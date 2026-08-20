@@ -1,0 +1,52 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+actor "Bệnh nhân" as Patient
+actor "Lễ tân" as Receptionist
+actor "Bác sĩ" as Doctor
+actor "Quản trị viên" as Admin
+
+rectangle "Hệ thống quản lý phòng khám" {
+  usecase "Đăng nhập/đăng ký tài khoản" as UC_AUTH
+  usecase "Xem chuyên khoa/bác sĩ" as UC_VIEW
+  usecase "AI gợi ý chuyên khoa" as UC_AI
+  usecase "Đặt lịch khám" as UC_BOOK
+  usecase "Theo dõi và yêu cầu thay đổi lịch" as UC_TRACK
+  usecase "Xem lịch sử/tái khám" as UC_HISTORY
+  usecase "Xác nhận/đổi/hủy lịch và xử lý lịch ảnh hưởng" as UC_RECEPTION
+  usecase "Tra cứu bệnh nhân" as UC_SEARCH
+  usecase "Xem lịch khám của tôi" as UC_DOCTOR_SCHEDULE
+  usecase "Hoàn thành buổi khám" as UC_COMPLETE
+  usecase "Đề xuất tái khám" as UC_REVISIT
+  usecase "Yêu cầu nghỉ" as UC_LEAVE
+  usecase "Quản lý dữ liệu" as UC_CRUD
+  usecase "Quản lý lịch làm việc/nghỉ" as UC_SCHEDULE
+  usecase "Dashboard và báo cáo" as UC_REPORT
+}
+
+' Bệnh nhân
+Patient -- UC_AUTH
+Patient -- UC_VIEW
+Patient -- UC_AI
+Patient -- UC_BOOK
+Patient -- UC_TRACK
+Patient -- UC_HISTORY
+
+' Lễ tân
+Receptionist -- UC_AUTH
+Receptionist -- UC_RECEPTION
+Receptionist -- UC_SEARCH
+
+' Bác sĩ
+Doctor -- UC_AUTH
+Doctor -- UC_DOCTOR_SCHEDULE
+Doctor -- UC_COMPLETE
+Doctor -- UC_REVISIT
+Doctor -- UC_LEAVE
+
+' Admin
+Admin -- UC_AUTH
+Admin -- UC_CRUD
+Admin -- UC_SCHEDULE
+Admin -- UC_REPORT
+@enduml
