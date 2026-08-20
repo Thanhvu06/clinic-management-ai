@@ -1,0 +1,213 @@
+@startuml
+title ERD - Hệ thống quản lý phòng khám tích hợp AI
+
+hide circle
+skinparam linetype ortho
+skinparam entity {
+  BackgroundColor White
+  BorderColor Black
+}
+
+entity "Users" as Users {
+  * Id : int <<PK>>
+  --
+  FullName : nvarchar
+  Email : nvarchar
+  PhoneNumber : nvarchar
+  PasswordHash : nvarchar
+  Role : varchar
+  IsActive : bit
+  CreatedAt : datetime
+  UpdatedAt : datetime
+}
+
+entity "Patients" as Patients {
+  * Id : int <<PK>>
+  --
+  UserId : int <<FK, UNIQUE>>
+  Gender : varchar
+  DateOfBirth : date
+  Address : nvarchar
+  CreatedAt : datetime
+  UpdatedAt : datetime
+}
+
+entity "Doctors" as Doctors {
+  * Id : int <<PK>>
+  --
+  UserId : int <<FK, UNIQUE>>
+  AcademicTitle : nvarchar
+  ExperienceYears : int
+  Description : nvarchar
+  IsActive : bit
+  CreatedAt : datetime
+  UpdatedAt : datetime
+}
+
+entity "Specialties" as Specialties {
+  * Id : int <<PK>>
+  --
+  SpecialtyCode : varchar <<UNIQUE>>
+  Name : nvarchar
+  Description : nvarchar
+  IsActive : bit
+  AiEnabled : bit
+  CreatedAt : datetime
+  UpdatedAt : datetime
+}
+
+entity "DoctorSpecialties" as DoctorSpecialties {
+  * DoctorId : int <<PK, FK>>
+  * SpecialtyId : int <<PK, FK>>
+  --
+  IsPrimary : bit
+}
+
+entity "DoctorWorkSchedules" as WorkSchedules {
+  * Id : int <<PK>>
+  --
+  DoctorId : int <<FK>>
+  WorkDate : date
+  StartTime : time
+  EndTime : time
+  IsActive : bit
+  CreatedAt : datetime
+  UpdatedAt : datetime
+}
+
+entity "AppointmentSlots" as Slots {
+  * Id : int <<PK>>
+  --
+  DoctorId : int <<FK>>
+  SlotDate : date
+  StartTime : time
+  EndTime : time
+  IsBooked : bit
+  ActiveAppointmentId : int <<FK, NULL>>
+  CreatedAt : datetime
+  UpdatedAt : datetime
+}
+
+entity "DoctorLeaveRequests" as LeaveRequests {
+  * Id : int <<PK>>
+  --
+  DoctorId : int <<FK>>
+  StartDateTime : datetime
+  EndDateTime : datetime
+  Reason : nvarchar
+  Status : varchar
+  AdminNote : nvarchar
+  CreatedAt : datetime
+  UpdatedAt : datetime
+}
+
+entity "Appointments" as Appointments {
+  * Id : int <<PK>>
+  --
+  AppointmentCode : varchar <<UNIQUE>>
+  PatientId : int <<FK>>
+  DoctorId : int <<FK>>
+  SpecialtyId : int <<FK>>
+  AppointmentSlotId : int <<FK>>
+  AppointmentDate : date
+  StartTime : time
+  EndTime : time
+  Reason : nvarchar
+  Status : varchar
+  CreatedAt : datetime
+  UpdatedAt : datetime
+}
+
+entity "AppointmentHistory" as AppointmentHistory {
+  * Id : int <<PK>>
+  --
+  AppointmentId : int <<FK>>
+  Action : varchar
+  OldStatus : varchar
+  NewStatus : varchar
+  Note : nvarchar
+  PerformedByUserId : int <<FK>>
+  CreatedAt : datetime
+}
+
+entity "VisitSummaries" as VisitSummaries {
+  * Id : int <<PK>>
+  --
+  AppointmentId : int <<FK>>
+  DoctorId : int <<FK>>
+  Summary : nvarchar
+  FollowUpInstruction : nvarchar
+  RevisitRequestId : int <<FK, NULL>>
+  CreatedAt : datetime
+  UpdatedAt : datetime
+}
+
+entity "RevisitRequests" as RevisitRequests {
+  * Id : int <<PK>>
+  --
+  AppointmentId : int <<FK>>
+  PatientId : int <<FK>>
+  DoctorId : int <<FK>>
+  SuggestedDate : date
+  Note : nvarchar
+  Status : varchar
+  NewAppointmentId : int <<FK, NULL>>
+  CreatedAt : datetime
+  UpdatedAt : datetime
+}
+
+entity "AiSuggestionLogs" as AiSuggestionLogs {
+  * Id : int <<PK>>
+  --
+  PatientId : int <<FK>>
+  InputText : nvarchar
+  SuggestedSpecialtiesJson : nvarchar
+  SelectedSpecialtyId : int <<FK, NULL>>
+  Provider : varchar
+  PromptVersion : varchar
+  CreatedAt : datetime
+}
+
+entity "SystemAuditLogs" as SystemAuditLogs {
+  * Id : int <<PK>>
+  --
+  UserId : int <<FK>>
+  Action : varchar
+  EntityName : varchar
+  EntityId : int
+  Description : nvarchar
+  CreatedAt : datetime
+}
+
+Users ||--o| Patients : "hồ sơ bệnh nhân"
+Users ||--o| Doctors : "hồ sơ bác sĩ"
+
+Doctors ||--o{ DoctorSpecialties : "thuộc"
+Specialties ||--o{ DoctorSpecialties : "bao gồm"
+
+Doctors ||--o{ WorkSchedules : "có lịch làm việc"
+Doctors ||--o{ Slots : "có slot"
+Doctors ||--o{ LeaveRequests : "gửi yêu cầu nghỉ"
+
+Patients ||--o{ Appointments : "đặt"
+Doctors ||--o{ Appointments : "khám"
+Specialties ||--o{ Appointments : "chuyên khoa"
+Slots ||--o{ Appointments : "được sử dụng"
+
+Appointments ||--o{ AppointmentHistory : "có lịch sử"
+Users ||--o{ AppointmentHistory : "thực hiện"
+
+Appointments ||--o| VisitSummaries : "có tóm tắt"
+Doctors ||--o{ VisitSummaries : "ghi"
+
+Appointments ||--o{ RevisitRequests : "phát sinh"
+Patients ||--o{ RevisitRequests : "nhận"
+Doctors ||--o{ RevisitRequests : "đề xuất"
+VisitSummaries |o--o| RevisitRequests : "liên kết"
+
+Patients ||--o{ AiSuggestionLogs : "sử dụng AI"
+Specialties ||--o{ AiSuggestionLogs : "được chọn"
+
+Users ||--o{ SystemAuditLogs : "thực hiện"
+
+@enduml

@@ -1,0 +1,58 @@
+@startuml
+title Activity Diagram - Luồng đặt lịch khám
+
+start
+
+:BN đăng nhập vào hệ thống;
+:Chọn chức năng đặt lịch khám;
+
+if (Muốn dùng AI gợi ý chuyên khoa?) then (Có)
+  :Nhập mô tả triệu chứng;
+  :Hệ thống loại bỏ dữ liệu định danh nếu có;
+  :Gửi mô tả sang API AI;
+  
+  if (API AI phản hồi hợp lệ?) then (Có)
+    :Hiển thị Top 3 chuyên khoa gợi ý;
+    :BN chọn chuyên khoa từ danh sách gợi ý;
+  else (Không)
+    :Thông báo AI tạm thời không khả dụng;
+    :BN chọn chuyên khoa thủ công;
+  endif
+
+else (Không)
+  :BN chọn chuyên khoa thủ công;
+endif
+
+:Hiển thị danh sách bác sĩ thuộc chuyên khoa;
+if (BN muốn hệ thống gợi ý bác sĩ?) then (Có)
+  :Tính điểm xếp hạng bác sĩ;
+  :Hiển thị bác sĩ phù hợp;
+endif
+
+:BN chọn bác sĩ;
+:Hiển thị các slot trống 30 phút;
+:BN chọn ngày và slot khám;
+:BN nhập lý do khám nếu có;
+:BN xác nhận gửi yêu cầu đặt lịch;
+
+:Hệ thống kiểm tra chuyên khoa hoạt động;
+:Hệ thống kiểm tra bác sĩ hoạt động;
+:Hệ thống kiểm tra bác sĩ có lịch làm việc;
+:Hệ thống kiểm tra bác sĩ không nghỉ;
+:Hệ thống kiểm tra bệnh nhân không có lịch trùng giờ;
+:Hệ thống kiểm tra slot còn trống;
+
+if (Thông tin hợp lệ?) then (Có)
+  :Bắt đầu transaction;
+  :Khóa slot đã chọn;
+  :Tạo lịch hẹn trạng thái Pending;
+  :Ghi AppointmentHistory;
+  :Commit transaction;
+  :Thông báo đặt lịch thành công;
+else (Không)
+  :Thông báo lỗi;
+  :Yêu cầu chọn lại thông tin hoặc slot khác;
+endif
+
+stop
+@enduml

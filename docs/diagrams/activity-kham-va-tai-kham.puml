@@ -1,0 +1,70 @@
+@startuml
+title Activity Diagram - Khám bệnh và đề xuất tái khám
+
+start
+
+:Bác sĩ đăng nhập vào hệ thống;
+:Bác sĩ xem lịch khám của tôi;
+:Bác sĩ chọn lịch hẹn cần xử lý;
+
+if (Bệnh nhân có đến khám?) then (Có)
+  :Bác sĩ xem lý do khám;
+  :Bác sĩ nhập tóm tắt kết quả khám;
+  :Bác sĩ nhập hướng dẫn tái khám nếu có;
+
+  if (Cần đề xuất tái khám?) then (Có)
+    :Bác sĩ nhập thời gian tái khám khuyến nghị;
+    :Tạo đề xuất tái khám;
+    :Ghi AppointmentHistory;
+    :Thông báo cho bệnh nhân;
+  else (Không)
+    :Không tạo đề xuất tái khám;
+  endif
+
+  :Cập nhật lịch hẹn trạng thái Completed;
+  :Ghi AppointmentHistory;
+  :Thông báo hoàn thành buổi khám;
+
+else (Không)
+  :Bác sĩ kiểm tra đã qua giờ khám;
+  
+  if (Đã qua giờ khám?) then (Có)
+    :Cập nhật lịch hẹn trạng thái NoShow;
+    :Ghi AppointmentHistory;
+    :Thông báo bệnh nhân không đến khám;
+  else (Không)
+    :Không được đánh dấu NoShow;
+    :Thông báo chưa đến thời điểm xử lý;
+  endif
+endif
+
+if (Bệnh nhân có đề xuất tái khám?) then (Có)
+  :Bệnh nhân xem đề xuất tái khám;
+
+  if (Bệnh nhân đồng ý?) then (Có)
+    :Bệnh nhân chọn slot khám mới;
+    :Hệ thống kiểm tra slot còn trống;
+    :Hệ thống kiểm tra bác sĩ làm việc và không nghỉ;
+
+    if (Thông tin hợp lệ?) then (Có)
+      :Bắt đầu transaction;
+      :Khóa slot mới;
+      :Tạo lịch hẹn mới trạng thái Pending;
+      :Ghi AppointmentHistory;
+      :Commit transaction;
+      :Thông báo đã gửi yêu cầu tái khám;
+    else (Không)
+      :Thông báo chọn slot khác;
+    endif
+
+  else (Từ chối)
+    :Cập nhật đề xuất tái khám là đã từ chối;
+    :Ghi AppointmentHistory;
+    :Thông báo đã từ chối tái khám;
+  endif
+
+else (Không)
+endif
+
+stop
+@enduml

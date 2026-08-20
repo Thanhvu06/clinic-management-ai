@@ -1,0 +1,57 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Bệnh nhân" as Patient
+actor "Lễ tân" as Receptionist
+
+rectangle "Chức năng quản lý lịch hẹn" {
+  usecase "Theo dõi lịch hẹn" as UC_TRACK
+  usecase "Gửi yêu cầu đổi lịch" as UC_REQ_RESCHEDULE
+  usecase "Gửi yêu cầu hủy lịch" as UC_REQ_CANCEL
+  usecase "Rút yêu cầu đổi/hủy" as UC_WITHDRAW
+
+  usecase "Xem danh sách lịch cần xử lý" as UC_VIEW_PENDING
+  usecase "Xác nhận lịch hẹn" as UC_CONFIRM
+  usecase "Xử lý yêu cầu đổi lịch" as UC_HANDLE_RESCHEDULE
+  usecase "Xử lý yêu cầu hủy lịch" as UC_HANDLE_CANCEL
+
+  usecase "Kiểm tra slot mới" as UC_CHECK_SLOT
+  usecase "Khóa slot mới và cập nhật lịch" as UC_LOCK_UPDATE
+  usecase "Giải phóng slot cũ" as UC_RELEASE_OLD
+  usecase "Cập nhật trạng thái lịch hẹn" as UC_UPDATE_STATUS
+  usecase "Ghi lịch sử thay đổi" as UC_HISTORY
+  usecase "Thông báo kết quả" as UC_NOTIFY
+}
+
+Patient -- UC_TRACK
+Patient -- UC_REQ_RESCHEDULE
+Patient -- UC_REQ_CANCEL
+Patient -- UC_WITHDRAW
+
+Receptionist -- UC_VIEW_PENDING
+Receptionist -- UC_CONFIRM
+Receptionist -- UC_HANDLE_RESCHEDULE
+Receptionist -- UC_HANDLE_CANCEL
+
+UC_REQ_RESCHEDULE ..> UC_TRACK : <<extend>>
+UC_REQ_CANCEL ..> UC_TRACK : <<extend>>
+UC_WITHDRAW ..> UC_TRACK : <<extend>>
+
+UC_CONFIRM ..> UC_UPDATE_STATUS : <<include>>
+UC_CONFIRM ..> UC_HISTORY : <<include>>
+UC_CONFIRM ..> UC_NOTIFY : <<include>>
+
+UC_HANDLE_RESCHEDULE ..> UC_CHECK_SLOT : <<include>>
+UC_HANDLE_RESCHEDULE ..> UC_LOCK_UPDATE : <<include>>
+UC_HANDLE_RESCHEDULE ..> UC_RELEASE_OLD : <<include>>
+UC_HANDLE_RESCHEDULE ..> UC_UPDATE_STATUS : <<include>>
+UC_HANDLE_RESCHEDULE ..> UC_HISTORY : <<include>>
+UC_HANDLE_RESCHEDULE ..> UC_NOTIFY : <<include>>
+
+UC_HANDLE_CANCEL ..> UC_RELEASE_OLD : <<include>>
+UC_HANDLE_CANCEL ..> UC_UPDATE_STATUS : <<include>>
+UC_HANDLE_CANCEL ..> UC_HISTORY : <<include>>
+UC_HANDLE_CANCEL ..> UC_NOTIFY : <<include>>
+
+@enduml

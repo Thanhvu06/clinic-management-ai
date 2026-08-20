@@ -1,0 +1,66 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Quản trị viên" as Admin
+
+rectangle "Chức năng quản trị hệ thống" {
+  usecase "Quản trị hệ thống" as UC_ADMIN
+
+  usecase "Quản lý tài khoản người dùng" as UC_USERS
+  usecase "Phân quyền tài khoản" as UC_ROLES
+
+  usecase "Quản lý bệnh nhân" as UC_PATIENTS
+  usecase "Quản lý bác sĩ" as UC_DOCTORS
+  usecase "Quản lý chuyên khoa" as UC_SPECIALTIES
+
+  usecase "Cập nhật trạng thái hoạt động" as UC_ACTIVE
+  usecase "Quản lý AI Enabled của chuyên khoa" as UC_AI_ENABLED
+  usecase "Kiểm tra ràng buộc trước khi sửa/xóa" as UC_CONSTRAINT
+
+  usecase "Quản lý lịch làm việc bác sĩ" as UC_WORK_SCHEDULE
+  usecase "Sinh slot khám 30 phút" as UC_GENERATE_SLOT
+  usecase "Quản lý yêu cầu nghỉ" as UC_LEAVE
+  usecase "Duyệt/Từ chối yêu cầu nghỉ" as UC_APPROVE_LEAVE
+
+  usecase "Xem dashboard thống kê" as UC_DASHBOARD
+  usecase "Xuất báo cáo Excel" as UC_EXCEL
+  usecase "Ghi lịch sử thao tác" as UC_HISTORY
+}
+
+Admin -- UC_ADMIN
+
+UC_ADMIN ..> UC_USERS : <<include>>
+UC_ADMIN ..> UC_PATIENTS : <<include>>
+UC_ADMIN ..> UC_DOCTORS : <<include>>
+UC_ADMIN ..> UC_SPECIALTIES : <<include>>
+UC_ADMIN ..> UC_WORK_SCHEDULE : <<include>>
+UC_ADMIN ..> UC_LEAVE : <<include>>
+UC_ADMIN ..> UC_DASHBOARD : <<include>>
+
+UC_USERS ..> UC_ROLES : <<include>>
+UC_USERS ..> UC_HISTORY : <<include>>
+
+UC_PATIENTS ..> UC_ACTIVE : <<include>>
+UC_PATIENTS ..> UC_CONSTRAINT : <<include>>
+UC_PATIENTS ..> UC_HISTORY : <<include>>
+
+UC_DOCTORS ..> UC_ACTIVE : <<include>>
+UC_DOCTORS ..> UC_CONSTRAINT : <<include>>
+UC_DOCTORS ..> UC_HISTORY : <<include>>
+
+UC_SPECIALTIES ..> UC_ACTIVE : <<include>>
+UC_SPECIALTIES ..> UC_AI_ENABLED : <<include>>
+UC_SPECIALTIES ..> UC_CONSTRAINT : <<include>>
+UC_SPECIALTIES ..> UC_HISTORY : <<include>>
+
+UC_WORK_SCHEDULE ..> UC_GENERATE_SLOT : <<include>>
+UC_WORK_SCHEDULE ..> UC_CONSTRAINT : <<include>>
+UC_WORK_SCHEDULE ..> UC_HISTORY : <<include>>
+
+UC_LEAVE ..> UC_APPROVE_LEAVE : <<include>>
+UC_LEAVE ..> UC_HISTORY : <<include>>
+
+UC_DASHBOARD ..> UC_EXCEL : <<extend>>
+
+@enduml

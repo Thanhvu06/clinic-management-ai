@@ -1,0 +1,62 @@
+    @startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Bác sĩ" as Doctor
+actor "Bệnh nhân" as Patient
+
+rectangle "Chức năng nghiệp vụ bác sĩ" {
+  usecase "Nghiệp vụ bác sĩ" as UC_DOCTOR
+
+  usecase "Xem lịch khám của tôi" as UC_VIEW_SCHEDULE
+  usecase "Xem thông tin lịch hẹn" as UC_VIEW_APPOINTMENT
+  usecase "Xem lý do khám" as UC_VIEW_REASON
+
+  usecase "Hoàn thành buổi khám" as UC_COMPLETE
+  usecase "Nhập tóm tắt kết quả khám" as UC_SUMMARY
+  usecase "Nhập hướng dẫn tái khám" as UC_GUIDE
+  usecase "Đánh dấu NoShow" as UC_NOSHOW
+
+  usecase "Đề xuất tái khám" as UC_REVISIT
+  usecase "Bệnh nhân phản hồi đề xuất tái khám" as UC_PATIENT_RESPONSE
+
+  usecase "Gửi yêu cầu nghỉ" as UC_LEAVE_REQUEST
+  usecase "Hủy yêu cầu nghỉ chưa duyệt" as UC_CANCEL_LEAVE
+
+  usecase "Cập nhật trạng thái lịch hẹn" as UC_UPDATE_STATUS
+  usecase "Ghi lịch sử thay đổi" as UC_HISTORY
+  usecase "Thông báo kết quả" as UC_NOTIFY
+}
+
+Doctor -- UC_DOCTOR
+Patient -- UC_PATIENT_RESPONSE
+
+UC_DOCTOR ..> UC_VIEW_SCHEDULE : <<include>>
+UC_DOCTOR ..> UC_COMPLETE : <<include>>
+UC_DOCTOR ..> UC_REVISIT : <<include>>
+UC_DOCTOR ..> UC_LEAVE_REQUEST : <<include>>
+
+UC_VIEW_SCHEDULE ..> UC_VIEW_APPOINTMENT : <<include>>
+UC_VIEW_APPOINTMENT ..> UC_VIEW_REASON : <<include>>
+
+UC_COMPLETE ..> UC_SUMMARY : <<include>>
+UC_COMPLETE ..> UC_GUIDE : <<extend>>
+UC_COMPLETE ..> UC_UPDATE_STATUS : <<include>>
+UC_COMPLETE ..> UC_HISTORY : <<include>>
+UC_COMPLETE ..> UC_NOTIFY : <<include>>
+
+UC_NOSHOW ..> UC_UPDATE_STATUS : <<include>>
+UC_NOSHOW ..> UC_HISTORY : <<include>>
+UC_NOSHOW ..> UC_NOTIFY : <<include>>
+
+UC_REVISIT ..> UC_PATIENT_RESPONSE : <<extend>>
+UC_REVISIT ..> UC_HISTORY : <<include>>
+UC_REVISIT ..> UC_NOTIFY : <<include>>
+
+UC_LEAVE_REQUEST ..> UC_HISTORY : <<include>>
+UC_LEAVE_REQUEST ..> UC_NOTIFY : <<include>>
+
+UC_CANCEL_LEAVE ..> UC_LEAVE_REQUEST : <<extend>>
+UC_CANCEL_LEAVE ..> UC_HISTORY : <<include>>
+
+@enduml

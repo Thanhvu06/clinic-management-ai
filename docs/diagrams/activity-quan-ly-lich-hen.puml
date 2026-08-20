@@ -1,0 +1,101 @@
+@startuml
+title Activity Diagram - Quản lý đổi/hủy lịch hẹn
+
+start
+
+:BN đăng nhập vào hệ thống;
+:BN xem danh sách lịch hẹn của mình;
+
+if (BN muốn làm gì?) then (Yêu cầu đổi lịch)
+  :BN chọn lịch hẹn cần đổi;
+  :BN chọn slot mới mong muốn;
+  :Hệ thống kiểm tra lịch hẹn có được đổi không;
+
+  if (Hợp lệ?) then (Có)
+    :Cập nhật trạng thái PendingReschedule;
+    :Ghi AppointmentHistory;
+    :Thông báo đã gửi yêu cầu đổi lịch;
+  else (Không)
+    :Thông báo không thể yêu cầu đổi lịch;
+    stop
+  endif
+
+elseif (Yêu cầu hủy lịch)
+  :BN chọn lịch hẹn cần hủy;
+  :Hệ thống kiểm tra lịch hẹn có được hủy không;
+
+  if (Hợp lệ?) then (Có)
+    :Cập nhật trạng thái PendingCancellation;
+    :Ghi AppointmentHistory;
+    :Thông báo đã gửi yêu cầu hủy lịch;
+  else (Không)
+    :Thông báo không thể yêu cầu hủy lịch;
+    stop
+  endif
+
+else (Rút yêu cầu)
+  :BN chọn yêu cầu đổi/hủy đang chờ xử lý;
+  :Hệ thống kiểm tra yêu cầu chưa được lễ tân xử lý;
+
+  if (Có thể rút yêu cầu?) then (Có)
+    :Chuyển trạng thái về Confirmed;
+    :Ghi AppointmentHistory;
+    :Thông báo đã rút yêu cầu;
+  else (Không)
+    :Thông báo không thể rút yêu cầu;
+  endif
+
+  stop
+endif
+
+:Lễ tân đăng nhập vào hệ thống;
+:Lễ tân xem danh sách lịch cần xử lý;
+
+if (Loại yêu cầu?) then (Pending)
+  :Lễ tân kiểm tra thông tin lịch hẹn;
+  :Chuyển trạng thái Confirmed;
+  :Ghi AppointmentHistory;
+  :Thông báo xác nhận lịch hẹn;
+
+elseif (PendingReschedule)
+  :Lễ tân kiểm tra slot mới;
+  :Kiểm tra bác sĩ có lịch làm việc;
+  :Kiểm tra bác sĩ không nghỉ;
+  :Kiểm tra slot mới còn trống;
+
+  if (Slot mới hợp lệ?) then (Có)
+    :Bắt đầu transaction;
+    :Giữ slot cũ;
+    :Khóa slot mới;
+    :Cập nhật lịch hẹn sang slot mới;
+    :Giải phóng slot cũ;
+    :Chuyển trạng thái Confirmed;
+    :Ghi AppointmentHistory;
+    :Commit transaction;
+    :Thông báo đổi lịch thành công;
+  else (Không)
+    :Thông báo không có slot phù hợp;
+    :Giữ lịch cũ ở trạng thái Confirmed;
+    :Ghi AppointmentHistory;
+  endif
+
+else (PendingCancellation)
+  :Lễ tân kiểm tra yêu cầu hủy;
+
+  if (Đồng ý hủy?) then (Có)
+    :Bắt đầu transaction;
+    :Chuyển trạng thái Cancelled;
+    :Giải phóng slot;
+    :Ghi AppointmentHistory;
+    :Commit transaction;
+    :Thông báo hủy lịch thành công;
+  else (Không)
+    :Chuyển trạng thái Confirmed;
+    :Ghi AppointmentHistory;
+    :Thông báo không chấp nhận hủy;
+  endif
+
+endif
+
+stop
+@enduml
