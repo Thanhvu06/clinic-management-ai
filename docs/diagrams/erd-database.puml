@@ -129,7 +129,19 @@ entity "AppointmentHistory" as AppointmentHistory {
   PerformedByUserId : int <<FK>>
   CreatedAt : datetime
 }
-
+entity "AppointmentChangeRequests" as ChangeRequests {
+  * Id : int <<PK>>
+  --
+  AppointmentId : int <<FK>>
+  RequestType : varchar
+  RequestedSlotId : int <<FK, NULL>>
+  Reason : nvarchar
+  Status : varchar
+  RequestedByUserId : int <<FK>>
+  ProcessedByUserId : int <<FK, NULL>>
+  CreatedAt : datetime
+  ProcessedAt : datetime
+}
 entity "VisitSummaries" as VisitSummaries {
   * Id : int <<PK>>
   --
@@ -196,7 +208,9 @@ Slots ||--o{ Appointments : "được sử dụng"
 
 Appointments ||--o{ AppointmentHistory : "có lịch sử"
 Users ||--o{ AppointmentHistory : "thực hiện"
-
+Appointments ||--o{ ChangeRequests : "có yêu cầu đổi/hủy"
+Slots ||--o{ ChangeRequests : "slot mong muốn"
+Users ||--o{ ChangeRequests : "gửi hoặc xử lý"
 Appointments ||--o| VisitSummaries : "có tóm tắt"
 Doctors ||--o{ VisitSummaries : "ghi"
 

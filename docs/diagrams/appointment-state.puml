@@ -1,0 +1,56 @@
+@startuml
+title State Diagram - Trạng thái lịch hẹn
+
+hide empty description
+
+[*] --> Pending : Bệnh nhân đặt lịch
+
+Pending --> Confirmed : Lễ tân xác nhận
+Pending --> PendingReschedule : Bệnh nhân yêu cầu đổi
+Pending --> PendingCancellation : Bệnh nhân yêu cầu hủy
+Pending --> Cancelled : Lễ tân hủy
+
+Confirmed --> PendingReschedule : Bệnh nhân yêu cầu đổi
+Confirmed --> PendingCancellation : Bệnh nhân yêu cầu hủy
+Confirmed --> Completed : Bác sĩ hoàn thành buổi khám
+Confirmed --> NoShow : Bác sĩ đánh dấu không đến
+Confirmed --> Cancelled : Lễ tân hủy
+
+PendingReschedule --> Confirmed : Đổi lịch thành công
+PendingReschedule --> Confirmed : Rút yêu cầu hoặc không có slot
+PendingReschedule --> Cancelled : Chấp nhận hủy lịch
+
+PendingCancellation --> Cancelled : Lễ tân chấp nhận hủy
+PendingCancellation --> Confirmed : Rút hoặc từ chối yêu cầu
+
+Cancelled --> [*]
+Completed --> [*]
+NoShow --> [*]
+
+note right of Pending
+  Slot đã được khóa.
+  Chờ lễ tân xác nhận.
+end note
+
+note right of PendingReschedule
+  Slot cũ vẫn được giữ.
+  Chỉ giải phóng sau khi
+  khóa thành công slot mới.
+end note
+
+note right of PendingCancellation
+  Slot vẫn được giữ
+  trong khi chờ xử lý.
+end note
+
+note right of Completed
+  Trạng thái kết thúc.
+  Có thể phát sinh đề xuất tái khám.
+end note
+
+note right of NoShow
+  Chỉ bác sĩ được đánh dấu
+  sau thời gian khám.
+end note
+
+@enduml

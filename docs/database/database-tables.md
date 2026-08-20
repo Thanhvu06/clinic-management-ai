@@ -334,7 +334,51 @@ Ghi chú:
 - Không cần thêm trạng thái `Rescheduled`, vì thao tác đổi lịch được lưu trong `AppointmentHistory`.
 
 ---
+## AppointmentChangeRequests
 
+Lưu yêu cầu đổi hoặc hủy lịch do bệnh nhân gửi.
+
+Các cột chính:
+
+- Id
+- AppointmentId
+- RequestType
+- RequestedSlotId
+- Reason
+- Status
+- RequestedByUserId
+- ProcessedByUserId
+- CreatedAt
+- ProcessedAt
+
+`RequestType` gồm:
+
+- `Reschedule`
+- `Cancellation`
+
+`Status` gồm:
+
+- `Pending`
+- `Approved`
+- `Rejected`
+- `Withdrawn`
+
+Ràng buộc:
+
+- `AppointmentId` là khóa ngoại tới `Appointments.Id`.
+- `RequestedSlotId` nullable, khóa ngoại tới `AppointmentSlots.Id`.
+- `RequestedByUserId` là khóa ngoại tới `Users.Id`.
+- `ProcessedByUserId` nullable, khóa ngoại tới `Users.Id`.
+- Yêu cầu đổi lịch phải có `RequestedSlotId`.
+- Yêu cầu hủy lịch không bắt buộc có `RequestedSlotId`.
+- Một lịch hẹn chỉ được có tối đa một yêu cầu đang ở trạng thái `Pending`.
+
+Ghi chú:
+
+- Slot cũ vẫn được giữ khi yêu cầu đổi lịch đang chờ xử lý.
+- Slot mới bệnh nhân chọn chỉ là slot mong muốn, chưa bị khóa ngay.
+- Khi lễ tân xử lý, hệ thống phải kiểm tra lại slot mới.
+- Nếu yêu cầu bị rút, `Status` chuyển thành `Withdrawn`.
 # 5. Nhóm tóm tắt khám và tái khám
 
 ## VisitSummaries
