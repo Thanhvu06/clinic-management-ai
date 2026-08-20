@@ -1,0 +1,47 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Bệnh nhân" as Patient
+actor "API AI" as AI <<external>>
+
+rectangle "Chức năng đặt lịch khám" {
+  usecase "Đặt lịch khám" as UC_BOOK
+  usecase "Nhập mô tả triệu chứng" as UC_DESC
+  usecase "AI gợi ý chuyên khoa" as UC_AI
+  usecase "Chọn chuyên khoa thủ công" as UC_MANUAL
+  usecase "Chọn bác sĩ" as UC_SELECT_DOC
+  usecase "Hệ thống gợi ý bác sĩ phù hợp" as UC_SUGGEST_DOC
+  usecase "Chọn slot khám 30 phút" as UC_SELECT_SLOT
+  usecase "Nhập lý do khám" as UC_REASON
+  usecase "Kiểm tra tính hợp lệ" as UC_VALIDATE
+  usecase "Khóa slot và tạo lịch hẹn Pending" as UC_CREATE
+  usecase "Ghi lịch sử đặt lịch" as UC_HISTORY
+  usecase "Thông báo kết quả đặt lịch" as UC_NOTIFY
+}
+
+Patient -- UC_BOOK
+Patient -- UC_DESC
+Patient -- UC_MANUAL
+Patient -- UC_SELECT_DOC
+Patient -- UC_SELECT_SLOT
+Patient -- UC_REASON
+
+UC_BOOK ..> UC_SELECT_DOC : <<include>>
+UC_BOOK ..> UC_SELECT_SLOT : <<include>>
+UC_BOOK ..> UC_VALIDATE : <<include>>
+UC_BOOK ..> UC_CREATE : <<include>>
+UC_BOOK ..> UC_HISTORY : <<include>>
+UC_BOOK ..> UC_NOTIFY : <<include>>
+
+UC_AI ..> UC_DESC : <<include>>
+UC_AI ..> UC_BOOK : <<extend>>
+UC_MANUAL ..> UC_BOOK : <<extend>>
+UC_SUGGEST_DOC ..> UC_SELECT_DOC : <<extend>>
+UC_REASON ..> UC_BOOK : <<extend>>
+
+UC_CREATE ..> UC_VALIDATE : <<include>>
+
+AI -- UC_AI
+
+@enduml
