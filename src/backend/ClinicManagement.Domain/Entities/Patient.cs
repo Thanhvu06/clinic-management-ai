@@ -14,4 +14,5 @@ public class Patient
 
     public ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
     public ICollection<RevisitRequest> RevisitRequests { get; set; } = new List<RevisitRequest>();
+    public ICollection<AiSuggestionLog> AiSuggestionLogs { get; set; } = new List<AiSuggestionLog>();
 }
