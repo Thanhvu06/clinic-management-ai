@@ -6,6 +6,13 @@ Hệ thống sử dụng cơ sở dữ liệu SQL Server cho website quản lý 
 
 AI trong hệ thống chỉ có nhiệm vụ gợi ý chuyên khoa tham khảo, không chẩn đoán bệnh, không kê đơn và không thay thế bác sĩ.
 
+**Quy ước kiểu khóa đã chốt:**
+- Bảng `AspNetUsers` (tài khoản) sử dụng khóa chính kiểu `Guid`.
+- Các bảng nghiệp vụ có `Id` riêng sử dụng kiểu `long` (tương ứng `bigint identity` trong SQL Server).
+- Các khóa ngoại (FK) trỏ tới `AspNetUsers` bắt buộc dùng kiểu `Guid`.
+- Các khóa ngoại giữa các bảng nghiệp vụ với nhau dùng kiểu `long`.
+- Bảng trung gian `DoctorSpecialties` sử dụng khóa chính kép (`DoctorId`, `SpecialtyId`), không có cột `Id` riêng.
+
 ---
 
 # 1. Nhóm tài khoản và phân quyền
