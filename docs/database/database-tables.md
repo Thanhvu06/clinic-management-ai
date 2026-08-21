@@ -10,35 +10,35 @@ AI trong hệ thống chỉ có nhiệm vụ gợi ý chuyên khoa tham khảo, 
 
 # 1. Nhóm tài khoản và phân quyền
 
-## Users
+## Users (Mô hình logic) / AspNetUsers (Bảng vật lý)
 
-Lưu thông tin đăng nhập chung cho tất cả tài khoản.
+Lưu thông tin đăng nhập chung cho tất cả tài khoản. Bảng vật lý trong Database là `AspNetUsers` (sử dụng ASP.NET Core Identity). Hệ thống không tạo thêm bảng `Users` riêng.
 
-Nếu dùng ASP.NET Core Identity, bảng này có thể tương ứng với `AspNetUsers`.
+Các cột chính của `AspNetUsers` (kế thừa IdentityUser<Guid>):
 
-Các cột chính:
-
-- Id
-- FullName
+- Id (kiểu Guid)
 - Email
 - PhoneNumber
 - PasswordHash
-- Role
-- IsActive
-- CreatedAt
-- UpdatedAt
+- FullName (Thuộc tính bổ sung)
+- IsActive (Thuộc tính bổ sung)
+- CreatedAt (Thuộc tính bổ sung)
+- UpdatedAt (Thuộc tính bổ sung)
 
-Vai trò:
+Vai trò (Roles):
 
+Được quản lý qua `IdentityRole<Guid>` và lưu trữ ở bảng `AspNetUserRoles`. 
+Bốn vai trò trong hệ thống:
 - Patient
 - Receptionist
 - Doctor
 - Admin
 
 Ghi chú:
-
+- Không lưu Role thành một cột đơn trong bảng `AspNetUsers`.
 - Nhân viên như lễ tân, bác sĩ, admin do Admin tạo tài khoản.
 - Bệnh nhân có thể tự đăng ký tài khoản.
+- Ứng dụng Domain hoàn toàn độc lập, không phụ thuộc vào ASP.NET Core Identity.
 
 ---
 
@@ -49,7 +49,7 @@ Lưu thông tin riêng của bệnh nhân.
 Các cột chính:
 
 - Id
-- UserId
+- UserId (kiểu Guid)
 - Gender
 - DateOfBirth
 - Address
@@ -58,7 +58,7 @@ Các cột chính:
 
 Ràng buộc:
 
-- `UserId` là khóa ngoại tới `Users.Id`.
+- `UserId` lưu liên kết dạng Guid tới tài khoản hệ thống. Trong Domain, entity `Patient` không chứa navigation property trỏ tới `ApplicationUser`.
 - `UserId` phải unique để đảm bảo 1 user chỉ có 1 hồ sơ bệnh nhân.
 
 ---
@@ -70,7 +70,7 @@ Lưu thông tin riêng của bác sĩ.
 Các cột chính:
 
 - Id
-- UserId
+- UserId (kiểu Guid)
 - AcademicTitle
 - ExperienceYears
 - Description
@@ -80,7 +80,7 @@ Các cột chính:
 
 Ràng buộc:
 
-- `UserId` là khóa ngoại tới `Users.Id`.
+- `UserId` lưu liên kết dạng Guid tới tài khoản hệ thống. Trong Domain, entity `Doctor` không chứa navigation property trỏ tới `ApplicationUser`.
 - `UserId` phải unique để đảm bảo 1 user chỉ có 1 hồ sơ bác sĩ.
 - `ExperienceYears >= 0`.
 
@@ -326,7 +326,7 @@ Action enum:
 Ràng buộc:
 
 - `AppointmentId` là khóa ngoại tới `Appointments.Id`.
-- `PerformedByUserId` là khóa ngoại tới `Users.Id`.
+- `PerformedByUserId` (Guid) lưu liên kết tới `AspNetUsers.Id`.
 
 Ghi chú:
 
@@ -367,8 +367,8 @@ Ràng buộc:
 
 - `AppointmentId` là khóa ngoại tới `Appointments.Id`.
 - `RequestedSlotId` nullable, khóa ngoại tới `AppointmentSlots.Id`.
-- `RequestedByUserId` là khóa ngoại tới `Users.Id`.
-- `ProcessedByUserId` nullable, khóa ngoại tới `Users.Id`.
+- `RequestedByUserId` (Guid) lưu liên kết tới `AspNetUsers.Id`.
+- `ProcessedByUserId` nullable (Guid), lưu liên kết tới `AspNetUsers.Id`.
 - Yêu cầu đổi lịch phải có `RequestedSlotId`.
 - Yêu cầu hủy lịch không bắt buộc có `RequestedSlotId`.
 - Một lịch hẹn chỉ được có tối đa một yêu cầu đang ở trạng thái `Pending`.
@@ -499,7 +499,7 @@ Các cột chính:
 
 Ràng buộc:
 
-- `UserId` là khóa ngoại tới `Users.Id`.
+- `UserId` (Guid) lưu liên kết tới `AspNetUsers.Id`.
 
 Ghi chú:
 

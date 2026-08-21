@@ -1,13 +1,17 @@
 # Quy tắc nghiệp vụ (Business Rules)
 
 ## 1. Tài khoản, Identity, phân quyền và IsActive
-- **BR-101**: Hệ thống có 4 vai trò: `Patient`, `Receptionist`, `Doctor`, `Admin`. Bệnh nhân được tự đăng ký tài khoản. Các nhân viên (Receptionist, Doctor, Admin) do Admin tạo.
-- **BR-102**: Không được hard-delete các tài khoản đã phát sinh dữ liệu, chỉ sử dụng cờ `IsActive = false` để vô hiệu hóa tài khoản.
+- **BR-101**: Hệ thống có 4 vai trò (`IdentityRole<Guid>`): `Patient`, `Receptionist`, `Doctor`, `Admin`. Không lưu Role thành cột đơn mà dùng bảng `AspNetUserRoles`.
+- **BR-102**: Bệnh nhân được tự đăng ký tài khoản. Nhân viên (Lễ tân, Bác sĩ, Admin) do Admin tạo.
+- **BR-103**: Không được hard-delete các tài khoản đã phát sinh dữ liệu, chỉ sử dụng cờ `IsActive = false` để vô hiệu hóa.
+- **BR-104**: Kiến trúc tài khoản: Sử dụng ASP.NET Core Identity. Bảng vật lý là `AspNetUsers`. `ApplicationUser` (kế thừa `IdentityUser<Guid>`) nằm ở tầng Infrastructure. Application định nghĩa và sử dụng `IIdentityService`. Domain hoàn toàn không phụ thuộc ASP.NET Core Identity.
+- **BR-105**: Xác thực API sử dụng JWT.
+- **BR-106**: Truy vấn kết hợp: Khi cần kết xuất dữ liệu Bác sĩ/Bệnh nhân với thông tin tài khoản, Infrastructure sẽ sử dụng LINQ join/projection và trả về DTO, không bắt buộc query hai lần.
 
 ## 2. Bệnh nhân
-- **BR-201**: Quan hệ 1-1 giữa bảng `Users` và `Patients`. `UserId` của bệnh nhân phải là Unique để đảm bảo 1 user chỉ có 1 hồ sơ.
+- **BR-201**: Quan hệ 1-1 logic giữa Tài khoản và Bệnh nhân thông qua cột `UserId` (kiểu Guid). `UserId` phải là Unique để đảm bảo 1 user chỉ có 1 hồ sơ. Entity `Patient` và `Doctor` trong Domain KHÔNG chứa navigation property trỏ tới `ApplicationUser`.
 - **BR-202**: Bệnh nhân chỉ được xem và cập nhật hồ sơ của chính mình.
-- **BR-203**: Email và Số điện thoại khi đăng ký phải là duy nhất.
+- **BR-203**: Email và Số điện thoại phải là duy nhất. Do ASP.NET Core Identity không mặc định đảm bảo `PhoneNumber` unique nên phải cấu hình kiểm tra hoặc đặt ràng buộc riêng khi triển khai.
 
 ## 3. Quan hệ nhiều–nhiều DoctorSpecialties và quy tắc chỉ một IsPrimary
 - **BR-301**: Một bác sĩ có thể thuộc nhiều chuyên khoa thông qua bảng trung gian `DoctorSpecialties`.
@@ -114,7 +118,6 @@
 
 # Các quyết định CHƯA CHỐT
 
-- Ánh xạ Users với ASP.NET Core Identity.
 - Quan hệ vòng AppointmentSlots.ActiveAppointmentId và Appointments.AppointmentSlotId.
 - Có giữ VisitSummaries.RevisitRequestId hay không.
 - Filtered unique index cho một change request Pending.
