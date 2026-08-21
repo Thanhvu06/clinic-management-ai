@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace ClinicManagement.Domain.Entities;
 
 public class Specialty
@@ -10,4 +12,5 @@ public class Specialty
     public bool AiEnabled { get; set; }
 
     public ICollection<DoctorSpecialty> DoctorSpecialties { get; set; } = new List<DoctorSpecialty>();
+    public ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
 }

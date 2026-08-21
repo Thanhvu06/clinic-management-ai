@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace ClinicManagement.Domain.Entities;
 
@@ -12,4 +13,5 @@ public class AppointmentSlot
     public bool IsBooked { get; set; } = false;
 
     public Doctor Doctor { get; set; } = null!;
+    public ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
 }
