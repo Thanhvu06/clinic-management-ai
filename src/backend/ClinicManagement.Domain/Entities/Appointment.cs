@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ClinicManagement.Domain.Enums;
 
 namespace ClinicManagement.Domain.Entities;
@@ -21,4 +22,7 @@ public class Appointment
     public Doctor Doctor { get; set; } = null!;
     public Specialty Specialty { get; set; } = null!;
     public AppointmentSlot AppointmentSlot { get; set; } = null!;
+    
+    public ICollection<AppointmentHistory> Histories { get; set; } = new List<AppointmentHistory>();
+    public ICollection<AppointmentChangeRequest> ChangeRequests { get; set; } = new List<AppointmentChangeRequest>();
 }
