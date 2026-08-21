@@ -17,4 +17,6 @@ public class Doctor
     public ICollection<DoctorLeaveRequest> LeaveRequests { get; set; } = new List<DoctorLeaveRequest>();
     public ICollection<AppointmentSlot> AppointmentSlots { get; set; } = new List<AppointmentSlot>();
     public ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
+    public ICollection<VisitSummary> VisitSummaries { get; set; } = new List<VisitSummary>();
+    public ICollection<RevisitRequest> RevisitRequests { get; set; } = new List<RevisitRequest>();
 }

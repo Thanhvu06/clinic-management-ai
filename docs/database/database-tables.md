@@ -397,21 +397,19 @@ Các cột chính:
 - DoctorId
 - Summary
 - FollowUpInstruction
-- RevisitRequestId
 - CreatedAt
 - UpdatedAt
 
 Ràng buộc:
 
-- `AppointmentId` là khóa ngoại tới `Appointments.Id`.
+- `AppointmentId` là khóa ngoại tới `Appointments.Id`. (Quan hệ 1-1 với lịch hẹn).
 - `DoctorId` là khóa ngoại tới `Doctors.Id`.
-- `RevisitRequestId` nullable, khóa ngoại tới `RevisitRequests.Id`.
 
 Ghi chú:
 
 - Không gọi là chẩn đoán.
 - Đây chỉ là ghi chú tóm tắt kết quả khám trong phạm vi đồ án.
-- Nếu bác sĩ có tạo đề xuất tái khám, có thể liên kết qua `RevisitRequestId`.
+- Để tra cứu đề xuất tái khám, sử dụng liên kết ngược thông qua lịch hẹn gốc.
 
 ---
 
@@ -441,10 +439,10 @@ Trạng thái:
 
 Ràng buộc:
 
-- `AppointmentId` là khóa ngoại tới `Appointments.Id`.
+- `AppointmentId` là khóa ngoại tới `Appointments.Id` gốc (khám xong mới đề xuất). Phải thiết lập unique để đảm bảo mỗi Appointment gốc chỉ có tối đa một đề xuất tái khám.
 - `PatientId` là khóa ngoại tới `Patients.Id`.
 - `DoctorId` là khóa ngoại tới `Doctors.Id`.
-- `NewAppointmentId` nullable, khóa ngoại tới `Appointments.Id`.
+- `NewAppointmentId` nullable, khóa ngoại tới `Appointments.Id` (lịch hẹn tái khám mới được tạo). Đây là quan hệ 1-1 tùy chọn, sẽ được đánh filtered unique index (`NewAppointmentId IS NOT NULL`) khi triển khai SQL Server, đảm bảo một lịch mới chỉ xuất phát từ tối đa một đề xuất tái khám.
 
 Ghi chú:
 

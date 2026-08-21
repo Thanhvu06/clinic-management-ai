@@ -25,4 +25,8 @@ public class Appointment
     
     public ICollection<AppointmentHistory> Histories { get; set; } = new List<AppointmentHistory>();
     public ICollection<AppointmentChangeRequest> ChangeRequests { get; set; } = new List<AppointmentChangeRequest>();
+
+    public VisitSummary? VisitSummary { get; set; }
+    public RevisitRequest? RevisitRequest { get; set; }
+    public RevisitRequest? SourceRevisitRequest { get; set; }
 }

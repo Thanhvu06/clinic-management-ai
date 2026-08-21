@@ -148,7 +148,6 @@ entity "VisitSummaries" as VisitSummaries {
   DoctorId : int <<FK>>
   Summary : nvarchar
   FollowUpInstruction : nvarchar
-  RevisitRequestId : int <<FK, NULL>>
   CreatedAt : datetime
   UpdatedAt : datetime
 }
@@ -213,10 +212,10 @@ Users ||--o{ ChangeRequests : "gửi hoặc xử lý"
 Appointments ||--o| VisitSummaries : "có tóm tắt"
 Doctors ||--o{ VisitSummaries : "ghi"
 
-Appointments ||--o{ RevisitRequests : "phát sinh"
+Appointments ||--o| RevisitRequests : "phát sinh (tối đa 1)"
 Patients ||--o{ RevisitRequests : "nhận"
 Doctors ||--o{ RevisitRequests : "đề xuất"
-VisitSummaries |o--o| RevisitRequests : "liên kết"
+Appointments |o--o| RevisitRequests : "lịch hẹn mới (từ đề xuất)"
 
 Patients ||--o{ AiSuggestionLogs : "sử dụng AI"
 Specialties ||--o{ AiSuggestionLogs : "được chọn"

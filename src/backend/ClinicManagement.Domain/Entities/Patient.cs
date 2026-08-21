@@ -13,4 +13,5 @@ public class Patient
     public string? Address { get; set; }
 
     public ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
+    public ICollection<RevisitRequest> RevisitRequests { get; set; } = new List<RevisitRequest>();
 }

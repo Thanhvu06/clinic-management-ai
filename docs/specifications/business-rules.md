@@ -81,8 +81,9 @@
 - **BR-1202**: Bác sĩ có quyền đánh dấu `NoShow` nếu đã quá thời gian bắt đầu mà bệnh nhân không có mặt.
 
 ## 13. Đề xuất tái khám
-- **BR-1301**: Bác sĩ có thể tạo đề xuất tái khám (`RevisitRequests`).
-- **BR-1302**: Khi bệnh nhân đồng ý đề xuất và chọn slot, lịch hẹn mới được tạo luôn mang trạng thái `Pending` và bắt buộc phải qua bước Lễ tân xác nhận.
+- **BR-1301**: Bác sĩ có thể tạo đề xuất tái khám (`RevisitRequests`). Mỗi lịch khám gốc (`Appointment`) đã hoàn thành (`Completed`) chỉ được phép tạo TỐI ĐA MỘT đề xuất tái khám.
+- **BR-1302**: Khi bệnh nhân đồng ý đề xuất và chọn slot, một lịch hẹn mới được tạo liên kết với đề xuất tái khám thông qua cột `NewAppointmentId`. Mỗi đề xuất tái khám chỉ sinh ra tối đa một lịch hẹn mới, được bảo vệ bằng filtered unique index.
+- **BR-1303**: Lịch hẹn mới luôn mang trạng thái `Pending` và bắt buộc phải qua bước Lễ tân xác nhận. Nó tuân thủ toàn bộ quy trình xác nhận, đổi, hủy như một lịch hẹn bình thường.
 
 ## 14. DoctorLeaveRequests và PendingAppointmentResolution
 - **BR-1401**: Bác sĩ gửi yêu cầu nghỉ với trạng thái mặc định là `Pending`.
@@ -122,7 +123,6 @@
 
 # Các quyết định CHƯA CHỐT
 
-- Có giữ VisitSummaries.RevisitRequestId hay không.
 - Filtered unique index cho một change request Pending.
 - Cách đảm bảo mỗi bác sĩ chỉ có một IsPrimary.
 - Danh sách tên và SpecialtyCode chính xác của 7 khoa.
