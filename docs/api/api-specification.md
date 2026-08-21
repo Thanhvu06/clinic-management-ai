@@ -456,6 +456,7 @@ Request:
 Backend phải kiểm tra:
 
 - Bệnh nhân đang hoạt động.
+- Hồ sơ bệnh nhân phải có đủ `Gender` và `DateOfBirth`. Nếu thiếu, trả về lỗi `VALIDATION_ERROR`.
 - Bác sĩ đang hoạt động.
 - Chuyên khoa đang hoạt động.
 - Bác sĩ thuộc chuyên khoa.

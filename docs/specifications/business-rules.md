@@ -12,6 +12,8 @@
 - **BR-201**: Quan hệ 1-1 logic giữa Tài khoản và Bệnh nhân thông qua cột `UserId` (kiểu Guid). `UserId` phải là Unique để đảm bảo 1 user chỉ có 1 hồ sơ. Entity `Patient` và `Doctor` trong Domain KHÔNG chứa navigation property trỏ tới `ApplicationUser`.
 - **BR-202**: Bệnh nhân chỉ được xem và cập nhật hồ sơ của chính mình.
 - **BR-203**: Email và Số điện thoại phải là duy nhất. Do ASP.NET Core Identity không mặc định đảm bảo `PhoneNumber` unique nên phải cấu hình kiểm tra hoặc đặt ràng buộc riêng khi triển khai.
+- **BR-204**: Hồ sơ bệnh nhân có thể chưa đầy đủ ngay sau khi đăng ký (các trường `Gender`, `DateOfBirth`, `Address` cho phép null).
+- **BR-205**: Điều kiện đặt lịch: Trước khi tạo lịch hẹn (`Appointment`), `Gender` và `DateOfBirth` bắt buộc phải có giá trị (không null). `Address` không bắt buộc. Việc bổ sung thông tin này được thực hiện tại bước xác nhận đặt lịch (không bắt buộc chuyển hướng sang trang Profile). Frontend có trách nhiệm kiểm tra để hỗ trợ UX, nhưng Backend bắt buộc phải validate lại.
 
 ## 3. Quan hệ nhiều–nhiều DoctorSpecialties và quy tắc chỉ một IsPrimary
 - **BR-301**: Một bác sĩ có thể thuộc nhiều chuyên khoa thông qua bảng trung gian `DoctorSpecialties`.
@@ -125,4 +127,3 @@
 - Danh sách tên và SpecialtyCode chính xác của 7 khoa.
 - Grace period trước khi đánh dấu NoShow.
 - Thời hạn tối thiểu/tối đa khi đổi hoặc hủy lịch.
-- Kiểu Domain của Gender.

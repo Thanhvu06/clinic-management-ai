@@ -55,17 +55,17 @@ Lưu thông tin riêng của bệnh nhân.
 
 Các cột chính:
 
-- Id
+- Id (long / bigint identity)
 - UserId (kiểu Guid)
-- Gender
-- DateOfBirth
-- Address
+- Gender (nullable, lưu chuỗi: Male, Female, Other)
+- DateOfBirth (nullable, kiểu date)
+- Address (nullable)
 - CreatedAt
 - UpdatedAt
 
 Ràng buộc:
 
-- `UserId` lưu liên kết dạng Guid tới tài khoản hệ thống. Trong Domain, entity `Patient` không chứa navigation property trỏ tới `ApplicationUser`.
+- `UserId` lưu liên kết dạng Guid tới tài khoản hệ thống (khóa ngoại trỏ tới `AspNetUsers.Id`). Trong Domain, entity `Patient` không chứa navigation property trỏ tới `ApplicationUser`.
 - `UserId` phải unique để đảm bảo 1 user chỉ có 1 hồ sơ bệnh nhân.
 
 ---
