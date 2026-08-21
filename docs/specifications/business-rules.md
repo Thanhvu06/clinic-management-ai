@@ -37,8 +37,10 @@
   `NewStart < ExistingEnd AND NewEnd > ExistingStart`
 
 ## 7. Đặt lịch bằng transaction/atomic update và lỗi 409 SLOT_ALREADY_BOOKED
-- **BR-701**: Toàn bộ quy trình Đặt lịch (Booking) bắt buộc phải sử dụng Transaction của Database để tránh race condition.
-- **BR-702**: Nếu hệ thống phát hiện slot đã bị giữ (Booked), giao dịch lập tức bị hủy và API phải trả về lỗi `409 Conflict` với mã lỗi `SLOT_ALREADY_BOOKED`.
+- **BR-701**: Toàn bộ quy trình Đặt lịch (Booking) bắt buộc phải sử dụng Transaction của Database. Transaction do Application use case điều phối; Infrastructure triển khai thao tác database. Controller không trực tiếp quản lý transaction.
+- **BR-702**: Atomic update: Thao tác tạo `Appointment`, tạo `AppointmentHistory` và cập nhật cờ `IsBooked` của `AppointmentSlot` phải cùng nằm trong một transaction.
+- **BR-703**: Nếu hệ thống phát hiện slot đã bị giữ (`IsBooked = true`), giao dịch lập tức bị hủy và API phải trả về lỗi `409 Conflict` với mã lỗi `SLOT_ALREADY_BOOKED`.
+- **BR-704**: Trạng thái giữ slot: Các trạng thái Appointment đang giữ slot bao gồm: `Pending`, `Confirmed`, `PendingReschedule`, `PendingCancellation`. Các trạng thái không giữ slot bao gồm: `Cancelled`, `Completed`, `NoShow`.
 
 ## 8. Toàn bộ trạng thái Appointment
 - **BR-801**: Lịch hẹn (`Appointments`) chỉ được nằm trong các trạng thái sau:
@@ -120,7 +122,6 @@
 
 # Các quyết định CHƯA CHỐT
 
-- Quan hệ vòng AppointmentSlots.ActiveAppointmentId và Appointments.AppointmentSlotId.
 - Có giữ VisitSummaries.RevisitRequestId hay không.
 - Filtered unique index cho một change request Pending.
 - Cách đảm bảo mỗi bác sĩ chỉ có một IsPrimary.

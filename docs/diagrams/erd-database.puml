@@ -83,7 +83,6 @@ entity "AppointmentSlots" as Slots {
   StartTime : time
   EndTime : time
   IsBooked : bit
-  ActiveAppointmentId : int <<FK, NULL>>
   CreatedAt : datetime
   UpdatedAt : datetime
 }

@@ -195,14 +195,12 @@ Các cột chính:
 - StartTime
 - EndTime
 - IsBooked
-- ActiveAppointmentId
 - CreatedAt
 - UpdatedAt
 
 Ràng buộc:
 
 - `DoctorId` là khóa ngoại tới `Doctors.Id`.
-- `ActiveAppointmentId` nullable, liên kết tới lịch hẹn đang giữ slot.
 - `UNIQUE(DoctorId, SlotDate, StartTime)`.
 - `StartTime < EndTime`.
 
@@ -210,9 +208,9 @@ Ghi chú:
 
 - Mỗi slot là 30 phút.
 - `IsBooked = false`: slot còn trống.
-- `IsBooked = true`: slot đang được giữ bởi một lịch hẹn còn hiệu lực.
+- `IsBooked = true`: cờ dùng cho atomic conditional update, báo hiệu slot đang được giữ bởi một lịch hẹn còn hiệu lực.
 - Khi đặt lịch phải cập nhật slot trong transaction.
-- Không tạo unique constraint trực tiếp trên `Appointments.AppointmentSlotId`, vì lịch đã hủy vẫn cần lưu lịch sử nhưng slot phải được giải phóng.
+- Không tạo unique constraint trực tiếp trên `Appointments.AppointmentSlotId`, vì lịch đã hủy vẫn cần lưu lịch sử nhưng slot phải được giải phóng. Mối quan hệ giữa `AppointmentSlots` và `Appointments` là 1-n.
 
 ---
 
