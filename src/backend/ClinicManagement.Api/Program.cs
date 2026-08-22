@@ -1,6 +1,12 @@
 using ClinicManagement.Api.Middlewares;
 using ClinicManagement.Application.Authentication.Interfaces;
+using ClinicManagement.Application.Patients.Interfaces;
+using ClinicManagement.Application.Specialties.Interfaces;
+using ClinicManagement.Application.Doctors.Interfaces;
 using ClinicManagement.Infrastructure.Authentication;
+using ClinicManagement.Infrastructure.Patients;
+using ClinicManagement.Infrastructure.Specialties;
+using ClinicManagement.Infrastructure.Doctors;
 using ClinicManagement.Infrastructure.Identity;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -89,6 +95,9 @@ builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<IPatientService, PatientService>();
+builder.Services.AddScoped<ISpecialtyService, SpecialtyService>();
+builder.Services.AddScoped<IDoctorService, DoctorService>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
