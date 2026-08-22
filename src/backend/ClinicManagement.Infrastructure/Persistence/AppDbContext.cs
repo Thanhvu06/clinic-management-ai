@@ -32,5 +32,20 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     {
         base.OnModelCreating(builder);
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            foreach (var entityType in builder.Model.GetEntityTypes())
+            {
+                var checkConstraints = System.Linq.Enumerable.ToList(entityType.GetCheckConstraints());
+                foreach (var constraint in checkConstraints)
+                {
+                    if (constraint.Sql != null && (constraint.Sql.Contains("DATEDIFF") || constraint.Sql.Contains("MINUTE")))
+                    {
+                        entityType.RemoveCheckConstraint(constraint.Name);
+                    }
+                }
+            }
+        }
     }
 }

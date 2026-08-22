@@ -1,0 +1,143 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using ClinicManagement.Application.AI.DTOs;
+using ClinicManagement.Application.AI.Interfaces;
+using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
+namespace ClinicManagement.Infrastructure.AI;
+
+public class AiSpecialtyService : IAiSpecialtyService
+{
+    private readonly AppDbContext _dbContext;
+    private readonly IAiSpecialtySuggestionProvider _aiProvider;
+    private readonly ILogger<AiSpecialtyService> _logger;
+
+    public AiSpecialtyService(AppDbContext dbContext, IAiSpecialtySuggestionProvider aiProvider, ILogger<AiSpecialtyService> logger)
+    {
+        _dbContext = dbContext;
+        _aiProvider = aiProvider;
+        _logger = logger;
+    }
+
+    public async Task<AiSuggestionResponseDto> GetSuggestionsAsync(AiSuggestionRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var cleanInput = SanitizeInput(request.SymptomDescription);
+
+        if (string.IsNullOrWhiteSpace(cleanInput) || cleanInput.Length < 10)
+        {
+            return new AiSuggestionResponseDto { Outcome = "INVALID_INPUT" };
+        }
+
+        // 1. Get Whitelist
+        // Rule: Specialty.IsActive = true, Specialty.AiEnabled = true (if exists)
+        // And has at least 1 active Doctor with active User
+        var whitelistData = await (from s in _dbContext.Specialties
+                                   where s.IsActive && s.AiEnabled
+                                   let activeDoctorCount = (
+                                        from ds in _dbContext.DoctorSpecialties
+                                        join d in _dbContext.Doctors on ds.DoctorId equals d.Id
+                                        join u in _dbContext.Users on d.UserId equals u.Id
+                                        where ds.SpecialtyId == s.Id && d.IsActive && u.IsActive
+                                        select d.Id
+                                   ).Count()
+                                   where activeDoctorCount > 0
+                                   select new WhitelistItemDto
+                                   {
+                                       Id = s.Id,
+                                       Code = s.SpecialtyCode,
+                                       Name = s.Name
+                                   }).AsNoTracking().ToListAsync(cancellationToken);
+
+        if (!whitelistData.Any())
+        {
+            _logger.LogWarning("AI Suggestion aborted: Whitelist is empty.");
+            return new AiSuggestionResponseDto { Outcome = "MANUAL_SELECTION_REQUIRED" };
+        }
+
+        var sw = Stopwatch.StartNew();
+        List<AiProviderSuggestionResult> aiResult;
+
+        try
+        {
+            aiResult = await _aiProvider.GetSuggestionsFromAiAsync(cleanInput, whitelistData, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "AI Provider call failed after {ElapsedMs}ms", sw.ElapsedMilliseconds);
+            return new AiSuggestionResponseDto { Outcome = "UNAVAILABLE" };
+        }
+
+        sw.Stop();
+
+        if (aiResult == null || !aiResult.Any())
+        {
+            _logger.LogInformation("AI returned no results. Outcome: MANUAL_SELECTION_REQUIRED. Latency: {ElapsedMs}ms", sw.ElapsedMilliseconds);
+            return new AiSuggestionResponseDto { Outcome = "MANUAL_SELECTION_REQUIRED" };
+        }
+
+        // Post-check and Map
+        var validSuggestions = new List<AiSpecialtySuggestionDto>();
+        var addedCodes = new HashSet<string>();
+        int rank = 1;
+
+        foreach (var item in aiResult)
+        {
+            if (addedCodes.Contains(item.SpecialtyCode)) continue;
+
+            var match = whitelistData.FirstOrDefault(w => w.Code == item.SpecialtyCode);
+            if (match != null && !string.IsNullOrWhiteSpace(item.Reason) && item.Reason.Length <= 300)
+            {
+                validSuggestions.Add(new AiSpecialtySuggestionDto
+                {
+                    SpecialtyId = match.Id,
+                    SpecialtyCode = match.Code,
+                    SpecialtyName = match.Name,
+                    Rank = rank++,
+                    Reason = item.Reason.Trim()
+                });
+                addedCodes.Add(match.Code);
+            }
+
+            if (validSuggestions.Count == 3) break; // Max 3
+        }
+
+        _logger.LogInformation("AI Success. WhitelistCount: {WCount}, ValidSuggestions: {VCount}, Latency: {ElapsedMs}ms", whitelistData.Count, validSuggestions.Count, sw.ElapsedMilliseconds);
+
+        if (!validSuggestions.Any())
+        {
+            return new AiSuggestionResponseDto { Outcome = "MANUAL_SELECTION_REQUIRED" };
+        }
+
+        return new AiSuggestionResponseDto
+        {
+            Outcome = "SUCCESS",
+            Suggestions = validSuggestions
+        };
+    }
+
+    private string SanitizeInput(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+        var text = input.Trim();
+
+        // Remove email addresses
+        text = Regex.Replace(text, @"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "[EMAIL_REMOVED]");
+
+        // Remove phone numbers (simple pattern for VN/International)
+        text = Regex.Replace(text, @"\b(?:\+84|0)(?:\d[\s.-]?){8,10}\b", "[PHONE_REMOVED]");
+
+        // Strip excessively long continuous numbers (likely IDs)
+        text = Regex.Replace(text, @"\b\d{6,}\b", "[ID_REMOVED]");
+
+        return text;
+    }
+}

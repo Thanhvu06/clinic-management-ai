@@ -3,12 +3,17 @@ using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Patients.Interfaces;
 using ClinicManagement.Application.Specialties.Interfaces;
 using ClinicManagement.Application.Doctors.Interfaces;
+using ClinicManagement.Application.Schedules.Interfaces;
+using ClinicManagement.Application.Appointments.Interfaces;
 using ClinicManagement.Infrastructure.Authentication;
 using ClinicManagement.Infrastructure.Patients;
 using ClinicManagement.Infrastructure.Specialties;
 using ClinicManagement.Infrastructure.Doctors;
+using ClinicManagement.Infrastructure.Schedules;
+using ClinicManagement.Infrastructure.Appointments;
 using ClinicManagement.Infrastructure.Identity;
 using ClinicManagement.Infrastructure.Persistence;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -98,6 +103,30 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<ISpecialtyService, SpecialtyService>();
 builder.Services.AddScoped<IDoctorService, DoctorService>();
+builder.Services.AddScoped<IScheduleService, ScheduleService>();
+builder.Services.AddScoped<IAppointmentService, AppointmentService>();
+builder.Services.AddScoped<IChangeRequestService, ChangeRequestService>();
+builder.Services.AddScoped<IReceptionService, ReceptionService>();
+builder.Services.AddScoped<IDoctorAppointmentService, DoctorAppointmentService>();
+builder.Services.AddScoped<IRevisitService, RevisitService>();
+builder.Services.AddScoped<ClinicManagement.Application.Admin.Interfaces.IAdminUserService, ClinicManagement.Infrastructure.Admin.AdminUserService>();
+builder.Services.AddScoped<ClinicManagement.Application.Admin.Interfaces.IAdminSpecialtyService, ClinicManagement.Infrastructure.Admin.AdminSpecialtyService>();
+builder.Services.AddScoped<ClinicManagement.Application.Admin.Interfaces.IAdminDoctorService, ClinicManagement.Infrastructure.Admin.AdminDoctorService>();
+builder.Services.AddScoped<ClinicManagement.Application.Leaves.Interfaces.IDoctorLeaveService, ClinicManagement.Infrastructure.Leaves.DoctorLeaveService>();
+builder.Services.AddScoped<ClinicManagement.Application.Leaves.Interfaces.IAdminLeaveService, ClinicManagement.Infrastructure.Leaves.AdminLeaveService>();
+builder.Services.Configure<ClinicManagement.Infrastructure.AI.AiProviderOptions>(builder.Configuration.GetSection(ClinicManagement.Infrastructure.AI.AiProviderOptions.SectionName));
+builder.Services.AddHttpClient<ClinicManagement.Application.AI.Interfaces.IAiSpecialtySuggestionProvider, ClinicManagement.Infrastructure.AI.GeminiAiProvider>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSpecialtyService, ClinicManagement.Infrastructure.AI.AiSpecialtyService>();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("ai_endpoint", opt =>
+    {
+        opt.Window = System.TimeSpan.FromMinutes(1);
+        opt.PermitLimit = 10;
+        opt.QueueLimit = 0;
+    });
+});
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
@@ -117,10 +146,12 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }
