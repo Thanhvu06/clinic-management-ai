@@ -23,7 +23,9 @@ public class AppointmentDto
     public string AppointmentCode { get; set; } = string.Empty;
     public long PatientId { get; set; }
     public long DoctorId { get; set; }
+    public string DoctorName { get; set; } = string.Empty;
     public long SpecialtyId { get; set; }
+    public string SpecialtyName { get; set; } = string.Empty;
     public long AppointmentSlotId { get; set; }
     public DateOnly AppointmentDate { get; set; }
     public TimeOnly StartTime { get; set; }

@@ -122,6 +122,7 @@ PATIENT SYMPTOM DESCRIPTION:
                     var text = parts[0].GetProperty("text").GetString();
                     if (!string.IsNullOrWhiteSpace(text))
                     {
+                        text = text.Replace("```json", "").Replace("```", "").Trim();
                         var result = JsonSerializer.Deserialize<List<AiProviderSuggestionResult>>(text, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                         return result ?? new List<AiProviderSuggestionResult>();
                     }

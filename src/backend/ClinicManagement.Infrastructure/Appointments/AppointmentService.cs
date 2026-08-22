@@ -171,7 +171,9 @@ public class AppointmentService : IAppointmentService
                 AppointmentCode = appointment.AppointmentCode,
                 PatientId = appointment.PatientId,
                 DoctorId = appointment.DoctorId,
+                DoctorName = "",
                 SpecialtyId = appointment.SpecialtyId,
+                SpecialtyName = "",
                 AppointmentSlotId = appointment.AppointmentSlotId,
                 AppointmentDate = appointment.AppointmentDate,
                 StartTime = appointment.StartTime,
@@ -209,23 +211,28 @@ public class AppointmentService : IAppointmentService
         query = query.OrderByDescending(a => a.AppointmentDate).ThenByDescending(a => a.StartTime);
 
         var totalItems = await query.CountAsync();
-        var items = await query
+        var items = await (from a in query
+                           join d in _dbContext.Doctors on a.DoctorId equals d.Id
+                           join u in _dbContext.Users on d.UserId equals u.Id
+                           join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
+                           select new AppointmentDto
+                           {
+                               Id = a.Id,
+                               AppointmentCode = a.AppointmentCode,
+                               PatientId = a.PatientId,
+                               DoctorId = a.DoctorId,
+                               DoctorName = u.FullName,
+                               SpecialtyId = a.SpecialtyId,
+                               SpecialtyName = s.Name,
+                               AppointmentSlotId = a.AppointmentSlotId,
+                               AppointmentDate = a.AppointmentDate,
+                               StartTime = a.StartTime,
+                               EndTime = a.EndTime,
+                               Reason = a.Reason,
+                               Status = a.Status.ToString()
+                           })
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(a => new AppointmentDto
-            {
-                Id = a.Id,
-                AppointmentCode = a.AppointmentCode,
-                PatientId = a.PatientId,
-                DoctorId = a.DoctorId,
-                SpecialtyId = a.SpecialtyId,
-                AppointmentSlotId = a.AppointmentSlotId,
-                AppointmentDate = a.AppointmentDate,
-                StartTime = a.StartTime,
-                EndTime = a.EndTime,
-                Reason = a.Reason,
-                Status = a.Status.ToString()
-            })
             .ToListAsync();
 
         return new PagedResult<AppointmentDto>(items, totalItems, page, pageSize);
@@ -241,27 +248,32 @@ public class AppointmentService : IAppointmentService
         if (patient == null)
             throw new NotFoundException("Hồ sơ bệnh nhân không tồn tại.");
 
-        var appointment = await _dbContext.Appointments
-            .AsNoTracking()
-            .FirstOrDefaultAsync(a => a.Id == appointmentId && a.PatientId == patient.Id);
+        var appointment = await (from a in _dbContext.Appointments.AsNoTracking()
+                                 join d in _dbContext.Doctors on a.DoctorId equals d.Id
+                                 join u in _dbContext.Users on d.UserId equals u.Id
+                                 join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
+                                 where a.Id == appointmentId && a.PatientId == patient.Id
+                                 select new AppointmentDto
+                                 {
+                                     Id = a.Id,
+                                     AppointmentCode = a.AppointmentCode,
+                                     PatientId = a.PatientId,
+                                     DoctorId = a.DoctorId,
+                                     DoctorName = u.FullName,
+                                     SpecialtyId = a.SpecialtyId,
+                                     SpecialtyName = s.Name,
+                                     AppointmentSlotId = a.AppointmentSlotId,
+                                     AppointmentDate = a.AppointmentDate,
+                                     StartTime = a.StartTime,
+                                     EndTime = a.EndTime,
+                                     Reason = a.Reason,
+                                     Status = a.Status.ToString()
+                                 }).FirstOrDefaultAsync();
 
         if (appointment == null)
             throw new NotFoundException("Lịch hẹn không tồn tại hoặc bạn không có quyền xem.");
 
-        return new AppointmentDto
-        {
-            Id = appointment.Id,
-            AppointmentCode = appointment.AppointmentCode,
-            PatientId = appointment.PatientId,
-            DoctorId = appointment.DoctorId,
-            SpecialtyId = appointment.SpecialtyId,
-            AppointmentSlotId = appointment.AppointmentSlotId,
-            AppointmentDate = appointment.AppointmentDate,
-            StartTime = appointment.StartTime,
-            EndTime = appointment.EndTime,
-            Reason = appointment.Reason,
-            Status = appointment.Status.ToString()
-        };
+        return appointment;
     }
 
     public async Task<List<AppointmentHistoryDto>> GetAppointmentHistoryAsync(long appointmentId)

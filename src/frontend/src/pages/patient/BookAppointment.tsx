@@ -7,22 +7,25 @@ import { Sparkles, CalendarDays, AlertTriangle, CheckCircle2, User, Clock, Steth
 
 interface Specialty {
     id: number;
-    name: string;
+    specialtyCode: string;
+    specialtyName: string;  // API trả về specialtyName (không phải "name")
     description: string;
+    aiEnabled: boolean;
 }
 
 interface Doctor {
     id: number;
     fullName: string;
-    specialtyName: string;
+    academicTitle?: string;
+    experienceYears?: number;
 }
 
 interface Slot {
-    id: number;
+    slotId: number;   // API trả về slotId (không phải "id")
+    doctorId: number;
     slotDate: string;
     startTime: string;
     endTime: string;
-    isBooked: boolean;
 }
 
 export const BookAppointment: React.FC = () => {
@@ -74,9 +77,11 @@ export const BookAppointment: React.FC = () => {
         }
         const fetchDoctors = async () => {
             try {
-                const res = await axiosClient.get<any, ApiResponse<Doctor[]>>(`/specialties/${specialtyId}/doctors`);
+                const res = await axiosClient.get<any, ApiResponse<any>>(`/specialties/${specialtyId}/doctors`);
                 if (res.success && res.data) {
-                    setDoctors(res.data);
+                    // API trả về paginated: { items, page, pageSize, ... }
+                    const list = Array.isArray(res.data) ? res.data : (res.data.items ?? []);
+                    setDoctors(list);
                 }
             } catch (err) {}
         };
@@ -105,7 +110,7 @@ export const BookAppointment: React.FC = () => {
 
     const handleAiSuggest = async () => {
         if (!symptomDescription || symptomDescription.length < 10) {
-            alert('Vui lòng mô tả chi tiết hơn (ít nhất 10 ký tự).');
+            setError('Vui lòng mô tả chi tiết hơn (ít nhất 10 ký tự).');
             return;
         }
         setLoadingAi(true);
@@ -115,14 +120,14 @@ export const BookAppointment: React.FC = () => {
             const res = await axiosClient.post<any, ApiResponse<any>>('/ai/specialty-suggestions', { symptomDescription });
             if (res.success && res.data) {
                 if (res.data.outcome === 'SUCCESS') {
-                    setAiSuggestions(res.data.suggestions);
+                    setAiSuggestions((res.data.suggestions || []).slice(0, 3));
                     setAiMessage(res.data.disclaimer);
                 } else {
                     setAiMessage('Không thể gợi ý. Vui lòng tự chọn chuyên khoa bên dưới.');
                 }
             }
         } catch (err) {
-            setAiMessage('Tính năng gợi ý tạm thời không khả dụng.');
+            setAiMessage('Tính năng gợi ý tạm thời không khả dụng. Vui lòng tự chọn chuyên khoa bên dưới.');
         } finally {
             setLoadingAi(false);
         }
@@ -254,7 +259,7 @@ export const BookAppointment: React.FC = () => {
                                 <label>Chuyên khoa (*)</label>
                                 <select className="form-select" value={specialtyId} onChange={(e) => setSpecialtyId(Number(e.target.value))}>
                                     <option value="">-- Chọn chuyên khoa --</option>
-                                    {specialties.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    {specialties.map(s => <option key={s.id} value={s.id}>{s.specialtyName}</option>)}
                                 </select>
                             </div>
 
@@ -279,18 +284,22 @@ export const BookAppointment: React.FC = () => {
 
                         <div className={styles.formGroup} style={{ marginTop: '10px' }}>
                             <label>Khung giờ khám (*)</label>
-                            {loadingSlots ? <div style={{ color: 'var(--c-muted)' }}>Đang tải ca khám...</div> : (
+                            {loadingSlots ? (
+                                <div style={{ color: 'var(--c-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    Đang tải khung giờ...
+                                </div>
+                            ) : (
                                 <div className={styles.slotsContainer}>
                                     {!doctorId ? (
-                                        <div style={{ color: 'var(--c-muted)', fontSize: '0.9rem' }}>Vui lòng chọn bác sĩ và ngày khám.</div>
+                                        <div style={{ color: 'var(--c-muted)', fontSize: '0.95rem', padding: '12px', background: 'var(--c-bg)', borderRadius: '8px', width: '100%', textAlign: 'center' }}>Vui lòng chọn bác sĩ và ngày khám.</div>
                                     ) : slots.length === 0 ? (
-                                        <div style={{ color: 'var(--c-muted)', fontSize: '0.9rem' }}>Không có khung giờ trống trong ngày này.</div>
+                                        <div style={{ color: 'var(--c-muted)', fontSize: '0.95rem', padding: '12px', background: 'var(--c-bg)', borderRadius: '8px', width: '100%', textAlign: 'center' }}>Bác sĩ chưa có lịch trống trong ngày này. Vui lòng chọn ngày khác.</div>
                                     ) : (
                                         slots.map(s => (
-                                            <button 
-                                                key={s.id}
-                                                className={`${styles.slotBtn} ${slotId === s.id ? styles.slotSelected : ''}`}
-                                                onClick={() => setSlotId(s.id)}
+                                            <button
+                                                key={s.slotId}
+                                                className={`${styles.slotBtn} ${slotId === s.slotId ? styles.slotSelected : ''}`}
+                                                onClick={() => setSlotId(s.slotId)}
                                             >
                                                 {s.startTime.substring(0, 5)}
                                             </button>
@@ -316,7 +325,7 @@ export const BookAppointment: React.FC = () => {
                     <div className={styles.summaryTicket}>
                         <div className={styles.summaryRow}>
                             <span className={styles.summaryLabel}><Stethoscope size={16} style={{ verticalAlign: 'middle', marginRight: '5px' }}/> Chuyên khoa</span>
-                            <span className={styles.summaryValue}>{specialties.find(s => s.id === specialtyId)?.name}</span>
+                            <span className={styles.summaryValue}>{specialties.find(s => s.id === specialtyId)?.specialtyName}</span>
                         </div>
                         <div className={styles.summaryRow}>
                             <span className={styles.summaryLabel}><User size={16} style={{ verticalAlign: 'middle', marginRight: '5px' }}/> Bác sĩ phụ trách</span>
@@ -328,7 +337,7 @@ export const BookAppointment: React.FC = () => {
                         </div>
                         <div className={styles.summaryRow}>
                             <span className={styles.summaryLabel}><Clock size={16} style={{ verticalAlign: 'middle', marginRight: '5px' }}/> Giờ khám</span>
-                            <span className={styles.summaryValue}>{slots.find(s => s.id === slotId)?.startTime.substring(0, 5)}</span>
+                            <span className={styles.summaryValue}>{slots.find(s => s.slotId === slotId)?.startTime.substring(0, 5)}</span>
                         </div>
                         <div className={styles.summaryRow}>
                             <span className={styles.summaryLabel}><FileText size={16} style={{ verticalAlign: 'middle', marginRight: '5px' }}/> Lý do khám</span>

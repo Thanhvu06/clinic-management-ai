@@ -3,12 +3,21 @@ import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { CalendarDays, Stethoscope, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '../../components/Toast';
 
 export const PatientRevisit: React.FC = () => {
     const [requests, setRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<number | null>(null);
+    
+    // Modal state
+    const [showRejectModal, setShowRejectModal] = useState(false);
+    const [rejectingId, setRejectingId] = useState<number | null>(null);
+    const [rejectReason, setRejectReason] = useState('');
+    const [rejectError, setRejectError] = useState('');
+
     const navigate = useNavigate();
+    const { warning, success } = useToast();
 
     const fetchRequests = async () => {
         try {
@@ -28,27 +37,36 @@ export const PatientRevisit: React.FC = () => {
     }, []);
 
     const handleAccept = () => {
-        // According to instructions: "Chọn slot thật. Tạo lịch tái khám mới đúng API backend"
-        // But the API for AcceptRevisitRequestDto requires TargetSlotId. We would need a flow to select it.
-        // For simplicity, we navigate to the booking page with some state, or we could render an inline selector.
-        // Since the prompt asks to select slot, let's just alert for now, or route to book.
-        alert('Để chấp nhận, vui lòng đặt lịch khám mới và chọn lịch gợi ý từ bác sĩ.');
+        warning('Vui lòng đặt lịch khám mới theo ngày gợi ý.');
         navigate('/patient/book');
     };
 
-    const handleReject = async (requestId: number) => {
-        const reason = prompt('Vui lòng nhập lý do từ chối (tùy chọn):');
-        if (reason === null) return; // User cancelled prompt
+    const openRejectModal = (id: number) => {
+        setRejectingId(id);
+        setRejectReason('');
+        setRejectError('');
+        setShowRejectModal(true);
+    };
 
-        setActionLoading(requestId);
+    const closeRejectModal = () => {
+        setShowRejectModal(false);
+        setRejectingId(null);
+    };
+
+    const submitReject = async () => {
+        if (!rejectingId) return;
+
+        setActionLoading(rejectingId);
+        setRejectError('');
         try {
-            const res = await axiosClient.post<any, ApiResponse<any>>(`/revisit-requests/${requestId}/reject`, { reason });
+            const res = await axiosClient.post<any, ApiResponse<any>>(`/revisit-requests/${rejectingId}/reject`, { reason: rejectReason });
             if (res.success) {
-                alert('Đã từ chối lịch tái khám.');
+                success('Đã từ chối lịch tái khám.');
                 fetchRequests();
+                closeRejectModal();
             }
         } catch (error: any) {
-            alert(error?.message || 'Có lỗi xảy ra khi từ chối.');
+            setRejectError(error?.message || 'Có lỗi xảy ra khi từ chối.');
         } finally {
             setActionLoading(null);
         }
@@ -115,7 +133,7 @@ export const PatientRevisit: React.FC = () => {
                                     <button 
                                         className="btn-danger" 
                                         style={{ padding: '6px 12px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px', background: 'white', color: 'var(--c-danger)', border: '1px solid var(--c-danger)' }} 
-                                        onClick={() => handleReject(req.id)}
+                                        onClick={() => openRejectModal(req.id)}
                                         disabled={actionLoading === req.id}
                                     >
                                         <XCircle size={16} /> Từ chối
@@ -123,7 +141,7 @@ export const PatientRevisit: React.FC = () => {
                                     <button 
                                         className="btn-primary" 
                                         style={{ padding: '6px 12px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }} 
-                                        onClick={() => handleAccept()}
+                                        onClick={handleAccept}
                                         disabled={actionLoading === req.id}
                                     >
                                         <CheckCircle size={16} /> Chọn lịch ngay
@@ -132,6 +150,53 @@ export const PatientRevisit: React.FC = () => {
                             )}
                         </div>
                     ))}
+                </div>
+            )}
+
+            {showRejectModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+                }}>
+                    <div style={{
+                        background: 'white', padding: '24px', borderRadius: '12px',
+                        width: '100%', maxWidth: '500px', margin: '0 20px',
+                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--c-danger-bg)', color: 'var(--c-danger)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <AlertCircle size={24} />
+                            </div>
+                            <h3 style={{ margin: 0, color: 'var(--c-text-dark)', fontSize: '1.2rem' }}>Từ chối tái khám</h3>
+                        </div>
+                        
+                        <p style={{ color: 'var(--c-text)', marginBottom: '16px' }}>Bạn có chắc chắn muốn từ chối đề xuất tái khám này?</p>
+                        
+                        {rejectError && (
+                            <div style={{ background: 'var(--c-danger-bg)', color: 'var(--c-danger)', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem' }}>
+                                {rejectError}
+                            </div>
+                        )}
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, fontSize: '0.9rem' }}>Lý do từ chối (tùy chọn)</label>
+                            <textarea
+                                className="form-textarea"
+                                rows={3}
+                                placeholder="Nhập lý do từ chối..."
+                                value={rejectReason}
+                                onChange={(e) => setRejectReason(e.target.value)}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                            <button className="btn-secondary" onClick={closeRejectModal} disabled={actionLoading === rejectingId}>Quay lại</button>
+                            <button className="btn-danger" onClick={submitReject} disabled={actionLoading === rejectingId}>
+                                {actionLoading === rejectingId ? 'Đang xử lý...' : 'Xác nhận từ chối'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

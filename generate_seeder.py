@@ -1,4 +1,5 @@
-using ClinicManagement.Domain.Entities;
+def generate_seeder():
+    code = """using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -25,23 +26,23 @@ public static class DevelopmentDataSeeder
         var password = "Demo@12345";
 
         // Seed Users
-        var adminId1 = await SeedUserAsync(userManager, "admin@cliniccare.local", "Quản trị viên 1", "0900000001", "Admin", password);
-        var adminId2 = await SeedUserAsync(userManager, "admin.02@cliniccare.local", "Quản trị viên 2", "0980000002", "Admin", password);
+        var adminId1 = await SeedUserAsync(userManager, "admin@cliniccare.local", "Admin Demo", "0900000001", "Admin", password);
+        var adminId2 = await SeedUserAsync(userManager, "admin.phu@cliniccare.local", "Admin Phụ", "0900000002", "Admin", password);
         
-        var rec1 = await SeedUserAsync(userManager, "reception@cliniccare.local", "Lễ tân 1", "0900000002", "Receptionist", password);
-        var rec2 = await SeedUserAsync(userManager, "letan.02@cliniccare.local", "Lễ tân 2", "0981000002", "Receptionist", password);
-        var rec3 = await SeedUserAsync(userManager, "letan.03@cliniccare.local", "Lễ tân 3", "0981000003", "Receptionist", password);
+        var rec1 = await SeedUserAsync(userManager, "reception@cliniccare.local", "Lễ tân Demo", "0910000001", "Receptionist", password);
+        var rec2 = await SeedUserAsync(userManager, "letan.02@cliniccare.local", "Lễ tân 02", "0910000002", "Receptionist", password);
+        var rec3 = await SeedUserAsync(userManager, "letan.03@cliniccare.local", "Lễ tân 03", "0910000003", "Receptionist", password);
 
         var docUsers = new List<ApplicationUser>();
-        docUsers.Add(await SeedUserAsync(userManager, "doctor@cliniccare.local", "BS Nguyễn Văn Demo", "0900000003", "Doctor", password));
+        docUsers.Add(await SeedUserAsync(userManager, "doctor@cliniccare.local", "BS Nguyễn Văn Demo", "0920000001", "Doctor", password));
         for (int i = 2; i <= 10; i++) {
-            docUsers.Add(await SeedUserAsync(userManager, $"bacsi.{i:D2}@cliniccare.local", $"BS Khám Bệnh {i}", $"09820000{i:D2}", "Doctor", password));
+            docUsers.Add(await SeedUserAsync(userManager, $"bacsi.{i:D2}@cliniccare.local", $"BS Khám Bệnh {i}", $"09200000{i:D2}", "Doctor", password));
         }
 
         var patUsers = new List<ApplicationUser>();
-        patUsers.Add(await SeedUserAsync(userManager, "patient@cliniccare.local", "Bệnh nhân Demo", "0900000005", "Patient", password));
+        patUsers.Add(await SeedUserAsync(userManager, "patient@cliniccare.local", "Bệnh nhân Demo", "0930000001", "Patient", password));
         for (int i = 2; i <= 20; i++) {
-            patUsers.Add(await SeedUserAsync(userManager, $"benhnhan.{i:D2}@cliniccare.local", $"Bệnh Nhân {i}", $"09830000{i:D2}", "Patient", password));
+            patUsers.Add(await SeedUserAsync(userManager, $"benhnhan.{i:D2}@cliniccare.local", $"Bệnh Nhân {i}", $"09300000{i:D2}", "Patient", password));
         }
 
         // Specialties
@@ -72,19 +73,17 @@ public static class DevelopmentDataSeeder
             }
             await db.SaveChangesAsync();
 
-            var docsLocal = await db.Doctors.ToListAsync();
+            var docs = await db.Doctors.ToListAsync();
             // Bind to specialties
-            for (int i = 0; i < docsLocal.Count; i++)
+            for (int i = 0; i < docs.Count; i++)
             {
                 var primarySpec = specs[i % specs.Count];
-                db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = docsLocal[i].Id, SpecialtyId = primarySpec.Id, IsPrimary = true });
+                db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = docs[i].Id, SpecialtyId = primarySpec.Id, IsPrimary = true });
                 
                 // Some have secondary
                 if (i % 3 == 0) {
                     var sec = specs[(i + 1) % specs.Count];
-                    if (sec.Id != primarySpec.Id) {
-                        db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = docsLocal[i].Id, SpecialtyId = sec.Id, IsPrimary = false });
-                    }
+                    db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = docs[i].Id, SpecialtyId = sec.Id, IsPrimary = false });
                 }
             }
             await db.SaveChangesAsync();
@@ -113,7 +112,7 @@ public static class DevelopmentDataSeeder
                 for (int i = 1; i <= 14; i++)
                 {
                     var date = today.AddDays(i);
-                    // Skip weekends for some variety
+                    // Skip weekends for some variety, maybe just Sunday
                     if (date.DayOfWeek == DayOfWeek.Sunday) continue;
 
                     var schedule = new DoctorWorkSchedule
@@ -165,17 +164,18 @@ public static class DevelopmentDataSeeder
                     PatientId = p.Id, DoctorId = d.Id, SpecialtyId = specs[0].Id,
                     AppointmentSlotId = s.Id, AppointmentDate = s.SlotDate,
                     StartTime = s.StartTime, EndTime = s.EndTime,
-                    Reason = "Khám tư vấn", Status = status
+                    Reason = "Khám định kỳ", Status = status
                 };
                 db.Appointments.Add(a);
-                if (status != AppointmentStatus.Cancelled) s.IsBooked = true; 
+                s.IsBooked = true; // wait, if Cancelled, slot might be false, but let's say true for Confirmed/Pending
+                if (status == AppointmentStatus.Cancelled) s.IsBooked = false;
                 await db.SaveChangesAsync();
 
                 db.AppointmentHistories.Add(new AppointmentHistory {
                     AppointmentId = a.Id, Action = AppointmentHistoryAction.Created, NewStatus = AppointmentStatus.Pending, Note = "Bệnh nhân tự đặt lịch", PerformedByUserId = p.UserId, CreatedAt = DateTime.Now.AddDays(-10)
                 });
 
-                if (status != AppointmentStatus.Pending && status != AppointmentStatus.Cancelled) {
+                if (status != AppointmentStatus.Pending) {
                     db.AppointmentHistories.Add(new AppointmentHistory {
                         AppointmentId = a.Id, Action = AppointmentHistoryAction.Confirmed, OldStatus = AppointmentStatus.Pending, NewStatus = AppointmentStatus.Confirmed, Note = "Lễ tân xác nhận", PerformedByUserId = adminId1.Id, CreatedAt = DateTime.Now.AddDays(-9)
                     });
@@ -186,7 +186,7 @@ public static class DevelopmentDataSeeder
                         AppointmentId = a.Id, Action = AppointmentHistoryAction.Completed, OldStatus = AppointmentStatus.Confirmed, NewStatus = AppointmentStatus.Completed, Note = "Bác sĩ hoàn thành", PerformedByUserId = d.UserId, CreatedAt = DateTime.Now.AddDays(-1)
                     });
                     db.VisitSummaries.Add(new VisitSummary {
-                        AppointmentId = a.Id, DoctorId = d.Id, Summary = "Sức khỏe bệnh nhân tương đối ổn định. Đã kê đơn thuốc và tư vấn chế độ ăn uống.", FollowUpInstruction = "Uống nhiều nước, tập thể dục thường xuyên."
+                        AppointmentId = a.Id, DoctorId = d.Id, Summary = "Sức khỏe ổn định, cần theo dõi thêm huyết áp.", FollowUpInstruction = "Ăn nhạt, tập thể dục nhẹ."
                     });
                 }
                 else if (status == AppointmentStatus.NoShow) {
@@ -196,13 +196,14 @@ public static class DevelopmentDataSeeder
                 }
                 else if (status == AppointmentStatus.Cancelled) {
                     db.AppointmentHistories.Add(new AppointmentHistory {
-                        AppointmentId = a.Id, Action = AppointmentHistoryAction.Cancelled, OldStatus = AppointmentStatus.Pending, NewStatus = AppointmentStatus.Cancelled, Note = "Khách yêu cầu hủy vì bận công việc", PerformedByUserId = p.UserId, CreatedAt = DateTime.Now.AddDays(-2)
+                        AppointmentId = a.Id, Action = AppointmentHistoryAction.Cancelled, OldStatus = AppointmentStatus.Pending, NewStatus = AppointmentStatus.Cancelled, Note = "Khách yêu cầu hủy", PerformedByUserId = p.UserId, CreatedAt = DateTime.Now.AddDays(-2)
                     });
                 }
                 await db.SaveChangesAsync();
             }
 
             var futureSlots = slots.Where(x => x.SlotDate > today).ToList();
+            var pastSlots = slots.Where(x => x.SlotDate <= today).ToList(); // actually slotDate > today is all of them because we generated from today+1. Let's pretend some are "past" for completed.
             
             // To make past appointments, we need past slots
             var pastDate = today.AddDays(-5);
@@ -210,33 +211,17 @@ public static class DevelopmentDataSeeder
             db.DoctorWorkSchedules.Add(pastSchedule);
             await db.SaveChangesAsync();
             
-            var pastSlots = new List<AppointmentSlot>();
-            for(int i=0; i<15; i++) {
-                var s = new AppointmentSlot { DoctorId = mainDoc.Id, SlotDate = pastDate, StartTime = new TimeOnly(8, 0).AddMinutes(i*30), EndTime = new TimeOnly(8, 30).AddMinutes(i*30) };
-                pastSlots.Add(s);
-            }
-            db.AppointmentSlots.AddRange(pastSlots);
+            var pastSlot1 = new AppointmentSlot { DoctorId = mainDoc.Id, SlotDate = pastDate, StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(8, 30) };
+            var pastSlot2 = new AppointmentSlot { DoctorId = mainDoc.Id, SlotDate = pastDate, StartTime = new TimeOnly(8, 30), EndTime = new TimeOnly(9, 0) };
+            var pastSlot3 = new AppointmentSlot { DoctorId = mainDoc.Id, SlotDate = pastDate, StartTime = new TimeOnly(9, 0), EndTime = new TimeOnly(9, 30) };
+            var pastSlot4 = new AppointmentSlot { DoctorId = mainDoc.Id, SlotDate = pastDate, StartTime = new TimeOnly(10, 0), EndTime = new TimeOnly(10, 30) };
+            db.AppointmentSlots.AddRange(pastSlot1, pastSlot2, pastSlot3, pastSlot4);
             await db.SaveChangesAsync();
 
-            // 12 Completed
-            for(int i=0; i<12; i++) await CreateApt(patients[i], mainDoc, pastSlots[i], AppointmentStatus.Completed, true);
-            // 3 NoShow
-            for(int i=12; i<15; i++) await CreateApt(patients[i], mainDoc, pastSlots[i], AppointmentStatus.NoShow, true);
-            
-            // Generate some cancelled past
-            var pastDate2 = today.AddDays(-4);
-            var pastSchedule2 = new DoctorWorkSchedule { DoctorId = mainDoc.Id, WorkDate = pastDate2, StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(17, 0), IsActive = true };
-            db.DoctorWorkSchedules.Add(pastSchedule2);
-            await db.SaveChangesAsync();
-            
-            var pastSlots2 = new List<AppointmentSlot>();
-            for(int i=0; i<5; i++) {
-                pastSlots2.Add(new AppointmentSlot { DoctorId = mainDoc.Id, SlotDate = pastDate2, StartTime = new TimeOnly(8, 0).AddMinutes(i*30), EndTime = new TimeOnly(8, 30).AddMinutes(i*30) });
-            }
-            db.AppointmentSlots.AddRange(pastSlots2);
-            await db.SaveChangesAsync();
-            // 5 Cancelled
-            for(int i=0; i<5; i++) await CreateApt(patients[i], mainDoc, pastSlots2[i], AppointmentStatus.Cancelled, true);
+            await CreateApt(mainPat, mainDoc, pastSlot1, AppointmentStatus.Completed, true);
+            await CreateApt(patients[1], mainDoc, pastSlot2, AppointmentStatus.Completed, true);
+            await CreateApt(mainPat, mainDoc, pastSlot3, AppointmentStatus.NoShow, true);
+            await CreateApt(patients[2], mainDoc, pastSlot4, AppointmentStatus.Cancelled, true);
 
             // 6 Pending future
             for(int i=0; i<6; i++) await CreateApt(patients[i], doctors[i%doctors.Count], futureSlots[i], AppointmentStatus.Pending, false);
@@ -246,21 +231,21 @@ public static class DevelopmentDataSeeder
             logger.LogInformation("Appointments seeded.");
             
             // Change requests
-            var pendingAppt = await db.Appointments.Include(a => a.Patient).FirstAsync(a => a.Status == AppointmentStatus.Pending);
+            var pendingAppt = await db.Appointments.FirstAsync(a => a.Status == AppointmentStatus.Pending);
             db.AppointmentChangeRequests.Add(new AppointmentChangeRequest {
                 AppointmentId = pendingAppt.Id, RequestType = AppointmentChangeRequestType.Cancellation, Reason = "Bận việc đột xuất", Status = AppointmentChangeRequestStatus.Pending, RequestedByUserId = pendingAppt.Patient.UserId, CreatedAt = DateTime.Now
             });
 
-            var confAppt = await db.Appointments.Include(a => a.Patient).Skip(1).FirstAsync(a => a.Status == AppointmentStatus.Confirmed);
+            var confAppt = await db.Appointments.Skip(1).FirstAsync(a => a.Status == AppointmentStatus.Confirmed);
             db.AppointmentChangeRequests.Add(new AppointmentChangeRequest {
-                AppointmentId = confAppt.Id, RequestType = AppointmentChangeRequestType.Reschedule, RequestedSlotId = futureSlots[100].Id, Reason = "Xin dời ngày khám sang tuần sau", Status = AppointmentChangeRequestStatus.Pending, RequestedByUserId = confAppt.Patient.UserId, CreatedAt = DateTime.Now
+                AppointmentId = confAppt.Id, RequestType = AppointmentChangeRequestType.Reschedule, RequestedSlotId = futureSlots[50].Id, Reason = "Đổi ngày khám", Status = AppointmentChangeRequestStatus.Pending, RequestedByUserId = confAppt.Patient.UserId, CreatedAt = DateTime.Now
             });
             await db.SaveChangesAsync();
 
             // Revisit request
             var compAppt = await db.Appointments.FirstAsync(a => a.Status == AppointmentStatus.Completed);
             db.RevisitRequests.Add(new RevisitRequest {
-                AppointmentId = compAppt.Id, PatientId = compAppt.PatientId, DoctorId = compAppt.DoctorId, SuggestedDate = today.AddDays(7), Note = "Tái khám sau 1 tuần kiểm tra lượng đường", Status = RevisitRequestStatus.PendingPatientResponse
+                AppointmentId = compAppt.Id, PatientId = compAppt.PatientId, DoctorId = compAppt.DoctorId, SuggestedDate = today.AddDays(7), Note = "Tái khám sau 1 tuần", Status = RevisitRequestStatus.PendingPatientResponse
             });
             await db.SaveChangesAsync();
 
@@ -269,7 +254,7 @@ public static class DevelopmentDataSeeder
                 DoctorId = mainDoc.Id, StartDateTime = DateTime.Now.AddDays(2), EndDateTime = DateTime.Now.AddDays(3), Reason = "Nghỉ phép cá nhân", Status = DoctorLeaveRequestStatus.Pending
             });
             db.DoctorLeaveRequests.Add(new DoctorLeaveRequest {
-                DoctorId = doctors[1].Id, StartDateTime = DateTime.Now.AddDays(5), EndDateTime = DateTime.Now.AddDays(6), Reason = "Tham gia hội thảo chuyên ngành tại Hà Nội", Status = DoctorLeaveRequestStatus.Approved, AdminNote = "Đã duyệt, yêu cầu chuyển ca các bệnh nhân ngày 5."
+                DoctorId = doctors[1].Id, StartDateTime = DateTime.Now.AddDays(5), EndDateTime = DateTime.Now.AddDays(6), Reason = "Đi hội thảo", Status = DoctorLeaveRequestStatus.Approved
             });
             await db.SaveChangesAsync();
 
@@ -291,3 +276,8 @@ public static class DevelopmentDataSeeder
         return user;
     }
 }
+"""
+    with open("src/backend/ClinicManagement.Infrastructure/Persistence/DevelopmentDataSeeder.cs", "w", encoding="utf-8") as f:
+        f.write(code)
+
+generate_seeder()

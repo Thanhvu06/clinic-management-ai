@@ -1,0 +1,69 @@
+@startuml
+title Activity Diagram - Quản lý lịch nghỉ bác sĩ
+
+start
+
+:Bác sĩ đăng nhập vào hệ thống;
+:Bác sĩ chọn chức năng yêu cầu nghỉ;
+:Bác sĩ nhập thời gian nghỉ và lý do nghỉ;
+:Hệ thống kiểm tra thời gian nghỉ hợp lệ;
+
+if (Yêu cầu hợp lệ?) then (Có)
+  :Tạo yêu cầu nghỉ trạng thái Pending;
+  :Ghi lịch sử thao tác;
+  :Thông báo đã gửi yêu cầu nghỉ;
+else (Không)
+  :Thông báo lỗi;
+  stop
+endif
+
+if (Bác sĩ muốn hủy yêu cầu trước khi duyệt?) then (Có)
+  :Bác sĩ chọn yêu cầu nghỉ Pending;
+  :Hủy yêu cầu nghỉ;
+  :Ghi lịch sử thao tác;
+  :Thông báo đã hủy yêu cầu nghỉ;
+  stop
+else (Không)
+endif
+
+:Admin đăng nhập vào hệ thống;
+:Admin xem danh sách yêu cầu nghỉ Pending;
+:Admin kiểm tra thông tin yêu cầu nghỉ;
+:Hệ thống kiểm tra lịch hẹn bị ảnh hưởng;
+
+if (Có lịch hẹn bị ảnh hưởng?) then (Có)
+  :Hiển thị danh sách lịch hẹn bị ảnh hưởng;
+  :Chuyển yêu cầu nghỉ sang trạng thái PendingAppointmentResolution;
+  :Thông báo cho lễ tân xử lý lịch bị ảnh hưởng;
+
+  :Lễ tân đăng nhập vào hệ thống;
+  :Lễ tân xem danh sách lịch hẹn bị ảnh hưởng;
+  :Lễ tân liên hệ bệnh nhân và xử lý đổi/hủy lịch;
+
+  if (Đã xử lý xong lịch ảnh hưởng?) then (Có)
+    :Cập nhật các lịch hẹn liên quan;
+    :Ghi lịch sử thao tác;
+    :Thông báo cho Admin tiếp tục duyệt;
+  else (Không)
+    :Giữ yêu cầu ở trạng thái PendingAppointmentResolution;
+    stop
+  endif
+
+else (Không)
+  :Không có lịch cần xử lý;
+endif
+
+if (Admin duyệt yêu cầu nghỉ?) then (Có)
+  :Cập nhật yêu cầu nghỉ là Approved;
+  :Đánh dấu bác sĩ nghỉ trong khoảng thời gian đã duyệt;
+  :Không sinh slot khám trong thời gian nghỉ;
+  :Ghi lịch sử thao tác;
+  :Thông báo duyệt yêu cầu nghỉ;
+else (Từ chối)
+  :Cập nhật yêu cầu nghỉ là Rejected;
+  :Ghi lịch sử thao tác;
+  :Thông báo từ chối yêu cầu nghỉ;
+endif
+
+stop
+@enduml

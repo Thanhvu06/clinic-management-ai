@@ -211,7 +211,7 @@ export const AdminDoctors: React.FC = () => {
 
     const handleSetPrimarySpecialty = (specId: number) => {
         const current = modal.data.specialties || [];
-        if (!window.confirm('Đổi chuyên khoa chính có thể ảnh hưởng đến lịch hẹn. Bạn có chắc chắn?')) return;
+        if (!window.confirm('Đổi chuyên khoa chính có thể ảnh hưởng đến lịch hẹn hiện có. Bạn có chắc chắn muốn tiếp tục?')) return;
 
         const newSpecs = current.map(s => ({
             ...s,
