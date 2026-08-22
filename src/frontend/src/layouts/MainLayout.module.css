@@ -1,0 +1,259 @@
+.layout {
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 260px;
+    background-color: var(--c-navy-dark);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+    z-index: 50;
+}
+
+.sidebarHeader {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--spacing-5);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.logoIcon {
+    color: var(--c-teal);
+    margin-right: var(--spacing-3);
+}
+
+.logoText {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+}
+
+.nav {
+    flex: 1;
+    padding: var(--spacing-5) var(--spacing-3);
+    overflow-y: auto;
+}
+
+.navSectionTitle {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--c-muted);
+    margin-bottom: var(--spacing-3);
+    padding: 0 var(--spacing-3);
+    letter-spacing: 0.05em;
+}
+
+.nav ul {
+    list-style: none;
+}
+
+.navLink {
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-3);
+    color: #cbd5e1;
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-1);
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.navLink:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: white;
+}
+
+.navLinkActive {
+    background-color: var(--c-teal);
+    color: white;
+}
+
+.navLinkActive:hover {
+    background-color: var(--c-teal-dark);
+}
+
+.navIcon {
+    margin-right: var(--spacing-3);
+    opacity: 0.8;
+}
+
+.navLinkActive .navIcon {
+    opacity: 1;
+}
+
+.userCard {
+    padding: var(--spacing-4);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.userAvatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: var(--c-teal);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.userInfo {
+    margin-left: var(--spacing-3);
+    flex: 1;
+    overflow: hidden;
+}
+
+.userName {
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.userRole {
+    font-size: 0.8rem;
+    color: var(--c-muted);
+}
+
+.logoutIconBtn {
+    background: none;
+    border: none;
+    color: var(--c-muted);
+    cursor: pointer;
+    padding: var(--spacing-2);
+    border-radius: var(--radius-md);
+    transition: all 0.2s;
+}
+
+.logoutIconBtn:hover {
+    color: var(--c-danger);
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0; /* fixes flexbox overflow issues */
+}
+
+.header {
+    height: 64px;
+    background-color: white;
+    border-bottom: 1px solid var(--c-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--spacing-6);
+    flex-shrink: 0;
+}
+
+.pageTitle {
+    font-size: 1.1rem;
+    color: var(--c-text);
+    margin: 0;
+}
+
+.headerRight {
+    display: flex;
+    align-items: center;
+}
+
+.headerAvatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: var(--c-bg);
+    border: 1px solid var(--c-border);
+    color: var(--c-text-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.content {
+    flex: 1;
+    padding: var(--spacing-6);
+    overflow-y: auto;
+}
+
+.mobileHeader {
+    display: none;
+}
+.mobileOverlay {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .layout {
+        flex-direction: column;
+    }
+    
+    .mobileHeader {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 60px;
+        background-color: var(--c-navy-dark);
+        color: white;
+        padding: 0 var(--spacing-4);
+        flex-shrink: 0;
+    }
+    
+    .mobileLogo {
+        display: flex;
+        align-items: center;
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    
+    .hamburgerBtn {
+        background: none;
+        border: none;
+        color: white;
+        cursor: pointer;
+    }
+    
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        transform: translateX(-100%);
+        width: 280px;
+    }
+    
+    .sidebarOpen {
+        transform: translateX(0);
+    }
+    
+    .mobileOverlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 40;
+    }
+    
+    .header {
+        display: none; /* Hide desktop header on mobile */
+    }
+    
+    .content {
+        padding: var(--spacing-4);
+    }
+}

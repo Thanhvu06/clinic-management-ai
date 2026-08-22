@@ -1,0 +1,297 @@
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.header {
+    margin-bottom: var(--spacing-6);
+}
+
+.header h2 {
+    color: var(--c-navy-dark);
+    font-size: 1.5rem;
+    margin-bottom: var(--spacing-4);
+}
+
+.stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: white;
+    padding: var(--spacing-4) var(--spacing-6);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--c-border);
+}
+
+.step {
+    display: flex;
+    align-items: center;
+    color: var(--c-muted);
+    font-weight: 500;
+}
+
+.stepActive {
+    color: var(--c-teal);
+    font-weight: 600;
+}
+
+.stepNumber {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background-color: var(--c-bg);
+    border: 2px solid var(--c-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: var(--spacing-2);
+    font-size: 0.9rem;
+}
+
+.stepActive .stepNumber {
+    background-color: var(--c-teal);
+    border-color: var(--c-teal);
+    color: white;
+}
+
+.stepLine {
+    flex: 1;
+    height: 2px;
+    background-color: var(--c-border);
+    margin: 0 var(--spacing-4);
+}
+
+.card {
+    background: white;
+    padding: var(--spacing-8);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--c-border);
+}
+
+.section {
+    margin-bottom: var(--spacing-8);
+}
+
+.sectionHeader {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-4);
+    border-bottom: 1px solid var(--c-border);
+    padding-bottom: var(--spacing-3);
+    color: var(--c-navy-dark);
+    font-size: 1.25rem;
+}
+
+.warningBox {
+    background-color: var(--c-warning-bg);
+    color: #b45309;
+    padding: var(--spacing-3) var(--spacing-4);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    margin-bottom: var(--spacing-4);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-2);
+}
+
+.aiSuggestBox {
+    background-color: var(--c-info-bg);
+    border: 1px solid #bfdbfe;
+    border-radius: var(--radius-md);
+    padding: var(--spacing-4);
+    margin-top: var(--spacing-4);
+}
+
+.aiBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: var(--spacing-2);
+}
+
+.aiSuggestionsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-3);
+    margin-top: var(--spacing-3);
+}
+
+.aiCard {
+    background: white;
+    border: 1px solid #bfdbfe;
+    border-radius: var(--radius-md);
+    padding: var(--spacing-3);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+}
+
+.aiCard:hover {
+    border-color: #3b82f6;
+    box-shadow: var(--shadow-sm);
+}
+
+.aiCardTitle {
+    font-weight: 600;
+    color: var(--c-text-dark);
+    margin-bottom: 4px;
+    font-size: 0.95rem;
+}
+
+.aiCardReason {
+    font-size: 0.85rem;
+    color: var(--c-muted);
+}
+
+.formGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-5);
+}
+
+.formGroup {
+    margin-bottom: var(--spacing-4);
+}
+
+.formGroup label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: var(--spacing-2);
+    color: var(--c-text-dark);
+}
+
+.slotsContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+}
+
+.slotBtn {
+    background: white;
+    border: 1px solid var(--c-border);
+    color: var(--c-text);
+    padding: var(--spacing-2) var(--spacing-4);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.slotBtn:hover {
+    border-color: var(--c-teal);
+    color: var(--c-teal);
+}
+
+.slotSelected {
+    background: var(--c-teal);
+    color: white;
+    border-color: var(--c-teal);
+}
+.slotSelected:hover {
+    background: var(--c-teal-dark);
+    color: white;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-3);
+    margin-top: var(--spacing-6);
+    border-top: 1px solid var(--c-border);
+    padding-top: var(--spacing-5);
+}
+
+.summaryTicket {
+    background: var(--c-bg);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-5);
+    margin-bottom: var(--spacing-5);
+}
+
+.summaryRow {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--spacing-3) 0;
+    border-bottom: 1px dashed var(--c-border);
+}
+.summaryRow:last-child {
+    border-bottom: none;
+}
+
+.summaryLabel {
+    color: var(--c-muted);
+    font-weight: 500;
+}
+
+.summaryValue {
+    font-weight: 600;
+    color: var(--c-text-dark);
+    text-align: right;
+}
+
+.alertError {
+    background-color: var(--c-danger-bg);
+    color: var(--c-danger);
+    padding: var(--spacing-4);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-5);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    font-weight: 500;
+}
+
+.successState {
+    text-align: center;
+    padding: var(--spacing-10) 0;
+}
+
+.successIcon {
+    width: 80px;
+    height: 80px;
+    background: var(--c-success-bg);
+    color: var(--c-success);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto var(--spacing-5);
+}
+
+.appointmentCode {
+    display: inline-block;
+    background: var(--c-bg);
+    border: 2px dashed var(--c-border);
+    padding: var(--spacing-3) var(--spacing-6);
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--c-navy-dark);
+    border-radius: var(--radius-md);
+    margin: var(--spacing-4) 0;
+}
+
+@media (max-width: 768px) {
+    .formGrid {
+        grid-template-columns: 1fr;
+    }
+    .stepper {
+        padding: var(--spacing-3);
+    }
+    .step span:last-child {
+        display: none; /* hide text on mobile */
+    }
+    .stepNumber {
+        margin-right: 0;
+    }
+}

@@ -64,7 +64,7 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
         ClockSkew = TimeSpan.Zero
     };
-    
+
     options.Events = new JwtBearerEvents
     {
         OnChallenge = context =>
@@ -72,9 +72,9 @@ builder.Services.AddAuthentication(options =>
             context.HandleResponse();
             context.Response.StatusCode = 401;
             context.Response.ContentType = "application/json";
-            var result = System.Text.Json.JsonSerializer.Serialize(new 
-            { 
-                success = false, 
+            var result = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                success = false,
                 message = "Chưa đăng nhập",
                 errorCode = "UNAUTHORIZED"
             }, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
@@ -84,9 +84,9 @@ builder.Services.AddAuthentication(options =>
         {
             context.Response.StatusCode = 403;
             context.Response.ContentType = "application/json";
-            var result = System.Text.Json.JsonSerializer.Serialize(new 
-            { 
-                success = false, 
+            var result = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                success = false,
                 message = "Không có quyền",
                 errorCode = "FORBIDDEN"
             }, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
@@ -130,12 +130,18 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddCors();
 
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
     await RoleSeeder.SeedRolesAsync(scope.ServiceProvider);
+
+    if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("DemoSeed:Enabled"))
+    {
+        await ClinicManagement.Infrastructure.Persistence.DevelopmentDataSeeder.SeedAsync(scope.ServiceProvider);
+    }
 }
 
 app.UseMiddleware<ExceptionMiddleware>();
@@ -144,6 +150,12 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+app.UseCors(builder => builder
+    .WithOrigins("http://localhost:5173")
+    .AllowAnyMethod()
+    .AllowAnyHeader()
+    .AllowCredentials());
 
 app.UseHttpsRedirection();
 app.UseRateLimiter();

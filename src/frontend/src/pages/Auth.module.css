@@ -1,0 +1,127 @@
+.authWrapper {
+    display: flex;
+    min-height: 100vh;
+    background-color: var(--c-bg);
+}
+
+.authLeft {
+    display: none;
+    flex: 1;
+    background: linear-gradient(135deg, var(--c-navy-dark) 0%, var(--c-navy) 100%);
+    color: white;
+    padding: var(--spacing-10);
+    position: relative;
+    overflow: hidden;
+}
+
+.authLeft::after {
+    content: '';
+    position: absolute;
+    bottom: -100px;
+    right: -100px;
+    width: 400px;
+    height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(14,165,233,0.2) 0%, transparent 70%);
+}
+
+.authBrand {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: var(--spacing-10);
+}
+
+.authBrandIcon {
+    color: var(--c-teal);
+}
+
+.authLeftContent h1 {
+    font-size: 2.5rem;
+    margin-bottom: var(--spacing-4);
+    line-height: 1.2;
+    color: white;
+}
+
+.authLeftContent p {
+    font-size: 1.1rem;
+    color: #cbd5e1;
+    line-height: 1.6;
+    max-width: 400px;
+}
+
+.authRight {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-6);
+}
+
+.card {
+    background: var(--c-card);
+    padding: var(--spacing-8);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    width: 100%;
+    max-width: 440px;
+    border: 1px solid var(--c-border);
+}
+
+.card h2 {
+    text-align: center;
+    color: var(--c-text-dark);
+    margin-bottom: var(--spacing-6);
+    font-size: 1.75rem;
+}
+
+.formGroup {
+    margin-bottom: var(--spacing-5);
+}
+
+.formGroup label {
+    display: block;
+    margin-bottom: var(--spacing-2);
+    color: var(--c-text);
+    font-weight: 500;
+    font-size: 0.95rem;
+}
+
+.submitBtn {
+    width: 100%;
+    padding: var(--spacing-3) var(--spacing-4);
+    font-size: 1.05rem;
+    margin-top: var(--spacing-2);
+}
+
+.error {
+    background-color: var(--c-danger-bg);
+    color: var(--c-danger);
+    padding: var(--spacing-3);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-5);
+    text-align: center;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.links {
+    margin-top: var(--spacing-6);
+    text-align: center;
+    font-size: 0.95rem;
+    color: var(--c-muted);
+}
+
+.links a {
+    color: var(--c-teal);
+    font-weight: 600;
+}
+
+@media (min-width: 992px) {
+    .authLeft {
+        display: flex;
+        flex-direction: column;
+    }
+}
