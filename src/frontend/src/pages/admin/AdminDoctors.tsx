@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { Search, Plus, XCircle, Edit, Stethoscope, Briefcase, Award, X } from 'lucide-react';
+import { useDialog } from '../../contexts/DialogContext';
 
 interface DoctorSpecialty {
     specialtyId: number;
@@ -22,6 +23,7 @@ interface Doctor {
 }
 
 export const AdminDoctors: React.FC = () => {
+    const { showAlert, showConfirm } = useDialog();
     const [doctors, setDoctors] = useState<Doctor[]>([]);
     const [loading, setLoading] = useState(true);
     const [totalItems, setTotalItems] = useState(0);
@@ -90,19 +92,11 @@ export const AdminDoctors: React.FC = () => {
         
         try {
             if (modal.isEdit) {
-                // Update basic info
-                const res = await axiosClient.put<any, ApiResponse<any>>(`/admin/doctors/${modal.data.id}`, {
-                    academicTitle: modal.data.academicTitle,
-                    experienceYears: Number(modal.data.experienceYears || 0),
-                    description: modal.data.description,
-                    isActive: modal.data.isActive
-                });
-                
                 // Update specialties
                 if (modal.data.specialties && modal.data.specialties.length > 0) {
                     const primaryCount = modal.data.specialties.filter(s => s.isPrimary).length;
                     if (primaryCount !== 1) {
-                        alert('Phải có chính xác 1 chuyên khoa chính.');
+                        showAlert('Phải có chính xác 1 chuyên khoa chính.', 'Lỗi', 'error');
                         setFormLoading(false);
                         return;
                     }
@@ -112,8 +106,16 @@ export const AdminDoctors: React.FC = () => {
                     })));
                 }
 
+                // Update basic info
+                const res = await axiosClient.put<any, ApiResponse<any>>(`/admin/doctors/${modal.data.id}`, {
+                    academicTitle: modal.data.academicTitle,
+                    experienceYears: Number(modal.data.experienceYears || 0),
+                    description: modal.data.description,
+                    isActive: modal.data.isActive
+                });
+                
                 if (res.success) {
-                    alert('Cập nhật bác sĩ thành công.');
+                    showAlert('Cập nhật bác sĩ thành công.', 'Thành công', 'success');
                     setModal({ isOpen: false, isEdit: false, data: {} });
                     fetchDoctors();
                 }
@@ -147,7 +149,7 @@ export const AdminDoctors: React.FC = () => {
                     }))
                 });
                 if (res.success) {
-                    alert('Thêm hồ sơ bác sĩ thành công.');
+                    showAlert('Thêm hồ sơ bác sĩ thành công.', 'Thành công', 'success');
                     setModal({ isOpen: false, isEdit: false, data: {} });
                     fetchDoctors();
                 }
@@ -189,7 +191,7 @@ export const AdminDoctors: React.FC = () => {
     const handleRemoveSpecialty = (specId: number) => {
         const current = modal.data.specialties || [];
         if (current.length === 1) {
-            alert('Bác sĩ phải có ít nhất 1 chuyên khoa.');
+            showAlert('Bác sĩ phải có ít nhất 1 chuyên khoa.', 'Lỗi', 'error');
             return;
         }
         
@@ -211,19 +213,19 @@ export const AdminDoctors: React.FC = () => {
 
     const handleSetPrimarySpecialty = (specId: number) => {
         const current = modal.data.specialties || [];
-        if (!window.confirm('Đổi chuyên khoa chính có thể ảnh hưởng đến lịch hẹn hiện có. Bạn có chắc chắn muốn tiếp tục?')) return;
-
-        const newSpecs = current.map(s => ({
-            ...s,
-            isPrimary: s.specialtyId === specId
-        }));
-
-        setModal({
-            ...modal,
-            data: {
-                ...modal.data,
-                specialties: newSpecs
-            }
+        showConfirm('Đổi chuyên khoa chính có thể ảnh hưởng đến lịch hẹn hiện có. Bạn có chắc chắn muốn tiếp tục?', () => {
+            const newSpecs = current.map(s => ({
+                ...s,
+                isPrimary: s.specialtyId === specId
+            }));
+    
+            setModal({
+                ...modal,
+                data: {
+                    ...modal.data,
+                    specialties: newSpecs
+                }
+            });
         });
     };
 
@@ -238,7 +240,7 @@ export const AdminDoctors: React.FC = () => {
                 </button>
             </div>
 
-            <div className="card-panel" style={{ marginBottom: '24px' }}>
+            <div className="card" style={{ marginBottom: '24px' }}>
                 <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 250px' }}>
                         <div style={{ position: 'relative' }}>
@@ -264,17 +266,17 @@ export const AdminDoctors: React.FC = () => {
                 </form>
             </div>
 
-            <div className="card-panel" style={{ padding: 0, overflowX: 'auto' }}>
+            <div className="card table-responsive" style={{ padding: 0 }}>
                 {loading ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <table className="table" style={{ width: '100%' }}>
                         <thead>
-                            <tr style={{ background: 'var(--c-bg)', borderBottom: '1px solid var(--c-border)' }}>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Bác sĩ</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Chuyên môn</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Trạng thái</th>
-                                <th style={{ padding: '16px', textAlign: 'right', fontWeight: 600, color: 'var(--c-text-dark)' }}>Thao tác</th>
+                            <tr>
+                                <th>Bác sĩ</th>
+                                <th>Chuyên môn</th>
+                                <th>Trạng thái</th>
+                                <th style={{ textAlign: 'right' }}>Thao tác</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -285,19 +287,19 @@ export const AdminDoctors: React.FC = () => {
                                     </td>
                                 </tr>
                             ) : doctors.map(d => (
-                                <tr key={d.id} style={{ borderBottom: '1px solid var(--c-border)' }}>
-                                    <td style={{ padding: '16px' }}>
+                                <tr key={d.id}>
+                                    <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                             <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--c-teal)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: '1.2rem' }}>
                                                 {d.fullName.charAt(0)}
                                             </div>
                                             <div>
-                                                <div style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>{d.academicTitle ? `${d.academicTitle} ` : ''}{d.fullName}</div>
+                                                <div style={{ fontWeight: 600 }}>{d.academicTitle ? `${d.academicTitle} ` : ''}{d.fullName}</div>
                                                 <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>{d.email}</div>
                                             </div>
                                         </div>
                                     </td>
-                                    <td style={{ padding: '16px' }}>
+                                    <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', marginBottom: '4px' }}>
                                             <Briefcase size={14} color="var(--c-teal)"/> {d.experienceYears} năm kinh nghiệm
                                         </div>
@@ -310,13 +312,13 @@ export const AdminDoctors: React.FC = () => {
                                             ))}
                                         </div>
                                     </td>
-                                    <td style={{ padding: '16px' }}>
+                                    <td>
                                         {d.isActive ? 
                                             <span className="badge badge-success">Đang hoạt động</span> : 
                                             <span className="badge badge-danger">Ngừng hoạt động</span>
                                         }
                                     </td>
-                                    <td style={{ padding: '16px', textAlign: 'right' }}>
+                                    <td style={{ textAlign: 'right' }}>
                                         <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => openEditModal(d)}>
                                             <Edit size={14} style={{ marginRight: '4px' }}/> Sửa
                                         </button>
@@ -334,8 +336,8 @@ export const AdminDoctors: React.FC = () => {
 
             {/* Form Modal */}
             {modal.isOpen && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-                    <div style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+                    <div style={{ background: 'white', padding: '24px', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                             <h3 style={{ margin: 0 }}>{modal.isEdit ? 'Cập nhật hồ sơ bác sĩ' : 'Thêm hồ sơ bác sĩ'}</h3>
                             <button onClick={() => setModal({ isOpen: false, isEdit: false, data: {} })} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
@@ -345,8 +347,8 @@ export const AdminDoctors: React.FC = () => {
 
                         <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             {!modal.isEdit && (
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Chọn tài khoản User liên kết (*)</label>
+                                <div className="form-group">
+                                    <label className="form-label">Chọn tài khoản User liên kết (*)</label>
                                     <select 
                                         className="form-select" 
                                         required 
@@ -362,8 +364,8 @@ export const AdminDoctors: React.FC = () => {
                             )}
 
                             <div style={{ display: 'flex', gap: '16px' }}>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Học hàm/Học vị</label>
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label className="form-label">Học hàm/Học vị</label>
                                     <input 
                                         type="text" 
                                         className="form-input" 
@@ -372,8 +374,8 @@ export const AdminDoctors: React.FC = () => {
                                         placeholder="VD: PGS. TS. BS"
                                     />
                                 </div>
-                                <div style={{ width: '150px' }}>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Số năm K.Nghiệm</label>
+                                <div className="form-group" style={{ width: '150px' }}>
+                                    <label className="form-label">Số năm K.Nghiệm</label>
                                     <input 
                                         type="number" 
                                         className="form-input" 
@@ -386,8 +388,8 @@ export const AdminDoctors: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Chuyên khoa (*)</label>
+                            <div className="form-group">
+                                <label className="form-label">Chuyên khoa (*)</label>
                                 <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                                     <select id="specSelect" className="form-select" style={{ flex: 1 }}>
                                         <option value="">-- Chọn chuyên khoa để thêm --</option>
@@ -436,8 +438,8 @@ export const AdminDoctors: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Mô tả</label>
+                            <div className="form-group">
+                                <label className="form-label">Mô tả</label>
                                 <textarea 
                                     className="form-textarea" 
                                     rows={3}
@@ -445,7 +447,7 @@ export const AdminDoctors: React.FC = () => {
                                     onChange={e => setModal({ ...modal, data: { ...modal.data, description: e.target.value } })} 
                                 />
                             </div>
-                            <div>
+                            <div className="form-group">
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, cursor: 'pointer' }}>
                                     <input 
                                         type="checkbox" 

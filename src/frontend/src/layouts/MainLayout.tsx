@@ -3,9 +3,9 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import styles from './MainLayout.module.css';
 import { 
-    LayoutDashboard, User, CalendarDays, CalendarCheck, 
-    History, Repeat, Users, Stethoscope, 
-    ShieldPlus, LogOut, Menu, X, ShieldAlert 
+    LayoutDashboard, CalendarDays, CalendarCheck, 
+    History, Users, Stethoscope, 
+    ShieldPlus, LogOut, Menu, X, ShieldAlert, Pill 
 } from 'lucide-react';
 
 export const MainLayout: React.FC = () => {
@@ -42,16 +42,6 @@ export const MainLayout: React.FC = () => {
 
     const renderMenu = () => {
         switch (user?.role) {
-            case 'Patient':
-                return (
-                    <>
-                        <NavItem to="/patient" icon={LayoutDashboard} label="Tổng quan" />
-                        <NavItem to="/patient/profile" icon={User} label="Hồ sơ cá nhân" />
-                        <NavItem to="/patient/book" icon={CalendarCheck} label="Đặt lịch khám" />
-                        <NavItem to="/patient/appointments" icon={CalendarDays} label="Lịch hẹn của tôi" />
-                        <NavItem to="/patient/revisit" icon={Repeat} label="Tái khám" />
-                    </>
-                );
             case 'Receptionist':
                 return (
                     <>
@@ -77,6 +67,15 @@ export const MainLayout: React.FC = () => {
                         <NavItem to="/admin/doctors" icon={Users} label="Quản lý bác sĩ" />
                         <NavItem to="/admin/work-schedules" icon={CalendarCheck} label="Lịch làm việc & Slots" />
                         <NavItem to="/admin/leaves" icon={CalendarDays} label="Yêu cầu nghỉ" />
+                    </>
+                );
+            case 'Pharmacist':
+                return (
+                    <>
+                        <NavItem to="/pharmacist" icon={LayoutDashboard} label="Tổng quan kho" />
+                        <NavItem to="/pharmacist/prescriptions" icon={CalendarCheck} label="Đơn thuốc chờ cấp" />
+                        <NavItem to="/pharmacist/medicines" icon={Pill} label="Danh mục thuốc" />
+                        <NavItem to="/pharmacist/inventory" icon={History} label="Lịch sử kho" />
                     </>
                 );
             default:

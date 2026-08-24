@@ -22,7 +22,7 @@ public class AppointmentFlowTests : IntegrationTestBase
             DoctorId = DoctorEntityId,
             SpecialtyId = SpecialtyEntityId,
             AppointmentSlotId = SlotEntityId,
-            Reason = "Đau lưng quá trời luôn"
+            Reason = "Đau lưng quá"
         };
 
         var response = await Client.PostAsJsonAsync("/api/v1/appointments", request);
@@ -31,10 +31,24 @@ public class AppointmentFlowTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Contains("Pending", json);
 
+        // Extract appointment ID
+        var doc = JsonDocument.Parse(json);
+        var appointmentId = doc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+
         // Check the slot is booked
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClinicManagement.Infrastructure.Persistence.AppDbContext>();
         var slot = await db.AppointmentSlots.FindAsync(SlotEntityId);
         Assert.True(slot.IsBooked);
+
+        // Test 1: Doctor 1 should be able to get history for this appointment (they own it)
+        await AuthenticateAsync("doc@test.com");
+        var doc1Response = await Client.GetAsync($"/api/v1/doctor/appointments/{appointmentId}/history");
+        Assert.Equal(HttpStatusCode.OK, doc1Response.StatusCode);
+
+        // Test 2: Doctor 2 should NOT be able to get history for this appointment (throws 404/403)
+        await AuthenticateAsync("doc2@test.com");
+        var doc2Response = await Client.GetAsync($"/api/v1/doctor/appointments/{appointmentId}/history");
+        Assert.Equal(HttpStatusCode.NotFound, doc2Response.StatusCode);
     }
 }

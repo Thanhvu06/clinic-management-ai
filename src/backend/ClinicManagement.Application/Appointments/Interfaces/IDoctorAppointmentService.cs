@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using ClinicManagement.Application.Appointments.DTOs;
 using ClinicManagement.Application.Appointments.DTOs.Doctor;
 using ClinicManagement.Application.Appointments.DTOs.Revisit;
 using ClinicManagement.Application.Common.Models;
@@ -9,6 +11,7 @@ public interface IDoctorAppointmentService
 {
     Task<PagedResult<DoctorAppointmentDto>> GetMyAppointmentsAsync(string? status, string? search, int page, int pageSize);
     Task<DoctorAppointmentDto> GetAppointmentByIdAsync(long appointmentId);
+    Task<List<AppointmentHistoryDto>> GetAppointmentHistoryAsync(long appointmentId);
     Task CompleteAppointmentAsync(long appointmentId, CompleteAppointmentDto request);
     Task MarkNoShowAsync(long appointmentId, NoShowAppointmentDto request);
     Task<RevisitRequestDto> CreateRevisitRequestAsync(long appointmentId, CreateRevisitRequestDto request);

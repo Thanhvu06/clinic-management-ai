@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using ClinicManagement.Application.Appointments.DTOs;
 using ClinicManagement.Application.Appointments.DTOs.Doctor;
 using ClinicManagement.Application.Appointments.Interfaces;
 using ClinicManagement.Application.Common.Constants;
@@ -32,6 +34,13 @@ public class DoctorAppointmentController : ControllerBase
     {
         var result = await _doctorAppointmentService.GetAppointmentByIdAsync(id);
         return Ok(ApiResponse<DoctorAppointmentDto>.Ok(result));
+    }
+
+    [HttpGet("{id}/history")]
+    public async Task<IActionResult> GetAppointmentHistory(long id)
+    {
+        var result = await _doctorAppointmentService.GetAppointmentHistoryAsync(id);
+        return Ok(ApiResponse<List<AppointmentHistoryDto>>.Ok(result));
     }
 
     [HttpPost("{id}/complete")]

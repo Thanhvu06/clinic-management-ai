@@ -16,6 +16,20 @@ public class DoctorService : IDoctorService
         _dbContext = dbContext;
     }
 
+    public async Task<List<DoctorBasicDto>> GetAllActiveDoctorsAsync()
+    {
+        return await (from d in _dbContext.Doctors
+                      join u in _dbContext.Users on d.UserId equals u.Id
+                      where d.IsActive && u.IsActive
+                      select new DoctorBasicDto
+                      {
+                          Id = d.Id,
+                          FullName = u.FullName,
+                          AcademicTitle = d.AcademicTitle ?? "",
+                          ExperienceYears = d.ExperienceYears
+                      }).ToListAsync();
+    }
+
     public async Task<DoctorDetailDto> GetDoctorByIdAsync(long doctorId)
     {
         var doctor = await (from d in _dbContext.Doctors

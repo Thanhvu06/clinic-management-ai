@@ -17,6 +17,13 @@ public class DoctorController : ControllerBase
         _doctorService = doctorService;
     }
 
+    [HttpGet]
+    public async Task<IActionResult> GetAllDoctors()
+    {
+        var doctors = await _doctorService.GetAllActiveDoctorsAsync();
+        return Ok(ApiResponse<List<DoctorBasicDto>>.Ok(doctors));
+    }
+
     [HttpGet("{doctorId}")]
     public async Task<IActionResult> GetDoctorById(long doctorId)
     {

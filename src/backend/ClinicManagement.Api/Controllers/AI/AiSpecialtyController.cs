@@ -33,4 +33,19 @@ public class AiSpecialtyController : ControllerBase
         
         return Ok(ApiResponse<AiSuggestionResponseDto>.Ok(result, "Xử lý thành công."));
     }
+
+    [HttpPost("chat")]
+    [Authorize(Roles = "Patient")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("AiChatPolicy")]
+    public async Task<IActionResult> Chat([FromBody] AiChatRequestDto request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return Ok(ApiResponse<AiChatResponseDto>.Ok(new AiChatResponseDto { Reply = "Dữ liệu không hợp lệ." }));
+        }
+
+        var result = await _aiSpecialtyService.ChatAsync(request, cancellationToken);
+
+        return Ok(ApiResponse<AiChatResponseDto>.Ok(result, "Xử lý thành công."));
+    }
 }

@@ -27,10 +27,20 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<RevisitRequest> RevisitRequests { get; set; } = null!;
     public DbSet<AiSuggestionLog> AiSuggestionLogs { get; set; } = null!;
     public DbSet<SystemAuditLog> SystemAuditLogs { get; set; } = null!;
+    
+    // Pharmacy
+    public DbSet<Medicine> Medicines { get; set; } = null!;
+    public DbSet<Prescription> Prescriptions { get; set; } = null!;
+    public DbSet<PrescriptionItem> PrescriptionItems { get; set; } = null!;
+    public DbSet<MedicineStockTransaction> MedicineStockTransactions { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        
+        builder.Entity<PrescriptionItem>()
+            .HasKey(pi => new { pi.PrescriptionId, pi.MedicineId });
+            
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
         if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")

@@ -120,9 +120,30 @@ builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSpecial
 
 builder.Services.AddRateLimiter(options =>
 {
+    options.RejectionStatusCode = 429;
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = 429;
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsync("{\"success\":false,\"message\":\"Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.\",\"data\":null}", token);
+    };
+
+    options.AddPolicy("AiChatPolicy", httpContext =>
+    {
+        var userId = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(userId, _ =>
+            new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 8,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
+
     options.AddFixedWindowLimiter("ai_endpoint", opt =>
     {
-        opt.Window = System.TimeSpan.FromMinutes(1);
+        opt.Window = TimeSpan.FromMinutes(1);
         opt.PermitLimit = 10;
         opt.QueueLimit = 0;
     });
@@ -151,11 +172,28 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseCors(builder => builder
-    .WithOrigins("http://localhost:5173")
-    .AllowAnyMethod()
-    .AllowAnyHeader()
-    .AllowCredentials());
+app.UseCors(corsBuilder => 
+{
+    if (app.Environment.IsDevelopment())
+    {
+        corsBuilder.SetIsOriginAllowed(origin => 
+        {
+            var uri = new Uri(origin);
+            return uri.Host == "localhost" || uri.Host == "127.0.0.1";
+        })
+        .AllowAnyMethod()
+        .AllowAnyHeader()
+        .AllowCredentials();
+    }
+    else
+    {
+        var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+        corsBuilder.WithOrigins(allowedOrigins)
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
+    }
+});
 
 app.UseHttpsRedirection();
 app.UseRateLimiter();

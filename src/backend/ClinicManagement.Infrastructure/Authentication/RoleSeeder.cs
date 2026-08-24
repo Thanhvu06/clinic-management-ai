@@ -13,7 +13,7 @@ public static class RoleSeeder
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("RoleSeeder");
 
-        string[] roles = { RoleNames.Patient, RoleNames.Receptionist, RoleNames.Doctor, RoleNames.Admin };
+        string[] roles = { RoleNames.Patient, RoleNames.Receptionist, RoleNames.Doctor, RoleNames.Admin, RoleNames.Pharmacist };
 
         foreach (var role in roles)
         {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { CalendarDays, User, CheckCircle, XCircle, Eye, X } from 'lucide-react';
+import { useDialog } from '../../contexts/DialogContext';
 
 interface LeaveRequest {
     id: number;
@@ -15,6 +16,7 @@ interface LeaveRequest {
 }
 
 export const AdminLeaves: React.FC = () => {
+    const { showAlert, showConfirm } = useDialog();
     const [requests, setRequests] = useState<LeaveRequest[]>([]);
     const [loading, setLoading] = useState(true);
     const [totalItems, setTotalItems] = useState(0);
@@ -68,25 +70,28 @@ export const AdminLeaves: React.FC = () => {
 
     const handleProcess = async (action: 'approve' | 'reject') => {
         if (!modal.req) return;
-        setActionLoading(true);
-        try {
-            const res = await axiosClient.post<any, ApiResponse<any>>(`/admin/leave-requests/${modal.req.id}/${action}`, {
-                adminNote
-            });
-            if (res.success) {
-                alert(action === 'approve' ? 'Đã duyệt yêu cầu nghỉ.' : 'Đã từ chối yêu cầu nghỉ.');
-                setModal({ isOpen: false, req: null });
-                fetchRequests();
+        
+        showConfirm(`Bạn có chắc chắn muốn ${action === 'approve' ? 'duyệt' : 'từ chối'} yêu cầu này?`, async () => {
+            setActionLoading(true);
+            try {
+                const res = await axiosClient.post<any, ApiResponse<any>>(`/admin/leave-requests/${modal.req!.id}/${action}`, {
+                    adminNote
+                });
+                if (res.success) {
+                    showAlert(action === 'approve' ? 'Đã duyệt yêu cầu nghỉ.' : 'Đã từ chối yêu cầu nghỉ.', 'Thành công', 'success');
+                    setModal({ isOpen: false, req: null });
+                    fetchRequests();
+                }
+            } catch (error: any) {
+                if (error?.errorCode === 'LEAVE_HAS_AFFECTED_APPOINTMENTS') {
+                    showAlert('Bác sĩ đang có lịch hẹn bị ảnh hưởng. Hãy để lễ tân xử lý các lịch này trước khi duyệt nghỉ.', 'Cảnh báo', 'warning');
+                } else {
+                    showAlert(error?.message || 'Có lỗi xảy ra.', 'Lỗi', 'error');
+                }
+            } finally {
+                setActionLoading(false);
             }
-        } catch (error: any) {
-            if (error?.errorCode === 'LEAVE_HAS_AFFECTED_APPOINTMENTS') {
-                alert('Bác sĩ đang có lịch hẹn bị ảnh hưởng. Hãy để lễ tân xử lý các lịch này trước khi duyệt nghỉ.');
-            } else {
-                alert(error?.message || 'Có lỗi xảy ra.');
-            }
-        } finally {
-            setActionLoading(false);
-        }
+        });
     };
 
     const formatDate = (dateString: string) => {
@@ -119,7 +124,7 @@ export const AdminLeaves: React.FC = () => {
                 </h2>
             </div>
 
-            <div className="card-panel" style={{ marginBottom: '24px' }}>
+            <div className="card" style={{ marginBottom: '24px' }}>
                 <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                     <div style={{ width: '250px' }}>
                         <select className="form-select" value={doctorIdFilter} onChange={e => { setDoctorIdFilter(e.target.value); setPage(1); }}>
@@ -139,17 +144,17 @@ export const AdminLeaves: React.FC = () => {
                 </div>
             </div>
 
-            <div className="card-panel" style={{ padding: 0, overflowX: 'auto' }}>
+            <div className="card table-responsive" style={{ padding: 0 }}>
                 {loading ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <table className="table" style={{ width: '100%' }}>
                         <thead>
-                            <tr style={{ background: 'var(--c-bg)', borderBottom: '1px solid var(--c-border)' }}>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Bác sĩ</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Thời gian nghỉ</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Trạng thái</th>
-                                <th style={{ padding: '16px', textAlign: 'right', fontWeight: 600, color: 'var(--c-text-dark)' }}>Thao tác</th>
+                            <tr>
+                                <th>Bác sĩ</th>
+                                <th>Thời gian nghỉ</th>
+                                <th>Trạng thái</th>
+                                <th style={{ textAlign: 'right' }}>Thao tác</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -160,20 +165,20 @@ export const AdminLeaves: React.FC = () => {
                                     </td>
                                 </tr>
                             ) : requests.map(r => (
-                                <tr key={r.id} style={{ borderBottom: '1px solid var(--c-border)' }}>
-                                    <td style={{ padding: '16px', fontWeight: 500 }}>
+                                <tr key={r.id}>
+                                    <td style={{ fontWeight: 500 }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <User size={16} color="var(--c-teal)"/> {r.doctorName}
                                         </div>
                                     </td>
-                                    <td style={{ padding: '16px' }}>
+                                    <td>
                                         <div style={{ fontSize: '0.9rem' }}>Từ: {formatDate(r.startDateTime)}</div>
                                         <div style={{ fontSize: '0.9rem' }}>Đến: {formatDate(r.endDateTime)}</div>
                                     </td>
-                                    <td style={{ padding: '16px' }}>
+                                    <td>
                                         {getStatusBadge(r.status)}
                                     </td>
-                                    <td style={{ padding: '16px', textAlign: 'right' }}>
+                                    <td style={{ textAlign: 'right' }}>
                                         <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => { setModal({ isOpen: true, req: r }); setAdminNote(''); }}>
                                             <Eye size={14} style={{ marginRight: '4px' }}/> Chi tiết
                                         </button>
@@ -191,8 +196,8 @@ export const AdminLeaves: React.FC = () => {
 
             {/* Detail Modal */}
             {modal.isOpen && modal.req && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-                    <div style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '500px' }}>
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+                    <div style={{ background: 'white', padding: '24px', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: '500px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                             <h3 style={{ margin: 0 }}>Chi tiết yêu cầu nghỉ</h3>
                             <button onClick={() => setModal({ isOpen: false, req: null })} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
@@ -225,8 +230,8 @@ export const AdminLeaves: React.FC = () => {
 
                         {modal.req.status === 'Pending' && (
                             <>
-                                <div style={{ marginBottom: '16px' }}>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Thêm ghi chú xử lý (Tùy chọn)</label>
+                                <div className="form-group" style={{ marginBottom: '16px' }}>
+                                    <label className="form-label">Thêm ghi chú xử lý (Tùy chọn)</label>
                                     <textarea 
                                         className="form-textarea" 
                                         rows={2}

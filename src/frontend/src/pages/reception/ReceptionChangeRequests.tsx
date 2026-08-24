@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { History, Eye, X, CheckCircle, XCircle, ArrowRight, RefreshCw } from 'lucide-react';
+import { useDialog } from '../../contexts/DialogContext';
 
 interface ChangeRequest {
     id: number;
@@ -73,44 +74,47 @@ export const ReceptionChangeRequests: React.FC = () => {
         }
     };
 
+    const { showAlert, showConfirm } = useDialog();
+
     const handleAction = async (action: 'approve-reschedule' | 'approve-cancellation' | 'reject') => {
-        if (!modal.req) return;
+        const req = modal.req;
+        if (!req) return;
         
         let confirmMsg = '';
         if (action === 'approve-reschedule') confirmMsg = 'Hệ thống sẽ chuyển lịch hẹn sang ca khám mới và giải phóng ca khám cũ. Xác nhận đổi lịch?';
         else if (action === 'approve-cancellation') confirmMsg = 'Xác nhận hủy lịch hẹn này? Hành động này không thể hoàn tác.';
         else confirmMsg = 'Từ chối yêu cầu của bệnh nhân? Lịch hẹn cũ vẫn sẽ được giữ nguyên.';
 
-        if (!window.confirm(confirmMsg)) return;
-
-        setActionLoading(true);
-        try {
-            const res = await axiosClient.post<any, ApiResponse<any>>(`/reception/change-requests/${modal.req.id}/${action}`, {
-                reason: adminNote
-            });
-            if (res.success) {
-                alert('Xử lý yêu cầu thành công.');
-                fetchRequests();
-                setModal({ isOpen: false, req: null });
+        showConfirm(confirmMsg, async () => {
+            setActionLoading(true);
+            try {
+                const res = await axiosClient.post<any, ApiResponse<any>>(`/reception/change-requests/${req.id}/${action}`, {
+                    reason: adminNote
+                });
+                if (res.success) {
+                    showAlert('Xử lý yêu cầu thành công.', 'Thành công', 'success');
+                    fetchRequests();
+                    setModal({ isOpen: false, req: null });
+                }
+            } catch (error: any) {
+                const code = error?.errorCode;
+                if (code === 'SLOT_TAKEN') showAlert('Khung giờ mới vừa được người khác chọn. Vui lòng liên hệ bệnh nhân để chọn lịch khác.', 'Lỗi', 'error');
+                else if (code === 'INVALID_CHANGE_REQUEST') showAlert('Yêu cầu không còn hợp lệ hoặc đã được xử lý.', 'Lỗi', 'error');
+                else if (code === 'ACTIVE_CHANGE_REQUEST_EXISTS') showAlert('Lịch hẹn đang có yêu cầu chờ xử lý.', 'Lỗi', 'error');
+                else if (code === 'DOCTOR_NOT_AVAILABLE') showAlert('Bác sĩ không còn làm việc trong khung giờ này.', 'Lỗi', 'error');
+                else if (code === 'RESOURCE_NOT_FOUND') showAlert('Không tìm thấy dữ liệu yêu cầu.', 'Lỗi', 'error');
+                else if (code === 'FORBIDDEN') showAlert('Bạn không có quyền thực hiện thao tác này.', 'Lỗi', 'error');
+                else showAlert(error?.message || 'Có lỗi xảy ra.', 'Lỗi', 'error');
+                
+                // Reload if conflict
+                if (['SLOT_TAKEN', 'INVALID_CHANGE_REQUEST'].includes(code)) {
+                    fetchRequests();
+                    setModal({ isOpen: false, req: null });
+                }
+            } finally {
+                setActionLoading(false);
             }
-        } catch (error: any) {
-            const code = error?.errorCode;
-            if (code === 'SLOT_TAKEN') alert('Khung giờ mới vừa được người khác chọn. Vui lòng liên hệ bệnh nhân để chọn lịch khác.');
-            else if (code === 'INVALID_CHANGE_REQUEST') alert('Yêu cầu không còn hợp lệ hoặc đã được xử lý.');
-            else if (code === 'ACTIVE_CHANGE_REQUEST_EXISTS') alert('Lịch hẹn đang có yêu cầu chờ xử lý.');
-            else if (code === 'DOCTOR_NOT_AVAILABLE') alert('Bác sĩ không còn làm việc trong khung giờ này.');
-            else if (code === 'RESOURCE_NOT_FOUND') alert('Không tìm thấy dữ liệu yêu cầu.');
-            else if (code === 'FORBIDDEN') alert('Bạn không có quyền thực hiện thao tác này.');
-            else alert(error?.message || 'Có lỗi xảy ra.');
-            
-            // Reload if conflict
-            if (['SLOT_TAKEN', 'INVALID_CHANGE_REQUEST'].includes(code)) {
-                fetchRequests();
-                setModal({ isOpen: false, req: null });
-            }
-        } finally {
-            setActionLoading(false);
-        }
+        });
     };
 
     const formatDateTime = (dateString: string) => {
@@ -150,7 +154,7 @@ export const ReceptionChangeRequests: React.FC = () => {
                 </button>
             </div>
 
-            <div className="card-panel" style={{ marginBottom: '24px' }}>
+            <div className="card" style={{ marginBottom: '24px' }}>
                 <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                     <div style={{ width: '250px' }}>
                         <select className="form-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
@@ -163,21 +167,22 @@ export const ReceptionChangeRequests: React.FC = () => {
                 </div>
             </div>
 
-            <div className="card-panel" style={{ padding: 0, overflowX: 'auto' }}>
+            <div className="card" style={{ padding: 0 }}>
                 {loading ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr style={{ background: 'var(--c-bg)', borderBottom: '1px solid var(--c-border)' }}>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Lịch gốc</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Loại Y/C</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Thời điểm tạo</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Trạng thái</th>
-                                <th style={{ padding: '16px', textAlign: 'right', fontWeight: 600, color: 'var(--c-text-dark)' }}>Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                    <div className="table-responsive">
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th>Lịch gốc</th>
+                                    <th>Loại Y/C</th>
+                                    <th>Thời điểm tạo</th>
+                                    <th>Trạng thái</th>
+                                    <th style={{ textAlign: 'right' }}>Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody>
                             {requests.length === 0 ? (
                                 <tr>
                                     <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>
@@ -215,6 +220,7 @@ export const ReceptionChangeRequests: React.FC = () => {
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 )}
             </div>
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { Search, CalendarDays, Eye, CheckCircle, XCircle, Clock, PlusCircle, RefreshCw, X, Send } from 'lucide-react';
+import { useDialog } from '../../contexts/DialogContext';
 
 interface DoctorAppointment {
     id: number;
@@ -20,6 +21,7 @@ interface DoctorAppointment {
 }
 
 export const DoctorAppointments: React.FC = () => {
+    const { showAlert, showConfirm } = useDialog();
     const [appointments, setAppointments] = useState<DoctorAppointment[]>([]);
     const [loading, setLoading] = useState(true);
     const [totalItems, setTotalItems] = useState(0);
@@ -106,7 +108,7 @@ export const DoctorAppointments: React.FC = () => {
         if (view === 'detail') {
             try {
                 // Doctor may not have access to history, but we try (if admin/patient only, this will fail)
-                const res = await axiosClient.get<any, ApiResponse<any>>(`/appointments/${apt.id}/history`);
+                const res = await axiosClient.get<any, ApiResponse<any>>(`/doctor/appointments/${apt.id}/history`);
                 if (res.success && res.data) {
                     setHistory(res.data);
                 }
@@ -119,70 +121,73 @@ export const DoctorAppointments: React.FC = () => {
     const handleComplete = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!modal.apt) return;
-        if (!window.confirm('Xác nhận hoàn thành buổi khám? Thông tin này chỉ là tóm tắt kết quả khám trong phạm vi hệ thống.')) return;
         
-        setActionLoading(true);
-        try {
-            const res = await axiosClient.post<any, ApiResponse<any>>(`/doctor/appointments/${modal.apt.id}/complete`, {
-                summary: completeSummary,
-                followUpInstruction: completeInstructions
-            });
-            if (res.success) {
-                alert('Đã hoàn thành buổi khám.');
-                setModal({ ...modal, view: 'detail' });
+        showConfirm('Xác nhận hoàn thành buổi khám? Thông tin này chỉ là tóm tắt kết quả khám trong phạm vi hệ thống.', async () => {
+            setActionLoading(true);
+            try {
+                const res = await axiosClient.post<any, ApiResponse<any>>(`/doctor/appointments/${modal.apt!.id}/complete`, {
+                    summary: completeSummary,
+                    followUpInstruction: completeInstructions
+                });
+                if (res.success) {
+                    showAlert('Đã hoàn thành buổi khám.', 'Thành công', 'success');
+                    setModal({ ...modal, view: 'detail' });
+                    fetchAppointments();
+                }
+            } catch (error: any) {
+                if (error?.errorCode === 'INVALID_APPOINTMENT_STATUS') showAlert('Trạng thái lịch hẹn không còn hợp lệ (đã được xử lý trước đó).', 'Lỗi', 'error');
+                else showAlert(error?.message || 'Có lỗi xảy ra.', 'Lỗi', 'error');
                 fetchAppointments();
+            } finally {
+                setActionLoading(false);
             }
-        } catch (error: any) {
-            if (error?.errorCode === 'INVALID_APPOINTMENT_STATUS') alert('Trạng thái lịch hẹn không còn hợp lệ (đã được xử lý trước đó).');
-            else alert(error?.message || 'Có lỗi xảy ra.');
-            fetchAppointments();
-        } finally {
-            setActionLoading(false);
-        }
+        });
     };
 
     const handleNoShow = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!modal.apt) return;
-        if (!window.confirm('Xác nhận đánh dấu bệnh nhân vắng mặt? Hành động này sẽ khóa lịch khám và không thể hoàn tác.')) return;
         
-        setActionLoading(true);
-        try {
-            const res = await axiosClient.post<any, ApiResponse<any>>(`/doctor/appointments/${modal.apt.id}/noshow`, {
-                reason: noShowReason
-            });
-            if (res.success) {
-                alert('Đã đánh dấu vắng mặt.');
-                setModal({ isOpen: false, apt: null, view: 'detail' });
-                fetchAppointments();
+        showConfirm('Xác nhận đánh dấu bệnh nhân vắng mặt? Hành động này sẽ khóa lịch khám và không thể hoàn tác.', async () => {
+            setActionLoading(true);
+            try {
+                const res = await axiosClient.post<any, ApiResponse<any>>(`/doctor/appointments/${modal.apt!.id}/noshow`, {
+                    reason: noShowReason
+                });
+                if (res.success) {
+                    showAlert('Đã đánh dấu vắng mặt.', 'Thành công', 'success');
+                    setModal({ isOpen: false, apt: null, view: 'detail' });
+                    fetchAppointments();
+                }
+            } catch (error: any) {
+                showAlert(error?.message || 'Có lỗi xảy ra.', 'Lỗi', 'error');
+            } finally {
+                setActionLoading(false);
             }
-        } catch (error: any) {
-            alert(error?.message || 'Có lỗi xảy ra.');
-        } finally {
-            setActionLoading(false);
-        }
+        });
     };
 
     const handleRevisit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!modal.apt) return;
-        if (!window.confirm('Gửi đề xuất tái khám đến bệnh nhân?')) return;
         
-        setActionLoading(true);
-        try {
-            const res = await axiosClient.post<any, ApiResponse<any>>(`/doctor/appointments/${modal.apt.id}/revisit-requests`, {
-                suggestedDate: revisitDate,
-                note: revisitNote
-            });
-            if (res.success) {
-                alert('Đề xuất tái khám đã gửi đến bệnh nhân.');
-                setModal({ isOpen: false, apt: null, view: 'detail' });
+        showConfirm('Gửi đề xuất tái khám đến bệnh nhân?', async () => {
+            setActionLoading(true);
+            try {
+                const res = await axiosClient.post<any, ApiResponse<any>>(`/doctor/appointments/${modal.apt!.id}/revisit-requests`, {
+                    suggestedDate: revisitDate,
+                    note: revisitNote
+                });
+                if (res.success) {
+                    showAlert('Đề xuất tái khám đã gửi đến bệnh nhân.', 'Thành công', 'success');
+                    setModal({ isOpen: false, apt: null, view: 'detail' });
+                }
+            } catch (error: any) {
+                showAlert(error?.message || 'Có lỗi xảy ra.', 'Lỗi', 'error');
+            } finally {
+                setActionLoading(false);
             }
-        } catch (error: any) {
-            alert(error?.message || 'Có lỗi xảy ra.');
-        } finally {
-            setActionLoading(false);
-        }
+        });
     };
 
     const formatDate = (dateString: string) => {
@@ -207,8 +212,8 @@ export const DoctorAppointments: React.FC = () => {
             case 'Confirmed': return <span className="badge badge-info">{translateStatus(status)}</span>;
             case 'Completed': return <span className="badge badge-success">{translateStatus(status)}</span>;
             case 'Cancelled': return <span className="badge badge-danger">{translateStatus(status)}</span>;
-            case 'NoShow': return <span className="badge badge-muted">{translateStatus(status)}</span>;
-            default: return <span className="badge badge-muted">{status}</span>;
+            case 'NoShow': return <span className="badge badge-default">{translateStatus(status)}</span>;
+            default: return <span className="badge badge-default">{status}</span>;
         }
     };
 
@@ -223,7 +228,7 @@ export const DoctorAppointments: React.FC = () => {
                 </button>
             </div>
 
-            <div className="card-panel" style={{ marginBottom: '24px' }}>
+            <div className="card" style={{ marginBottom: '24px' }}>
                 <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 250px' }}>
                         <div style={{ position: 'relative' }}>
@@ -256,18 +261,18 @@ export const DoctorAppointments: React.FC = () => {
                 </form>
             </div>
 
-            <div className="card-panel" style={{ padding: 0, overflowX: 'auto' }}>
+            <div className="card table-responsive" style={{ padding: 0 }}>
                 {loading ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <table className="table">
                         <thead>
-                            <tr style={{ background: 'var(--c-bg)', borderBottom: '1px solid var(--c-border)' }}>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Giờ khám</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Bệnh nhân</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Lý do khám</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Trạng thái</th>
-                                <th style={{ padding: '16px', textAlign: 'right', fontWeight: 600, color: 'var(--c-text-dark)' }}>Thao tác</th>
+                            <tr>
+                                <th>Giờ khám</th>
+                                <th>Bệnh nhân</th>
+                                <th>Lý do khám</th>
+                                <th>Trạng thái</th>
+                                <th style={{ textAlign: 'right' }}>Thao tác</th>
                             </tr>
                         </thead>
                         <tbody>

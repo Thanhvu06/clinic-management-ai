@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { Search, Plus, Edit, Stethoscope, Sparkles, X, AlertTriangle } from 'lucide-react';
+import { useDialog } from '../../contexts/DialogContext';
 
 interface Specialty {
     id: number;
@@ -13,6 +14,7 @@ interface Specialty {
 }
 
 export const AdminSpecialties: React.FC = () => {
+    const { showAlert, showConfirm } = useDialog();
     const [specialties, setSpecialties] = useState<Specialty[]>([]);
     const [loading, setLoading] = useState(true);
     const [totalItems, setTotalItems] = useState(0);
@@ -62,43 +64,47 @@ export const AdminSpecialties: React.FC = () => {
     const handleFormSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setFormError('');
-        setFormLoading(true);
         
-        try {
-            if (modal.isEdit) {
-                if (!modal.data.isActive) {
-                    if (!window.confirm('Cảnh báo: Chuyên khoa ngừng hoạt động sẽ không hiển thị khi bệnh nhân đặt lịch mới, nhưng lịch sử vẫn được giữ. Bạn có chắc chắn?')) {
-                        setFormLoading(false);
-                        return;
+        const submitData = async () => {
+            setFormLoading(true);
+            try {
+                if (modal.isEdit) {
+                    const res = await axiosClient.put<any, ApiResponse<any>>(`/admin/specialties/${modal.data.id}`, {
+                        name: modal.data.name,
+                        description: modal.data.description,
+                        isActive: modal.data.isActive
+                    });
+                    if (res.success) {
+                        showAlert('Cập nhật chuyên khoa thành công.', 'Thành công', 'success');
+                        setModal({ isOpen: false, isEdit: false, data: {} });
+                        fetchSpecialties();
+                    }
+                } else {
+                    const res = await axiosClient.post<any, ApiResponse<any>>('/admin/specialties', {
+                        specialtyCode: modal.data.specialtyCode,
+                        name: modal.data.name,
+                        description: modal.data.description,
+                        isActive: modal.data.isActive ?? true
+                    });
+                    if (res.success) {
+                        showAlert('Thêm chuyên khoa thành công.', 'Thành công', 'success');
+                        setModal({ isOpen: false, isEdit: false, data: {} });
+                        fetchSpecialties();
                     }
                 }
-                const res = await axiosClient.put<any, ApiResponse<any>>(`/admin/specialties/${modal.data.id}`, {
-                    name: modal.data.name,
-                    description: modal.data.description,
-                    isActive: modal.data.isActive
-                });
-                if (res.success) {
-                    alert('Cập nhật chuyên khoa thành công.');
-                    setModal({ isOpen: false, isEdit: false, data: {} });
-                    fetchSpecialties();
-                }
-            } else {
-                const res = await axiosClient.post<any, ApiResponse<any>>('/admin/specialties', {
-                    specialtyCode: modal.data.specialtyCode,
-                    name: modal.data.name,
-                    description: modal.data.description,
-                    isActive: modal.data.isActive ?? true
-                });
-                if (res.success) {
-                    alert('Thêm chuyên khoa thành công.');
-                    setModal({ isOpen: false, isEdit: false, data: {} });
-                    fetchSpecialties();
-                }
+            } catch (error: any) {
+                setFormError(error?.message || 'Có lỗi xảy ra.');
+            } finally {
+                setFormLoading(false);
             }
-        } catch (error: any) {
-            setFormError(error?.message || 'Có lỗi xảy ra.');
-        } finally {
-            setFormLoading(false);
+        };
+
+        if (modal.isEdit && !modal.data.isActive) {
+            showConfirm('Cảnh báo: Chuyên khoa ngừng hoạt động sẽ không hiển thị khi bệnh nhân đặt lịch mới, nhưng lịch sử vẫn được giữ. Bạn có chắc chắn?', () => {
+                submitData();
+            });
+        } else {
+            submitData();
         }
     };
 
@@ -121,7 +127,7 @@ export const AdminSpecialties: React.FC = () => {
                 </button>
             </div>
 
-            <div className="card-panel" style={{ marginBottom: '24px' }}>
+            <div className="card" style={{ marginBottom: '24px' }}>
                 <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 250px' }}>
                         <div style={{ position: 'relative' }}>
@@ -147,18 +153,18 @@ export const AdminSpecialties: React.FC = () => {
                 </form>
             </div>
 
-            <div className="card-panel" style={{ padding: 0, overflowX: 'auto' }}>
+            <div className="card table-responsive" style={{ padding: 0 }}>
                 {loading ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <table className="table" style={{ width: '100%' }}>
                         <thead>
-                            <tr style={{ background: 'var(--c-bg)', borderBottom: '1px solid var(--c-border)' }}>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Mã Khoa</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Tên chuyên khoa</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Trạng thái</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Tính năng AI</th>
-                                <th style={{ padding: '16px', textAlign: 'right', fontWeight: 600, color: 'var(--c-text-dark)' }}>Thao tác</th>
+                            <tr>
+                                <th>Mã Khoa</th>
+                                <th>Tên chuyên khoa</th>
+                                <th>Trạng thái</th>
+                                <th>Tính năng AI</th>
+                                <th style={{ textAlign: 'right' }}>Thao tác</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -169,21 +175,21 @@ export const AdminSpecialties: React.FC = () => {
                                     </td>
                                 </tr>
                             ) : specialties.map(s => (
-                                <tr key={s.id} style={{ borderBottom: '1px solid var(--c-border)' }}>
-                                    <td style={{ padding: '16px', fontWeight: 500 }}>{s.specialtyCode}</td>
-                                    <td style={{ padding: '16px' }}>
-                                        <div style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>{s.name}</div>
+                                <tr key={s.id}>
+                                    <td style={{ fontWeight: 500 }}>{s.specialtyCode}</td>
+                                    <td>
+                                        <div style={{ fontWeight: 600 }}>{s.name}</div>
                                         <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', marginTop: '4px', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             {s.description || 'Không có mô tả'}
                                         </div>
                                     </td>
-                                    <td style={{ padding: '16px' }}>
+                                    <td>
                                         {s.isActive ? 
                                             <span className="badge badge-success">Đang hoạt động</span> : 
                                             <span className="badge badge-danger">Ngừng hoạt động</span>
                                         }
                                     </td>
-                                    <td style={{ padding: '16px' }}>
+                                    <td>
                                         {s.aiEnabled ? 
                                             <span className="badge badge-info" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                                 <Sparkles size={12}/> Cho phép gợi ý
@@ -191,7 +197,7 @@ export const AdminSpecialties: React.FC = () => {
                                             <span className="badge badge-muted">Tắt</span>
                                         }
                                     </td>
-                                    <td style={{ padding: '16px', textAlign: 'right' }}>
+                                    <td style={{ textAlign: 'right' }}>
                                         <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => openEditModal(s)}>
                                             <Edit size={14} style={{ marginRight: '4px' }}/> Sửa
                                         </button>
@@ -209,8 +215,8 @@ export const AdminSpecialties: React.FC = () => {
 
             {/* Form Modal */}
             {modal.isOpen && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-                    <div style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '500px' }}>
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+                    <div style={{ background: 'white', padding: '24px', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: '500px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                             <h3 style={{ margin: 0 }}>{modal.isEdit ? 'Cập nhật chuyên khoa' : 'Thêm chuyên khoa'}</h3>
                             <button onClick={() => setModal({ isOpen: false, isEdit: false, data: {} })} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
@@ -219,8 +225,8 @@ export const AdminSpecialties: React.FC = () => {
                         {formError && <div style={{ color: 'var(--c-danger)', background: 'var(--c-danger-bg)', padding: '10px', borderRadius: '6px', marginBottom: '16px', fontSize: '0.9rem' }}>{formError}</div>}
 
                         <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Mã chuyên khoa (*)</label>
+                            <div className="form-group">
+                                <label className="form-label">Mã chuyên khoa (*)</label>
                                 <input 
                                     type="text" 
                                     className="form-input" 
@@ -232,8 +238,8 @@ export const AdminSpecialties: React.FC = () => {
                                     style={{ backgroundColor: modal.isEdit ? 'var(--c-bg)' : 'white' }}
                                 />
                             </div>
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Tên chuyên khoa (*)</label>
+                            <div className="form-group">
+                                <label className="form-label">Tên chuyên khoa (*)</label>
                                 <input 
                                     type="text" 
                                     className="form-input" 
@@ -243,8 +249,8 @@ export const AdminSpecialties: React.FC = () => {
                                     placeholder="VD: Tim mạch"
                                 />
                             </div>
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Mô tả</label>
+                            <div className="form-group">
+                                <label className="form-label">Mô tả</label>
                                 <textarea 
                                     className="form-textarea" 
                                     rows={3}
@@ -252,7 +258,7 @@ export const AdminSpecialties: React.FC = () => {
                                     onChange={e => setModal({ ...modal, data: { ...modal.data, description: e.target.value } })} 
                                 />
                             </div>
-                            <div>
+                            <div className="form-group">
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, cursor: 'pointer' }}>
                                     <input 
                                         type="checkbox" 

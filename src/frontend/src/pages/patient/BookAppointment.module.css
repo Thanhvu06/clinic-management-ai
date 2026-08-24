@@ -1,297 +1,45 @@
-.container {
-    max-width: 900px;
-    margin: 0 auto;
-}
+/* BookAppointment layout */
+.container { max-width: 1000px; margin: 0 auto; }
+.pageTitle { font-size: 1.75rem; font-weight: 700; color: var(--c-navy); margin-bottom: 24px; text-align: center; }
 
-.header {
-    margin-bottom: var(--spacing-6);
-}
+/* Stepper */
+.stepperContainer { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; max-width: 800px; margin-left: auto; margin-right: auto; }
+.stepItem { display: flex; flex-direction: column; align-items: center; position: relative; flex: 1; }
+.stepCircle { width: 36px; height: 36px; border-radius: 50%; background-color: var(--c-border); color: var(--c-text-light); display: flex; align-items: center; justify-content: center; font-weight: 600; margin-bottom: 8px; z-index: 2; transition: all 0.3s; }
+.stepLabel { font-size: 0.85rem; color: var(--c-text-light); font-weight: 500; transition: all 0.3s; white-space: nowrap; }
+.stepLine { position: absolute; top: 18px; left: 50%; right: -50%; height: 2px; background-color: var(--c-border); z-index: 1; transition: all 0.3s; }
+.stepItemActive .stepCircle { background-color: var(--c-primary); color: white; box-shadow: 0 0 0 4px var(--c-primary-light); }
+.stepItemActive .stepLabel { color: var(--c-primary); font-weight: 600; }
+.stepItemActive .stepLine { background-color: var(--c-primary); }
 
-.header h2 {
-    color: var(--c-navy-dark);
-    font-size: 1.5rem;
-    margin-bottom: var(--spacing-4);
-}
+.card { background: white; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); border: 1px solid var(--c-border); overflow: hidden; }
+.stepContent { padding: 32px; }
+.stepTitle { font-size: 1.25rem; font-weight: 600; color: var(--c-navy); margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--c-border); }
 
-.stepper {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: white;
-    padding: var(--spacing-4) var(--spacing-6);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-    border: 1px solid var(--c-border);
-}
+/* Selection Grid (for specs and doctors) */
+.selectionGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.selectionCard { border: 2px solid var(--c-border); border-radius: var(--radius-md); padding: 24px 16px; text-align: center; cursor: pointer; transition: all 0.2s; background: white; }
+.selectionCard:hover { border-color: var(--c-primary-light); background-color: var(--c-bg); }
+.selectionCardActive { border-color: var(--c-primary); background-color: var(--c-primary-light); }
+.cardIcon { color: var(--c-primary); margin-bottom: 12px; }
+.selectionCard h4 { margin: 0 0 8px 0; font-size: 1.05rem; color: var(--c-navy); }
+.selectionCard p { margin: 0; font-size: 0.85rem; color: var(--c-text-light); line-height: 1.4; }
 
-.step {
-    display: flex;
-    align-items: center;
-    color: var(--c-muted);
-    font-weight: 500;
-}
+.slotGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; }
+.slotBtn { padding: 10px; border-radius: var(--radius-md); font-size: 0.95rem; font-weight: 500; border: 1px solid var(--c-border); background: white; color: var(--c-text); cursor: pointer; transition: all 0.2s; }
+.slotBtn:hover { border-color: var(--c-primary); color: var(--c-primary); background-color: var(--c-bg); }
+.slotBtnActive { border-color: var(--c-primary); background: var(--c-primary); color: white; }
 
-.stepActive {
-    color: var(--c-teal);
-    font-weight: 600;
-}
+.stepFooter { display: flex; justify-content: flex-end; gap: 16px; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--c-border); }
 
-.stepNumber {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background-color: var(--c-bg);
-    border: 2px solid var(--c-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: var(--spacing-2);
-    font-size: 0.9rem;
-}
+.confirmBox { background-color: var(--c-bg); border-radius: var(--radius-md); padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+.confirmRow { display: flex; gap: 16px; align-items: flex-start; }
+.confirmIcon { color: var(--c-primary); flex-shrink: 0; margin-top: 2px; }
+.confirmLabel { font-size: 0.9rem; color: var(--c-text-light); margin-bottom: 4px; }
+.confirmValue { font-size: 1.05rem; font-weight: 500; color: var(--c-navy); line-height: 1.4; }
 
-.stepActive .stepNumber {
-    background-color: var(--c-teal);
-    border-color: var(--c-teal);
-    color: white;
-}
-
-.stepLine {
-    flex: 1;
-    height: 2px;
-    background-color: var(--c-border);
-    margin: 0 var(--spacing-4);
-}
-
-.card {
-    background: white;
-    padding: var(--spacing-8);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-    border: 1px solid var(--c-border);
-}
-
-.section {
-    margin-bottom: var(--spacing-8);
-}
-
-.sectionHeader {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-2);
-    margin-bottom: var(--spacing-4);
-    border-bottom: 1px solid var(--c-border);
-    padding-bottom: var(--spacing-3);
-    color: var(--c-navy-dark);
-    font-size: 1.25rem;
-}
-
-.warningBox {
-    background-color: var(--c-warning-bg);
-    color: #b45309;
-    padding: var(--spacing-3) var(--spacing-4);
-    border-radius: var(--radius-md);
-    font-size: 0.9rem;
-    margin-bottom: var(--spacing-4);
-    display: flex;
-    align-items: flex-start;
-    gap: var(--spacing-2);
-}
-
-.aiSuggestBox {
-    background-color: var(--c-info-bg);
-    border: 1px solid #bfdbfe;
-    border-radius: var(--radius-md);
-    padding: var(--spacing-4);
-    margin-top: var(--spacing-4);
-}
-
-.aiBadge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: linear-gradient(135deg, #8b5cf6, #3b82f6);
-    color: white;
-    padding: 2px 8px;
-    border-radius: 9999px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin-bottom: var(--spacing-2);
-}
-
-.aiSuggestionsGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: var(--spacing-3);
-    margin-top: var(--spacing-3);
-}
-
-.aiCard {
-    background: white;
-    border: 1px solid #bfdbfe;
-    border-radius: var(--radius-md);
-    padding: var(--spacing-3);
-    cursor: pointer;
-    transition: all 0.2s;
-    text-align: left;
-}
-
-.aiCard:hover {
-    border-color: #3b82f6;
-    box-shadow: var(--shadow-sm);
-}
-
-.aiCardTitle {
-    font-weight: 600;
-    color: var(--c-text-dark);
-    margin-bottom: 4px;
-    font-size: 0.95rem;
-}
-
-.aiCardReason {
-    font-size: 0.85rem;
-    color: var(--c-muted);
-}
-
-.formGrid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-5);
-}
-
-.formGroup {
-    margin-bottom: var(--spacing-4);
-}
-
-.formGroup label {
-    display: block;
-    font-weight: 500;
-    margin-bottom: var(--spacing-2);
-    color: var(--c-text-dark);
-}
-
-.slotsContainer {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--spacing-2);
-}
-
-.slotBtn {
-    background: white;
-    border: 1px solid var(--c-border);
-    color: var(--c-text);
-    padding: var(--spacing-2) var(--spacing-4);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-weight: 500;
-    transition: all 0.2s;
-}
-
-.slotBtn:hover {
-    border-color: var(--c-teal);
-    color: var(--c-teal);
-}
-
-.slotSelected {
-    background: var(--c-teal);
-    color: white;
-    border-color: var(--c-teal);
-}
-.slotSelected:hover {
-    background: var(--c-teal-dark);
-    color: white;
-}
-
-.actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--spacing-3);
-    margin-top: var(--spacing-6);
-    border-top: 1px solid var(--c-border);
-    padding-top: var(--spacing-5);
-}
-
-.summaryTicket {
-    background: var(--c-bg);
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius-md);
-    padding: var(--spacing-5);
-    margin-bottom: var(--spacing-5);
-}
-
-.summaryRow {
-    display: flex;
-    justify-content: space-between;
-    padding: var(--spacing-3) 0;
-    border-bottom: 1px dashed var(--c-border);
-}
-.summaryRow:last-child {
-    border-bottom: none;
-}
-
-.summaryLabel {
-    color: var(--c-muted);
-    font-weight: 500;
-}
-
-.summaryValue {
-    font-weight: 600;
-    color: var(--c-text-dark);
-    text-align: right;
-}
-
-.alertError {
-    background-color: var(--c-danger-bg);
-    color: var(--c-danger);
-    padding: var(--spacing-4);
-    border-radius: var(--radius-md);
-    margin-bottom: var(--spacing-5);
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-3);
-    font-weight: 500;
-}
-
-.successState {
-    text-align: center;
-    padding: var(--spacing-10) 0;
-}
-
-.successIcon {
-    width: 80px;
-    height: 80px;
-    background: var(--c-success-bg);
-    color: var(--c-success);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto var(--spacing-5);
-}
-
-.appointmentCode {
-    display: inline-block;
-    background: var(--c-bg);
-    border: 2px dashed var(--c-border);
-    padding: var(--spacing-3) var(--spacing-6);
-    font-size: 1.5rem;
-    font-weight: 700;
-    letter-spacing: 2px;
-    color: var(--c-navy-dark);
-    border-radius: var(--radius-md);
-    margin: var(--spacing-4) 0;
-}
-
-@media (max-width: 768px) {
-    .formGrid {
-        grid-template-columns: 1fr;
-    }
-    .stepper {
-        padding: var(--spacing-3);
-    }
-    .step span:last-child {
-        display: none; /* hide text on mobile */
-    }
-    .stepNumber {
-        margin-right: 0;
-    }
+@media (max-width: 640px) {
+  .stepLabel { display: none; }
+  .stepperContainer { margin-bottom: 24px; }
+  .selectionGrid { grid-template-columns: 1fr; }
 }

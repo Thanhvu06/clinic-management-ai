@@ -392,6 +392,95 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.Medicine", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("ReorderLevel")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("StockQuantity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Medicines");
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.MedicineStockTransaction", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("BalanceAfter")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("MedicineId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("PrescriptionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("QuantityChange")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MedicineId");
+
+                    b.HasIndex("PrescriptionId");
+
+                    b.ToTable("MedicineStockTransactions");
+                });
+
             modelBuilder.Entity("ClinicManagement.Domain.Entities.Patient", b =>
                 {
                     b.Property<long>("Id")
@@ -418,6 +507,83 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Patients", (string)null);
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.Prescription", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AppointmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DispensedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DispensedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("DoctorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("PatientId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppointmentId");
+
+                    b.HasIndex("DoctorId");
+
+                    b.HasIndex("PatientId");
+
+                    b.ToTable("Prescriptions");
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.PrescriptionItem", b =>
+                {
+                    b.Property<long>("PrescriptionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("MedicineId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Dosage")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("DurationDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Instructions")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.HasKey("PrescriptionId", "MedicineId");
+
+                    b.HasIndex("MedicineId");
+
+                    b.ToTable("PrescriptionItems");
                 });
 
             modelBuilder.Entity("ClinicManagement.Domain.Entities.RevisitRequest", b =>
@@ -951,6 +1117,23 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("Doctor");
                 });
 
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.MedicineStockTransaction", b =>
+                {
+                    b.HasOne("ClinicManagement.Domain.Entities.Medicine", "Medicine")
+                        .WithMany("StockTransactions")
+                        .HasForeignKey("MedicineId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ClinicManagement.Domain.Entities.Prescription", "Prescription")
+                        .WithMany()
+                        .HasForeignKey("PrescriptionId");
+
+                    b.Navigation("Medicine");
+
+                    b.Navigation("Prescription");
+                });
+
             modelBuilder.Entity("ClinicManagement.Domain.Entities.Patient", b =>
                 {
                     b.HasOne("ClinicManagement.Infrastructure.Identity.ApplicationUser", null)
@@ -958,6 +1141,52 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ClinicManagement.Domain.Entities.Patient", "UserId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.Prescription", b =>
+                {
+                    b.HasOne("ClinicManagement.Domain.Entities.Appointment", "Appointment")
+                        .WithMany()
+                        .HasForeignKey("AppointmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ClinicManagement.Domain.Entities.Doctor", "Doctor")
+                        .WithMany()
+                        .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ClinicManagement.Domain.Entities.Patient", "Patient")
+                        .WithMany()
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Appointment");
+
+                    b.Navigation("Doctor");
+
+                    b.Navigation("Patient");
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.PrescriptionItem", b =>
+                {
+                    b.HasOne("ClinicManagement.Domain.Entities.Medicine", "Medicine")
+                        .WithMany("PrescriptionItems")
+                        .HasForeignKey("MedicineId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ClinicManagement.Domain.Entities.Prescription", "Prescription")
+                        .WithMany("Items")
+                        .HasForeignKey("PrescriptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Medicine");
+
+                    b.Navigation("Prescription");
                 });
 
             modelBuilder.Entity("ClinicManagement.Domain.Entities.RevisitRequest", b =>
@@ -1108,6 +1337,13 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("WorkSchedules");
                 });
 
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.Medicine", b =>
+                {
+                    b.Navigation("PrescriptionItems");
+
+                    b.Navigation("StockTransactions");
+                });
+
             modelBuilder.Entity("ClinicManagement.Domain.Entities.Patient", b =>
                 {
                     b.Navigation("AiSuggestionLogs");
@@ -1115,6 +1351,11 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("Appointments");
 
                     b.Navigation("RevisitRequests");
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.Prescription", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("ClinicManagement.Domain.Entities.Specialty", b =>

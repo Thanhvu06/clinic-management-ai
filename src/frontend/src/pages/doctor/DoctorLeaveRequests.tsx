@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { CalendarCheck, Plus, XCircle, Clock, RefreshCw, X } from 'lucide-react';
+import { useDialog } from '../../contexts/DialogContext';
 
 interface LeaveRequest {
     id: number;
@@ -13,6 +14,7 @@ interface LeaveRequest {
 }
 
 export const DoctorLeaveRequests: React.FC = () => {
+    const { showAlert, showConfirm } = useDialog();
     const [requests, setRequests] = useState<LeaveRequest[]>([]);
     const [loading, setLoading] = useState(true);
     const [totalItems, setTotalItems] = useState(0);
@@ -75,7 +77,7 @@ export const DoctorLeaveRequests: React.FC = () => {
                 reason
             });
             if (res.success) {
-                alert('Tạo yêu cầu nghỉ thành công.');
+                showAlert('Tạo yêu cầu nghỉ thành công.', 'Thành công', 'success');
                 setModalOpen(false);
                 setStartDate('');
                 setEndDate('');
@@ -90,17 +92,17 @@ export const DoctorLeaveRequests: React.FC = () => {
     };
 
     const handleWithdraw = async (id: number) => {
-        if (!window.confirm('Bạn có chắc chắn muốn rút lại yêu cầu nghỉ này?')) return;
-        
-        try {
-            const res = await axiosClient.post<any, ApiResponse<any>>(`/doctor/leave-requests/${id}/withdraw`, {});
-            if (res.success) {
-                alert('Đã rút yêu cầu nghỉ.');
-                fetchRequests();
+        showConfirm('Bạn có chắc chắn muốn rút lại yêu cầu nghỉ này?', async () => {
+            try {
+                const res = await axiosClient.post<any, ApiResponse<any>>(`/doctor/leave-requests/${id}/withdraw`, {});
+                if (res.success) {
+                    showAlert('Đã rút yêu cầu nghỉ.', 'Thành công', 'success');
+                    fetchRequests();
+                }
+            } catch (error: any) {
+                showAlert(error?.message || 'Có lỗi xảy ra.', 'Lỗi', 'error');
             }
-        } catch (error: any) {
-            alert(error?.message || 'Có lỗi xảy ra.');
-        }
+        });
     };
 
     const formatDateTime = (dateString: string) => {
@@ -119,8 +121,8 @@ export const DoctorLeaveRequests: React.FC = () => {
             case 'Pending': return <span className="badge badge-warning">Chờ duyệt</span>;
             case 'Approved': return <span className="badge badge-success">Đã duyệt</span>;
             case 'Rejected': return <span className="badge badge-danger">Đã từ chối</span>;
-            case 'Cancelled': return <span className="badge badge-muted">Đã rút</span>;
-            default: return <span className="badge badge-muted">{status}</span>;
+            case 'Cancelled': return <span className="badge badge-default">Đã rút</span>;
+            default: return <span className="badge badge-default">{status}</span>;
         }
     };
 
@@ -140,7 +142,7 @@ export const DoctorLeaveRequests: React.FC = () => {
                 </div>
             </div>
 
-            <div className="card-panel" style={{ marginBottom: '24px' }}>
+            <div className="card" style={{ marginBottom: '24px' }}>
                 <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                     <div style={{ width: '250px' }}>
                         <select className="form-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
@@ -154,18 +156,18 @@ export const DoctorLeaveRequests: React.FC = () => {
                 </div>
             </div>
 
-            <div className="card-panel" style={{ padding: 0, overflowX: 'auto' }}>
+            <div className="card table-responsive" style={{ padding: 0 }}>
                 {loading ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <table className="table">
                         <thead>
-                            <tr style={{ background: 'var(--c-bg)', borderBottom: '1px solid var(--c-border)' }}>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Thời gian nghỉ</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Lý do</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Ghi chú quản trị</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Trạng thái</th>
-                                <th style={{ padding: '16px', textAlign: 'right', fontWeight: 600, color: 'var(--c-text-dark)' }}>Thao tác</th>
+                            <tr>
+                                <th>Thời gian nghỉ</th>
+                                <th>Lý do</th>
+                                <th>Ghi chú quản trị</th>
+                                <th>Trạng thái</th>
+                                <th style={{ textAlign: 'right' }}>Thao tác</th>
                             </tr>
                         </thead>
                         <tbody>

@@ -26,6 +26,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
     public static Guid ReceptionistId { get; private set; }
     
     public static long DoctorEntityId { get; private set; }
+    public static long Doctor2EntityId { get; private set; }
     public static long Patient1EntityId { get; private set; }
     public static long Patient2EntityId { get; private set; }
     public static long SpecialtyEntityId { get; private set; }
@@ -102,6 +103,13 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         var doctor = new Doctor { UserId = DoctorId, IsActive = true, AcademicTitle = "BS", ExperienceYears = 5 };
         db.Doctors.Add(doctor);
 
+        var doc2 = new ApplicationUser { UserName = "doc2@test.com", Email = "doc2@test.com", FullName = "Doctor 2", PhoneNumber = "0123456789", IsActive = true };
+        await userManager.CreateAsync(doc2, "Pass@123");
+        await userManager.AddToRoleAsync(doc2, "Doctor");
+        
+        var doctor2 = new Doctor { UserId = doc2.Id, IsActive = true, AcademicTitle = "BS", ExperienceYears = 5 };
+        db.Doctors.Add(doctor2);
+
         var patient1 = new Patient { UserId = Patient1Id, DateOfBirth = new DateOnly(1990, 1, 1), Gender = Gender.Male };
         var patient2 = new Patient { UserId = Patient2Id, DateOfBirth = new DateOnly(1995, 1, 1), Gender = Gender.Female };
         db.Patients.Add(patient1);
@@ -112,6 +120,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         await db.SaveChangesAsync();
 
         db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor.Id, SpecialtyId = spec.Id, IsPrimary = true });
+        db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor2.Id, SpecialtyId = spec.Id, IsPrimary = true });
         
         var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
         var schedule = new DoctorWorkSchedule { DoctorId = doctor.Id, WorkDate = date, StartTime = new TimeOnly(8,0,0), EndTime = new TimeOnly(12,0,0), IsActive = true };
@@ -123,6 +132,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         await db.SaveChangesAsync();
 
         DoctorEntityId = doctor.Id;
+        Doctor2EntityId = doctor2.Id;
         Patient1EntityId = patient1.Id;
         Patient2EntityId = patient2.Id;
         SpecialtyEntityId = spec.Id;

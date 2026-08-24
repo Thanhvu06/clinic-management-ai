@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using ClinicManagement.Application.Appointments.DTOs;
 using System.Linq;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Appointments.DTOs.Reception;
@@ -94,6 +96,30 @@ public class ReceptionService : IReceptionService
         if (item == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
 
         return MapToDto(item.Appointment, item.PatientName, item.PatientPhone, item.DoctorName, item.SpecialtyName);
+    }
+
+    public async Task<List<AppointmentHistoryDto>> GetAppointmentHistoryAsync(long appointmentId)
+    {
+        var appointmentExists = await _dbContext.Appointments
+            .AnyAsync(a => a.Id == appointmentId);
+
+        if (!appointmentExists)
+            throw new NotFoundException("Lịch hẹn không tồn tại.");
+
+        return await _dbContext.AppointmentHistories
+            .AsNoTracking()
+            .Where(h => h.AppointmentId == appointmentId)
+            .OrderByDescending(h => h.CreatedAt)
+            .Select(h => new AppointmentHistoryDto
+            {
+                Id = h.Id,
+                Action = h.Action.ToString(),
+                OldStatus = h.OldStatus != null ? h.OldStatus.ToString() : null,
+                NewStatus = h.NewStatus.ToString(),
+                Note = h.Note,
+                CreatedAt = h.CreatedAt
+            })
+            .ToListAsync();
     }
 
     public async Task ConfirmAppointmentAsync(long appointmentId)

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { CalendarDays, Plus, Clock, Edit, CheckCircle, XCircle, PlayCircle, X } from 'lucide-react';
+import { useDialog } from '../../contexts/DialogContext';
 
 interface WorkSchedule {
     id: number;
@@ -14,6 +15,7 @@ interface WorkSchedule {
 }
 
 export const AdminWorkSchedules: React.FC = () => {
+    const { showAlert, showConfirm } = useDialog();
     const [doctors, setDoctors] = useState<any[]>([]);
     const [selectedDoctorId, setSelectedDoctorId] = useState<number | ''>('');
     const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
@@ -81,7 +83,7 @@ export const AdminWorkSchedules: React.FC = () => {
                     endTime: modal.data.endTime
                 });
                 if (res.success) {
-                    alert('Cập nhật lịch làm việc thành công.');
+                    showAlert('Cập nhật lịch làm việc thành công.', 'Thành công', 'success');
                     setModal({ isOpen: false, isEdit: false, data: {} });
                     fetchSchedules();
                 }
@@ -92,7 +94,7 @@ export const AdminWorkSchedules: React.FC = () => {
                     endTime: modal.data.endTime
                 });
                 if (res.success) {
-                    alert('Tạo lịch làm việc thành công.');
+                    showAlert('Tạo lịch làm việc thành công.', 'Thành công', 'success');
                     setModal({ isOpen: false, isEdit: false, data: {} });
                     fetchSchedules();
                 }
@@ -105,33 +107,35 @@ export const AdminWorkSchedules: React.FC = () => {
     };
 
     const handleToggleStatus = async (id: number, currentStatus: boolean) => {
-        if (!window.confirm(`Bạn có chắc chắn muốn ${currentStatus ? 'khóa' : 'mở khóa'} lịch làm việc này?`)) return;
-        try {
-            const res = await axiosClient.patch<any, ApiResponse<any>>(`/admin/work-schedules/${id}/status`, {
-                isActive: !currentStatus
-            });
-            if (res.success) {
-                fetchSchedules();
+        showConfirm(`Bạn có chắc chắn muốn ${currentStatus ? 'khóa' : 'mở khóa'} lịch làm việc này?`, async () => {
+            try {
+                const res = await axiosClient.patch<any, ApiResponse<any>>(`/admin/work-schedules/${id}/status`, {
+                    isActive: !currentStatus
+                });
+                if (res.success) {
+                    fetchSchedules();
+                }
+            } catch (error: any) {
+                showAlert(error?.message || 'Có lỗi xảy ra.', 'Lỗi', 'error');
             }
-        } catch (error: any) {
-            alert(error?.message || 'Có lỗi xảy ra.');
-        }
+        });
     };
 
     const handleGenerateSlots = async (id: number) => {
-        if (!window.confirm('Sinh ca khám (slots) cho lịch này? Lịch cũ có thể bị ảnh hưởng nếu đã được đặt.')) return;
-        setActionLoading(id);
-        try {
-            const res = await axiosClient.post<any, ApiResponse<any>>(`/admin/work-schedules/${id}/generate-slots`, {});
-            if (res.success) {
-                alert('Sinh slot thành công.');
-                fetchSchedules();
+        showConfirm('Sinh ca khám (slots) cho lịch này? Lịch cũ có thể bị ảnh hưởng nếu đã được đặt.', async () => {
+            setActionLoading(id);
+            try {
+                const res = await axiosClient.post<any, ApiResponse<any>>(`/admin/work-schedules/${id}/generate-slots`, {});
+                if (res.success) {
+                    showAlert('Sinh slot thành công.', 'Thành công', 'success');
+                    fetchSchedules();
+                }
+            } catch (error: any) {
+                showAlert(error?.message || 'Có lỗi xảy ra khi sinh slot.', 'Lỗi', 'error');
+            } finally {
+                setActionLoading(null);
             }
-        } catch (error: any) {
-            alert(error?.message || 'Có lỗi xảy ra khi sinh slot.');
-        } finally {
-            setActionLoading(null);
-        }
+        });
     };
 
     const formatDate = (dateString: string) => {
@@ -164,7 +168,7 @@ export const AdminWorkSchedules: React.FC = () => {
                 )}
             </div>
 
-            <div className="card-panel" style={{ marginBottom: '24px' }}>
+            <div className="card" style={{ marginBottom: '24px' }}>
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
                     <label style={{ fontWeight: 500 }}>Chọn Bác sĩ:</label>
                     <select className="form-select" style={{ maxWidth: '300px' }} value={selectedDoctorId} onChange={e => setSelectedDoctorId(Number(e.target.value))}>
@@ -175,17 +179,17 @@ export const AdminWorkSchedules: React.FC = () => {
             </div>
 
             {selectedDoctorId ? (
-                <div className="card-panel" style={{ padding: 0, overflowX: 'auto' }}>
+                <div className="card table-responsive" style={{ padding: 0 }}>
                     {loading ? (
                         <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải lịch làm việc...</div>
                     ) : (
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <table className="table" style={{ width: '100%' }}>
                             <thead>
-                                <tr style={{ background: 'var(--c-bg)', borderBottom: '1px solid var(--c-border)' }}>
-                                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Ngày</th>
-                                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Ca làm việc</th>
-                                    <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Trạng thái</th>
-                                    <th style={{ padding: '16px', textAlign: 'right', fontWeight: 600, color: 'var(--c-text-dark)' }}>Thao tác</th>
+                                <tr>
+                                    <th>Ngày</th>
+                                    <th>Ca làm việc</th>
+                                    <th>Trạng thái</th>
+                                    <th style={{ textAlign: 'right' }}>Thao tác</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -196,12 +200,12 @@ export const AdminWorkSchedules: React.FC = () => {
                                         </td>
                                     </tr>
                                 ) : schedules.map(s => (
-                                    <tr key={s.id} style={{ borderBottom: '1px solid var(--c-border)' }}>
-                                        <td style={{ padding: '16px' }}>
-                                            <div style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>{formatDate(s.workDate)}</div>
+                                    <tr key={s.id}>
+                                        <td>
+                                            <div style={{ fontWeight: 600 }}>{formatDate(s.workDate)}</div>
                                             <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>{getDayOfWeek(s.workDate)}</div>
                                         </td>
-                                        <td style={{ padding: '16px' }}>
+                                        <td>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 <Clock size={16} color="var(--c-teal)"/> 
                                                 <span>{s.startTime.substring(0, 5)} - {s.endTime.substring(0, 5)}</span>
@@ -211,13 +215,13 @@ export const AdminWorkSchedules: React.FC = () => {
                                                 Lưu ý: Bạn cần sinh slot để bệnh nhân có thể đặt lịch.
                                             </div>
                                         </td>
-                                        <td style={{ padding: '16px' }}>
+                                        <td>
                                             {s.isActive ? 
                                                 <span className="badge badge-success">Đang hoạt động</span> : 
                                                 <span className="badge badge-danger">Đã khóa</span>
                                             }
                                         </td>
-                                        <td style={{ padding: '16px', textAlign: 'right' }}>
+                                        <td style={{ textAlign: 'right' }}>
                                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                                                 <button 
                                                     className="btn-primary" 
@@ -247,7 +251,7 @@ export const AdminWorkSchedules: React.FC = () => {
                     )}
                 </div>
             ) : (
-                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)', background: 'white', borderRadius: '12px', border: '1px dashed var(--c-border)' }}>
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)', background: 'white', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--c-border)' }}>
                     <CalendarDays size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
                     <h3>Chưa chọn bác sĩ</h3>
                     <p>Vui lòng chọn một bác sĩ từ danh sách để xem lịch làm việc.</p>
@@ -256,8 +260,8 @@ export const AdminWorkSchedules: React.FC = () => {
 
             {/* Form Modal */}
             {modal.isOpen && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-                    <div style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '400px' }}>
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+                    <div style={{ background: 'white', padding: '24px', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: '400px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                             <h3 style={{ margin: 0 }}>{modal.isEdit ? 'Cập nhật lịch làm việc' : 'Thêm lịch làm việc'}</h3>
                             <button onClick={() => setModal({ isOpen: false, isEdit: false, data: {} })} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
@@ -266,8 +270,8 @@ export const AdminWorkSchedules: React.FC = () => {
                         {formError && <div style={{ color: 'var(--c-danger)', background: 'var(--c-danger-bg)', padding: '10px', borderRadius: '6px', marginBottom: '16px', fontSize: '0.9rem' }}>{formError}</div>}
 
                         <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Ngày làm việc (*)</label>
+                            <div className="form-group">
+                                <label className="form-label">Ngày làm việc (*)</label>
                                 <input 
                                     type="date" 
                                     className="form-input" 
@@ -277,8 +281,8 @@ export const AdminWorkSchedules: React.FC = () => {
                                 />
                             </div>
                             <div style={{ display: 'flex', gap: '16px' }}>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Từ giờ (*)</label>
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label className="form-label">Từ giờ (*)</label>
                                     <input 
                                         type="time" 
                                         className="form-input" 
@@ -287,8 +291,8 @@ export const AdminWorkSchedules: React.FC = () => {
                                         onChange={e => setModal({ ...modal, data: { ...modal.data, startTime: e.target.value } })} 
                                     />
                                 </div>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Đến giờ (*)</label>
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label className="form-label">Đến giờ (*)</label>
                                     <input 
                                         type="time" 
                                         className="form-input" 

@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using ClinicManagement.Application.Appointments.DTOs;
 using ClinicManagement.Application.Appointments.DTOs.ChangeRequests;
 using ClinicManagement.Application.Appointments.DTOs.Reception;
 using ClinicManagement.Application.Appointments.Interfaces;
@@ -35,6 +37,13 @@ public class ReceptionController : ControllerBase
     {
         var result = await _receptionService.GetAppointmentByIdAsync(id);
         return Ok(ApiResponse<ReceptionAppointmentDto>.Ok(result));
+    }
+
+    [HttpGet("appointments/{id}/history")]
+    public async Task<IActionResult> GetAppointmentHistory(long id)
+    {
+        var result = await _receptionService.GetAppointmentHistoryAsync(id);
+        return Ok(ApiResponse<List<AppointmentHistoryDto>>.Ok(result));
     }
 
     [HttpPost("appointments/{id}/confirm")]

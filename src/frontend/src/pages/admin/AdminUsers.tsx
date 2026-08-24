@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { Users, Search, Plus, CheckCircle, XCircle } from 'lucide-react';
+import { useDialog } from '../../contexts/DialogContext';
 
 interface UserDto {
     id: string;
@@ -14,6 +15,7 @@ interface UserDto {
 }
 
 export const AdminUsers: React.FC = () => {
+    const { showAlert, showConfirm } = useDialog();
     const [users, setUsers] = useState<UserDto[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [page, setPage] = useState(1);
@@ -72,19 +74,19 @@ export const AdminUsers: React.FC = () => {
 
     const toggleStatus = async (userId: string, currentStatus: boolean) => {
         const actionName = currentStatus ? 'khóa' : 'mở khóa';
-        if (!window.confirm(`Bạn có chắc chắn muốn ${actionName} tài khoản này?`)) return;
-
-        try {
-            const res = await axiosClient.patch<any, ApiResponse<any>>(`/admin/users/${userId}/status`, {
-                isActive: !currentStatus
-            });
-            if (res.success) {
-                alert(`Đã ${actionName} tài khoản thành công.`);
-                fetchUsers();
+        showConfirm(`Bạn có chắc chắn muốn ${actionName} tài khoản này?`, async () => {
+            try {
+                const res = await axiosClient.patch<any, ApiResponse<any>>(`/admin/users/${userId}/status`, {
+                    isActive: !currentStatus
+                });
+                if (res.success) {
+                    showAlert(`Đã ${actionName} tài khoản thành công.`, 'Thành công', 'success');
+                    fetchUsers();
+                }
+            } catch (error: any) {
+                showAlert(error?.message || 'Có lỗi xảy ra.', 'Lỗi', 'error');
             }
-        } catch (error: any) {
-            alert(error?.message || 'Có lỗi xảy ra.');
-        }
+        });
     };
 
     const handleCreateSubmit = async (e: React.FormEvent) => {
@@ -94,7 +96,7 @@ export const AdminUsers: React.FC = () => {
         try {
             const res = await axiosClient.post<any, ApiResponse<any>>('/admin/users', formData);
             if (res.success) {
-                alert('Tạo tài khoản nhân sự thành công.');
+                showAlert('Tạo tài khoản nhân sự thành công.', 'Thành công', 'success');
                 setIsCreateModalOpen(false);
                 setFormData({ email: '', phoneNumber: '', fullName: '', password: '', role: 'Receptionist' });
                 fetchUsers();
@@ -135,7 +137,7 @@ export const AdminUsers: React.FC = () => {
                 </button>
             </div>
 
-            <div className="card-panel" style={{ marginBottom: '24px' }}>
+            <div className="card" style={{ marginBottom: '24px' }}>
                 <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 250px' }}>
                         <div style={{ position: 'relative' }}>
@@ -170,18 +172,18 @@ export const AdminUsers: React.FC = () => {
                 </form>
             </div>
 
-            <div className="card-panel" style={{ padding: 0, overflowX: 'auto' }}>
+            <div className="card table-responsive" style={{ padding: 0 }}>
                 {loading ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <table className="table" style={{ width: '100%' }}>
                         <thead>
-                            <tr style={{ background: 'var(--c-bg)', borderBottom: '1px solid var(--c-border)' }}>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Họ và tên</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Thông tin liên hệ</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Vai trò</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Trạng thái</th>
-                                <th style={{ padding: '16px', textAlign: 'right', fontWeight: 600, color: 'var(--c-text-dark)' }}>Thao tác</th>
+                            <tr>
+                                <th>Họ và tên</th>
+                                <th>Thông tin liên hệ</th>
+                                <th>Vai trò</th>
+                                <th>Trạng thái</th>
+                                <th style={{ textAlign: 'right' }}>Thao tác</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -192,16 +194,16 @@ export const AdminUsers: React.FC = () => {
                                     </td>
                                 </tr>
                             ) : users.map(u => (
-                                <tr key={u.id} style={{ borderBottom: '1px solid var(--c-border)' }}>
-                                    <td style={{ padding: '16px' }}>
-                                        <div style={{ fontWeight: 500, color: 'var(--c-text-dark)' }}>{u.fullName}</div>
+                                <tr key={u.id}>
+                                    <td>
+                                        <div style={{ fontWeight: 500 }}>{u.fullName}</div>
                                         <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>Tham gia: {formatDate(u.createdAt)}</div>
                                     </td>
-                                    <td style={{ padding: '16px' }}>
+                                    <td>
                                         <div>{u.email}</div>
                                         <div style={{ fontSize: '0.9rem', color: 'var(--c-muted)' }}>{u.phoneNumber}</div>
                                     </td>
-                                    <td style={{ padding: '16px' }}>
+                                    <td>
                                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                             {u.roles.map(r => (
                                                 <span key={r} className={`badge ${r === 'Admin' ? 'badge-danger' : r === 'Doctor' ? 'badge-info' : 'badge-muted'}`}>
@@ -210,13 +212,13 @@ export const AdminUsers: React.FC = () => {
                                             ))}
                                         </div>
                                     </td>
-                                    <td style={{ padding: '16px' }}>
+                                    <td>
                                         {u.isActive ? 
                                             <span className="badge badge-success"><CheckCircle size={14} style={{ marginRight: '4px' }}/> Đang hoạt động</span> : 
                                             <span className="badge badge-danger"><XCircle size={14} style={{ marginRight: '4px' }}/> Đã khóa</span>
                                         }
                                     </td>
-                                    <td style={{ padding: '16px', textAlign: 'right' }}>
+                                    <td style={{ textAlign: 'right' }}>
                                         <button 
                                             className={u.isActive ? "btn-danger" : "btn-primary"} 
                                             style={{ padding: '6px 12px', fontSize: '0.85rem' }}
@@ -234,15 +236,14 @@ export const AdminUsers: React.FC = () => {
                 )}
             </div>
             
-            {/* Pagination could be added here if needed */}
             <div style={{ marginTop: '16px', color: 'var(--c-muted)', fontSize: '0.9rem' }}>
                 Tổng cộng: {totalItems} tài khoản
             </div>
 
             {/* Create Modal */}
             {isCreateModalOpen && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-                    <div style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '500px' }}>
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+                    <div style={{ background: 'white', padding: '24px', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: '500px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                             <h3 style={{ margin: 0 }}>Tạo tài khoản nhân sự</h3>
                             <button onClick={() => setIsCreateModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><XCircle size={24} color="var(--c-muted)"/></button>
@@ -251,24 +252,24 @@ export const AdminUsers: React.FC = () => {
                         {formError && <div style={{ color: 'var(--c-danger)', background: 'var(--c-danger-bg)', padding: '10px', borderRadius: '6px', marginBottom: '16px', fontSize: '0.9rem' }}>{formError}</div>}
 
                         <form onSubmit={handleCreateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Họ và tên (*)</label>
+                            <div className="form-group">
+                                <label className="form-label">Họ và tên (*)</label>
                                 <input type="text" className="form-input" required value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} placeholder="Nguyễn Văn A" />
                             </div>
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Email (*)</label>
+                            <div className="form-group">
+                                <label className="form-label">Email (*)</label>
                                 <input type="email" className="form-input" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="email@example.com" />
                             </div>
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Số điện thoại (*)</label>
+                            <div className="form-group">
+                                <label className="form-label">Số điện thoại (*)</label>
                                 <input type="text" className="form-input" required value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} placeholder="09xxxxxxxxx" />
                             </div>
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Mật khẩu (*)</label>
+                            <div className="form-group">
+                                <label className="form-label">Mật khẩu (*)</label>
                                 <input type="password" className="form-input" required minLength={8} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="Tối thiểu 8 ký tự" />
                             </div>
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Vai trò (*)</label>
+                            <div className="form-group">
+                                <label className="form-label">Vai trò (*)</label>
                                 <select className="form-select" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
                                     <option value="Receptionist">Lễ tân</option>
                                     <option value="Doctor">Bác sĩ</option>
@@ -293,3 +294,4 @@ export const AdminUsers: React.FC = () => {
         </div>
     );
 };
+

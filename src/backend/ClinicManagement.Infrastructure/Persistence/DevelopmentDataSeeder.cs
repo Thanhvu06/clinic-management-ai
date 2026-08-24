@@ -25,7 +25,10 @@ public static class DevelopmentDataSeeder
         var password = "Demo@12345";
 
         // Seed Users
-        var adminId1 = await SeedUserAsync(userManager, "admin@cliniccare.local", "Quản trị viên 1", "0900000001", "Admin", password);
+        var adminId1 = await SeedUserAsync(userManager, "admin@cliniccare.local", "Quản trị viên", "0999999999", "Admin", password);
+
+        // Pharmacist
+        var pharmacist = await SeedUserAsync(userManager, "pharmacist@cliniccare.local", "Dược sĩ Lâm Sàng", "0977777777", "Pharmacist", password);
         var adminId2 = await SeedUserAsync(userManager, "admin.02@cliniccare.local", "Quản trị viên 2", "0980000002", "Admin", password);
         
         var rec1 = await SeedUserAsync(userManager, "reception@cliniccare.local", "Lễ tân 1", "0900000002", "Receptionist", password);
@@ -33,28 +36,30 @@ public static class DevelopmentDataSeeder
         var rec3 = await SeedUserAsync(userManager, "letan.03@cliniccare.local", "Lễ tân 3", "0981000003", "Receptionist", password);
 
         var docUsers = new List<ApplicationUser>();
-        docUsers.Add(await SeedUserAsync(userManager, "doctor@cliniccare.local", "BS Nguyễn Văn Demo", "0900000003", "Doctor", password));
+        var docNames = new[] { "BS.CKI Nguyá»…n Minh Kháº£i", "BS. Tráº§n Thu HĂ ", "BS.CKII LĂª HoĂ ng Nam", "ThS.BS Pháº¡m VÄƒn HĂ¹ng", "BS. Äinh Thá»‹ Yáº¿n", "BS.CKI VÅ© Quang Vinh", "TS.BS BĂ¹i Háº£i Yáº¿n", "BS. Äá»— Tuáº¥n Anh", "BS.CKI LĂ½ Kim Dung", "BS. HoĂ ng VÄƒn Äáº¡t" };
+        docUsers.Add(await SeedUserAsync(userManager, "doctor@cliniccare.local", docNames[0], "0900000003", "Doctor", password));
         for (int i = 2; i <= 10; i++) {
-            docUsers.Add(await SeedUserAsync(userManager, $"bacsi.{i:D2}@cliniccare.local", $"BS Khám Bệnh {i}", $"09820000{i:D2}", "Doctor", password));
+            docUsers.Add(await SeedUserAsync(userManager, $"bacsi.{i:D2}@cliniccare.local", docNames[i-1], $"09820000{i:D2}", "Doctor", password));
         }
 
         var patUsers = new List<ApplicationUser>();
-        patUsers.Add(await SeedUserAsync(userManager, "patient@cliniccare.local", "Bệnh nhân Demo", "0900000005", "Patient", password));
-        for (int i = 2; i <= 20; i++) {
-            patUsers.Add(await SeedUserAsync(userManager, $"benhnhan.{i:D2}@cliniccare.local", $"Bệnh Nhân {i}", $"09830000{i:D2}", "Patient", password));
+        patUsers.Add(await SeedUserAsync(userManager, "patient@cliniccare.local", "Nguyá»…n ÄĂ¬nh ThĂ nh", "0900000004", "Patient", password));
+        var patNames = new[] { "LĂª Thá»‹ Lan", "Tráº§n VÄƒn BĂ¬nh", "Pháº¡m Thu HÆ°Æ¡ng", "HoĂ ng Ngá»c SÆ¡n", "VÅ© Thá»‹ Mai", "Äáº·ng VÄƒn ToĂ n", "BĂ¹i Thá»‹ TĂ¡m", "Äá»— Minh Äá»©c", "Há»“ Quang Hiáº¿u", "NgĂ´ PhÆ°Æ¡ng Trinh", "DÆ°Æ¡ng Quá»‘c CÆ°á»ng", "LĂ½ Tiá»ƒu Long", "Tráº§n ÄÄƒng Khoa", "Nguyá»…n Thá»‹ Hoa", "Phan Anh Tuáº¥n" };
+        for (int i = 1; i <= 15; i++) {
+            patUsers.Add(await SeedUserAsync(userManager, $"patient.{i:D2}@cliniccare.local", patNames[i-1], $"09830000{i:D2}", "Patient", password));
         }
 
         // Specialties
         if (!await db.Specialties.AnyAsync())
         {
             db.Specialties.AddRange(
-                new Specialty { SpecialtyCode = "SP01", Name = "Nội tổng quát", Description = "Khám các bệnh nội khoa chung", IsActive = true, AiEnabled = true },
-                new Specialty { SpecialtyCode = "SP02", Name = "Nhi khoa", Description = "Khám bệnh cho trẻ em", IsActive = true, AiEnabled = true },
-                new Specialty { SpecialtyCode = "SP03", Name = "Sản phụ khoa", Description = "Khám thai, phụ khoa", IsActive = true, AiEnabled = true },
-                new Specialty { SpecialtyCode = "SP04", Name = "Da liễu", Description = "Khám các bệnh về da", IsActive = true, AiEnabled = true },
-                new Specialty { SpecialtyCode = "SP05", Name = "Tai mũi họng", Description = "Khám các bệnh tai mũi họng", IsActive = true, AiEnabled = true },
-                new Specialty { SpecialtyCode = "SP06", Name = "Tim mạch", Description = "Khám bệnh tim mạch", IsActive = true, AiEnabled = true },
-                new Specialty { SpecialtyCode = "SP07", Name = "Cơ xương khớp", Description = "Khám bệnh cơ xương khớp", IsActive = true, AiEnabled = true }
+                new Specialty { SpecialtyCode = "SP01", Name = "Ná»™i tá»•ng quĂ¡t", Description = "KhĂ¡m vĂ  Ä‘iá»u trá»‹ cĂ¡c bá»‡nh lĂ½ ná»™i khoa chung", IsActive = true, AiEnabled = true },
+                new Specialty { SpecialtyCode = "SP02", Name = "Nhi khoa", Description = "KhĂ¡m, cháº©n Ä‘oĂ¡n vĂ  Ä‘iá»u trá»‹ bá»‡nh cho tráº» em", IsActive = true, AiEnabled = true },
+                new Specialty { SpecialtyCode = "SP03", Name = "Sáº£n phá»¥ khoa", Description = "KhĂ¡m thai Ä‘á»‹nh ká»³ vĂ  tÆ° váº¥n sá»©c khá»e phá»¥ khoa", IsActive = true, AiEnabled = true },
+                new Specialty { SpecialtyCode = "SP04", Name = "Da liá»…u", Description = "ChuyĂªn trá»‹ cĂ¡c váº¥n Ä‘á» vá» da, tĂ³c vĂ  mĂ³ng", IsActive = true, AiEnabled = true },
+                new Specialty { SpecialtyCode = "SP05", Name = "Tai mÅ©i há»ng", Description = "KhĂ¡m vĂ  Ä‘iá»u trá»‹ bá»‡nh lĂ½ tai mÅ©i há»ng", IsActive = true, AiEnabled = true },
+                new Specialty { SpecialtyCode = "SP06", Name = "Tim máº¡ch", Description = "Kiá»ƒm tra huyáº¿t Ă¡p, Ä‘o Ä‘iá»‡n tĂ¢m Ä‘á»“ vĂ  bá»‡nh lĂ½ tim máº¡ch", IsActive = true, AiEnabled = true },
+                new Specialty { SpecialtyCode = "SP07", Name = "CÆ¡ xÆ°Æ¡ng khá»›p", Description = "Äiá»u trá»‹ viĂªm khá»›p, thoĂ¡i hĂ³a khá»›p vĂ  cĂ¡c cháº¥n thÆ°Æ¡ng", IsActive = true, AiEnabled = true }
             );
             await db.SaveChangesAsync();
             logger.LogInformation("Specialties seeded.");
@@ -165,7 +170,7 @@ public static class DevelopmentDataSeeder
                     PatientId = p.Id, DoctorId = d.Id, SpecialtyId = specs[0].Id,
                     AppointmentSlotId = s.Id, AppointmentDate = s.SlotDate,
                     StartTime = s.StartTime, EndTime = s.EndTime,
-                    Reason = "Khám tư vấn", Status = status
+                    Reason = "KhĂ¡m tÆ° váº¥n", Status = status
                 };
                 db.Appointments.Add(a);
                 if (status != AppointmentStatus.Cancelled) s.IsBooked = true; 
@@ -186,7 +191,7 @@ public static class DevelopmentDataSeeder
                         AppointmentId = a.Id, Action = AppointmentHistoryAction.Completed, OldStatus = AppointmentStatus.Confirmed, NewStatus = AppointmentStatus.Completed, Note = "Bác sĩ hoàn thành", PerformedByUserId = d.UserId, CreatedAt = DateTime.Now.AddDays(-1)
                     });
                     db.VisitSummaries.Add(new VisitSummary {
-                        AppointmentId = a.Id, DoctorId = d.Id, Summary = "Sức khỏe bệnh nhân tương đối ổn định. Đã kê đơn thuốc và tư vấn chế độ ăn uống.", FollowUpInstruction = "Uống nhiều nước, tập thể dục thường xuyên."
+                        AppointmentId = a.Id, DoctorId = d.Id, Summary = "Sá»©c khá»e bá»‡nh nhĂ¢n tÆ°Æ¡ng Ä‘á»‘i á»•n Ä‘á»‹nh. ÄĂ£ kĂª Ä‘Æ¡n thuá»‘c vĂ  tÆ° váº¥n cháº¿ Ä‘á»™ Äƒn uá»‘ng.", FollowUpInstruction = "Uá»‘ng nhiá»u nÆ°á»›c, táº­p thá»ƒ dá»¥c thÆ°á»ng xuyĂªn."
                     });
                 }
                 else if (status == AppointmentStatus.NoShow) {
@@ -253,14 +258,14 @@ public static class DevelopmentDataSeeder
 
             var confAppt = await db.Appointments.Include(a => a.Patient).Skip(1).FirstAsync(a => a.Status == AppointmentStatus.Confirmed);
             db.AppointmentChangeRequests.Add(new AppointmentChangeRequest {
-                AppointmentId = confAppt.Id, RequestType = AppointmentChangeRequestType.Reschedule, RequestedSlotId = futureSlots[100].Id, Reason = "Xin dời ngày khám sang tuần sau", Status = AppointmentChangeRequestStatus.Pending, RequestedByUserId = confAppt.Patient.UserId, CreatedAt = DateTime.Now
+                AppointmentId = confAppt.Id, RequestType = AppointmentChangeRequestType.Reschedule, RequestedSlotId = futureSlots[100].Id, Reason = "Xin dá»i ngĂ y khĂ¡m sang tuáº§n sau", Status = AppointmentChangeRequestStatus.Pending, RequestedByUserId = confAppt.Patient.UserId, CreatedAt = DateTime.Now
             });
             await db.SaveChangesAsync();
 
             // Revisit request
             var compAppt = await db.Appointments.FirstAsync(a => a.Status == AppointmentStatus.Completed);
             db.RevisitRequests.Add(new RevisitRequest {
-                AppointmentId = compAppt.Id, PatientId = compAppt.PatientId, DoctorId = compAppt.DoctorId, SuggestedDate = today.AddDays(7), Note = "Tái khám sau 1 tuần kiểm tra lượng đường", Status = RevisitRequestStatus.PendingPatientResponse
+                AppointmentId = compAppt.Id, PatientId = compAppt.PatientId, DoctorId = compAppt.DoctorId, SuggestedDate = today.AddDays(7), Note = "TĂ¡i khĂ¡m sau 1 tuáº§n kiá»ƒm tra lÆ°á»£ng Ä‘Æ°á»ng", Status = RevisitRequestStatus.PendingPatientResponse
             });
             await db.SaveChangesAsync();
 
@@ -269,7 +274,7 @@ public static class DevelopmentDataSeeder
                 DoctorId = mainDoc.Id, StartDateTime = DateTime.Now.AddDays(2), EndDateTime = DateTime.Now.AddDays(3), Reason = "Nghỉ phép cá nhân", Status = DoctorLeaveRequestStatus.Pending
             });
             db.DoctorLeaveRequests.Add(new DoctorLeaveRequest {
-                DoctorId = doctors[1].Id, StartDateTime = DateTime.Now.AddDays(5), EndDateTime = DateTime.Now.AddDays(6), Reason = "Tham gia hội thảo chuyên ngành tại Hà Nội", Status = DoctorLeaveRequestStatus.Approved, AdminNote = "Đã duyệt, yêu cầu chuyển ca các bệnh nhân ngày 5."
+                DoctorId = doctors[1].Id, StartDateTime = DateTime.Now.AddDays(5), EndDateTime = DateTime.Now.AddDays(6), Reason = "Tham gia hội thảo chuyên ngành tại Hà Nội", Status = DoctorLeaveRequestStatus.Approved, AdminNote = "ÄĂ£ duyá»‡t, yĂªu cáº§u chuyá»ƒn ca cĂ¡c bá»‡nh nhĂ¢n ngĂ y 5."
             });
             await db.SaveChangesAsync();
 
@@ -284,6 +289,9 @@ public static class DevelopmentDataSeeder
         var user = await userManager.FindByEmailAsync(email);
         if (user == null)
         {
+            var existingByPhone = userManager.Users.FirstOrDefault(u => u.PhoneNumber == phone);
+            if (existingByPhone != null) return existingByPhone;
+
             user = new ApplicationUser { UserName = email, Email = email, FullName = name, PhoneNumber = phone, IsActive = true };
             await userManager.CreateAsync(user, password);
             await userManager.AddToRoleAsync(user, role);

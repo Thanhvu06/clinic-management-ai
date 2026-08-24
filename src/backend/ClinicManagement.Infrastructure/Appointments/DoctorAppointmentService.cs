@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using ClinicManagement.Application.Appointments.DTOs;
 using System.Linq;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Appointments.DTOs.Doctor;
@@ -100,6 +102,32 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         if (item == null) throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
 
         return MapToDto(item.Appointment, item.PatientName, item.PatientPhone, item.PatientGender, item.PatientDob);
+    }
+
+    public async Task<List<AppointmentHistoryDto>> GetAppointmentHistoryAsync(long appointmentId)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+
+        var appointmentExists = await _dbContext.Appointments
+            .AnyAsync(a => a.Id == appointmentId && a.DoctorId == doctor.Id);
+
+        if (!appointmentExists)
+            throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
+
+        return await _dbContext.AppointmentHistories
+            .AsNoTracking()
+            .Where(h => h.AppointmentId == appointmentId)
+            .OrderByDescending(h => h.CreatedAt)
+            .Select(h => new AppointmentHistoryDto
+            {
+                Id = h.Id,
+                Action = h.Action.ToString(),
+                OldStatus = h.OldStatus != null ? h.OldStatus.ToString() : null,
+                NewStatus = h.NewStatus.ToString(),
+                Note = h.Note,
+                CreatedAt = h.CreatedAt
+            })
+            .ToListAsync();
     }
 
     public async Task CompleteAppointmentAsync(long appointmentId, CompleteAppointmentDto request)

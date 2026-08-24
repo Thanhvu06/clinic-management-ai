@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { Search, CalendarDays, Eye, X, Clock, RefreshCw } from 'lucide-react';
+import { useDialog } from '../../contexts/DialogContext';
 
 interface ReceptionAppointment {
     id: number;
@@ -72,16 +73,13 @@ export const ReceptionAppointments: React.FC = () => {
         setHistoryError('');
         setHistory([]);
         try {
-            const res = await axiosClient.get<any, ApiResponse<any>>(`/appointments/${id}/history`);
+            const res = await axiosClient.get<any, ApiResponse<any>>(`/reception/appointments/${id}/history`);
             if (res.success && res.data) {
                 setHistory(res.data);
             }
         } catch (error: any) {
-            if (error?.status === 403) {
-                setHistoryError('Lịch sử chỉ dành cho bệnh nhân (do phân quyền hiện tại).');
-            } else {
-                setHistoryError('Không thể tải lịch sử.');
-            }
+            console.error("Lỗi tải lịch sử:", error);
+            setHistoryError('Không thể tải lịch sử.');
         } finally {
             setHistoryLoading(false);
         }
@@ -92,31 +90,35 @@ export const ReceptionAppointments: React.FC = () => {
         fetchHistory(apt.id);
     };
 
+    const { showAlert, showConfirm } = useDialog();
+
     const handleConfirm = async () => {
-        if (!modal.apt) return;
-        if (!window.confirm('Xác nhận lịch hẹn này hợp lệ và đã sẵn sàng cho bác sĩ?')) return;
+        const apt = modal.apt;
+        if (!apt) return;
         
-        setActionLoading(true);
-        try {
-            const res = await axiosClient.post<any, ApiResponse<any>>(`/reception/appointments/${modal.apt.id}/confirm`, {});
-            if (res.success) {
-                alert('Đã xác nhận lịch hẹn.');
-                // Update local state temporarily for fast UI or refetch all
-                setModal({ ...modal, apt: { ...modal.apt, status: 'Confirmed' } });
-                fetchHistory(modal.apt.id);
-                fetchAppointments();
+        showConfirm('Xác nhận lịch hẹn này hợp lệ và đã sẵn sàng cho bác sĩ?', async () => {
+            setActionLoading(true);
+            try {
+                const res = await axiosClient.post<any, ApiResponse<any>>(`/reception/appointments/${apt.id}/confirm`, {});
+                if (res.success) {
+                    showAlert('Đã xác nhận lịch hẹn.', 'Thành công', 'success');
+                    // Update local state temporarily for fast UI or refetch all
+                    setModal({ ...modal, apt: { ...apt, status: 'Confirmed' } });
+                    fetchHistory(apt.id);
+                    fetchAppointments();
+                }
+            } catch (error: any) {
+                if (error?.errorCode === 'INVALID_APPOINTMENT_STATUS') {
+                    showAlert('Trạng thái lịch hẹn không hợp lệ (có thể đã được người khác xử lý). Dữ liệu sẽ được làm mới.', 'Thông báo', 'warning');
+                    fetchAppointments();
+                    setModal({ isOpen: false, apt: null });
+                } else {
+                    showAlert(error?.message || 'Có lỗi xảy ra.', 'Lỗi', 'error');
+                }
+            } finally {
+                setActionLoading(false);
             }
-        } catch (error: any) {
-            if (error?.errorCode === 'INVALID_APPOINTMENT_STATUS') {
-                alert('Trạng thái lịch hẹn không hợp lệ (có thể đã được người khác xử lý). Dữ liệu sẽ được làm mới.');
-                fetchAppointments();
-                setModal({ isOpen: false, apt: null });
-            } else {
-                alert(error?.message || 'Có lỗi xảy ra.');
-            }
-        } finally {
-            setActionLoading(false);
-        }
+        });
     };
 
     const formatDate = (dateString: string) => {
@@ -182,7 +184,7 @@ export const ReceptionAppointments: React.FC = () => {
                 </button>
             </div>
 
-            <div className="card-panel" style={{ marginBottom: '24px' }}>
+            <div className="card" style={{ marginBottom: '24px' }}>
                 <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 250px' }}>
                         <div style={{ position: 'relative' }}>
@@ -210,21 +212,22 @@ export const ReceptionAppointments: React.FC = () => {
                 </form>
             </div>
 
-            <div className="card-panel" style={{ padding: 0, overflowX: 'auto' }}>
+            <div className="card" style={{ padding: 0 }}>
                 {loading ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr style={{ background: 'var(--c-bg)', borderBottom: '1px solid var(--c-border)' }}>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Lịch khám</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Bệnh nhân</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Bác sĩ & Chuyên khoa</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: 'var(--c-text-dark)' }}>Trạng thái</th>
-                                <th style={{ padding: '16px', textAlign: 'right', fontWeight: 600, color: 'var(--c-text-dark)' }}>Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                    <div className="table-responsive">
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th>Lịch khám</th>
+                                    <th>Bệnh nhân</th>
+                                    <th>Bác sĩ & Chuyên khoa</th>
+                                    <th>Trạng thái</th>
+                                    <th style={{ textAlign: 'right' }}>Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody>
                             {appointments.length === 0 ? (
                                 <tr>
                                     <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>
@@ -259,6 +262,7 @@ export const ReceptionAppointments: React.FC = () => {
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 )}
             </div>
 

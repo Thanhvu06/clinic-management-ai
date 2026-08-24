@@ -1,29 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import axiosClient from '../../api/axiosClient';
-import type { ApiResponse } from '../../types';
-import { CalendarDays, Stethoscope, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { useToast } from '../../components/Toast';
+import React, { useState, useEffect } from "react";
+import axiosClient from "../../api/axiosClient";
+import type { ApiResponse } from "../../types";
+import { CalendarDays, Stethoscope, CheckCircle, XCircle, AlertCircle,  } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { AppModal } from "../../components/AppModal";
+import { useDialog } from "../../contexts/DialogContext";
+import { Breadcrumb } from "../../components/Breadcrumb";
 
 export const PatientRevisit: React.FC = () => {
     const [requests, setRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<number | null>(null);
+    const { showAlert,  } = useDialog();
     
-    // Modal state
-    const [showRejectModal, setShowRejectModal] = useState(false);
-    const [rejectingId, setRejectingId] = useState<number | null>(null);
-    const [rejectReason, setRejectReason] = useState('');
-    const [rejectError, setRejectError] = useState('');
+    // Reject Modal state
+    const [rejectModal, setRejectModal] = useState<{isOpen: boolean, id: number | null, reason: string, error: string}>({
+        isOpen: false, id: null, reason: "", error: ""
+    });
 
     const navigate = useNavigate();
-    const { warning, success } = useToast();
 
     const fetchRequests = async () => {
         try {
-            const res = await axiosClient.get<any, ApiResponse<any[]>>('/revisit-requests/my');
+            const res = await axiosClient.get<any, ApiResponse<any>>("/revisit-requests");
             if (res.success && res.data) {
-                setRequests(res.data);
+                setRequests(Array.isArray(res.data) ? res.data : (res.data.items || []));
             }
         } catch (error) {
             // Ignore
@@ -37,168 +38,188 @@ export const PatientRevisit: React.FC = () => {
     }, []);
 
     const handleAccept = () => {
-        warning('Vui lòng đặt lịch khám mới theo ngày gợi ý.');
-        navigate('/patient/book');
+        showAlert("Vui lòng đặt lịch khám mới theo ngày gợi ý.", "Chấp nhận tái khám", "success");
+        navigate("/patient/book");
     };
 
     const openRejectModal = (id: number) => {
-        setRejectingId(id);
-        setRejectReason('');
-        setRejectError('');
-        setShowRejectModal(true);
+        setRejectModal({ isOpen: true, id, reason: "", error: "" });
     };
 
     const closeRejectModal = () => {
-        setShowRejectModal(false);
-        setRejectingId(null);
+        if (actionLoading !== null) return;
+        setRejectModal({ isOpen: false, id: null, reason: "", error: "" });
     };
 
     const submitReject = async () => {
-        if (!rejectingId) return;
+        const { id, reason } = rejectModal;
+        if (!id) return;
+        if (reason.trim().length < 5) {
+            setRejectModal(p => ({ ...p, error: "Vui lòng nhập lý do (ít nhất 5 ký tự)." }));
+            return;
+        }
 
-        setActionLoading(rejectingId);
-        setRejectError('');
+        setActionLoading(id);
+        setRejectModal(p => ({ ...p, error: "" }));
+
         try {
-            const res = await axiosClient.post<any, ApiResponse<any>>(`/revisit-requests/${rejectingId}/reject`, { reason: rejectReason });
+            const res = await axiosClient.post<any, ApiResponse<any>>(`/revisit-requests/${id}/reject`, { reason });
             if (res.success) {
-                success('Đã từ chối lịch tái khám.');
-                fetchRequests();
                 closeRejectModal();
+                showAlert('Đã từ chối lời mời tái khám.', 'Thành công', 'success');
+                fetchRequests();
+            } else {
+                setRejectModal(p => ({ ...p, error: res.message || "Không thể từ chối" }));
             }
-        } catch (error: any) {
-            setRejectError(error?.message || 'Có lỗi xảy ra khi từ chối.');
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.message || "Có lỗi xảy ra";
+            setRejectModal(p => ({ ...p, error: msg }));
         } finally {
             setActionLoading(null);
         }
     };
 
-    const formatDate = (dateString: string) => {
-        try {
-            const date = new Date(dateString);
-            return new Intl.DateTimeFormat('vi-VN').format(date);
-        } catch (e) {
-            return dateString;
-        }
-    };
+    const pendingRequests = requests.filter(r => r.status === "PendingPatientResponse");
+    const historyRequests = requests.filter(r => r.status !== "PendingPatientResponse");
 
-    const getStatusBadge = (status: string) => {
-        switch(status) {
-            case 'Pending': return <span className="badge badge-warning">Chờ phản hồi</span>;
-            case 'Accepted': return <span className="badge badge-success">Đã đồng ý</span>;
-            case 'Rejected': return <span className="badge badge-danger">Đã từ chối</span>;
-            default: return <span className="badge badge-muted">{status}</span>;
-        }
-    };
+    if (loading) {
+        return <div style={{ padding: "40px", textAlign: "center", color: "var(--c-muted)" }}>Đang tải lời mời tái khám...</div>;
+    }
 
     return (
-        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-            <h2 style={{ marginBottom: '24px', color: 'var(--c-navy-dark)' }}>Yêu cầu tái khám</h2>
-            
-            {loading ? (
-                <div style={{ color: 'var(--c-muted)', padding: '20px' }}>Đang tải dữ liệu...</div>
-            ) : requests.length === 0 ? (
-                <div style={{ background: 'white', padding: '40px', borderRadius: '12px', border: '1px dashed var(--c-border)', textAlign: 'center' }}>
-                    <CalendarDays size={48} style={{ color: 'var(--c-muted)', marginBottom: '16px' }} />
-                    <h3 style={{ color: 'var(--c-text-dark)', marginBottom: '8px' }}>Không có đề xuất tái khám</h3>
-                    <p style={{ color: 'var(--c-muted)' }}>Bạn hiện không có lời mời tái khám nào từ bác sĩ.</p>
+        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+            <Breadcrumb items={[
+                { label: 'Trang chủ', path: '/patient' },
+                { label: 'Tái khám' }
+            ]} />
+            <h2 style={{ marginBottom: "24px", color: "var(--c-navy-dark)" }}>Lời mời tái khám</h2>
+
+            {pendingRequests.length === 0 ? (
+                <div className="card-panel" style={{ textAlign: "center", padding: "60px 20px", marginBottom: "32px" }}>
+                    <CheckCircle size={48} color="var(--c-success)" style={{ marginBottom: "16px", opacity: 0.8 }} />
+                    <h3 style={{ margin: "0 0 8px 0", color: "var(--c-navy-dark)" }}>Không có lời mời mới</h3>
+                    <p style={{ margin: 0, color: "var(--c-text)" }}>Sức khỏe của bạn đang rất tốt, hãy duy trì nhé!</p>
                 </div>
             ) : (
-                <div style={{ display: 'grid', gap: '16px' }}>
-                    {requests.map(req => (
-                        <div key={req.id} className="card-panel" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--c-border)', paddingBottom: '12px' }}>
-                                <div>
-                                    <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--c-text-dark)' }}>Từ bác sĩ: {req.doctorName}</div>
-                                    <div style={{ color: 'var(--c-muted)', fontSize: '0.9rem', marginTop: '4px' }}>
-                                        <AlertCircle size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }}/> 
-                                        Ghi chú: {req.note || 'Không có ghi chú'}
-                                    </div>
+                <div style={{ display: "grid", gap: "20px", marginBottom: "40px" }}>
+                    {pendingRequests.map(r => (
+                        <div key={r.id} className="card-panel" style={{ padding: "0", border: "1px solid var(--c-primary)", overflow: "hidden" }}>
+                            <div style={{ backgroundColor: "#EFF6FF", padding: "16px 20px", borderBottom: "1px solid #BFDBFE", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--c-primary-dark)", fontWeight: 600 }}>
+                                    <AlertCircle size={20} />
+                                    Bác sĩ yêu cầu tái khám
                                 </div>
-                                {getStatusBadge(req.status)}
-                            </div>
-                            
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <CalendarDays size={18} style={{ color: 'var(--c-teal)' }}/>
-                                    <span><strong>Ngày gợi ý:</strong> {formatDate(req.suggestedDate)}</span>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Stethoscope size={18} style={{ color: 'var(--c-teal)' }}/>
-                                    <span><strong>Khoa:</strong> {req.specialtyName}</span>
-                                </div>
+                                <span className="badge badge-warning">Chờ phản hồi</span>
                             </div>
 
-                            {req.status === 'Pending' && (
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--c-bg)' }}>
-                                    <button 
-                                        className="btn-danger" 
-                                        style={{ padding: '6px 12px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px', background: 'white', color: 'var(--c-danger)', border: '1px solid var(--c-danger)' }} 
-                                        onClick={() => openRejectModal(req.id)}
-                                        disabled={actionLoading === req.id}
+                            <div style={{ padding: "20px" }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
+                                    <div>
+                                        <p style={{ margin: "0 0 4px 0", color: "var(--c-muted)", fontSize: "0.9rem" }}>Ngày gợi ý</p>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 500 }}>
+                                            <CalendarDays size={18} color="var(--c-primary)" />
+                                            {r.suggestedDate ? r.suggestedDate.split("T")[0] : ""}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p style={{ margin: "0 0 4px 0", color: "var(--c-muted)", fontSize: "0.9rem" }}>Bác sĩ phụ trách</p>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 500 }}>
+                                            <Stethoscope size={18} color="var(--c-primary)" />
+                                            {r.doctorName || "..."}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style={{ backgroundColor: "var(--c-bg)", padding: "12px 16px", borderRadius: "8px", borderLeft: "4px solid var(--c-primary)", marginBottom: "24px" }}>
+                                    <p style={{ margin: "0 0 4px 0", fontSize: "0.85rem", color: "var(--c-muted)", fontWeight: 600, textTransform: "uppercase" }}>Lời nhắn từ bác sĩ</p>
+                                    <p style={{ margin: 0, fontStyle: "italic" }}>"{r.note}"</p>
+                                </div>
+
+                                <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                                    <button
+                                        className="btn-danger"
+                                        onClick={() => openRejectModal(r.id)}
+                                        disabled={actionLoading === r.id}
                                     >
-                                        <XCircle size={16} /> Từ chối
+                                        <XCircle size={18} /> Từ chối
                                     </button>
-                                    <button 
-                                        className="btn-primary" 
-                                        style={{ padding: '6px 12px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }} 
+                                    <button
+                                        className="btn-primary"
                                         onClick={handleAccept}
-                                        disabled={actionLoading === req.id}
+                                        disabled={actionLoading === r.id}
                                     >
-                                        <CheckCircle size={16} /> Chọn lịch ngay
+                                        <CheckCircle size={18} /> Đặt lịch ngay
                                     </button>
                                 </div>
-                            )}
+                            </div>
                         </div>
                     ))}
                 </div>
             )}
 
-            {showRejectModal && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-                }}>
-                    <div style={{
-                        background: 'white', padding: '24px', borderRadius: '12px',
-                        width: '100%', maxWidth: '500px', margin: '0 20px',
-                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--c-danger-bg)', color: 'var(--c-danger)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <AlertCircle size={24} />
+            {historyRequests.length > 0 && (
+                <div>
+                    <h3 style={{ marginBottom: "16px", color: "var(--c-navy-dark)" }}>Lịch sử tái khám</h3>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                        {historyRequests.map(r => (
+                            <div key={r.id} className="card-panel" style={{ padding: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div>
+                                    <p style={{ margin: "0 0 8px 0", fontWeight: 500 }}>Ngày hẹn: {r.suggestedDate ? r.suggestedDate.split("T")[0] : ""}</p>
+                                    <p style={{ margin: "0 0 4px 0", fontSize: "0.9rem", color: "var(--c-text)" }}>Bác sĩ: <strong>{r.doctorName}</strong></p>
+                                    <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--c-muted)" }}>Lý do: {r.note}</p>
+                                </div>
+                                <div>
+                                    {r.status === "PatientRejected" ? (
+                                        <span className="badge badge-danger">Đã từ chối</span>
+                                    ) : r.status === "Accepted" ? (
+                                        <span className="badge badge-success">Đã chấp nhận</span>
+                                    ) : (
+                                        <span className="badge badge-muted">{r.status}</span>
+                                    )}
+                                </div>
                             </div>
-                            <h3 style={{ margin: 0, color: 'var(--c-text-dark)', fontSize: '1.2rem' }}>Từ chối tái khám</h3>
-                        </div>
-                        
-                        <p style={{ color: 'var(--c-text)', marginBottom: '16px' }}>Bạn có chắc chắn muốn từ chối đề xuất tái khám này?</p>
-                        
-                        {rejectError && (
-                            <div style={{ background: 'var(--c-danger-bg)', color: 'var(--c-danger)', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem' }}>
-                                {rejectError}
-                            </div>
-                        )}
-
-                        <div style={{ marginBottom: '20px' }}>
-                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, fontSize: '0.9rem' }}>Lý do từ chối (tùy chọn)</label>
-                            <textarea
-                                className="form-textarea"
-                                rows={3}
-                                placeholder="Nhập lý do từ chối..."
-                                value={rejectReason}
-                                onChange={(e) => setRejectReason(e.target.value)}
-                            />
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                            <button className="btn-secondary" onClick={closeRejectModal} disabled={actionLoading === rejectingId}>Quay lại</button>
-                            <button className="btn-danger" onClick={submitReject} disabled={actionLoading === rejectingId}>
-                                {actionLoading === rejectingId ? 'Đang xử lý...' : 'Xác nhận từ chối'}
-                            </button>
-                        </div>
+                        ))}
                     </div>
                 </div>
             )}
+
+            <AppModal
+                isOpen={rejectModal.isOpen}
+                onClose={closeRejectModal}
+                title="Từ chối tái khám"
+                actions={
+                    <>
+                        <button type="button" className="btn-secondary" onClick={closeRejectModal} disabled={actionLoading !== null}>
+                            Đóng
+                        </button>
+                        <button type="button" className="btn-danger" onClick={submitReject} disabled={actionLoading !== null}>
+                            {actionLoading !== null ? "Đang xử lý..." : "Xác nhận từ chối"}
+                        </button>
+                    </>
+                }
+            >
+                <div style={{ marginBottom: "16px", color: "var(--c-text-dark)" }}>
+                    Xin hãy cho chúng tôi biết lý do bạn không thể tham gia tái khám đợt này.
+                </div>
+                <label style={{ display: "block", marginBottom: "8px", fontWeight: 500, color: "var(--c-text-dark)" }}>
+                    Lý do từ chối (*)
+                </label>
+                <textarea
+                    className="form-input"
+                    rows={3}
+                    placeholder="Vui lòng nhập lý do (ví dụ: Đã khỏe lại, Bận công tác...)"
+                    value={rejectModal.reason}
+                    onChange={(e) => setRejectModal(p => ({ ...p, reason: e.target.value }))}
+                    disabled={actionLoading !== null}
+                    style={{ resize: "none" }}
+                />
+                {rejectModal.error && (
+                    <p style={{ color: "var(--c-danger)", fontSize: "0.85rem", marginTop: "8px", marginBottom: 0 }}>
+                        {rejectModal.error}
+                    </p>
+                )}
+            </AppModal>
+
         </div>
     );
 };

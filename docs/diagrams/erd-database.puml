@@ -1,5 +1,5 @@
 @startuml
-title ERD - Hệ thống quản lý phòng khám tích hợp AI
+title ERD - Hệ thống quản lý phòng khám tích hợp AI (Bilingual)
 
 hide circle
 skinparam linetype ortho
@@ -8,207 +8,277 @@ skinparam entity {
   BorderColor Black
 }
 
-entity "Users" as Users {
-  * Id : int <<PK>>
-  --
-  FullName : nvarchar
-  Email : nvarchar
-  PhoneNumber : nvarchar
-  PasswordHash : nvarchar
-  Role : varchar
-  IsActive : bit
-  CreatedAt : datetime
-  UpdatedAt : datetime
+package "1. Tài khoản và phân quyền" {
+  entity "AspNetUsers\n(Tài khoản người dùng)" as AspNetUsers {
+    * Id : int <<PK>>
+    --
+    FullName : nvarchar
+    Email : nvarchar
+    PhoneNumber : nvarchar
+    PasswordHash : nvarchar
+    IsActive : bit
+    CreatedAt : datetime
+    UpdatedAt : datetime
+  }
+  
+  entity "AspNetRoles\n(Vai trò)" as AspNetRoles {
+    * Id : int <<PK>>
+    --
+    Name : nvarchar
+    NormalizedName : nvarchar
+  }
+  
+  entity "AspNetUserRoles\n(Phân quyền người dùng)" as AspNetUserRoles {
+    * UserId : int <<PK, FK>>
+    * RoleId : int <<PK, FK>>
+  }
 }
 
-entity "Patients" as Patients {
-  * Id : int <<PK>>
-  --
-  UserId : int <<FK, UNIQUE>>
-  Gender : varchar
-  DateOfBirth : date
-  Address : nvarchar
-  CreatedAt : datetime
-  UpdatedAt : datetime
+package "2. Bệnh nhân, bác sĩ và chuyên khoa" {
+  entity "Patients\n(Bệnh nhân)" as Patients {
+    * Id : int <<PK>>
+    --
+    UserId : int <<FK, UNIQUE>>
+    Gender : varchar
+    DateOfBirth : date
+    Address : nvarchar
+    CreatedAt : datetime
+    UpdatedAt : datetime
+  }
+
+  entity "Doctors\n(Bác sĩ)" as Doctors {
+    * Id : int <<PK>>
+    --
+    UserId : int <<FK, UNIQUE>>
+    AcademicTitle : nvarchar
+    ExperienceYears : int
+    Description : nvarchar
+    IsActive : bit
+    CreatedAt : datetime
+    UpdatedAt : datetime
+  }
+
+  entity "Specialties\n(Chuyên khoa)" as Specialties {
+    * Id : int <<PK>>
+    --
+    SpecialtyCode : varchar <<UNIQUE>>
+    Name : nvarchar
+    Description : nvarchar
+    IsActive : bit
+    AiEnabled : bit
+    CreatedAt : datetime
+    UpdatedAt : datetime
+  }
+
+  entity "DoctorSpecialties\n(Phân bổ Bác sĩ & Chuyên khoa)" as DoctorSpecialties {
+    * DoctorId : int <<PK, FK>>
+    * SpecialtyId : int <<PK, FK>>
+    --
+    IsPrimary : bit
+  }
 }
 
-entity "Doctors" as Doctors {
-  * Id : int <<PK>>
-  --
-  UserId : int <<FK, UNIQUE>>
-  AcademicTitle : nvarchar
-  ExperienceYears : int
-  Description : nvarchar
-  IsActive : bit
-  CreatedAt : datetime
-  UpdatedAt : datetime
+package "3. Lịch làm việc và khung giờ" {
+  entity "DoctorWorkSchedules\n(Lịch làm việc bác sĩ)" as DoctorWorkSchedules {
+    * Id : int <<PK>>
+    --
+    DoctorId : int <<FK>>
+    WorkDate : date
+    StartTime : time
+    EndTime : time
+    IsActive : bit
+    CreatedAt : datetime
+    UpdatedAt : datetime
+  }
+
+  entity "AppointmentSlots\n(Khung giờ khám)" as AppointmentSlots {
+    * Id : int <<PK>>
+    --
+    DoctorId : int <<FK>>
+    SlotDate : date
+    StartTime : time
+    EndTime : time
+    IsBooked : bit
+    CreatedAt : datetime
+    UpdatedAt : datetime
+  }
+
+  entity "DoctorLeaveRequests\n(Yêu cầu nghỉ phép)" as DoctorLeaveRequests {
+    * Id : int <<PK>>
+    --
+    DoctorId : int <<FK>>
+    StartDateTime : datetime
+    EndDateTime : datetime
+    Reason : nvarchar
+    Status : varchar
+    AdminNote : nvarchar
+    CreatedAt : datetime
+    UpdatedAt : datetime
+  }
 }
 
-entity "Specialties" as Specialties {
-  * Id : int <<PK>>
-  --
-  SpecialtyCode : varchar <<UNIQUE>>
-  Name : nvarchar
-  Description : nvarchar
-  IsActive : bit
-  AiEnabled : bit
-  CreatedAt : datetime
-  UpdatedAt : datetime
+package "4. Lịch hẹn và lịch sử" {
+  entity "Appointments\n(Lịch hẹn)" as Appointments {
+    * Id : int <<PK>>
+    --
+    AppointmentCode : varchar <<UNIQUE>>
+    PatientId : int <<FK>>
+    DoctorId : int <<FK>>
+    SpecialtyId : int <<FK>>
+    AppointmentSlotId : int <<FK>>
+    AppointmentDate : date
+    StartTime : time
+    EndTime : time
+    Reason : nvarchar
+    Status : int
+    CreatedAt : datetime
+    UpdatedAt : datetime
+  }
+
+  entity "AppointmentHistory\n(Lịch sử lịch hẹn)" as AppointmentHistory {
+    * Id : int <<PK>>
+    --
+    AppointmentId : int <<FK>>
+    Action : varchar
+    OldStatus : int
+    NewStatus : int
+    Note : nvarchar
+    PerformedByUserId : int <<FK>>
+    CreatedAt : datetime
+  }
+  
+  entity "AppointmentChangeRequests\n(Yêu cầu thay đổi lịch hẹn)" as AppointmentChangeRequests {
+    * Id : int <<PK>>
+    --
+    AppointmentId : int <<FK>>
+    RequestType : int
+    RequestedSlotId : int <<FK, NULL>>
+    Reason : nvarchar
+    Status : int
+    RequestedByUserId : int <<FK>>
+    ProcessedByUserId : int <<FK, NULL>>
+    CreatedAt : datetime
+    ProcessedAt : datetime
+  }
 }
 
-entity "DoctorSpecialties" as DoctorSpecialties {
-  * DoctorId : int <<PK, FK>>
-  * SpecialtyId : int <<PK, FK>>
-  --
-  IsPrimary : bit
+package "5. Kết quả khám và tái khám" {
+  entity "VisitSummaries\n(Tóm tắt buổi khám)" as VisitSummaries {
+    * Id : int <<PK>>
+    --
+    AppointmentId : int <<FK>>
+    DoctorId : int <<FK>>
+    Summary : nvarchar
+    FollowUpInstruction : nvarchar
+    CreatedAt : datetime
+    UpdatedAt : datetime
+  }
+
+  entity "RevisitRequests\n(Đề xuất/Yêu cầu tái khám)" as RevisitRequests {
+    * Id : int <<PK>>
+    --
+    AppointmentId : int <<FK>>
+    PatientId : int <<FK>>
+    DoctorId : int <<FK>>
+    SuggestedDate : date
+    Note : nvarchar
+    Status : int
+    NewAppointmentId : int <<FK, NULL>>
+    CreatedAt : datetime
+    UpdatedAt : datetime
+  }
 }
 
-entity "DoctorWorkSchedules" as WorkSchedules {
-  * Id : int <<PK>>
-  --
-  DoctorId : int <<FK>>
-  WorkDate : date
-  StartTime : time
-  EndTime : time
-  IsActive : bit
-  CreatedAt : datetime
-  UpdatedAt : datetime
+package "6. Gợi ý chuyên khoa bằng AI" {
+  entity "AiSuggestionLogs\n(Nhật ký tư vấn AI)" as AiSuggestionLogs {
+    * Id : int <<PK>>
+    --
+    PatientId : int <<FK>>
+    InputText : nvarchar
+    SuggestedSpecialtiesJson : nvarchar
+    SelectedSpecialtyId : int <<FK, NULL>>
+    Provider : varchar
+    PromptVersion : varchar
+    CreatedAt : datetime
+  }
 }
 
-entity "AppointmentSlots" as Slots {
-  * Id : int <<PK>>
-  --
-  DoctorId : int <<FK>>
-  SlotDate : date
-  StartTime : time
-  EndTime : time
-  IsBooked : bit
-  CreatedAt : datetime
-  UpdatedAt : datetime
+package "7. Nhà thuốc" {
+  note "Lưu ý: Migration đã tồn tại nhưng\nmodule Nhà thuốc chưa hoàn thiện." as N1
+  entity "Medicines\n(Thuốc)" as Medicines {
+    * Id : bigint <<PK>>
+    --
+    Code : nvarchar
+    Name : nvarchar
+    Unit : nvarchar
+    StockQuantity : int
+    ReorderLevel : int
+    IsActive : bit
+    RowVersion : rowversion
+    CreatedAt : datetime
+    UpdatedAt : datetime
+  }
+
+  entity "Prescriptions\n(Đơn thuốc)" as Prescriptions {
+    * Id : bigint <<PK>>
+    --
+    AppointmentId : bigint <<FK>>
+    PatientId : bigint <<FK>>
+    DoctorId : bigint <<FK>>
+    Status : int
+    Notes : nvarchar
+    CreatedAt : datetime
+    DispensedAt : datetime
+    DispensedByUserId : uniqueidentifier <<FK, NULL>>
+  }
+
+  entity "PrescriptionItems\n(Chi tiết đơn thuốc)" as PrescriptionItems {
+    * Id : bigint <<PK>>
+    --
+    PrescriptionId : bigint <<FK>>
+    MedicineId : bigint <<FK>>
+    Quantity : int
+    DosageInstruction : nvarchar
+    UnitPrice : decimal
+    TotalPrice : decimal
+  }
+  
+  entity "MedicineStockTransactions\n(Giao dịch xuất/nhập kho)" as MedicineStockTransactions {
+    * Id : bigint <<PK>>
+    --
+    MedicineId : bigint <<FK>>
+    TransactionType : int
+    Quantity : int
+    ReferenceId : nvarchar
+    Notes : nvarchar
+    CreatedByUserId : uniqueidentifier
+    CreatedAt : datetime
+  }
 }
 
-entity "DoctorLeaveRequests" as LeaveRequests {
-  * Id : int <<PK>>
-  --
-  DoctorId : int <<FK>>
-  StartDateTime : datetime
-  EndDateTime : datetime
-  Reason : nvarchar
-  Status : varchar
-  AdminNote : nvarchar
-  CreatedAt : datetime
-  UpdatedAt : datetime
-}
+AspNetUsers ||--o{ AspNetUserRoles : "có"
+AspNetRoles ||--o{ AspNetUserRoles : "được gán"
 
-entity "Appointments" as Appointments {
-  * Id : int <<PK>>
-  --
-  AppointmentCode : varchar <<UNIQUE>>
-  PatientId : int <<FK>>
-  DoctorId : int <<FK>>
-  SpecialtyId : int <<FK>>
-  AppointmentSlotId : int <<FK>>
-  AppointmentDate : date
-  StartTime : time
-  EndTime : time
-  Reason : nvarchar
-  Status : varchar
-  CreatedAt : datetime
-  UpdatedAt : datetime
-}
-
-entity "AppointmentHistory" as AppointmentHistory {
-  * Id : int <<PK>>
-  --
-  AppointmentId : int <<FK>>
-  Action : varchar
-  OldStatus : varchar
-  NewStatus : varchar
-  Note : nvarchar
-  PerformedByUserId : int <<FK>>
-  CreatedAt : datetime
-}
-entity "AppointmentChangeRequests" as ChangeRequests {
-  * Id : int <<PK>>
-  --
-  AppointmentId : int <<FK>>
-  RequestType : varchar
-  RequestedSlotId : int <<FK, NULL>>
-  Reason : nvarchar
-  Status : varchar
-  RequestedByUserId : int <<FK>>
-  ProcessedByUserId : int <<FK, NULL>>
-  CreatedAt : datetime
-  ProcessedAt : datetime
-}
-entity "VisitSummaries" as VisitSummaries {
-  * Id : int <<PK>>
-  --
-  AppointmentId : int <<FK>>
-  DoctorId : int <<FK>>
-  Summary : nvarchar
-  FollowUpInstruction : nvarchar
-  CreatedAt : datetime
-  UpdatedAt : datetime
-}
-
-entity "RevisitRequests" as RevisitRequests {
-  * Id : int <<PK>>
-  --
-  AppointmentId : int <<FK>>
-  PatientId : int <<FK>>
-  DoctorId : int <<FK>>
-  SuggestedDate : date
-  Note : nvarchar
-  Status : varchar
-  NewAppointmentId : int <<FK, NULL>>
-  CreatedAt : datetime
-  UpdatedAt : datetime
-}
-
-entity "AiSuggestionLogs" as AiSuggestionLogs {
-  * Id : int <<PK>>
-  --
-  PatientId : int <<FK>>
-  InputText : nvarchar
-  SuggestedSpecialtiesJson : nvarchar
-  SelectedSpecialtyId : int <<FK, NULL>>
-  Provider : varchar
-  PromptVersion : varchar
-  CreatedAt : datetime
-}
-
-entity "SystemAuditLogs" as SystemAuditLogs {
-  * Id : int <<PK>>
-  --
-  UserId : int <<FK>>
-  Action : varchar
-  EntityName : varchar
-  EntityId : int
-  Description : nvarchar
-  CreatedAt : datetime
-}
-
-Users ||--o| Patients : "hồ sơ bệnh nhân"
-Users ||--o| Doctors : "hồ sơ bác sĩ"
+AspNetUsers ||--o| Patients : "hồ sơ bệnh nhân"
+AspNetUsers ||--o| Doctors : "hồ sơ bác sĩ"
 
 Doctors ||--o{ DoctorSpecialties : "thuộc"
 Specialties ||--o{ DoctorSpecialties : "bao gồm"
 
-Doctors ||--o{ WorkSchedules : "có lịch làm việc"
-Doctors ||--o{ Slots : "có slot"
-Doctors ||--o{ LeaveRequests : "gửi yêu cầu nghỉ"
+Doctors ||--o{ DoctorWorkSchedules : "có lịch làm việc"
+Doctors ||--o{ AppointmentSlots : "có slot"
+Doctors ||--o{ DoctorLeaveRequests : "gửi yêu cầu nghỉ"
 
 Patients ||--o{ Appointments : "đặt"
 Doctors ||--o{ Appointments : "khám"
 Specialties ||--o{ Appointments : "chuyên khoa"
-Slots ||--o{ Appointments : "được sử dụng"
+AppointmentSlots ||--o{ Appointments : "được sử dụng"
 
 Appointments ||--o{ AppointmentHistory : "có lịch sử"
-Users ||--o{ AppointmentHistory : "thực hiện"
-Appointments ||--o{ ChangeRequests : "có yêu cầu đổi/hủy"
-Slots ||--o{ ChangeRequests : "slot mong muốn"
-Users ||--o{ ChangeRequests : "gửi hoặc xử lý"
+AspNetUsers ||--o{ AppointmentHistory : "thực hiện"
+Appointments ||--o{ AppointmentChangeRequests : "có yêu cầu đổi/hủy"
+AppointmentSlots ||--o{ AppointmentChangeRequests : "slot mong muốn"
+AspNetUsers ||--o{ AppointmentChangeRequests : "gửi hoặc xử lý"
 Appointments ||--o| VisitSummaries : "có tóm tắt"
 Doctors ||--o{ VisitSummaries : "ghi"
 
@@ -220,6 +290,11 @@ Appointments |o--o| RevisitRequests : "lịch hẹn mới (từ đề xuất)"
 Patients ||--o{ AiSuggestionLogs : "sử dụng AI"
 Specialties ||--o{ AiSuggestionLogs : "được chọn"
 
-Users ||--o{ SystemAuditLogs : "thực hiện"
+Appointments ||--o| Prescriptions : "được kê"
+Patients ||--o{ Prescriptions : "nhận"
+Doctors ||--o{ Prescriptions : "kê"
+Prescriptions ||--o{ PrescriptionItems : "gồm"
+Medicines ||--o{ PrescriptionItems : "được kê"
+Medicines ||--o{ MedicineStockTransactions : "có giao dịch"
 
 @enduml
