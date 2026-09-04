@@ -23,7 +23,7 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("ClinicManagementDb")
-    ?? throw new InvalidOperationException("Connection string 'ClinicManagementDb' not found.");
+    ?? "Server=(localdb)\\mssqllocaldb;Database=ClinicManagementDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True";
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString));
@@ -59,9 +59,9 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
+        ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "ClinicCareServer",
+        ValidAudience = builder.Configuration["Jwt:Audience"] ?? "ClinicCareClient",
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? "ClinicCareDevelopmentSecretKey2026MustBeAtLeast32BytesLong!")),
         ClockSkew = TimeSpan.Zero
     };
 
@@ -158,6 +158,12 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    if (db.Database.IsRelational() && db.Database.ProviderName != "Microsoft.EntityFrameworkCore.Sqlite")
+    {
+        await db.Database.MigrateAsync();
+    }
+
     await RoleSeeder.SeedRolesAsync(scope.ServiceProvider);
 
     if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("DemoSeed:Enabled"))

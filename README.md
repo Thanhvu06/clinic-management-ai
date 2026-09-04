@@ -1,103 +1,184 @@
-# Xây dựng website quản lý phòng khám tích hợp AI hỗ trợ tư vấn đặt lịch
+# ClinicCare AI - Hệ Thống Quản Lý Phòng Khám Đa Khoa Thông Minh
 
-## Mục tiêu
-Dự án nhằm xây dựng một hệ thống phần mềm quản lý phòng khám hiện đại, giúp số hóa quy trình đặt lịch khám, quản lý hồ sơ, lịch làm việc và tích hợp Trí tuệ nhân tạo (AI) để hỗ trợ bệnh nhân chọn chuyên khoa phù hợp dựa trên mô tả triệu chứng.
+ClinicCare AI là giải pháp phần mềm quản lý phòng khám đa khoa hiện đại, số hóa toàn diện quy trình tiếp đón, đặt lịch khám, khám chữa bệnh, kê đơn, cấp phát thuốc và tích hợp Trí tuệ nhân tạo (AI Gemini) hỗ trợ định tuyến chuyên khoa y tế chính xác và an toàn.
+
+---
 
 ## Công nghệ sử dụng
-- **Backend:** ASP.NET Core Web API 10.0, Entity Framework Core (SQLite Database), JWT Authentication.
-- **Frontend:** React 18, Vite, TypeScript, CSS Modules.
-- **AI Integration:** Google Gemini AI API (Phân tích triệu chứng & gợi ý chuyên khoa).
-- **Kiểm thử:** XUnit, WebApplicationFactory (Integration Tests).
+
+- **Backend:** 
+  - ASP.NET Core Web API .NET 10 LTS.
+  - Entity Framework Core 10.
+  - **Cơ sở dữ liệu:** Microsoft SQL Server (dành cho ứng dụng thật & môi trường chạy Local/Production); SQLite In-Memory (dành riêng cho Integration Tests).
+  - ASP.NET Core Identity & JWT Authentication (Bearer Token).
+  - Clean Architecture (Domain, Application, Infrastructure, WebApi).
+- **Frontend:** 
+  - React 19, TypeScript, Vite.
+  - CSS Modules (Giao diện chuẩn y tế hiện đại, responsive, thẩm mỹ cao).
+  - Lucide React Icons.
+  - State Management: React Context (AuthContext, ChatContext, DialogContext).
+- **Môi trường & Công cụ:**
+  - Node.js: Node 24 LTS (xác định qua `.nvmrc` và `package.json engines`).
+  - GitHub Actions CI/CD pipeline tự động kiểm thử và build.
+- **AI Integration:** 
+  - Google Gemini AI (Mô hình gemini-1.5-flash) phân tích triệu chứng và định tuyến chuyên khoa theo dữ liệu phòng khám thực tế.
+  - Guardrails y tế nghiêm ngặt: không chẩn đoán, không kê đơn, lọc PII, đối chiếu whitelist chuyên khoa từ database, fallback chọn thủ công an toàn khi mất kết nối AI.
+- **Kiểm thử tự động:** 
+  - xUnit, WebApplicationFactory (Integration Tests cho luồng đặt lịch, JWT, bảo mật dữ liệu, cấp phát thuốc).
+  - Vitest / React Testing Library cho giao diện frontend.
+
+---
 
 ## Kiến trúc thư mục
-- [`src/backend/`](file:///src/backend/): Chứa toàn bộ mã nguồn API backend (Domain, Application, Infrastructure, WebApi) xây dựng theo mô hình Clean Architecture và các unit/integration test.
-- [`src/frontend/`](file:///src/frontend/): Chứa mã nguồn giao diện React/Vite (components, pages, api hooks).
-- [`docs/`](file:///docs/): Chứa tài liệu phân tích thiết kế, đặc tả API, cơ sở dữ liệu và các sơ đồ kiến trúc.
 
-## Chức năng hệ thống
-Hệ thống được chia theo 4 vai trò:
-1. **Bệnh nhân:** Đăng ký, quản lý hồ sơ cá nhân, đặt lịch khám có sự hỗ trợ của AI, xem lịch sử và kết quả khám bệnh, yêu cầu đổi/hủy lịch.
-2. **Lễ tân:** Xác nhận lịch hẹn, hỗ trợ bệnh nhân tại quầy, xử lý các yêu cầu đổi/hủy lịch từ bệnh nhân, theo dõi timeline khám bệnh.
-3. **Bác sĩ:** Quản lý lịch làm việc của bản thân, thực hiện ca khám và lưu tóm tắt kết quả, chỉ định tái khám, xin phép nghỉ đột xuất/có kế hoạch.
-4. **Quản trị viên:** Quản lý danh mục chuyên khoa, quản lý tài khoản nhân viên (Bác sĩ, Lễ tân), sinh ca khám (Work Schedules), duyệt yêu cầu nghỉ của bác sĩ.
+```
+clinic-management-ai/
+├── .github/workflows/ci.yml       # GitHub Actions CI pipeline
+├── .nvmrc                         # Node.js 24 LTS specification
+├── .env.example                   # Biến môi trường mẫu
+├── docs/                          # Tài liệu kỹ thuật, ERD, API, Business rules
+│   ├── IMPLEMENTATION_PLAN.md
+│   ├── data_dictionary.md
+│   └── diagrams/
+└── src/
+    ├── backend/
+    │   ├── ClinicManagement.Domain/          # Entities, Enums, Domain Rules
+    │   ├── ClinicManagement.Application/     # DTOs, Interfaces, Logic
+    │   ├── ClinicManagement.Infrastructure/  # EF Core, Migrations, AI Provider, Services
+    │   ├── ClinicManagement.Api/             # Controllers, Program.cs, Middlewares
+    │   └── ClinicManagement.IntegrationTests/# Integration Test Suite
+    └── frontend/                             # React 19 Vite application
+        ├── src/
+        │   ├── api/                          # Axios Client & Interceptors
+        │   ├── auth/                         # AuthContext, JWT handling
+        │   ├── components/                   # Shared UI, Header, Chat Widget, Modals
+        │   ├── contexts/                     # ChatContext, DialogContext
+        │   ├── layouts/                      # PublicLayout, MainLayout
+        │   └── pages/                        # Public, Patient, Reception, Doctor, Pharmacist, Admin
+        └── package.json
+```
 
-## Hoạt động của tính năng AI
-- AI phân tích mô tả triệu chứng của bệnh nhân và gợi ý **tối đa 3 chuyên khoa** phù hợp nhất.
-- AI được thiết kế với cơ chế guardrails: **không chẩn đoán, không kê đơn, không tự điều trị hay tự động đặt lịch**.
-- Đầu ra của AI chỉ ánh xạ dựa trên **whitelist** các chuyên khoa đang hoạt động tại phòng khám.
-- Frontend cam kết **không gửi PII** (Thông tin định danh cá nhân) vào mô hình ngôn ngữ.
-- Khi AI gặp sự cố (unavailable, quota limits), hệ thống tự động fallback cho phép bệnh nhân **chọn chuyên khoa thủ công**.
+---
 
-## Hướng dẫn cài đặt và chạy (Local Development)
+## Phân quyền hệ thống (5 Roles)
 
-### 1. Điều kiện tiên quyết
+1. **Bệnh nhân (Patient):**
+   - Đăng ký, đăng nhập, quên mật khẩu (demo-safe).
+   - Quản lý hồ sơ cá nhân.
+   - Tìm kiếm chuyên khoa, bác sĩ, khung giờ khám trống (slot 30 phút).
+   - Đặt lịch khám trực tuyến với cơ chế chống trùng slot (Database Transaction).
+   - Tra cứu nhanh lịch hẹn cho khách vãng lai qua mã lịch hẹn hoặc số điện thoại.
+   - Quản lý lịch hẹn, theo dõi timeline tiến trình, gửi yêu cầu dời lịch / hủy lịch.
+   - Phản hồi đề xuất tái khám từ bác sĩ (Chấp nhận / Từ chối).
+   - Xem kết quả khám bệnh, tóm tắt ca khám và danh sách đơn thuốc thật từ hệ thống.
+   - Trò chuyện với Trợ lý AI và nhận gợi ý chuyên khoa phù hợp với triệu chứng.
+
+2. **Lễ tân (Receptionist):**
+   - Dashboard thống kê lịch khám hôm nay, lịch chờ duyệt, đã hoàn tất, yêu cầu đổi/hủy.
+   - Quản lý danh sách lịch hẹn: tìm kiếm, lọc theo ngày/trạng thái, phân trang.
+   - Xem chi tiết và lịch sử thay đổi (timeline), xác nhận lịch hẹn.
+   - Xử lý phê duyệt / từ chối các yêu cầu dời hoặc hủy lịch của bệnh nhân.
+
+3. **Bác sĩ (Doctor):**
+   - Dashboard ca khám trong ngày của bản thân.
+   - Xem danh sách và lịch sử khám của bệnh nhân thuộc ca của mình.
+   - Thực hiện khám, hoàn tất ca khám và lưu tóm tắt kết quả (Visit Summary).
+   - Đánh dấu bệnh nhân vắng mặt (No-show).
+   - Kê đơn thuốc điện tử (chọn thuốc từ danh mục, nhập liều lượng, số lượng, lời dặn).
+   - Tạo đề xuất tái khám cho bệnh nhân.
+   - Gửi yêu cầu xin nghỉ phép / rút đơn và theo dõi trạng thái phê duyệt.
+
+4. **Dược sĩ (Pharmacist - Module Pharmacy):**
+   - Dashboard tổng quan kho dược: đơn chờ cấp phát, đơn đã cấp trong ngày, cảnh báo thuốc sắp hết hàng.
+   - Quản lý danh mục thuốc: mã thuốc, tên, đơn vị tính, tồn kho hiện tại, ngưỡng tồn kho tối thiểu.
+   - Xem danh sách và chi tiết đơn thuốc chờ cấp phát kèm kiểm tra tồn kho tức thì.
+   - Xác nhận cấp phát thuốc với cơ chế giao dịch nguyên tử (Atomic Database Transaction): trừ kho, tạo `MedicineStockTransaction`, cập nhật trạng thái đơn sang `Dispensed`.
+   - Chặn nghiêm ngặt việc cấp trùng đơn hoặc cấp khi kho không đủ số lượng.
+   - Xem lịch sử giao dịch biến động kho thuốc (nhập, cấp, điều chỉnh).
+
+5. **Quản trị viên (Admin):**
+   - Dashboard KPI toàn diện: ca khám, bệnh nhân mới, bác sĩ hoạt động, đơn thuốc.
+   - Quản lý tài khoản và phân quyền nhân viên (Bác sĩ, Lễ tân, Dược sĩ, Admin).
+   - Quản lý danh mục chuyên khoa và liên kết Bác sĩ - Chuyên khoa (Many-to-Many).
+   - Quản lý lịch làm việc của bác sĩ và tự động sinh slots khám 30 phút.
+   - Quản lý danh mục Gói chăm sóc sức khỏe ClinicCare.
+   - Quản lý danh mục thuốc và tồn kho dược phẩm.
+   - Duyệt / từ chối yêu cầu nghỉ phép của bác sĩ có cảnh báo lịch khám bị ảnh hưởng.
+   - Nhật ký kiểm toán hệ thống (Audit Log).
+
+---
+
+## Hướng dẫn cài đặt và chạy Local
+
+### 1. Yêu cầu tiên quyết
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- [Node.js 20+](https://nodejs.org/)
+- [Node.js 24 LTS](https://nodejs.org/) (`node -v` >= 24.0.0)
+- SQL Server (LocalDB đi kèm Visual Studio, SQL Server Express hoặc Docker SQL Server)
 - Git
 
-### 2. Chạy Backend
-Mở Terminal ở thư mục gốc:
+### 2. Cấu hình Backend
+Mở Terminal tại thư mục dự án:
 ```bash
-# 1. Di chuyển vào thư mục dự án
 cd src/backend/ClinicManagement.Api
 
-# 2. Cấu hình AI Secret Key
-# (Tuyệt đối không hardcode. Dùng User Secrets trong .NET)
+# Tùy chọn: Nếu muốn dùng Gemini AI thật, cấu hình User Secrets (không commit key):
 dotnet user-secrets set "AiProvider:ApiKey" "YOUR_API_KEY_HERE"
 dotnet user-secrets set "AiProvider:IsEnabled" "true"
+```
+Hệ thống đã cấu hình sẵn chuỗi kết nối mặc định `Server=(localdb)\mssqllocaldb;Database=ClinicManagementDb;...` trong `appsettings.Development.json`. Khi khởi động lần đầu, backend tự động chạy migration EF Core để tạo bảng và seed dữ liệu demo.
 
-# 3. Kích hoạt tính năng sinh dữ liệu Demo
-# Đảm bảo appsettings.Development.json có cờ:
-# "DemoSeed": { "Enabled": true }
-
-# 4. Chạy dự án (Tự động restore và build)
+Chạy Backend:
+```bash
 dotnet run
 ```
-*Lưu ý: API chạy trên `http://localhost:5258`. Truy cập thẳng vào `http://localhost:5258/` có thể trả về `404 Not Found` vì hệ thống không khai báo route gốc, vui lòng sử dụng Frontend hoặc gọi trực tiếp API.*
+API lắng nghe tại: `http://localhost:5258` (Swagger/OpenAPI tài liệu tại: `http://localhost:5258/openapi/v1.json`).
 
-### 3. Chạy Frontend
-Mở Terminal khác ở thư mục gốc:
+### 3. Cấu hình và chạy Frontend
+Mở một Terminal khác:
 ```bash
 cd src/frontend
 
-# 1. Cài đặt dependencies
+# 1. Cài đặt thư viện
 npm install
 
-# 2. Cấu hình biến môi trường
-# Tạo file .env nếu chưa có
-# VITE_API_BASE_URL=http://localhost:5258
-
-# 3. Khởi động server
+# 2. Khởi chạy Vite Dev Server
 npm run dev
 ```
-Truy cập giao diện tại: `http://localhost:5173`
+Truy cập giao diện ứng dụng tại: `http://localhost:5173`
 
-## Lệnh Build / Test
+---
+
+## Tài khoản Demo
+
+Khi chạy ở môi trường `Development`, hệ thống đã tự sinh sẵn các tài khoản demo sau với mật khẩu chung: **`Demo@12345`**
+
+| Vai trò | Email đăng nhập | Mật khẩu |
+|---|---|---|
+| **Quản trị viên** | `admin@cliniccare.local` | `Demo@12345` |
+| **Bác sĩ** | `doctor@cliniccare.local` | `Demo@12345` |
+| **Lễ tân** | `reception@cliniccare.local` | `Demo@12345` |
+| **Dược sĩ** | `pharmacist@cliniccare.local` | `Demo@12345` |
+| **Bệnh nhân** | `patient@cliniccare.local` | `Demo@12345` |
+
+---
+
+## Lệnh Build & Test
+
 ```bash
-# Backend Test
+# 1. Kiểm thử và Build Backend
 dotnet build src/backend/ClinicManagement.sln
 dotnet test src/backend/ClinicManagement.sln
 
-# Frontend Build
-cd src/frontend && npm run build
+# 2. Kiểm thử và Build Frontend
+cd src/frontend
+npm run lint
+npm run build
+npm test
 ```
 
-## Tài khoản Demo
-Khi chạy với cờ `DemoSeed:Enabled = true`, hệ thống tự sinh các tài khoản sau:
-- **Quản trị viên:** `admin@cliniccare.local` / `Demo@12345`
-- **Lễ tân:** `reception@cliniccare.local` / `Demo@12345`
-- **Bác sĩ:** `doctor@cliniccare.local` / `Demo@12345`
-- **Bệnh nhân:** `patient@cliniccare.local` / `Demo@12345`
-
-> **Cảnh báo:** Dữ liệu Seed này chỉ dùng cho môi trường `Development`. Tuyệt đối không dùng cho `Production` hoặc `Staging`.
-
-## Tài liệu tham khảo
-- [Đặc tả API (API Specification)](file:///docs/api/api-specification.md)
-- [Luật nghiệp vụ (Business Rules)](file:///docs/specifications/business-rules.md)
-- [Thiết kế cơ sở dữ liệu (Database)](file:///docs/database/database-tables.md)
-- [Biểu đồ (Sơ đồ Use Case, ERD, Activity)](file:///docs/diagrams/)
+---
 
 ## Lưu ý Bảo mật
-1. **Tuyệt đối không commit** các thông tin nhạy cảm: `appsettings.json` (chứa db thật, key thật), file `.env`, mật khẩu thật, chuỗi kết nối (Connection String) hoặc Database production.
-2. AI chỉ đóng vai trò phân luồng thông tin, **không phải là công cụ y tế thay thế bác sĩ**.
-3. Các môi trường Test/Prod yêu cầu triển khai Reverse Proxy, HTTPS và quản lý Secret Key tập trung.
+1. Tuyệt đối không commit API Key thật, JWT secret key sản xuất hoặc connection string production lên git.
+2. Tất cả các endpoint nghiệp vụ đều được kiểm soát phân quyền chặt chẽ trên Backend (JWT Authorize role-based).
+3. AI chỉ đóng vai trò phân luồng thông tin tham khảo, không thay thế chẩn đoán y khoa.
