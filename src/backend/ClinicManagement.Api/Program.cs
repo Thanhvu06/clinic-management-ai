@@ -117,6 +117,7 @@ builder.Services.AddScoped<ClinicManagement.Application.Leaves.Interfaces.IAdmin
 builder.Services.Configure<ClinicManagement.Infrastructure.AI.AiProviderOptions>(builder.Configuration.GetSection(ClinicManagement.Infrastructure.AI.AiProviderOptions.SectionName));
 builder.Services.AddHttpClient<ClinicManagement.Application.AI.Interfaces.IAiSpecialtySuggestionProvider, ClinicManagement.Infrastructure.AI.GeminiAiProvider>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSpecialtyService, ClinicManagement.Infrastructure.AI.AiSpecialtyService>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IClinicAiContextService, ClinicManagement.Infrastructure.AI.ClinicAiContextService>();
 
 builder.Services.AddRateLimiter(options =>
 {

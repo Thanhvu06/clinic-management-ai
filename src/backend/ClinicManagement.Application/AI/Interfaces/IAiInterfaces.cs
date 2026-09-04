@@ -14,5 +14,10 @@ public interface IAiSpecialtyService
 public interface IAiSpecialtySuggestionProvider
 {
     Task<List<AiProviderSuggestionResult>> GetSuggestionsFromAiAsync(string symptomDescription, List<WhitelistItemDto> whitelist, CancellationToken cancellationToken = default);
-    Task<AiChatProviderResult> ChatWithAiAsync(string message, List<ChatMessageDto> context, List<WhitelistItemDto> whitelist, CancellationToken cancellationToken = default);
+    Task<AiChatProviderResult> ChatWithAiAsync(string message, List<ChatMessageDto> context, List<WhitelistItemDto> whitelist, string clinicContextJson, CancellationToken cancellationToken = default);
+}
+
+public interface IClinicAiContextService
+{
+    Task<string> GetClinicContextJsonAsync(CancellationToken cancellationToken = default);
 }

@@ -5,6 +5,8 @@ import { Trash2, Send, AlertTriangle, ArrowRight, Stethoscope } from "lucide-rea
 import type { ApiResponse } from "../../types";
 import { Breadcrumb } from "../../components/Breadcrumb";
 
+import { useChatContext } from "../../contexts/ChatContext";
+
 export interface ChatMessage {
     role: "user" | "model";
     content: string;
@@ -13,10 +15,7 @@ export interface ChatMessage {
 }
 
 export const PatientAiConsultation: React.FC = () => {
-    const [messages, setMessages] = useState<ChatMessage[]>([{
-        role: "model",
-        content: "Chào bạn, tôi là trợ lý y tế AI của ClinicCare. Tôi có thể hỗ trợ thông tin sức khỏe tham khảo và gợi ý chuyên khoa phù hợp. Bạn đang gặp triệu chứng hoặc cần tư vấn về vấn đề sức khỏe nào ạ?"
-    }]);
+    const { messages, setMessages } = useChatContext();
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");

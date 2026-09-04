@@ -18,12 +18,14 @@ public class AiSpecialtyService : IAiSpecialtyService
 {
     private readonly AppDbContext _dbContext;
     private readonly IAiSpecialtySuggestionProvider _aiProvider;
+    private readonly IClinicAiContextService _clinicAiContextService;
     private readonly ILogger<AiSpecialtyService> _logger;
 
-    public AiSpecialtyService(AppDbContext dbContext, IAiSpecialtySuggestionProvider aiProvider, ILogger<AiSpecialtyService> logger)
+    public AiSpecialtyService(AppDbContext dbContext, IAiSpecialtySuggestionProvider aiProvider, IClinicAiContextService clinicAiContextService, ILogger<AiSpecialtyService> logger)
     {
         _dbContext = dbContext;
         _aiProvider = aiProvider;
+        _clinicAiContextService = clinicAiContextService;
         _logger = logger;
     }
 
@@ -179,10 +181,12 @@ public class AiSpecialtyService : IAiSpecialtyService
                                        Name = s.Name
                                    }).AsNoTracking().ToListAsync(cancellationToken);
 
+        var clinicContextJson = await _clinicAiContextService.GetClinicContextJsonAsync(cancellationToken);
+
         AiChatProviderResult aiResult;
         try
         {
-            aiResult = await _aiProvider.ChatWithAiAsync(cleanMessage, cleanContext, whitelistData, cancellationToken);
+            aiResult = await _aiProvider.ChatWithAiAsync(cleanMessage, cleanContext, whitelistData, clinicContextJson, cancellationToken);
         }
         catch (Exception ex)
         {

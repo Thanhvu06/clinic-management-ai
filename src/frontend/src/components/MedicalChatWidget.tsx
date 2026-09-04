@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useChatContext } from "../contexts/ChatContext";
@@ -17,16 +17,12 @@ export interface ChatMessage {
 
 const PatientMedicalChatWidget: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
-    const [messages, setMessages] = useState<ChatMessage[]>([{
-        role: "model",
-        content: "Chào bạn, tôi là trợ lý y tế AI của ClinicCare. Tôi có thể hỗ trợ thông tin sức khỏe tham khảo và gợi ý chuyên khoa phù hợp. Bạn đang gặp triệu chứng hoặc cần tư vấn về vấn đề sức khỏe nào ạ?"
-    }]);
+    const { messages, setMessages, setPendingSpecialtyId } = useChatContext();
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
     
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const { setPendingSpecialtyId } = useChatContext();
     const navigate = useNavigate();
     const location = useLocation();
 
