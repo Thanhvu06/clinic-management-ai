@@ -200,4 +200,30 @@ public class AuthenticationService : IAuthenticationService
 
         return (new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
     }
+
+    public async Task<string> ForgotPasswordAsync(ForgotPasswordRequest request)
+    {
+        var user = await _userManager.FindByEmailAsync(request.Email.Trim());
+        if (user == null || !user.IsActive)
+        {
+            return "Nếu email tồn tại trong hệ thống, mã xác thực đặt lại mật khẩu đã được tạo.";
+        }
+
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        return token;
+    }
+
+    public async Task ResetPasswordAsync(ResetPasswordRequest request)
+    {
+        var user = await _userManager.FindByEmailAsync(request.Email.Trim());
+        if (user == null || !user.IsActive)
+            throw new NotFoundException("Tài khoản không tồn tại hoặc đã bị vô hiệu hóa.");
+
+        var result = await _userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            throw new BusinessException("RESET_PASSWORD_FAILED", $"Đặt lại mật khẩu không thành công: {errors}");
+        }
+    }
 }

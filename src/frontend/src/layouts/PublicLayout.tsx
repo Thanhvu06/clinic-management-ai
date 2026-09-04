@@ -2,17 +2,19 @@ import React, { useState } from 'react';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import styles from './PublicLayout.module.css';
+import { AppointmentLookupModal } from '../components/AppointmentLookupModal';
 import { 
     Phone, Clock, MapPin, ShieldPlus, Menu, X, 
-    UserCircle, Calendar, FileText, Pill, LogOut, ChevronDown 
+    UserCircle, Calendar, FileText, Pill, LogOut, ChevronDown, Search, Globe 
 } from 'lucide-react';
-
 
 export const PublicLayout: React.FC = () => {
     const { isAuthenticated, user, logout } = useAuth();
     const navigate = useNavigate();
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
+    const [currentLang, setCurrentLang] = useState<'vi' | 'en'>('vi');
 
     const handleLogout = () => {
         logout();
@@ -24,26 +26,44 @@ export const PublicLayout: React.FC = () => {
 
     return (
         <div className={styles.layout}>
-            {/* Top Bar */}
+            <AppointmentLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} />
+
+            {/* Utility Top Bar (Tier 1) */}
             <div className={styles.topBar}>
                 <div className={styles.topBarContainer}>
                     <div className={styles.topBarInfo}>
                         <div className={styles.topBarInfoItem}>
-                            <Clock size={14} /> Giờ làm việc: 07:00 - 19:00 (Thứ 2 - Chủ Nhật)
+                            <Clock size={14} /> Giờ làm việc: 07:00 - 19:00 (Hàng ngày)
+                        </div>
+                        <div className={styles.topBarInfoItem}>
+                            <Phone size={14} /> Hotline: <strong>1900 1234</strong>
                         </div>
                     </div>
                     <div className={styles.topBarInfo}>
+                        <button 
+                            type="button"
+                            onClick={() => setIsLookupModalOpen(true)}
+                            className={styles.topBarBtn}
+                            title="Tra cứu lịch hẹn"
+                        >
+                            <Search size={13} /> Tra cứu lịch hẹn
+                        </button>
                         <div className={styles.topBarInfoItem}>
-                            <Phone size={14} /> Hotline: 1900 1234
+                            <MapPin size={14} /> Hệ thống 40+ điểm khám
                         </div>
-                        <div className={styles.topBarInfoItem}>
-                            <MapPin size={14} /> Hệ thống 40+ phòng khám
-                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setCurrentLang(prev => prev === 'vi' ? 'en' : 'vi')}
+                            className={styles.langToggleBtn}
+                            title="Chuyển đổi ngôn ngữ"
+                        >
+                            <Globe size={13} /> {currentLang === 'vi' ? 'VIE' : 'ENG'}
+                        </button>
                     </div>
                 </div>
             </div>
 
-            {/* Main Header */}
+            {/* Main Navigation (Tier 2) */}
             <header className={styles.header}>
                 <div className={styles.headerContainer}>
                     <Link to="/" className={styles.logoArea}>
@@ -54,7 +74,9 @@ export const PublicLayout: React.FC = () => {
                     <nav className={styles.nav}>
                         <Link to="/" className={styles.navLink}>Trang chủ</Link>
                         <a href="/#specialties" className={styles.navLink}>Chuyên khoa</a>
+                        <a href="/#packages" className={styles.navLink}>Gói khám</a>
                         <a href="/#doctors" className={styles.navLink}>Bác sĩ</a>
+                        <a href="/#locations" className={styles.navLink}>Điểm khám</a>
                         <Link to="/patient/ai-consultation" className={styles.navLink}>Tư vấn AI</Link>
                     </nav>
 
@@ -131,8 +153,18 @@ export const PublicLayout: React.FC = () => {
                 <div className={`${styles.mobileMenu} ${isMobileMenuOpen ? styles.open : ''}`}>
                     <Link to="/" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Trang chủ</Link>
                     <a href="/#specialties" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Chuyên khoa</a>
+                    <a href="/#packages" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Gói khám</a>
                     <a href="/#doctors" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Bác sĩ</a>
+                    <a href="/#locations" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Điểm khám</a>
                     <Link to="/patient/ai-consultation" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Tư vấn AI</Link>
+                    <button 
+                        type="button" 
+                        onClick={() => { setIsMobileMenuOpen(false); setIsLookupModalOpen(true); }}
+                        className={styles.navLink}
+                        style={{ textAlign: 'left', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: '#0284c7' }}
+                    >
+                        🔍 Tra cứu lịch hẹn
+                    </button>
                     {!isAuthenticated ? (
                         <>
                             <Link to="/login" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Đăng nhập</Link>

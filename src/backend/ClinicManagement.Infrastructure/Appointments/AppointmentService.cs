@@ -309,4 +309,62 @@ public class AppointmentService : IAppointmentService
             })
             .ToListAsync();
     }
+
+    public async Task<List<AppointmentLookupDto>> LookupAppointmentsAsync(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 4)
+            return new List<AppointmentLookupDto>();
+
+        var cleanQuery = query.Trim();
+
+        var queryable = from a in _dbContext.Appointments
+                        join p in _dbContext.Patients on a.PatientId equals p.Id
+                        join pu in _dbContext.Users on p.UserId equals pu.Id
+                        join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
+                        join d in _dbContext.Doctors on a.DoctorId equals d.Id
+                        join du in _dbContext.Users on d.UserId equals du.Id
+                        where a.AppointmentCode == cleanQuery.ToUpper() || pu.PhoneNumber == cleanQuery
+                        orderby a.AppointmentDate descending, a.StartTime descending
+                        select new
+                        {
+                            a.AppointmentCode,
+                            a.AppointmentDate,
+                            a.StartTime,
+                            a.EndTime,
+                            SpecialtyName = s.Name,
+                            DoctorName = (string.IsNullOrWhiteSpace(d.AcademicTitle) ? "" : d.AcademicTitle + ". ") + du.FullName,
+                            Status = a.Status.ToString(),
+                            FullName = pu.FullName,
+                            PhoneNumber = pu.PhoneNumber
+                        };
+
+        var items = await queryable.Take(10).ToListAsync();
+
+        return items.Select(x => new AppointmentLookupDto
+        {
+            AppointmentCode = x.AppointmentCode,
+            AppointmentDate = x.AppointmentDate,
+            StartTime = x.StartTime,
+            EndTime = x.EndTime,
+            SpecialtyName = x.SpecialtyName,
+            DoctorName = x.DoctorName,
+            Status = x.Status,
+            MaskedPatientName = MaskName(x.FullName),
+            MaskedPhoneNumber = MaskPhone(x.PhoneNumber)
+        }).ToList();
+    }
+
+    private static string MaskName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "***";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length <= 1) return name.Length > 2 ? name[0] + "***" + name[^1] : "***";
+        return parts[0] + " " + string.Join(" ", parts.Skip(1).Select(p => p[0] + "***"));
+    }
+
+    private static string MaskPhone(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone) || phone.Length < 6) return "***";
+        return phone.Substring(0, 3) + "****" + phone.Substring(phone.Length - 3);
+    }
 }

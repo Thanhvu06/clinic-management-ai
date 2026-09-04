@@ -68,4 +68,70 @@ public class PatientService : IPatientService
 
         await _dbContext.SaveChangesAsync();
     }
+
+    public async Task<List<PatientPrescriptionDto>> GetMyPrescriptionsAsync()
+    {
+        var userId = _currentUserService.UserId ?? throw new UnauthorizedException();
+
+        var patient = await _dbContext.Patients.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == userId);
+        if (patient == null)
+            throw new NotFoundException("Không tìm thấy hồ sơ bệnh nhân.");
+
+        var prescriptions = await _dbContext.Prescriptions
+            .AsNoTracking()
+            .Where(p => p.PatientId == patient.Id)
+            .Include(p => p.Appointment)
+                .ThenInclude(a => a!.Specialty)
+            .Include(p => p.Appointment)
+                .ThenInclude(a => a!.VisitSummary)
+            .Include(p => p.Doctor)
+            .Include(p => p.Items)
+                .ThenInclude(i => i.Medicine)
+            .OrderByDescending(p => p.CreatedAt)
+            .ToListAsync();
+
+        var doctorUserIds = prescriptions
+            .Where(p => p.Doctor != null)
+            .Select(p => p.Doctor!.UserId)
+            .Distinct()
+            .ToList();
+
+        var doctorUsers = await _dbContext.Users
+            .AsNoTracking()
+            .Where(u => doctorUserIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.FullName);
+
+        return prescriptions.Select(p =>
+        {
+            var doctorFullName = (p.Doctor != null && doctorUsers.TryGetValue(p.Doctor.UserId, out var name)) ? name : "Bác sĩ";
+            var doctorTitle = string.IsNullOrWhiteSpace(p.Doctor?.AcademicTitle) ? "" : p.Doctor.AcademicTitle + ". ";
+
+            return new PatientPrescriptionDto
+            {
+                Id = p.Id,
+                Code = $"RX-{p.CreatedAt:yyyyMMdd}-{p.Id:D4}",
+                AppointmentId = p.AppointmentId,
+                AppointmentCode = p.Appointment?.AppointmentCode ?? string.Empty,
+                AppointmentDate = p.Appointment?.AppointmentDate ?? DateOnly.FromDateTime(p.CreatedAt),
+                DoctorName = doctorTitle + doctorFullName,
+                SpecialtyName = p.Appointment?.Specialty?.Name ?? "Đa khoa",
+                Diagnosis = p.Appointment?.VisitSummary?.Summary ?? "Khám chuyên khoa",
+                Status = p.Status.ToString(),
+                Notes = p.Notes,
+                CreatedAt = p.CreatedAt,
+                DispensedAt = p.DispensedAt,
+                Items = p.Items.Select(i => new PatientPrescriptionItemDto
+                {
+                    MedicineId = i.MedicineId,
+                    Name = i.Medicine?.Name ?? "Thuốc",
+                    Unit = i.Medicine?.Unit ?? "Đơn vị",
+                    Quantity = i.Quantity,
+                    Dosage = i.Dosage,
+                    Frequency = i.Frequency,
+                    DurationDays = i.DurationDays,
+                    Instructions = i.Instructions
+                }).ToList()
+            };
+        }).ToList();
+    }
 }

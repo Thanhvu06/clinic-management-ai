@@ -21,6 +21,14 @@ public class AppointmentController : ControllerBase
         _appointmentService = appointmentService;
     }
 
+    [AllowAnonymous]
+    [HttpGet("lookup")]
+    public async Task<IActionResult> LookupAppointments([FromQuery] string query)
+    {
+        var results = await _appointmentService.LookupAppointmentsAsync(query);
+        return Ok(ApiResponse<List<AppointmentLookupDto>>.Ok(results));
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateAppointment([FromBody] CreateAppointmentRequest request)
     {

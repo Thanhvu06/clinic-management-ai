@@ -4,11 +4,13 @@ import axiosClient from '../api/axiosClient';
 import { useAuth } from '../auth/AuthContext';
 import { ShieldPlus, Mail, Lock } from 'lucide-react';
 import { useDialog } from '../contexts/DialogContext';
+import { ForgotPasswordModal } from '../components/ForgotPasswordModal';
 
 export const Login: React.FC = () => {
     const [emailOrPhone, setEmailOrPhone] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showForgotModal, setShowForgotModal] = useState(false);
     
     const { login } = useAuth();
     const navigate = useNavigate();
@@ -27,6 +29,7 @@ export const Login: React.FC = () => {
                     case 'Admin': navigate('/admin'); break;
                     case 'Doctor': navigate('/doctor'); break;
                     case 'Receptionist': navigate('/reception'); break;
+                    case 'Pharmacist': navigate('/pharmacy'); break;
                     default: navigate('/patient'); break;
                 }
             }
@@ -76,7 +79,25 @@ export const Login: React.FC = () => {
                             </div>
                         </div>
                         <div className="form-group" style={{ marginBottom: '28px' }}>
-                            <label className="form-label" style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>Mật khẩu</label>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <label className="form-label" style={{ fontWeight: 600, color: 'var(--c-text-dark)', margin: 0 }}>Mật khẩu</label>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowForgotModal(true)}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        padding: 0,
+                                        color: 'var(--c-secondary)',
+                                        fontSize: '0.875rem',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        textDecoration: 'none'
+                                    }}
+                                >
+                                    Quên mật khẩu?
+                                </button>
+                            </div>
                             <div style={{ position: 'relative' }}>
                                 <div style={{ position: 'absolute', top: '50%', left: '14px', transform: 'translateY(-50%)', color: 'var(--c-text-light)' }}>
                                     <Lock size={20} />
@@ -99,6 +120,11 @@ export const Login: React.FC = () => {
                     <div style={{ marginTop: '28px', textAlign: 'center', fontSize: '0.95rem', color: 'var(--c-text-light)' }}>
                         Chưa có tài khoản? <Link to="/register" style={{ color: 'var(--c-secondary)', fontWeight: 600, marginLeft: '4px' }}>Đăng ký ngay</Link>
                     </div>
+
+                    <ForgotPasswordModal
+                        isOpen={showForgotModal}
+                        onClose={() => setShowForgotModal(false)}
+                    />
                 </div>
             </div>
             <div style={{ flex: '1 1 500px', display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, var(--c-primary-light) 0%, white 100%)', padding: '40px', justifyContent: 'center', alignItems: 'center' }}>

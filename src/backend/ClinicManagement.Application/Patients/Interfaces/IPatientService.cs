@@ -6,4 +6,5 @@ public interface IPatientService
 {
     Task<PatientProfileDto> GetMyProfileAsync();
     Task UpdateMyProfileAsync(UpdatePatientProfileRequest request);
+    Task<List<PatientPrescriptionDto>> GetMyPrescriptionsAsync();
 }

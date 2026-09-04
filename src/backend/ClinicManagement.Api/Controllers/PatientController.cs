@@ -32,4 +32,11 @@ public class PatientController : ControllerBase
         await _patientService.UpdateMyProfileAsync(request);
         return Ok(ApiResponse.Ok("Cập nhật thông tin thành công"));
     }
+
+    [HttpGet("me/prescriptions")]
+    public async Task<IActionResult> GetMyPrescriptions()
+    {
+        var prescriptions = await _patientService.GetMyPrescriptionsAsync();
+        return Ok(ApiResponse<List<PatientPrescriptionDto>>.Ok(prescriptions));
+    }
 }
