@@ -75,10 +75,10 @@ export const MainLayout: React.FC = () => {
             case 'Pharmacist':
                 return (
                     <>
-                        <NavItem to="/pharmacist" icon={LayoutDashboard} label="Tổng quan kho" />
-                        <NavItem to="/pharmacist/prescriptions" icon={CalendarCheck} label="Đơn thuốc chờ cấp" />
-                        <NavItem to="/pharmacist/medicines" icon={Pill} label="Danh mục thuốc" />
-                        <NavItem to="/pharmacist/inventory" icon={History} label="Lịch sử kho" />
+                        <NavItem to="/pharmacy" icon={LayoutDashboard} label="Bàn làm việc" />
+                        <NavItem to="/pharmacy/prescriptions" icon={CalendarCheck} label="Đơn thuốc chờ cấp" />
+                        <NavItem to="/pharmacy/medicines" icon={Pill} label="Danh mục thuốc" />
+                        <NavItem to="/pharmacy/inventory" icon={History} label="Lịch sử kho" />
                     </>
                 );
             default:
@@ -124,6 +124,7 @@ export const MainLayout: React.FC = () => {
                             {user?.role === 'Patient' ? 'Bệnh nhân' : 
                              user?.role === 'Receptionist' ? 'Lễ tân' : 
                              user?.role === 'Doctor' ? 'Bác sĩ' : 
+                             user?.role === 'Pharmacist' ? 'Dược sĩ' : 
                              user?.role === 'Admin' ? 'Quản trị viên' : user?.role}
                         </div>
                     </div>

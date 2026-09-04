@@ -25,6 +25,9 @@ import { AdminWorkSchedules } from './pages/admin/AdminWorkSchedules';
 import { AdminHealthPackages } from './pages/admin/AdminHealthPackages';
 import { AdminMedicines } from './pages/admin/AdminMedicines';
 import { AdminAuditLogs } from './pages/admin/AdminAuditLogs';
+import { PharmacyDashboard } from './pages/pharmacy/PharmacyDashboard';
+import { PharmacyPrescriptions } from './pages/pharmacy/PharmacyPrescriptions';
+import { PharmacyInventory } from './pages/pharmacy/PharmacyInventory';
 import { ChatProvider } from './contexts/ChatContext';
 import { DialogProvider } from './contexts/DialogContext';
 import { MedicalChatWidget } from './components/MedicalChatWidget';
@@ -95,7 +98,10 @@ function App() {
                                     
                                     {/* Pharmacist Routes */}
                                     <Route element={<RoleRoute roles={['Pharmacist']} />}>
-                                        {/* To be implemented */}
+                                        <Route path="/pharmacy" element={<PharmacyDashboard />} />
+                                        <Route path="/pharmacy/prescriptions" element={<PharmacyPrescriptions />} />
+                                        <Route path="/pharmacy/medicines" element={<AdminMedicines />} />
+                                        <Route path="/pharmacy/inventory" element={<PharmacyInventory />} />
                                     </Route>
                                 </Route>
                             </Route>
