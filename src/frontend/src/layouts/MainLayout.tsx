@@ -5,7 +5,7 @@ import styles from './MainLayout.module.css';
 import { 
     LayoutDashboard, CalendarDays, CalendarCheck, 
     History, Users, Stethoscope, 
-    ShieldPlus, LogOut, Menu, X, ShieldAlert, Pill 
+    ShieldPlus, LogOut, Menu, X, ShieldAlert, Pill, Package 
 } from 'lucide-react';
 
 export const MainLayout: React.FC = () => {
@@ -65,8 +65,11 @@ export const MainLayout: React.FC = () => {
                         <NavItem to="/admin/accounts" icon={ShieldAlert} label="Quản lý tài khoản" />
                         <NavItem to="/admin/specialties" icon={Stethoscope} label="Quản lý chuyên khoa" />
                         <NavItem to="/admin/doctors" icon={Users} label="Quản lý bác sĩ" />
+                        <NavItem to="/admin/packages" icon={Package} label="Gói khám sức khỏe" />
+                        <NavItem to="/admin/medicines" icon={Pill} label="Danh mục thuốc" />
                         <NavItem to="/admin/work-schedules" icon={CalendarCheck} label="Lịch làm việc & Slots" />
                         <NavItem to="/admin/leaves" icon={CalendarDays} label="Yêu cầu nghỉ" />
+                        <NavItem to="/admin/audit-logs" icon={History} label="Nhật ký hệ thống" />
                     </>
                 );
             case 'Pharmacist':

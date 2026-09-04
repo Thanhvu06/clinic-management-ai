@@ -25,6 +25,13 @@ public class ReceptionController : ControllerBase
         _changeRequestService = changeRequestService;
     }
 
+    [HttpGet("stats")]
+    public async Task<IActionResult> GetStats()
+    {
+        var result = await _receptionService.GetStatsAsync();
+        return Ok(ApiResponse<ReceptionStatsDto>.Ok(result));
+    }
+
     [HttpGet("appointments")]
     public async Task<IActionResult> GetAppointments([FromQuery] string? status, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {

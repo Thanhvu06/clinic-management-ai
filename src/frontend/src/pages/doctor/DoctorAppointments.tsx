@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { Search, CalendarDays, Eye, CheckCircle, XCircle, Clock, PlusCircle, RefreshCw, X, Send } from 'lucide-react';
+import { Search, CalendarDays, Eye, CheckCircle, XCircle, Clock, PlusCircle, RefreshCw, X, Send, Pill, Trash2, Plus } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
 
 interface DoctorAppointment {
@@ -18,6 +18,23 @@ interface DoctorAppointment {
     endTime: string;
     reason: string | null;
     status: string;
+}
+
+interface ActiveMedicine {
+    id: number;
+    code: string;
+    name: string;
+    unit: string;
+    stockQuantity: number;
+}
+
+interface PrescriptionItemForm {
+    medicineId: number;
+    quantity: number;
+    dosage: string;
+    frequency: string;
+    durationDays?: number;
+    instructions?: string;
 }
 
 export const DoctorAppointments: React.FC = () => {
@@ -41,6 +58,12 @@ export const DoctorAppointments: React.FC = () => {
     // Complete Form
     const [completeSummary, setCompleteSummary] = useState('');
     const [completeInstructions, setCompleteInstructions] = useState('');
+
+    // Prescription Form
+    const [activeMedicines, setActiveMedicines] = useState<ActiveMedicine[]>([]);
+    const [prescriptionItems, setPrescriptionItems] = useState<PrescriptionItemForm[]>([]);
+    const [prescriptionNotes, setPrescriptionNotes] = useState('');
+    const [currentPrescription, setCurrentPrescription] = useState<any>(null);
     
     // No Show Form
     const [noShowReason, setNoShowReason] = useState('');
@@ -48,6 +71,14 @@ export const DoctorAppointments: React.FC = () => {
     // Revisit Form
     const [revisitDate, setRevisitDate] = useState('');
     const [revisitNote, setRevisitNote] = useState('');
+
+    useEffect(() => {
+        axiosClient.get<any, ApiResponse<ActiveMedicine[]>>('/medicines/active')
+            .then(res => {
+                if (res.success && res.data) setActiveMedicines(res.data);
+            })
+            .catch(() => {});
+    }, []);
 
     const fetchAppointments = async () => {
         setLoading(true);
@@ -58,9 +89,6 @@ export const DoctorAppointments: React.FC = () => {
             });
             if (search) params.append('search', search);
             if (statusFilter) params.append('status', statusFilter);
-            
-            // The backend doesn't seem to have a date filter explicit for today in DoctorAppointmentController (only search, status). 
-            // So we might have to filter client-side if needed, but let's send it if the backend supports it later.
 
             const res = await axiosClient.get<any, ApiResponse<any>>(`/doctor/appointments?${params.toString()}`);
             if (res.success && res.data) {
@@ -70,7 +98,6 @@ export const DoctorAppointments: React.FC = () => {
                     items = items.filter(i => i.appointmentDate.startsWith(todayStr));
                 }
                 
-                // Sort by date/time
                 items.sort((a, b) => {
                     const dateDiff = new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime();
                     if (dateDiff !== 0) return dateDiff;
@@ -80,8 +107,8 @@ export const DoctorAppointments: React.FC = () => {
                 setAppointments(items);
                 setTotalItems(res.data.totalItems);
             }
-        } catch (error) {
-            // Error handling
+        } catch {
+            // Handled
         } finally {
             setLoading(false);
         }
@@ -104,25 +131,74 @@ export const DoctorAppointments: React.FC = () => {
         setNoShowReason('');
         setRevisitDate('');
         setRevisitNote('');
+        setPrescriptionItems([]);
+        setPrescriptionNotes('');
+        setCurrentPrescription(null);
+
+        try {
+            const presRes = await axiosClient.get<any, ApiResponse<any>>(`/doctor/appointments/${apt.id}/prescription`);
+            if (presRes.success && presRes.data) {
+                setCurrentPrescription(presRes.data);
+                if (view === 'complete' && presRes.data.items) {
+                    setPrescriptionNotes(presRes.data.notes || '');
+                    setPrescriptionItems(presRes.data.items.map((i: any) => ({
+                        medicineId: i.medicineId,
+                        quantity: i.quantity,
+                        dosage: i.dosage,
+                        frequency: i.frequency,
+                        durationDays: i.durationDays,
+                        instructions: i.instructions || ''
+                    })));
+                }
+            }
+        } catch {
+            setCurrentPrescription(null);
+        }
 
         if (view === 'detail') {
             try {
-                // Doctor may not have access to history, but we try (if admin/patient only, this will fail)
                 const res = await axiosClient.get<any, ApiResponse<any>>(`/doctor/appointments/${apt.id}/history`);
                 if (res.success && res.data) {
                     setHistory(res.data);
                 }
-            } catch (error: any) {
+            } catch {
                 setHistory([]);
             }
         }
+    };
+
+    const handleAddMedicineRow = () => {
+        if (activeMedicines.length === 0) return;
+        setPrescriptionItems(prev => [
+            ...prev,
+            {
+                medicineId: activeMedicines[0].id,
+                quantity: 10,
+                dosage: '1 viên',
+                frequency: '2 lần / ngày sau ăn',
+                durationDays: 5,
+                instructions: 'Uống sau bữa ăn'
+            }
+        ]);
+    };
+
+    const handleRemoveMedicineRow = (index: number) => {
+        setPrescriptionItems(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleUpdateMedicineRow = (index: number, field: keyof PrescriptionItemForm, value: any) => {
+        setPrescriptionItems(prev => {
+            const updated = [...prev];
+            updated[index] = { ...updated[index], [field]: value };
+            return updated;
+        });
     };
 
     const handleComplete = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!modal.apt) return;
         
-        showConfirm('Xác nhận hoàn thành buổi khám? Thông tin này chỉ là tóm tắt kết quả khám trong phạm vi hệ thống.', async () => {
+        showConfirm('Xác nhận hoàn thành buổi khám và lưu đơn thuốc?', async () => {
             setActionLoading(true);
             try {
                 const res = await axiosClient.post<any, ApiResponse<any>>(`/doctor/appointments/${modal.apt!.id}/complete`, {
@@ -130,7 +206,14 @@ export const DoctorAppointments: React.FC = () => {
                     followUpInstruction: completeInstructions
                 });
                 if (res.success) {
-                    showAlert('Đã hoàn thành buổi khám.', 'Thành công', 'success');
+                    if (prescriptionItems.length > 0) {
+                        await axiosClient.post<any, ApiResponse<any>>(`/doctor/appointments/${modal.apt!.id}/prescription`, {
+                            notes: prescriptionNotes,
+                            items: prescriptionItems
+                        });
+                    }
+
+                    showAlert('Đã hoàn thành buổi khám và lưu kết quả khám.', 'Thành công', 'success');
                     setModal({ ...modal, view: 'detail' });
                     fetchAppointments();
                 }
@@ -394,8 +477,50 @@ export const DoctorAppointments: React.FC = () => {
                                             <XCircle size={16} style={{ marginRight: '4px' }}/> Đánh dấu vắng mặt
                                         </button>
                                         <button className="btn-primary" onClick={() => setModal({ ...modal, view: 'complete' })}>
-                                            <CheckCircle size={16} style={{ marginRight: '4px' }}/> Bắt đầu khám
+                                            <CheckCircle size={16} style={{ marginRight: '4px' }}/> Bắt đầu khám & Kê đơn
                                         </button>
+                                    </div>
+                                )}
+
+                                {currentPrescription && (
+                                    <div style={{ marginTop: '20px', borderTop: '1px solid var(--c-border)', paddingTop: '16px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--c-navy-dark)' }}>
+                                                <Pill size={18} color="var(--c-primary)" /> Đơn thuốc đã kê
+                                            </h4>
+                                            <span className={currentPrescription.status === 'Dispensed' ? 'badge badge-success' : 'badge badge-warning'}>
+                                                {currentPrescription.status === 'Dispensed' ? 'Đã cấp thuốc' : 'Chờ cấp thuốc (Issued)'}
+                                            </span>
+                                        </div>
+                                        {currentPrescription.notes && (
+                                            <div style={{ fontSize: '0.9rem', color: 'var(--c-text)', marginBottom: '10px', fontStyle: 'italic' }}>
+                                                Ghi chú: {currentPrescription.notes}
+                                            </div>
+                                        )}
+                                        <div style={{ overflowX: 'auto' }}>
+                                            <table className="table" style={{ fontSize: '0.875rem' }}>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Tên thuốc</th>
+                                                        <th>Số lượng</th>
+                                                        <th>Liều dùng</th>
+                                                        <th>Tần suất</th>
+                                                        <th>Ghi chú</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {currentPrescription.items?.map((item: any, idx: number) => (
+                                                        <tr key={idx}>
+                                                            <td style={{ fontWeight: 600 }}>{item.medicineName} ({item.medicineCode})</td>
+                                                            <td>{item.quantity} {item.unit}</td>
+                                                            <td>{item.dosage}</td>
+                                                            <td>{item.frequency}</td>
+                                                            <td>{item.instructions || '-'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 )}
                             </>
@@ -404,7 +529,7 @@ export const DoctorAppointments: React.FC = () => {
                         {modal.view === 'complete' && (
                             <form onSubmit={handleComplete} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                 <div style={{ padding: '12px', background: 'var(--c-info-bg)', color: 'var(--c-info)', borderRadius: '6px', fontSize: '0.9rem' }}>
-                                    Thông tin này chỉ là tóm tắt kết quả khám trong phạm vi hệ thống để bệnh nhân theo dõi.
+                                    Nhập kết quả khám và kê đơn thuốc cho bệnh nhân. Đơn thuốc sẽ tự động chuyển đến bộ phận Dược sĩ sau khi hoàn thành.
                                 </div>
                                 <div>
                                     <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Tóm tắt kết quả khám (*)</label>
@@ -427,10 +552,109 @@ export const DoctorAppointments: React.FC = () => {
                                         placeholder="Nhắc nhở dùng thuốc, kiêng cữ..."
                                     />
                                 </div>
+
+                                {/* Prescription Section */}
+                                <div style={{ marginTop: '8px', borderTop: '1px dashed var(--c-border)', paddingTop: '16px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                        <label style={{ margin: 0, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--c-navy-dark)' }}>
+                                            <Pill size={18} color="var(--c-primary)" /> Kê đơn thuốc (Tùy chọn)
+                                        </label>
+                                        <button
+                                            type="button"
+                                            className="btn-secondary"
+                                            onClick={handleAddMedicineRow}
+                                            style={{ fontSize: '0.85rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                        >
+                                            <Plus size={14} /> Thêm thuốc
+                                        </button>
+                                    </div>
+
+                                    {prescriptionItems.length > 0 && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
+                                            {prescriptionItems.map((item, idx) => (
+                                                <div key={idx} style={{ background: 'var(--c-bg)', padding: '12px', borderRadius: '8px', border: '1px solid var(--c-border)' }}>
+                                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
+                                                        <div style={{ flex: '2 1 200px' }}>
+                                                            <select
+                                                                className="form-select"
+                                                                value={item.medicineId}
+                                                                onChange={e => handleUpdateMedicineRow(idx, 'medicineId', parseInt(e.target.value, 10))}
+                                                            >
+                                                                {activeMedicines.map(m => (
+                                                                    <option key={m.id} value={m.id}>
+                                                                        {m.name} ({m.code}) - Tồn: {m.stockQuantity} {m.unit}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div style={{ width: '90px' }}>
+                                                            <input
+                                                                type="number"
+                                                                min={1}
+                                                                className="form-input"
+                                                                placeholder="SL"
+                                                                value={item.quantity}
+                                                                onChange={e => handleUpdateMedicineRow(idx, 'quantity', parseInt(e.target.value, 10) || 1)}
+                                                            />
+                                                        </div>
+                                                        <div style={{ flex: '1 1 120px' }}>
+                                                            <input
+                                                                type="text"
+                                                                className="form-input"
+                                                                placeholder="Liều dùng (vd: 1 viên)"
+                                                                value={item.dosage}
+                                                                onChange={e => handleUpdateMedicineRow(idx, 'dosage', e.target.value)}
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveMedicineRow(idx)}
+                                                            style={{ background: 'none', border: 'none', color: 'var(--c-danger)', cursor: 'pointer', padding: '6px' }}
+                                                            title="Xóa thuốc"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                        <div style={{ flex: '1 1 180px' }}>
+                                                            <input
+                                                                type="text"
+                                                                className="form-input"
+                                                                placeholder="Tần suất (vd: 2 lần/ngày sau ăn)"
+                                                                value={item.frequency}
+                                                                onChange={e => handleUpdateMedicineRow(idx, 'frequency', e.target.value)}
+                                                            />
+                                                        </div>
+                                                        <div style={{ flex: '2 1 200px' }}>
+                                                            <input
+                                                                type="text"
+                                                                className="form-input"
+                                                                placeholder="Hướng dẫn thêm..."
+                                                                value={item.instructions || ''}
+                                                                onChange={e => handleUpdateMedicineRow(idx, 'instructions', e.target.value)}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            <div>
+                                                <input
+                                                    type="text"
+                                                    className="form-input"
+                                                    placeholder="Ghi chú đơn thuốc (vd: Uống nhiều nước, kiêng rượu bia...)"
+                                                    value={prescriptionNotes}
+                                                    onChange={e => setPrescriptionNotes(e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
                                     <button type="button" className="btn-secondary" onClick={() => setModal({ ...modal, view: 'detail' })}>Quay lại</button>
                                     <button type="submit" className="btn-primary" disabled={actionLoading}>
-                                        {actionLoading ? 'Đang lưu...' : 'Hoàn thành khám'}
+                                        {actionLoading ? 'Đang lưu...' : 'Hoàn thành khám & Lưu đơn thuốc'}
                                     </button>
                                 </div>
                             </form>

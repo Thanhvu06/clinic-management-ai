@@ -11,6 +11,7 @@ using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
+using ClinicManagement.Application.Prescriptions.DTOs;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -298,6 +299,129 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    public async Task<PrescriptionDetailDto?> GetPrescriptionByAppointmentIdAsync(long appointmentId)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+        var prescription = await _dbContext.Prescriptions
+            .Include(p => p.Items)
+                .ThenInclude(i => i.Medicine)
+            .Include(p => p.Appointment)
+            .Include(p => p.Patient)
+            .FirstOrDefaultAsync(p => p.AppointmentId == appointmentId && p.DoctorId == doctor.Id);
+
+        if (prescription == null) return null;
+
+        var patientUser = prescription.Patient != null 
+            ? await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == prescription.Patient.UserId) 
+            : null;
+        var doctorUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == doctor.UserId);
+
+        return new PrescriptionDetailDto
+        {
+            Id = prescription.Id,
+            AppointmentId = prescription.AppointmentId,
+            AppointmentCode = prescription.Appointment?.AppointmentCode ?? $"APT-{prescription.AppointmentId}",
+            PatientId = prescription.PatientId,
+            PatientName = patientUser?.FullName ?? "Bệnh nhân",
+            PatientPhone = patientUser?.PhoneNumber ?? "",
+            DoctorId = prescription.DoctorId,
+            DoctorName = doctorUser?.FullName ?? "Bác sĩ",
+            Status = prescription.Status.ToString(),
+            Notes = prescription.Notes,
+            CreatedAt = prescription.CreatedAt,
+            DispensedAt = prescription.DispensedAt,
+            Items = prescription.Items.Select(i => new PrescriptionDetailItemDto
+            {
+                MedicineId = i.MedicineId,
+                MedicineCode = i.Medicine?.Code ?? "",
+                MedicineName = i.Medicine?.Name ?? "Thuốc",
+                Unit = i.Medicine?.Unit ?? "Hộp",
+                Quantity = i.Quantity,
+                AvailableStock = i.Medicine?.StockQuantity ?? 0,
+                Dosage = i.Dosage,
+                Frequency = i.Frequency,
+                DurationDays = i.DurationDays,
+                Instructions = i.Instructions
+            }).ToList()
+        };
+    }
+
+    public async Task<PrescriptionDetailDto> CreatePrescriptionAsync(long appointmentId, CreatePrescriptionDto request)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+
+        var appointment = await _dbContext.Appointments
+            .Include(a => a.Patient)
+            .FirstOrDefaultAsync(a => a.Id == appointmentId && a.DoctorId == doctor.Id);
+
+        if (appointment == null)
+            throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
+
+        if (appointment.Status != AppointmentStatus.Confirmed && appointment.Status != AppointmentStatus.Completed)
+            throw new BusinessException("INVALID_APPOINTMENT_STATUS", "Chỉ có thể kê đơn cho lịch hẹn đã xác nhận hoặc đã hoàn thành.");
+
+        var existing = await _dbContext.Prescriptions
+            .Include(p => p.Items)
+            .FirstOrDefaultAsync(p => p.AppointmentId == appointmentId);
+
+        if (existing != null && existing.Status == PrescriptionStatus.Dispensed)
+            throw new BusinessException("ALREADY_DISPENSED", "Đơn thuốc này đã được cấp phát, không thể chỉnh sửa.");
+
+        if (existing != null)
+        {
+            _dbContext.PrescriptionItems.RemoveRange(existing.Items);
+            existing.Notes = request.Notes;
+            existing.CreatedAt = DateTime.UtcNow;
+
+            foreach (var item in request.Items)
+            {
+                _dbContext.PrescriptionItems.Add(new PrescriptionItem
+                {
+                    PrescriptionId = existing.Id,
+                    MedicineId = item.MedicineId,
+                    Quantity = item.Quantity,
+                    Dosage = item.Dosage,
+                    Frequency = item.Frequency,
+                    DurationDays = item.DurationDays,
+                    Instructions = item.Instructions
+                });
+            }
+
+            await _dbContext.SaveChangesAsync();
+            return (await GetPrescriptionByAppointmentIdAsync(appointmentId))!;
+        }
+
+        var newPrescription = new Prescription
+        {
+            AppointmentId = appointmentId,
+            PatientId = appointment.PatientId,
+            DoctorId = doctor.Id,
+            Status = PrescriptionStatus.Issued,
+            Notes = request.Notes,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.Prescriptions.Add(newPrescription);
+        await _dbContext.SaveChangesAsync();
+
+        foreach (var item in request.Items)
+        {
+            _dbContext.PrescriptionItems.Add(new PrescriptionItem
+            {
+                PrescriptionId = newPrescription.Id,
+                MedicineId = item.MedicineId,
+                Quantity = item.Quantity,
+                Dosage = item.Dosage,
+                Frequency = item.Frequency,
+                DurationDays = item.DurationDays,
+                Instructions = item.Instructions
+            });
+        }
+
+        await _dbContext.SaveChangesAsync();
+        return (await GetPrescriptionByAppointmentIdAsync(appointmentId))!;
     }
 
     private static DoctorAppointmentDto MapToDto(Appointment a, string patientName, string patientPhone, Gender? gender, DateOnly? dob) => new()

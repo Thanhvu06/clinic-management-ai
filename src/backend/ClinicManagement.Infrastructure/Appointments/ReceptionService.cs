@@ -149,6 +149,26 @@ public class ReceptionService : IReceptionService
         await _dbContext.SaveChangesAsync();
     }
 
+    public async Task<ReceptionStatsDto> GetStatsAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var appointmentsToday = await _dbContext.Appointments
+            .Where(a => a.AppointmentDate == today)
+            .ToListAsync();
+
+        var pendingChangeRequests = await _dbContext.AppointmentChangeRequests
+            .CountAsync(c => c.Status == AppointmentChangeRequestStatus.Pending);
+
+        return new ReceptionStatsDto
+        {
+            AppointmentsToday = appointmentsToday.Count,
+            PendingAppointmentsToday = appointmentsToday.Count(a => a.Status == AppointmentStatus.Pending),
+            ConfirmedAppointmentsToday = appointmentsToday.Count(a => a.Status == AppointmentStatus.Confirmed),
+            CompletedAppointmentsToday = appointmentsToday.Count(a => a.Status == AppointmentStatus.Completed),
+            PendingChangeRequests = pendingChangeRequests
+        };
+    }
+
     private static ReceptionAppointmentDto MapToDto(Appointment a, string patientName, string patientPhone, string doctorName, string specialtyName) => new()
     {
         Id = a.Id,

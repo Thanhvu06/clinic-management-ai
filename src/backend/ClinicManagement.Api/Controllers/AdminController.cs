@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Admin.DTOs;
 using ClinicManagement.Application.Admin.Interfaces;
 using ClinicManagement.Application.Common.Constants;
 using ClinicManagement.Application.Common.Models;
+using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace ClinicManagement.Api.Controllers;
 
@@ -24,6 +27,81 @@ public class AdminController : ControllerBase
         _adminUserService = adminUserService;
         _adminSpecialtyService = adminSpecialtyService;
         _adminDoctorService = adminDoctorService;
+    }
+
+    [HttpGet("stats")]
+    public async Task<IActionResult> GetStats([FromServices] AppDbContext dbContext)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var totalPatients = await dbContext.Patients.CountAsync();
+        var totalDoctors = await dbContext.Doctors.CountAsync();
+        var totalAppointmentsToday = await dbContext.Appointments.CountAsync(a => a.AppointmentDate == today);
+        var totalAppointmentsAll = await dbContext.Appointments.CountAsync();
+        var totalPrescriptions = await dbContext.Prescriptions.CountAsync();
+        var totalHealthPackages = await dbContext.HealthPackages.CountAsync();
+        var lowStockCount = await dbContext.Medicines.CountAsync(m => m.StockQuantity <= m.ReorderLevel);
+
+        var stats = new AdminStatsDto
+        {
+            TotalPatients = totalPatients,
+            TotalDoctors = totalDoctors,
+            TotalAppointmentsToday = totalAppointmentsToday,
+            TotalAppointmentsAll = totalAppointmentsAll,
+            TotalPrescriptions = totalPrescriptions,
+            TotalHealthPackages = totalHealthPackages,
+            LowStockMedicinesCount = lowStockCount
+        };
+
+        return Ok(ApiResponse<AdminStatsDto>.Ok(stats));
+    }
+
+    [HttpGet("audit-logs")]
+    public async Task<IActionResult> GetAuditLogs(
+        [FromServices] AppDbContext dbContext,
+        [FromQuery] string? action,
+        [FromQuery] string? entityName,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 15)
+    {
+        var query = from l in dbContext.SystemAuditLogs.AsNoTracking()
+                    join u in dbContext.Users.AsNoTracking() on l.UserId equals u.Id into uJoin
+                    from user in uJoin.DefaultIfEmpty()
+                    select new
+                    {
+                        Log = l,
+                        UserName = user != null ? user.FullName : "System"
+                    };
+
+        if (!string.IsNullOrWhiteSpace(action))
+        {
+            query = query.Where(x => x.Log.Action == action.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(entityName))
+        {
+            query = query.Where(x => x.Log.EntityName == entityName.Trim());
+        }
+
+        query = query.OrderByDescending(x => x.Log.CreatedAt);
+
+        var totalItems = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new SystemAuditLogDto
+            {
+                Id = x.Log.Id,
+                UserId = x.Log.UserId,
+                UserFullName = x.UserName,
+                Action = x.Log.Action,
+                EntityName = x.Log.EntityName,
+                EntityId = x.Log.EntityId,
+                Description = x.Log.Description,
+                CreatedAt = x.Log.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(ApiResponse<PagedResult<SystemAuditLogDto>>.Ok(new PagedResult<SystemAuditLogDto>(items, totalItems, page, pageSize)));
     }
 
     // USERS

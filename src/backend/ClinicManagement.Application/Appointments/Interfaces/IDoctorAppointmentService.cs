@@ -15,6 +15,8 @@ public interface IDoctorAppointmentService
     Task CompleteAppointmentAsync(long appointmentId, CompleteAppointmentDto request);
     Task MarkNoShowAsync(long appointmentId, NoShowAppointmentDto request);
     Task<RevisitRequestDto> CreateRevisitRequestAsync(long appointmentId, CreateRevisitRequestDto request);
+    Task<ClinicManagement.Application.Prescriptions.DTOs.PrescriptionDetailDto> CreatePrescriptionAsync(long appointmentId, ClinicManagement.Application.Prescriptions.DTOs.CreatePrescriptionDto request);
+    Task<ClinicManagement.Application.Prescriptions.DTOs.PrescriptionDetailDto?> GetPrescriptionByAppointmentIdAsync(long appointmentId);
 }
 
 public interface IRevisitService

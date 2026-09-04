@@ -63,4 +63,18 @@ public class DoctorAppointmentController : ControllerBase
         var result = await _doctorAppointmentService.CreateRevisitRequestAsync(id, request);
         return Ok(ApiResponse<ClinicManagement.Application.Appointments.DTOs.Revisit.RevisitRequestDto>.Ok(result, "Đã tạo đề xuất tái khám."));
     }
+
+    [HttpGet("{id}/prescription")]
+    public async Task<IActionResult> GetPrescription(long id)
+    {
+        var result = await _doctorAppointmentService.GetPrescriptionByAppointmentIdAsync(id);
+        return Ok(ApiResponse<ClinicManagement.Application.Prescriptions.DTOs.PrescriptionDetailDto?>.Ok(result));
+    }
+
+    [HttpPost("{id}/prescription")]
+    public async Task<IActionResult> CreatePrescription(long id, [FromBody] ClinicManagement.Application.Prescriptions.DTOs.CreatePrescriptionDto request)
+    {
+        var result = await _doctorAppointmentService.CreatePrescriptionAsync(id, request);
+        return Ok(ApiResponse<ClinicManagement.Application.Prescriptions.DTOs.PrescriptionDetailDto>.Ok(result, "Đã lưu đơn thuốc thành công."));
+    }
 }
