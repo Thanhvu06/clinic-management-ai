@@ -24,6 +24,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
     public static Guid Patient1Id { get; private set; }
     public static Guid Patient2Id { get; private set; }
     public static Guid ReceptionistId { get; private set; }
+    public static Guid PharmacistId { get; private set; }
     
     public static long DoctorEntityId { get; private set; }
     public static long Doctor2EntityId { get; private set; }
@@ -31,6 +32,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
     public static long Patient2EntityId { get; private set; }
     public static long SpecialtyEntityId { get; private set; }
     public static long SlotEntityId { get; private set; }
+    public static long MedicineEntityId { get; private set; }
 
     protected IntegrationTestBase(CustomWebApplicationFactory factory)
     {
@@ -67,6 +69,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         await roleManager.CreateAsync(new IdentityRole<Guid>("Doctor"));
         await roleManager.CreateAsync(new IdentityRole<Guid>("Patient"));
         await roleManager.CreateAsync(new IdentityRole<Guid>("Receptionist"));
+        await roleManager.CreateAsync(new IdentityRole<Guid>("Pharmacist"));
 
         // Users
         var admin = new ApplicationUser { UserName = "admin@test.com", Email = "admin@test.com", FullName = "Admin", PhoneNumber = "0123456781", IsActive = true };
@@ -86,6 +89,12 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         if (!res3.Succeeded) throw new Exception("Failed rec: " + res3.Errors.First().Description);
         await userManager.AddToRoleAsync(rec, "Receptionist");
         ReceptionistId = rec.Id;
+
+        var pharm = new ApplicationUser { UserName = "pharm@test.com", Email = "pharm@test.com", FullName = "Pharmacist", PhoneNumber = "0123456786", IsActive = true };
+        var resPharm = await userManager.CreateAsync(pharm, "Pass@123");
+        if (!resPharm.Succeeded) throw new Exception("Failed pharm: " + resPharm.Errors.First().Description);
+        await userManager.AddToRoleAsync(pharm, "Pharmacist");
+        PharmacistId = pharm.Id;
 
         var pat1 = new ApplicationUser { UserName = "pat1@test.com", Email = "pat1@test.com", FullName = "Patient 1", PhoneNumber = "0123456784", IsActive = true };
         var res4 = await userManager.CreateAsync(pat1, "Pass@123");
@@ -129,6 +138,17 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
 
         var slot = new AppointmentSlot { DoctorId = doctor.Id, SlotDate = date, StartTime = new TimeOnly(8,0,0), EndTime = new TimeOnly(8,30,0), IsBooked = false };
         db.AppointmentSlots.Add(slot);
+        
+        var medicine = new Medicine
+        {
+            Code = "PARA500",
+            Name = "Paracetamol 500mg",
+            Unit = "Viên",
+            StockQuantity = 50,
+            ReorderLevel = 10,
+            IsActive = true
+        };
+        db.Medicines.Add(medicine);
         await db.SaveChangesAsync();
 
         DoctorEntityId = doctor.Id;
@@ -137,6 +157,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         Patient2EntityId = patient2.Id;
         SpecialtyEntityId = spec.Id;
         SlotEntityId = slot.Id;
+        MedicineEntityId = medicine.Id;
         
         _seeded = true;
         }
@@ -157,5 +178,39 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         }
         string token = dataProp.GetProperty("accessToken").GetString()!;
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    }
+
+    protected async Task<AppointmentSlot> CreateAvailableSlotAsync(long doctorId, DateOnly date, TimeOnly startTime, TimeOnly endTime)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        
+        var schedule = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+            db.DoctorWorkSchedules, s => s.DoctorId == doctorId && s.WorkDate == date);
+        if (schedule == null)
+        {
+            schedule = new DoctorWorkSchedule
+            {
+                DoctorId = doctorId,
+                WorkDate = date,
+                StartTime = new TimeOnly(7, 0, 0),
+                EndTime = new TimeOnly(20, 0, 0),
+                IsActive = true
+            };
+            db.DoctorWorkSchedules.Add(schedule);
+            await db.SaveChangesAsync();
+        }
+
+        var slot = new AppointmentSlot
+        {
+            DoctorId = doctorId,
+            SlotDate = date,
+            StartTime = startTime,
+            EndTime = endTime,
+            IsBooked = false
+        };
+        db.AppointmentSlots.Add(slot);
+        await db.SaveChangesAsync();
+        return slot;
     }
 }
