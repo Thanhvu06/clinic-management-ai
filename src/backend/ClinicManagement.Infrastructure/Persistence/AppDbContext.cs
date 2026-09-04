@@ -34,6 +34,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<PrescriptionItem> PrescriptionItems { get; set; } = null!;
     public DbSet<MedicineStockTransaction> MedicineStockTransactions { get; set; } = null!;
 
+    // Health Packages
+    public DbSet<HealthPackage> HealthPackages { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

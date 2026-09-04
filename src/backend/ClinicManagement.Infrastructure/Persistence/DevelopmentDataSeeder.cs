@@ -281,6 +281,164 @@ public static class DevelopmentDataSeeder
             logger.LogInformation("Requests and Leaves seeded.");
         }
 
+        // 7. Health Care Packages (ClinicCare Branded)
+        if (!await db.HealthPackages.AnyAsync())
+        {
+            db.HealthPackages.AddRange(
+                new HealthPackage
+                {
+                    Code = "PKG01",
+                    Name = "Gói Khám Sức Khỏe Tổng Quát Tiêu Chuẩn",
+                    TargetAudience = "Mọi độ tuổi từ 18 trở lên",
+                    Description = "Kiểm tra toàn diện các chỉ số huyết học, chức năng gan, thận, đường huyết, mỡ máu, X-quang phổi và siêu âm bụng tổng quát.",
+                    Price = 1250000m,
+                    IncludedServicesJson = "[\"Khám nội tổng quát\",\"Công thức máu 18 chỉ số\",\"Đo đường huyết Glucose\",\"Men gan AST/ALT\",\"Chức năng thận Ure/Creatinine\",\"X-quang tim phổi thẳng\",\"Siêu âm bụng tổng quát\"]",
+                    IsActive = true
+                },
+                new HealthPackage
+                {
+                    Code = "PKG02",
+                    Name = "Gói Tầm Soát Tim Mạch Toàn Diện",
+                    TargetAudience = "Người trưởng thành, trung niên và có tiền sử tim mạch",
+                    Description = "Tầm soát chuyên sâu bệnh lý mạch vành, huyết áp, rối loạn nhịp tim và xơ vữa động mạch.",
+                    Price = 2800000m,
+                    IncludedServicesJson = "[\"Khám chuyên khoa Tim mạch\",\"Điện tâm đồ ECG 12 chuyển đạo\",\"Siêu âm tim Doppler màu\",\"Bộ mỡ máu toàn phần (Cholesterol, Triglyceride, HDL, LDL)\",\"Đo chỉ số xơ vữa ABI\",\"Tư vấn chế độ dinh dưỡng tim mạch\"]",
+                    IsActive = true
+                },
+                new HealthPackage
+                {
+                    Code = "PKG03",
+                    Name = "Gói Chăm Sóc Sức Khỏe Nhi Khoa Toàn Diện",
+                    TargetAudience = "Trẻ em từ 0 - 15 tuổi",
+                    Description = "Đánh giá phát triển thể chất, dinh dưỡng, tầm soát thiếu máu, vi chất và kiểm tra tai mũi họng tổng quát.",
+                    Price = 950000m,
+                    IncludedServicesJson = "[\"Khám chuyên khoa Nhi\",\"Đánh giá chỉ số phát triển chiều cao - cân nặng\",\"Tổng phân tích tế bào máu\",\"Kiểm tra vi chất kẽm, canxi, sắt\",\"Nội soi tai mũi họng\",\"Tư vấn lịch tiêm chủng\"]",
+                    IsActive = true
+                },
+                new HealthPackage
+                {
+                    Code = "PKG04",
+                    Name = "Gói Tầm Soát Sức Khỏe Phụ Nữ Chuyên Sâu",
+                    TargetAudience = "Nữ giới từ 18 tuổi trở lên",
+                    Description = "Tầm soát bệnh lý phụ khoa, ung thư cổ tử cung, tầm soát tuyến vú và các rối loạn nội tiết.",
+                    Price = 1950000m,
+                    IncludedServicesJson = "[\"Khám Sản phụ khoa chuyên sâu\",\"Soi tươi dịch âm đạo\",\"Siêu âm đầu dò tử cung buồng trứng\",\"Siêu âm tuyến vú 2 bên\",\"Xét nghiệm Pap smear tầm soát sớm\",\"Định lượng hormon nội tiết\"]",
+                    IsActive = true
+                },
+                new HealthPackage
+                {
+                    Code = "PKG05",
+                    Name = "Gói Khám Cơ Xương Khớp & Loãng Xương",
+                    TargetAudience = "Người cao tuổi, nhân viên văn phòng, người vận động thể thao",
+                    Description = "Tầm soát thoái hóa khớp, thoát vị đĩa đệm, viêm khớp dạng thấp và đo mật độ xương toàn thân.",
+                    Price = 1650000m,
+                    IncludedServicesJson = "[\"Khám chuyên khoa Cơ xương khớp\",\"Đo mật độ xương DEXA\",\"X-quang khớp gối / cột sống thắt lưng\",\"Xét nghiệm Axit Uric (gút)\",\"Định lượng Canxi và Vitamin D3\"]",
+                    IsActive = true
+                },
+                new HealthPackage
+                {
+                    Code = "PKG06",
+                    Name = "Gói Tầm Soát Gan Mật & Rối Loạn Chuyển Hóa",
+                    TargetAudience = "Người có nguy cơ gan nhiễm mỡ, viêm gan, đái tháo đường",
+                    Description = "Đánh giá chức năng gan mật, tầm soát virus viêm gan B/C, men gan và các chỉ số rối loạn chuyển hóa.",
+                    Price = 1750000m,
+                    IncludedServicesJson = "[\"Khám chuyên khoa Nội\",\"Xét nghiệm HBsAg, Anti-HCV\",\"Men gan toàn diện AST, ALT, GGT\",\"Siêu âm Doppler gan mật tụy lách\",\"Chỉ số đường huyết HbA1c\"]",
+                    IsActive = true
+                }
+            );
+            await db.SaveChangesAsync();
+            logger.LogInformation("HealthPackages seeded.");
+        }
+
+        // 8. Medicines & Pharmacy Seed
+        if (!await db.Medicines.AnyAsync())
+        {
+            var med1 = new Medicine { Code = "MED01", Name = "Paracetamol 500mg", Unit = "Viên", StockQuantity = 500, ReorderLevel = 100, IsActive = true };
+            var med2 = new Medicine { Code = "MED02", Name = "Amoxicillin 500mg", Unit = "Viên", StockQuantity = 300, ReorderLevel = 50, IsActive = true };
+            var med3 = new Medicine { Code = "MED03", Name = "Ibuprofen 400mg", Unit = "Viên", StockQuantity = 250, ReorderLevel = 50, IsActive = true };
+            var med4 = new Medicine { Code = "MED04", Name = "Omeprazole 20mg", Unit = "Viên", StockQuantity = 400, ReorderLevel = 80, IsActive = true };
+            var med5 = new Medicine { Code = "MED05", Name = "Cefixime 200mg", Unit = "Viên", StockQuantity = 150, ReorderLevel = 40, IsActive = true };
+            var med6 = new Medicine { Code = "MED06", Name = "Loratadine 10mg", Unit = "Viên", StockQuantity = 200, ReorderLevel = 50, IsActive = true };
+            var med7 = new Medicine { Code = "MED07", Name = "Metformin 500mg", Unit = "Viên", StockQuantity = 350, ReorderLevel = 60, IsActive = true };
+            var med8 = new Medicine { Code = "MED08", Name = "Amlodipine 5mg", Unit = "Viên", StockQuantity = 300, ReorderLevel = 50, IsActive = true };
+            var med9 = new Medicine { Code = "MED09", Name = "Vitamin C 500mg", Unit = "Viên", StockQuantity = 600, ReorderLevel = 100, IsActive = true };
+            var med10 = new Medicine { Code = "MED10", Name = "Salbutamol 2mg", Unit = "Viên", StockQuantity = 25, ReorderLevel = 50, IsActive = true }; // Low stock alert!
+            var med11 = new Medicine { Code = "MED11", Name = "Berberin 100mg", Unit = "Viên", StockQuantity = 400, ReorderLevel = 80, IsActive = true };
+            var med12 = new Medicine { Code = "MED12", Name = "Phosphalugel 20g", Unit = "Gói", StockQuantity = 180, ReorderLevel = 40, IsActive = true };
+
+            db.Medicines.AddRange(med1, med2, med3, med4, med5, med6, med7, med8, med9, med10, med11, med12);
+            await db.SaveChangesAsync();
+
+            var pharmacistUser = await userManager.FindByEmailAsync("pharmacist@cliniccare.local");
+            var pharmacistId = pharmacistUser?.Id ?? Guid.NewGuid();
+
+            var allMeds = await db.Medicines.ToListAsync();
+            foreach (var m in allMeds)
+            {
+                db.MedicineStockTransactions.Add(new MedicineStockTransaction
+                {
+                    MedicineId = m.Id,
+                    Type = MedicineStockTransactionType.Initial,
+                    QuantityChange = m.StockQuantity,
+                    BalanceAfter = m.StockQuantity,
+                    Reason = "Nhập kho ban đầu hệ thống",
+                    ActorUserId = pharmacistId,
+                    CreatedAt = DateTime.UtcNow.AddDays(-10)
+                });
+            }
+            await db.SaveChangesAsync();
+            logger.LogInformation("Medicines and initial inventory transactions seeded.");
+
+            // Prescriptions for completed appointments
+            var completedAppts = await db.Appointments
+                .Where(a => a.Status == AppointmentStatus.Completed)
+                .Take(5)
+                .ToListAsync();
+
+            if (completedAppts.Count >= 2)
+            {
+                var pres1 = new Prescription
+                {
+                    AppointmentId = completedAppts[0].Id,
+                    PatientId = completedAppts[0].PatientId,
+                    DoctorId = completedAppts[0].DoctorId,
+                    Status = PrescriptionStatus.Issued,
+                    Notes = "Uống thuốc sau ăn, uống nhiều nước ấm. Nghỉ ngơi hợp lý.",
+                    CreatedAt = DateTime.UtcNow.AddHours(-2)
+                };
+                db.Prescriptions.Add(pres1);
+                await db.SaveChangesAsync();
+
+                db.PrescriptionItems.AddRange(
+                    new PrescriptionItem { PrescriptionId = pres1.Id, MedicineId = med1.Id, Quantity = 10, Dosage = "1 viên / lần", Frequency = "2 lần / ngày sau ăn", DurationDays = 5, Instructions = "Uống khi sốt hoặc đau đầu" },
+                    new PrescriptionItem { PrescriptionId = pres1.Id, MedicineId = med2.Id, Quantity = 14, Dosage = "1 viên / lần", Frequency = "2 lần / ngày (sáng - tối)", DurationDays = 7, Instructions = "Uống đều đặn đủ liệu trình kháng sinh" },
+                    new PrescriptionItem { PrescriptionId = pres1.Id, MedicineId = med9.Id, Quantity = 10, Dosage = "1 viên / lần", Frequency = "1 lần / ngày buổi sáng", DurationDays = 10, Instructions = "Tăng cường đề kháng" }
+                );
+
+                var pres2 = new Prescription
+                {
+                    AppointmentId = completedAppts[1].Id,
+                    PatientId = completedAppts[1].PatientId,
+                    DoctorId = completedAppts[1].DoctorId,
+                    Status = PrescriptionStatus.Dispensed,
+                    Notes = "Kiêng đồ cay nóng, bia rượu và chất kích thích.",
+                    CreatedAt = DateTime.UtcNow.AddDays(-1),
+                    DispensedAt = DateTime.UtcNow.AddDays(-1).AddHours(1),
+                    DispensedByUserId = pharmacistId
+                };
+                db.Prescriptions.Add(pres2);
+                await db.SaveChangesAsync();
+
+                db.PrescriptionItems.AddRange(
+                    new PrescriptionItem { PrescriptionId = pres2.Id, MedicineId = med4.Id, Quantity = 14, Dosage = "1 viên / lần", Frequency = "1 lần / ngày trước ăn sáng 30 phút", DurationDays = 14, Instructions = "Uống trước bữa ăn" },
+                    new PrescriptionItem { PrescriptionId = pres2.Id, MedicineId = med12.Id, Quantity = 15, Dosage = "1 gói / lần", Frequency = "3 lần / ngày khi đau hoặc sau ăn 1h", DurationDays = 5, Instructions = "Lắc kỹ trước khi dùng" }
+                );
+
+                await db.SaveChangesAsync();
+                logger.LogInformation("Sample Prescriptions seeded.");
+            }
+        }
+
         logger.LogInformation("Development Data Seeding completed.");
     }
 
