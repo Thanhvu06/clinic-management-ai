@@ -10,12 +10,14 @@ public class Prescription
     public long PatientId { get; set; }
     public long DoctorId { get; set; }
     
-    public PrescriptionStatus Status { get; set; } = PrescriptionStatus.Issued;
+    public PrescriptionStatus Status { get; set; } = PrescriptionStatus.Draft;
     public string? Notes { get; set; }
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? DispensedAt { get; set; }
     public Guid? DispensedByUserId { get; set; }
+
+    public byte[]? RowVersion { get; set; }
 
     [ForeignKey("AppointmentId")]
     public Appointment? Appointment { get; set; }
