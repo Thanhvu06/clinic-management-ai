@@ -1,45 +1,327 @@
-/* BookAppointment layout */
-.container { max-width: 1000px; margin: 0 auto; }
-.pageTitle { font-size: 1.75rem; font-weight: 700; color: var(--c-navy); margin-bottom: 24px; text-align: center; }
+/* BookAppointment 2-Column Responsive Layout */
+
+.pageWrapper {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 24px 80px 24px;
+    width: 100%;
+}
+
+.pageHeader {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.pageTitle {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--c-navy);
+    margin: 0 0 8px 0;
+}
+
+.pageSubtitle {
+    color: var(--c-text-muted);
+    font-size: 1rem;
+    margin: 0;
+}
 
 /* Stepper */
-.stepperContainer { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; max-width: 800px; margin-left: auto; margin-right: auto; }
-.stepItem { display: flex; flex-direction: column; align-items: center; position: relative; flex: 1; }
-.stepCircle { width: 36px; height: 36px; border-radius: 50%; background-color: var(--c-border); color: var(--c-text-light); display: flex; align-items: center; justify-content: center; font-weight: 600; margin-bottom: 8px; z-index: 2; transition: all 0.3s; }
-.stepLabel { font-size: 0.85rem; color: var(--c-text-light); font-weight: 500; transition: all 0.3s; white-space: nowrap; }
-.stepLine { position: absolute; top: 18px; left: 50%; right: -50%; height: 2px; background-color: var(--c-border); z-index: 1; transition: all 0.3s; }
-.stepItemActive .stepCircle { background-color: var(--c-primary); color: white; box-shadow: 0 0 0 4px var(--c-primary-light); }
-.stepItemActive .stepLabel { color: var(--c-primary); font-weight: 600; }
-.stepItemActive .stepLine { background-color: var(--c-primary); }
+.stepperContainer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 36px;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
 
-.card { background: white; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); border: 1px solid var(--c-border); overflow: hidden; }
-.stepContent { padding: 32px; }
-.stepTitle { font-size: 1.25rem; font-weight: 600; color: var(--c-navy); margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--c-border); }
+.stepItem {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    flex: 1;
+}
 
-/* Selection Grid (for specs and doctors) */
-.selectionGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
-.selectionCard { border: 2px solid var(--c-border); border-radius: var(--radius-md); padding: 24px 16px; text-align: center; cursor: pointer; transition: all 0.2s; background: white; }
-.selectionCard:hover { border-color: var(--c-primary-light); background-color: var(--c-bg); }
-.selectionCardActive { border-color: var(--c-primary); background-color: var(--c-primary-light); }
-.cardIcon { color: var(--c-primary); margin-bottom: 12px; }
-.selectionCard h4 { margin: 0 0 8px 0; font-size: 1.05rem; color: var(--c-navy); }
-.selectionCard p { margin: 0; font-size: 0.85rem; color: var(--c-text-light); line-height: 1.4; }
+.stepCircle {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background-color: #f1f5f9;
+    border: 2px solid var(--c-border);
+    color: var(--c-text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 8px;
+    z-index: 2;
+    transition: all 0.25s;
+}
 
-.slotGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; }
-.slotBtn { padding: 10px; border-radius: var(--radius-md); font-size: 0.95rem; font-weight: 500; border: 1px solid var(--c-border); background: white; color: var(--c-text); cursor: pointer; transition: all 0.2s; }
-.slotBtn:hover { border-color: var(--c-primary); color: var(--c-primary); background-color: var(--c-bg); }
-.slotBtnActive { border-color: var(--c-primary); background: var(--c-primary); color: white; }
+.stepLabel {
+    font-size: 0.85rem;
+    color: var(--c-text-muted);
+    font-weight: 500;
+    transition: all 0.25s;
+    white-space: nowrap;
+}
 
-.stepFooter { display: flex; justify-content: flex-end; gap: 16px; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--c-border); }
+.stepLine {
+    position: absolute;
+    top: 19px;
+    left: 50%;
+    right: -50%;
+    height: 2px;
+    background-color: var(--c-border);
+    z-index: 1;
+    transition: all 0.25s;
+}
 
-.confirmBox { background-color: var(--c-bg); border-radius: var(--radius-md); padding: 24px; display: flex; flex-direction: column; gap: 20px; }
-.confirmRow { display: flex; gap: 16px; align-items: flex-start; }
-.confirmIcon { color: var(--c-primary); flex-shrink: 0; margin-top: 2px; }
-.confirmLabel { font-size: 0.9rem; color: var(--c-text-light); margin-bottom: 4px; }
-.confirmValue { font-size: 1.05rem; font-weight: 500; color: var(--c-navy); line-height: 1.4; }
+.stepItemActive .stepCircle {
+    background-color: var(--c-primary);
+    border-color: var(--c-primary);
+    color: white;
+    box-shadow: 0 0 0 4px rgba(14, 116, 144, 0.15);
+}
+
+.stepItemActive .stepLabel {
+    color: var(--c-navy);
+    font-weight: 700;
+}
+
+.stepItemActive .stepLine {
+    background-color: var(--c-primary);
+}
+
+/* 2-Column Booking Layout */
+.bookingLayout {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 32px;
+    align-items: start;
+}
+
+/* Main Step Card */
+.mainCard {
+    background: #ffffff;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--c-border);
+    padding: 32px;
+}
+
+.stepTitle {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--c-navy);
+    margin: 0 0 8px 0;
+}
+
+.stepSubtitle {
+    font-size: 0.9rem;
+    color: var(--c-text-muted);
+    margin: 0 0 24px 0;
+}
+
+/* Selection Grids */
+.selectionGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.selectionCard {
+    border: 1.5px solid var(--c-border);
+    border-radius: var(--radius-md);
+    padding: 20px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.selectionCard:hover {
+    border-color: var(--c-primary);
+    background-color: #f8fafc;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+.selectionCardActive {
+    border-color: var(--c-primary);
+    background-color: rgba(14, 116, 144, 0.05);
+    box-shadow: 0 0 0 2px rgba(14, 116, 144, 0.2);
+}
+
+.cardIcon {
+    color: var(--c-primary);
+    margin-bottom: 12px;
+}
+
+.selectionCard h4 {
+    margin: 0 0 6px 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--c-navy);
+}
+
+.selectionCard p {
+    margin: 0;
+    font-size: 0.825rem;
+    color: var(--c-text-muted);
+    line-height: 1.4;
+}
+
+/* Slot grid */
+.slotGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.slotBtn {
+    min-height: 44px;
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    font-size: 0.95rem;
+    font-weight: 600;
+    border: 1px solid var(--c-border);
+    background: #ffffff;
+    color: var(--c-text);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.slotBtn:hover {
+    border-color: var(--c-primary);
+    color: var(--c-primary);
+    background-color: #f0fdf4;
+}
+
+.slotBtnActive {
+    border-color: var(--c-primary) !important;
+    background: var(--c-primary) !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(14, 116, 144, 0.25);
+}
+
+/* Step Footer Navigation */
+.stepFooter {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--c-border-light);
+}
+
+/* Sticky Summary Card (Right Column) */
+.summaryCard {
+    background: #ffffff;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--c-border);
+    padding: 24px;
+    position: sticky;
+    top: 96px;
+}
+
+.summaryTitle {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--c-navy);
+    margin: 0 0 16px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--c-border-light);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.summaryList {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.summaryItem {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.summaryItemIcon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    background: #f1f5f9;
+    color: var(--c-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.summaryItemLabel {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--c-text-muted);
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.summaryItemValue {
+    font-size: 0.925rem;
+    font-weight: 600;
+    color: var(--c-navy);
+}
+
+.summaryItemEmpty {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .bookingLayout {
+        grid-template-columns: 1fr;
+    }
+    .summaryCard {
+        position: static;
+        order: -1;
+    }
+}
 
 @media (max-width: 640px) {
-  .stepLabel { display: none; }
-  .stepperContainer { margin-bottom: 24px; }
-  .selectionGrid { grid-template-columns: 1fr; }
+    .pageWrapper {
+        padding: 20px 16px 60px 16px;
+    }
+    .mainCard {
+        padding: 20px 16px;
+    }
+    .stepLabel {
+        display: none;
+    }
+    .stepperContainer {
+        margin-bottom: 24px;
+    }
+    .selectionGrid {
+        grid-template-columns: 1fr;
+    }
 }
