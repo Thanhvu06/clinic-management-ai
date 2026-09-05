@@ -1,40 +1,66 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
-import { ShieldPlus, User, Mail, Phone, Lock } from 'lucide-react';
+import { User, Mail, Phone, ArrowRight } from 'lucide-react';
 import { useDialog } from '../contexts/DialogContext';
+import { AuthShell, FormField, TextInput, PasswordInput, Button, FormError } from '../components/forms';
 
 export const Register: React.FC = () => {
     const { showAlert, showToast } = useDialog();
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    // Parse returnUrl if user was trying to access a protected page
+    const searchParams = new URLSearchParams(location.search);
+    const returnUrl = searchParams.get('returnUrl');
+
     const [formData, setFormData] = useState({
         fullName: '',
         email: '',
         phoneNumber: '',
         password: ''
     });
+
     const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
+    const [generalError, setGeneralError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-    
-    const navigate = useNavigate();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-        if (fieldErrors[e.target.name]) {
-            setFieldErrors({ ...fieldErrors, [e.target.name]: '' });
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+        if (fieldErrors[name]) {
+            setFieldErrors(prev => ({ ...prev, [name]: '' }));
         }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setFieldErrors({});
+        setGeneralError(null);
+
+        // Basic client validation
+        const errors: { [key: string]: string } = {};
+        if (!formData.fullName.trim()) errors.fullName = 'Vui lòng nhập họ và tên.';
+        if (!formData.email.trim()) errors.email = 'Vui lòng nhập địa chỉ email.';
+        if (!formData.phoneNumber.trim()) errors.phoneNumber = 'Vui lòng nhập số điện thoại.';
+        if (!formData.password || formData.password.length < 8) {
+            errors.password = 'Mật khẩu phải có ít nhất 8 ký tự.';
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setFieldErrors(errors);
+            return;
+        }
+
         setLoading(true);
 
         try {
             const res = await axiosClient.post<any, any>('/auth/register', formData);
             if (res.success) {
                 showToast('Tài khoản đã được tạo thành công!', 'success');
-                showAlert('Tài khoản đã được tạo thành công. Vui lòng đăng nhập để sử dụng dịch vụ.', 'Đăng ký thành công', 'success');
-                navigate('/login');
+                showAlert('Tài khoản đã được tạo thành công. Vui lòng đăng nhập để bắt đầu sử dụng dịch vụ.', 'Đăng ký thành công', 'success');
+                const targetLogin = returnUrl ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : '/login';
+                navigate(targetLogin);
             }
         } catch (err: any) {
             if (err?.errors) {
@@ -45,120 +71,111 @@ export const Register: React.FC = () => {
                 }
                 setFieldErrors(newFieldErrors);
             } else {
-                showAlert(err?.message || err?.title || 'Đăng ký thất bại. Vui lòng thử lại.', 'Đã xảy ra lỗi', 'error');
+                setGeneralError(err?.response?.data?.message || err?.message || 'Đăng ký thất bại. Vui lòng kiểm tra lại thông tin.');
             }
         } finally {
             setLoading(false);
         }
     };
 
+    const loginUrl = returnUrl ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : '/login';
+
     return (
-        <div style={{ display: 'flex', width: '100%', minHeight: '80vh', backgroundColor: 'var(--c-bg)', flexWrap: 'wrap-reverse' }}>
-            <div style={{ flex: '1 1 500px', display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, var(--c-secondary-light) 0%, white 100%)', padding: '40px', justifyContent: 'center', alignItems: 'center' }}>
-                <img src="https://images.unsplash.com/photo-1551076805-e18690c5e561?auto=format&fit=crop&w=800&q=80" alt="Register Visual" style={{ maxWidth: '80%', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-xl)' }} />
-                <div style={{ marginTop: '40px', textAlign: 'center', maxWidth: '80%' }}>
-                    <h3 style={{ color: 'var(--c-navy)', fontSize: '2rem', fontWeight: 800, marginBottom: '16px' }}>Đồng hành cùng sức khỏe</h3>
-                    <p style={{ color: 'var(--c-text)', fontSize: '1.1rem', lineHeight: 1.6 }}>Tạo tài khoản để dễ dàng quản lý sức khỏe của bạn và người thân trong gia đình một cách toàn diện.</p>
+        <AuthShell
+            title="Tạo tài khoản mới"
+            subtitle="Đăng ký tài khoản để khám chữa bệnh và quản lý hồ sơ gia đình thuận tiện"
+            heroTitle="Đồng hành cùng sức khỏe gia đình bạn"
+            heroDescription="Hệ thống quản lý phòng khám thông minh ClinicCare giúp bạn tiếp cận dịch vụ y tế chuẩn mực, minh bạch chi phí và an tâm điều trị."
+            heroImageUrl="https://images.unsplash.com/photo-1551076805-e18690c5e561?auto=format&fit=crop&w=800&q=80"
+            footerLink={
+                <span>
+                    Đã có tài khoản?{' '}
+                    <Link to={loginUrl} style={{ color: 'var(--c-primary)', fontWeight: 600 }}>
+                        Đăng nhập ngay &rarr;
+                    </Link>
+                </span>
+            }
+        >
+            {generalError && (
+                <div style={{ marginBottom: '20px' }}>
+                    <FormError message={generalError} />
                 </div>
-            </div>
-            
-            <div style={{ flex: '1 1 500px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 20px' }}>
-                <div className="card" style={{ width: '100%', maxWidth: '480px', borderRadius: 'var(--radius-xl)', padding: '40px 32px', border: 'none', boxShadow: 'var(--shadow-lg)' }}>
-                    <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'var(--c-secondary-light)', color: 'var(--c-secondary)', marginBottom: '16px' }}>
-                            <ShieldPlus size={36} />
-                        </div>
-                        <h2 style={{ fontSize: '1.75rem', margin: 0, color: 'var(--c-navy)', fontWeight: 700 }}>Tạo tài khoản mới</h2>
-                        <p style={{ color: 'var(--c-text-light)', marginTop: '8px', fontSize: '0.95rem' }}>Bắt đầu chăm sóc sức khỏe ngay hôm nay</p>
-                    </div>
-                    
-                    <form onSubmit={handleSubmit}>
-                        <div className="form-group" style={{ marginBottom: '20px' }}>
-                            <label className="form-label" style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>Họ và tên</label>
-                            <div style={{ position: 'relative' }}>
-                                <div style={{ position: 'absolute', top: '50%', left: '14px', transform: 'translateY(-50%)', color: 'var(--c-text-light)' }}>
-                                    <User size={20} />
-                                </div>
-                                <input 
-                                    type="text" 
-                                    className={`form-input ${fieldErrors.fullName ? 'is-invalid' : ''}`} 
-                                    name="fullName" 
-                                    value={formData.fullName} 
-                                    onChange={handleChange} 
-                                    required 
-                                    placeholder="Nguyễn Văn A"
-                                    style={{ paddingLeft: '44px' }}
-                                />
-                            </div>
-                            {fieldErrors.fullName && <div style={{ color: 'var(--c-danger)', fontSize: '0.85rem', marginTop: '6px', fontWeight: 500 }}>{fieldErrors.fullName}</div>}
-                        </div>
-                        <div className="form-group" style={{ marginBottom: '20px' }}>
-                            <label className="form-label" style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>Email</label>
-                            <div style={{ position: 'relative' }}>
-                                <div style={{ position: 'absolute', top: '50%', left: '14px', transform: 'translateY(-50%)', color: 'var(--c-text-light)' }}>
-                                    <Mail size={20} />
-                                </div>
-                                <input 
-                                    type="email" 
-                                    className={`form-input ${fieldErrors.email ? 'is-invalid' : ''}`} 
-                                    name="email" 
-                                    value={formData.email} 
-                                    onChange={handleChange} 
-                                    required 
-                                    placeholder="email@example.com"
-                                    style={{ paddingLeft: '44px' }}
-                                />
-                            </div>
-                            {fieldErrors.email && <div style={{ color: 'var(--c-danger)', fontSize: '0.85rem', marginTop: '6px', fontWeight: 500 }}>{fieldErrors.email}</div>}
-                        </div>
-                        <div className="form-group" style={{ marginBottom: '20px' }}>
-                            <label className="form-label" style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>Số điện thoại</label>
-                            <div style={{ position: 'relative' }}>
-                                <div style={{ position: 'absolute', top: '50%', left: '14px', transform: 'translateY(-50%)', color: 'var(--c-text-light)' }}>
-                                    <Phone size={20} />
-                                </div>
-                                <input 
-                                    type="text" 
-                                    className={`form-input ${fieldErrors.phoneNumber ? 'is-invalid' : ''}`} 
-                                    name="phoneNumber" 
-                                    value={formData.phoneNumber} 
-                                    onChange={handleChange} 
-                                    required 
-                                    placeholder="09xxxxxxxxx"
-                                    style={{ paddingLeft: '44px' }}
-                                />
-                            </div>
-                            {fieldErrors.phoneNumber && <div style={{ color: 'var(--c-danger)', fontSize: '0.85rem', marginTop: '6px', fontWeight: 500 }}>{fieldErrors.phoneNumber}</div>}
-                        </div>
-                        <div className="form-group" style={{ marginBottom: '28px' }}>
-                            <label className="form-label" style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>Mật khẩu</label>
-                            <div style={{ position: 'relative' }}>
-                                <div style={{ position: 'absolute', top: '50%', left: '14px', transform: 'translateY(-50%)', color: 'var(--c-text-light)' }}>
-                                    <Lock size={20} />
-                                </div>
-                                <input 
-                                    type="password" 
-                                    className={`form-input ${fieldErrors.password ? 'is-invalid' : ''}`} 
-                                    name="password" 
-                                    value={formData.password} 
-                                    onChange={handleChange} 
-                                    required 
-                                    placeholder="Ít nhất 8 ký tự"
-                                    style={{ paddingLeft: '44px' }}
-                                />
-                            </div>
-                            <div style={{ fontSize: '0.85rem', color: 'var(--c-text-light)', marginTop: '8px' }}>Mật khẩu yêu cầu ít nhất 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt.</div>
-                            {fieldErrors.password && <div style={{ color: 'var(--c-danger)', fontSize: '0.85rem', marginTop: '6px', fontWeight: 500 }}>{fieldErrors.password}</div>}
-                        </div>
-                        <button type="submit" className="btn-secondary" disabled={loading} style={{ width: '100%', padding: '14px', fontSize: '1.05rem', borderRadius: 'var(--radius-md)', fontWeight: 600, display: 'flex', justifyContent: 'center' }}>
-                            {loading ? 'Đang xử lý...' : 'Đăng ký tài khoản'}
-                        </button>
-                    </form>
-                    <div style={{ marginTop: '28px', textAlign: 'center', fontSize: '0.95rem', color: 'var(--c-text-light)' }}>
-                        Đã có tài khoản? <Link to="/login" style={{ color: 'var(--c-primary)', fontWeight: 600, marginLeft: '4px' }}>Đăng nhập ngay</Link>
-                    </div>
+            )}
+
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                <FormField id="fullName" label="Họ và tên" required error={fieldErrors.fullName}>
+                    <TextInput
+                        id="fullName"
+                        name="fullName"
+                        type="text"
+                        placeholder="Nguyễn Văn A"
+                        value={formData.fullName}
+                        onChange={handleChange}
+                        required
+                        hasError={!!fieldErrors.fullName}
+                        icon={<User size={18} />}
+                    />
+                </FormField>
+
+                <FormField id="email" label="Địa chỉ Email" required error={fieldErrors.email}>
+                    <TextInput
+                        id="email"
+                        name="email"
+                        type="email"
+                        placeholder="name@example.com"
+                        value={formData.email}
+                        onChange={handleChange}
+                        required
+                        hasError={!!fieldErrors.email}
+                        icon={<Mail size={18} />}
+                    />
+                </FormField>
+
+                <FormField id="phoneNumber" label="Số điện thoại" required error={fieldErrors.phoneNumber}>
+                    <TextInput
+                        id="phoneNumber"
+                        name="phoneNumber"
+                        type="tel"
+                        placeholder="0901234567"
+                        value={formData.phoneNumber}
+                        onChange={handleChange}
+                        required
+                        hasError={!!fieldErrors.phoneNumber}
+                        icon={<Phone size={18} />}
+                    />
+                </FormField>
+
+                <FormField 
+                    id="password" 
+                    label="Mật khẩu" 
+                    required 
+                    error={fieldErrors.password}
+                    helpText="Mật khẩu tối thiểu 8 ký tự, nên bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt."
+                >
+                    <PasswordInput
+                        id="password"
+                        name="password"
+                        placeholder="Ít nhất 8 ký tự"
+                        value={formData.password}
+                        onChange={handleChange}
+                        required
+                        hasError={!!fieldErrors.password}
+                    />
+                </FormField>
+
+                <div style={{ marginTop: '10px' }}>
+                    <Button
+                        type="submit"
+                        variant="secondary"
+                        size="lg"
+                        fullWidth
+                        loading={loading}
+                        disabled={loading}
+                    >
+                        Đăng ký tài khoản <ArrowRight size={18} />
+                    </Button>
                 </div>
-            </div>
-        </div>
+            </form>
+        </AuthShell>
     );
 };
