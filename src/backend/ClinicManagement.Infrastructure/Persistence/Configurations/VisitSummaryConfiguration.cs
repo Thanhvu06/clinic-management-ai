@@ -23,7 +23,15 @@ public class VisitSummaryConfiguration : IEntityTypeConfiguration<VisitSummary>
             .HasForeignKey(vs => vs.DoctorId)
             .OnDelete(DeleteBehavior.NoAction);
 
-        builder.Property(vs => vs.Summary)
-            .IsRequired();
+        builder.Property(vs => vs.ChiefComplaint).HasMaxLength(1000);
+        builder.Property(vs => vs.ClinicalFindings).HasMaxLength(4000);
+        builder.Property(vs => vs.Diagnosis).HasMaxLength(1000);
+        builder.Property(vs => vs.DiagnosisCode).HasMaxLength(50);
+        builder.Property(vs => vs.TreatmentPlan).HasMaxLength(4000);
+        builder.Property(vs => vs.Summary).IsRequired().HasMaxLength(4000);
+        builder.Property(vs => vs.FollowUpInstruction).HasMaxLength(1000);
+
+        builder.Property(vs => vs.CreatedAtUtc).IsRequired();
+        builder.Property(vs => vs.RowVersion).IsRowVersion();
     }
 }

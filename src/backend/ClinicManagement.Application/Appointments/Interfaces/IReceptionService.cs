@@ -12,5 +12,6 @@ public interface IReceptionService
     Task<ReceptionAppointmentDto> GetAppointmentByIdAsync(long appointmentId);
     Task<List<AppointmentHistoryDto>> GetAppointmentHistoryAsync(long appointmentId);
     Task ConfirmAppointmentAsync(long appointmentId);
+    Task CheckInAppointmentAsync(long appointmentId);
     Task<ReceptionStatsDto> GetStatsAsync();
 }

@@ -60,6 +60,13 @@ public class ReceptionController : ControllerBase
         return Ok(ApiResponse.Ok("Xác nhận lịch khám thành công."));
     }
 
+    [HttpPost("appointments/{id}/check-in")]
+    public async Task<IActionResult> CheckInAppointment(long id)
+    {
+        await _receptionService.CheckInAppointmentAsync(id);
+        return Ok(ApiResponse.Ok("Tiếp nhận và check-in bệnh nhân thành công."));
+    }
+
     [HttpGet("change-requests")]
     public async Task<IActionResult> GetChangeRequests([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {

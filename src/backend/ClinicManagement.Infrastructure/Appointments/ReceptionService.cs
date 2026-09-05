@@ -149,6 +149,33 @@ public class ReceptionService : IReceptionService
         await _dbContext.SaveChangesAsync();
     }
 
+    public async Task CheckInAppointmentAsync(long appointmentId)
+    {
+        var userId = GetUserId();
+
+        var appointment = await _dbContext.Appointments.FirstOrDefaultAsync(a => a.Id == appointmentId);
+        if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
+
+        if (appointment.Status != AppointmentStatus.Confirmed)
+            throw new BusinessException("INVALID_STATE", "Chỉ có thể check-in lịch hẹn ở trạng thái Confirmed.");
+
+        var oldStatus = appointment.Status;
+        appointment.Status = AppointmentStatus.CheckedIn;
+
+        _dbContext.AppointmentHistories.Add(new AppointmentHistory
+        {
+            AppointmentId = appointment.Id,
+            Action = AppointmentHistoryAction.CheckedIn,
+            OldStatus = oldStatus,
+            NewStatus = AppointmentStatus.CheckedIn,
+            Note = "Bệnh nhân đã có mặt tại phòng khám và check-in vào hàng đợi",
+            PerformedByUserId = userId,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await _dbContext.SaveChangesAsync();
+    }
+
     public async Task<ReceptionStatsDto> GetStatsAsync()
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
