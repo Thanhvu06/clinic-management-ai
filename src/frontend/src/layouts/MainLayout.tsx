@@ -55,8 +55,10 @@ export const MainLayout: React.FC = () => {
                 return (
                     <>
                         <NavItem to="/doctor" icon={LayoutDashboard} label="Bàn làm việc" />
-                        <NavItem to="/doctor/appointments" icon={CalendarDays} label="Lịch khám của tôi" />
-                        <NavItem to="/doctor/leave-requests" icon={CalendarCheck} label="Yêu cầu nghỉ" />
+                        <NavItem to="/doctor/queue" icon={Users} label="Hàng đợi khám" />
+                        <NavItem to="/doctor/schedule" icon={CalendarCheck} label="Lịch trực & ca khám" />
+                        <NavItem to="/doctor/appointments" icon={CalendarDays} label="Danh sách lịch khám" />
+                        <NavItem to="/doctor/leave-requests" icon={CalendarCheck} label="Yêu cầu nghỉ phép" />
                     </>
                 );
             case 'Admin':

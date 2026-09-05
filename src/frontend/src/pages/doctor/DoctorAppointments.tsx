@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { Search, CalendarDays, Eye, CheckCircle, XCircle, Clock, PlusCircle, RefreshCw, X, Send, Pill, Trash2, Plus } from 'lucide-react';
+import { Search, CalendarDays, Eye, CheckCircle, XCircle, Clock, PlusCircle, RefreshCw, X, Send, Pill, Trash2, Plus, Stethoscope } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
 
 interface DoctorAppointment {
@@ -38,6 +39,7 @@ interface PrescriptionItemForm {
 }
 
 export const DoctorAppointments: React.FC = () => {
+    const navigate = useNavigate();
     const { showAlert, showConfirm } = useDialog();
     const [appointments, setAppointments] = useState<DoctorAppointment[]>([]);
     const [loading, setLoading] = useState(true);
@@ -392,9 +394,19 @@ export const DoctorAppointments: React.FC = () => {
                                     </td>
                                     <td style={{ padding: '16px', textAlign: 'right' }}>
                                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                                            <button className="btn-secondary" style={{ padding: '4px 10px', fontSize: '0.85rem' }} onClick={() => openModal(apt, 'detail')}>
-                                                <Eye size={14} style={{ marginRight: '4px' }}/> Chi tiết
+                                            <button className="btn-secondary" style={{ padding: '4px 10px', fontSize: '0.85rem' }} onClick={() => navigate(`/doctor/appointments/${apt.id}`)}>
+                                                <Eye size={14} style={{ marginRight: '4px' }}/> Hồ sơ
                                             </button>
+                                            {apt.status === 'InConsultation' && (
+                                                <button className="btn-primary" style={{ padding: '4px 10px', fontSize: '0.85rem', backgroundColor: '#4f46e5' }} onClick={() => navigate(`/doctor/appointments/${apt.id}/examination`)}>
+                                                    <Stethoscope size={14} style={{ marginRight: '4px' }}/> Tiếp tục khám
+                                                </button>
+                                            )}
+                                            {apt.status === 'CheckedIn' && (
+                                                <button className="btn-primary" style={{ padding: '4px 10px', fontSize: '0.85rem' }} onClick={() => navigate(`/doctor/appointments/${apt.id}/examination`)}>
+                                                    <Stethoscope size={14} style={{ marginRight: '4px' }}/> Vào khám
+                                                </button>
+                                            )}
                                             {apt.status === 'Confirmed' && (
                                                 <button className="btn-primary" style={{ padding: '4px 10px', fontSize: '0.85rem' }} onClick={() => openModal(apt, 'complete')}>
                                                     <CheckCircle size={14} style={{ marginRight: '4px' }}/> Khám

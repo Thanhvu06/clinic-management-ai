@@ -5,7 +5,7 @@ import { PublicLayout } from './layouts/PublicLayout';
 import { PublicRoute, ProtectedRoute, RoleRoute } from './routes/guards';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
-import { ReceptionistDashboard, DoctorDashboard, AdminDashboard, ForbiddenPage, NotFoundPage } from './pages/Dashboards';
+import { ReceptionistDashboard, AdminDashboard, ForbiddenPage, NotFoundPage } from './pages/Dashboards';
 import { PublicLanding } from './pages/public/PublicLanding';
 import { SpecialtiesList } from './pages/public/SpecialtiesList';
 import { SpecialtyDetail } from './pages/public/SpecialtyDetail';
@@ -26,7 +26,12 @@ import { PatientAiConsultation } from './pages/patient/PatientAiConsultation';
 import { ReceptionAppointments } from './pages/reception/ReceptionAppointments';
 import { ReceptionPackageRegistrations } from './pages/reception/ReceptionPackageRegistrations';
 import { ReceptionChangeRequests } from './pages/reception/ReceptionChangeRequests';
+import { DoctorDashboard } from './pages/doctor/DoctorDashboard';
+import { DoctorQueue } from './pages/doctor/DoctorQueue';
+import { DoctorSchedule } from './pages/doctor/DoctorSchedule';
 import { DoctorAppointments } from './pages/doctor/DoctorAppointments';
+import { DoctorAppointmentDetail } from './pages/doctor/DoctorAppointmentDetail';
+import { DoctorExaminationWorkspace } from './pages/doctor/DoctorExaminationWorkspace';
 import { DoctorLeaveRequests } from './pages/doctor/DoctorLeaveRequests';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminSpecialties } from './pages/admin/AdminSpecialties';
@@ -102,7 +107,11 @@ function App() {
                                     {/* Doctor Routes */}
                                     <Route element={<RoleRoute roles={['Doctor']} />}>
                                         <Route path="/doctor" element={<DoctorDashboard />} />
+                                        <Route path="/doctor/queue" element={<DoctorQueue />} />
+                                        <Route path="/doctor/schedule" element={<DoctorSchedule />} />
                                         <Route path="/doctor/appointments" element={<DoctorAppointments />} />
+                                        <Route path="/doctor/appointments/:id" element={<DoctorAppointmentDetail />} />
+                                        <Route path="/doctor/appointments/:id/examination" element={<DoctorExaminationWorkspace />} />
                                         <Route path="/doctor/leave-requests" element={<DoctorLeaveRequests />} />
                                     </Route>
 

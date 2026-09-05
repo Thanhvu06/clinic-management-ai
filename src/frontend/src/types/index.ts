@@ -93,3 +93,5 @@ export interface DoctorAvailabilityDto {
     days: DoctorDayAvailabilityDto[];
 }
 
+export * from './doctor';
+

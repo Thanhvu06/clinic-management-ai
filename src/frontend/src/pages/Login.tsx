@@ -6,7 +6,7 @@ import { Mail, ArrowRight } from 'lucide-react';
 import { useDialog } from '../contexts/DialogContext';
 import { ForgotPasswordModal } from '../components/ForgotPasswordModal';
 import { AuthShell, FormField, TextInput, PasswordInput, Button, FormError } from '../components/forms';
-import { getRoleDashboardPath, sanitizeReturnUrl, getRedirectAfterLogin } from '../utils/roleRoutes';
+import { sanitizeReturnUrl, getRedirectAfterLogin } from '../utils/roleRoutes';
 
 export const Login: React.FC = () => {
     const [emailOrPhone, setEmailOrPhone] = useState('');
