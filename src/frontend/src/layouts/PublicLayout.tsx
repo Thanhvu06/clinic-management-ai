@@ -1,20 +1,22 @@
-import React, { useState } from 'react';
-import { Outlet, Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import styles from './PublicLayout.module.css';
 import { AppointmentLookupModal } from '../components/AppointmentLookupModal';
 import { 
     Phone, Clock, MapPin, ShieldPlus, Menu, X, 
-    UserCircle, Calendar, FileText, Pill, LogOut, ChevronDown, Search, Globe 
+    UserCircle, Calendar, FileText, Pill, LogOut, ChevronDown, Search, Globe, PackageCheck 
 } from 'lucide-react';
 
 export const PublicLayout: React.FC = () => {
     const { isAuthenticated, user, logout } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
     const [currentLang, setCurrentLang] = useState<'vi' | 'en'>('vi');
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     const handleLogout = () => {
         logout();
@@ -23,6 +25,38 @@ export const PublicLayout: React.FC = () => {
 
     const isPatient = user?.role === 'Patient';
     const isStaff = user && user.role !== 'Patient';
+
+    // Close menus when route changes
+    useEffect(() => {
+        setIsDropdownOpen(false);
+        setIsMobileMenuOpen(false);
+    }, [location.pathname]);
+
+    // Handle Escape key and click outside
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setIsDropdownOpen(false);
+                setIsMobileMenuOpen(false);
+            }
+        };
+
+        const handleClickOutside = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
+
+    const navLinkClass = ({ isActive }: { isActive: boolean }) => 
+        isActive ? `${styles.navLink} ${styles.active}` : styles.navLink;
 
     return (
         <div className={styles.layout}>
@@ -48,9 +82,9 @@ export const PublicLayout: React.FC = () => {
                         >
                             <Search size={13} /> Tra cứu lịch hẹn
                         </button>
-                        <div className={styles.topBarInfoItem}>
-                            <MapPin size={14} /> Hệ thống 40+ điểm khám
-                        </div>
+                        <Link to="/locations" className={styles.topBarInfoItem} style={{ textDecoration: 'none' }}>
+                            <MapPin size={14} /> Hệ thống cơ sở phòng khám
+                        </Link>
                         <button
                             type="button"
                             onClick={() => setCurrentLang(prev => prev === 'vi' ? 'en' : 'vi')}
@@ -72,12 +106,12 @@ export const PublicLayout: React.FC = () => {
                     </Link>
 
                     <nav className={styles.nav}>
-                        <Link to="/" className={styles.navLink}>Trang chủ</Link>
-                        <a href="/#specialties" className={styles.navLink}>Chuyên khoa</a>
-                        <a href="/#packages" className={styles.navLink}>Gói khám</a>
-                        <a href="/#doctors" className={styles.navLink}>Bác sĩ</a>
-                        <a href="/#locations" className={styles.navLink}>Điểm khám</a>
-                        <Link to="/patient/ai-consultation" className={styles.navLink}>Tư vấn AI</Link>
+                        <NavLink to="/" end className={navLinkClass}>Trang chủ</NavLink>
+                        <NavLink to="/specialties" className={navLinkClass}>Chuyên khoa</NavLink>
+                        <NavLink to="/health-packages" className={navLinkClass}>Gói khám</NavLink>
+                        <NavLink to="/doctors" className={navLinkClass}>Bác sĩ</NavLink>
+                        <NavLink to="/locations" className={navLinkClass}>Điểm khám</NavLink>
+                        <NavLink to="/patient/ai-consultation" className={navLinkClass}>Tư vấn AI</NavLink>
                     </nav>
 
                     <div className={styles.authArea}>
@@ -87,10 +121,12 @@ export const PublicLayout: React.FC = () => {
                                 <Link to="/register" className={styles.btnRegister}>Đăng ký ngay</Link>
                             </>
                         ) : (
-                            <div className={styles.userDropdown}>
+                            <div className={styles.userDropdown} ref={dropdownRef}>
                                 <button 
                                     className={styles.userToggle}
                                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                    aria-expanded={isDropdownOpen}
+                                    aria-haspopup="true"
                                 >
                                     <div className={styles.avatar}>
                                         {user?.fullName?.charAt(0).toUpperCase() || 'U'}
@@ -111,8 +147,11 @@ export const PublicLayout: React.FC = () => {
                                                 <Link to="/patient/appointments" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
                                                     <Calendar size={18} /> Lịch hẹn của tôi
                                                 </Link>
+                                                <Link to="/patient/health-package-registrations" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
+                                                    <PackageCheck size={18} /> Gói khám đã đăng ký
+                                                </Link>
                                                 <Link to="/patient/revisit" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
-                                                    <FileText size={18} /> Tái khám
+                                                    <FileText size={18} /> Lịch tái khám
                                                 </Link>
                                                 <Link to="/patient/prescriptions" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
                                                     <Pill size={18} /> Đơn thuốc của tôi
@@ -135,8 +174,8 @@ export const PublicLayout: React.FC = () => {
                             </div>
                         )}
                         {!isStaff && (
-                            <Link to="/patient/book" className={styles.btnRegister} style={{ marginLeft: '10px' }}>
-                                Đặt lịch khám
+                            <Link to="/patient/book" className={styles.btnBookHeader}>
+                                <Calendar size={16} /> Đặt lịch khám
                             </Link>
                         )}
                     </div>
@@ -144,53 +183,83 @@ export const PublicLayout: React.FC = () => {
                     <button 
                         className={styles.hamburger}
                         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                        aria-label="Mở thực đơn điều hướng"
                     >
-                        {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
+                        {isMobileMenuOpen ? <X size={26} /> : <Menu size={26} />}
                     </button>
                 </div>
 
-                {/* Mobile Menu */}
+                {/* Mobile Backdrop */}
+                <div 
+                    className={`${styles.backdrop} ${isMobileMenuOpen ? styles.open : ''}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                />
+
+                {/* Mobile Drawer */}
                 <div className={`${styles.mobileMenu} ${isMobileMenuOpen ? styles.open : ''}`}>
-                    <Link to="/" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Trang chủ</Link>
-                    <a href="/#specialties" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Chuyên khoa</a>
-                    <a href="/#packages" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Gói khám</a>
-                    <a href="/#doctors" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Bác sĩ</a>
-                    <a href="/#locations" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Điểm khám</a>
-                    <Link to="/patient/ai-consultation" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Tư vấn AI</Link>
+                    <div className={styles.mobileMenuHeader}>
+                        <div className={styles.logoArea} style={{ fontSize: '1.2rem' }}>
+                            <ShieldPlus size={24} />
+                            ClinicCare AI
+                        </div>
+                        <button 
+                            className={styles.closeMobileBtn}
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            aria-label="Đóng thực đơn"
+                        >
+                            <X size={22} />
+                        </button>
+                    </div>
+
+                    <NavLink to="/" end className={navLinkClass} onClick={() => setIsMobileMenuOpen(false)}>Trang chủ</NavLink>
+                    <NavLink to="/specialties" className={navLinkClass} onClick={() => setIsMobileMenuOpen(false)}>Chuyên khoa</NavLink>
+                    <NavLink to="/health-packages" className={navLinkClass} onClick={() => setIsMobileMenuOpen(false)}>Gói khám</NavLink>
+                    <NavLink to="/doctors" className={navLinkClass} onClick={() => setIsMobileMenuOpen(false)}>Bác sĩ</NavLink>
+                    <NavLink to="/locations" className={navLinkClass} onClick={() => setIsMobileMenuOpen(false)}>Điểm khám</NavLink>
+                    <NavLink to="/patient/ai-consultation" className={navLinkClass} onClick={() => setIsMobileMenuOpen(false)}>Tư vấn AI</NavLink>
+                    
                     <button 
                         type="button" 
                         onClick={() => { setIsMobileMenuOpen(false); setIsLookupModalOpen(true); }}
                         className={styles.navLink}
-                        style={{ textAlign: 'left', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: '#0284c7' }}
+                        style={{ textAlign: 'left', background: 'transparent', border: 'none', padding: '8px 0', cursor: 'pointer', color: 'var(--c-primary)' }}
                     >
                         🔍 Tra cứu lịch hẹn
                     </button>
-                    {!isAuthenticated ? (
-                        <>
-                            <Link to="/login" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Đăng nhập</Link>
-                            <Link to="/register" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Đăng ký ngay</Link>
-                        </>
-                    ) : (
-                         isPatient ? (
+
+                    <div style={{ borderTop: '1px solid var(--c-border)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {!isAuthenticated ? (
                             <>
-                                <Link to="/patient/profile" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Hồ sơ cá nhân</Link>
-                                <Link to="/patient/appointments" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Lịch hẹn của tôi</Link>
-                                <Link to="/patient/revisit" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Tái khám</Link>
-                                <Link to="/patient/prescriptions" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Đơn thuốc của tôi</Link>
-                                <button onClick={handleLogout} className={styles.navLink} style={{ textAlign: 'left', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--c-danger)' }}>Đăng xuất</button>
+                                <Link to="/login" className={styles.btnLogin} style={{ textAlign: 'center' }} onClick={() => setIsMobileMenuOpen(false)}>
+                                    Đăng nhập
+                                </Link>
+                                <Link to="/register" className={styles.btnRegister} style={{ textAlign: 'center', justifyContent: 'center' }} onClick={() => setIsMobileMenuOpen(false)}>
+                                    Đăng ký tài khoản
+                                </Link>
                             </>
-                         ) : (
-                            <>
-                                <Link to={`/${user?.role.toLowerCase()}`} className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Bảng điều khiển quản trị</Link>
-                                <button onClick={handleLogout} className={styles.navLink} style={{ textAlign: 'left', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--c-danger)' }}>Đăng xuất</button>
-                            </>
-                         )
-                    )}
-                    {!isStaff && (
-                        <Link to="/patient/book" className={styles.btnRegister} style={{ display: 'inline-block', textAlign: 'center', marginTop: '10px' }} onClick={() => setIsMobileMenuOpen(false)}>
-                            Đặt lịch khám
-                        </Link>
-                    )}
+                        ) : (
+                            isPatient ? (
+                                <>
+                                    <Link to="/patient/profile" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Hồ sơ cá nhân</Link>
+                                    <Link to="/patient/appointments" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Lịch hẹn của tôi</Link>
+                                    <Link to="/patient/health-package-registrations" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Gói khám đã đăng ký</Link>
+                                    <Link to="/patient/revisit" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Lịch tái khám</Link>
+                                    <Link to="/patient/prescriptions" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Đơn thuốc của tôi</Link>
+                                    <button onClick={handleLogout} className={styles.navLink} style={{ textAlign: 'left', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--c-danger)' }}>Đăng xuất</button>
+                                </>
+                            ) : (
+                                <>
+                                    <Link to={`/${user?.role.toLowerCase()}`} className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Bảng điều khiển quản trị</Link>
+                                    <button onClick={handleLogout} className={styles.navLink} style={{ textAlign: 'left', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--c-danger)' }}>Đăng xuất</button>
+                                </>
+                            )
+                        )}
+                        {!isStaff && (
+                            <Link to="/patient/book" className={styles.btnBookHeader} style={{ justifyContent: 'center', marginTop: '10px' }} onClick={() => setIsMobileMenuOpen(false)}>
+                                <Calendar size={16} /> Đặt lịch khám
+                            </Link>
+                        )}
+                    </div>
                 </div>
             </header>
 
@@ -212,26 +281,27 @@ export const PublicLayout: React.FC = () => {
                         <p><Phone size={16} /> Hotline: 1900 1234 (7:00 - 19:00)</p>
                     </div>
                     <div className={styles.footerCol}>
-                        <h3>Dịch vụ</h3>
-                        <Link to="/patient/book" className={styles.footerLink}>Đặt lịch khám</Link>
-                        <Link to="/patient/ai-consultation" className={styles.footerLink}>Tư vấn AI</Link>
-                        <a href="/#specialties" className={styles.footerLink}>Khám chuyên khoa</a>
-                        <a href="/#doctors" className={styles.footerLink}>Khám tổng quát</a>
+                        <h3>Dịch vụ & Đặt hẹn</h3>
+                        <Link to="/patient/book" className={styles.footerLink}>Đặt lịch khám chuyên khoa</Link>
+                        <Link to="/health-packages" className={styles.footerLink}>Gói khám sức khỏe</Link>
+                        <Link to="/specialties" className={styles.footerLink}>Danh mục Chuyên khoa</Link>
+                        <Link to="/doctors" className={styles.footerLink}>Đội ngũ Bác sĩ</Link>
+                        <Link to="/patient/ai-consultation" className={styles.footerLink}>Tư vấn sơ bộ với AI</Link>
                     </div>
                     <div className={styles.footerCol}>
-                        <h3>Thông tin</h3>
-                        <span className={styles.footerText}>Về chúng tôi</span>
-                        <span className={styles.footerText}>Đội ngũ bác sĩ</span>
-                        <span className={styles.footerText}>Hướng dẫn đặt lịch</span>
-                        <span className={styles.footerText}>Câu hỏi thường gặp</span>
+                        <h3>Hệ thống cơ sở</h3>
+                        <Link to="/locations" className={styles.footerLink}>Tất cả điểm khám</Link>
+                        <span className={styles.footerText}>Cơ sở TP. Hồ Chí Minh</span>
+                        <span className={styles.footerText}>Cơ sở Hà Nội</span>
+                        <span className={styles.footerText}>Cơ sở Đà Nẵng</span>
                     </div>
                     <div className={styles.footerCol}>
-                        <h3>Chính sách</h3>
-                        <span className={styles.footerText}>Chính sách bảo mật</span>
-                        <span className={styles.footerText}>Điều khoản dịch vụ</span>
-                        <span className={styles.footerText}>Quy định sử dụng AI</span>
-                        <p style={{ fontSize: '0.8rem', marginTop: '10px', color: '#64748b' }}>
-                            * Lưu ý: Hệ thống AI chỉ đưa ra gợi ý chuyên khoa dựa trên triệu chứng, không thay thế chẩn đoán của bác sĩ.
+                        <h3>Chính sách & Pháp lý</h3>
+                        <span className={styles.footerText}>Chính sách bảo mật dữ liệu y tế</span>
+                        <span className={styles.footerText}>Điều khoản sử dụng dịch vụ</span>
+                        <span className={styles.footerText}>Quy định định tuyến AI</span>
+                        <p style={{ fontSize: '0.8rem', marginTop: '10px', color: '#94a3b8', lineHeight: 1.5 }}>
+                            * Lưu ý: Trợ lý AI chỉ đưa ra định hướng tham khảo dựa trên mô tả triệu chứng, không thay thế chẩn đoán y khoa chuyên sâu của bác sĩ.
                         </p>
                     </div>
                 </div>
