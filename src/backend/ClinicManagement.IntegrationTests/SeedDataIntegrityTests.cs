@@ -124,5 +124,27 @@ public class SeedDataIntegrityTests : IntegrationTestBase
 
         var distinctBirthYears = patients.Select(p => p.DateOfBirth?.Year).Where(y => y.HasValue).Distinct().Count();
         Assert.True(distinctBirthYears >= 5, "Should have diverse patient birth years");
+
+        // 7. Verify Doctor Appointment Slot and Specialty Integrity
+        var appointments = await db.Appointments
+            .Include(a => a.AppointmentSlot)
+            .Include(a => a.Doctor)
+                .ThenInclude(d => d.DoctorSpecialties)
+            .ToListAsync();
+
+        Assert.NotEmpty(appointments);
+        foreach (var apt in appointments)
+        {
+            Assert.NotNull(apt.AppointmentSlot);
+            Assert.Equal(apt.DoctorId, apt.AppointmentSlot.DoctorId);
+            Assert.Contains(apt.Doctor.DoctorSpecialties, ds => ds.SpecialtyId == apt.SpecialtyId);
+        }
+
+        // Verify demo doctor has appointments today
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var demoDocUser = users.First(u => u.Email == "doctor@cliniccare.local");
+        var demoDoc = doctors.First(d => d.UserId == demoDocUser.Id);
+        var todayDoctorAppointments = appointments.Where(a => a.DoctorId == demoDoc.Id && a.AppointmentDate == today).ToList();
+        Assert.NotEmpty(todayDoctorAppointments);
     }
 }

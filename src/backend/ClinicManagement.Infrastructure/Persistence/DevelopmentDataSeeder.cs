@@ -226,69 +226,69 @@ public static class DevelopmentDataSeeder
         await db.SaveChangesAsync();
         logger.LogInformation("Clinic locations seeded.");
 
-        // 6. Doctor Work Schedules & Slots (2-shift model: 08:00–11:30 and 13:30–17:00 for next 14 days)
+        // 6. Doctor Work Schedules & Slots (2-shift model: 08:00–11:30 and 13:30–17:00 for today + next 14 days)
         var today = DateOnly.FromDateTime(DateTime.Now);
         foreach (var doc in doctors)
         {
-            if (!await db.DoctorWorkSchedules.AnyAsync(ws => ws.DoctorId == doc.Id))
+            for (int i = 0; i <= 14; i++)
             {
-                for (int i = 1; i <= 14; i++)
+                var date = today.AddDays(i);
+                // Skip Sundays
+                if (date.DayOfWeek == DayOfWeek.Sunday) continue;
+
+                if (await db.DoctorWorkSchedules.AnyAsync(ws => ws.DoctorId == doc.Id && ws.WorkDate == date))
+                    continue;
+
+                // Morning Shift (08:00 - 11:30)
+                var morningSchedule = new DoctorWorkSchedule
                 {
-                    var date = today.AddDays(i);
-                    // Skip Sundays
-                    if (date.DayOfWeek == DayOfWeek.Sunday) continue;
+                    DoctorId = doc.Id,
+                    WorkDate = date,
+                    StartTime = new TimeOnly(8, 0),
+                    EndTime = new TimeOnly(11, 30),
+                    IsActive = true
+                };
+                db.DoctorWorkSchedules.Add(morningSchedule);
 
-                    // Morning Shift (08:00 - 11:30)
-                    var morningSchedule = new DoctorWorkSchedule
+                // Afternoon Shift (13:30 - 17:00)
+                var afternoonSchedule = new DoctorWorkSchedule
+                {
+                    DoctorId = doc.Id,
+                    WorkDate = date,
+                    StartTime = new TimeOnly(13, 30),
+                    EndTime = new TimeOnly(17, 0),
+                    IsActive = true
+                };
+                db.DoctorWorkSchedules.Add(afternoonSchedule);
+
+                // Morning slots (7 slots: 08:00 to 11:30, 30m each)
+                var mStart = new TimeOnly(8, 0);
+                for (int s = 0; s < 7; s++)
+                {
+                    db.AppointmentSlots.Add(new AppointmentSlot
                     {
                         DoctorId = doc.Id,
-                        WorkDate = date,
-                        StartTime = new TimeOnly(8, 0),
-                        EndTime = new TimeOnly(11, 30),
-                        IsActive = true
-                    };
-                    db.DoctorWorkSchedules.Add(morningSchedule);
+                        SlotDate = date,
+                        StartTime = mStart,
+                        EndTime = mStart.AddMinutes(30),
+                        IsBooked = false
+                    });
+                    mStart = mStart.AddMinutes(30);
+                }
 
-                    // Afternoon Shift (13:30 - 17:00)
-                    var afternoonSchedule = new DoctorWorkSchedule
+                // Afternoon slots (7 slots: 13:30 to 17:00, 30m each)
+                var aStart = new TimeOnly(13, 30);
+                for (int s = 0; s < 7; s++)
+                {
+                    db.AppointmentSlots.Add(new AppointmentSlot
                     {
                         DoctorId = doc.Id,
-                        WorkDate = date,
-                        StartTime = new TimeOnly(13, 30),
-                        EndTime = new TimeOnly(17, 0),
-                        IsActive = true
-                    };
-                    db.DoctorWorkSchedules.Add(afternoonSchedule);
-
-                    // Morning slots (7 slots: 08:00 to 11:30, 30m each)
-                    var mStart = new TimeOnly(8, 0);
-                    for (int s = 0; s < 7; s++)
-                    {
-                        db.AppointmentSlots.Add(new AppointmentSlot
-                        {
-                            DoctorId = doc.Id,
-                            SlotDate = date,
-                            StartTime = mStart,
-                            EndTime = mStart.AddMinutes(30),
-                            IsBooked = false
-                        });
-                        mStart = mStart.AddMinutes(30);
-                    }
-
-                    // Afternoon slots (7 slots: 13:30 to 17:00, 30m each)
-                    var aStart = new TimeOnly(13, 30);
-                    for (int s = 0; s < 7; s++)
-                    {
-                        db.AppointmentSlots.Add(new AppointmentSlot
-                        {
-                            DoctorId = doc.Id,
-                            SlotDate = date,
-                            StartTime = aStart,
-                            EndTime = aStart.AddMinutes(30),
-                            IsBooked = false
-                        });
-                        aStart = aStart.AddMinutes(30);
-                    }
+                        SlotDate = date,
+                        StartTime = aStart,
+                        EndTime = aStart.AddMinutes(30),
+                        IsBooked = false
+                    });
+                    aStart = aStart.AddMinutes(30);
                 }
             }
         }
@@ -299,13 +299,20 @@ public static class DevelopmentDataSeeder
         if (!await db.Appointments.AnyAsync(a => a.AppointmentCode.StartsWith("DEMO-")))
         {
             var slots = await db.AppointmentSlots.ToListAsync();
-            var mainDoc = doctors[0];
+            var mainDoc = doctors.FirstOrDefault(d => d.UserId == docUsers[0].Id) ?? doctors[0];
             var mainDocSpecId = mainDoc.DoctorSpecialties.FirstOrDefault(ds => ds.IsPrimary)?.SpecialtyId ?? specs[0].Id;
             var aptCount = 0;
 
             async Task CreateApt(Patient p, Doctor d, AppointmentSlot s, AppointmentStatus status, string reason)
             {
-                var docSpecId = d.DoctorSpecialties.FirstOrDefault(ds => ds.IsPrimary)?.SpecialtyId ?? specs[0].Id;
+                if (s.DoctorId != d.Id)
+                {
+                    throw new InvalidOperationException($"Appointment slot doctor {s.DoctorId} must match appointment doctor {d.Id}");
+                }
+
+                var docSpecId = d.DoctorSpecialties.FirstOrDefault(ds => ds.IsPrimary)?.SpecialtyId 
+                    ?? d.DoctorSpecialties.FirstOrDefault()?.SpecialtyId 
+                    ?? specs[0].Id;
                 var code = $"DEMO-{DateTime.Now.Ticks % 100000:D5}-{aptCount++:D2}";
                 var a = new Appointment
                 {
@@ -475,18 +482,39 @@ public static class DevelopmentDataSeeder
                 await CreateApt(patients[i % patients.Count], mainDoc, pastSlots2[i % pastSlots2.Count], AppointmentStatus.Cancelled, "Tái khám theo hẹn của bác sĩ");
             }
 
-            // Future appointments
+            // Appointments for today for mainDoc (Dr. Khai) for immediate dashboard/workspace testing
+            var todaySlots = await db.AppointmentSlots
+                .Where(s => s.DoctorId == mainDoc.Id && s.SlotDate == today && !s.IsBooked)
+                .OrderBy(s => s.StartTime)
+                .ToListAsync();
+
+            if (todaySlots.Count >= 3)
+            {
+                await CreateApt(patients[0], mainDoc, todaySlots[0], AppointmentStatus.Confirmed, "Kiểm tra định kỳ huyết áp và đường huyết sáng nay");
+                await CreateApt(patients[1], mainDoc, todaySlots[1], AppointmentStatus.Confirmed, "Tái khám viêm họng hạt và sốt nhẹ");
+                await CreateApt(patients[2], mainDoc, todaySlots[2], AppointmentStatus.Confirmed, "Tư vấn dinh dưỡng và chăm sóc sức khỏe");
+            }
+
+            // Future appointments with strict slot & specialty doctor integrity
             // 6 Pending
             for (int i = 0; i < 6; i++)
             {
                 var doc = doctors[i % doctors.Count];
-                await CreateApt(patients[i % patients.Count], doc, futureSlots[i % futureSlots.Count], AppointmentStatus.Pending, "Đau đầu kéo dài kèm mệt mỏi nhẹ");
+                var docSlot = futureSlots.FirstOrDefault(s => s.DoctorId == doc.Id && !s.IsBooked);
+                if (docSlot != null)
+                {
+                    await CreateApt(patients[i % patients.Count], doc, docSlot, AppointmentStatus.Pending, "Đau đầu kéo dài kèm mệt mỏi nhẹ");
+                }
             }
             // 10 Confirmed
             for (int i = 6; i < 16; i++)
             {
                 var doc = doctors[(i + 1) % doctors.Count];
-                await CreateApt(patients[i % patients.Count], doc, futureSlots[i % futureSlots.Count], AppointmentStatus.Confirmed, "Kiểm tra huyết áp và tư vấn lối sống");
+                var docSlot = futureSlots.FirstOrDefault(s => s.DoctorId == doc.Id && !s.IsBooked);
+                if (docSlot != null)
+                {
+                    await CreateApt(patients[i % patients.Count], doc, docSlot, AppointmentStatus.Confirmed, "Kiểm tra huyết áp và tư vấn lối sống");
+                }
             }
 
             logger.LogInformation("Appointments seeded.");
@@ -504,11 +532,12 @@ public static class DevelopmentDataSeeder
             });
 
             var confAppt = await db.Appointments.Include(a => a.Patient).Skip(1).FirstAsync(a => a.Status == AppointmentStatus.Confirmed);
+            var rescheduleSlot = futureSlots.FirstOrDefault(s => s.DoctorId == confAppt.DoctorId && !s.IsBooked);
             db.AppointmentChangeRequests.Add(new AppointmentChangeRequest
             {
                 AppointmentId = confAppt.Id,
                 RequestType = AppointmentChangeRequestType.Reschedule,
-                RequestedSlotId = futureSlots[100].Id,
+                RequestedSlotId = rescheduleSlot?.Id ?? confAppt.AppointmentSlotId,
                 Reason = "Xin dời ngày khám sang tuần sau vì việc gia đình",
                 Status = AppointmentChangeRequestStatus.Pending,
                 RequestedByUserId = confAppt.Patient.UserId,
