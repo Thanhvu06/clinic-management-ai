@@ -7,13 +7,24 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { ReceptionistDashboard, DoctorDashboard, AdminDashboard, ForbiddenPage, NotFoundPage } from './pages/Dashboards';
 import { PublicLanding } from './pages/public/PublicLanding';
+import { SpecialtiesList } from './pages/public/SpecialtiesList';
+import { SpecialtyDetail } from './pages/public/SpecialtyDetail';
+import { DoctorsList } from './pages/public/DoctorsList';
+import { DoctorDetail } from './pages/public/DoctorDetail';
+import { HealthPackagesList } from './pages/public/HealthPackagesList';
+import { HealthPackageDetail } from './pages/public/HealthPackageDetail';
+import { LocationsList } from './pages/public/LocationsList';
+import { SearchResults } from './pages/public/SearchResults';
 import { BookAppointment } from './pages/patient/BookAppointment';
+import { PackageRegistration } from './pages/patient/PackageRegistration';
+import { PatientPackageRegistrations } from './pages/patient/PatientPackageRegistrations';
 import { PatientAppointments } from './pages/patient/PatientAppointments';
 import { PatientProfile } from './pages/patient/PatientProfile';
 import { PatientRevisit } from './pages/patient/PatientRevisit';
 import { PatientPrescriptions } from './pages/patient/PatientPrescriptions';
 import { PatientAiConsultation } from './pages/patient/PatientAiConsultation';
 import { ReceptionAppointments } from './pages/reception/ReceptionAppointments';
+import { ReceptionPackageRegistrations } from './pages/reception/ReceptionPackageRegistrations';
 import { ReceptionChangeRequests } from './pages/reception/ReceptionChangeRequests';
 import { DoctorAppointments } from './pages/doctor/DoctorAppointments';
 import { DoctorLeaveRequests } from './pages/doctor/DoctorLeaveRequests';
@@ -44,6 +55,14 @@ function App() {
                             {/* Public Website Layout (No Sidebar) */}
                             <Route element={<PublicLayout />}>
                                 <Route path="/" element={<PublicLanding />} />
+                                <Route path="/specialties" element={<SpecialtiesList />} />
+                                <Route path="/specialties/:id" element={<SpecialtyDetail />} />
+                                <Route path="/doctors" element={<DoctorsList />} />
+                                <Route path="/doctors/:id" element={<DoctorDetail />} />
+                                <Route path="/health-packages" element={<HealthPackagesList />} />
+                                <Route path="/health-packages/:id" element={<HealthPackageDetail />} />
+                                <Route path="/locations" element={<LocationsList />} />
+                                <Route path="/search" element={<SearchResults />} />
                                 
                                 <Route element={<PublicRoute />}>
                                     <Route path="/login" element={<Login />} />
@@ -55,9 +74,11 @@ function App() {
                                 {/* Patient Protected Routes (Still in Public Layout) */}
                                 <Route element={<ProtectedRoute />}>
                                     <Route element={<RoleRoute roles={['Patient']} />}>
-                                        <Route path="/patient" element={<PatientProfile />} /> {/* Redirect patient dashboard to profile */}
+                                        <Route path="/patient" element={<PatientProfile />} />
                                         <Route path="/patient/profile" element={<PatientProfile />} />
                                         <Route path="/patient/book" element={<BookAppointment />} />
+                                        <Route path="/patient/health-packages/:id/register" element={<PackageRegistration />} />
+                                        <Route path="/patient/health-package-registrations" element={<PatientPackageRegistrations />} />
                                         <Route path="/patient/appointments" element={<PatientAppointments />} />
                                         <Route path="/patient/revisit" element={<PatientRevisit />} />
                                         <Route path="/patient/prescriptions" element={<PatientPrescriptions />} />
@@ -73,6 +94,7 @@ function App() {
                                     <Route element={<RoleRoute roles={['Receptionist']} />}>
                                         <Route path="/reception" element={<ReceptionistDashboard />} />
                                         <Route path="/reception/appointments" element={<ReceptionAppointments />} />
+                                        <Route path="/reception/package-registrations" element={<ReceptionPackageRegistrations />} />
                                         <Route path="/reception/change-requests" element={<ReceptionChangeRequests />} />
                                     </Route>
 

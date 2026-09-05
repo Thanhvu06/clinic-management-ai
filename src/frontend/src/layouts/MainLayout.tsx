@@ -47,6 +47,7 @@ export const MainLayout: React.FC = () => {
                     <>
                         <NavItem to="/reception" icon={LayoutDashboard} label="Bàn làm việc" />
                         <NavItem to="/reception/appointments" icon={CalendarCheck} label="Lịch hẹn" />
+                        <NavItem to="/reception/package-registrations" icon={Package} label="Đăng ký gói khám" />
                         <NavItem to="/reception/change-requests" icon={History} label="Yêu cầu đổi/hủy" />
                     </>
                 );
