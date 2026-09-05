@@ -42,15 +42,19 @@
 
 ---
 
-## 5. Bác sĩ khám và Đề xuất tái khám (2 phút)
-- **Role đăng nhập:** Bác sĩ (`doctor@cliniccare.local` / `Demo@12345`)
-- **Trang mở:** Lịch khám của tôi (`/doctor/appointments`)
-- **Thao tác:** 
-  1. Tìm lịch "Đã xác nhận" của bệnh nhân trên. Bấm "Khám".
-  2. Điền tóm tắt kết quả khám và bấm hoàn tất -> Lịch chuyển sang "Đã hoàn thành".
-  3. Bấm "Đề xuất tái khám", chọn ngày mai, điền ghi chú "Tái khám kiểm tra".
-- **Kết quả:** Form lưu thành công. Lịch sử Timeline hiện đầy đủ.
-- **Thuyết minh:** *"Bác sĩ chỉ thấy lịch của mình. Giao diện tập trung vào việc cập nhật kết quả. Bác sĩ cũng có thể chủ động đề xuất tái khám chỉ với vài lượt click thay vì yêu cầu bệnh nhân ra quầy đặt lại từ đầu."*
+## 5. Bác sĩ tiếp nhận, khám lâm sàng & Kê đơn thuốc (3 phút)
+- **Role đăng nhập:** Bác sĩ (`doctor@cliniccare.local` / `Demo@12345` – BS.CKI Nguyễn Minh Khải)
+- **Trang mở:** 
+  1. **Dashboard Bác sĩ (`/doctor`):** Xem ca trực hiện tại, thẻ KPI thời gian thực, banner bệnh nhân tiếp theo và hàng đợi khám trong ngày.
+  2. **Hàng đợi bệnh nhân (`/doctor/queue`):** Bấm "Tiếp nhận" (Check-in) bệnh nhân từ hàng đợi -> Bấm "Bắt đầu khám" để vào Không gian khám lâm sàng.
+  3. **Không gian khám lâm sàng (`/doctor/examination/:id`):**
+     - **Tab Dấu hiệu sinh tồn:** Nhập Cân nặng (70kg), Chiều cao (175cm) -> Hệ thống tự động tính BMI thời gian thực = 22.9 (Bình thường), đo huyết áp, mạch, nhiệt độ.
+     - **Tab Diễn tiến khám:** Ghi nhận Chẩn đoán (Diagnosis), mã ICD-10, triệu chứng lâm sàng và kế hoạch điều trị.
+     - **Tab Kê đơn thuốc:** Tìm kiếm thuốc trực tiếp từ kho (Paracetamol, Amoxicillin...), xem số lượng tồn khả dụng, nhập liều lượng (1 viên, 2 lần/ngày, 5 ngày). Bấm "Lưu nháp đơn thuốc".
+     - **Bấm "Hoàn tất ca khám":** Hệ thống thực thi Database Transaction nguyên tử: chuyển trạng thái cuộc hẹn sang `Completed`, chốt bệnh án `VisitSummary` và phát hành đơn thuốc `Issued`.
+  4. **Chi tiết ca khám & Đề xuất tái khám (`/doctor/appointments/:id`):** Xem lại toàn bộ hồ sơ khám, bấm "In hồ sơ khám / Đơn thuốc", bấm "Đề xuất tái khám" sau 7 ngày.
+  5. **Lịch trực & Đăng ký nghỉ (`/doctor/schedule`):** Xem lưới ca trực tuần, mở modal "Đăng ký nghỉ phép" chọn ngày nghỉ để xem trước (Preview) các cuộc hẹn bị ảnh hưởng.
+- **Thuyết minh:** *"Doctor Clinical Workspace được thiết kế chuẩn mực như hệ thống HIS/EMR bệnh viện thực thụ. Quy trình từ Check-in, Bắt đầu khám, đo sinh hiệu với BMI tự động, ghi nhận bệnh án và kê đơn đều được bảo vệ bởi cơ chế Optimistic Concurrency Control (RowVersion) chống ghi đè dữ liệu và Database Transaction nguyên tử."*
 
 ---
 
