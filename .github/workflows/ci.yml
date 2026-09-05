@@ -2,9 +2,9 @@ name: ClinicCare CI
 
 on:
   push:
-    branches: [ main, "wip/**" ]
+    branches: [ main, "feat/**", "fix/**", "wip/**" ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, "feat/**" ]
 
 jobs:
   backend:
@@ -29,7 +29,7 @@ jobs:
         run: dotnet test src/backend/ClinicManagement.sln --no-build --configuration Release --verbosity normal
 
   frontend:
-    name: Frontend Lint & Build (Node 24)
+    name: Frontend Lint, Test & Build (Node 24)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -49,6 +49,10 @@ jobs:
       - name: Run linter
         working-directory: src/frontend
         run: npm run lint
+
+      - name: Run unit tests
+        working-directory: src/frontend
+        run: npm run test
 
       - name: Build frontend
         working-directory: src/frontend
