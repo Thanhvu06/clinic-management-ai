@@ -8,7 +8,7 @@ import {
 import styles from './PublicLanding.module.css';
 import axiosClient from '../../api/axiosClient';
 import { AppointmentLookupModal } from '../../components/AppointmentLookupModal';
-import { CLINIC_LOCATIONS } from '../../data/locationsData';
+import type { ClinicLocationDto } from '../../types';
 import { parseIncludedServices, formatVndCurrency } from '../../utils/formatters';
 
 export const PublicLanding: React.FC = () => {
@@ -16,6 +16,7 @@ export const PublicLanding: React.FC = () => {
     const [specialties, setSpecialties] = useState<any[]>([]);
     const [doctors, setDoctors] = useState<any[]>([]);
     const [healthPackages, setHealthPackages] = useState<any[]>([]);
+    const [locations, setLocations] = useState<ClinicLocationDto[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
     const [packagesError, setPackagesError] = useState(false);
@@ -31,10 +32,11 @@ export const PublicLanding: React.FC = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [specRes, docRes, pkgRes] = await Promise.all([
+                const [specRes, docRes, pkgRes, locRes] = await Promise.all([
                     axiosClient.get<any, any>('/specialties'),
                     axiosClient.get<any, any>('/doctors'),
-                    axiosClient.get<any, any>('/health-packages').catch(() => ({ success: false, data: [] }))
+                    axiosClient.get<any, any>('/health-packages').catch(() => ({ success: false, data: [] })),
+                    axiosClient.get<any, any>('/locations').catch(() => ({ success: false, data: [] }))
                 ]);
                 if (specRes.success) setSpecialties(specRes.data || []);
                 if (docRes.success) setDoctors(docRes.data || []);
@@ -42,6 +44,9 @@ export const PublicLanding: React.FC = () => {
                     setHealthPackages(pkgRes.data);
                 } else {
                     setPackagesError(true);
+                }
+                if (locRes.success && locRes.data) {
+                    setLocations(locRes.data);
                 }
             } catch (error) {
                 console.error("Failed to fetch landing data", error);
@@ -473,8 +478,8 @@ export const PublicLanding: React.FC = () => {
                     </div>
 
                     <div className={styles.locationsGrid}>
-                        {CLINIC_LOCATIONS.map((loc, idx) => (
-                            <div key={idx} className={styles.locationCard}>
+                        {locations.slice(0, 3).map((loc) => (
+                            <div key={loc.id} className={styles.locationCard}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                                     <Award size={18} color="#0284c7" />
                                     <h4 className={styles.locationName}>{loc.name}</h4>
@@ -485,7 +490,7 @@ export const PublicLanding: React.FC = () => {
                                 </div>
                                 <div className={styles.locationDetail}>
                                     <Clock size={16} color="#64748b" style={{ flexShrink: 0 }} />
-                                    <span>{loc.hours}</span>
+                                    <span>{loc.openingHours}</span>
                                 </div>
                                 <div className={styles.locationDetail}>
                                     <Phone size={16} color="#64748b" style={{ flexShrink: 0 }} />
@@ -589,7 +594,7 @@ const faqItems = [
         answer: "Sau khi bác sĩ hoàn tất ca khám, kết quả tóm tắt và đơn thuốc điện tử sẽ được cập nhật ngay trên tài khoản của bạn tại mục 'Đơn thuốc của tôi'. Bạn có thể xem lại hoặc in ra bất kỳ lúc nào."
     },
     {
-        question: "Tôi có thể đăng ký gói khám sức khỏe cho người thân không?",
-        answer: "Có, khi đăng ký gói khám, bạn có thể điền thông tin và số điện thoại của người thăm khám thực tế tại bước nhập thông tin liên hệ."
+        question: "Tôi cần chuẩn bị gì khi đến khám gói sức khỏe?",
+        answer: "Quý khách nên nhịn ăn ít nhất 6-8 tiếng trước khi lấy mẫu máu xét nghiệm, uống đủ nước lọc và mang theo các kết quả khám, đơn thuốc đang dùng nếu có."
     }
 ];

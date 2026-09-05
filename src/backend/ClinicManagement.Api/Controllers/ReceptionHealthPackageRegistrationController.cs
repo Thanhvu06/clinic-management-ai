@@ -1,5 +1,4 @@
-using System.Collections.Generic;
-using System.Threading;
+﻿using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Common.Constants;
 using ClinicManagement.Application.Common.Models;
@@ -23,23 +22,34 @@ public class ReceptionHealthPackageRegistrationController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<List<HealthPackageRegistrationDto>>>> GetAllRegistrations([FromQuery] string? status, CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<PagedResult<HealthPackageRegistrationDto>>>> GetAllRegistrations(
+        [FromQuery] string? status,
+        [FromQuery] string? search,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
     {
-        var results = await _registrationService.GetAllRegistrationsForReceptionAsync(status, cancellationToken);
-        return Ok(ApiResponse<List<HealthPackageRegistrationDto>>.Ok(results));
+        var results = await _registrationService.GetAllRegistrationsForReceptionAsync(status, search, page, pageSize, cancellationToken);
+        return Ok(ApiResponse<PagedResult<HealthPackageRegistrationDto>>.Ok(results));
     }
 
     [HttpPost("{id}/confirm")]
-    public async Task<ActionResult<ApiResponse<HealthPackageRegistrationDto>>> ConfirmRegistration(long id, CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<HealthPackageRegistrationDto>>> ConfirmRegistration(
+        long id,
+        [FromBody] ConfirmPackageRegistrationRequest? request,
+        CancellationToken cancellationToken)
     {
-        var result = await _registrationService.ConfirmRegistrationAsync(id, cancellationToken);
+        var result = await _registrationService.ConfirmRegistrationAsync(id, request, cancellationToken);
         return Ok(ApiResponse<HealthPackageRegistrationDto>.Ok(result, "Xác nhận đăng ký gói khám thành công."));
     }
 
     [HttpPost("{id}/cancel")]
-    public async Task<ActionResult<ApiResponse<HealthPackageRegistrationDto>>> CancelRegistration(long id, CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<HealthPackageRegistrationDto>>> CancelRegistration(
+        long id,
+        [FromBody] CancelPackageRegistrationRequest? request,
+        CancellationToken cancellationToken)
     {
-        var result = await _registrationService.CancelRegistrationByReceptionAsync(id, cancellationToken);
+        var result = await _registrationService.CancelRegistrationByReceptionAsync(id, request, cancellationToken);
         return Ok(ApiResponse<HealthPackageRegistrationDto>.Ok(result, "Hủy đăng ký gói khám thành công."));
     }
 }

@@ -4,6 +4,7 @@ import axiosClient from '../api/axiosClient';
 import { User, Mail, Phone, ArrowRight } from 'lucide-react';
 import { useDialog } from '../contexts/DialogContext';
 import { AuthShell, FormField, TextInput, PasswordInput, Button, FormError } from '../components/forms';
+import { sanitizeReturnUrl } from '../utils/roleRoutes';
 
 export const Register: React.FC = () => {
     const { showAlert, showToast } = useDialog();
@@ -13,6 +14,7 @@ export const Register: React.FC = () => {
     // Parse returnUrl if user was trying to access a protected page
     const searchParams = new URLSearchParams(location.search);
     const returnUrl = searchParams.get('returnUrl');
+    const safeReturnUrl = sanitizeReturnUrl(returnUrl);
 
     const [formData, setFormData] = useState({
         fullName: '',
@@ -59,7 +61,7 @@ export const Register: React.FC = () => {
             if (res.success) {
                 showToast('Tài khoản đã được tạo thành công!', 'success');
                 showAlert('Tài khoản đã được tạo thành công. Vui lòng đăng nhập để bắt đầu sử dụng dịch vụ.', 'Đăng ký thành công', 'success');
-                const targetLogin = returnUrl ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : '/login';
+                const targetLogin = safeReturnUrl ? `/login?returnUrl=${encodeURIComponent(safeReturnUrl)}` : '/login';
                 navigate(targetLogin);
             }
         } catch (err: any) {
@@ -78,7 +80,7 @@ export const Register: React.FC = () => {
         }
     };
 
-    const loginUrl = returnUrl ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : '/login';
+    const loginUrl = safeReturnUrl ? `/login?returnUrl=${encodeURIComponent(safeReturnUrl)}` : '/login';
 
     return (
         <AuthShell

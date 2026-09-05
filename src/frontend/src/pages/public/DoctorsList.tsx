@@ -7,7 +7,7 @@ import styles from './PublicPages.module.css';
 interface Doctor {
     id: number;
     fullName: string;
-    academicTitle: string;
+    academicTitle?: string;
     experienceYears: number;
     specialtyId?: number;
     specialtyName?: string;
@@ -56,6 +56,22 @@ export const DoctorsList: React.FC = () => {
         fetchData();
     }, []);
 
+    const formatDoctorTitleAndName = (title?: string, name?: string) => {
+        if (!name) return '';
+        if (!title) return name;
+        if (name.toLowerCase().startsWith(title.toLowerCase())) {
+            return name;
+        }
+        return `${title}. ${name}`;
+    };
+
+    const getDoctorInitials = (name?: string) => {
+        if (!name) return 'BS';
+        const parts = name.trim().split(/\s+/);
+        if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+        return (parts[parts.length - 2][0] + parts[parts.length - 1][0]).toUpperCase();
+    };
+
     const filteredDoctors = useMemo(() => {
         return doctors
             .filter(d => {
@@ -73,7 +89,7 @@ export const DoctorsList: React.FC = () => {
             })
             .sort((a, b) => {
                 if (sortBy === 'exp') {
-                    return b.experienceYears - a.experienceYears;
+                    return (b.experienceYears || 0) - (a.experienceYears || 0);
                 }
                 return a.fullName.localeCompare(b.fullName, 'vi');
             });
@@ -150,21 +166,21 @@ export const DoctorsList: React.FC = () => {
                 <div className={styles.grid4}>
                     {filteredDoctors.map(doc => (
                         <div key={doc.id} className={styles.doctorCard}>
-                            <div className={styles.doctorAvatar}>
-                                <User size={44} />
+                            <div className={styles.doctorAvatar} style={{ background: '#f1f5f9', color: 'var(--c-primary)', fontWeight: 700, fontSize: '1.1rem' }}>
+                                {getDoctorInitials(doc.fullName)}
                             </div>
                             <h2 className={styles.doctorName}>
-                                {doc.academicTitle ? `${doc.academicTitle}. ` : ''}{doc.fullName}
+                                {formatDoctorTitleAndName(doc.academicTitle, doc.fullName)}
                             </h2>
                             <span className={styles.doctorSpecialty}>
-                                {doc.specialtyName || 'Bác sĩ Đa khoa'}
+                                {doc.specialtyName || 'Chuyên khoa'}
                             </span>
                             <span className={styles.doctorExp}>
-                                {doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Bác sĩ chuyên khoa'}
+                                {doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật'}
                             </span>
                             
                             <p style={{ fontSize: '0.85rem', color: 'var(--c-text-muted)', lineClamp: 2, overflow: 'hidden', textOverflow: 'ellipsis', margin: '0 0 16px 0', minHeight: '38px' }}>
-                                {doc.description || 'Chuyên gia thăm khám và điều trị chuyên sâu, tận tâm đồng hành cùng người bệnh.'}
+                                {doc.description || 'Bác sĩ chuyên khoa tại hệ thống phòng khám ClinicCare.'}
                             </p>
 
                             <div className={styles.doctorActions}>

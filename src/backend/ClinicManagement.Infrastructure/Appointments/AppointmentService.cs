@@ -13,17 +13,21 @@ using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
 
+using ClinicManagement.Application.Common.Interfaces;
+
 namespace ClinicManagement.Infrastructure.Appointments;
 
 public class AppointmentService : IAppointmentService
 {
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public AppointmentService(AppDbContext dbContext, ICurrentUserService currentUserService)
+    public AppointmentService(AppDbContext dbContext, ICurrentUserService currentUserService, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<AppointmentDto> CreateAppointmentAsync(CreateAppointmentRequest request)
@@ -32,7 +36,8 @@ public class AppointmentService : IAppointmentService
         if (currentUserId == null || currentUserId == Guid.Empty)
             throw new UnauthorizedException("Chưa đăng nhập.");
 
-        if (request.Reason != null && (request.Reason.Length < 10 || request.Reason.Length > 500))
+        var normalizedReason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
+        if (normalizedReason != null && (normalizedReason.Length < 10 || normalizedReason.Length > 500))
             throw new BusinessException("VALIDATION_ERROR", "Lý do khám phải từ 10 đến 500 ký tự.");
 
         // 1 & 2 & 3. Validate Patient
@@ -54,6 +59,9 @@ public class AppointmentService : IAppointmentService
         if (doctor == null)
             throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ không tồn tại hoặc đã ngừng hoạt động.");
 
+        var doctorUser = await _dbContext.Users.FindAsync(doctor.UserId);
+        var doctorName = doctorUser?.FullName ?? "Bác sĩ";
+
         // 5 & 6. Validate Specialty
         var specialty = await _dbContext.Specialties.FirstOrDefaultAsync(s => s.Id == request.SpecialtyId && s.IsActive);
         if (specialty == null)
@@ -74,7 +82,10 @@ public class AppointmentService : IAppointmentService
         var slotStart = slot.SlotDate.ToDateTime(slot.StartTime);
         var slotEnd = slot.SlotDate.ToDateTime(slot.EndTime);
 
-        if (slotStart <= DateTime.UtcNow)
+        var vnToday = _dateTimeProvider.VietnamToday;
+        var vnTime = _dateTimeProvider.VietnamTime;
+
+        if (slot.SlotDate < vnToday || (slot.SlotDate == vnToday && slot.StartTime <= vnTime))
             throw new BusinessException("VALIDATION_ERROR", "Không thể đặt lịch trong quá khứ.");
 
         if ((slotEnd - slotStart).TotalMinutes != 30)
@@ -130,7 +141,7 @@ public class AppointmentService : IAppointmentService
                 throw new BusinessException("PATIENT_TIME_CONFLICT", "Bạn đã có lịch khám khác trùng hoặc giao lấp thời gian với slot này.");
 
             // Create Appointment
-            var appointmentCode = "APT-" + DateTime.UtcNow.ToString("yyMMdd") + "-" + Guid.NewGuid().ToString("N").Substring(0, 4).ToUpper();
+            var appointmentCode = $"APT-{_dateTimeProvider.VietnamNow:yyMMdd}-{Guid.NewGuid():N}"[..18].ToUpper();
 
             var appointment = new Appointment
             {
@@ -142,7 +153,7 @@ public class AppointmentService : IAppointmentService
                 AppointmentDate = slot.SlotDate,
                 StartTime = slot.StartTime,
                 EndTime = slot.EndTime,
-                Reason = request.Reason,
+                Reason = normalizedReason,
                 Status = AppointmentStatus.Pending
             };
 
@@ -171,9 +182,9 @@ public class AppointmentService : IAppointmentService
                 AppointmentCode = appointment.AppointmentCode,
                 PatientId = appointment.PatientId,
                 DoctorId = appointment.DoctorId,
-                DoctorName = "",
+                DoctorName = doctorName,
                 SpecialtyId = appointment.SpecialtyId,
-                SpecialtyName = "",
+                SpecialtyName = specialty.Name,
                 AppointmentSlotId = appointment.AppointmentSlotId,
                 AppointmentDate = appointment.AppointmentDate,
                 StartTime = appointment.StartTime,

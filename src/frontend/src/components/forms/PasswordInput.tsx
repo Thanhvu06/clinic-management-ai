@@ -27,6 +27,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(({
             <input
                 ref={ref}
                 type={showPassword ? 'text' : 'password'}
+                aria-invalid={resolvedInvalid ? 'true' : undefined}
                 className={`
                     ${styles.input}
                     ${resolvedStartIcon ? styles.hasStartIcon : ''}
@@ -42,7 +43,6 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(({
                     className={styles.eyeBtn}
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                    tabIndex={-1}
                 >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>

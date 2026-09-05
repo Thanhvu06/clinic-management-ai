@@ -59,4 +59,60 @@ public class PatientPrivacyTests : IntegrationTestBase
         var prescriptionsResponse = await Client.GetAsync("/api/v1/patients/me/prescriptions");
         Assert.Equal(HttpStatusCode.OK, prescriptionsResponse.StatusCode);
     }
+
+    [Fact]
+    public async Task Given_Patient1PackageRegistration_When_Patient2AttemptsToAccess_Then_ReturnsNotFound()
+    {
+        // 1. Patient 1 registers for a health package
+        await AuthenticateAsync("pat1@test.com");
+        var tomorrow = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
+        var regResponse = await Client.PostAsJsonAsync("/api/v1/patient/health-package-registrations", new ClinicManagement.Application.HealthPackages.DTOs.CreatePackageRegistrationRequest
+        {
+            HealthPackageId = PackageEntityId,
+            PreferredDate = tomorrow,
+            ContactPhone = "0912345678",
+            Note = "Bệnh nhân 1 đăng ký riêng tư"
+        });
+        Assert.Equal(HttpStatusCode.Created, regResponse.StatusCode);
+        var regDoc = JsonDocument.Parse(await regResponse.Content.ReadAsStringAsync());
+        var regId = regDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+
+        // 2. Patient 2 authenticates
+        await AuthenticateAsync("pat2@test.com");
+
+        // Attempt 1: Direct GET by ID
+        var getById = await Client.GetAsync($"/api/v1/patient/health-package-registrations/{regId}");
+        Assert.Equal(HttpStatusCode.NotFound, getById.StatusCode);
+
+        // Attempt 2: Cancel Patient 1's registration
+        var cancelAttempt = await Client.PostAsJsonAsync($"/api/v1/patient/health-package-registrations/{regId}/cancel", new ClinicManagement.Application.HealthPackages.DTOs.CancelPackageRegistrationRequest
+        {
+            CancellationReason = "Hủy lén của Patient 1"
+        });
+        Assert.Equal(HttpStatusCode.NotFound, cancelAttempt.StatusCode);
+
+        // Attempt 3: List for Patient 2 must not contain Patient 1's registration
+        var listResponse = await Client.GetAsync("/api/v1/patient/health-package-registrations");
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        var listJson = await listResponse.Content.ReadAsStringAsync();
+        Assert.DoesNotContain($"\"id\":{regId},", listJson);
+        Assert.DoesNotContain("Bệnh nhân 1 đăng ký riêng tư", listJson);
+    }
+
+    [Fact]
+    public async Task Given_TwoPatients_When_AccessingMeProfile_Then_StrictlyIsolated()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var p1Res = await Client.GetAsync("/api/v1/patients/me");
+        Assert.Equal(HttpStatusCode.OK, p1Res.StatusCode);
+        var p1Json = await p1Res.Content.ReadAsStringAsync();
+        Assert.Contains("pat1@test.com", p1Json);
+
+        await AuthenticateAsync("pat2@test.com");
+        var p2Res = await Client.GetAsync("/api/v1/patients/me");
+        Assert.Equal(HttpStatusCode.OK, p2Res.StatusCode);
+        var p2Json = await p2Res.Content.ReadAsStringAsync();
+        Assert.Contains("pat2@test.com", p2Json);
+        Assert.DoesNotContain("pat1@test.com", p2Json);
+    }
 }

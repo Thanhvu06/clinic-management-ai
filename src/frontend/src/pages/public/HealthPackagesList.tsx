@@ -12,7 +12,8 @@ interface HealthPackage {
     targetAudience: string;
     description: string;
     price: number;
-    includedServicesJson: string;
+    includedServices?: string[];
+    includedServicesJson?: string;
     isActive: boolean;
 }
 
@@ -96,7 +97,9 @@ export const HealthPackagesList: React.FC = () => {
             ) : filteredPackages.length > 0 ? (
                 <div className={styles.grid3}>
                     {filteredPackages.map(pkg => {
-                        const services = parseIncludedServices(pkg.includedServicesJson);
+                        const services = (pkg.includedServices && pkg.includedServices.length > 0)
+                            ? pkg.includedServices
+                            : parseIncludedServices(pkg.includedServicesJson);
                         return (
                             <div key={pkg.id} className={styles.packageCard}>
                                 <span className={styles.packageBadge}>{pkg.code}</span>

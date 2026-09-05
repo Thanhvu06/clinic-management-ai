@@ -2,19 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Package, CheckCircle2, CalendarCheck, Phone, Users, ShieldCheck, AlertCircle } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
+import type { HealthPackageDto } from '../../types';
 import { parseIncludedServices, formatVndCurrency } from '../../utils/formatters';
 import styles from './PublicPages.module.css';
 
-interface HealthPackage {
-    id: number;
-    code: string;
-    name: string;
-    targetAudience: string;
-    description: string;
-    price: number;
-    includedServicesJson: string;
-    isActive: boolean;
-}
+type HealthPackage = HealthPackageDto;
 
 export const HealthPackageDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -66,7 +58,9 @@ export const HealthPackageDetail: React.FC = () => {
         );
     }
 
-    const services = parseIncludedServices(pkg.includedServicesJson);
+    const services = (pkg.includedServices && pkg.includedServices.length > 0)
+        ? pkg.includedServices
+        : parseIncludedServices(pkg.includedServicesJson);
 
     return (
         <div className={styles.pageContainer}>
@@ -107,7 +101,7 @@ export const HealthPackageDetail: React.FC = () => {
                     </p>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px', marginBottom: '32px' }}>
-                        {services.map((service, idx) => (
+                        {services.map((service: string, idx: number) => (
                             <div 
                                 key={idx} 
                                 style={{ 
@@ -127,7 +121,7 @@ export const HealthPackageDetail: React.FC = () => {
                     </h2>
                     <ul style={{ paddingLeft: '20px', color: 'var(--c-text)', lineHeight: 1.8, fontSize: '0.925rem', marginBottom: '32px' }}>
                         <li><strong>Nhịn ăn:</strong> Nhịn ăn ít nhất 6-8 tiếng trước khi lấy mẫu máu xét nghiệm (chỉ được uống nước lọc).</li>
-                        <li><strong>Thuốc đang dùng:</strong> Nếu bạn đang điều trị tăng huyết áp hoặc tim mạch, có thể uống thuốc bình thường cùng một ngụm nước nhỏ.</li>
+                        <li><strong>Thuốc đang dùng:</strong> Vui lòng mang theo đơn thuốc hoặc thông báo trước với bác sĩ/lễ tân về các loại thuốc bạn đang sử dụng định kỳ để được hướng dẫn phù hợp.</li>
                         <li><strong>Trang phục:</strong> Mặc quần áo rộng rãi, thuận tiện để thăm khám lâm sàng, đo điện tim và chụp X-quang.</li>
                         <li><strong>Giấy tờ:</strong> Mang theo Căn cước công dân hoặc giấy tờ tùy thân có ảnh khi làm thủ tục tại quầy lễ tân.</li>
                     </ul>
@@ -137,7 +131,7 @@ export const HealthPackageDetail: React.FC = () => {
                             <ShieldCheck size={20} /> Cam kết chất lượng dịch vụ ClinicCare
                         </div>
                         <p style={{ margin: 0, fontSize: '0.875rem', color: '#047857', lineHeight: 1.5 }}>
-                            Kết quả xét nghiệm được kiểm soát theo quy chuẩn ISO y tế. Sau khi hoàn tất các chỉ định, bác sĩ chuyên khoa sẽ trực tiếp đọc kết quả, giải thích ý nghĩa các chỉ số và tư vấn điều chỉnh lối sống cụ thể cho bạn.
+                            Quy trình thăm khám và xét nghiệm được thực hiện đồng bộ theo đúng tiêu chuẩn chuyên môn y khoa. Sau khi hoàn tất các chỉ định, bác sĩ chuyên khoa sẽ trực tiếp đọc kết quả, giải thích chi tiết và tư vấn định hướng chăm sóc sức khỏe cụ thể cho bạn.
                         </p>
                     </div>
                 </div>

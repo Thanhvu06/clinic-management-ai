@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { getRoleDashboardPath } from '../utils/roleRoutes';
 
 export const ProtectedRoute: React.FC = () => {
     const { isAuthenticated, loading } = useAuth();
@@ -17,11 +18,7 @@ export const PublicRoute: React.FC = () => {
     if (loading) return <div style={{ padding: '20px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải...</div>;
 
     if (isAuthenticated && user) {
-        let path = '/patient';
-        if (user.role === 'Admin') path = '/admin';
-        else if (user.role === 'Doctor') path = '/doctor';
-        else if (user.role === 'Receptionist') path = '/reception';
-        
+        const path = getRoleDashboardPath(user.role);
         return <Navigate to={path} replace />;
     }
 
@@ -42,7 +39,7 @@ export const RoleRoute: React.FC<RoleRouteProps> = ({ roles }) => {
     }
 
     if (user && !roles.includes(user.role)) {
-        return <Navigate to="/403" replace />;
+        return <Navigate to="/forbidden" replace />;
     }
 
     return <Outlet />;

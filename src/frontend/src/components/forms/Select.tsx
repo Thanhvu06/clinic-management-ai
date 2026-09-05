@@ -14,6 +14,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(({
     return (
         <select
             ref={ref}
+            aria-invalid={isInvalid ? 'true' : undefined}
             className={`
                 ${styles.select}
                 ${isInvalid ? styles.isInvalid : ''}

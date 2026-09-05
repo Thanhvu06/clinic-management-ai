@@ -102,6 +102,7 @@ builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<ISpecialtyService, SpecialtyService>();
+builder.Services.AddSingleton<ClinicManagement.Application.Common.Interfaces.IDateTimeProvider, ClinicManagement.Infrastructure.Services.DateTimeProvider>();
 builder.Services.AddScoped<IDoctorService, DoctorService>();
 builder.Services.AddScoped<IScheduleService, ScheduleService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
@@ -120,6 +121,7 @@ builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSpecial
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IClinicAiContextService, ClinicManagement.Infrastructure.AI.ClinicAiContextService>();
 builder.Services.AddScoped<ClinicManagement.Application.HealthPackages.Interfaces.IHealthPackageService, ClinicManagement.Infrastructure.HealthPackages.HealthPackageService>();
 builder.Services.AddScoped<ClinicManagement.Application.HealthPackages.Interfaces.IHealthPackageRegistrationService, ClinicManagement.Infrastructure.HealthPackages.HealthPackageRegistrationService>();
+builder.Services.AddScoped<ClinicManagement.Application.Locations.Interfaces.ILocationService, ClinicManagement.Infrastructure.Locations.LocationService>();
 builder.Services.AddScoped<ClinicManagement.Application.Medicines.Interfaces.IMedicineService, ClinicManagement.Infrastructure.Medicines.MedicineService>();
 builder.Services.AddScoped<ClinicManagement.Application.Pharmacy.Interfaces.IPharmacyService, ClinicManagement.Infrastructure.Pharmacy.PharmacyService>();
 

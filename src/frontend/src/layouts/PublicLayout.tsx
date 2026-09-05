@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { getRoleDashboardPath } from '../utils/roleRoutes';
 import styles from './PublicLayout.module.css';
 import { AppointmentLookupModal } from '../components/AppointmentLookupModal';
 import { 
     Phone, Clock, MapPin, ShieldPlus, Menu, X, 
-    UserCircle, Calendar, FileText, Pill, LogOut, ChevronDown, Search, Globe, PackageCheck 
+    UserCircle, Calendar, FileText, Pill, LogOut, ChevronDown, Search, PackageCheck 
 } from 'lucide-react';
 
 export const PublicLayout: React.FC = () => {
@@ -15,7 +16,6 @@ export const PublicLayout: React.FC = () => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
-    const [currentLang, setCurrentLang] = useState<'vi' | 'en'>('vi');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const handleLogout = () => {
@@ -85,14 +85,6 @@ export const PublicLayout: React.FC = () => {
                         <Link to="/locations" className={styles.topBarInfoItem} style={{ textDecoration: 'none' }}>
                             <MapPin size={14} /> Hệ thống cơ sở phòng khám
                         </Link>
-                        <button
-                            type="button"
-                            onClick={() => setCurrentLang(prev => prev === 'vi' ? 'en' : 'vi')}
-                            className={styles.langToggleBtn}
-                            title="Chuyển đổi ngôn ngữ"
-                        >
-                            <Globe size={13} /> {currentLang === 'vi' ? 'VIE' : 'ENG'}
-                        </button>
                     </div>
                 </div>
             </div>
@@ -159,7 +151,7 @@ export const PublicLayout: React.FC = () => {
                                             </>
                                         ) : (
                                             <Link 
-                                                to={isStaff ? `/${user?.role.toLowerCase()}` : '/'} 
+                                                to={getRoleDashboardPath(user?.role)} 
                                                 className={styles.dropdownItem} 
                                                 onClick={() => setIsDropdownOpen(false)}
                                             >
@@ -249,7 +241,7 @@ export const PublicLayout: React.FC = () => {
                                 </>
                             ) : (
                                 <>
-                                    <Link to={`/${user?.role.toLowerCase()}`} className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Bảng điều khiển quản trị</Link>
+                                    <Link to={getRoleDashboardPath(user?.role)} className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Bảng điều khiển quản trị</Link>
                                     <button onClick={handleLogout} className={styles.navLink} style={{ textAlign: 'left', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--c-danger)' }}>Đăng xuất</button>
                                 </>
                             )
@@ -277,8 +269,8 @@ export const PublicLayout: React.FC = () => {
                             ClinicCare AI
                         </div>
                         <p>Hệ thống phòng khám đa khoa thông minh tích hợp trí tuệ nhân tạo, mang lại trải nghiệm khám chữa bệnh nhanh chóng, chính xác và tiện lợi.</p>
-                        <p style={{ marginTop: '20px' }}><MapPin size={16} /> 123 Nguyễn Văn Linh, Quận 7, TP.HCM</p>
-                        <p><Phone size={16} /> Hotline: 1900 1234 (7:00 - 19:00)</p>
+                        <p style={{ marginTop: '20px' }}><MapPin size={16} /> 123 Nguyễn Thị Minh Khai, Phường Bến Thành, Quận 1, TP.HCM</p>
+                        <p><Phone size={16} /> Hotline: 1900 1234 - (028) 3930 1234 (7:00 - 19:00)</p>
                     </div>
                     <div className={styles.footerCol}>
                         <h3>Dịch vụ & Đặt hẹn</h3>

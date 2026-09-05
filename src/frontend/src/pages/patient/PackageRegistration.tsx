@@ -14,7 +14,8 @@ interface HealthPackage {
     targetAudience: string;
     description: string;
     price: number;
-    includedServicesJson: string;
+    includedServices?: string[];
+    includedServicesJson?: string;
     isActive: boolean;
 }
 
@@ -114,7 +115,7 @@ export const PackageRegistration: React.FC = () => {
                 healthPackageId: pkg.id,
                 preferredDate,
                 contactPhone: contactPhone.trim(),
-                notes: notes.trim()
+                note: notes.trim() ? notes.trim() : undefined
             };
 
             const res = await axiosClient.post<any, any>('/patient/health-package-registrations', payload);
@@ -238,7 +239,9 @@ export const PackageRegistration: React.FC = () => {
         );
     }
 
-    const services = parseIncludedServices(pkg.includedServicesJson);
+    const services = (pkg.includedServices && pkg.includedServices.length > 0)
+        ? pkg.includedServices
+        : parseIncludedServices(pkg.includedServicesJson);
 
     return (
         <div style={{ maxWidth: '860px', margin: '32px auto 80px auto', padding: '0 20px' }}>

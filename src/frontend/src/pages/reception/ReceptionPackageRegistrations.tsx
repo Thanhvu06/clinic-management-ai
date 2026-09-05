@@ -11,13 +11,19 @@ interface PackageRegistrationItem {
     patientId: number;
     patientName: string;
     healthPackageId: number;
-    packageName: string;
-    packageCode: string;
-    packagePrice: number;
+    healthPackageName?: string;
+    packageName?: string;
+    healthPackageCode?: string;
+    packageCode?: string;
+    healthPackagePrice?: number;
+    packagePrice?: number;
     preferredDate: string;
     contactPhone: string;
+    note?: string;
     notes?: string;
-    status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
+    adminNotes?: string;
+    cancellationReason?: string;
+    status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled' | string;
     createdAt: string;
 }
 
@@ -233,11 +239,21 @@ export const ReceptionPackageRegistrations: React.FC = () => {
                                             <div style={{ fontSize: '0.85rem', color: 'var(--c-text-muted)' }}>{reg.contactPhone}</div>
                                         </td>
                                         <td>
-                                            <div style={{ fontWeight: 600 }}>{reg.packageName}</div>
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--c-text-muted)' }}>Mã: {reg.packageCode}</div>
-                                            {reg.notes && (
+                                            <div style={{ fontWeight: 600 }}>{reg.healthPackageName || reg.packageName}</div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--c-text-muted)' }}>Mã: {reg.healthPackageCode || reg.packageCode}</div>
+                                            {(reg.note || reg.notes) && (
                                                 <div style={{ fontSize: '0.8rem', color: '#64748b', fontStyle: 'italic', maxWidth: '240px' }}>
-                                                    "{reg.notes}"
+                                                    "{reg.note || reg.notes}"
+                                                </div>
+                                            )}
+                                            {reg.adminNotes && (
+                                                <div style={{ fontSize: '0.75rem', color: '#065f46', marginTop: '2px' }}>
+                                                    <strong>Lễ tân:</strong> {reg.adminNotes}
+                                                </div>
+                                            )}
+                                            {reg.cancellationReason && (
+                                                <div style={{ fontSize: '0.75rem', color: '#991b1b', marginTop: '2px' }}>
+                                                    <strong>Lý do hủy:</strong> {reg.cancellationReason}
                                                 </div>
                                             )}
                                         </td>
@@ -246,7 +262,7 @@ export const ReceptionPackageRegistrations: React.FC = () => {
                                         </td>
                                         <td>
                                             <span style={{ fontWeight: 700, color: 'var(--c-primary)' }}>
-                                                {formatVndCurrency(reg.packagePrice)}
+                                                {formatVndCurrency(reg.healthPackagePrice ?? reg.packagePrice ?? 0)}
                                             </span>
                                         </td>
                                         <td>

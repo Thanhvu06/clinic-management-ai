@@ -70,6 +70,7 @@ function App() {
                                 </Route>
                                 
                                 <Route path="/forbidden" element={<Forbidden />} />
+                                <Route path="/403" element={<Forbidden />} />
 
                                 {/* Patient Protected Routes (Still in Public Layout) */}
                                 <Route element={<ProtectedRoute />}>

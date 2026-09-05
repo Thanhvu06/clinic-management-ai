@@ -9,13 +9,19 @@ interface PackageRegistrationItem {
     id: number;
     registrationCode: string;
     healthPackageId: number;
-    packageName: string;
-    packageCode: string;
-    packagePrice: number;
+    healthPackageName?: string;
+    packageName?: string;
+    healthPackageCode?: string;
+    packageCode?: string;
+    healthPackagePrice?: number;
+    packagePrice?: number;
     preferredDate: string;
     contactPhone: string;
+    note?: string;
     notes?: string;
-    status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
+    adminNotes?: string;
+    cancellationReason?: string;
+    status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled' | string;
     createdAt: string;
 }
 
@@ -172,13 +178,13 @@ export const PatientPackageRegistrations: React.FC = () => {
                                         {getStatusBadge(reg.status)}
                                     </div>
                                     <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--c-navy)', margin: 0 }}>
-                                        {reg.packageName}
+                                        {reg.healthPackageName || reg.packageName}
                                     </h2>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
                                     <span style={{ fontSize: '0.75rem', color: 'var(--c-text-muted)', display: 'block' }}>Chi phí trọn gói</span>
                                     <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--c-primary)' }}>
-                                        {formatVndCurrency(reg.packagePrice)}
+                                        {formatVndCurrency(reg.healthPackagePrice ?? reg.packagePrice ?? 0)}
                                     </span>
                                 </div>
                             </div>
@@ -202,9 +208,21 @@ export const PatientPackageRegistrations: React.FC = () => {
                                 </div>
                             </div>
 
-                            {reg.notes && (
-                                <div style={{ fontSize: '0.85rem', color: 'var(--c-text-muted)', marginBottom: '16px' }}>
-                                    <strong>Ghi chú:</strong> {reg.notes}
+                            {(reg.note || reg.notes) && (
+                                <div style={{ fontSize: '0.85rem', color: 'var(--c-text-muted)', marginBottom: '12px' }}>
+                                    <strong>Ghi chú của bạn:</strong> {reg.note || reg.notes}
+                                </div>
+                            )}
+
+                            {reg.adminNotes && (
+                                <div style={{ fontSize: '0.85rem', color: '#065f46', background: '#ecfdf5', padding: '8px 12px', borderRadius: '6px', marginBottom: '12px' }}>
+                                    <strong>Ghi chú từ phòng khám:</strong> {reg.adminNotes}
+                                </div>
+                            )}
+
+                            {reg.cancellationReason && (
+                                <div style={{ fontSize: '0.85rem', color: '#991b1b', background: '#fef2f2', padding: '8px 12px', borderRadius: '6px', marginBottom: '12px' }}>
+                                    <strong>Lý do hủy:</strong> {reg.cancellationReason}
                                 </div>
                             )}
 

@@ -26,6 +26,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(({
             {resolvedStartIcon && <div className={styles.startIcon}>{resolvedStartIcon}</div>}
             <input
                 ref={ref}
+                aria-invalid={resolvedInvalid ? 'true' : undefined}
                 className={`
                     ${styles.input}
                     ${resolvedStartIcon ? styles.hasStartIcon : ''}

@@ -13,6 +13,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({
     return (
         <textarea
             ref={ref}
+            aria-invalid={isInvalid ? 'true' : undefined}
             className={`
                 ${styles.textarea}
                 ${isInvalid ? styles.isInvalid : ''}

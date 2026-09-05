@@ -33,7 +33,21 @@ public class HealthPackageRegistrationDto
     public DateOnly PreferredDate { get; set; }
     public string ContactPhone { get; set; } = string.Empty;
     public string? Note { get; set; }
+    public string? AdminNotes { get; set; }
+    public string? CancellationReason { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+}
+
+public class ConfirmPackageRegistrationRequest
+{
+    [MaxLength(1000, ErrorMessage = "Ghi chú không được vượt quá 1000 ký tự.")]
+    public string? Notes { get; set; }
+}
+
+public class CancelPackageRegistrationRequest
+{
+    [MaxLength(500, ErrorMessage = "Lý do hủy không được vượt quá 500 ký tự.")]
+    public string? CancellationReason { get; set; }
 }

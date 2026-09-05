@@ -6,6 +6,7 @@ import { Mail, ArrowRight } from 'lucide-react';
 import { useDialog } from '../contexts/DialogContext';
 import { ForgotPasswordModal } from '../components/ForgotPasswordModal';
 import { AuthShell, FormField, TextInput, PasswordInput, Button, FormError } from '../components/forms';
+import { getRoleDashboardPath, sanitizeReturnUrl } from '../utils/roleRoutes';
 
 export const Login: React.FC = () => {
     const [emailOrPhone, setEmailOrPhone] = useState('');
@@ -39,19 +40,14 @@ export const Login: React.FC = () => {
                 login(res.data.accessToken, res.data.user);
 
                 // If returnUrl is provided and valid, navigate there
-                if (returnUrl && returnUrl.startsWith('/') && !returnUrl.startsWith('//')) {
-                    navigate(returnUrl);
+                const safeReturnUrl = sanitizeReturnUrl(returnUrl);
+                if (safeReturnUrl) {
+                    navigate(safeReturnUrl);
                     return;
                 }
 
                 // Default role-based redirection
-                switch (res.data.user.role) {
-                    case 'Admin': navigate('/admin'); break;
-                    case 'Doctor': navigate('/doctor'); break;
-                    case 'Receptionist': navigate('/reception'); break;
-                    case 'Pharmacist': navigate('/pharmacy'); break;
-                    default: navigate('/patient'); break;
-                }
+                navigate(getRoleDashboardPath(res.data.user.role));
             }
         } catch (err: any) {
             let errorMsg = 'Đăng nhập thất bại. Vui lòng kiểm tra lại email/SĐT và mật khẩu.';
@@ -68,7 +64,8 @@ export const Login: React.FC = () => {
         }
     };
 
-    const registerUrl = returnUrl ? `/register?returnUrl=${encodeURIComponent(returnUrl)}` : '/register';
+    const safeReturnUrl = sanitizeReturnUrl(returnUrl);
+    const registerUrl = safeReturnUrl ? `/register?returnUrl=${encodeURIComponent(safeReturnUrl)}` : '/register';
 
     return (
         <AuthShell

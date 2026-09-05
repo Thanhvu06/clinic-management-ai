@@ -44,9 +44,12 @@ public class PatientHealthPackageRegistrationController : ControllerBase
     }
 
     [HttpPost("{id}/cancel")]
-    public async Task<ActionResult<ApiResponse<HealthPackageRegistrationDto>>> CancelRegistration(long id, CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<HealthPackageRegistrationDto>>> CancelRegistration(
+        long id, 
+        [FromBody] CancelPackageRegistrationRequest? request, 
+        CancellationToken cancellationToken)
     {
-        var result = await _registrationService.CancelMyRegistrationAsync(id, cancellationToken);
+        var result = await _registrationService.CancelMyRegistrationAsync(id, request, cancellationToken);
         return Ok(ApiResponse<HealthPackageRegistrationDto>.Ok(result, "Hủy đăng ký gói khám thành công."));
     }
 }

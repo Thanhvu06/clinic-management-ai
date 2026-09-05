@@ -28,6 +28,8 @@ export const FormField: React.FC<FormFieldProps> = ({
 }) => {
     const targetId = htmlFor || id;
     const resolvedHelp = error ? undefined : (helperText || helpText);
+    const errorId = targetId && error ? `${targetId}-error` : undefined;
+    const helpId = targetId && resolvedHelp ? `${targetId}-help` : undefined;
 
     return (
         <div className={`${styles.formField} ${className || ''}`}>
@@ -42,9 +44,9 @@ export const FormField: React.FC<FormFieldProps> = ({
             )}
             {children}
             {error ? (
-                <div className={styles.errorText}>{error}</div>
+                <div id={errorId} role="alert" className={styles.errorText}>{error}</div>
             ) : resolvedHelp ? (
-                <div className={styles.helperText}>{resolvedHelp}</div>
+                <div id={helpId} className={styles.helperText}>{resolvedHelp}</div>
             ) : null}
         </div>
     );

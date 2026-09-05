@@ -168,4 +168,43 @@ public class HealthPackageRegistrationTests : IntegrationTestBase
         var response2 = await Client.GetAsync("/api/v1/patient/health-package-registrations");
         Assert.Equal(HttpStatusCode.Forbidden, response2.StatusCode);
     }
+
+    [Fact]
+    public async Task Given_Receptionist_When_QueriesPagedAndManagesRegistrations_Then_CorrectPagedResultAndNotesPersisted()
+    {
+        // 1. Register a package
+        await AuthenticateAsync("pat1@test.com");
+        var tomorrow = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(5));
+        var regRes = await Client.PostAsJsonAsync("/api/v1/patient/health-package-registrations", new CreatePackageRegistrationRequest
+        {
+            HealthPackageId = PackageEntityId,
+            PreferredDate = tomorrow,
+            ContactPhone = "0933333333",
+            Note = "Cần tư vấn thêm xét nghiệm máu"
+        });
+        Assert.Equal(HttpStatusCode.Created, regRes.StatusCode);
+        var regDoc = JsonDocument.Parse(await regRes.Content.ReadAsStringAsync());
+        var regId = regDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        var regCode = regDoc.RootElement.GetProperty("data").GetProperty("registrationCode").GetString();
+
+        // 2. Receptionist queries with paging and search
+        await AuthenticateAsync("rec@test.com");
+        var pagedRes = await Client.GetAsync($"/api/v1/reception/health-package-registrations?page=1&pageSize=10&search={regCode}&status=Pending");
+        Assert.Equal(HttpStatusCode.OK, pagedRes.StatusCode);
+
+        var pagedJson = await pagedRes.Content.ReadAsStringAsync();
+        Assert.Contains("\"items\":", pagedJson);
+        Assert.Contains("\"totalItems\":", pagedJson);
+        Assert.Contains(regCode!, pagedJson);
+
+        // 3. Confirm with reception note
+        var confirmRes = await Client.PostAsJsonAsync($"/api/v1/reception/health-package-registrations/{regId}/confirm", new ConfirmPackageRegistrationRequest
+        {
+            Notes = "Đã gọi xác nhận và hẹn giờ 8:00 sáng"
+        });
+        Assert.Equal(HttpStatusCode.OK, confirmRes.StatusCode);
+        var confirmDoc = JsonDocument.Parse(await confirmRes.Content.ReadAsStringAsync());
+        Assert.Equal("Confirmed", confirmDoc.RootElement.GetProperty("data").GetProperty("status").GetString());
+        Assert.Equal("Đã gọi xác nhận và hẹn giờ 8:00 sáng", confirmDoc.RootElement.GetProperty("data").GetProperty("adminNotes").GetString());
+    }
 }

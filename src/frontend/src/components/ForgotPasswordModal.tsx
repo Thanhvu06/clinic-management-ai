@@ -213,12 +213,13 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
                     {step === 'request' ? (
                         <form onSubmit={handleRequestToken}>
                             <div style={{ marginBottom: '20px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
+                                <label htmlFor="forgot-email" style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
                                     Địa chỉ Email tài khoản
                                 </label>
                                 <div style={{ position: 'relative' }}>
                                     <Mail size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: '#94a3b8' }} />
                                     <input
+                                        id="forgot-email"
                                         type="email"
                                         required
                                         value={email}
@@ -256,10 +257,11 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
                     ) : (
                         <form onSubmit={handleResetPassword}>
                             <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
+                                <label htmlFor="forgot-token" style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
                                     Mã xác thực (Token)
                                 </label>
                                 <input
+                                    id="forgot-token"
                                     type="text"
                                     required
                                     value={token}
@@ -278,12 +280,13 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
                             </div>
 
                             <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
+                                <label htmlFor="forgot-newPassword" style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
                                     Mật khẩu mới (tối thiểu 6 ký tự)
                                 </label>
                                 <div style={{ position: 'relative' }}>
                                     <Lock size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: '#94a3b8' }} />
                                     <input
+                                        id="forgot-newPassword"
                                         type="password"
                                         required
                                         minLength={6}
@@ -303,12 +306,13 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
                             </div>
 
                             <div style={{ marginBottom: '22px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
+                                <label htmlFor="forgot-confirmPassword" style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
                                     Xác nhận mật khẩu mới
                                 </label>
                                 <div style={{ position: 'relative' }}>
                                     <Lock size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: '#94a3b8' }} />
                                     <input
+                                        id="forgot-confirmPassword"
                                         type="password"
                                         required
                                         minLength={6}

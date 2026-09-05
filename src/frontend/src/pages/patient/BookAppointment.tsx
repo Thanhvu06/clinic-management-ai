@@ -217,19 +217,19 @@ export const BookAppointment: React.FC = () => {
                 doctorId,
                 specialtyId,
                 appointmentSlotId: slotId,
-                reason: reason.trim()
+                reason: reason.trim() ? reason.trim() : null
             });
 
             if (res.success && res.data) {
                 setSuccessBooking({
                     appointmentId: res.data.id || res.data.appointmentId,
-                    appointmentCode: res.data.appointmentCode || 'APT-CONFIRMED',
-                    doctorName: selectedDoc?.fullName || "Bác sĩ chuyên khoa",
-                    specialtyName: selectedSpec?.specialtyName || "Chuyên khoa",
+                    appointmentCode: res.data.appointmentCode,
+                    doctorName: res.data.doctorName || selectedDoc?.fullName || "",
+                    specialtyName: res.data.specialtyName || selectedSpec?.specialtyName || "",
                     slotDate,
-                    startTime: selectedSlot?.startTime.substring(0, 5) || "",
-                    endTime: selectedSlot?.endTime.substring(0, 5) || "",
-                    reason: reason.trim()
+                    startTime: (res.data.startTime || selectedSlot?.startTime || "").substring(0, 5),
+                    endTime: (res.data.endTime || selectedSlot?.endTime || "").substring(0, 5),
+                    reason: res.data.reason || (reason.trim() ? reason.trim() : undefined)
                 });
             }
         } catch (err: any) {

@@ -24,6 +24,12 @@ public class HealthPackageRegistration
     [StringLength(1000)]
     public string? Note { get; set; }
 
+    [StringLength(1000)]
+    public string? AdminNotes { get; set; }
+
+    [StringLength(500)]
+    public string? CancellationReason { get; set; }
+
     public HealthPackageRegistrationStatus Status { get; set; } = HealthPackageRegistrationStatus.Pending;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

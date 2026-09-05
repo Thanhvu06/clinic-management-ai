@@ -17,18 +17,22 @@ public class AppointmentFlowTests : IntegrationTestBase
     {
         await AuthenticateAsync("pat1@test.com");
 
+        var testDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(5));
+        var testSlot = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(10, 0, 0), new TimeOnly(10, 30, 0));
+        var testSlotId = testSlot.Id;
+
         var request = new
         {
             DoctorId = DoctorEntityId,
             SpecialtyId = SpecialtyEntityId,
-            AppointmentSlotId = SlotEntityId,
+            AppointmentSlotId = testSlotId,
             Reason = "Đau lưng quá"
         };
 
         var response = await Client.PostAsJsonAsync("/api/v1/appointments", request);
         var json = await response.Content.ReadAsStringAsync();
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.True(response.StatusCode == HttpStatusCode.Created, $"Status was {response.StatusCode}. Response: {json}");
         Assert.Contains("Pending", json);
 
         // Extract appointment ID
@@ -38,7 +42,8 @@ public class AppointmentFlowTests : IntegrationTestBase
         // Check the slot is booked
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ClinicManagement.Infrastructure.Persistence.AppDbContext>();
-        var slot = await db.AppointmentSlots.FindAsync(SlotEntityId);
+        var slot = await db.AppointmentSlots.FindAsync(testSlotId);
+        Assert.NotNull(slot);
         Assert.True(slot.IsBooked);
 
         // Test 1: Doctor 1 should be able to get history for this appointment (they own it)

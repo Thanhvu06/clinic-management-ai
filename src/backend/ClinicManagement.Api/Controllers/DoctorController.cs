@@ -44,4 +44,18 @@ public class DoctorController : ControllerBase
         var slots = await _doctorService.GetAvailableSlotsAsync(doctorId, fromDate, toDate, specialtyId);
         return Ok(ApiResponse<List<AvailableSlotDto>>.Ok(slots));
     }
+
+    [HttpGet("{doctorId}/availability")]
+    public async Task<IActionResult> GetDoctorAvailability(
+        long doctorId,
+        [FromQuery] DateOnly? fromDate,
+        [FromQuery] DateOnly? toDate,
+        [FromQuery] long? specialtyId,
+        [FromServices] ClinicManagement.Application.Common.Interfaces.IDateTimeProvider dateTimeProvider)
+    {
+        var start = fromDate ?? dateTimeProvider.VietnamToday;
+        var end = toDate ?? start.AddDays(13);
+        var availability = await _doctorService.GetDoctorAvailabilityAsync(doctorId, start, end, specialtyId);
+        return Ok(ApiResponse<DoctorAvailabilityDto>.Ok(availability));
+    }
 }

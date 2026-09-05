@@ -200,19 +200,29 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         
         var schedule = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
-            db.DoctorWorkSchedules, s => s.DoctorId == doctorId && s.WorkDate == date);
+            db.DoctorWorkSchedules, s => s.DoctorId == doctorId && s.WorkDate == date && s.StartTime <= startTime && s.EndTime >= endTime);
         if (schedule == null)
         {
             schedule = new DoctorWorkSchedule
             {
                 DoctorId = doctorId,
                 WorkDate = date,
-                StartTime = new TimeOnly(7, 0, 0),
-                EndTime = new TimeOnly(20, 0, 0),
+                StartTime = startTime < new TimeOnly(7, 0, 0) ? startTime : new TimeOnly(7, 0, 0),
+                EndTime = endTime > new TimeOnly(20, 0, 0) ? endTime : new TimeOnly(20, 0, 0),
                 IsActive = true
             };
             db.DoctorWorkSchedules.Add(schedule);
             await db.SaveChangesAsync();
+        }
+
+        var existingSlot = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+            db.AppointmentSlots, s => s.DoctorId == doctorId && s.SlotDate == date && s.StartTime == startTime);
+        if (existingSlot != null)
+        {
+            existingSlot.IsBooked = false;
+            existingSlot.EndTime = endTime;
+            await db.SaveChangesAsync();
+            return existingSlot;
         }
 
         var slot = new AppointmentSlot

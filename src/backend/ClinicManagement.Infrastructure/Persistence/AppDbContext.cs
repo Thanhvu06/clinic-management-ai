@@ -38,12 +38,21 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<HealthPackage> HealthPackages { get; set; } = null!;
     public DbSet<HealthPackageRegistration> HealthPackageRegistrations { get; set; } = null!;
 
+    // Clinic Locations
+    public DbSet<ClinicLocation> ClinicLocations { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
         
         builder.Entity<PrescriptionItem>()
             .HasKey(pi => new { pi.PrescriptionId, pi.MedicineId });
+
+        builder.Entity<ClinicLocation>(b =>
+        {
+            b.HasIndex(l => l.Code).IsUnique();
+            b.HasIndex(l => l.IsActive);
+        });
 
         builder.Entity<HealthPackageRegistration>(b =>
         {
