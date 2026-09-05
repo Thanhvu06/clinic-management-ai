@@ -49,9 +49,19 @@ public class ExceptionMiddleware
                 response.ErrorCode = "UNAUTHORIZED";
                 response.Message = e.Message;
                 break;
+            case ForbiddenException e:
+                context.Response.StatusCode = (int)HttpStatusCode.Forbidden;
+                response.ErrorCode = e.ErrorCode;
+                response.Message = e.Message;
+                break;
             case NotFoundException e:
                 context.Response.StatusCode = (int)HttpStatusCode.NotFound;
                 response.ErrorCode = "RESOURCE_NOT_FOUND";
+                response.Message = e.Message;
+                break;
+            case ConflictException e:
+                context.Response.StatusCode = (int)HttpStatusCode.Conflict;
+                response.ErrorCode = e.ErrorCode;
                 response.Message = e.Message;
                 break;
             case BusinessException e:

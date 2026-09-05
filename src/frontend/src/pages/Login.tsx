@@ -6,7 +6,7 @@ import { Mail, ArrowRight } from 'lucide-react';
 import { useDialog } from '../contexts/DialogContext';
 import { ForgotPasswordModal } from '../components/ForgotPasswordModal';
 import { AuthShell, FormField, TextInput, PasswordInput, Button, FormError } from '../components/forms';
-import { getRoleDashboardPath, sanitizeReturnUrl } from '../utils/roleRoutes';
+import { getRoleDashboardPath, sanitizeReturnUrl, getRedirectAfterLogin } from '../utils/roleRoutes';
 
 export const Login: React.FC = () => {
     const [emailOrPhone, setEmailOrPhone] = useState('');
@@ -39,15 +39,8 @@ export const Login: React.FC = () => {
                 showToast('Đăng nhập thành công', 'success');
                 login(res.data.accessToken, res.data.user);
 
-                // If returnUrl is provided and valid, navigate there
-                const safeReturnUrl = sanitizeReturnUrl(returnUrl);
-                if (safeReturnUrl) {
-                    navigate(safeReturnUrl);
-                    return;
-                }
-
-                // Default role-based redirection
-                navigate(getRoleDashboardPath(res.data.user.role));
+                const targetPath = getRedirectAfterLogin(res.data.user?.role, returnUrl);
+                navigate(targetPath, { replace: true });
             }
         } catch (err: any) {
             let errorMsg = 'Đăng nhập thất bại. Vui lòng kiểm tra lại email/SĐT và mật khẩu.';

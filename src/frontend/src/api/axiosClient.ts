@@ -23,10 +23,12 @@ axiosClient.interceptors.response.use(
         if (error.response?.status === 401) {
             localStorage.removeItem('token');
             if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-                window.location.href = '/login';
+                const currentFull = window.location.pathname + window.location.search + window.location.hash;
+                const safeParam = currentFull && currentFull !== '/' ? `?returnUrl=${encodeURIComponent(currentFull)}` : '';
+                window.location.href = `/login${safeParam}`;
             }
         } else if (error.response?.status === 403) {
-            if (window.location.pathname !== '/forbidden') {
+            if (window.location.pathname !== '/forbidden' && window.location.pathname !== '/403') {
                 window.location.href = '/forbidden';
             }
         }

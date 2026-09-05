@@ -108,6 +108,7 @@ builder.Services.AddScoped<IScheduleService, ScheduleService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<IChangeRequestService, ChangeRequestService>();
 builder.Services.AddScoped<IReceptionService, ReceptionService>();
+builder.Services.AddScoped<ClinicManagement.Application.Doctors.Interfaces.IDoctorContextService, ClinicManagement.Infrastructure.Doctors.DoctorContextService>();
 builder.Services.AddScoped<IDoctorAppointmentService, DoctorAppointmentService>();
 builder.Services.AddScoped<IRevisitService, RevisitService>();
 builder.Services.AddScoped<ClinicManagement.Application.Admin.Interfaces.IAdminUserService, ClinicManagement.Infrastructure.Admin.AdminUserService>();
