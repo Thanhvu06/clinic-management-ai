@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
+using ClinicManagement.Application.Doctors.Interfaces;
 using ClinicManagement.Application.Leaves.DTOs;
 using ClinicManagement.Application.Leaves.Interfaces;
 using ClinicManagement.Domain.Entities;
@@ -16,24 +18,22 @@ namespace ClinicManagement.Infrastructure.Leaves;
 public class DoctorLeaveService : IDoctorLeaveService
 {
     private readonly AppDbContext _dbContext;
-    private readonly ICurrentUserService _currentUserService;
+    private readonly IDoctorContextService _doctorContextService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public DoctorLeaveService(AppDbContext dbContext, ICurrentUserService currentUserService)
+    public DoctorLeaveService(
+        AppDbContext dbContext, 
+        IDoctorContextService doctorContextService,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
-        _currentUserService = currentUserService;
+        _doctorContextService = doctorContextService;
+        _dateTimeProvider = dateTimeProvider;
     }
 
-    private async Task<Doctor> GetCurrentDoctorAsync()
+    private Task<Doctor> GetCurrentDoctorAsync()
     {
-        var currentUserId = _currentUserService.UserId;
-        if (currentUserId == null || currentUserId == Guid.Empty)
-            throw new UnauthorizedException("Chưa đăng nhập.");
-
-        var doctor = await _dbContext.Doctors.FirstOrDefaultAsync(d => d.UserId == currentUserId.Value);
-        if (doctor == null) throw new NotFoundException("Hồ sơ bác sĩ không tồn tại.");
-
-        return doctor;
+        return _doctorContextService.GetCurrentActiveDoctorAsync();
     }
 
     public async Task<PagedResult<LeaveRequestDto>> GetMyLeaveRequestsAsync(string? status, int page, int pageSize)
@@ -96,14 +96,70 @@ public class DoctorLeaveService : IDoctorLeaveService
         };
     }
 
+    public async Task<LeavePreviewDto> PreviewLeaveAffectedAppointmentsAsync(DateTime start, DateTime end)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+        
+        var startDateOnly = DateOnly.FromDateTime(start.Date);
+        var endDateOnly = DateOnly.FromDateTime(end.Date);
+
+        var query = from a in _dbContext.Appointments
+                    join p in _dbContext.Patients on a.PatientId equals p.Id
+                    join u in _dbContext.Users on p.UserId equals u.Id
+                    where a.DoctorId == doctor.Id
+                       && a.AppointmentDate >= startDateOnly
+                       && a.AppointmentDate <= endDateOnly
+                       && (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed)
+                    select new
+                    {
+                        a.Id,
+                        a.AppointmentCode,
+                        a.AppointmentDate,
+                        a.StartTime,
+                        a.EndTime,
+                        PatientName = u.FullName,
+                        Status = a.Status.ToString()
+                    };
+
+        var list = await query.ToListAsync();
+
+        var affected = list.Where(x =>
+        {
+            var apptStart = x.AppointmentDate.ToDateTime(x.StartTime);
+            var apptEnd = x.AppointmentDate.ToDateTime(x.EndTime);
+            return apptStart < end && apptEnd > start;
+        }).Select(x => new AffectedAppointmentDto
+        {
+            Id = x.Id,
+            AppointmentCode = x.AppointmentCode,
+            Date = x.AppointmentDate,
+            StartTime = x.StartTime,
+            EndTime = x.EndTime,
+            PatientName = x.PatientName,
+            Status = x.Status
+        }).ToList();
+
+        return new LeavePreviewDto
+        {
+            StartDateTime = start,
+            EndDateTime = end,
+            AffectedAppointmentsCount = affected.Count,
+            AffectedAppointments = affected
+        };
+    }
+
     public async Task<LeaveRequestDto> CreateLeaveRequestAsync(CreateLeaveRequestDto request)
     {
         var doctor = await GetCurrentDoctorAsync();
 
+        var reason = request.Reason?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new BusinessException("INVALID_REASON", "Lý do nghỉ không được để trống.");
+
         if (request.StartDateTime >= request.EndDateTime)
             throw new BusinessException("INVALID_TIME", "Thời gian bắt đầu phải trước thời gian kết thúc.");
 
-        if (request.StartDateTime < DateTime.Now)
+        if (request.StartDateTime < _dateTimeProvider.VietnamNow)
             throw new BusinessException("INVALID_TIME", "Không thể tạo yêu cầu nghỉ trong quá khứ.");
 
         var overlap = await _dbContext.DoctorLeaveRequests.AnyAsync(l => 
@@ -119,7 +175,7 @@ public class DoctorLeaveService : IDoctorLeaveService
             DoctorId = doctor.Id,
             StartDateTime = request.StartDateTime,
             EndDateTime = request.EndDateTime,
-            Reason = request.Reason,
+            Reason = reason,
             Status = DoctorLeaveRequestStatus.Pending
         };
 

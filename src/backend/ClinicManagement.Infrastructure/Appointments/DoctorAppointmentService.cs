@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using ClinicManagement.Application.Appointments.DTOs;
 using System.Linq;
 using System.Threading.Tasks;
+using ClinicManagement.Application.Common.Interfaces;
+using ClinicManagement.Application.Doctors.Interfaces;
 using ClinicManagement.Application.Appointments.DTOs.Doctor;
 using ClinicManagement.Application.Appointments.DTOs.Revisit;
 using ClinicManagement.Application.Appointments.Interfaces;
@@ -20,12 +22,25 @@ namespace ClinicManagement.Infrastructure.Appointments;
 public class DoctorAppointmentService : IDoctorAppointmentService
 {
     private readonly AppDbContext _dbContext;
+    private readonly IDoctorContextService _doctorContextService;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ICurrentUserService _currentUserService;
 
-    public DoctorAppointmentService(AppDbContext dbContext, ICurrentUserService currentUserService)
+    public DoctorAppointmentService(
+        AppDbContext dbContext, 
+        IDoctorContextService doctorContextService,
+        IDateTimeProvider dateTimeProvider,
+        ICurrentUserService currentUserService)
     {
         _dbContext = dbContext;
+        _doctorContextService = doctorContextService;
+        _dateTimeProvider = dateTimeProvider;
         _currentUserService = currentUserService;
+    }
+
+    private Task<Doctor> GetCurrentDoctorAsync()
+    {
+        return _doctorContextService.GetCurrentActiveDoctorAsync();
     }
 
     private Guid GetUserId()
@@ -36,15 +51,184 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         return currentUserId.Value;
     }
 
-    private async Task<Doctor> GetCurrentDoctorAsync()
+    public async Task<DoctorDashboardDto> GetDoctorDashboardAsync(DateOnly? date)
     {
-        var userId = GetUserId();
-        var doctor = await _dbContext.Doctors.FirstOrDefaultAsync(d => d.UserId == userId);
-        if (doctor == null) throw new NotFoundException("Hồ sơ bác sĩ không tồn tại.");
-        return doctor;
+        var doctor = await GetCurrentDoctorAsync();
+        var targetDate = date ?? _dateTimeProvider.VietnamToday;
+        var currentTime = _dateTimeProvider.VietnamTime;
+
+        var query = from a in _dbContext.Appointments
+                    join p in _dbContext.Patients on a.PatientId equals p.Id
+                    join u in _dbContext.Users on p.UserId equals u.Id
+                    join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
+                    where a.DoctorId == doctor.Id && a.AppointmentDate == targetDate
+                    orderby a.StartTime ascending
+                    select new DoctorQueueItemDto
+                    {
+                        AppointmentId = a.Id,
+                        AppointmentCode = a.AppointmentCode,
+                        AppointmentDate = a.AppointmentDate,
+                        StartTime = a.StartTime,
+                        EndTime = a.EndTime,
+                        PatientId = p.Id,
+                        PatientName = u.FullName,
+                        PatientPhone = u.PhoneNumber ?? string.Empty,
+                        PatientGender = p.Gender.HasValue ? p.Gender.Value.ToString() : string.Empty,
+                        PatientDob = p.DateOfBirth,
+                        Reason = a.Reason,
+                        Status = a.Status.ToString(),
+                        SpecialtyName = s.Name
+                    };
+
+        var queue = await query.ToListAsync();
+
+        var total = queue.Count;
+        var checkedIn = queue.Count(q => q.Status == nameof(AppointmentStatus.CheckedIn));
+        var inConsultation = queue.Count(q => q.Status == nameof(AppointmentStatus.InConsultation));
+        var completed = queue.Count(q => q.Status == nameof(AppointmentStatus.Completed));
+        var noShow = queue.Count(q => q.Status == nameof(AppointmentStatus.NoShow));
+
+        var activeSchedules = await _dbContext.DoctorWorkSchedules
+            .AsNoTracking()
+            .Where(ws => ws.DoctorId == doctor.Id && ws.WorkDate == targetDate && ws.IsActive)
+            .OrderBy(ws => ws.StartTime)
+            .ToListAsync();
+
+        string currentShift = "Không có ca trực";
+        if (activeSchedules.Count > 0)
+        {
+            var matchingShift = activeSchedules.FirstOrDefault(ws => ws.StartTime <= currentTime && ws.EndTime >= currentTime);
+            if (matchingShift != null)
+            {
+                currentShift = matchingShift.StartTime < new TimeOnly(12, 0)
+                    ? $"Ca sáng ({matchingShift.StartTime:HH\\:mm} - {matchingShift.EndTime:HH\\:mm})"
+                    : $"Ca chiều ({matchingShift.StartTime:HH\\:mm} - {matchingShift.EndTime:HH\\:mm})";
+            }
+            else
+            {
+                currentShift = string.Join(", ", activeSchedules.Select(s => $"{s.StartTime:HH\\:mm} - {s.EndTime:HH\\:mm}"));
+            }
+        }
+
+        var nextPatient = queue.FirstOrDefault(q => q.Status == nameof(AppointmentStatus.InConsultation))
+                       ?? queue.FirstOrDefault(q => q.Status == nameof(AppointmentStatus.CheckedIn))
+                       ?? queue.FirstOrDefault(q => q.Status == nameof(AppointmentStatus.Confirmed));
+
+        return new DoctorDashboardDto
+        {
+            TodayDate = targetDate,
+            TotalToday = total,
+            CheckedInCount = checkedIn,
+            InConsultationCount = inConsultation,
+            CompletedTodayCount = completed,
+            NoShowTodayCount = noShow,
+            CurrentShift = currentShift,
+            NextPatient = nextPatient,
+            Queue = queue
+        };
     }
 
-    public async Task<PagedResult<DoctorAppointmentDto>> GetMyAppointmentsAsync(string? status, string? search, int page, int pageSize)
+    public async Task<List<DoctorScheduleDayDto>> GetDoctorScheduleAsync(DateOnly fromDate, DateOnly toDate)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+
+        var schedules = await _dbContext.DoctorWorkSchedules
+            .AsNoTracking()
+            .Where(ws => ws.DoctorId == doctor.Id && ws.WorkDate >= fromDate && ws.WorkDate <= toDate)
+            .OrderBy(ws => ws.WorkDate).ThenBy(ws => ws.StartTime)
+            .ToListAsync();
+
+        var slots = await _dbContext.AppointmentSlots
+            .AsNoTracking()
+            .Where(s => s.DoctorId == doctor.Id && s.SlotDate >= fromDate && s.SlotDate <= toDate)
+            .OrderBy(s => s.SlotDate).ThenBy(s => s.StartTime)
+            .ToListAsync();
+
+        var appointments = await (from a in _dbContext.Appointments
+                                  join p in _dbContext.Patients on a.PatientId equals p.Id
+                                  join u in _dbContext.Users on p.UserId equals u.Id
+                                  where a.DoctorId == doctor.Id && a.AppointmentDate >= fromDate && a.AppointmentDate <= toDate
+                                  select new
+                                  {
+                                      a.Id,
+                                      a.AppointmentSlotId,
+                                      a.AppointmentCode,
+                                      a.Status,
+                                      PatientName = u.FullName
+                                  }).ToListAsync();
+
+        var apptMap = appointments.ToDictionary(a => a.AppointmentSlotId);
+
+        var groupedDays = new List<DoctorScheduleDayDto>();
+        for (var d = fromDate; d <= toDate; d = d.AddDays(1))
+        {
+            var date = d;
+            var daySchedules = schedules.Where(s => s.WorkDate == date).ToList();
+            var daySlots = slots.Where(s => s.SlotDate == date).ToList();
+
+            var shiftDtos = new List<DoctorShiftDto>();
+            foreach (var sch in daySchedules)
+            {
+                var schSlots = daySlots
+                    .Where(s => s.StartTime >= sch.StartTime && s.EndTime <= sch.EndTime)
+                    .Select(s =>
+                    {
+                        apptMap.TryGetValue(s.Id, out var appt);
+                        return new DoctorSlotDetailDto
+                        {
+                            SlotId = s.Id,
+                            SlotDate = s.SlotDate,
+                            StartTime = s.StartTime,
+                            EndTime = s.EndTime,
+                            IsBooked = s.IsBooked,
+                            AppointmentId = appt?.Id,
+                            AppointmentCode = appt?.AppointmentCode,
+                            PatientName = appt?.PatientName,
+                            Status = appt?.Status.ToString()
+                        };
+                    }).ToList();
+
+                var shiftName = sch.StartTime < new TimeOnly(12, 0) ? "Ca sáng" : "Ca chiều";
+                var bookedCount = schSlots.Count(s => s.IsBooked);
+
+                shiftDtos.Add(new DoctorShiftDto
+                {
+                    ScheduleId = sch.Id,
+                    ShiftName = shiftName,
+                    StartTime = sch.StartTime,
+                    EndTime = sch.EndTime,
+                    IsActive = sch.IsActive,
+                    TotalSlots = schSlots.Count,
+                    BookedSlots = bookedCount,
+                    AvailableSlots = schSlots.Count - bookedCount,
+                    Slots = schSlots
+                });
+            }
+
+            var dayName = date.DayOfWeek switch
+            {
+                DayOfWeek.Monday => "Thứ Hai",
+                DayOfWeek.Tuesday => "Thứ Ba",
+                DayOfWeek.Wednesday => "Thứ Tư",
+                DayOfWeek.Thursday => "Thứ Năm",
+                DayOfWeek.Friday => "Thứ Sáu",
+                DayOfWeek.Saturday => "Thứ Bảy",
+                DayOfWeek.Sunday => "Chủ Nhật",
+                _ => string.Empty
+            };
+
+            groupedDays.Add(new DoctorScheduleDayDto
+            {
+                Date = date,
+                DayOfWeekName = dayName,
+                Shifts = shiftDtos
+            });
+        }
+
+        return groupedDays;
+    }
+
+    public async Task<PagedResult<DoctorAppointmentDto>> GetMyAppointmentsAsync(DateOnly? date, string? status, string? search, int page, int pageSize)
     {
         var doctor = await GetCurrentDoctorAsync();
 
@@ -56,10 +240,15 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                     {
                         Appointment = a,
                         PatientName = pu.FullName,
-                        PatientPhone = pu.PhoneNumber,
+                        PatientPhone = pu.PhoneNumber ?? string.Empty,
                         PatientGender = p.Gender,
                         PatientDob = p.DateOfBirth
                     };
+
+        if (date.HasValue)
+        {
+            query = query.Where(x => x.Appointment.AppointmentDate == date.Value);
+        }
 
         if (!string.IsNullOrEmpty(status) && Enum.TryParse<AppointmentStatus>(status, true, out var parsedStatus))
         {
@@ -69,10 +258,11 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         if (!string.IsNullOrEmpty(search))
         {
             query = query.Where(x => x.Appointment.AppointmentCode.Contains(search) 
-                                  || x.PatientName.Contains(search));
+                                  || x.PatientName.Contains(search)
+                                  || x.PatientPhone.Contains(search));
         }
 
-        query = query.OrderBy(x => x.Appointment.AppointmentDate).ThenBy(x => x.Appointment.StartTime);
+        query = query.OrderByDescending(x => x.Appointment.AppointmentDate).ThenBy(x => x.Appointment.StartTime);
 
         var totalItems = await query.CountAsync();
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
@@ -131,42 +321,291 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             .ToListAsync();
     }
 
-    public async Task CompleteAppointmentAsync(long appointmentId, CompleteAppointmentDto request)
+    public async Task<PatientClinicalContextDto> GetPatientClinicalContextAsync(long appointmentId)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+
+        var appointment = await _dbContext.Appointments
+            .Include(a => a.Patient)
+            .Include(a => a.Specialty)
+            .Include(a => a.VitalSigns)
+            .Include(a => a.VisitSummary)
+            .Include(a => a.Prescription)
+                .ThenInclude(p => p!.Items)
+                    .ThenInclude(i => i.Medicine)
+            .FirstOrDefaultAsync(a => a.Id == appointmentId && a.DoctorId == doctor.Id);
+
+        if (appointment == null)
+            throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
+
+        var patientUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == appointment.Patient.UserId);
+        var doctorUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == doctor.UserId);
+
+        var pastAppointments = await _dbContext.Appointments
+            .AsNoTracking()
+            .Include(a => a.Doctor)
+            .Include(a => a.Specialty)
+            .Include(a => a.VisitSummary)
+            .Include(a => a.Prescription)
+                .ThenInclude(p => p!.Items)
+                    .ThenInclude(i => i.Medicine)
+            .Where(a => a.PatientId == appointment.PatientId && a.Id != appointment.Id && a.Status == AppointmentStatus.Completed)
+            .OrderByDescending(a => a.AppointmentDate)
+            .ThenByDescending(a => a.StartTime)
+            .Take(20)
+            .ToListAsync();
+
+        var pastDoctorUserIds = pastAppointments.Select(a => a.Doctor.UserId).Distinct().ToList();
+        var pastDoctorUsers = await _dbContext.Users
+            .Where(u => pastDoctorUserIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.FullName);
+
+        var pastVisitDtos = pastAppointments.Select(a =>
+        {
+            pastDoctorUsers.TryGetValue(a.Doctor.UserId, out var docName);
+            return new PastVisitSummaryDto
+            {
+                AppointmentId = a.Id,
+                AppointmentCode = a.AppointmentCode,
+                Date = a.AppointmentDate,
+                DoctorName = docName ?? "Bác sĩ",
+                SpecialtyName = a.Specialty?.Name ?? string.Empty,
+                Diagnosis = a.VisitSummary?.Diagnosis,
+                Summary = a.VisitSummary?.Summary,
+                PrescriptionItemNames = a.Prescription?.Items.Select(i => i.Medicine?.Name ?? "Thuốc").ToList() ?? new List<string>()
+            };
+        }).ToList();
+
+        VitalSignsDto? vitalsDto = null;
+        if (appointment.VitalSigns != null)
+        {
+            var recorder = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == appointment.VitalSigns.RecordedByUserId);
+            vitalsDto = MapVitalsToDto(appointment.VitalSigns, recorder?.FullName ?? "Nhân viên y tế");
+        }
+
+        ClinicalEncounterDto? encounterDto = null;
+        if (appointment.VisitSummary != null)
+        {
+            encounterDto = MapEncounterToDto(appointment.VisitSummary, doctorUser?.FullName ?? "Bác sĩ");
+        }
+
+        PrescriptionDraftDto? presDto = null;
+        if (appointment.Prescription != null)
+        {
+            presDto = MapPrescriptionToDto(appointment.Prescription, doctorUser?.FullName ?? "Bác sĩ", patientUser?.FullName ?? "Bệnh nhân");
+        }
+
+        return new PatientClinicalContextDto
+        {
+            PatientId = appointment.PatientId,
+            PatientName = patientUser?.FullName ?? "Bệnh nhân",
+            PatientPhone = patientUser?.PhoneNumber ?? string.Empty,
+            PatientGender = appointment.Patient.Gender.HasValue ? appointment.Patient.Gender.Value.ToString() : string.Empty,
+            PatientDob = appointment.Patient.DateOfBirth,
+            Address = appointment.Patient.Address,
+            TotalPastVisits = pastVisitDtos.Count,
+            PastVisits = pastVisitDtos,
+            CurrentAppointment = MapToDto(appointment, patientUser?.FullName ?? "", patientUser?.PhoneNumber ?? "", appointment.Patient.Gender, appointment.Patient.DateOfBirth),
+            VitalSigns = vitalsDto,
+            Encounter = encounterDto,
+            Prescription = presDto
+        };
+    }
+
+    public async Task CheckInAppointmentAsync(long appointmentId)
     {
         var doctor = await GetCurrentDoctorAsync();
         var userId = GetUserId();
 
+        var appointment = await _dbContext.Appointments
+            .FirstOrDefaultAsync(a => a.Id == appointmentId && a.DoctorId == doctor.Id);
+
+        if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
+
+        if (appointment.Status != AppointmentStatus.Confirmed)
+            throw new BusinessException("INVALID_STATE_TRANSITION", "Chỉ có thể check-in lịch hẹn ở trạng thái Confirmed.");
+
+        var oldStatus = appointment.Status;
+        appointment.Status = AppointmentStatus.CheckedIn;
+
+        _dbContext.AppointmentHistories.Add(new AppointmentHistory
+        {
+            AppointmentId = appointment.Id,
+            Action = AppointmentHistoryAction.CheckedIn,
+            OldStatus = oldStatus,
+            NewStatus = AppointmentStatus.CheckedIn,
+            Note = "Bác sĩ xác nhận bệnh nhân đã có mặt và check-in vào phòng khám",
+            PerformedByUserId = userId,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await _dbContext.SaveChangesAsync();
+    }
+
+    public async Task StartConsultationAsync(long appointmentId)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+        var userId = GetUserId();
+
+        var appointment = await _dbContext.Appointments
+            .Include(a => a.VisitSummary)
+            .FirstOrDefaultAsync(a => a.Id == appointmentId && a.DoctorId == doctor.Id);
+
+        if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
+
+        if (appointment.Status != AppointmentStatus.CheckedIn)
+            throw new BusinessException("INVALID_STATE_TRANSITION", "Chỉ có thể bắt đầu khám khi bệnh nhân đã ở trạng thái CheckedIn.");
+
+        var oldStatus = appointment.Status;
+        appointment.Status = AppointmentStatus.InConsultation;
+
+        if (appointment.VisitSummary == null)
+        {
+            appointment.VisitSummary = new VisitSummary
+            {
+                AppointmentId = appointment.Id,
+                DoctorId = doctor.Id,
+                ChiefComplaint = appointment.Reason,
+                Summary = "Đang trong quá trình thăm khám.",
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            _dbContext.VisitSummaries.Add(appointment.VisitSummary);
+        }
+
+        _dbContext.AppointmentHistories.Add(new AppointmentHistory
+        {
+            AppointmentId = appointment.Id,
+            Action = AppointmentHistoryAction.InConsultation,
+            OldStatus = oldStatus,
+            NewStatus = AppointmentStatus.InConsultation,
+            Note = "Bác sĩ bắt đầu phiên khám lâm sàng",
+            PerformedByUserId = userId,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await _dbContext.SaveChangesAsync();
+    }
+
+    public async Task CompleteAppointmentAsync(long appointmentId, CompleteConsultationRequest request)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+        var userId = GetUserId();
+
+        var appointment = await _dbContext.Appointments
+            .Include(a => a.VisitSummary)
+            .Include(a => a.Prescription)
+                .ThenInclude(p => p!.Items)
+            .FirstOrDefaultAsync(a => a.Id == appointmentId && a.DoctorId == doctor.Id);
+
+        if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
+
+        if (string.IsNullOrWhiteSpace(request.Summary) && string.IsNullOrWhiteSpace(request.Diagnosis))
+            throw new BusinessException("VALIDATION_ERROR", "Tóm tắt kết luận khám không được để trống.");
+
+        if (string.IsNullOrWhiteSpace(request.Diagnosis))
+        {
+            request.Diagnosis = !string.IsNullOrWhiteSpace(request.Summary) ? request.Summary : "Khám lâm sàng";
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Summary))
+        {
+            request.Summary = request.Diagnosis;
+        }
+
         using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         try
         {
-            var appointment = await _dbContext.Appointments
-                .FirstOrDefaultAsync(a => a.Id == appointmentId && a.DoctorId == doctor.Id);
+            if (appointment.Status != AppointmentStatus.InConsultation)
+                throw new BusinessException("INVALID_STATE_TRANSITION", "Chỉ có thể hoàn tất lịch hẹn đang trong phiên khám (InConsultation).");
 
-            if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
-
-            if (appointment.Status != AppointmentStatus.Confirmed)
-                throw new BusinessException("INVALID_STATE", "Chỉ có thể hoàn thành lịch hẹn ở trạng thái Confirmed.");
-
-            var currentDateTime = DateTime.UtcNow; // Note: In real app, consider timezone for the clinic
-            var appointmentDateTimeUtc = appointment.AppointmentDate.ToDateTime(appointment.StartTime, DateTimeKind.Utc);
-            
-            // To allow completion, it should theoretically be past or near the start time.
-            // But we will be lenient and assume if it's confirmed, they can complete it during the visit.
-            
             var oldStatus = appointment.Status;
             appointment.Status = AppointmentStatus.Completed;
 
-            // Ensure no duplicate summary
-            var existingSummary = await _dbContext.VisitSummaries.AnyAsync(v => v.AppointmentId == appointment.Id);
-            if (!existingSummary)
+            var summary = appointment.VisitSummary;
+            if (summary == null)
             {
-                _dbContext.VisitSummaries.Add(new VisitSummary
+                summary = new VisitSummary
                 {
                     AppointmentId = appointment.Id,
                     DoctorId = doctor.Id,
+                    ChiefComplaint = request.ChiefComplaint,
+                    ClinicalFindings = request.ClinicalFindings,
+                    Diagnosis = request.Diagnosis,
+                    DiagnosisCode = request.DiagnosisCode,
+                    TreatmentPlan = request.TreatmentPlan,
                     Summary = request.Summary,
-                    FollowUpInstruction = request.FollowUpInstruction
-                });
+                    FollowUpInstruction = request.FollowUpInstruction,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    CompletedAtUtc = DateTime.UtcNow
+                };
+                _dbContext.VisitSummaries.Add(summary);
+            }
+            else
+            {
+                ValidateRowVersion(summary.RowVersion, request.EncounterRowVersion);
+
+                summary.ChiefComplaint = request.ChiefComplaint;
+                summary.ClinicalFindings = request.ClinicalFindings;
+                summary.Diagnosis = request.Diagnosis;
+                summary.DiagnosisCode = request.DiagnosisCode;
+                summary.TreatmentPlan = request.TreatmentPlan;
+                summary.Summary = request.Summary;
+                summary.FollowUpInstruction = request.FollowUpInstruction;
+                summary.UpdatedAtUtc = DateTime.UtcNow;
+                summary.CompletedAtUtc = DateTime.UtcNow;
+            }
+
+            if (request.IssuePrescription && request.PrescriptionItems != null && request.PrescriptionItems.Count > 0)
+            {
+                var prescription = appointment.Prescription;
+                if (prescription == null)
+                {
+                    prescription = new Prescription
+                    {
+                        AppointmentId = appointment.Id,
+                        PatientId = appointment.PatientId,
+                        DoctorId = doctor.Id,
+                        Status = PrescriptionStatus.Issued,
+                        Notes = request.PrescriptionNotes,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _dbContext.Prescriptions.Add(prescription);
+                    await _dbContext.SaveChangesAsync();
+                }
+                else
+                {
+                    ValidateRowVersion(prescription.RowVersion, request.PrescriptionRowVersion);
+                    prescription.Status = PrescriptionStatus.Issued;
+                    prescription.Notes = request.PrescriptionNotes;
+                    prescription.CreatedAt = DateTime.UtcNow;
+
+                    _dbContext.PrescriptionItems.RemoveRange(prescription.Items);
+                }
+
+                foreach (var item in request.PrescriptionItems)
+                {
+                    var medExists = await _dbContext.Medicines.AnyAsync(m => m.Id == item.MedicineId && m.IsActive);
+                    if (!medExists)
+                        throw new BusinessException("INVALID_MEDICINE", $"Thuốc với ID {item.MedicineId} không tồn tại hoặc đã ngừng cung cấp.");
+
+                    _dbContext.PrescriptionItems.Add(new PrescriptionItem
+                    {
+                        PrescriptionId = prescription.Id,
+                        MedicineId = item.MedicineId,
+                        Quantity = item.Quantity,
+                        Dosage = item.Dosage ?? string.Empty,
+                        Frequency = item.Frequency ?? string.Empty,
+                        DurationDays = item.DurationDays,
+                        Instructions = item.Instructions
+                    });
+                }
+            }
+            else if (appointment.Prescription != null && appointment.Prescription.Status == PrescriptionStatus.Draft)
+            {
+                if (appointment.Prescription.Items.Count > 0)
+                {
+                    appointment.Prescription.Status = PrescriptionStatus.Issued;
+                }
             }
 
             _dbContext.AppointmentHistories.Add(new AppointmentHistory
@@ -175,13 +614,18 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 Action = AppointmentHistoryAction.Completed,
                 OldStatus = oldStatus,
                 NewStatus = AppointmentStatus.Completed,
-                Note = "Bác sĩ hoàn thành khám",
+                Note = "Bác sĩ hoàn thành phiên khám lâm sàng và cấp hồ sơ bệnh án",
                 PerformedByUserId = userId,
                 CreatedAt = DateTime.UtcNow
             });
 
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync();
+            throw new ConflictException("Hồ sơ khám đã được cập nhật bởi một phiên làm việc khác. Vui lòng tải lại trang.");
         }
         catch
         {
@@ -203,14 +647,14 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
             if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
 
-            if (appointment.Status != AppointmentStatus.Confirmed)
-                throw new BusinessException("INVALID_STATE", "Chỉ có thể đánh dấu NoShow lịch hẹn ở trạng thái Confirmed.");
+            if (appointment.Status != AppointmentStatus.Confirmed && appointment.Status != AppointmentStatus.CheckedIn && appointment.Status != AppointmentStatus.Pending)
+                throw new BusinessException("INVALID_STATE", "Chỉ có thể đánh dấu NoShow cho lịch hẹn chưa hoàn thành.");
 
-            // Check if time has passed
-            // Simplification: Clinic timezone usually means UTC+7, but comparing Date+Time strictly
-            var appointmentDateTime = appointment.AppointmentDate.ToDateTime(appointment.StartTime);
-            if (appointmentDateTime > DateTime.Now)
+            if (appointment.AppointmentDate > _dateTimeProvider.VietnamToday ||
+               (appointment.AppointmentDate == _dateTimeProvider.VietnamToday && appointment.StartTime > _dateTimeProvider.VietnamTime))
+            {
                 throw new BusinessException("INVALID_TIME", "Chưa đến thời gian khám, không thể đánh dấu vắng mặt.");
+            }
 
             var oldStatus = appointment.Status;
             appointment.Status = AppointmentStatus.NoShow;
@@ -221,7 +665,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 Action = AppointmentHistoryAction.NoShow,
                 OldStatus = oldStatus,
                 NewStatus = AppointmentStatus.NoShow,
-                Note = request.Reason ?? "Bệnh nhân không đến khám",
+                Note = request.Reason ?? "Bệnh nhân không có mặt tại phòng khám vào giờ hẹn",
                 PerformedByUserId = userId,
                 CreatedAt = DateTime.UtcNow
             });
@@ -251,6 +695,9 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
             if (appointment.Status != AppointmentStatus.Completed)
                 throw new BusinessException("INVALID_STATE", "Chỉ có thể tạo đề xuất tái khám cho lịch hẹn đã hoàn thành.");
+
+            if (request.SuggestedDate <= _dateTimeProvider.VietnamToday)
+                throw new BusinessException("INVALID_DATE", "Ngày hẹn tái khám phải sau ngày hôm nay.");
 
             var existingPending = await _dbContext.RevisitRequests
                 .AnyAsync(r => r.AppointmentId == appointment.Id && r.Status == RevisitRequestStatus.PendingPatientResponse);
@@ -301,127 +748,266 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         }
     }
 
-    public async Task<PrescriptionDetailDto?> GetPrescriptionByAppointmentIdAsync(long appointmentId)
+    public async Task<ClinicalEncounterDto?> GetEncounterAsync(long appointmentId)
     {
         var doctor = await GetCurrentDoctorAsync();
+
+        var encounter = await _dbContext.VisitSummaries
+            .AsNoTracking()
+            .FirstOrDefaultAsync(vs => vs.AppointmentId == appointmentId && vs.DoctorId == doctor.Id);
+
+        if (encounter == null) return null;
+
+        var doctorUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == doctor.UserId);
+        return MapEncounterToDto(encounter, doctorUser?.FullName ?? "Bác sĩ");
+    }
+
+    public async Task<ClinicalEncounterDto> SaveEncounterAsync(long appointmentId, SaveEncounterRequest request)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+
+        var appointment = await _dbContext.Appointments
+            .Include(a => a.VisitSummary)
+            .FirstOrDefaultAsync(a => a.Id == appointmentId && a.DoctorId == doctor.Id);
+
+        if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
+
+        if (appointment.Status != AppointmentStatus.InConsultation && appointment.Status != AppointmentStatus.CheckedIn)
+            throw new BusinessException("INVALID_STATE", "Chỉ có thể ghi nhận diễn tiến khám khi đang trong phiên khám.");
+
+        var summary = appointment.VisitSummary;
+        if (summary == null)
+        {
+            summary = new VisitSummary
+            {
+                AppointmentId = appointment.Id,
+                DoctorId = doctor.Id,
+                ChiefComplaint = request.ChiefComplaint,
+                ClinicalFindings = request.ClinicalFindings,
+                Diagnosis = request.Diagnosis,
+                DiagnosisCode = request.DiagnosisCode,
+                TreatmentPlan = request.TreatmentPlan,
+                Summary = request.Summary ?? "Ghi chép lâm sàng",
+                FollowUpInstruction = request.FollowUpInstruction,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            _dbContext.VisitSummaries.Add(summary);
+        }
+        else
+        {
+            ValidateRowVersion(summary.RowVersion, request.RowVersion);
+
+            summary.ChiefComplaint = request.ChiefComplaint;
+            summary.ClinicalFindings = request.ClinicalFindings;
+            summary.Diagnosis = request.Diagnosis;
+            summary.DiagnosisCode = request.DiagnosisCode;
+            summary.TreatmentPlan = request.TreatmentPlan;
+            summary.Summary = request.Summary ?? summary.Summary;
+            summary.FollowUpInstruction = request.FollowUpInstruction;
+            summary.UpdatedAtUtc = DateTime.UtcNow;
+        }
+
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ConflictException("Hồ sơ khám đã được cập nhật bởi một phiên làm việc khác. Vui lòng tải lại trang.");
+        }
+
+        var doctorUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == doctor.UserId);
+        return MapEncounterToDto(summary, doctorUser?.FullName ?? "Bác sĩ");
+    }
+
+    public async Task<VitalSignsDto?> GetVitalSignsAsync(long appointmentId)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+
+        var vitals = await _dbContext.AppointmentVitalSigns
+            .AsNoTracking()
+            .FirstOrDefaultAsync(v => v.AppointmentId == appointmentId && v.Appointment.DoctorId == doctor.Id);
+
+        if (vitals == null) return null;
+
+        var recorder = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == vitals.RecordedByUserId);
+        return MapVitalsToDto(vitals, recorder?.FullName ?? "Nhân viên y tế");
+    }
+
+    public async Task<VitalSignsDto> SaveVitalSignsAsync(long appointmentId, SaveVitalSignsRequest request)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+        var userId = GetUserId();
+
+        var appointment = await _dbContext.Appointments
+            .Include(a => a.VitalSigns)
+            .FirstOrDefaultAsync(a => a.Id == appointmentId && a.DoctorId == doctor.Id);
+
+        if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
+
+        if (appointment.Status == AppointmentStatus.Completed || appointment.Status == AppointmentStatus.Cancelled || appointment.Status == AppointmentStatus.NoShow)
+            throw new BusinessException("INVALID_STATE", "Không thể chỉnh sửa dấu hiệu sinh tồn cho lịch hẹn đã kết thúc.");
+
+        var vitals = appointment.VitalSigns;
+        var computedBmi = AppointmentVitalSigns.CalculateBmi(request.Weight, request.Height);
+
+        if (vitals == null)
+        {
+            vitals = new AppointmentVitalSigns
+            {
+                AppointmentId = appointment.Id,
+                Temperature = request.Temperature,
+                BloodPressureSystolic = request.BloodPressureSystolic,
+                BloodPressureDiastolic = request.BloodPressureDiastolic,
+                HeartRate = request.HeartRate,
+                RespiratoryRate = request.RespiratoryRate,
+                Weight = request.Weight,
+                Height = request.Height,
+                Bmi = computedBmi,
+                SpO2 = request.SpO2,
+                RecordedAtUtc = DateTime.UtcNow,
+                RecordedByUserId = userId
+            };
+            _dbContext.AppointmentVitalSigns.Add(vitals);
+        }
+        else
+        {
+            ValidateRowVersion(vitals.RowVersion, request.RowVersion);
+
+            vitals.Temperature = request.Temperature;
+            vitals.BloodPressureSystolic = request.BloodPressureSystolic;
+            vitals.BloodPressureDiastolic = request.BloodPressureDiastolic;
+            vitals.HeartRate = request.HeartRate;
+            vitals.RespiratoryRate = request.RespiratoryRate;
+            vitals.Weight = request.Weight;
+            vitals.Height = request.Height;
+            vitals.Bmi = computedBmi;
+            vitals.SpO2 = request.SpO2;
+            vitals.RecordedAtUtc = DateTime.UtcNow;
+            vitals.RecordedByUserId = userId;
+        }
+
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ConflictException("Dữ liệu dấu hiệu sinh tồn đã bị thay đổi bởi phiên làm việc khác. Vui lòng tải lại.");
+        }
+
+        var recorder = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        return MapVitalsToDto(vitals, recorder?.FullName ?? "Nhân viên y tế");
+    }
+
+    public async Task<PrescriptionDraftDto?> GetPrescriptionDraftAsync(long appointmentId)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+
         var prescription = await _dbContext.Prescriptions
             .Include(p => p.Items)
                 .ThenInclude(i => i.Medicine)
-            .Include(p => p.Appointment)
             .Include(p => p.Patient)
             .FirstOrDefaultAsync(p => p.AppointmentId == appointmentId && p.DoctorId == doctor.Id);
 
         if (prescription == null) return null;
 
-        var patientUser = prescription.Patient != null 
-            ? await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == prescription.Patient.UserId) 
-            : null;
         var doctorUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == doctor.UserId);
+        var patientUser = prescription.Patient != null ? await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == prescription.Patient.UserId) : null;
 
-        return new PrescriptionDetailDto
-        {
-            Id = prescription.Id,
-            AppointmentId = prescription.AppointmentId,
-            AppointmentCode = prescription.Appointment?.AppointmentCode ?? $"APT-{prescription.AppointmentId}",
-            PatientId = prescription.PatientId,
-            PatientName = patientUser?.FullName ?? "Bệnh nhân",
-            PatientPhone = patientUser?.PhoneNumber ?? "",
-            DoctorId = prescription.DoctorId,
-            DoctorName = doctorUser?.FullName ?? "Bác sĩ",
-            Status = prescription.Status.ToString(),
-            Notes = prescription.Notes,
-            CreatedAt = prescription.CreatedAt,
-            DispensedAt = prescription.DispensedAt,
-            Items = prescription.Items.Select(i => new PrescriptionDetailItemDto
-            {
-                MedicineId = i.MedicineId,
-                MedicineCode = i.Medicine?.Code ?? "",
-                MedicineName = i.Medicine?.Name ?? "Thuốc",
-                Unit = i.Medicine?.Unit ?? "Hộp",
-                Quantity = i.Quantity,
-                AvailableStock = i.Medicine?.StockQuantity ?? 0,
-                Dosage = i.Dosage,
-                Frequency = i.Frequency,
-                DurationDays = i.DurationDays,
-                Instructions = i.Instructions
-            }).ToList()
-        };
+        return MapPrescriptionToDto(prescription, doctorUser?.FullName ?? "Bác sĩ", patientUser?.FullName ?? "Bệnh nhân");
     }
 
-    public async Task<PrescriptionDetailDto> CreatePrescriptionAsync(long appointmentId, CreatePrescriptionDto request)
+    public async Task<PrescriptionDraftDto> SavePrescriptionDraftAsync(long appointmentId, SavePrescriptionDraftRequest request)
     {
         var doctor = await GetCurrentDoctorAsync();
 
         var appointment = await _dbContext.Appointments
             .Include(a => a.Patient)
+            .Include(a => a.Prescription)
+                .ThenInclude(p => p!.Items)
             .FirstOrDefaultAsync(a => a.Id == appointmentId && a.DoctorId == doctor.Id);
 
-        if (appointment == null)
-            throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
+        if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
 
-        if (appointment.Status != AppointmentStatus.Confirmed && appointment.Status != AppointmentStatus.Completed)
-            throw new BusinessException("INVALID_APPOINTMENT_STATUS", "Chỉ có thể kê đơn cho lịch hẹn đã xác nhận hoặc đã hoàn thành.");
+        if (appointment.Status != AppointmentStatus.InConsultation && appointment.Status != AppointmentStatus.CheckedIn)
+            throw new BusinessException("INVALID_STATE", "Chỉ có thể soạn đơn thuốc trong phiên khám.");
 
-        var existing = await _dbContext.Prescriptions
-            .Include(p => p.Items)
-            .FirstOrDefaultAsync(p => p.AppointmentId == appointmentId);
-
-        if (existing != null && existing.Status == PrescriptionStatus.Dispensed)
-            throw new BusinessException("ALREADY_DISPENSED", "Đơn thuốc này đã được cấp phát, không thể chỉnh sửa.");
-
-        if (existing != null)
+        var prescription = appointment.Prescription;
+        if (prescription == null)
         {
-            _dbContext.PrescriptionItems.RemoveRange(existing.Items);
-            existing.Notes = request.Notes;
-            existing.CreatedAt = DateTime.UtcNow;
-
-            foreach (var item in request.Items)
+            prescription = new Prescription
             {
-                _dbContext.PrescriptionItems.Add(new PrescriptionItem
-                {
-                    PrescriptionId = existing.Id,
-                    MedicineId = item.MedicineId,
-                    Quantity = item.Quantity,
-                    Dosage = item.Dosage,
-                    Frequency = item.Frequency,
-                    DurationDays = item.DurationDays,
-                    Instructions = item.Instructions
-                });
-            }
-
+                AppointmentId = appointment.Id,
+                PatientId = appointment.PatientId,
+                DoctorId = doctor.Id,
+                Status = PrescriptionStatus.Draft,
+                Notes = request.Notes,
+                CreatedAt = DateTime.UtcNow
+            };
+            _dbContext.Prescriptions.Add(prescription);
             await _dbContext.SaveChangesAsync();
-            return (await GetPrescriptionByAppointmentIdAsync(appointmentId))!;
         }
-
-        var newPrescription = new Prescription
+        else
         {
-            AppointmentId = appointmentId,
-            PatientId = appointment.PatientId,
-            DoctorId = doctor.Id,
-            Status = PrescriptionStatus.Issued,
-            Notes = request.Notes,
-            CreatedAt = DateTime.UtcNow
-        };
+            if (prescription.Status == PrescriptionStatus.Dispensed)
+                throw new BusinessException("ALREADY_DISPENSED", "Đơn thuốc đã cấp phát không thể chỉnh sửa.");
 
-        _dbContext.Prescriptions.Add(newPrescription);
-        await _dbContext.SaveChangesAsync();
+            ValidateRowVersion(prescription.RowVersion, request.RowVersion);
+
+            prescription.Notes = request.Notes;
+            prescription.Status = PrescriptionStatus.Draft;
+            prescription.CreatedAt = DateTime.UtcNow;
+
+            _dbContext.PrescriptionItems.RemoveRange(prescription.Items);
+        }
 
         foreach (var item in request.Items)
         {
+            var medExists = await _dbContext.Medicines.AnyAsync(m => m.Id == item.MedicineId && m.IsActive);
+            if (!medExists)
+                throw new BusinessException("INVALID_MEDICINE", $"Thuốc với ID {item.MedicineId} không tồn tại hoặc ngừng hoạt động.");
+
             _dbContext.PrescriptionItems.Add(new PrescriptionItem
             {
-                PrescriptionId = newPrescription.Id,
+                PrescriptionId = prescription.Id,
                 MedicineId = item.MedicineId,
                 Quantity = item.Quantity,
-                Dosage = item.Dosage,
-                Frequency = item.Frequency,
+                Dosage = item.Dosage ?? string.Empty,
+                Frequency = item.Frequency ?? string.Empty,
                 DurationDays = item.DurationDays,
                 Instructions = item.Instructions
             });
         }
 
-        await _dbContext.SaveChangesAsync();
-        return (await GetPrescriptionByAppointmentIdAsync(appointmentId))!;
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ConflictException("Đơn thuốc đã được cập nhật bởi một phiên làm việc khác. Vui lòng tải lại.");
+        }
+
+        return (await GetPrescriptionDraftAsync(appointmentId))!;
+    }
+
+    private static void ValidateRowVersion(byte[]? entityVersion, string? clientVersion)
+    {
+        if (entityVersion != null && entityVersion.Length > 0 && !string.IsNullOrEmpty(clientVersion))
+        {
+            try
+            {
+                var clientBytes = Convert.FromBase64String(clientVersion);
+                if (!entityVersion.SequenceEqual(clientBytes))
+                {
+                    throw new ConflictException("Dữ liệu đã bị sửa đổi bởi phiên làm việc khác. Vui lòng tải lại trang.");
+                }
+            }
+            catch (FormatException)
+            {
+            }
+        }
     }
 
     private static DoctorAppointmentDto MapToDto(Appointment a, string patientName, string patientPhone, Gender? gender, DateOnly? dob) => new()
@@ -441,5 +1027,69 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         PatientPhone = patientPhone ?? string.Empty,
         PatientGender = gender?.ToString() ?? string.Empty,
         PatientDob = dob
+    };
+
+    private static VitalSignsDto MapVitalsToDto(AppointmentVitalSigns v, string recorderName) => new()
+    {
+        Id = v.Id,
+        AppointmentId = v.AppointmentId,
+        Temperature = v.Temperature,
+        BloodPressureSystolic = v.BloodPressureSystolic,
+        BloodPressureDiastolic = v.BloodPressureDiastolic,
+        HeartRate = v.HeartRate,
+        RespiratoryRate = v.RespiratoryRate,
+        Weight = v.Weight,
+        Height = v.Height,
+        Bmi = v.Bmi,
+        SpO2 = v.SpO2,
+        RecordedAtUtc = v.RecordedAtUtc,
+        RecordedByUserName = recorderName,
+        RowVersion = v.RowVersion != null ? Convert.ToBase64String(v.RowVersion) : null
+    };
+
+    private static ClinicalEncounterDto MapEncounterToDto(VisitSummary vs, string doctorName) => new()
+    {
+        Id = vs.Id,
+        AppointmentId = vs.AppointmentId,
+        DoctorId = vs.DoctorId,
+        DoctorName = doctorName,
+        ChiefComplaint = vs.ChiefComplaint,
+        ClinicalFindings = vs.ClinicalFindings,
+        Diagnosis = vs.Diagnosis,
+        DiagnosisCode = vs.DiagnosisCode,
+        TreatmentPlan = vs.TreatmentPlan,
+        Summary = vs.Summary,
+        FollowUpInstruction = vs.FollowUpInstruction,
+        CreatedAtUtc = vs.CreatedAtUtc,
+        UpdatedAtUtc = vs.UpdatedAtUtc,
+        CompletedAtUtc = vs.CompletedAtUtc,
+        RowVersion = vs.RowVersion != null ? Convert.ToBase64String(vs.RowVersion) : null
+    };
+
+    private static PrescriptionDraftDto MapPrescriptionToDto(Prescription p, string doctorName, string patientName) => new()
+    {
+        Id = p.Id,
+        AppointmentId = p.AppointmentId,
+        DoctorId = p.DoctorId,
+        DoctorName = doctorName,
+        PatientId = p.PatientId,
+        PatientName = patientName,
+        Status = p.Status.ToString(),
+        Notes = p.Notes,
+        CreatedAt = p.CreatedAt,
+        RowVersion = p.RowVersion != null ? Convert.ToBase64String(p.RowVersion) : null,
+        Items = p.Items.Select(i => new PrescriptionDraftItemDto
+        {
+            MedicineId = i.MedicineId,
+            MedicineCode = i.Medicine?.Code ?? string.Empty,
+            MedicineName = i.Medicine?.Name ?? "Thuốc",
+            Unit = i.Medicine?.Unit ?? "Hộp",
+            Quantity = i.Quantity,
+            AvailableStock = i.Medicine?.StockQuantity ?? 0,
+            Dosage = i.Dosage,
+            Frequency = i.Frequency,
+            DurationDays = i.DurationDays,
+            Instructions = i.Instructions
+        }).ToList()
     };
 }

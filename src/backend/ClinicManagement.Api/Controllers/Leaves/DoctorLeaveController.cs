@@ -34,6 +34,13 @@ public class DoctorLeaveController : ControllerBase
         return Ok(ApiResponse<LeaveRequestDto>.Ok(result));
     }
 
+    [HttpGet("preview")]
+    public async Task<IActionResult> PreviewLeave([FromQuery] DateTime start, [FromQuery] DateTime end)
+    {
+        var result = await _doctorLeaveService.PreviewLeaveAffectedAppointmentsAsync(start, end);
+        return Ok(ApiResponse<LeavePreviewDto>.Ok(result));
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateLeaveRequest([FromBody] CreateLeaveRequestDto request)
     {

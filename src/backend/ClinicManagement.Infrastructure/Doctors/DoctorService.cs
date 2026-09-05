@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -113,6 +113,16 @@ public class DoctorService : IDoctorService
         var timeNow = _dateTimeProvider.VietnamTime;
         var vnNow = _dateTimeProvider.VietnamNow;
 
+        var activeSchedules = await _dbContext.DoctorWorkSchedules
+            .AsNoTracking()
+            .Where(ws => ws.DoctorId == doctorId && ws.IsActive && ws.WorkDate >= fromDate && ws.WorkDate <= toDate)
+            .ToListAsync();
+
+        if (activeSchedules.Count == 0)
+        {
+            return new List<AvailableSlotDto>();
+        }
+
         var slots = await _dbContext.AppointmentSlots
             .AsNoTracking()
             .Where(s => s.DoctorId == doctorId
@@ -130,9 +140,18 @@ public class DoctorService : IDoctorService
             .ToListAsync();
 
         var validSlots = slots.Where(s => {
+            // Must belong to an active schedule block
+            var isInActiveSchedule = activeSchedules.Any(ws => 
+                ws.WorkDate == s.SlotDate && ws.StartTime <= s.StartTime && ws.EndTime >= s.EndTime);
+            if (!isInActiveSchedule) return false;
+
+            // Must not overlap with approved leave
             var slotStart = s.SlotDate.ToDateTime(s.StartTime);
             var slotEnd = s.SlotDate.ToDateTime(s.EndTime);
-            return !leaves.Any(l => slotStart < l.EndDateTime && slotEnd > l.StartDateTime);
+            if (leaves.Any(l => slotStart < l.EndDateTime && slotEnd > l.StartDateTime))
+                return false;
+
+            return true;
         }).Select(s => new AvailableSlotDto
         {
             SlotId = s.Id,
