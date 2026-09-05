@@ -21,12 +21,20 @@ public class DoctorService : IDoctorService
         return await (from d in _dbContext.Doctors
                       join u in _dbContext.Users on d.UserId equals u.Id
                       where d.IsActive && u.IsActive
+                      let primarySpec = (from ds in _dbContext.DoctorSpecialties
+                                         join s in _dbContext.Specialties on ds.SpecialtyId equals s.Id
+                                         where ds.DoctorId == d.Id && s.IsActive
+                                         orderby ds.IsPrimary ? 0 : 1
+                                         select s).FirstOrDefault()
                       select new DoctorBasicDto
                       {
                           Id = d.Id,
                           FullName = u.FullName,
                           AcademicTitle = d.AcademicTitle ?? "",
-                          ExperienceYears = d.ExperienceYears
+                          ExperienceYears = d.ExperienceYears,
+                          SpecialtyId = primarySpec != null ? primarySpec.Id : null,
+                          SpecialtyName = primarySpec != null ? primarySpec.Name : "Bác sĩ Đa khoa",
+                          Description = d.Description ?? ""
                       }).ToListAsync();
     }
 

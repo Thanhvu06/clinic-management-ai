@@ -33,6 +33,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
     public static long SpecialtyEntityId { get; private set; }
     public static long SlotEntityId { get; private set; }
     public static long MedicineEntityId { get; private set; }
+    public static long PackageEntityId { get; private set; }
 
     protected IntegrationTestBase(CustomWebApplicationFactory factory)
     {
@@ -149,6 +150,18 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
             IsActive = true
         };
         db.Medicines.Add(medicine);
+
+        var package = new HealthPackage
+        {
+            Code = "PKG-TEST",
+            Name = "Gói Khám Tổng Quát Tiêu Chuẩn Test",
+            TargetAudience = "Người trưởng thành từ 18 tuổi",
+            Description = "Kiểm tra sức khỏe tổng quát định kỳ",
+            Price = 1500000,
+            IsActive = true,
+            IncludedServicesJson = "[\"Khám nội tổng quát\",\"Xét nghiệm máu\"]"
+        };
+        db.HealthPackages.Add(package);
         await db.SaveChangesAsync();
 
         DoctorEntityId = doctor.Id;
@@ -158,6 +171,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         SpecialtyEntityId = spec.Id;
         SlotEntityId = slot.Id;
         MedicineEntityId = medicine.Id;
+        PackageEntityId = package.Id;
         
         _seeded = true;
         }

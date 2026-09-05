@@ -36,6 +36,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
 
     // Health Packages
     public DbSet<HealthPackage> HealthPackages { get; set; } = null!;
+    public DbSet<HealthPackageRegistration> HealthPackageRegistrations { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -43,6 +44,21 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         
         builder.Entity<PrescriptionItem>()
             .HasKey(pi => new { pi.PrescriptionId, pi.MedicineId });
+
+        builder.Entity<HealthPackageRegistration>(b =>
+        {
+            b.HasIndex(r => r.RegistrationCode).IsUnique();
+            b.HasIndex(r => r.PatientId);
+            b.HasIndex(r => r.Status);
+            b.HasOne(r => r.HealthPackage)
+                .WithMany()
+                .HasForeignKey(r => r.HealthPackageId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(r => r.Patient)
+                .WithMany()
+                .HasForeignKey(r => r.PatientId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
             
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
