@@ -24,6 +24,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<AppointmentHistory> AppointmentHistories { get; set; } = null!;
     public DbSet<AppointmentChangeRequest> AppointmentChangeRequests { get; set; } = null!;
     public DbSet<VisitSummary> VisitSummaries { get; set; } = null!;
+    public DbSet<AppointmentVitalSigns> AppointmentVitalSigns { get; set; } = null!;
     public DbSet<RevisitRequest> RevisitRequests { get; set; } = null!;
     public DbSet<AiSuggestionLog> AiSuggestionLogs { get; set; } = null!;
     public DbSet<SystemAuditLog> SystemAuditLogs { get; set; } = null!;
@@ -47,6 +48,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         
         builder.Entity<PrescriptionItem>()
             .HasKey(pi => new { pi.PrescriptionId, pi.MedicineId });
+
+        builder.Entity<Prescription>(b =>
+        {
+            b.Property(p => p.RowVersion)
+                .IsRowVersion();
+        });
 
         builder.Entity<ClinicLocation>(b =>
         {
@@ -78,12 +85,31 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
                 var checkConstraints = System.Linq.Enumerable.ToList(entityType.GetCheckConstraints());
                 foreach (var constraint in checkConstraints)
                 {
-                    if (constraint.Sql != null && (constraint.Sql.Contains("DATEDIFF") || constraint.Sql.Contains("MINUTE")))
+                    if (constraint.Name != null && constraint.Sql != null && (constraint.Sql.Contains("DATEDIFF") || constraint.Sql.Contains("MINUTE")))
                     {
                         entityType.RemoveCheckConstraint(constraint.Name);
                     }
                 }
             }
         }
+    }
+
+    public override System.Threading.Tasks.Task<int> SaveChangesAsync(System.Threading.CancellationToken cancellationToken = default)
+    {
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            foreach (var entry in ChangeTracker.Entries())
+            {
+                if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+                {
+                    var rowVersionProp = entry.Properties.FirstOrDefault(p => p.Metadata.IsConcurrencyToken && p.Metadata.ClrType == typeof(byte[]));
+                    if (rowVersionProp != null)
+                    {
+                        rowVersionProp.CurrentValue = Guid.NewGuid().ToByteArray();
+                    }
+                }
+            }
+        }
+        return base.SaveChangesAsync(cancellationToken);
     }
 }
