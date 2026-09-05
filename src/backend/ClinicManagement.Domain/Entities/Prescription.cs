@@ -17,7 +17,7 @@ public class Prescription
     public DateTime? DispensedAt { get; set; }
     public Guid? DispensedByUserId { get; set; }
 
-    public byte[]? RowVersion { get; set; }
+    public byte[]? RowVersion { get; set; } = Guid.NewGuid().ToByteArray();
 
     [ForeignKey("AppointmentId")]
     public Appointment? Appointment { get; set; }

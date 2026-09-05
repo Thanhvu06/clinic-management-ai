@@ -18,7 +18,7 @@ public class VisitSummary
     public DateTime? UpdatedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
 
-    public byte[]? RowVersion { get; set; }
+    public byte[]? RowVersion { get; set; } = Guid.NewGuid().ToByteArray();
 
     public Appointment Appointment { get; set; } = null!;
     public Doctor Doctor { get; set; } = null!;

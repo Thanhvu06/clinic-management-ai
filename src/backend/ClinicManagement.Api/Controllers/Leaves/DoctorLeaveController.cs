@@ -10,6 +10,7 @@ namespace ClinicManagement.Api.Controllers.Leaves;
 
 [ApiController]
 [Route("api/v1/doctor/leave-requests")]
+[Route("api/v1/doctor/leaves")]
 [Authorize(Roles = RoleNames.Doctor)]
 public class DoctorLeaveController : ControllerBase
 {
@@ -35,9 +36,20 @@ public class DoctorLeaveController : ControllerBase
     }
 
     [HttpGet("preview")]
-    public async Task<IActionResult> PreviewLeave([FromQuery] DateTime start, [FromQuery] DateTime end)
+    [HttpGet("preview-impact")]
+    public async Task<IActionResult> PreviewLeave(
+        [FromQuery] DateTime? start, 
+        [FromQuery] DateTime? end,
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate)
     {
-        var result = await _doctorLeaveService.PreviewLeaveAffectedAppointmentsAsync(start, end);
+        var actualStart = startDate ?? start ?? DateTime.Today;
+        var actualEnd = endDate ?? end ?? actualStart;
+        if (actualEnd.TimeOfDay == TimeSpan.Zero)
+        {
+            actualEnd = actualEnd.Date.AddDays(1).AddTicks(-1);
+        }
+        var result = await _doctorLeaveService.PreviewLeaveAffectedAppointmentsAsync(actualStart, actualEnd);
         return Ok(ApiResponse<LeavePreviewDto>.Ok(result));
     }
 

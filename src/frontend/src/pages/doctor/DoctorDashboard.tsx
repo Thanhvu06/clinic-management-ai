@@ -105,16 +105,16 @@ export const DoctorDashboard: React.FC = () => {
     };
 
     const kpis = dashboardData?.kpis || {
-        totalAppointmentsToday: 0,
-        waitingCount: 0,
-        inConsultationCount: 0,
-        completedCount: 0,
-        noShowCount: 0
+        totalAppointmentsToday: (dashboardData as any)?.totalToday ?? 0,
+        waitingCount: (dashboardData as any)?.checkedInCount ?? 0,
+        inConsultationCount: (dashboardData as any)?.inConsultationCount ?? 0,
+        completedCount: (dashboardData as any)?.completedTodayCount ?? 0,
+        noShowCount: (dashboardData as any)?.noShowTodayCount ?? 0,
     };
 
     const currentShift = dashboardData?.currentShift;
     const nextPatient = dashboardData?.nextPatient;
-    const queue = dashboardData?.todayQueue || [];
+    const queue: DoctorQueueItemDto[] = dashboardData?.todayQueue || (dashboardData as any)?.queue || [];
 
     return (
         <div style={{ padding: '8px 0' }}>
@@ -161,9 +161,11 @@ export const DoctorDashboard: React.FC = () => {
                                 Ca trực hôm nay ({new Date().toLocaleDateString('vi-VN')})
                             </div>
                             <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>
-                                {currentShift ? (
+                                {typeof currentShift === 'string' ? (
+                                    currentShift || 'Hôm nay bạn không có ca trực phòng khám được phân bổ'
+                                ) : currentShift ? (
                                     <>
-                                        {currentShift.shiftName} ({currentShift.startTime.substring(0, 5)} - {currentShift.endTime.substring(0, 5)}) • {currentShift.room}
+                                        {currentShift.shiftName} ({currentShift.startTime?.substring(0, 5) || ''} - {currentShift.endTime?.substring(0, 5) || ''}){currentShift.room ? ` • ${currentShift.room}` : ''}
                                     </>
                                 ) : (
                                     'Hôm nay bạn không có ca trực phòng khám được phân bổ'
@@ -171,7 +173,7 @@ export const DoctorDashboard: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                    {currentShift && (
+                    {currentShift && typeof currentShift === 'object' && (
                         <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '4px 10px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600 }}>
                             {currentShift.status === 'InProgress' ? 'Đang trong ca trực' : 'Ca trực hôm nay'}
                         </span>
@@ -184,7 +186,7 @@ export const DoctorDashboard: React.FC = () => {
                 <div className="card" style={{ padding: '18px', borderLeft: '4px solid #0284c7', borderRadius: '8px' }}>
                     <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>TỔNG SỐ CA HÔM NAY</div>
                     <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>
-                        {loading ? '...' : kpis.totalAppointmentsToday}
+                        {loading ? '...' : (kpis?.totalAppointmentsToday ?? 0)}
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>Tất cả lịch khám</div>
                 </div>
@@ -192,7 +194,7 @@ export const DoctorDashboard: React.FC = () => {
                 <div className="card" style={{ padding: '18px', borderLeft: '4px solid #f59e0b', borderRadius: '8px' }}>
                     <div style={{ fontSize: '0.8rem', color: '#b45309', fontWeight: 600 }}>ĐANG CHỜ KHÁM</div>
                     <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#b45309', marginTop: '4px' }}>
-                        {loading ? '...' : kpis.waitingCount}
+                        {loading ? '...' : (kpis?.waitingCount ?? 0)}
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>Đã xác nhận & check-in</div>
                 </div>
@@ -200,7 +202,7 @@ export const DoctorDashboard: React.FC = () => {
                 <div className="card" style={{ padding: '18px', borderLeft: '4px solid #6366f1', borderRadius: '8px' }}>
                     <div style={{ fontSize: '0.8rem', color: '#4338ca', fontWeight: 600 }}>ĐANG THĂM KHÁM</div>
                     <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#4338ca', marginTop: '4px' }}>
-                        {loading ? '...' : kpis.inConsultationCount}
+                        {loading ? '...' : (kpis?.inConsultationCount ?? 0)}
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>Phiên khám đang mở</div>
                 </div>
@@ -208,7 +210,7 @@ export const DoctorDashboard: React.FC = () => {
                 <div className="card" style={{ padding: '18px', borderLeft: '4px solid #10b981', borderRadius: '8px' }}>
                     <div style={{ fontSize: '0.8rem', color: '#15803d', fontWeight: 600 }}>ĐÃ HOÀN TẤT</div>
                     <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#15803d', marginTop: '4px' }}>
-                        {loading ? '...' : kpis.completedCount}
+                        {loading ? '...' : (kpis?.completedCount ?? 0)}
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>Đã chốt kết quả & đơn thuốc</div>
                 </div>
@@ -216,7 +218,7 @@ export const DoctorDashboard: React.FC = () => {
                 <div className="card" style={{ padding: '18px', borderLeft: '4px solid #ef4444', borderRadius: '8px' }}>
                     <div style={{ fontSize: '0.8rem', color: '#b91c1c', fontWeight: 600 }}>VẮNG MẶT (NO-SHOW)</div>
                     <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#b91c1c', marginTop: '4px' }}>
-                        {loading ? '...' : kpis.noShowCount}
+                        {loading ? '...' : (kpis?.noShowCount ?? 0)}
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>Không có mặt đúng giờ</div>
                 </div>
@@ -242,7 +244,7 @@ export const DoctorDashboard: React.FC = () => {
                                     </span>
                                 </div>
                                 <div style={{ fontSize: '0.9rem', color: '#334155', marginTop: '4px' }}>
-                                    <strong>Khung giờ:</strong> {nextPatient.startTime.substring(0, 5)} - {nextPatient.endTime.substring(0, 5)} | <strong>SĐT:</strong> {nextPatient.patientPhone}
+                                    <strong>Khung giờ:</strong> {nextPatient.startTime?.substring(0, 5) || '--:--'} - {nextPatient.endTime?.substring(0, 5) || '--:--'} | <strong>SĐT:</strong> {nextPatient.patientPhone}
                                 </div>
                                 <div style={{ fontSize: '0.9rem', color: '#475569', marginTop: '2px' }}>
                                     <strong>Lý do khám:</strong> {nextPatient.reason || 'Khám tổng quát theo lịch hẹn'}
@@ -349,7 +351,7 @@ export const DoctorDashboard: React.FC = () => {
                                             {item.queueOrder || idx + 1}
                                         </td>
                                         <td style={{ padding: '12px 10px', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>
-                                            {item.startTime.substring(0, 5)} - {item.endTime.substring(0, 5)}
+                                            {item.startTime?.substring(0, 5) || '--:--'} - {item.endTime?.substring(0, 5) || '--:--'}
                                         </td>
                                         <td style={{ padding: '12px 10px', fontFamily: 'monospace', fontSize: '0.85rem', color: '#475569' }}>
                                             {item.appointmentCode}

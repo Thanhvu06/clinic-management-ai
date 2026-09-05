@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace ClinicManagement.Domain.Entities;
 
@@ -20,7 +20,7 @@ public class AppointmentVitalSigns
     public DateTime RecordedAtUtc { get; set; } = DateTime.UtcNow;
     public Guid RecordedByUserId { get; set; }
 
-    public byte[]? RowVersion { get; set; }
+    public byte[]? RowVersion { get; set; } = Guid.NewGuid().ToByteArray();
 
     public Appointment Appointment { get; set; } = null!;
 

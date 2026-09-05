@@ -114,6 +114,7 @@ public class DoctorAppointmentController : ControllerBase
     }
 
     [HttpGet("{id}/prescription")]
+    [HttpGet("{id}/prescription-draft")]
     public async Task<IActionResult> GetPrescriptionDraft(long id)
     {
         var result = await _doctorAppointmentService.GetPrescriptionDraftAsync(id);
@@ -121,6 +122,7 @@ public class DoctorAppointmentController : ControllerBase
     }
 
     [HttpPut("{id}/prescription")]
+    [HttpPut("{id}/prescription-draft")]
     public async Task<IActionResult> SavePrescriptionDraft(long id, [FromBody] SavePrescriptionDraftRequest request)
     {
         var result = await _doctorAppointmentService.SavePrescriptionDraftAsync(id, request);
@@ -128,6 +130,7 @@ public class DoctorAppointmentController : ControllerBase
     }
 
     [HttpPost("{id}/prescription")]
+    [HttpPost("{id}/prescription-draft")]
     public async Task<IActionResult> SavePrescriptionDraftPost(long id, [FromBody] SavePrescriptionDraftRequest request)
     {
         var result = await _doctorAppointmentService.SavePrescriptionDraftAsync(id, request);

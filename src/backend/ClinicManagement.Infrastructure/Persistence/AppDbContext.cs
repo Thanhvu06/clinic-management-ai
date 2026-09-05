@@ -82,6 +82,14 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         {
             foreach (var entityType in builder.Model.GetEntityTypes())
             {
+                foreach (var property in entityType.GetProperties())
+                {
+                    if (property.IsConcurrencyToken && property.ClrType == typeof(byte[]))
+                    {
+                        property.ValueGenerated = Microsoft.EntityFrameworkCore.Metadata.ValueGenerated.Never;
+                    }
+                }
+
                 var checkConstraints = System.Linq.Enumerable.ToList(entityType.GetCheckConstraints());
                 foreach (var constraint in checkConstraints)
                 {

@@ -805,6 +805,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             summary.Summary = request.Summary ?? summary.Summary;
             summary.FollowUpInstruction = request.FollowUpInstruction;
             summary.UpdatedAtUtc = DateTime.UtcNow;
+            summary.RowVersion = Guid.NewGuid().ToByteArray();
         }
 
         try
@@ -885,6 +886,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             vitals.SpO2 = request.SpO2;
             vitals.RecordedAtUtc = DateTime.UtcNow;
             vitals.RecordedByUserId = userId;
+            vitals.RowVersion = Guid.NewGuid().ToByteArray();
         }
 
         try
@@ -958,6 +960,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             prescription.Notes = request.Notes;
             prescription.Status = PrescriptionStatus.Draft;
             prescription.CreatedAt = DateTime.UtcNow;
+            prescription.RowVersion = Guid.NewGuid().ToByteArray();
 
             _dbContext.PrescriptionItems.RemoveRange(prescription.Items);
         }
