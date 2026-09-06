@@ -89,17 +89,17 @@ public static class DevelopmentDataSeeder
         // 2. 11 Specialties with clean UTF-8
         var specialtyDefs = new[]
         {
-            new Specialty { SpecialtyCode = "SP01", Name = "Nội tổng quát", Description = "Khám và điều trị các bệnh lý nội khoa chung", IsActive = true, AiEnabled = true },
-            new Specialty { SpecialtyCode = "SP02", Name = "Nhi khoa", Description = "Khám, chẩn đoán và điều trị bệnh cho trẻ em", IsActive = true, AiEnabled = true },
-            new Specialty { SpecialtyCode = "SP03", Name = "Sản phụ khoa", Description = "Khám thai định kỳ và tư vấn sức khỏe phụ khoa", IsActive = true, AiEnabled = true },
-            new Specialty { SpecialtyCode = "SP04", Name = "Da liễu", Description = "Chuyên trị các vấn đề về da, tóc và móng", IsActive = true, AiEnabled = true },
-            new Specialty { SpecialtyCode = "SP05", Name = "Tai mũi họng", Description = "Khám và điều trị bệnh lý tai mũi họng", IsActive = true, AiEnabled = true },
-            new Specialty { SpecialtyCode = "SP06", Name = "Tim mạch", Description = "Kiểm tra huyết áp, đo điện tâm đồ và bệnh lý tim mạch", IsActive = true, AiEnabled = true },
-            new Specialty { SpecialtyCode = "SP07", Name = "Cơ xương khớp", Description = "Điều trị viêm khớp, thoái hóa khớp và các chấn thương", IsActive = true, AiEnabled = true },
-            new Specialty { SpecialtyCode = "SP08", Name = "Thần kinh", Description = "Khám và điều trị các bệnh lý thần kinh và đau đầu", IsActive = true, AiEnabled = true },
-            new Specialty { SpecialtyCode = "SP09", Name = "Nội tiết", Description = "Khám và điều trị bệnh lý tiểu đường, tuyến giáp và rối loạn nội tiết", IsActive = true, AiEnabled = true },
-            new Specialty { SpecialtyCode = "SP10", Name = "Nhãn khoa", Description = "Khám và điều trị các bệnh lý về mắt và thị lực", IsActive = true, AiEnabled = true },
-            new Specialty { SpecialtyCode = "SP11", Name = "Tiêu hóa", Description = "Khám và điều trị các bệnh lý dạ dày, đại tràng và tiêu hóa", IsActive = true, AiEnabled = true }
+            new Specialty { SpecialtyCode = "SP01", Name = "Nội tổng quát", Description = "Khám và điều trị các bệnh lý nội khoa chung (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 150000m },
+            new Specialty { SpecialtyCode = "SP02", Name = "Nhi khoa", Description = "Khám, chẩn đoán và điều trị bệnh cho trẻ em (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
+            new Specialty { SpecialtyCode = "SP03", Name = "Sản phụ khoa", Description = "Khám thai định kỳ và tư vấn sức khỏe phụ khoa (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 200000m },
+            new Specialty { SpecialtyCode = "SP04", Name = "Da liễu", Description = "Chuyên trị các vấn đề về da, tóc và móng (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 200000m },
+            new Specialty { SpecialtyCode = "SP05", Name = "Tai mũi họng", Description = "Khám và điều trị bệnh lý tai mũi họng (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
+            new Specialty { SpecialtyCode = "SP06", Name = "Tim mạch", Description = "Kiểm tra huyết áp, đo điện tâm đồ và bệnh lý tim mạch (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 250000m },
+            new Specialty { SpecialtyCode = "SP07", Name = "Cơ xương khớp", Description = "Điều trị viêm khớp, thoái hóa khớp và các chấn thương (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 220000m },
+            new Specialty { SpecialtyCode = "SP08", Name = "Thần kinh", Description = "Khám và điều trị các bệnh lý thần kinh và đau đầu (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 250000m },
+            new Specialty { SpecialtyCode = "SP09", Name = "Nội tiết", Description = "Khám và điều trị bệnh lý tiểu đường, tuyến giáp và rối loạn nội tiết (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 220000m },
+            new Specialty { SpecialtyCode = "SP10", Name = "Nhãn khoa", Description = "Khám và điều trị các bệnh lý về mắt và thị lực (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
+            new Specialty { SpecialtyCode = "SP11", Name = "Tiêu hóa", Description = "Khám và điều trị các bệnh lý dạ dày, đại tràng và tiêu hóa (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 200000m }
         };
         foreach (var sdef in specialtyDefs)
         {
@@ -114,10 +114,14 @@ public static class DevelopmentDataSeeder
                 existingSpec.Description = sdef.Description;
                 existingSpec.IsActive = true;
                 existingSpec.AiEnabled = true;
+                if (existingSpec.ConsultationFee <= 0)
+                {
+                    existingSpec.ConsultationFee = sdef.ConsultationFee;
+                }
             }
         }
         await db.SaveChangesAsync();
-        logger.LogInformation("11 Specialties seeded and synchronized.");
+        logger.LogInformation("11 Specialties seeded and synchronized with demo consultation fees.");
         var specs = await db.Specialties.ToListAsync();
         var specByCode = specs.ToDictionary(s => s.SpecialtyCode, s => s);
 

@@ -96,4 +96,6 @@ export interface DoctorAvailabilityDto {
 }
 
 export * from './doctor';
+export * from './notification';
+export * from './billing';
 

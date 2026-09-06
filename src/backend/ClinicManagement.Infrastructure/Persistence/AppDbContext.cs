@@ -45,6 +45,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     // Notifications
     public DbSet<Notification> Notifications { get; set; } = null!;
 
+    // Billing
+    public DbSet<Invoice> Invoices { get; set; } = null!;
+    public DbSet<InvoiceItem> InvoiceItems { get; set; } = null!;
+    public DbSet<Payment> Payments { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

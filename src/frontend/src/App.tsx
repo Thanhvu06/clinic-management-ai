@@ -22,10 +22,12 @@ import { PatientAppointments } from './pages/patient/PatientAppointments';
 import { PatientProfile } from './pages/patient/PatientProfile';
 import { PatientRevisit } from './pages/patient/PatientRevisit';
 import { PatientPrescriptions } from './pages/patient/PatientPrescriptions';
+import { PatientInvoices } from './pages/patient/PatientInvoices';
 import { PatientAiConsultation } from './pages/patient/PatientAiConsultation';
 import { ReceptionAppointments } from './pages/reception/ReceptionAppointments';
 import { ReceptionPackageRegistrations } from './pages/reception/ReceptionPackageRegistrations';
 import { ReceptionChangeRequests } from './pages/reception/ReceptionChangeRequests';
+import { ReceptionBilling } from './pages/reception/ReceptionBilling';
 import { DoctorDashboard } from './pages/doctor/DoctorDashboard';
 import { DoctorQueue } from './pages/doctor/DoctorQueue';
 import { DoctorSchedule } from './pages/doctor/DoctorSchedule';
@@ -41,6 +43,7 @@ import { AdminWorkSchedules } from './pages/admin/AdminWorkSchedules';
 import { AdminHealthPackages } from './pages/admin/AdminHealthPackages';
 import { AdminMedicines } from './pages/admin/AdminMedicines';
 import { AdminAuditLogs } from './pages/admin/AdminAuditLogs';
+import { AdminBilling } from './pages/admin/AdminBilling';
 import { PharmacyDashboard } from './pages/pharmacy/PharmacyDashboard';
 import { PharmacyPrescriptions } from './pages/pharmacy/PharmacyPrescriptions';
 import { PharmacyInventory } from './pages/pharmacy/PharmacyInventory';
@@ -89,6 +92,7 @@ function App() {
                                         <Route path="/patient/appointments" element={<PatientAppointments />} />
                                         <Route path="/patient/revisit" element={<PatientRevisit />} />
                                         <Route path="/patient/prescriptions" element={<PatientPrescriptions />} />
+                                        <Route path="/patient/invoices" element={<PatientInvoices />} />
                                         <Route path="/patient/ai-consultation" element={<PatientAiConsultation />} />
                                         <Route path="/patient/notifications" element={<NotificationsPage />} />
                                     </Route>
@@ -104,6 +108,7 @@ function App() {
                                         <Route path="/reception" element={<ReceptionistDashboard />} />
                                         <Route path="/reception/appointments" element={<ReceptionAppointments />} />
                                         <Route path="/reception/package-registrations" element={<ReceptionPackageRegistrations />} />
+                                        <Route path="/reception/billing" element={<ReceptionBilling />} />
                                         <Route path="/reception/change-requests" element={<ReceptionChangeRequests />} />
                                     </Route>
 
@@ -121,6 +126,7 @@ function App() {
                                     {/* Admin Routes */}
                                     <Route element={<RoleRoute roles={['Admin']} />}>
                                         <Route path="/admin" element={<AdminDashboard />} />
+                                        <Route path="/admin/billing" element={<AdminBilling />} />
                                         <Route path="/admin/accounts" element={<AdminUsers />} />
                                         <Route path="/admin/specialties" element={<AdminSpecialties />} />
                                         <Route path="/admin/doctors" element={<AdminDoctors />} />

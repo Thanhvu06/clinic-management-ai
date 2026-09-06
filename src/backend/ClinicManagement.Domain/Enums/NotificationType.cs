@@ -8,5 +8,7 @@ public enum NotificationType
     Revisit = 3,
     LeaveRequest = 4,
     Prescription = 5,
-    HealthPackage = 6
+    HealthPackage = 6,
+    Invoice = 7,
+    Payment = 8
 }
