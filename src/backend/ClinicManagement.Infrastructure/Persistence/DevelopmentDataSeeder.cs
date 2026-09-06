@@ -19,6 +19,8 @@ public static class DevelopmentDataSeeder
         var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DevelopmentDataSeeder");
         var userManager = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var db = serviceProvider.GetRequiredService<AppDbContext>();
+        var dateTimeProvider = serviceProvider.GetService<ClinicManagement.Application.Common.Interfaces.IDateTimeProvider>()
+            ?? new ClinicManagement.Infrastructure.Services.DateTimeProvider();
 
         logger.LogInformation("Starting Development Data Seeding...");
 
@@ -34,19 +36,19 @@ public static class DevelopmentDataSeeder
         var rec2 = await SeedUserAsync(userManager, "letan.02@cliniccare.local", "Lễ tân Trần Mai Anh", "0981000002", "Receptionist", password);
         var rec3 = await SeedUserAsync(userManager, "letan.03@cliniccare.local", "Lễ tân Lê Hoàng Yến", "0981000003", "Receptionist", password);
 
-        // 10 Doctors with clean FullName (without duplicated academic titles)
+        // 10 Doctors with clean FullName (without duplicated academic titles) and exact specialty mappings
         var doctorDefs = new[]
         {
-            new { Name = "Nguyễn Minh Khải", Title = "BS.CKI", Exp = 12, Phone = "0900000003", Email = "doctor@cliniccare.local" },
-            new { Name = "Trần Thu Hà", Title = "BS", Exp = 7, Phone = "0982000002", Email = "bacsi.02@cliniccare.local" },
-            new { Name = "Lê Hoàng Nam", Title = "BS.CKII", Exp = 18, Phone = "0982000003", Email = "bacsi.03@cliniccare.local" },
-            new { Name = "Phạm Văn Hùng", Title = "ThS.BS", Exp = 14, Phone = "0982000004", Email = "bacsi.04@cliniccare.local" },
-            new { Name = "Đinh Thị Yến", Title = "BS", Exp = 5, Phone = "0982000005", Email = "bacsi.05@cliniccare.local" },
-            new { Name = "Vũ Quang Vinh", Title = "BS.CKI", Exp = 10, Phone = "0982000006", Email = "bacsi.06@cliniccare.local" },
-            new { Name = "Bùi Hải Yến", Title = "TS.BS", Exp = 20, Phone = "0982000007", Email = "bacsi.07@cliniccare.local" },
-            new { Name = "Đỗ Tuấn Anh", Title = "BS", Exp = 4, Phone = "0982000008", Email = "bacsi.08@cliniccare.local" },
-            new { Name = "Lý Kim Dung", Title = "BS.CKI", Exp = 11, Phone = "0982000009", Email = "bacsi.09@cliniccare.local" },
-            new { Name = "Hoàng Văn Đạt", Title = "BS", Exp = 8, Phone = "0982000010", Email = "bacsi.10@cliniccare.local" }
+            new { Email = "doctor@cliniccare.local", Name = "Nguyễn Minh Khải", Title = "BS.CKI", Exp = 12, Phone = "0900000003", PrimaryCode = "SP01", SecondaryCode = (string?)"SP06" },
+            new { Email = "bacsi.02@cliniccare.local", Name = "Trần Thu Hà", Title = "BS", Exp = 7, Phone = "0982000002", PrimaryCode = "SP03", SecondaryCode = (string?)null },
+            new { Email = "bacsi.03@cliniccare.local", Name = "Lê Hoàng Nam", Title = "BS.CKII", Exp = 18, Phone = "0982000003", PrimaryCode = "SP07", SecondaryCode = (string?)null },
+            new { Email = "bacsi.04@cliniccare.local", Name = "Phạm Văn Hùng", Title = "ThS.BS", Exp = 14, Phone = "0982000004", PrimaryCode = "SP05", SecondaryCode = (string?)null },
+            new { Email = "bacsi.05@cliniccare.local", Name = "Đinh Thị Yến", Title = "BS", Exp = 5, Phone = "0982000005", PrimaryCode = "SP04", SecondaryCode = (string?)null },
+            new { Email = "bacsi.06@cliniccare.local", Name = "Vũ Quang Vinh", Title = "BS.CKI", Exp = 10, Phone = "0982000006", PrimaryCode = "SP08", SecondaryCode = (string?)null },
+            new { Email = "bacsi.07@cliniccare.local", Name = "Bùi Hải Yến", Title = "TS.BS", Exp = 20, Phone = "0982000007", PrimaryCode = "SP09", SecondaryCode = (string?)null },
+            new { Email = "bacsi.08@cliniccare.local", Name = "Đỗ Tuấn Anh", Title = "BS", Exp = 4, Phone = "0982000008", PrimaryCode = "SP10", SecondaryCode = (string?)null },
+            new { Email = "bacsi.09@cliniccare.local", Name = "Lý Kim Dung", Title = "BS.CKI", Exp = 11, Phone = "0982000009", PrimaryCode = "SP02", SecondaryCode = (string?)null },
+            new { Email = "bacsi.10@cliniccare.local", Name = "Hoàng Văn Đạt", Title = "BS", Exp = 8, Phone = "0982000010", PrimaryCode = "SP11", SecondaryCode = (string?)null }
         };
 
         var docUsers = new List<ApplicationUser>();
@@ -84,7 +86,7 @@ public static class DevelopmentDataSeeder
             patUsers.Add(u);
         }
 
-        // 2. Specialties with clean UTF-8
+        // 2. 11 Specialties with clean UTF-8
         var specialtyDefs = new[]
         {
             new Specialty { SpecialtyCode = "SP01", Name = "Nội tổng quát", Description = "Khám và điều trị các bệnh lý nội khoa chung", IsActive = true, AiEnabled = true },
@@ -93,70 +95,140 @@ public static class DevelopmentDataSeeder
             new Specialty { SpecialtyCode = "SP04", Name = "Da liễu", Description = "Chuyên trị các vấn đề về da, tóc và móng", IsActive = true, AiEnabled = true },
             new Specialty { SpecialtyCode = "SP05", Name = "Tai mũi họng", Description = "Khám và điều trị bệnh lý tai mũi họng", IsActive = true, AiEnabled = true },
             new Specialty { SpecialtyCode = "SP06", Name = "Tim mạch", Description = "Kiểm tra huyết áp, đo điện tâm đồ và bệnh lý tim mạch", IsActive = true, AiEnabled = true },
-            new Specialty { SpecialtyCode = "SP07", Name = "Cơ xương khớp", Description = "Điều trị viêm khớp, thoái hóa khớp và các chấn thương", IsActive = true, AiEnabled = true }
+            new Specialty { SpecialtyCode = "SP07", Name = "Cơ xương khớp", Description = "Điều trị viêm khớp, thoái hóa khớp và các chấn thương", IsActive = true, AiEnabled = true },
+            new Specialty { SpecialtyCode = "SP08", Name = "Thần kinh", Description = "Khám và điều trị các bệnh lý thần kinh và đau đầu", IsActive = true, AiEnabled = true },
+            new Specialty { SpecialtyCode = "SP09", Name = "Nội tiết", Description = "Khám và điều trị bệnh lý tiểu đường, tuyến giáp và rối loạn nội tiết", IsActive = true, AiEnabled = true },
+            new Specialty { SpecialtyCode = "SP10", Name = "Nhãn khoa", Description = "Khám và điều trị các bệnh lý về mắt và thị lực", IsActive = true, AiEnabled = true },
+            new Specialty { SpecialtyCode = "SP11", Name = "Tiêu hóa", Description = "Khám và điều trị các bệnh lý dạ dày, đại tràng và tiêu hóa", IsActive = true, AiEnabled = true }
         };
         foreach (var sdef in specialtyDefs)
         {
-            if (!await db.Specialties.AnyAsync(s => s.SpecialtyCode == sdef.SpecialtyCode))
+            var existingSpec = await db.Specialties.FirstOrDefaultAsync(s => s.SpecialtyCode == sdef.SpecialtyCode);
+            if (existingSpec == null)
             {
                 db.Specialties.Add(sdef);
             }
-        }
-        await db.SaveChangesAsync();
-        logger.LogInformation("Specialties seeded.");
-        var specs = await db.Specialties.ToListAsync();
-
-        // 3. Doctors & Specialty Bindings
-        // 3. Doctors & Specialty Bindings
-        for (int i = 0; i < docUsers.Count; i++)
-        {
-            var def = doctorDefs[i];
-            if (!await db.Doctors.AnyAsync(d => d.UserId == docUsers[i].Id))
+            else
             {
-                var d = new Doctor
-                {
-                    UserId = docUsers[i].Id,
-                    IsActive = true,
-                    ExperienceYears = def.Exp,
-                    AcademicTitle = def.Title
-                };
-                db.Doctors.Add(d);
+                existingSpec.Name = sdef.Name;
+                existingSpec.Description = sdef.Description;
+                existingSpec.IsActive = true;
+                existingSpec.AiEnabled = true;
             }
         }
         await db.SaveChangesAsync();
+        logger.LogInformation("11 Specialties seeded and synchronized.");
+        var specs = await db.Specialties.ToListAsync();
+        var specByCode = specs.ToDictionary(s => s.SpecialtyCode, s => s);
 
-        var docsLocal = await db.Doctors.ToListAsync();
-        for (int i = 0; i < docsLocal.Count; i++)
+        // 3. Doctors & Specialty Bindings (Exact mapping by Email and SpecialtyCode)
+        var doctors = new List<Doctor>();
+        for (int i = 0; i < doctorDefs.Length; i++)
         {
-            if (!await db.DoctorSpecialties.AnyAsync(ds => ds.DoctorId == docsLocal[i].Id))
+            var def = doctorDefs[i];
+            var docUser = docUsers[i];
+            var d = await db.Doctors.Include(x => x.DoctorSpecialties).FirstOrDefaultAsync(x => x.UserId == docUser.Id);
+            if (d == null)
             {
-                var primarySpec = specs[i % specs.Count];
+                d = new Doctor
+                {
+                    UserId = docUser.Id,
+                    IsActive = true,
+                    ExperienceYears = def.Exp,
+                    AcademicTitle = def.Title,
+                    Description = $"Bác sĩ chuyên khoa tại ClinicCare AI với {def.Exp} năm kinh nghiệm chuyên môn."
+                };
+                db.Doctors.Add(d);
+                await db.SaveChangesAsync();
+            }
+            else
+            {
+                d.IsActive = true;
+                d.ExperienceYears = def.Exp;
+                d.AcademicTitle = def.Title;
+                if (string.IsNullOrWhiteSpace(d.Description))
+                {
+                    d.Description = $"Bác sĩ chuyên khoa tại ClinicCare AI với {def.Exp} năm kinh nghiệm chuyên môn.";
+                }
+            }
+
+            // Sync exact specialties
+            var primarySpec = specByCode[def.PrimaryCode];
+            var secondarySpec = def.SecondaryCode != null && specByCode.ContainsKey(def.SecondaryCode) ? specByCode[def.SecondaryCode] : null;
+
+            var currentBindings = await db.DoctorSpecialties.Where(ds => ds.DoctorId == d.Id).ToListAsync();
+
+            // Primary
+            var primaryBinding = currentBindings.FirstOrDefault(ds => ds.SpecialtyId == primarySpec.Id);
+            if (primaryBinding == null)
+            {
                 db.DoctorSpecialties.Add(new DoctorSpecialty
                 {
-                    DoctorId = docsLocal[i].Id,
+                    DoctorId = d.Id,
                     SpecialtyId = primarySpec.Id,
                     IsPrimary = true
                 });
+            }
+            else
+            {
+                primaryBinding.IsPrimary = true;
+            }
 
-                // Secondary specialty for every 3rd doctor
-                if (i % 3 == 0)
+            // Secondary
+            if (secondarySpec != null)
+            {
+                var secondaryBinding = currentBindings.FirstOrDefault(ds => ds.SpecialtyId == secondarySpec.Id);
+                if (secondaryBinding == null)
                 {
-                    var sec = specs[(i + 1) % specs.Count];
-                    if (sec.Id != primarySpec.Id)
+                    db.DoctorSpecialties.Add(new DoctorSpecialty
                     {
-                        db.DoctorSpecialties.Add(new DoctorSpecialty
-                        {
-                            DoctorId = docsLocal[i].Id,
-                            SpecialtyId = sec.Id,
-                            IsPrimary = false
-                        });
+                        DoctorId = d.Id,
+                        SpecialtyId = secondarySpec.Id,
+                        IsPrimary = false
+                    });
+                }
+                else
+                {
+                    secondaryBinding.IsPrimary = false;
+                }
+            }
+
+            // Remove any other invalid bindings for this doctor
+            var allowedSpecIds = new HashSet<long> { primarySpec.Id };
+            if (secondarySpec != null) allowedSpecIds.Add(secondarySpec.Id);
+
+            foreach (var b in currentBindings)
+            {
+                if (!allowedSpecIds.Contains(b.SpecialtyId))
+                {
+                    db.DoctorSpecialties.Remove(b);
+                }
+            }
+
+            doctors.Add(d);
+        }
+        await db.SaveChangesAsync();
+        logger.LogInformation("10 Doctors and exact specialty mappings synchronized.");
+
+        // Fix any existing appointments where SpecialtyId is not one of doctor's specialties
+        var allAppts = await db.Appointments.Include(a => a.Doctor).ThenInclude(d => d.DoctorSpecialties).ToListAsync();
+        foreach (var appt in allAppts)
+        {
+            if (appt.Doctor?.DoctorSpecialties != null)
+            {
+                var validSpecialties = appt.Doctor.DoctorSpecialties.Select(ds => ds.SpecialtyId).ToList();
+                if (!validSpecialties.Contains(appt.SpecialtyId))
+                {
+                    var docPrimary = appt.Doctor.DoctorSpecialties.FirstOrDefault(ds => ds.IsPrimary) 
+                        ?? appt.Doctor.DoctorSpecialties.FirstOrDefault();
+                    if (docPrimary != null)
+                    {
+                        appt.SpecialtyId = docPrimary.SpecialtyId;
                     }
                 }
             }
         }
         await db.SaveChangesAsync();
-        logger.LogInformation("Doctors and specialty mappings seeded.");
-        var doctors = await db.Doctors.Include(d => d.DoctorSpecialties).ToListAsync();
 
         // 4. Patients
         for (int i = 0; i < patUsers.Count; i++)
@@ -226,53 +298,84 @@ public static class DevelopmentDataSeeder
         await db.SaveChangesAsync();
         logger.LogInformation("Clinic locations seeded.");
 
-        // 6. Doctor Work Schedules & Slots (2-shift model: 08:00–11:30 and 13:30–17:00 for today + next 14 days)
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        // 6. Doctor Work Schedules & Slots (2-shift model: 08:00–11:30 and 13:30–17:00 for today + next 30 days, skipping Sundays)
+        var today = dateTimeProvider.VietnamToday;
+        var existingSchedules = await db.DoctorWorkSchedules.ToListAsync();
+        var scheduleLookup = existingSchedules
+            .GroupBy(s => (s.DoctorId, s.WorkDate, s.StartTime, s.EndTime))
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var existingSlots = await db.AppointmentSlots.ToListAsync();
+        var slotLookup = existingSlots
+            .GroupBy(s => (s.DoctorId, s.SlotDate, s.StartTime))
+            .ToDictionary(g => g.Key, g => g.First());
+
         foreach (var doc in doctors)
         {
-            for (int i = 0; i <= 14; i++)
+            for (int i = 0; i < 30; i++)
             {
                 var date = today.AddDays(i);
                 // Skip Sundays
                 if (date.DayOfWeek == DayOfWeek.Sunday) continue;
 
-                if (await db.DoctorWorkSchedules.AnyAsync(ws => ws.DoctorId == doc.Id && ws.WorkDate == date))
-                    continue;
-
                 // Morning Shift (08:00 - 11:30)
-                var morningSchedule = new DoctorWorkSchedule
+                var morningKey = (doc.Id, date, new TimeOnly(8, 0), new TimeOnly(11, 30));
+                if (!scheduleLookup.TryGetValue(morningKey, out var morningSchedule))
                 {
-                    DoctorId = doc.Id,
-                    WorkDate = date,
-                    StartTime = new TimeOnly(8, 0),
-                    EndTime = new TimeOnly(11, 30),
-                    IsActive = true
-                };
-                db.DoctorWorkSchedules.Add(morningSchedule);
+                    morningSchedule = new DoctorWorkSchedule
+                    {
+                        DoctorId = doc.Id,
+                        WorkDate = date,
+                        StartTime = new TimeOnly(8, 0),
+                        EndTime = new TimeOnly(11, 30),
+                        IsActive = true
+                    };
+                    db.DoctorWorkSchedules.Add(morningSchedule);
+                    scheduleLookup[morningKey] = morningSchedule;
+                }
+                else if (!morningSchedule.IsActive)
+                {
+                    morningSchedule.IsActive = true;
+                }
 
                 // Afternoon Shift (13:30 - 17:00)
-                var afternoonSchedule = new DoctorWorkSchedule
+                var afternoonKey = (doc.Id, date, new TimeOnly(13, 30), new TimeOnly(17, 0));
+                if (!scheduleLookup.TryGetValue(afternoonKey, out var afternoonSchedule))
                 {
-                    DoctorId = doc.Id,
-                    WorkDate = date,
-                    StartTime = new TimeOnly(13, 30),
-                    EndTime = new TimeOnly(17, 0),
-                    IsActive = true
-                };
-                db.DoctorWorkSchedules.Add(afternoonSchedule);
+                    afternoonSchedule = new DoctorWorkSchedule
+                    {
+                        DoctorId = doc.Id,
+                        WorkDate = date,
+                        StartTime = new TimeOnly(13, 30),
+                        EndTime = new TimeOnly(17, 0),
+                        IsActive = true
+                    };
+                    db.DoctorWorkSchedules.Add(afternoonSchedule);
+                    scheduleLookup[afternoonKey] = afternoonSchedule;
+                }
+                else if (!afternoonSchedule.IsActive)
+                {
+                    afternoonSchedule.IsActive = true;
+                }
 
                 // Morning slots (7 slots: 08:00 to 11:30, 30m each)
                 var mStart = new TimeOnly(8, 0);
                 for (int s = 0; s < 7; s++)
                 {
-                    db.AppointmentSlots.Add(new AppointmentSlot
+                    var slotKey = (doc.Id, date, mStart);
+                    if (!slotLookup.TryGetValue(slotKey, out var slot))
                     {
-                        DoctorId = doc.Id,
-                        SlotDate = date,
-                        StartTime = mStart,
-                        EndTime = mStart.AddMinutes(30),
-                        IsBooked = false
-                    });
+                        slot = new AppointmentSlot
+                        {
+                            DoctorId = doc.Id,
+                            SlotDate = date,
+                            StartTime = mStart,
+                            EndTime = mStart.AddMinutes(30),
+                            IsBooked = false
+                        };
+                        db.AppointmentSlots.Add(slot);
+                        slotLookup[slotKey] = slot;
+                    }
                     mStart = mStart.AddMinutes(30);
                 }
 
@@ -280,20 +383,46 @@ public static class DevelopmentDataSeeder
                 var aStart = new TimeOnly(13, 30);
                 for (int s = 0; s < 7; s++)
                 {
-                    db.AppointmentSlots.Add(new AppointmentSlot
+                    var slotKey = (doc.Id, date, aStart);
+                    if (!slotLookup.TryGetValue(slotKey, out var slot))
                     {
-                        DoctorId = doc.Id,
-                        SlotDate = date,
-                        StartTime = aStart,
-                        EndTime = aStart.AddMinutes(30),
-                        IsBooked = false
-                    });
+                        slot = new AppointmentSlot
+                        {
+                            DoctorId = doc.Id,
+                            SlotDate = date,
+                            StartTime = aStart,
+                            EndTime = aStart.AddMinutes(30),
+                            IsBooked = false
+                        };
+                        db.AppointmentSlots.Add(slot);
+                        slotLookup[slotKey] = slot;
+                    }
                     aStart = aStart.AddMinutes(30);
                 }
             }
         }
         await db.SaveChangesAsync();
-        logger.LogInformation("Work schedules (2 shifts) and slots seeded.");
+
+        // Synchronize IsBooked on all slots based on active appointments holding slots
+        var activeApptSlotIds = await db.Appointments
+            .Where(a => AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
+            .Select(a => a.AppointmentSlotId)
+            .Distinct()
+            .ToListAsync();
+        var activeSlotIdSet = new HashSet<long>(activeApptSlotIds);
+
+        var allDoctorSlots = await db.AppointmentSlots.ToListAsync();
+        foreach (var slot in allDoctorSlots)
+        {
+            var shouldBeBooked = activeSlotIdSet.Contains(slot.Id);
+            if (slot.IsBooked != shouldBeBooked)
+            {
+                slot.IsBooked = shouldBeBooked;
+            }
+        }
+        await db.SaveChangesAsync();
+        logger.LogInformation("Work schedules (30 days [VietnamToday..+29], 2 shifts) and slots (14 slots/day) seeded and synchronized.");
+        logger.LogInformation("NOTE: All doctor profiles and medical records seeded are demo/mock data for development purposes only.");
 
         // 7. Appointments & Histories
         if (!await db.Appointments.AnyAsync(a => a.AppointmentCode.StartsWith("DEMO-")))
@@ -411,32 +540,43 @@ public static class DevelopmentDataSeeder
 
             // Historical past appointments (create past schedules & slots for realistic history)
             var pastDate = today.AddDays(-5);
-            var pastSchedule = new DoctorWorkSchedule
+            var pastSchedule = await db.DoctorWorkSchedules.FirstOrDefaultAsync(s => s.DoctorId == mainDoc.Id && s.WorkDate == pastDate);
+            if (pastSchedule == null)
             {
-                DoctorId = mainDoc.Id,
-                WorkDate = pastDate,
-                StartTime = new TimeOnly(8, 0),
-                EndTime = new TimeOnly(17, 0),
-                IsActive = true
-            };
-            db.DoctorWorkSchedules.Add(pastSchedule);
-            await db.SaveChangesAsync();
-
-            var pastSlots = new List<AppointmentSlot>();
-            for (int i = 0; i < 15; i++)
-            {
-                var s = new AppointmentSlot
+                pastSchedule = new DoctorWorkSchedule
                 {
                     DoctorId = mainDoc.Id,
-                    SlotDate = pastDate,
-                    StartTime = new TimeOnly(8, 0).AddMinutes(i * 30),
-                    EndTime = new TimeOnly(8, 30).AddMinutes(i * 30),
-                    IsBooked = true
+                    WorkDate = pastDate,
+                    StartTime = new TimeOnly(8, 0),
+                    EndTime = new TimeOnly(17, 0),
+                    IsActive = true
                 };
-                pastSlots.Add(s);
+                db.DoctorWorkSchedules.Add(pastSchedule);
+                await db.SaveChangesAsync();
             }
-            db.AppointmentSlots.AddRange(pastSlots);
-            await db.SaveChangesAsync();
+
+            var pastSlots = await db.AppointmentSlots.Where(s => s.DoctorId == mainDoc.Id && s.SlotDate == pastDate).ToListAsync();
+            if (pastSlots.Count < 15)
+            {
+                for (int i = pastSlots.Count; i < 15; i++)
+                {
+                    var sTime = new TimeOnly(8, 0).AddMinutes(i * 30);
+                    if (!pastSlots.Any(x => x.StartTime == sTime))
+                    {
+                        var s = new AppointmentSlot
+                        {
+                            DoctorId = mainDoc.Id,
+                            SlotDate = pastDate,
+                            StartTime = sTime,
+                            EndTime = sTime.AddMinutes(30),
+                            IsBooked = true
+                        };
+                        pastSlots.Add(s);
+                        db.AppointmentSlots.Add(s);
+                    }
+                }
+                await db.SaveChangesAsync();
+            }
 
             // 12 Completed
             for (int i = 0; i < 12; i++)
@@ -451,31 +591,43 @@ public static class DevelopmentDataSeeder
 
             // Past cancelled
             var pastDate2 = today.AddDays(-4);
-            var pastSchedule2 = new DoctorWorkSchedule
+            var pastSchedule2 = await db.DoctorWorkSchedules.FirstOrDefaultAsync(s => s.DoctorId == mainDoc.Id && s.WorkDate == pastDate2);
+            if (pastSchedule2 == null)
             {
-                DoctorId = mainDoc.Id,
-                WorkDate = pastDate2,
-                StartTime = new TimeOnly(8, 0),
-                EndTime = new TimeOnly(17, 0),
-                IsActive = true
-            };
-            db.DoctorWorkSchedules.Add(pastSchedule2);
-            await db.SaveChangesAsync();
-
-            var pastSlots2 = new List<AppointmentSlot>();
-            for (int i = 0; i < 5; i++)
-            {
-                pastSlots2.Add(new AppointmentSlot
+                pastSchedule2 = new DoctorWorkSchedule
                 {
                     DoctorId = mainDoc.Id,
-                    SlotDate = pastDate2,
-                    StartTime = new TimeOnly(8, 0).AddMinutes(i * 30),
-                    EndTime = new TimeOnly(8, 30).AddMinutes(i * 30),
-                    IsBooked = false
-                });
+                    WorkDate = pastDate2,
+                    StartTime = new TimeOnly(8, 0),
+                    EndTime = new TimeOnly(17, 0),
+                    IsActive = true
+                };
+                db.DoctorWorkSchedules.Add(pastSchedule2);
+                await db.SaveChangesAsync();
             }
-            db.AppointmentSlots.AddRange(pastSlots2);
-            await db.SaveChangesAsync();
+
+            var pastSlots2 = await db.AppointmentSlots.Where(s => s.DoctorId == mainDoc.Id && s.SlotDate == pastDate2).ToListAsync();
+            if (pastSlots2.Count < 5)
+            {
+                for (int i = pastSlots2.Count; i < 5; i++)
+                {
+                    var sTime = new TimeOnly(8, 0).AddMinutes(i * 30);
+                    if (!pastSlots2.Any(x => x.StartTime == sTime))
+                    {
+                        var s = new AppointmentSlot
+                        {
+                            DoctorId = mainDoc.Id,
+                            SlotDate = pastDate2,
+                            StartTime = sTime,
+                            EndTime = sTime.AddMinutes(30),
+                            IsBooked = false
+                        };
+                        pastSlots2.Add(s);
+                        db.AppointmentSlots.Add(s);
+                    }
+                }
+                await db.SaveChangesAsync();
+            }
 
             for (int i = 0; i < 5; i++)
             {
@@ -520,63 +672,81 @@ public static class DevelopmentDataSeeder
             logger.LogInformation("Appointments seeded.");
 
             // Change requests
-            var pendingAppt = await db.Appointments.Include(a => a.Patient).FirstAsync(a => a.Status == AppointmentStatus.Pending);
-            db.AppointmentChangeRequests.Add(new AppointmentChangeRequest
+            if (!await db.AppointmentChangeRequests.AnyAsync())
             {
-                AppointmentId = pendingAppt.Id,
-                RequestType = AppointmentChangeRequestType.Cancellation,
-                Reason = "Bận chuyến công tác đột xuất tại Hà Nội",
-                Status = AppointmentChangeRequestStatus.Pending,
-                RequestedByUserId = pendingAppt.Patient.UserId,
-                CreatedAt = DateTime.UtcNow
-            });
+                var pendingAppt = await db.Appointments.Include(a => a.Patient).FirstOrDefaultAsync(a => a.Status == AppointmentStatus.Pending);
+                if (pendingAppt != null)
+                {
+                    db.AppointmentChangeRequests.Add(new AppointmentChangeRequest
+                    {
+                        AppointmentId = pendingAppt.Id,
+                        RequestType = AppointmentChangeRequestType.Cancellation,
+                        Reason = "Bận chuyến công tác đột xuất tại Hà Nội",
+                        Status = AppointmentChangeRequestStatus.Pending,
+                        RequestedByUserId = pendingAppt.Patient.UserId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
 
-            var confAppt = await db.Appointments.Include(a => a.Patient).Skip(1).FirstAsync(a => a.Status == AppointmentStatus.Confirmed);
-            var rescheduleSlot = futureSlots.FirstOrDefault(s => s.DoctorId == confAppt.DoctorId && !s.IsBooked);
-            db.AppointmentChangeRequests.Add(new AppointmentChangeRequest
-            {
-                AppointmentId = confAppt.Id,
-                RequestType = AppointmentChangeRequestType.Reschedule,
-                RequestedSlotId = rescheduleSlot?.Id ?? confAppt.AppointmentSlotId,
-                Reason = "Xin dời ngày khám sang tuần sau vì việc gia đình",
-                Status = AppointmentChangeRequestStatus.Pending,
-                RequestedByUserId = confAppt.Patient.UserId,
-                CreatedAt = DateTime.UtcNow
-            });
-            await db.SaveChangesAsync();
+                var confAppt = await db.Appointments.Include(a => a.Patient).Skip(1).FirstOrDefaultAsync(a => a.Status == AppointmentStatus.Confirmed);
+                if (confAppt != null)
+                {
+                    var rescheduleSlot = futureSlots.FirstOrDefault(s => s.DoctorId == confAppt.DoctorId && !s.IsBooked);
+                    db.AppointmentChangeRequests.Add(new AppointmentChangeRequest
+                    {
+                        AppointmentId = confAppt.Id,
+                        RequestType = AppointmentChangeRequestType.Reschedule,
+                        RequestedSlotId = rescheduleSlot?.Id ?? confAppt.AppointmentSlotId,
+                        Reason = "Xin dời ngày khám sang tuần sau vì việc gia đình",
+                        Status = AppointmentChangeRequestStatus.Pending,
+                        RequestedByUserId = confAppt.Patient.UserId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+                await db.SaveChangesAsync();
+            }
 
             // Revisit request
-            var compAppt = await db.Appointments.FirstAsync(a => a.Status == AppointmentStatus.Completed);
-            db.RevisitRequests.Add(new RevisitRequest
+            if (!await db.RevisitRequests.AnyAsync())
             {
-                AppointmentId = compAppt.Id,
-                PatientId = compAppt.PatientId,
-                DoctorId = compAppt.DoctorId,
-                SuggestedDate = today.AddDays(7),
-                Note = "Tái khám sau 1 tuần để kiểm tra lại đường huyết và men gan",
-                Status = RevisitRequestStatus.PendingPatientResponse
-            });
-            await db.SaveChangesAsync();
+                var compAppt = await db.Appointments.FirstOrDefaultAsync(a => a.Status == AppointmentStatus.Completed);
+                if (compAppt != null)
+                {
+                    db.RevisitRequests.Add(new RevisitRequest
+                    {
+                        AppointmentId = compAppt.Id,
+                        PatientId = compAppt.PatientId,
+                        DoctorId = compAppt.DoctorId,
+                        SuggestedDate = today.AddDays(7),
+                        Note = "Tái khám sau 1 tuần để kiểm tra lại đường huyết và men gan",
+                        Status = RevisitRequestStatus.PendingPatientResponse
+                    });
+                    await db.SaveChangesAsync();
+                }
+            }
 
             // Leave requests
-            db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
+            if (!await db.DoctorLeaveRequests.AnyAsync())
             {
-                DoctorId = mainDoc.Id,
-                StartDateTime = DateTime.UtcNow.AddDays(2),
-                EndDateTime = DateTime.UtcNow.AddDays(3),
-                Reason = "Nghỉ phép cá nhân giải quyết việc gia đình",
-                Status = DoctorLeaveRequestStatus.Pending
-            });
-            db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
-            {
-                DoctorId = doctors[1].Id,
-                StartDateTime = DateTime.UtcNow.AddDays(5),
-                EndDateTime = DateTime.UtcNow.AddDays(6),
-                Reason = "Tham gia hội thảo chuyên ngành tại Hà Nội",
-                Status = DoctorLeaveRequestStatus.Approved,
-                AdminNote = "Đã duyệt, yêu cầu chuyển giao ca trực và hỗ trợ bệnh nhân ngày 5."
-            });
-            await db.SaveChangesAsync();
+                db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
+                {
+                    DoctorId = mainDoc.Id,
+                    StartDateTime = DateTime.UtcNow.AddDays(2),
+                    EndDateTime = DateTime.UtcNow.AddDays(3),
+                    Reason = "Nghỉ phép cá nhân giải quyết việc gia đình",
+                    Status = DoctorLeaveRequestStatus.Pending
+                });
+                db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
+                {
+                    DoctorId = doctors[1].Id,
+                    StartDateTime = DateTime.UtcNow.AddDays(5),
+                    EndDateTime = DateTime.UtcNow.AddDays(6),
+                    Reason = "Tham gia hội thảo chuyên ngành tại Hà Nội",
+                    Status = DoctorLeaveRequestStatus.Approved,
+                    AdminNote = "Đã duyệt, yêu cầu chuyển giao ca trực và hỗ trợ bệnh nhân ngày 5."
+                });
+                await db.SaveChangesAsync();
+            }
             logger.LogInformation("Requests and Leaves seeded.");
         }
 
@@ -799,11 +969,34 @@ public static class DevelopmentDataSeeder
         if (user == null)
         {
             var existingByPhone = userManager.Users.FirstOrDefault(u => u.PhoneNumber == phone);
-            if (existingByPhone != null) return existingByPhone;
+            if (existingByPhone != null)
+            {
+                existingByPhone.UserName = email;
+                existingByPhone.Email = email;
+                existingByPhone.FullName = name;
+                existingByPhone.IsActive = true;
+                await userManager.UpdateAsync(existingByPhone);
+                if (!await userManager.IsInRoleAsync(existingByPhone, role))
+                {
+                    await userManager.AddToRoleAsync(existingByPhone, role);
+                }
+                return existingByPhone;
+            }
 
             user = new ApplicationUser { UserName = email, Email = email, FullName = name, PhoneNumber = phone, IsActive = true };
             await userManager.CreateAsync(user, password);
             await userManager.AddToRoleAsync(user, role);
+        }
+        else
+        {
+            user.FullName = name;
+            user.PhoneNumber = phone;
+            user.IsActive = true;
+            await userManager.UpdateAsync(user);
+            if (!await userManager.IsInRoleAsync(user, role))
+            {
+                await userManager.AddToRoleAsync(user, role);
+            }
         }
         return user;
     }

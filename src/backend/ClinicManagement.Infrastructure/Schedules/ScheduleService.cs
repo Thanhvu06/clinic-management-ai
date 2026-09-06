@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -235,8 +235,7 @@ public class ScheduleService : IScheduleService
                                 && a.AppointmentSlot.SlotDate == schedule.WorkDate
                                 && a.AppointmentSlot.StartTime >= schedule.StartTime
                                 && a.AppointmentSlot.EndTime <= schedule.EndTime
-                                && (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed
-                                    || a.Status == AppointmentStatus.PendingReschedule || a.Status == AppointmentStatus.PendingCancellation));
+                                && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status));
 
                 if (hasActiveAppointments)
                     throw new BusinessException("INVALID_OPERATION", "Không được ngừng lịch làm việc vì còn lịch hẹn chưa xử lý.");

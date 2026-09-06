@@ -11,6 +11,7 @@ import { useChatContext } from "../../contexts/ChatContext";
 import { useDialog } from "../../contexts/DialogContext";
 import { Breadcrumb } from "../../components/Breadcrumb";
 import { Button, FormField, TextInput, Textarea, FormError } from "../../components/forms";
+import { formatDoctorName, getNextWorkingDateString, isSundayDateString } from "../../utils/doctorNameHelper";
 
 interface Specialty {
     id: number;
@@ -57,11 +58,7 @@ export const BookAppointment: React.FC = () => {
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
     const [specialtyId, setSpecialtyId] = useState<number | "">("");
     const [doctorId, setDoctorId] = useState<number | "">("");
-    const [slotDate, setSlotDate] = useState<string>(() => {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        return tomorrow.toISOString().split("T")[0];
-    });
+    const [slotDate, setSlotDate] = useState<string>(() => getNextWorkingDateString());
     const [slotId, setSlotId] = useState<number | "">("");
     const [reason, setReason] = useState("");
 
@@ -115,6 +112,15 @@ export const BookAppointment: React.FC = () => {
             if (queryDocId) {
                 targetDocId = parseInt(queryDocId, 10);
             }
+            const queryDate = params.get("date");
+            if (queryDate) {
+                if (isSundayDateString(queryDate)) {
+                    showAlert("Phòng khám không mở lịch khám vào Chủ nhật. Hệ thống đã tự động chuyển sang ngày làm việc gần nhất.", "Lưu ý", "info");
+                    setSlotDate(getNextWorkingDateString(new Date(queryDate)));
+                } else {
+                    setSlotDate(queryDate);
+                }
+            }
         }
 
         if (targetSpecId && !isNaN(targetSpecId)) {
@@ -124,9 +130,9 @@ export const BookAppointment: React.FC = () => {
         if (targetDocId && !isNaN(targetDocId)) {
             setDoctorId(targetDocId);
         }
-    }, [specialties, pendingSpecialtyId, location.search, setPendingSpecialtyId]);
+    }, [specialties, pendingSpecialtyId, location.search, setPendingSpecialtyId, showAlert]);
 
-    // 3. Fetch Doctors when specialtyId changes (or all active doctors if query has doctorId)
+    // 3. Fetch Doctors when specialtyId changes
     useEffect(() => {
         if (!specialtyId) {
             setDoctors([]);
@@ -141,10 +147,11 @@ export const BookAppointment: React.FC = () => {
                     const list = Array.isArray(res.data) ? res.data : (res.data.items ?? []);
                     setDoctors(list);
                     
-                    // If current doctorId is not in the specialty's doctor list, reset doctorId
+                    // If current doctorId is not in the specialty's doctor list, prompt and reset
                     if (doctorId && !list.some((d: Doctor) => d.id === doctorId)) {
                         setDoctorId("");
                         setSlotId("");
+                        showAlert("Bác sĩ đã chọn không thuộc chuyên khoa này. Vui lòng chọn lại bác sĩ.", "Thông báo", "info");
                     }
                 }
             } catch (err) {
@@ -155,7 +162,7 @@ export const BookAppointment: React.FC = () => {
         };
 
         fetchDoctors();
-    }, [specialtyId]);
+    }, [specialtyId, doctorId, showAlert]);
 
     // 4. Fetch Slots when doctorId and slotDate are set
     useEffect(() => {
@@ -165,11 +172,18 @@ export const BookAppointment: React.FC = () => {
             return;
         }
 
+        if (isSundayDateString(slotDate)) {
+            setSlots([]);
+            setSlotId("");
+            return;
+        }
+
         const fetchSlots = async () => {
             try {
                 setLoadingSlots(true);
+                const specParam = specialtyId ? `&specialtyId=${specialtyId}` : '';
                 const res = await axiosClient.get<any, ApiResponse<Slot[]>>(
-                    `/appointments/slots?doctorId=${doctorId}&fromDate=${slotDate}&toDate=${slotDate}`
+                    `/doctors/${doctorId}/available-slots?fromDate=${slotDate}&toDate=${slotDate}${specParam}`
                 );
                 if (res.success && res.data) {
                     setSlots(res.data);
@@ -185,7 +199,7 @@ export const BookAppointment: React.FC = () => {
         };
 
         fetchSlots();
-    }, [doctorId, slotDate]);
+    }, [doctorId, slotDate, specialtyId]);
 
     // Handler when selecting specialty: discards doctor & slot
     const handleSelectSpecialty = (id: number) => {
@@ -472,8 +486,8 @@ export const BookAppointment: React.FC = () => {
                                             <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#e0f2fe', color: 'var(--c-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
                                                 <User size={26} />
                                             </div>
-                                            <h4>{d.academicTitle ? d.academicTitle + ". " : ""}{d.fullName}</h4>
-                                            <p>{d.experienceYears ? `${d.experienceYears} năm kinh nghiệm` : "Bác sĩ chuyên khoa"}</p>
+                                            <h4>{formatDoctorName(d.academicTitle, d.fullName)}</h4>
+                                            <p>{d.experienceYears ? `${d.experienceYears} năm kinh nghiệm` : "Chưa cập nhật kinh nghiệm"}</p>
                                         </div>
                                     ))}
                                 </div>
@@ -502,7 +516,7 @@ export const BookAppointment: React.FC = () => {
                                 Bước 3: Chọn ngày & giờ khám
                             </h2>
                             <p className={styles.stepSubtitle}>
-                                Lịch trống của {selectedDoc?.academicTitle ? selectedDoc.academicTitle + ". " : ""}{selectedDoc?.fullName}
+                                Lịch trống của {formatDoctorName(selectedDoc?.academicTitle, selectedDoc?.fullName)}
                             </p>
 
                             <div style={{ maxWidth: '320px', marginBottom: '24px' }}>
@@ -524,7 +538,22 @@ export const BookAppointment: React.FC = () => {
                                 <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: 'var(--c-navy)', marginBottom: '8px' }}>
                                     Khung giờ khám còn trống (*)
                                 </label>
-                                {loadingSlots ? (
+                                {isSundayDateString(slotDate) ? (
+                                    <div style={{
+                                        padding: '16px 20px',
+                                        background: '#fffbeb',
+                                        border: '1px solid #fef3c7',
+                                        borderRadius: '10px',
+                                        color: '#b45309',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '12px',
+                                        fontSize: '0.925rem'
+                                    }}>
+                                        <AlertCircle size={20} color="#d97706" style={{ flexShrink: 0 }} />
+                                        <span><strong>Lưu ý:</strong> Phòng khám không mở lịch bác sĩ vào Chủ nhật. Vui lòng chọn ngày từ Thứ Hai đến Thứ Bảy.</span>
+                                    </div>
+                                ) : loadingSlots ? (
                                     <div style={{ padding: '24px', background: '#f8fafc', borderRadius: '8px', textAlign: 'center', color: 'var(--c-text-muted)' }}>
                                         Đang kiểm tra lịch trống của bác sĩ...
                                     </div>
@@ -605,7 +634,7 @@ export const BookAppointment: React.FC = () => {
                                     <div>
                                         <span style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)', display: 'block' }}>BÁC SĨ PHỤ TRÁCH</span>
                                         <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--c-navy)' }}>
-                                            {selectedDoc?.academicTitle ? selectedDoc.academicTitle + ". " : ""}{selectedDoc?.fullName}
+                                            {formatDoctorName(selectedDoc?.academicTitle, selectedDoc?.fullName)}
                                         </span>
                                     </div>
                                 </div>
@@ -685,7 +714,7 @@ export const BookAppointment: React.FC = () => {
                             <div>
                                 <div className={styles.summaryItemLabel}>Bác sĩ</div>
                                 <div className={selectedDoc ? styles.summaryItemValue : styles.summaryItemEmpty}>
-                                    {selectedDoc ? `${selectedDoc.academicTitle ? selectedDoc.academicTitle + ". " : ""}${selectedDoc.fullName}` : "Chưa chọn"}
+                                    {selectedDoc ? formatDoctorName(selectedDoc.academicTitle, selectedDoc.fullName) : "Chưa chọn"}
                                 </div>
                             </div>
                         </div>

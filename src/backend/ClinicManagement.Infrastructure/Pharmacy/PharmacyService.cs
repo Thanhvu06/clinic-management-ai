@@ -211,6 +211,28 @@ public class PharmacyService : IPharmacyService
             prescription.DispensedAt = DateTime.UtcNow;
             prescription.DispensedByUserId = actorUserId;
 
+            var patientUserId = await _dbContext.Patients
+                .Where(p => p.Id == prescription.PatientId)
+                .Select(p => p.UserId)
+                .FirstOrDefaultAsync();
+
+            if (patientUserId != Guid.Empty)
+            {
+                _dbContext.Notifications.Add(new Notification
+                {
+                    UserId = patientUserId,
+                    Type = NotificationType.Prescription,
+                    Title = "Đơn thuốc đã được phát",
+                    Message = $"Đơn thuốc cho lịch khám #{prescription.AppointmentId} đã được nhà thuốc cấp phát thành công.",
+                    Route = "/patient/prescriptions",
+                    RelatedEntityType = "Prescription",
+                    RelatedEntityId = prescription.Id.ToString(),
+                    DedupeKey = $"rx_dispensed_{prescription.Id}",
+                    IsRead = false,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+            }
+
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
 

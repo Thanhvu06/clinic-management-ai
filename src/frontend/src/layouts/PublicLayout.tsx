@@ -6,8 +6,9 @@ import styles from './PublicLayout.module.css';
 import { AppointmentLookupModal } from '../components/AppointmentLookupModal';
 import { 
     Phone, Clock, MapPin, ShieldPlus, Menu, X, 
-    UserCircle, Calendar, FileText, Pill, LogOut, ChevronDown, Search, PackageCheck 
+    UserCircle, Calendar, FileText, Pill, LogOut, ChevronDown, Search, PackageCheck, Bell
 } from 'lucide-react';
+import { NotificationBell } from '../components/common/NotificationBell';
 
 export const PublicLayout: React.FC = () => {
     const { isAuthenticated, user, logout } = useAuth();
@@ -113,43 +114,48 @@ export const PublicLayout: React.FC = () => {
                                 <Link to="/register" className={styles.btnRegister}>Đăng ký ngay</Link>
                             </>
                         ) : (
-                            <div className={styles.userDropdown} ref={dropdownRef}>
-                                <button 
-                                    className={styles.userToggle}
-                                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                    aria-expanded={isDropdownOpen}
-                                    aria-haspopup="true"
-                                >
-                                    <div className={styles.avatar}>
-                                        {user?.fullName?.charAt(0).toUpperCase() || 'U'}
-                                    </div>
-                                    <span style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>
-                                        {user?.fullName}
-                                    </span>
-                                    <ChevronDown size={16} color="var(--c-text-light)" />
-                                </button>
-                                
-                                {isDropdownOpen && (
-                                    <div className={styles.dropdownMenu}>
-                                        {isPatient ? (
-                                            <>
-                                                <Link to="/patient/profile" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
-                                                    <UserCircle size={18} /> Hồ sơ cá nhân
-                                                </Link>
-                                                <Link to="/patient/appointments" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
-                                                    <Calendar size={18} /> Lịch hẹn của tôi
-                                                </Link>
-                                                <Link to="/patient/health-package-registrations" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
-                                                    <PackageCheck size={18} /> Gói khám đã đăng ký
-                                                </Link>
-                                                <Link to="/patient/revisit" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
-                                                    <FileText size={18} /> Lịch tái khám
-                                                </Link>
-                                                <Link to="/patient/prescriptions" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
-                                                    <Pill size={18} /> Đơn thuốc của tôi
-                                                </Link>
-                                            </>
-                                        ) : (
+                            <>
+                                <NotificationBell />
+                                <div className={styles.userDropdown} ref={dropdownRef}>
+                                    <button 
+                                        className={styles.userToggle}
+                                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                        aria-expanded={isDropdownOpen}
+                                        aria-haspopup="true"
+                                    >
+                                        <div className={styles.avatar}>
+                                            {user?.fullName?.charAt(0).toUpperCase() || 'U'}
+                                        </div>
+                                        <span style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>
+                                            {user?.fullName}
+                                        </span>
+                                        <ChevronDown size={16} color="var(--c-text-light)" />
+                                    </button>
+                                    
+                                    {isDropdownOpen && (
+                                        <div className={styles.dropdownMenu}>
+                                            {isPatient ? (
+                                                <>
+                                                    <Link to="/patient/profile" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
+                                                        <UserCircle size={18} /> Hồ sơ cá nhân
+                                                    </Link>
+                                                    <Link to="/patient/notifications" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
+                                                        <Bell size={18} /> Thông báo của tôi
+                                                    </Link>
+                                                    <Link to="/patient/appointments" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
+                                                        <Calendar size={18} /> Lịch hẹn của tôi
+                                                    </Link>
+                                                    <Link to="/patient/health-package-registrations" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
+                                                        <PackageCheck size={18} /> Gói khám đã đăng ký
+                                                    </Link>
+                                                    <Link to="/patient/revisit" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
+                                                        <FileText size={18} /> Lịch tái khám
+                                                    </Link>
+                                                    <Link to="/patient/prescriptions" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
+                                                        <Pill size={18} /> Đơn thuốc của tôi
+                                                    </Link>
+                                                </>
+                                            ) : (
                                             <Link 
                                                 to={getRoleDashboardPath(user?.role)} 
                                                 className={styles.dropdownItem} 
@@ -164,6 +170,7 @@ export const PublicLayout: React.FC = () => {
                                     </div>
                                 )}
                             </div>
+                            </>
                         )}
                         {!isStaff && (
                             <Link to="/patient/book" className={styles.btnBookHeader}>

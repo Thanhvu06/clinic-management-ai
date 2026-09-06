@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-    Calendar, ChevronLeft, ChevronRight, Clock, 
+    ChevronLeft, ChevronRight, Clock, 
     CalendarPlus, AlertTriangle, RefreshCw, X, ShieldAlert 
 } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
 import type { DoctorScheduleDayDto, LeavePreviewDto } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
+import { PageHeader, InlineError, EmptyState } from '../../components/common';
 
 export const DoctorSchedule: React.FC = () => {
     const { showAlert, showToast } = useDialog();
@@ -21,6 +22,7 @@ export const DoctorSchedule: React.FC = () => {
     const [currentMonday, setCurrentMonday] = useState<Date>(() => getMonday(new Date()));
     const [scheduleDays, setScheduleDays] = useState<DoctorScheduleDayDto[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     // Leave request modal state
     const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
@@ -38,17 +40,18 @@ export const DoctorSchedule: React.FC = () => {
 
     const loadSchedule = useCallback(async () => {
         setLoading(true);
+        setLoadError(null);
         try {
             const res = await doctorApi.getSchedule(startDateStr, endDateStr);
             if (res.success && res.data) {
                 setScheduleDays(res.data);
             }
         } catch (err: any) {
-            showAlert(err.response?.data?.message || 'Không thể tải lịch trực của bác sĩ.', 'Lỗi', 'error');
+            setLoadError(err.response?.data?.message || err.message || 'Không thể tải lịch trực của bác sĩ.');
         } finally {
             setLoading(false);
         }
-    }, [startDateStr, endDateStr, showAlert]);
+    }, [startDateStr, endDateStr]);
 
     useEffect(() => {
         loadSchedule();
@@ -132,50 +135,55 @@ export const DoctorSchedule: React.FC = () => {
     };
 
     return (
-        <div style={{ padding: '8px 0' }}>
+        <div>
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-                <div>
-                    <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Calendar size={24} style={{ color: '#0284c7' }} />
-                        <span>Lịch trực & Ca khám tuần</span>
-                    </h1>
-                    <p style={{ color: '#64748b', margin: '4px 0 0 0', fontSize: '0.9rem' }}>
-                        Xem lịch trực được phân bổ, danh sách các khung giờ và thông tin bệnh nhân đã đặt.
-                    </p>
-                </div>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button
-                        className="btn-primary"
-                        onClick={() => setIsLeaveModalOpen(true)}
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '6px', backgroundColor: '#e11d48', cursor: 'pointer' }}
-                    >
-                        <CalendarPlus size={16} />
-                        <span>Đăng ký nghỉ phép</span>
-                    </button>
-                    <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
-                        <button onClick={handlePrevWeek} style={{ border: 'none', background: 'none', padding: '8px 10px', cursor: 'pointer', color: '#475569' }}>
-                            <ChevronLeft size={18} />
+            <PageHeader
+                title="Lịch trực & Ca khám tuần"
+                subtitle="Xem lịch trực được phân bổ, danh sách các khung giờ và thông tin bệnh nhân đã đặt."
+                actions={
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <button
+                            className="btn-primary"
+                            onClick={() => setIsLeaveModalOpen(true)}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#e11d48' }}
+                        >
+                            <CalendarPlus size={15} />
+                            <span>Đăng ký nghỉ phép</span>
                         </button>
-                        <button onClick={handleTodayWeek} style={{ border: 'none', background: 'none', padding: '8px 12px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}>
-                            Hôm nay
-                        </button>
-                        <button onClick={handleNextWeek} style={{ border: 'none', background: 'none', padding: '8px 10px', cursor: 'pointer', color: '#475569' }}>
-                            <ChevronRight size={18} />
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'white', border: '1px solid var(--c-border)', borderRadius: '8px', overflow: 'hidden' }}>
+                            <button onClick={handlePrevWeek} style={{ border: 'none', background: 'none', padding: '8px 10px', cursor: 'pointer', color: 'var(--c-text-light)' }} title="Tuần trước">
+                                <ChevronLeft size={18} />
+                            </button>
+                            <button onClick={handleTodayWeek} style={{ border: 'none', background: 'none', padding: '8px 12px', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, borderLeft: '1px solid var(--c-border)', borderRight: '1px solid var(--c-border)', color: 'var(--c-text-dark)' }}>
+                                Hôm nay
+                            </button>
+                            <button onClick={handleNextWeek} style={{ border: 'none', background: 'none', padding: '8px 10px', cursor: 'pointer', color: 'var(--c-text-light)' }} title="Tuần sau">
+                                <ChevronRight size={18} />
+                            </button>
+                        </div>
                     </div>
+                }
+            />
+
+            {/* Load error inline banner */}
+            {loadError && (
+                <div style={{ marginBottom: '20px' }}>
+                    <InlineError 
+                        message={loadError} 
+                        onRetry={loadSchedule} 
+                    />
                 </div>
-            </div>
+            )}
 
             {/* Week Date Display */}
-            <div className="card" style={{ padding: '12px 16px', marginBottom: '20px', backgroundColor: '#f8fafc', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 600, color: '#1e293b' }}>
+            <div className="card" style={{ padding: '12px 18px', marginBottom: '20px', backgroundColor: '#f8fafc', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 600, color: 'var(--c-text-dark)', fontSize: '0.92rem' }}>
                     Tuần từ {currentMonday.toLocaleDateString('vi-VN')} đến {sunday.toLocaleDateString('vi-VN')}
                 </span>
                 <button 
                     onClick={loadSchedule} 
                     disabled={loading}
-                    style={{ background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', fontWeight: 600 }}
+                    style={{ background: 'none', border: 'none', color: 'var(--c-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem', fontWeight: 600 }}
                 >
                     <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
                     <span>Làm mới</span>
@@ -184,15 +192,15 @@ export const DoctorSchedule: React.FC = () => {
 
             {/* Schedule Days View */}
             {loading ? (
-                <div style={{ textAlign: 'center', padding: '48px 0', color: '#64748b' }}>
+                <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--c-text-light)' }}>
                     <RefreshCw size={28} className="animate-spin" style={{ margin: '0 auto 10px auto' }} />
-                    <p>Đang tải lịch trực...</p>
+                    <p style={{ fontSize: '0.9rem' }}>Đang tải lịch trực...</p>
                 </div>
             ) : scheduleDays.length === 0 ? (
-                <div className="card" style={{ textAlign: 'center', padding: '48px 0', color: '#64748b', borderRadius: '8px' }}>
-                    <Calendar size={40} style={{ margin: '0 auto 10px auto', color: '#94a3b8' }} />
-                    <p style={{ fontWeight: 600 }}>Không có dữ liệu lịch làm việc cho tuần này.</p>
-                </div>
+                <EmptyState
+                    title="Không có lịch làm việc cho tuần này"
+                    description="Hiện chưa có ca trực nào được phân bổ cho khoảng thời gian này."
+                />
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     {scheduleDays.map(day => (

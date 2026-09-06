@@ -91,6 +91,12 @@ public class ChangeRequestService : IChangeRequestService
             CreatedAt = DateTime.UtcNow
         });
 
+        await NotifyReceptionistsAsync(
+            "Yêu cầu dời lịch khám mới",
+            $"Bệnh nhân yêu cầu dời lịch khám #{appointment.AppointmentCode}.",
+            changeRequest.Id.ToString(),
+            $"chg_req_resched_{changeRequest.Id}");
+
         await _dbContext.SaveChangesAsync();
 
         return MapToDto(changeRequest);
@@ -140,6 +146,12 @@ public class ChangeRequestService : IChangeRequestService
             PerformedByUserId = userId,
             CreatedAt = DateTime.UtcNow
         });
+
+        await NotifyReceptionistsAsync(
+            "Yêu cầu hủy lịch khám mới",
+            $"Bệnh nhân yêu cầu hủy lịch khám #{appointment.AppointmentCode}.",
+            changeRequest.Id.ToString(),
+            $"chg_req_cancel_{changeRequest.Id}");
 
         await _dbContext.SaveChangesAsync();
 
@@ -288,7 +300,6 @@ public class ChangeRequestService : IChangeRequestService
             changeReq.ProcessedByUserId = userId;
             changeReq.ProcessedAt = DateTime.UtcNow;
 
-            // History
             _dbContext.AppointmentHistories.Add(new AppointmentHistory
             {
                 AppointmentId = appointment.Id,
@@ -299,6 +310,12 @@ public class ChangeRequestService : IChangeRequestService
                 PerformedByUserId = userId,
                 CreatedAt = DateTime.UtcNow
             });
+
+            await NotifyPatientForAppointmentAsync(
+                appointment.Id,
+                "Yêu cầu dời lịch khám đã được duyệt",
+                $"Yêu cầu dời lịch khám #{appointment.AppointmentCode} của bạn đã được chấp thuận.",
+                $"appt_chg_proc_{changeReq.Id}_approved");
 
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -355,6 +372,12 @@ public class ChangeRequestService : IChangeRequestService
                 CreatedAt = DateTime.UtcNow
             });
 
+            await NotifyPatientForAppointmentAsync(
+                appointment.Id,
+                "Yêu cầu hủy lịch khám đã được duyệt",
+                $"Yêu cầu hủy lịch khám #{appointment.AppointmentCode} của bạn đã được chấp thuận.",
+                $"appt_chg_proc_{changeReq.Id}_approved");
+
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
         }
@@ -403,7 +426,71 @@ public class ChangeRequestService : IChangeRequestService
             CreatedAt = DateTime.UtcNow
         });
 
+        await NotifyPatientForAppointmentAsync(
+            changeReq.AppointmentId,
+            "Yêu cầu thay đổi lịch khám bị từ chối",
+            $"Yêu cầu thay đổi cho lịch khám #{changeReq.Appointment.AppointmentCode} đã bị từ chối. Lý do: {request.Reason ?? "Không có lý do cụ thể"}.",
+            $"appt_chg_proc_{changeReq.Id}_rejected");
+
         await _dbContext.SaveChangesAsync();
+    }
+
+    private async Task NotifyReceptionistsAsync(string title, string message, string relatedEntityId, string dedupeKeyPrefix)
+    {
+        var recRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Name == ClinicManagement.Application.Common.Constants.RoleNames.Receptionist);
+        if (recRole == null) return;
+
+        var recUserIds = await _dbContext.UserRoles
+            .Where(ur => ur.RoleId == recRole.Id)
+            .Select(ur => ur.UserId)
+            .ToListAsync();
+
+        var activeRecUserIds = await _dbContext.Users
+            .Where(u => recUserIds.Contains(u.Id) && u.IsActive)
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        foreach (var recUserId in activeRecUserIds)
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = recUserId,
+                Type = NotificationType.AppointmentChangeRequest,
+                Title = title,
+                Message = message,
+                Route = "/receptionist/appointments",
+                RelatedEntityType = "AppointmentChangeRequest",
+                RelatedEntityId = relatedEntityId,
+                DedupeKey = $"{dedupeKeyPrefix}_{recUserId}",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
+    }
+
+    private async Task NotifyPatientForAppointmentAsync(long appointmentId, string title, string message, string dedupeKey)
+    {
+        var patientUserId = await (from a in _dbContext.Appointments
+                                   join p in _dbContext.Patients on a.PatientId equals p.Id
+                                   where a.Id == appointmentId
+                                   select p.UserId).FirstOrDefaultAsync();
+
+        if (patientUserId != Guid.Empty)
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = patientUserId,
+                Type = NotificationType.AppointmentChangeRequest,
+                Title = title,
+                Message = message,
+                Route = "/patient/appointments",
+                RelatedEntityType = "Appointment",
+                RelatedEntityId = appointmentId.ToString(),
+                DedupeKey = dedupeKey,
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
     }
 
     private static ChangeRequestDto MapToDto(AppointmentChangeRequest req) => new()

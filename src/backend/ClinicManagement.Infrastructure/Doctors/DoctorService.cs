@@ -133,13 +133,29 @@ public class DoctorService : IDoctorService
             .OrderBy(s => s.SlotDate).ThenBy(s => s.StartTime)
             .ToListAsync();
 
+        var fromDateTime = fromDate.ToDateTime(TimeOnly.MinValue);
+        var toDateTime = toDate.ToDateTime(TimeOnly.MaxValue);
+
+        var activeHoldingSlotIds = await _dbContext.Appointments
+            .AsNoTracking()
+            .Where(a => a.DoctorId == doctorId 
+                     && a.AppointmentDate >= fromDate 
+                     && a.AppointmentDate <= toDate 
+                     && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
+            .Select(a => a.AppointmentSlotId)
+            .Distinct()
+            .ToListAsync();
+        var holdingSlotIdSet = new HashSet<long>(activeHoldingSlotIds);
+
         var leaves = await _dbContext.DoctorLeaveRequests
             .AsNoTracking()
             .Where(l => l.DoctorId == doctorId && l.Status == DoctorLeaveRequestStatus.Approved 
-                     && l.EndDateTime >= vnNow)
+                     && l.StartDateTime <= toDateTime && l.EndDateTime >= fromDateTime)
             .ToListAsync();
 
         var validSlots = slots.Where(s => {
+            if (holdingSlotIdSet.Contains(s.Id)) return false;
+
             // Must belong to an active schedule block
             var isInActiveSchedule = activeSchedules.Any(ws => 
                 ws.WorkDate == s.SlotDate && ws.StartTime <= s.StartTime && ws.EndTime >= s.EndTime);

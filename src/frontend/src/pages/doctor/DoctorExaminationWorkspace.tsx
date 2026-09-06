@@ -428,17 +428,19 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
     const patient = context;
     const apt = context.currentAppointment;
+    const isCompleted = apt?.status === 'Completed';
 
     return (
         <div style={{ paddingBottom: '90px' }}>
             {/* Top Navigation Bar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <Link to="/doctor" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#0284c7', textDecoration: 'none', fontWeight: 600, fontSize: '0.9rem' }}>
+                <Link to="/doctor" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--c-primary)', textDecoration: 'none', fontWeight: 600, fontSize: '0.9rem' }}>
                     <ArrowLeft size={16} />
                     <span>Quay lại Bàn làm việc Bác sĩ</span>
                 </Link>
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <button 
+                        type="button"
                         onClick={loadContext} 
                         className="btn-secondary" 
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '0.85rem' }}
@@ -449,8 +451,28 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 </div>
             </div>
 
+            {/* Read-only Banner if Completed */}
+            {isCompleted && (
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '14px 18px',
+                    backgroundColor: 'var(--c-warning-bg)',
+                    border: '1px solid rgba(217, 119, 6, 0.3)',
+                    borderRadius: 'var(--radius-lg)',
+                    color: 'var(--c-warning)',
+                    marginBottom: '20px'
+                }}>
+                    <AlertCircle size={20} style={{ flexShrink: 0 }} />
+                    <div style={{ fontSize: '0.9rem', color: '#92400e' }}>
+                        <strong>Ca khám này đã hoàn tất:</strong> Hồ sơ bệnh án và đơn thuốc đang ở trạng thái lưu trữ chính thức (chỉ đọc) để bảo toàn tính xác thực y khoa.
+                    </div>
+                </div>
+            )}
+
             {/* Patient Header Spotlight Banner */}
-            <div className="card" style={{ padding: '20px 24px', marginBottom: '20px', borderRadius: '10px', backgroundColor: '#f8fafc', borderLeft: '5px solid #0284c7' }}>
+            <div className="card" style={{ padding: '20px 24px', marginBottom: '20px', borderRadius: '10px', backgroundColor: '#f8fafc', borderLeft: '5px solid var(--c-primary)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -460,8 +482,8 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'monospace' }}>
                                 #{apt.appointmentCode}
                             </span>
-                            <span style={{ backgroundColor: '#e0e7ff', color: '#4338ca', padding: '2px 10px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700 }}>
-                                Phiên khám lâm sàng
+                            <span style={{ backgroundColor: isCompleted ? '#dcfce7' : '#e0e7ff', color: isCompleted ? '#15803d' : '#4338ca', padding: '2px 10px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700 }}>
+                                {isCompleted ? 'Hồ sơ đã hoàn tất' : 'Phiên khám lâm sàng'}
                             </span>
                         </div>
 
@@ -1146,8 +1168,15 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Trạng thái hồ sơ:</span>
-                    <span style={{ backgroundColor: '#e0e7ff', color: '#4338ca', padding: '3px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 700 }}>
-                        Đang khám
+                    <span style={{ 
+                        backgroundColor: isCompleted ? '#dcfce7' : '#e0e7ff', 
+                        color: isCompleted ? '#15803d' : '#4338ca', 
+                        padding: '3px 8px', 
+                        borderRadius: '4px', 
+                        fontSize: '0.8rem', 
+                        fontWeight: 700 
+                    }}>
+                        {isCompleted ? 'Đã hoàn tất' : 'Đang khám'}
                     </span>
                     {prescriptionItems.length > 0 && (
                         <span style={{ backgroundColor: '#f0fdf4', color: '#15803d', padding: '3px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>
@@ -1156,32 +1185,39 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <button
-                        type="button"
-                        onClick={() => setIsRevisitModalOpen(true)}
-                        className="btn-secondary"
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}
-                    >
-                        <Calendar size={16} />
-                        <span>Hẹn tái khám</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => setIsCompleteModalOpen(true)}
-                        className="btn-primary"
-                        style={{ 
-                            display: 'flex', alignItems: 'center', gap: '6px', 
-                            padding: '10px 20px', borderRadius: '6px', 
-                            fontWeight: 700, backgroundColor: '#059669', 
-                            cursor: 'pointer', fontSize: '0.95rem' 
-                        }}
-                    >
+                {isCompleted ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#15803d', fontWeight: 600, fontSize: '0.9rem' }}>
                         <CheckCircle size={18} />
-                        <span>HOÀN TẤT KHÁM BỆNH</span>
-                    </button>
-                </div>
+                        <span>Hồ sơ ca khám đã chốt và lưu trữ chính thức</span>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsRevisitModalOpen(true)}
+                            className="btn-secondary"
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}
+                        >
+                            <Calendar size={16} />
+                            <span>Hẹn tái khám</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setIsCompleteModalOpen(true)}
+                            className="btn-primary"
+                            style={{ 
+                                display: 'flex', alignItems: 'center', gap: '6px', 
+                                padding: '10px 20px', borderRadius: '6px', 
+                                fontWeight: 700, backgroundColor: '#059669', 
+                                cursor: 'pointer', fontSize: '0.95rem' 
+                            }}
+                        >
+                            <CheckCircle size={18} />
+                            <span>HOÀN TẤT KHÁM BỆNH</span>
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Revisit Modal */}

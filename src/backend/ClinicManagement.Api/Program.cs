@@ -125,6 +125,7 @@ builder.Services.AddScoped<ClinicManagement.Application.HealthPackages.Interface
 builder.Services.AddScoped<ClinicManagement.Application.Locations.Interfaces.ILocationService, ClinicManagement.Infrastructure.Locations.LocationService>();
 builder.Services.AddScoped<ClinicManagement.Application.Medicines.Interfaces.IMedicineService, ClinicManagement.Infrastructure.Medicines.MedicineService>();
 builder.Services.AddScoped<ClinicManagement.Application.Pharmacy.Interfaces.IPharmacyService, ClinicManagement.Infrastructure.Pharmacy.PharmacyService>();
+builder.Services.AddScoped<ClinicManagement.Application.Notifications.Interfaces.INotificationService, ClinicManagement.Infrastructure.Notifications.NotificationService>();
 
 builder.Services.AddRateLimiter(options =>
 {

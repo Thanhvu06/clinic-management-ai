@@ -172,6 +172,54 @@ public class AppointmentService : IAppointmentService
             };
 
             _dbContext.AppointmentHistories.Add(history);
+
+            // Create in-app notification for patient
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = currentUserId.Value,
+                Type = NotificationType.Appointment,
+                Title = "Đặt lịch khám thành công",
+                Message = $"Lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm} đã được tiếp nhận.",
+                Route = "/patient/appointments",
+                RelatedEntityType = "Appointment",
+                RelatedEntityId = appointment.Id.ToString(),
+                DedupeKey = $"appt_booked_pat_{appointment.Id}",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+            // Notify active receptionists
+            var recRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Name == ClinicManagement.Application.Common.Constants.RoleNames.Receptionist);
+            if (recRole != null)
+            {
+                var recUserIds = await _dbContext.UserRoles
+                    .Where(ur => ur.RoleId == recRole.Id)
+                    .Select(ur => ur.UserId)
+                    .ToListAsync();
+
+                var activeRecUserIds = await _dbContext.Users
+                    .Where(u => recUserIds.Contains(u.Id) && u.IsActive)
+                    .Select(u => u.Id)
+                    .ToListAsync();
+
+                foreach (var recUserId in activeRecUserIds)
+                {
+                    _dbContext.Notifications.Add(new Notification
+                    {
+                        UserId = recUserId,
+                        Type = NotificationType.Appointment,
+                        Title = "Lịch khám mới chờ xử lý",
+                        Message = $"Bệnh nhân đã đặt lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy}.",
+                        Route = "/receptionist/appointments",
+                        RelatedEntityType = "Appointment",
+                        RelatedEntityId = appointment.Id.ToString(),
+                        DedupeKey = $"appt_booked_rec_{appointment.Id}_{recUserId}",
+                        IsRead = false,
+                        CreatedAtUtc = DateTime.UtcNow
+                    });
+                }
+            }
+
             await _dbContext.SaveChangesAsync();
 
             await transaction.CommitAsync();

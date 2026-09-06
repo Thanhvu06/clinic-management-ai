@@ -3,6 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { Search, Stethoscope, User, Package, ChevronRight, Calendar, CalendarCheck } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import { formatVndCurrency } from '../../utils/formatters';
+import { formatDoctorName } from '../../utils/doctorNameHelper';
 import styles from './PublicPages.module.css';
 
 export const SearchResults: React.FC = () => {
@@ -207,7 +208,7 @@ export const SearchResults: React.FC = () => {
                                             <User size={36} />
                                         </div>
                                         <h3 className={styles.doctorName}>
-                                            {doc.academicTitle ? `${doc.academicTitle}. ` : ''}{doc.fullName}
+                                            {formatDoctorName(doc.academicTitle, doc.fullName)}
                                         </h3>
                                         <span className={styles.doctorSpecialty}>
                                             {doc.specialtyName || 'Bác sĩ Đa khoa'}

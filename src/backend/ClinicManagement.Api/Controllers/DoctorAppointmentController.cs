@@ -29,6 +29,14 @@ public class DoctorAppointmentController : ControllerBase
         return Ok(ApiResponse<PagedResult<DoctorAppointmentDto>>.Ok(result));
     }
 
+    [HttpGet("queue")]
+    [HttpGet("/api/v1/doctor/queue")]
+    public async Task<IActionResult> GetQueue([FromQuery] System.DateOnly? date)
+    {
+        var dashboard = await _doctorAppointmentService.GetDoctorDashboardAsync(date);
+        return Ok(ApiResponse<List<DoctorQueueItemDto>>.Ok(dashboard.Queue));
+    }
+
     [HttpGet("{id}")]
     public async Task<IActionResult> GetAppointmentById(long id)
     {

@@ -10,6 +10,7 @@ import axiosClient from '../../api/axiosClient';
 import { AppointmentLookupModal } from '../../components/AppointmentLookupModal';
 import type { ClinicLocationDto } from '../../types';
 import { parseIncludedServices, formatVndCurrency } from '../../utils/formatters';
+import { formatDoctorName } from '../../utils/doctorNameHelper';
 
 export const PublicLanding: React.FC = () => {
     const navigate = useNavigate();
@@ -239,7 +240,7 @@ export const PublicLanding: React.FC = () => {
                                                             {filteredDoctors.map(d => (
                                                                 <li key={d.id}>
                                                                     <Link to={`/doctors/${d.id}`} onClick={() => setShowDropdown(false)}>
-                                                                        <User size={16} /> {d.academicTitle ? d.academicTitle + ". " : ""}{d.fullName} <span className={styles.mutedText}>- {d.specialtyName || 'Đa khoa'}</span>
+                                                                        <User size={16} /> {formatDoctorName(d.academicTitle, d.fullName)} <span className={styles.mutedText}>- {d.specialtyName || 'Đa khoa'}</span>
                                                                     </Link>
                                                                 </li>
                                                             ))}
@@ -443,9 +444,9 @@ export const PublicLanding: React.FC = () => {
                                         <User size={40} className={styles.placeholderAvatar} />
                                     </div>
                                     <div className={styles.doctorInfo}>
-                                        <h3>{doc.academicTitle ? `${doc.academicTitle}. ` : ''}{doc.fullName}</h3>
+                                        <h3>{formatDoctorName(doc.academicTitle, doc.fullName)}</h3>
                                         <p className={styles.doctorSpec}>{doc.specialtyName || 'Bác sĩ Đa khoa'}</p>
-                                        <p className={styles.doctorExp}>{doc.experienceYears || 5} năm kinh nghiệm</p>
+                                        <p className={styles.doctorExp}>{doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật kinh nghiệm'}</p>
                                         <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                                             <Link to={`/doctors/${doc.id}`} className={styles.btnOutline} style={{ flex: 1, padding: '8px 10px', fontSize: '0.85rem' }}>
                                                 Hồ sơ

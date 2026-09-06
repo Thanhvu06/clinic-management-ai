@@ -19,9 +19,11 @@
     "lucide-react": "^1.33.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.2"
+    "react-router-dom": "^7.18.2",
+    "undici": "^8.10.2"
   },
   "devDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "^1.2.7",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",

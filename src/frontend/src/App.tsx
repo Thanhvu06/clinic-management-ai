@@ -44,6 +44,7 @@ import { AdminAuditLogs } from './pages/admin/AdminAuditLogs';
 import { PharmacyDashboard } from './pages/pharmacy/PharmacyDashboard';
 import { PharmacyPrescriptions } from './pages/pharmacy/PharmacyPrescriptions';
 import { PharmacyInventory } from './pages/pharmacy/PharmacyInventory';
+import { NotificationsPage } from './pages/common/NotificationsPage';
 import { ChatProvider } from './contexts/ChatContext';
 import { DialogProvider } from './contexts/DialogContext';
 import { MedicalChatWidget } from './components/MedicalChatWidget';
@@ -89,6 +90,7 @@ function App() {
                                         <Route path="/patient/revisit" element={<PatientRevisit />} />
                                         <Route path="/patient/prescriptions" element={<PatientPrescriptions />} />
                                         <Route path="/patient/ai-consultation" element={<PatientAiConsultation />} />
+                                        <Route path="/patient/notifications" element={<NotificationsPage />} />
                                     </Route>
                                 </Route>
                             </Route>
@@ -96,6 +98,7 @@ function App() {
                             {/* Staff Dashboard Layout (With Sidebar) */}
                             <Route element={<ProtectedRoute />}>
                                 <Route element={<MainLayout />}>
+                                    <Route path="/notifications" element={<NotificationsPage />} />
                                     {/* Receptionist Routes */}
                                     <Route element={<RoleRoute roles={['Receptionist']} />}>
                                         <Route path="/reception" element={<ReceptionistDashboard />} />

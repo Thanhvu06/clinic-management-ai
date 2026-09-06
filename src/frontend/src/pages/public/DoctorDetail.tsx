@@ -4,6 +4,7 @@ import { User, Calendar, Stethoscope, Award, Phone, CheckCircle2, Clock, Calenda
 import axiosClient from '../../api/axiosClient';
 import type { DoctorAvailabilityDto, DoctorDayAvailabilityDto } from '../../types';
 import styles from './PublicPages.module.css';
+import { formatDoctorName } from '../../utils/doctorNameHelper';
 
 interface DoctorDetail {
     id: number;
@@ -67,15 +68,6 @@ export const DoctorDetail: React.FC = () => {
         fetchDoctorData();
     }, [id]);
 
-    const formatDoctorTitleAndName = (title?: string, name?: string) => {
-        if (!name) return '';
-        if (!title) return name;
-        if (name.toLowerCase().startsWith(title.toLowerCase())) {
-            return name;
-        }
-        return `${title}. ${name}`;
-    };
-
     const getDoctorInitials = (name?: string) => {
         if (!name) return 'BS';
         const parts = name.trim().split(/\s+/);
@@ -121,7 +113,7 @@ export const DoctorDetail: React.FC = () => {
                 <span>/</span>
                 <Link to="/doctors">Bác sĩ</Link>
                 <span>/</span>
-                <span aria-current="page">{formatDoctorTitleAndName(doctor.academicTitle, doctor.fullName)}</span>
+                <span aria-current="page">{formatDoctorName(doctor.academicTitle, doctor.fullName)}</span>
             </nav>
 
             <div className={styles.detailLayout}>
@@ -246,9 +238,9 @@ export const DoctorDetail: React.FC = () => {
                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                                 {selectedDayData.availableSlots.map(slot => (
                                                     <button
-                                                        key={slot.id}
+                                                        key={slot.slotId}
                                                         type="button"
-                                                        onClick={() => handleSlotClick(slot.id)}
+                                                        onClick={() => handleSlotClick(slot.slotId)}
                                                         style={{
                                                             padding: '8px 14px',
                                                             borderRadius: '8px',
@@ -328,7 +320,7 @@ export const DoctorDetail: React.FC = () => {
                         Đặt lịch khám bác sĩ
                     </h3>
                     <p style={{ fontSize: '0.9rem', color: 'var(--c-text-muted)', marginBottom: '20px', lineHeight: 1.5 }}>
-                        Chọn ngày và khung giờ khám trực tuyến cùng {formatDoctorTitleAndName(doctor.academicTitle, doctor.fullName)}.
+                        Chọn ngày và khung giờ khám trực tuyến cùng {formatDoctorName(doctor.academicTitle, doctor.fullName)}.
                     </p>
 
                     <Link 

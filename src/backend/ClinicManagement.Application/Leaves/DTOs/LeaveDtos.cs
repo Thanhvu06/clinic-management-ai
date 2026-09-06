@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace ClinicManagement.Application.Leaves.DTOs;
@@ -38,7 +39,7 @@ public class LeavePreviewDto
     public DateTime StartDateTime { get; set; }
     public DateTime EndDateTime { get; set; }
     public int AffectedAppointmentsCount { get; set; }
-    public System.Collections.Generic.List<AffectedAppointmentDto> AffectedAppointments { get; set; } = new();
+    public List<AffectedAppointmentDto> AffectedAppointments { get; set; } = new();
 }
 
 public class AffectedAppointmentDto

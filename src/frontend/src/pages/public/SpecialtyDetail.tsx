@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { Stethoscope, User, Calendar, Bot, Phone, ChevronRight, Sparkles, CheckCircle2 } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import styles from './PublicPages.module.css';
+import { formatDoctorName } from '../../utils/doctorNameHelper';
 
 interface Specialty {
     id: number;
@@ -15,7 +16,7 @@ interface Specialty {
 interface Doctor {
     id: number;
     fullName: string;
-    academicTitle: string;
+    academicTitle?: string;
     experienceYears: number;
     specialtyId?: number;
     specialtyName?: string;
@@ -151,13 +152,13 @@ export const SpecialtyDetail: React.FC = () => {
                                         <User size={36} />
                                     </div>
                                     <h3 className={styles.doctorName}>
-                                        {doc.academicTitle ? `${doc.academicTitle}. ` : ''}{doc.fullName}
+                                        {formatDoctorName(doc.academicTitle, doc.fullName)}
                                     </h3>
                                     <span className={styles.doctorSpecialty}>
                                         {specialty.specialtyName}
                                     </span>
                                     <span className={styles.doctorExp}>
-                                        {doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Bác sĩ chuyên khoa'}
+                                        {doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật kinh nghiệm'}
                                     </span>
                                     <div className={styles.doctorActions}>
                                         <Link to={`/doctors/${doc.id}`} className={styles.cardActionLink} style={{ justifyContent: 'center' }}>

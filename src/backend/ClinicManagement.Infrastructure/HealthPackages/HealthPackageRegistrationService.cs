@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -74,6 +74,53 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
             Description = $"Đăng ký gói khám {package.Name} (Mã: {registrationCode})",
             CreatedAt = DateTime.UtcNow
         });
+
+        // Notify patient
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = userId,
+            Type = NotificationType.HealthPackage,
+            Title = "Đăng ký gói khám thành công",
+            Message = $"Bạn đã gửi đăng ký gói khám '{package.Name}'. Lễ tân sẽ liên hệ xác nhận sớm nhất.",
+            Route = "/patient/health-packages",
+            RelatedEntityType = "HealthPackageRegistration",
+            RelatedEntityId = registrationCode,
+            DedupeKey = $"pkg_reg_pat_{registrationCode}",
+            IsRead = false,
+            CreatedAtUtc = DateTime.UtcNow
+        });
+
+        // Notify active receptionists
+        var recRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Name == ClinicManagement.Application.Common.Constants.RoleNames.Receptionist, cancellationToken);
+        if (recRole != null)
+        {
+            var recUserIds = await _dbContext.UserRoles
+                .Where(ur => ur.RoleId == recRole.Id)
+                .Select(ur => ur.UserId)
+                .ToListAsync(cancellationToken);
+
+            var activeRecUserIds = await _dbContext.Users
+                .Where(u => recUserIds.Contains(u.Id) && u.IsActive)
+                .Select(u => u.Id)
+                .ToListAsync(cancellationToken);
+
+            foreach (var recUserId in activeRecUserIds)
+            {
+                _dbContext.Notifications.Add(new Notification
+                {
+                    UserId = recUserId,
+                    Type = NotificationType.HealthPackage,
+                    Title = "Đăng ký gói khám mới",
+                    Message = $"Khách hàng đăng ký gói khám '{package.Name}' cần được tiếp nhận.",
+                    Route = "/receptionist/health-packages",
+                    RelatedEntityType = "HealthPackageRegistration",
+                    RelatedEntityId = registrationCode,
+                    DedupeKey = $"pkg_reg_rec_{registrationCode}_{recUserId}",
+                    IsRead = false,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+            }
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -333,6 +380,21 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
             CreatedAt = DateTime.UtcNow
         });
 
+        // Notify patient
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = reg.Patient.UserId,
+            Type = NotificationType.HealthPackage,
+            Title = "Gói khám đã được xác nhận",
+            Message = $"Đăng ký gói khám '{reg.HealthPackage.Name}' của bạn đã được xác nhận thành công.",
+            Route = "/patient/health-packages",
+            RelatedEntityType = "HealthPackageRegistration",
+            RelatedEntityId = reg.Id.ToString(),
+            DedupeKey = $"pkg_reg_proc_{reg.Id}_confirmed",
+            IsRead = false,
+            CreatedAtUtc = DateTime.UtcNow
+        });
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         var patientUser = await _dbContext.Users.FindAsync(new object[] { reg.Patient.UserId }, cancellationToken);
@@ -389,6 +451,21 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
             EntityId = reg.RegistrationCode,
             Description = $"Lễ tân hủy đăng ký gói khám {reg.HealthPackage.Name} (Mã: {reg.RegistrationCode}){(string.IsNullOrWhiteSpace(reg.CancellationReason) ? "" : $". Lý do: {reg.CancellationReason}")}",
             CreatedAt = DateTime.UtcNow
+        });
+
+        // Notify patient
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = reg.Patient.UserId,
+            Type = NotificationType.HealthPackage,
+            Title = "Đăng ký gói khám đã bị hủy",
+            Message = $"Đăng ký gói khám '{reg.HealthPackage.Name}' của bạn đã bị hủy. Lý do: {reg.CancellationReason ?? "Không có lý do cụ thể"}.",
+            Route = "/patient/health-packages",
+            RelatedEntityType = "HealthPackageRegistration",
+            RelatedEntityId = reg.Id.ToString(),
+            DedupeKey = $"pkg_reg_proc_{reg.Id}_cancelled",
+            IsRead = false,
+            CreatedAtUtc = DateTime.UtcNow
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);

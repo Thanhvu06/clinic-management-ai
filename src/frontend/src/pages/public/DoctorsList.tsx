@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { User, Search, ChevronRight, Calendar } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import styles from './PublicPages.module.css';
+import { formatDoctorName } from '../../utils/doctorNameHelper';
 
 interface Doctor {
     id: number;
@@ -55,15 +56,6 @@ export const DoctorsList: React.FC = () => {
 
         fetchData();
     }, []);
-
-    const formatDoctorTitleAndName = (title?: string, name?: string) => {
-        if (!name) return '';
-        if (!title) return name;
-        if (name.toLowerCase().startsWith(title.toLowerCase())) {
-            return name;
-        }
-        return `${title}. ${name}`;
-    };
 
     const getDoctorInitials = (name?: string) => {
         if (!name) return 'BS';
@@ -170,7 +162,7 @@ export const DoctorsList: React.FC = () => {
                                 {getDoctorInitials(doc.fullName)}
                             </div>
                             <h2 className={styles.doctorName}>
-                                {formatDoctorTitleAndName(doc.academicTitle, doc.fullName)}
+                                {formatDoctorName(doc.academicTitle, doc.fullName)}
                             </h2>
                             <span className={styles.doctorSpecialty}>
                                 {doc.specialtyName || 'Chuyên khoa'}

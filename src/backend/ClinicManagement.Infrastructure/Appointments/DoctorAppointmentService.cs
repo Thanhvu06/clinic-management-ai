@@ -82,6 +82,53 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
         var queue = await query.ToListAsync();
 
+        var aptIds = queue.Select(q => q.AppointmentId).ToList();
+        var vitalsDict = await _dbContext.AppointmentVitalSigns
+            .AsNoTracking()
+            .Where(v => aptIds.Contains(v.AppointmentId))
+            .ToDictionaryAsync(v => v.AppointmentId);
+
+        var encountersDict = await _dbContext.VisitSummaries
+            .AsNoTracking()
+            .Where(e => aptIds.Contains(e.AppointmentId))
+            .ToDictionaryAsync(e => e.AppointmentId);
+
+        for (int i = 0; i < queue.Count; i++)
+        {
+            var item = queue[i];
+            item.QueueOrder = i + 1;
+            if (item.PatientDob.HasValue)
+            {
+                var age = targetDate.Year - item.PatientDob.Value.Year;
+                if (targetDate < item.PatientDob.Value.AddYears(age)) age--;
+                item.PatientAge = age;
+            }
+
+            if (vitalsDict.TryGetValue(item.AppointmentId, out var vitals))
+            {
+                item.IsVitalsRecorded = true;
+                var parts = new List<string>();
+                if (vitals.BloodPressureSystolic.HasValue && vitals.BloodPressureDiastolic.HasValue)
+                    parts.Add($"HA: {vitals.BloodPressureSystolic}/{vitals.BloodPressureDiastolic} mmHg");
+                if (vitals.HeartRate.HasValue)
+                    parts.Add($"Mạch: {vitals.HeartRate} bpm");
+                if (vitals.Temperature.HasValue)
+                    parts.Add($"T: {vitals.Temperature:0.#}°C");
+                if (vitals.SpO2.HasValue)
+                    parts.Add($"SpO2: {vitals.SpO2}%");
+                item.VitalSummaryText = parts.Count > 0 ? string.Join(", ", parts) : null;
+            }
+
+            if (encountersDict.TryGetValue(item.AppointmentId, out var encounter) && !string.IsNullOrWhiteSpace(encounter.ChiefComplaint))
+            {
+                item.ChiefComplaint = encounter.ChiefComplaint;
+            }
+            else
+            {
+                item.ChiefComplaint = item.Reason;
+            }
+        }
+
         var total = queue.Count;
         var checkedIn = queue.Count(q => q.Status == nameof(AppointmentStatus.CheckedIn));
         var inConsultation = queue.Count(q => q.Status == nameof(AppointmentStatus.InConsultation));
@@ -619,6 +666,28 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 CreatedAt = DateTime.UtcNow
             });
 
+            var patientUserId = await _dbContext.Patients
+                .Where(p => p.Id == appointment.PatientId)
+                .Select(p => p.UserId)
+                .FirstOrDefaultAsync();
+
+            if (patientUserId != Guid.Empty)
+            {
+                _dbContext.Notifications.Add(new Notification
+                {
+                    UserId = patientUserId,
+                    Type = NotificationType.Prescription,
+                    Title = "Hoàn thành buổi khám bệnh",
+                    Message = $"Buổi khám #{appointment.AppointmentCode} đã hoàn tất. Bạn có thể xem kết luận khám và đơn thuốc trực tuyến.",
+                    Route = "/patient/appointments",
+                    RelatedEntityType = "Appointment",
+                    RelatedEntityId = appointment.Id.ToString(),
+                    DedupeKey = $"consult_done_{appointment.Id}",
+                    IsRead = false,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+            }
+
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
         }
@@ -726,6 +795,28 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 PerformedByUserId = userId,
                 CreatedAt = DateTime.UtcNow
             });
+
+            var patientUserId = await _dbContext.Patients
+                .Where(p => p.Id == appointment.PatientId)
+                .Select(p => p.UserId)
+                .FirstOrDefaultAsync();
+
+            if (patientUserId != Guid.Empty)
+            {
+                _dbContext.Notifications.Add(new Notification
+                {
+                    UserId = patientUserId,
+                    Type = NotificationType.Revisit,
+                    Title = "Đề xuất tái khám mới",
+                    Message = $"Bác sĩ đã gửi đề xuất tái khám sau buổi khám #{appointment.AppointmentCode}. Vui lòng xác nhận lịch tái khám.",
+                    Route = "/patient/revisit-requests",
+                    RelatedEntityType = "RevisitRequest",
+                    RelatedEntityId = revisitReq.Id.ToString(),
+                    DedupeKey = $"revisit_req_{revisitReq.Id}",
+                    IsRead = false,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+            }
 
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();

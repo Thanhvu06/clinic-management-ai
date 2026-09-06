@@ -42,6 +42,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     // Clinic Locations
     public DbSet<ClinicLocation> ClinicLocations { get; set; } = null!;
 
+    // Notifications
+    public DbSet<Notification> Notifications { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

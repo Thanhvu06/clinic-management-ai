@@ -22,6 +22,7 @@ public class DoctorQueueItemDto
 {
     public long AppointmentId { get; set; }
     public string AppointmentCode { get; set; } = string.Empty;
+    public int QueueOrder { get; set; }
     public DateOnly AppointmentDate { get; set; }
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
@@ -30,9 +31,13 @@ public class DoctorQueueItemDto
     public string PatientPhone { get; set; } = string.Empty;
     public string PatientGender { get; set; } = string.Empty;
     public DateOnly? PatientDob { get; set; }
+    public int? PatientAge { get; set; }
     public string? Reason { get; set; }
     public string Status { get; set; } = string.Empty;
     public string SpecialtyName { get; set; } = string.Empty;
+    public bool IsVitalsRecorded { get; set; }
+    public string? VitalSummaryText { get; set; }
+    public string? ChiefComplaint { get; set; }
 }
 
 public class DoctorScheduleDayDto

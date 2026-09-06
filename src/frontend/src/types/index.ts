@@ -74,7 +74,9 @@ export interface ScheduleBlockDto {
 }
 
 export interface AvailableSlotDto {
-    id: number;
+    slotId: number;
+    doctorId?: number;
+    slotDate?: string;
     startTime: string;
     endTime: string;
 }
