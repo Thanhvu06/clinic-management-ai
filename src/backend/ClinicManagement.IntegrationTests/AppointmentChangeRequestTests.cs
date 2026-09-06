@@ -1117,13 +1117,16 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var reqCount = await db.AppointmentChangeRequests.CountAsync(r => r.AppointmentId == app.Id && r.Status == AppointmentChangeRequestStatus.Pending);
             Assert.Equal(1, reqCount);
+
+            var appDb = await db.Appointments.FirstAsync(a => a.Id == app.Id);
+            Assert.Equal(AppointmentStatus.PendingCancellation, appDb.Status);
         }
     }
 
     [Fact]
     public async Task Scenario30_Concurrent_ApproveAndApprove_ExactlyOneSucceeds()
     {
-        var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
+        var (app, slot) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
 
         await AuthenticateAsync("pat1@test.com");
         await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/cancellation-requests", new { reason = "Hủy lịch để test duyệt đồng thời" });
@@ -1159,12 +1162,28 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         }
         Assert.Equal(1, okCount);
         Assert.Equal(1, conflictCount);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var req = await db.AppointmentChangeRequests.FirstAsync(r => r.Id == requestId);
+            Assert.Equal(AppointmentChangeRequestStatus.Approved, req.Status);
+
+            var updatedApp = await db.Appointments.FirstAsync(a => a.Id == app.Id);
+            Assert.Equal(AppointmentStatus.Cancelled, updatedApp.Status);
+
+            var slotDb = await db.AppointmentSlots.FirstAsync(s => s.Id == slot.Id);
+            Assert.False(slotDb.IsBooked);
+
+            var historyCount = await db.AppointmentHistories.CountAsync(h => h.AppointmentId == app.Id && h.Action == AppointmentHistoryAction.Cancelled);
+            Assert.Equal(1, historyCount);
+        }
     }
 
     [Fact]
     public async Task Scenario31_Concurrent_ApproveAndReject_ExactlyOneSucceeds()
     {
-        var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
+        var (app, slot) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
 
         await AuthenticateAsync("pat1@test.com");
         await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/cancellation-requests", new { reason = "Hủy lịch test approve vs reject" });
@@ -1200,12 +1219,33 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         }
         Assert.Equal(1, okCount);
         Assert.Equal(1, conflictCount);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var req = await db.AppointmentChangeRequests.FirstAsync(r => r.Id == requestId);
+            Assert.True(req.Status == AppointmentChangeRequestStatus.Approved || req.Status == AppointmentChangeRequestStatus.Rejected);
+
+            var updatedApp = await db.Appointments.FirstAsync(a => a.Id == app.Id);
+            var slotDb = await db.AppointmentSlots.FirstAsync(s => s.Id == slot.Id);
+
+            if (req.Status == AppointmentChangeRequestStatus.Approved)
+            {
+                Assert.Equal(AppointmentStatus.Cancelled, updatedApp.Status);
+                Assert.False(slotDb.IsBooked);
+            }
+            else
+            {
+                Assert.Equal(AppointmentStatus.Confirmed, updatedApp.Status);
+                Assert.True(slotDb.IsBooked);
+            }
+        }
     }
 
     [Fact]
     public async Task Scenario32_Concurrent_RejectAndWithdraw_ExactlyOneSucceeds()
     {
-        var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
+        var (app, slot) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
 
         await AuthenticateAsync("pat1@test.com");
         await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/cancellation-requests", new { reason = "Hủy lịch test reject vs withdraw" });
@@ -1242,6 +1282,19 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         }
         Assert.Equal(1, okCount);
         Assert.Equal(1, conflictCount);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var req = await db.AppointmentChangeRequests.FirstAsync(r => r.Id == requestId);
+            Assert.True(req.Status == AppointmentChangeRequestStatus.Rejected || req.Status == AppointmentChangeRequestStatus.Withdrawn);
+
+            var updatedApp = await db.Appointments.FirstAsync(a => a.Id == app.Id);
+            Assert.Equal(AppointmentStatus.Confirmed, updatedApp.Status);
+
+            var slotDb = await db.AppointmentSlots.FirstAsync(s => s.Id == slot.Id);
+            Assert.True(slotDb.IsBooked);
+        }
     }
 
     [Fact]

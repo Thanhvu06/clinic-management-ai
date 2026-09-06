@@ -9,6 +9,7 @@ using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Identity;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -49,131 +50,153 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
     }
 
     private static readonly SemaphoreSlim _seedLock = new(1, 1);
-    private static bool _seeded = false;
 
     private async Task SeedData(AppDbContext db, IServiceProvider sp)
     {
         await _seedLock.WaitAsync();
         try
         {
-            if (_seeded || db.Users.Any())
+            if (await db.Users.AnyAsync())
             {
-                _seeded = true;
+                var docExisting = await db.Doctors.FirstAsync();
+                var doc2Existing = await db.Doctors.OrderBy(d => d.Id).Skip(1).FirstOrDefaultAsync();
+                var pat1Existing = await db.Patients.FirstAsync();
+                var pat2Existing = await db.Patients.OrderBy(p => p.Id).Skip(1).FirstOrDefaultAsync();
+                var specExisting = await db.Specialties.FirstAsync();
+                var slotExisting = await db.AppointmentSlots.FirstAsync();
+                var medExisting = await db.Medicines.FirstAsync();
+                var pkgExisting = await db.HealthPackages.FirstAsync();
+
+                DoctorEntityId = docExisting.Id;
+                Doctor2EntityId = doc2Existing?.Id ?? 0;
+                Patient1EntityId = pat1Existing.Id;
+                Patient2EntityId = pat2Existing?.Id ?? 0;
+                SpecialtyEntityId = specExisting.Id;
+                SlotEntityId = slotExisting.Id;
+                MedicineEntityId = medExisting.Id;
+                PackageEntityId = pkgExisting.Id;
+
+                AdminId = (await db.Users.FirstAsync(u => u.UserName == "admin@test.com")).Id;
+                DoctorId = (await db.Users.FirstAsync(u => u.UserName == "doc@test.com")).Id;
+                ReceptionistId = (await db.Users.FirstAsync(u => u.UserName == "rec@test.com")).Id;
+                PharmacistId = (await db.Users.FirstAsync(u => u.UserName == "pharm@test.com")).Id;
+                Patient1Id = (await db.Users.FirstAsync(u => u.UserName == "pat1@test.com")).Id;
+                Patient2Id = (await db.Users.FirstAsync(u => u.UserName == "pat2@test.com")).Id;
                 return;
             }
 
-        var userManager = sp.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = sp.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+            var userManager = sp.GetRequiredService<UserManager<ApplicationUser>>();
+            var roleManager = sp.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
 
-        // Roles
-        await roleManager.CreateAsync(new IdentityRole<Guid>("Admin"));
-        await roleManager.CreateAsync(new IdentityRole<Guid>("Doctor"));
-        await roleManager.CreateAsync(new IdentityRole<Guid>("Patient"));
-        await roleManager.CreateAsync(new IdentityRole<Guid>("Receptionist"));
-        await roleManager.CreateAsync(new IdentityRole<Guid>("Pharmacist"));
+            // Roles
+            await roleManager.CreateAsync(new IdentityRole<Guid>("Admin"));
+            await roleManager.CreateAsync(new IdentityRole<Guid>("Doctor"));
+            await roleManager.CreateAsync(new IdentityRole<Guid>("Patient"));
+            await roleManager.CreateAsync(new IdentityRole<Guid>("Receptionist"));
+            await roleManager.CreateAsync(new IdentityRole<Guid>("Pharmacist"));
 
-        // Users
-        var admin = new ApplicationUser { UserName = "admin@test.com", Email = "admin@test.com", FullName = "Admin", PhoneNumber = "0123456781", IsActive = true };
-        var res1 = await userManager.CreateAsync(admin, "Pass@123");
-        if (!res1.Succeeded) throw new Exception("Failed to create admin: " + res1.Errors.First().Description);
-        await userManager.AddToRoleAsync(admin, "Admin");
-        AdminId = admin.Id;
+            AdminId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+            DoctorId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+            var doc2UserId = Guid.Parse("22222222-2222-2222-2222-222222222223");
+            ReceptionistId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+            PharmacistId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+            Patient1Id = Guid.Parse("44444444-4444-4444-4444-444444444441");
+            Patient2Id = Guid.Parse("44444444-4444-4444-4444-444444444442");
 
-        var doc = new ApplicationUser { UserName = "doc@test.com", Email = "doc@test.com", FullName = "Doctor 1", PhoneNumber = "0123456782", IsActive = true };
-        var res2 = await userManager.CreateAsync(doc, "Pass@123");
-        if (!res2.Succeeded) throw new Exception("Failed doc: " + res2.Errors.First().Description);
-        await userManager.AddToRoleAsync(doc, "Doctor");
-        DoctorId = doc.Id;
+            // Users
+            var admin = new ApplicationUser { Id = AdminId, UserName = "admin@test.com", Email = "admin@test.com", FullName = "Admin", PhoneNumber = "0123456781", IsActive = true };
+            var res1 = await userManager.CreateAsync(admin, "Pass@123");
+            if (!res1.Succeeded) throw new Exception("Failed to create admin: " + res1.Errors.First().Description);
+            await userManager.AddToRoleAsync(admin, "Admin");
 
-        var rec = new ApplicationUser { UserName = "rec@test.com", Email = "rec@test.com", FullName = "Receptionist", PhoneNumber = "0123456783", IsActive = true };
-        var res3 = await userManager.CreateAsync(rec, "Pass@123");
-        if (!res3.Succeeded) throw new Exception("Failed rec: " + res3.Errors.First().Description);
-        await userManager.AddToRoleAsync(rec, "Receptionist");
-        ReceptionistId = rec.Id;
+            var doc = new ApplicationUser { Id = DoctorId, UserName = "doc@test.com", Email = "doc@test.com", FullName = "Doctor 1", PhoneNumber = "0123456782", IsActive = true };
+            var res2 = await userManager.CreateAsync(doc, "Pass@123");
+            if (!res2.Succeeded) throw new Exception("Failed doc: " + res2.Errors.First().Description);
+            await userManager.AddToRoleAsync(doc, "Doctor");
 
-        var pharm = new ApplicationUser { UserName = "pharm@test.com", Email = "pharm@test.com", FullName = "Pharmacist", PhoneNumber = "0123456786", IsActive = true };
-        var resPharm = await userManager.CreateAsync(pharm, "Pass@123");
-        if (!resPharm.Succeeded) throw new Exception("Failed pharm: " + resPharm.Errors.First().Description);
-        await userManager.AddToRoleAsync(pharm, "Pharmacist");
-        PharmacistId = pharm.Id;
+            var rec = new ApplicationUser { Id = ReceptionistId, UserName = "rec@test.com", Email = "rec@test.com", FullName = "Receptionist", PhoneNumber = "0123456783", IsActive = true };
+            var res3 = await userManager.CreateAsync(rec, "Pass@123");
+            if (!res3.Succeeded) throw new Exception("Failed rec: " + res3.Errors.First().Description);
+            await userManager.AddToRoleAsync(rec, "Receptionist");
 
-        var pat1 = new ApplicationUser { UserName = "pat1@test.com", Email = "pat1@test.com", FullName = "Patient 1", PhoneNumber = "0123456784", IsActive = true };
-        var res4 = await userManager.CreateAsync(pat1, "Pass@123");
-        if (!res4.Succeeded) throw new Exception("Failed pat1: " + res4.Errors.First().Description);
-        await userManager.AddToRoleAsync(pat1, "Patient");
-        Patient1Id = pat1.Id;
+            var pharm = new ApplicationUser { Id = PharmacistId, UserName = "pharm@test.com", Email = "pharm@test.com", FullName = "Pharmacist", PhoneNumber = "0123456786", IsActive = true };
+            var resPharm = await userManager.CreateAsync(pharm, "Pass@123");
+            if (!resPharm.Succeeded) throw new Exception("Failed pharm: " + resPharm.Errors.First().Description);
+            await userManager.AddToRoleAsync(pharm, "Pharmacist");
 
-        var pat2 = new ApplicationUser { UserName = "pat2@test.com", Email = "pat2@test.com", FullName = "Patient 2", PhoneNumber = "0123456785", IsActive = true };
-        var res5 = await userManager.CreateAsync(pat2, "Pass@123");
-        if (!res5.Succeeded) throw new Exception("Failed pat2: " + res5.Errors.First().Description);
-        await userManager.AddToRoleAsync(pat2, "Patient");
-        Patient2Id = pat2.Id;
+            var pat1 = new ApplicationUser { Id = Patient1Id, UserName = "pat1@test.com", Email = "pat1@test.com", FullName = "Patient 1", PhoneNumber = "0123456784", IsActive = true };
+            var res4 = await userManager.CreateAsync(pat1, "Pass@123");
+            if (!res4.Succeeded) throw new Exception("Failed pat1: " + res4.Errors.First().Description);
+            await userManager.AddToRoleAsync(pat1, "Patient");
 
-        // Entities
-        var doctor = new Doctor { UserId = DoctorId, IsActive = true, AcademicTitle = "BS", ExperienceYears = 5 };
-        db.Doctors.Add(doctor);
+            var pat2 = new ApplicationUser { Id = Patient2Id, UserName = "pat2@test.com", Email = "pat2@test.com", FullName = "Patient 2", PhoneNumber = "0123456785", IsActive = true };
+            var res5 = await userManager.CreateAsync(pat2, "Pass@123");
+            if (!res5.Succeeded) throw new Exception("Failed pat2: " + res5.Errors.First().Description);
+            await userManager.AddToRoleAsync(pat2, "Patient");
 
-        var doc2 = new ApplicationUser { UserName = "doc2@test.com", Email = "doc2@test.com", FullName = "Doctor 2", PhoneNumber = "0123456789", IsActive = true };
-        await userManager.CreateAsync(doc2, "Pass@123");
-        await userManager.AddToRoleAsync(doc2, "Doctor");
-        
-        var doctor2 = new Doctor { UserId = doc2.Id, IsActive = true, AcademicTitle = "BS", ExperienceYears = 5 };
-        db.Doctors.Add(doctor2);
+            // Entities
+            var doctor = new Doctor { UserId = DoctorId, IsActive = true, AcademicTitle = "BS", ExperienceYears = 5 };
+            db.Doctors.Add(doctor);
 
-        var patient1 = new Patient { UserId = Patient1Id, DateOfBirth = new DateOnly(1990, 1, 1), Gender = Gender.Male };
-        var patient2 = new Patient { UserId = Patient2Id, DateOfBirth = new DateOnly(1995, 1, 1), Gender = Gender.Female };
-        db.Patients.Add(patient1);
-        db.Patients.Add(patient2);
+            var doc2 = new ApplicationUser { Id = doc2UserId, UserName = "doc2@test.com", Email = "doc2@test.com", FullName = "Doctor 2", PhoneNumber = "0123456789", IsActive = true };
+            await userManager.CreateAsync(doc2, "Pass@123");
+            await userManager.AddToRoleAsync(doc2, "Doctor");
 
-        var spec = new Specialty { SpecialtyCode = "SP-01", Name = "Tim Mạch", IsActive = true, AiEnabled = true };
-        db.Specialties.Add(spec);
-        await db.SaveChangesAsync();
+            var doctor2 = new Doctor { UserId = doc2.Id, IsActive = true, AcademicTitle = "BS", ExperienceYears = 5 };
+            db.Doctors.Add(doctor2);
 
-        db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor.Id, SpecialtyId = spec.Id, IsPrimary = true });
-        db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor2.Id, SpecialtyId = spec.Id, IsPrimary = true });
-        
-        var date = GetFutureWorkingDate(1);
-        var schedule = new DoctorWorkSchedule { DoctorId = doctor.Id, WorkDate = date, StartTime = new TimeOnly(8,0,0), EndTime = new TimeOnly(12,0,0), IsActive = true };
-        db.DoctorWorkSchedules.Add(schedule);
-        await db.SaveChangesAsync();
+            var patient1 = new Patient { UserId = Patient1Id, DateOfBirth = new DateOnly(1990, 1, 1), Gender = Gender.Male };
+            var patient2 = new Patient { UserId = Patient2Id, DateOfBirth = new DateOnly(1995, 1, 1), Gender = Gender.Female };
+            db.Patients.Add(patient1);
+            db.Patients.Add(patient2);
 
-        var slot = new AppointmentSlot { DoctorId = doctor.Id, SlotDate = date, StartTime = new TimeOnly(8,0,0), EndTime = new TimeOnly(8,30,0), IsBooked = false };
-        db.AppointmentSlots.Add(slot);
-        
-        var medicine = new Medicine
-        {
-            Code = "PARA500",
-            Name = "Paracetamol 500mg",
-            Unit = "Viên",
-            StockQuantity = 50,
-            ReorderLevel = 10,
-            IsActive = true
-        };
-        db.Medicines.Add(medicine);
+            var spec = new Specialty { SpecialtyCode = "SP-01", Name = "Tim Mạch", IsActive = true, AiEnabled = true };
+            db.Specialties.Add(spec);
+            await db.SaveChangesAsync();
 
-        var package = new HealthPackage
-        {
-            Code = "PKG-TEST",
-            Name = "Gói Khám Tổng Quát Tiêu Chuẩn Test",
-            TargetAudience = "Người trưởng thành từ 18 tuổi",
-            Description = "Kiểm tra sức khỏe tổng quát định kỳ",
-            Price = 1500000,
-            IsActive = true,
-            IncludedServicesJson = "[\"Khám nội tổng quát\",\"Xét nghiệm máu\"]"
-        };
-        db.HealthPackages.Add(package);
-        await db.SaveChangesAsync();
+            db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor.Id, SpecialtyId = spec.Id, IsPrimary = true });
+            db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor2.Id, SpecialtyId = spec.Id, IsPrimary = true });
 
-        DoctorEntityId = doctor.Id;
-        Doctor2EntityId = doctor2.Id;
-        Patient1EntityId = patient1.Id;
-        Patient2EntityId = patient2.Id;
-        SpecialtyEntityId = spec.Id;
-        SlotEntityId = slot.Id;
-        MedicineEntityId = medicine.Id;
-        PackageEntityId = package.Id;
-        
-        _seeded = true;
+            var date = GetFutureWorkingDate(1);
+            var schedule = new DoctorWorkSchedule { DoctorId = doctor.Id, WorkDate = date, StartTime = new TimeOnly(8,0,0), EndTime = new TimeOnly(12,0,0), IsActive = true };
+            db.DoctorWorkSchedules.Add(schedule);
+            await db.SaveChangesAsync();
+
+            var slot = new AppointmentSlot { DoctorId = doctor.Id, SlotDate = date, StartTime = new TimeOnly(8,0,0), EndTime = new TimeOnly(8,30,0), IsBooked = false };
+            db.AppointmentSlots.Add(slot);
+
+            var medicine = new Medicine
+            {
+                Code = "PARA500",
+                Name = "Paracetamol 500mg",
+                Unit = "Viên",
+                StockQuantity = 50,
+                ReorderLevel = 10,
+                IsActive = true
+            };
+            db.Medicines.Add(medicine);
+
+            var package = new HealthPackage
+            {
+                Code = "PKG-TEST",
+                Name = "Gói Khám Tổng Quát Tiêu Chuẩn Test",
+                TargetAudience = "Người trưởng thành từ 18 tuổi",
+                Description = "Kiểm tra sức khỏe tổng quát định kỳ",
+                Price = 1500000,
+                IsActive = true,
+                IncludedServicesJson = "[\"Khám nội tổng quát\",\"Xét nghiệm máu\"]"
+            };
+            db.HealthPackages.Add(package);
+            await db.SaveChangesAsync();
+
+            DoctorEntityId = doctor.Id;
+            Doctor2EntityId = doctor2.Id;
+            Patient1EntityId = patient1.Id;
+            Patient2EntityId = patient2.Id;
+            SpecialtyEntityId = spec.Id;
+            SlotEntityId = slot.Id;
+            MedicineEntityId = medicine.Id;
+            PackageEntityId = package.Id;
         }
         finally
         {
