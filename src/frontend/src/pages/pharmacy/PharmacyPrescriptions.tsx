@@ -42,6 +42,7 @@ interface PrescriptionItemDetail {
     unit: string;
     quantity: number;
     availableStock: number;
+    isActive?: boolean;
     dosage: string;
     frequency: string;
     durationDays?: number;
@@ -121,10 +122,25 @@ export const PharmacyPrescriptions: React.FC = () => {
                 if (res.success) {
                     showAlert('Cấp phát thuốc thành công! Tồn kho đã được cập nhật.', 'Thành công', 'success');
                     setDetailModalOpen(false);
+                    setSelectedPrescription(null);
                     fetchPrescriptions();
                 }
             } catch (error: any) {
-                showAlert(error?.message || 'Không thể cấp phát thuốc.', 'Lỗi cấp phát', 'error');
+                const status = error?.response?.status;
+                const errorCode = error?.response?.data?.errorCode;
+                const errorMessage = error?.response?.data?.message || error?.message || 'Không thể cấp phát thuốc.';
+
+                if (status === 409 || errorCode === 'PRESCRIPTION_ALREADY_DISPENSED' || errorCode === 'DISPENSE_CONFLICT') {
+                    showAlert('Đơn thuốc này vừa được người khác xử lý hoặc dữ liệu đã thay đổi. Hệ thống sẽ tự động cập nhật lại danh sách.', 'Xung đột dữ liệu (409)', 'warning');
+                    setDetailModalOpen(false);
+                    setSelectedPrescription(null);
+                    fetchPrescriptions();
+                } else if (status === 422 || errorCode === 'INSUFFICIENT_MEDICINE_STOCK' || errorCode === 'MEDICINE_INACTIVE' || errorCode === 'PRESCRIPTION_NOT_DISPENSABLE') {
+                    showAlert(errorMessage, 'Không thể cấp phát (422)', 'error');
+                    handleOpenDetail(id);
+                } else {
+                    showAlert(errorMessage, 'Lỗi cấp phát', 'error');
+                }
             } finally {
                 setDispenseLoading(false);
             }
@@ -143,10 +159,14 @@ export const PharmacyPrescriptions: React.FC = () => {
         }
     };
 
-    // Check if any item lacks sufficient stock
+    // Check if any item lacks sufficient stock or is inactive
     const hasInsufficientStock = selectedPrescription?.items.some(
         item => item.availableStock < item.quantity
     );
+    const hasInactiveMedicine = selectedPrescription?.items.some(
+        item => item.isActive === false
+    );
+    const canDispense = selectedPrescription?.status === 'Issued' && !hasInsufficientStock && !hasInactiveMedicine;
 
     return (
         <div>
@@ -373,6 +393,16 @@ export const PharmacyPrescriptions: React.FC = () => {
                                         </div>
                                     )}
 
+                                    {/* Inactive Medicine Warning */}
+                                    {hasInactiveMedicine && selectedPrescription.status === 'Issued' && (
+                                        <div style={{ padding: '12px 16px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', color: '#92400e', fontSize: '0.875rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <AlertCircle size={20} />
+                                            <span>
+                                                <strong>Cảnh báo danh mục:</strong> Có thuốc trong đơn đã ngừng cung cấp hoặc ngừng hoạt động. Không thể cấp phát đơn này!
+                                            </span>
+                                        </div>
+                                    )}
+
                                     {/* Items Table */}
                                     <h4 style={{ margin: '0 0 10px', color: 'var(--c-navy-dark)' }}>Danh mục thuốc chỉ định</h4>
                                     <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', marginBottom: '20px' }}>
@@ -389,11 +419,19 @@ export const PharmacyPrescriptions: React.FC = () => {
                                             <tbody>
                                                 {selectedPrescription.items.map((item, idx) => {
                                                     const isLow = item.availableStock < item.quantity;
+                                                    const isInactive = item.isActive === false;
                                                     return (
                                                         <tr key={idx}>
                                                             <td>
                                                                 <div style={{ fontWeight: 600 }}>{item.medicineName}</div>
-                                                                <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)' }}>{item.medicineCode}</div>
+                                                                <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <span>{item.medicineCode}</span>
+                                                                    {isInactive && (
+                                                                        <span style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: '1px 6px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600 }}>
+                                                                            Ngừng hoạt động
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                             </td>
                                                             <td style={{ fontWeight: 700 }}>
                                                                 {item.quantity} {item.unit}
@@ -452,9 +490,9 @@ export const PharmacyPrescriptions: React.FC = () => {
                                     <button
                                         type="button"
                                         className="btn-primary"
-                                        disabled={dispenseLoading || hasInsufficientStock}
+                                        disabled={dispenseLoading || !canDispense}
                                         onClick={() => handleDispense(selectedPrescription.id)}
-                                        style={{ backgroundColor: hasInsufficientStock ? '#94a3b8' : '#059669', cursor: hasInsufficientStock ? 'not-allowed' : 'pointer' }}
+                                        style={{ backgroundColor: canDispense ? '#059669' : '#94a3b8', cursor: canDispense ? 'pointer' : 'not-allowed' }}
                                     >
                                         {dispenseLoading ? 'Đang xử lý...' : 'Xác nhận cấp thuốc & Trừ kho'}
                                     </button>
