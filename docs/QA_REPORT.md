@@ -1,9 +1,9 @@
 # Báo Cáo Kiểm Thử (QA Report)
 
-**Thời điểm thực hiện:** Giai đoạn CI, Billing & Pharmacy Hardening (PR #1 - `fix/ci-billing-hardening`)
-**Commit SHA:** HEAD (Cập nhật hoàn thiện Pharmacy Dispensing & Inventory)
+**Thời điểm thực hiện:** Giai đoạn CI, Billing, Pharmacy & Appointment Change Requests Hardening (PR #1 - `fix/ci-billing-hardening`)
+**Commit SHA:** HEAD (Hoàn thiện toàn diện quy trình Đổi lịch & Hủy lịch khám - Appointment Change Request Workflow)
 **Target Base:** `feat/doctor-clinical-workspace`
-**Phạm vi:** Toàn bộ hệ thống Backend (.NET 10), Frontend (React 19 + TypeScript), Billing & Invoicing, Revisit Booking, In-App Notification Center, Doctor Workspace, Database Seeding, và hoàn thiện **Pharmacy Dispensing & Medicine Inventory Workflow**.
+**Phạm vi:** Toàn bộ hệ thống Backend (.NET 10), Frontend (React 19 + TypeScript), Billing & Invoicing, Revisit Booking, In-App Notification Center, Doctor Workspace, Database Seeding, Pharmacy Dispensing & Medicine Inventory, và **Atomic Appointment Change Request Workflow (Đổi lịch / Hủy lịch khám)**.
 
 ---
 
@@ -12,19 +12,29 @@
 Toàn bộ quy trình kiểm thử tự động đã được kiểm chứng độc lập ở cả cấu hình Debug và Release:
 
 - **Backend Build (`dotnet build`):** Pass - 0 Error(s), 0 Warning(s) trên cả `Debug` và `Release`.
-- **Backend Tests (`dotnet test`):** **90/90 passed (0 failed, 0 skipped)**
-  - `PharmacyDispenseTests`: 11/11 passed
-    1. Cấp phát thành công: đơn đổi `Dispensed`, tồn kho trừ chính xác, sinh `MedicineStockTransaction` (Type = Dispense, QuantityChange âm, BalanceAfter cập nhật), lưu `DispensedAt` và `DispensedByUserId`.
-    2. Đơn gồm nhiều thuốc: toàn bộ thuốc giảm đúng số lượng.
-    3. Đơn gồm nhiều thuốc: nếu 1 thuốc thiếu tồn kho thì rollback toàn bộ giao dịch, không thuốc nào bị trừ tồn kho (HTTP 422 `INSUFFICIENT_MEDICINE_STOCK`).
-    4. Thuốc ngừng hoạt động (`IsActive = false`): chặn cấp phát, báo lỗi nghiệp vụ rõ ràng, không trừ kho (HTTP 422 `MEDICINE_INACTIVE`).
-    5. Đơn ở trạng thái `Draft` hoặc `Cancelled`: chặn cấp phát (HTTP 422 `PRESCRIPTION_NOT_DISPENSABLE`).
-    6. Đơn đã cấp phát trước đó: chặn cấp phát trùng lặp (HTTP 409 `PRESCRIPTION_ALREADY_DISPENSED`).
-    7. Concurrency / Race Condition cùng 1 đơn thuốc: 2 request đồng thời -> đúng 1 request thành công (HTTP 200), request còn lại bị chặn Conflict (HTTP 409), tồn kho chỉ trừ 1 lần duy nhất.
-    8. Concurrency Stock tranh chấp tồn kho cuối: 2 đơn thuốc cùng tranh chấp lượng thuốc còn lại -> chỉ đơn đầu thành công, đơn sau bị từ chối, tồn kho không bao giờ âm.
-    9. RBAC: Pharmacist và Admin cấp phát thành công (200 OK); Doctor, Receptionist, Patient bị từ chối (HTTP 403 Forbidden); Unauthenticated bị chặn (HTTP 401 Unauthorized).
-    10. In-App Notification: Bệnh nhân nhận được thông báo thật với route `/patient/prescriptions`, type `Prescription`, entityId trỏ đúng đơn thuốc.
-    11. Data Isolation & Privacy: Patient không xem được danh mục tồn kho nội bộ (`GET /api/v1/medicines/active` trả 403); Patient chỉ xem đơn thuốc của chính mình; Doctor chỉ quản lý lịch và đơn thuốc thuộc ca khám của mình.
+- **Backend Tests (`dotnet test`):** **110/110 passed (0 failed, 0 skipped)**
+  - `AppointmentChangeRequestTests`: 20/20 passed
+    1. Yêu cầu hủy lịch hẹn `Confirmed` -> trạng thái đổi `PendingCancellation`, slot khám hiện tại vẫn được giữ tạm thời.
+    2. Chống tạo yêu cầu thay đổi trùng lặp khi đã có yêu cầu `Pending` (HTTP 409 `ACTIVE_CHANGE_REQUEST_EXISTS`).
+    3. Lễ tân duyệt yêu cầu hủy lịch -> lịch hẹn chuyển `Cancelled`, slot khám được giải phóng (`IsBooked = false`).
+    4. Lễ tân từ chối yêu cầu hủy lịch -> lịch hẹn khôi phục trạng thái `Confirmed`, slot khám tiếp tục được giữ (`IsBooked = true`), ghi nhận lý do từ chối vào `AppointmentHistory`.
+    5. Yêu cầu đổi sang slot hợp lệ cùng bác sĩ -> trạng thái đổi `PendingReschedule`, slot cũ vẫn được giữ tạm thời.
+    6. Lễ tân duyệt đổi lịch -> slot cũ được giải phóng, slot mới được chuyển thành booked (`IsBooked = true`), lịch hẹn trỏ sang slot mới và chuyển về `Confirmed`.
+    7. Lễ tân từ chối yêu cầu đổi lịch -> lịch hẹn khôi phục trạng thái cũ (`Confirmed`), slot cũ vẫn giữ nguyên, ghi chép audit log đầy đủ.
+    8. Concurrency Collision khi đổi lịch: Slot đích bị đặt đồng thời bởi lịch hẹn khác -> duyệt đổi lịch bắn HTTP 409 `TARGET_SLOT_ALREADY_BOOKED`, transaction rollback toàn bộ, không có dữ liệu chắp vá (slot cũ giữ nguyên, lịch hẹn giữ nguyên).
+    9. Bệnh nhân rút yêu cầu đổi lịch (`Withdrawn`) -> lịch hẹn khôi phục trạng thái cũ, slot được bảo toàn.
+    10. Bệnh nhân rút yêu cầu hủy lịch (`Withdrawn`) -> lịch hẹn khôi phục trạng thái cũ, slot được bảo toàn.
+    11. Chặn đổi sang slot ở quá khứ (HTTP 400 `INVALID_TARGET`).
+    12. Chặn đổi sang slot trùng với slot hiện tại (HTTP 400 `INVALID_TARGET`).
+    13. Chặn đổi sang slot của bác sĩ khác (HTTP 400 `DOCTOR_MISMATCH`).
+    14. Chặn đổi sang slot vào ngày Chủ nhật (HTTP 400 `INVALID_SCHEDULE`).
+    15. Chặn đổi sang slot của bác sĩ không hoạt động (HTTP 400 `DOCTOR_NOT_AVAILABLE`).
+    16. Chặn đổi sang slot khi bác sĩ có lịch nghỉ đã duyệt (HTTP 400 `DOCTOR_NOT_AVAILABLE`).
+    17. Chặn đổi sang slot khi bệnh nhân có lịch hẹn khác trùng giờ (HTTP 400 `PATIENT_TIME_CONFLICT`).
+    18. Notification: Lễ tân nhận thông báo thật với route `/reception/change-requests` khi bệnh nhân gửi yêu cầu (ID thực không hardcode "0").
+    19. Notification: Bệnh nhân nhận thông báo thật với route `/patient/appointments` khi yêu cầu được duyệt hoặc từ chối.
+    20. Data Isolation & Privacy: Bệnh nhân chỉ xem và thao tác trên yêu cầu của chính mình; không thể rút yêu cầu của người khác.
+  - `PharmacyDispenseTests`: 11/11 passed (Cấp phát nguyên tử, trừ tồn kho chính xác, chống duplicate dispense 409, concurrency race condition, RBAC dược sĩ, thông báo `/patient/prescriptions`).
   - `BillingTests`: 10/10 passed (Validation phí chuyên khoa, kiểm soát range 365 ngày, snapshot giá không đổi khi phí gốc cập nhật, chống double payment, audit log, KPI doanh thu).
   - `RevisitWorkflowTests`: 6/6 passed (Bác sĩ đề xuất tái khám, route `/patient/revisit`, Notification ID thực không hardcode "0", bệnh nhân chỉ đặt được đề xuất của chính mình, phân định trạng thái `HoldingSlotStatuses` vs `ReleasedSlotStatuses`, thông báo lễ tân `/reception/appointments`).
   - `AppointmentConcurrencyTests`: 2/2 passed (Chống race-condition đặt trùng slot đồng thời với Serializable transaction).
@@ -32,8 +42,9 @@ Toàn bộ quy trình kiểm thử tự động đã được kiểm chứng đ�
   - `PatientPrivacyTests`: 11/11 passed (Cách ly hóa đơn bệnh nhân, bảo vệ PII, tra cứu công khai che số điện thoại và tên).
   - Các bộ test Identity, JWT, Schedule & Leave Requests: 35/35 passed.
 - **Frontend Linter (`npm run lint`):** Pass - 0 error, 84 minor warnings (cho phép).
-- **Frontend Tests (`npm run test`):** **53/53 passed (0 failed across 10 test suites)**
-  - `pharmacyPrescriptions.test.tsx`: 4/4 passed (Render danh sách đơn thuốc, xem chi tiết và tồn kho khả dụng, disable nút cấp thuốc khi tồn kho không đủ, hiển thị badge và cảnh báo khi thuốc ngừng hoạt động `IsActive = false`).
+- **Frontend Tests (`npm run test`):** **57/57 passed (0 failed across 11 test suites)**
+  - `appointmentChangeRequests.test.tsx`: 4/4 passed (Bệnh nhân xem danh sách lịch khám và badge trạng thái, mở modal chọn slot khả dụng & gửi yêu cầu đổi lịch, lễ tân lọc danh sách yêu cầu theo loại Reschedule/Cancellation & trạng thái, xem chi tiết và duyệt yêu cầu).
+  - `pharmacyPrescriptions.test.tsx`: 4/4 passed (Render danh sách đơn thuốc, xem chi tiết và tồn kho khả dụng, disable nút cấp thuốc khi tồn kho không đủ, hiển thị badge và cảnh báo khi thuốc ngừng hoạt động).
   - `revisitBookingHelper.test.ts`: Format ngày giờ tái khám theo tiêu chuẩn ca khám y tế.
   - `billing.test.ts`: Format tiền tệ VND, mapping trạng thái hóa đơn, phân quyền hóa đơn lễ tân và bệnh nhân.
   - `notifications.test.ts` & `notificationBell.test.ts`: Hiển thị thông báo thật, polling/mark-as-read, badge số đếm.
@@ -45,7 +56,21 @@ Toàn bộ quy trình kiểm thử tự động đã được kiểm chứng đ�
 
 ## 2. Kiểm thử Thực tế E2E (Live System Verification)
 
-Hệ thống được khởi động live tại Backend (`http://localhost:5258`) và Frontend (`http://localhost:5173`). Kịch bản E2E kiểm tra dữ liệu thật trên DB với 12 bước hoàn chỉnh cho module Pharmacy:
+Hệ thống được khởi động live tại Backend (`http://localhost:5258`) và Frontend (`http://localhost:5173`). Kịch bản E2E kiểm tra dữ liệu thật trên DB:
+
+### A. Quy trình Đổi lịch & Hủy lịch khám (Appointment Change Requests)
+
+| STT | Kịch bản kiểm tra | Kết quả | Chi tiết xác thực nghiệp vụ |
+|---|---|---|---|
+| 1 | **Scenario A: Yêu cầu hủy lịch & Lễ tân duyệt** | **Pass** | Bệnh nhân gửi yêu cầu hủy lịch #APT -> Trạng thái đổi `PendingCancellation`. Chặn yêu cầu trùng lặp (HTTP 409). Lễ tân duyệt hủy -> Lịch đổi `Cancelled`, Slot khám ban đầu được giải phóng (`IsBooked = false`). Lịch sử ghi nhận `Cancelled` với lý do duyệt. |
+| 2 | **Scenario B: Yêu cầu hủy & Lễ tân từ chối** | **Pass** | Lễ tân từ chối yêu cầu với lý do -> Lịch hẹn khôi phục chính xác trạng thái ban đầu (`Confirmed`), Slot khám tiếp tục được giữ nguyên (`IsBooked = true`). |
+| 3 | **Scenario C: Yêu cầu đổi lịch & Lễ tân duyệt** | **Pass** | Bệnh nhân gửi yêu cầu đổi sang Slot B -> Trạng thái đổi `PendingReschedule`. Lễ tân duyệt đổi lịch -> Slot A được giải phóng, Slot B chuyển thành `IsBooked = true`, lịch hẹn trỏ sang Slot B và cập nhật trạng thái `Confirmed`. |
+| 4 | **Scenario D: Xung đột Slot đích (Concurrency Collision)** | **Pass** | Bệnh nhân 1 xin đổi sang Slot C. Trong lúc chờ, Bệnh nhân 2 đặt thành công Slot C. Lễ tân duyệt yêu cầu của Bệnh nhân 1 -> Bị chặn với HTTP 409 `TARGET_SLOT_ALREADY_BOOKED`. Transaction rollback an toàn: Bệnh nhân 1 vẫn giữ Slot B ban đầu, không xảy ra ghi đè dữ liệu. |
+| 5 | **Scenario E: Bệnh nhân rút yêu cầu** | **Pass** | Bệnh nhân chủ động rút yêu cầu (`withdraw`) -> Lịch hẹn khôi phục trạng thái `Confirmed`, Slot B vẫn được giữ nguyên. |
+| 6 | **Scenario F: In-App Notifications** | **Pass** | Bệnh nhân nhận thông báo với route `/patient/appointments`. Lễ tân nhận thông báo với route `/reception/change-requests`. ID liên kết thực tế, không hardcode. |
+| 7 | **Scenario G: Web Server Health** | **Pass** | Frontend phản hồi HTTP 200 tại `http://localhost:5173`. |
+
+### B. Quy trình Cấp phát thuốc & Kho dược (Pharmacy Dispensing & Inventory)
 
 | STT | Bước kiểm tra | Kết quả | Minh chứng thực tế |
 |---|---|---|---|
@@ -60,7 +85,6 @@ Hệ thống được khởi động live tại Backend (`http://localhost:5258`
 | 9 | **RBAC Enforce on Dispense** | **Pass** | Gọi cấp phát đơn thuốc từ Doctor, Receptionist, Patient -> Đều bị chặn chính xác với HTTP 403 Forbidden. |
 | 10| **Internal Inventory Privacy** | **Pass** | Bệnh nhân gọi `GET /api/v1/medicines/active` và `GET /api/v1/pharmacy/prescriptions` -> Bị chặn với HTTP 403 Forbidden. |
 | 11| **Patient In-App Notification & Rx View** | **Pass** | Bệnh nhân nhận thông báo: Title `Đơn thuốc đã được phát`, Route `/patient/prescriptions`. Xem được đơn thuốc tại trang bệnh nhân. |
-| 12| **Frontend Web Server Health** | **Pass** | Web Frontend phản hồi HTTP 200 tại `http://localhost:5173`. |
 
 ---
 
@@ -69,17 +93,19 @@ Hệ thống được khởi động live tại Backend (`http://localhost:5258`
 1. **RBAC & Data Isolation:**
    - Dược sĩ và Quản trị viên: Có quyền truy cập kho thuốc, xem danh sách đơn thuốc và thực hiện cấp phát.
    - Bác sĩ chỉ truy cập được hàng đợi, bệnh án và lịch làm việc của chính mình.
-   - Bệnh nhân chỉ xem được hóa đơn, thông báo và đơn thuốc thuộc sở hữu của mình; không thể truy cập danh mục thuốc nội bộ hay hàng đợi nhà thuốc.
-   - Lễ tân không có quyền cấu hình mức phí chuyên khoa và không được phép cấp phát thuốc.
+   - Bệnh nhân chỉ xem và thao tác trên lịch hẹn, yêu cầu đổi/hủy lịch, hóa đơn và thông báo của chính mình; không xem kho thuốc nội bộ.
+   - Lễ tân có quyền duyệt/từ chối yêu cầu đổi và hủy lịch hẹn, quản lý hàng đợi lễ tân; không thể cấp phát thuốc hoặc thay đổi phí cấu hình.
 2. **Transaction Isolation & Concurrency Safety:**
-   - Cấp phát thuốc thực hiện trong transaction với mức cô lập `Serializable`.
-   - Tranh chấp đơn thuốc hoặc tồn kho đồng thời được xử lý an toàn: trả HTTP 409 `DISPENSE_CONFLICT`, không gây dirty write hay số lượng tồn kho âm.
+   - Cấp phát thuốc và duyệt đổi lịch thực hiện với transaction Serializable kết hợp conditional update (`ExecuteUpdateAsync`).
+   - Xung đột slot đích khi duyệt dời lịch trả HTTP 409 `TARGET_SLOT_ALREADY_BOOKED` kèm rollback an toàn.
+   - Tranh chấp đơn thuốc hoặc tồn kho đồng thời được xử lý an toàn: trả HTTP 409 `DISPENSE_CONFLICT`, không gây dirty write hay âm tồn kho.
 3. **Public Lookup Safety:**
    - Yêu cầu chuỗi tìm kiếm tối thiểu 4 ký tự.
    - Che mặt định danh cá nhân (PII): họ tên bệnh nhân chỉ hiển thị dạng ký tự đầu và dấu sao, số điện thoại được che giữa.
 4. **Slot Policy State Machine:**
    - Trạng thái giữ slot (`HoldingSlotStatuses`): `Pending`, `Confirmed`, `PendingReschedule`, `PendingCancellation`, `CheckedIn`, `InConsultation`.
    - Trạng thái giải phóng slot (`ReleasedSlotStatuses`): `Cancelled`, `Completed`, `NoShow`.
+   - Khôi phục trạng thái chuẩn xác khi từ chối hoặc rút yêu cầu đổi/hủy lịch dựa trên lịch sử `AppointmentHistories`.
 5. **Data Integrity & Consistency:**
    - Giá trên hóa đơn lấy snapshot tại thời điểm lập hóa đơn, không bị hồi tố khi Admin thay đổi giá chuyên khoa.
    - Giới hạn tra cứu báo cáo doanh thu tối đa 365 ngày, xử lý ngày giờ theo múi giờ chuẩn Việt Nam (UTC+7).
@@ -97,6 +123,7 @@ Hệ thống được khởi động live tại Backend (`http://localhost:5258`
 ## 5. Kết Luận
 
 - Trạng thái mã nguồn: **Sạch, chuẩn hóa, không có thay đổi rác hay secret bị lộ**.
-- CI local: **100% Pass** (Backend 90/90, Frontend 53/53, Lint 0 error, Build 0 error).
-- E2E: **12/12 bước kiểm thử Pharmacy Dispensing & Medicine Inventory hoạt động ổn định trên môi trường thực tế**.
+- CI local: **100% Pass** (Backend 110/110, Frontend 57/57, Lint 0 error, Build 0 error).
+- E2E: **Toàn bộ kịch bản nghiệp vụ Đổi lịch/Hủy lịch khám và Pharmacy Dispensing hoạt động ổn định và nhất quán trên môi trường thực tế**.
 - Nhánh `fix/ci-billing-hardening` đã hoàn thiện toàn diện và sẵn sàng merge vào `feat/doctor-clinical-workspace`.
+

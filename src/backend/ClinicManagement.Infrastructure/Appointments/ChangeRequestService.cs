@@ -45,24 +45,62 @@ public class ChangeRequestService : IChangeRequestService
 
         if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
 
+        if (appointment.Status == AppointmentStatus.PendingReschedule || appointment.Status == AppointmentStatus.PendingCancellation)
+            throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
+
         if (appointment.Status != AppointmentStatus.Pending && appointment.Status != AppointmentStatus.Confirmed)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể đổi lịch khi lịch hẹn đang ở trạng thái Pending hoặc Confirmed.");
 
         var pendingRequest = await _dbContext.AppointmentChangeRequests
             .AnyAsync(r => r.AppointmentId == appointmentId && r.Status == AppointmentChangeRequestStatus.Pending);
         if (pendingRequest)
-            throw new BusinessException("REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
+            throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
 
         var targetSlot = await _dbContext.AppointmentSlots
+            .Include(s => s.Doctor)
             .FirstOrDefaultAsync(s => s.Id == request.RequestedSlotId);
         if (targetSlot == null) throw new NotFoundException("Slot yêu cầu không tồn tại.");
 
         if (targetSlot.Id == appointment.AppointmentSlotId)
             throw new BusinessException("INVALID_TARGET", "Slot yêu cầu không được trùng với slot hiện tại.");
 
-        var slotStart = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime);
-        if (slotStart <= DateTime.UtcNow)
+        if (targetSlot.DoctorId != appointment.DoctorId)
+            throw new BusinessException("DOCTOR_MISMATCH", "Slot yêu cầu phải thuộc cùng bác sĩ với lịch hẹn ban đầu.");
+
+        if (targetSlot.SlotDate.DayOfWeek == DayOfWeek.Sunday)
+            throw new BusinessException("INVALID_SCHEDULE", "Phòng khám không làm việc vào Chủ nhật.");
+
+        var vnNow = DateTime.UtcNow.AddHours(7);
+        var slotDateTime = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime);
+        if (slotDateTime <= vnNow)
             throw new BusinessException("INVALID_TARGET", "Slot yêu cầu phải ở trong tương lai.");
+
+        if (!targetSlot.Doctor.IsActive)
+            throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ hiện không hoạt động.");
+
+        var slotStart = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime);
+        var slotEnd = targetSlot.SlotDate.ToDateTime(targetSlot.EndTime);
+
+        var onLeave = await _dbContext.DoctorLeaveRequests
+            .AnyAsync(l => l.DoctorId == targetSlot.DoctorId
+                        && l.Status == DoctorLeaveRequestStatus.Approved
+                        && l.StartDateTime <= slotEnd
+                        && l.EndDateTime >= slotStart);
+        if (onLeave)
+            throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ có lịch nghỉ trong khung giờ này.");
+
+        if (targetSlot.IsBooked)
+            throw new ConflictException("TARGET_SLOT_ALREADY_BOOKED", "Slot yêu cầu đã được đặt hoặc không khả dụng.");
+
+        var hasTimeConflict = await _dbContext.Appointments
+            .AnyAsync(a => a.PatientId == patient.Id
+                        && a.Id != appointment.Id
+                        && a.AppointmentDate == targetSlot.SlotDate
+                        && a.Status != AppointmentStatus.Cancelled
+                        && a.StartTime < targetSlot.EndTime
+                        && a.EndTime > targetSlot.StartTime);
+        if (hasTimeConflict)
+            throw new ConflictException("PATIENT_TIME_CONFLICT", "Bạn đã có lịch khám khác trong khung giờ này.");
 
         var oldStatus = appointment.Status;
         appointment.Status = AppointmentStatus.PendingReschedule;
@@ -91,6 +129,8 @@ public class ChangeRequestService : IChangeRequestService
             CreatedAt = DateTime.UtcNow
         });
 
+        await _dbContext.SaveChangesAsync();
+
         await NotifyReceptionistsAsync(
             "Yêu cầu dời lịch khám mới",
             $"Bệnh nhân yêu cầu dời lịch khám #{appointment.AppointmentCode}.",
@@ -99,7 +139,7 @@ public class ChangeRequestService : IChangeRequestService
 
         await _dbContext.SaveChangesAsync();
 
-        return MapToDto(changeRequest);
+        return await GetChangeRequestByIdAsync(changeRequest.Id);
     }
 
     public async Task<ChangeRequestDto> CreateCancellationRequestAsync(long appointmentId, CreateCancellationRequestDto request)
@@ -113,13 +153,16 @@ public class ChangeRequestService : IChangeRequestService
 
         if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
 
+        if (appointment.Status == AppointmentStatus.PendingReschedule || appointment.Status == AppointmentStatus.PendingCancellation)
+            throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
+
         if (appointment.Status != AppointmentStatus.Pending && appointment.Status != AppointmentStatus.Confirmed)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể hủy lịch khi lịch hẹn đang ở trạng thái Pending hoặc Confirmed.");
 
         var pendingRequest = await _dbContext.AppointmentChangeRequests
             .AnyAsync(r => r.AppointmentId == appointmentId && r.Status == AppointmentChangeRequestStatus.Pending);
         if (pendingRequest)
-            throw new BusinessException("REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
+            throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
 
         var oldStatus = appointment.Status;
         appointment.Status = AppointmentStatus.PendingCancellation;
@@ -147,6 +190,8 @@ public class ChangeRequestService : IChangeRequestService
             CreatedAt = DateTime.UtcNow
         });
 
+        await _dbContext.SaveChangesAsync();
+
         await NotifyReceptionistsAsync(
             "Yêu cầu hủy lịch khám mới",
             $"Bệnh nhân yêu cầu hủy lịch khám #{appointment.AppointmentCode}.",
@@ -155,7 +200,7 @@ public class ChangeRequestService : IChangeRequestService
 
         await _dbContext.SaveChangesAsync();
 
-        return MapToDto(changeRequest);
+        return await GetChangeRequestByIdAsync(changeRequest.Id);
     }
 
     public async Task WithdrawRequestAsync(long requestId)
@@ -173,30 +218,23 @@ public class ChangeRequestService : IChangeRequestService
         request.ProcessedByUserId = userId;
         request.ProcessedAt = DateTime.UtcNow;
 
-        // Restore appointment status based on previous history, or default back to Pending
         var history = await _dbContext.AppointmentHistories
             .Where(h => h.AppointmentId == request.AppointmentId 
                      && (h.Action == AppointmentHistoryAction.RescheduleRequested || h.Action == AppointmentHistoryAction.CancelRequested))
             .OrderByDescending(h => h.CreatedAt)
             .FirstOrDefaultAsync();
 
-        var restoredStatus = history?.OldStatus ?? AppointmentStatus.Pending;
-        
+        var restoredStatus = history?.OldStatus ?? AppointmentStatus.Confirmed;
         var oldAppointmentStatus = request.Appointment.Status;
         request.Appointment.Status = restoredStatus;
-
-        // NOTE: The prompt says "Rút request không làm thay đổi Appointment hoặc slot". 
-        // By restoring the status, we change the Status property, but do not change the time/slot data.
-        // This is standard to avoid soft-locking. If strictly NO change to Appointment is allowed, we'd remove this.
-        // But restoring the status is the only logical way to unlock the appointment.
 
         _dbContext.AppointmentHistories.Add(new AppointmentHistory
         {
             AppointmentId = request.Appointment.Id,
-            Action = AppointmentHistoryAction.Created, // No specific 'Withdrawn' action, using Created or keeping it generic
+            Action = restoredStatus == AppointmentStatus.Confirmed ? AppointmentHistoryAction.Confirmed : AppointmentHistoryAction.Created,
             OldStatus = oldAppointmentStatus,
             NewStatus = restoredStatus,
-            Note = "Bệnh nhân rút yêu cầu",
+            Note = "Bệnh nhân rút yêu cầu thay đổi",
             PerformedByUserId = userId,
             CreatedAt = DateTime.UtcNow
         });
@@ -207,13 +245,44 @@ public class ChangeRequestService : IChangeRequestService
     public async Task<PagedResult<ChangeRequestDto>> GetMyChangeRequestsAsync(string? status, int page, int pageSize)
     {
         var userId = GetUserId();
-        var query = _dbContext.AppointmentChangeRequests
-            .AsNoTracking()
-            .Where(r => r.RequestedByUserId == userId);
+        var query = from cr in _dbContext.AppointmentChangeRequests
+                    join a in _dbContext.Appointments on cr.AppointmentId equals a.Id
+                    join p in _dbContext.Patients on a.PatientId equals p.Id
+                    join pu in _dbContext.Users on p.UserId equals pu.Id
+                    join d in _dbContext.Doctors on a.DoctorId equals d.Id
+                    join du in _dbContext.Users on d.UserId equals du.Id
+                    join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
+                    join rs in _dbContext.AppointmentSlots on cr.RequestedSlotId equals rs.Id into rsg
+                    from reqSlot in rsg.DefaultIfEmpty()
+                    where cr.RequestedByUserId == userId
+                    select new ChangeRequestDto
+                    {
+                        Id = cr.Id,
+                        AppointmentId = cr.AppointmentId,
+                        RequestType = cr.RequestType.ToString(),
+                        RequestedSlotId = cr.RequestedSlotId,
+                        Reason = cr.Reason,
+                        Status = cr.Status.ToString(),
+                        RequestedByUserId = cr.RequestedByUserId,
+                        ProcessedByUserId = cr.ProcessedByUserId,
+                        CreatedAt = cr.CreatedAt,
+                        ProcessedAt = cr.ProcessedAt,
+                        AppointmentCode = a.AppointmentCode,
+                        PatientName = pu.FullName,
+                        DoctorName = du.FullName,
+                        SpecialtyName = s.Name,
+                        CurrentSlotDate = a.AppointmentDate,
+                        CurrentStartTime = a.StartTime,
+                        CurrentEndTime = a.EndTime,
+                        RequestedSlotDate = reqSlot != null ? reqSlot.SlotDate : (DateOnly?)null,
+                        RequestedStartTime = reqSlot != null ? reqSlot.StartTime : (TimeOnly?)null,
+                        RequestedEndTime = reqSlot != null ? reqSlot.EndTime : (TimeOnly?)null
+                    };
 
         if (!string.IsNullOrEmpty(status) && Enum.TryParse<AppointmentChangeRequestStatus>(status, true, out var parsedStatus))
         {
-            query = query.Where(r => r.Status == parsedStatus);
+            var parsedStatusStr = parsedStatus.ToString();
+            query = query.Where(r => r.Status == parsedStatusStr);
         }
 
         query = query.OrderByDescending(r => r.CreatedAt);
@@ -221,16 +290,54 @@ public class ChangeRequestService : IChangeRequestService
         var totalItems = await query.CountAsync();
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
 
-        return new PagedResult<ChangeRequestDto>(items.Select(MapToDto).ToList(), totalItems, page, pageSize);
+        return new PagedResult<ChangeRequestDto>(items, totalItems, page, pageSize);
     }
 
-    public async Task<PagedResult<ChangeRequestDto>> GetAllChangeRequestsAsync(string? status, int page, int pageSize)
+    public async Task<PagedResult<ChangeRequestDto>> GetAllChangeRequestsAsync(string? requestType, string? status, int page, int pageSize)
     {
-        var query = _dbContext.AppointmentChangeRequests.AsNoTracking();
+        var query = from cr in _dbContext.AppointmentChangeRequests
+                    join a in _dbContext.Appointments on cr.AppointmentId equals a.Id
+                    join p in _dbContext.Patients on a.PatientId equals p.Id
+                    join pu in _dbContext.Users on p.UserId equals pu.Id
+                    join d in _dbContext.Doctors on a.DoctorId equals d.Id
+                    join du in _dbContext.Users on d.UserId equals du.Id
+                    join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
+                    join rs in _dbContext.AppointmentSlots on cr.RequestedSlotId equals rs.Id into rsg
+                    from reqSlot in rsg.DefaultIfEmpty()
+                    select new ChangeRequestDto
+                    {
+                        Id = cr.Id,
+                        AppointmentId = cr.AppointmentId,
+                        RequestType = cr.RequestType.ToString(),
+                        RequestedSlotId = cr.RequestedSlotId,
+                        Reason = cr.Reason,
+                        Status = cr.Status.ToString(),
+                        RequestedByUserId = cr.RequestedByUserId,
+                        ProcessedByUserId = cr.ProcessedByUserId,
+                        CreatedAt = cr.CreatedAt,
+                        ProcessedAt = cr.ProcessedAt,
+                        AppointmentCode = a.AppointmentCode,
+                        PatientName = pu.FullName,
+                        DoctorName = du.FullName,
+                        SpecialtyName = s.Name,
+                        CurrentSlotDate = a.AppointmentDate,
+                        CurrentStartTime = a.StartTime,
+                        CurrentEndTime = a.EndTime,
+                        RequestedSlotDate = reqSlot != null ? reqSlot.SlotDate : (DateOnly?)null,
+                        RequestedStartTime = reqSlot != null ? reqSlot.StartTime : (TimeOnly?)null,
+                        RequestedEndTime = reqSlot != null ? reqSlot.EndTime : (TimeOnly?)null
+                    };
+
+        if (!string.IsNullOrEmpty(requestType) && Enum.TryParse<AppointmentChangeRequestType>(requestType, true, out var parsedType))
+        {
+            var parsedTypeStr = parsedType.ToString();
+            query = query.Where(r => r.RequestType == parsedTypeStr);
+        }
 
         if (!string.IsNullOrEmpty(status) && Enum.TryParse<AppointmentChangeRequestStatus>(status, true, out var parsedStatus))
         {
-            query = query.Where(r => r.Status == parsedStatus);
+            var parsedStatusStr = parsedStatus.ToString();
+            query = query.Where(r => r.Status == parsedStatusStr);
         }
 
         query = query.OrderByDescending(r => r.CreatedAt);
@@ -238,14 +345,48 @@ public class ChangeRequestService : IChangeRequestService
         var totalItems = await query.CountAsync();
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
 
-        return new PagedResult<ChangeRequestDto>(items.Select(MapToDto).ToList(), totalItems, page, pageSize);
+        return new PagedResult<ChangeRequestDto>(items, totalItems, page, pageSize);
     }
 
     public async Task<ChangeRequestDto> GetChangeRequestByIdAsync(long requestId)
     {
-        var req = await _dbContext.AppointmentChangeRequests.AsNoTracking().FirstOrDefaultAsync(r => r.Id == requestId);
+        var query = from cr in _dbContext.AppointmentChangeRequests
+                    join a in _dbContext.Appointments on cr.AppointmentId equals a.Id
+                    join p in _dbContext.Patients on a.PatientId equals p.Id
+                    join pu in _dbContext.Users on p.UserId equals pu.Id
+                    join d in _dbContext.Doctors on a.DoctorId equals d.Id
+                    join du in _dbContext.Users on d.UserId equals du.Id
+                    join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
+                    join rs in _dbContext.AppointmentSlots on cr.RequestedSlotId equals rs.Id into rsg
+                    from reqSlot in rsg.DefaultIfEmpty()
+                    where cr.Id == requestId
+                    select new ChangeRequestDto
+                    {
+                        Id = cr.Id,
+                        AppointmentId = cr.AppointmentId,
+                        RequestType = cr.RequestType.ToString(),
+                        RequestedSlotId = cr.RequestedSlotId,
+                        Reason = cr.Reason,
+                        Status = cr.Status.ToString(),
+                        RequestedByUserId = cr.RequestedByUserId,
+                        ProcessedByUserId = cr.ProcessedByUserId,
+                        CreatedAt = cr.CreatedAt,
+                        ProcessedAt = cr.ProcessedAt,
+                        AppointmentCode = a.AppointmentCode,
+                        PatientName = pu.FullName,
+                        DoctorName = du.FullName,
+                        SpecialtyName = s.Name,
+                        CurrentSlotDate = a.AppointmentDate,
+                        CurrentStartTime = a.StartTime,
+                        CurrentEndTime = a.EndTime,
+                        RequestedSlotDate = reqSlot != null ? reqSlot.SlotDate : (DateOnly?)null,
+                        RequestedStartTime = reqSlot != null ? reqSlot.StartTime : (TimeOnly?)null,
+                        RequestedEndTime = reqSlot != null ? reqSlot.EndTime : (TimeOnly?)null
+                    };
+
+        var req = await query.FirstOrDefaultAsync();
         if (req == null) throw new NotFoundException("Yêu cầu không tồn tại.");
-        return MapToDto(req);
+        return req;
     }
 
     public async Task ApproveRescheduleAsync(long requestId, ProcessChangeRequestDto request)
@@ -263,42 +404,70 @@ public class ChangeRequestService : IChangeRequestService
             if (changeReq.Status != AppointmentChangeRequestStatus.Pending)
                 throw new BusinessException("INVALID_STATE", "Yêu cầu không ở trạng thái Pending.");
             
-            if (changeReq.RequestType != AppointmentChangeRequestType.Reschedule || changeReq.RequestedSlotId == null)
+            if (changeReq.RequestType != AppointmentChangeRequestType.Reschedule || (!changeReq.RequestedSlotId.HasValue && !request.NewSlotId.HasValue))
                 throw new BusinessException("INVALID_TYPE", "Yêu cầu không phải là yêu cầu đổi lịch.");
 
             var appointment = changeReq.Appointment;
             if (appointment.Status != AppointmentStatus.PendingReschedule)
                 throw new BusinessException("INVALID_STATE", "Lịch hẹn không ở trạng thái chờ đổi lịch.");
 
-            // Target slot lock
+            var targetSlotId = request.NewSlotId ?? changeReq.RequestedSlotId!.Value;
+
+            var targetSlot = await _dbContext.AppointmentSlots
+                .Include(s => s.Doctor)
+                .FirstOrDefaultAsync(s => s.Id == targetSlotId);
+            if (targetSlot == null)
+                throw new NotFoundException("Slot yêu cầu không tồn tại.");
+
+            if (targetSlot.DoctorId != appointment.DoctorId)
+                throw new BusinessException("DOCTOR_MISMATCH", "Slot yêu cầu không thuộc bác sĩ của lịch hẹn.");
+
+            if (targetSlot.SlotDate.DayOfWeek == DayOfWeek.Sunday)
+                throw new BusinessException("INVALID_SCHEDULE", "Phòng khám không làm việc vào Chủ nhật.");
+
+            if (!targetSlot.Doctor.IsActive)
+                throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ hiện không hoạt động.");
+
+            var slotStart = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime);
+            var slotEnd = targetSlot.SlotDate.ToDateTime(targetSlot.EndTime);
+
+            var onLeave = await _dbContext.DoctorLeaveRequests
+                .AnyAsync(l => l.DoctorId == targetSlot.DoctorId
+                            && l.Status == DoctorLeaveRequestStatus.Approved
+                            && l.StartDateTime <= slotEnd
+                            && l.EndDateTime >= slotStart);
+            if (onLeave)
+                throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ có lịch nghỉ trong khung giờ này.");
+
+            // Atomic conditional update on target slot
             var affectedRows = await _dbContext.AppointmentSlots
-                .Where(s => s.Id == changeReq.RequestedSlotId.Value && !s.IsBooked)
+                .Where(s => s.Id == targetSlotId && !s.IsBooked)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsBooked, true));
 
             if (affectedRows == 0)
-                throw new BusinessException("SLOT_TAKEN", "Slot yêu cầu đã được đặt hoặc không khả dụng.");
-
-            // Fetch old and new slot info
-            var newSlot = await _dbContext.AppointmentSlots.FirstAsync(s => s.Id == changeReq.RequestedSlotId.Value);
-            var oldSlotId = appointment.AppointmentSlotId;
+                throw new ConflictException("TARGET_SLOT_ALREADY_BOOKED", "Slot yêu cầu đã được đặt hoặc không khả dụng.");
 
             // Release old slot
+            var oldSlotId = appointment.AppointmentSlotId;
             await _dbContext.AppointmentSlots
                 .Where(s => s.Id == oldSlotId)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsBooked, false));
 
             // Update appointment
             var oldStatus = appointment.Status;
-            appointment.AppointmentSlotId = newSlot.Id;
-            appointment.AppointmentDate = newSlot.SlotDate;
-            appointment.StartTime = newSlot.StartTime;
-            appointment.EndTime = newSlot.EndTime;
-            appointment.Status = AppointmentStatus.Confirmed; // Confirm it
+            appointment.AppointmentSlotId = targetSlot.Id;
+            appointment.AppointmentDate = targetSlot.SlotDate;
+            appointment.StartTime = targetSlot.StartTime;
+            appointment.EndTime = targetSlot.EndTime;
+            appointment.Status = AppointmentStatus.Confirmed;
 
             // Update request
             changeReq.Status = AppointmentChangeRequestStatus.Approved;
+            changeReq.RequestedSlotId = targetSlot.Id;
             changeReq.ProcessedByUserId = userId;
             changeReq.ProcessedAt = DateTime.UtcNow;
+
+            var processNote = request.Note ?? request.Reason ?? "Lễ tân xác nhận đổi lịch";
 
             _dbContext.AppointmentHistories.Add(new AppointmentHistory
             {
@@ -306,7 +475,7 @@ public class ChangeRequestService : IChangeRequestService
                 Action = AppointmentHistoryAction.Rescheduled,
                 OldStatus = oldStatus,
                 NewStatus = AppointmentStatus.Confirmed,
-                Note = request.Reason ?? "Lễ tân xác nhận đổi lịch",
+                Note = processNote,
                 PerformedByUserId = userId,
                 CreatedAt = DateTime.UtcNow
             });
@@ -314,7 +483,7 @@ public class ChangeRequestService : IChangeRequestService
             await NotifyPatientForAppointmentAsync(
                 appointment.Id,
                 "Yêu cầu dời lịch khám đã được duyệt",
-                $"Yêu cầu dời lịch khám #{appointment.AppointmentCode} của bạn đã được chấp thuận.",
+                $"Yêu cầu dời lịch khám #{appointment.AppointmentCode} của bạn đã được chấp thuận. Lịch mới: {targetSlot.SlotDate:dd/MM/yyyy} ({targetSlot.StartTime:hh\\:mm} - {targetSlot.EndTime:hh\\:mm}).",
                 $"appt_chg_proc_{changeReq.Id}_approved");
 
             await _dbContext.SaveChangesAsync();
@@ -361,13 +530,15 @@ public class ChangeRequestService : IChangeRequestService
             changeReq.ProcessedByUserId = userId;
             changeReq.ProcessedAt = DateTime.UtcNow;
 
+            var processNote = request.Note ?? request.Reason ?? "Lễ tân xác nhận hủy lịch";
+
             _dbContext.AppointmentHistories.Add(new AppointmentHistory
             {
                 AppointmentId = appointment.Id,
                 Action = AppointmentHistoryAction.Cancelled,
                 OldStatus = oldStatus,
                 NewStatus = AppointmentStatus.Cancelled,
-                Note = request.Reason ?? "Lễ tân xác nhận hủy lịch",
+                Note = processNote,
                 PerformedByUserId = userId,
                 CreatedAt = DateTime.UtcNow
             });
@@ -415,13 +586,15 @@ public class ChangeRequestService : IChangeRequestService
         
         changeReq.Appointment.Status = restoredStatus;
 
+        var rejectReason = request.Note ?? request.Reason ?? "Từ chối yêu cầu thay đổi";
+
         _dbContext.AppointmentHistories.Add(new AppointmentHistory
         {
             AppointmentId = changeReq.Appointment.Id,
-            Action = AppointmentHistoryAction.Confirmed, // Adjust if needed
+            Action = restoredStatus == AppointmentStatus.Confirmed ? AppointmentHistoryAction.Confirmed : AppointmentHistoryAction.Created,
             OldStatus = oldAppointmentStatus,
             NewStatus = restoredStatus,
-            Note = request.Reason ?? "Từ chối yêu cầu thay đổi",
+            Note = $"Từ chối yêu cầu: {rejectReason}",
             PerformedByUserId = userId,
             CreatedAt = DateTime.UtcNow
         });
@@ -429,7 +602,7 @@ public class ChangeRequestService : IChangeRequestService
         await NotifyPatientForAppointmentAsync(
             changeReq.AppointmentId,
             "Yêu cầu thay đổi lịch khám bị từ chối",
-            $"Yêu cầu thay đổi cho lịch khám #{changeReq.Appointment.AppointmentCode} đã bị từ chối. Lý do: {request.Reason ?? "Không có lý do cụ thể"}.",
+            $"Yêu cầu thay đổi cho lịch khám #{changeReq.Appointment.AppointmentCode} đã bị từ chối. Lý do: {rejectReason}.",
             $"appt_chg_proc_{changeReq.Id}_rejected");
 
         await _dbContext.SaveChangesAsync();
@@ -458,7 +631,7 @@ public class ChangeRequestService : IChangeRequestService
                 Type = NotificationType.AppointmentChangeRequest,
                 Title = title,
                 Message = message,
-                Route = "/receptionist/appointments",
+                Route = "/reception/change-requests",
                 RelatedEntityType = "AppointmentChangeRequest",
                 RelatedEntityId = relatedEntityId,
                 DedupeKey = $"{dedupeKeyPrefix}_{recUserId}",
@@ -492,18 +665,4 @@ public class ChangeRequestService : IChangeRequestService
             });
         }
     }
-
-    private static ChangeRequestDto MapToDto(AppointmentChangeRequest req) => new()
-    {
-        Id = req.Id,
-        AppointmentId = req.AppointmentId,
-        RequestType = req.RequestType.ToString(),
-        RequestedSlotId = req.RequestedSlotId,
-        Reason = req.Reason,
-        Status = req.Status.ToString(),
-        RequestedByUserId = req.RequestedByUserId,
-        ProcessedByUserId = req.ProcessedByUserId,
-        CreatedAt = req.CreatedAt,
-        ProcessedAt = req.ProcessedAt
-    };
 }

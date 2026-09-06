@@ -13,7 +13,7 @@ public interface IChangeRequestService
     Task<PagedResult<ChangeRequestDto>> GetMyChangeRequestsAsync(string? status, int page, int pageSize);
     
     // For Receptionists
-    Task<PagedResult<ChangeRequestDto>> GetAllChangeRequestsAsync(string? status, int page, int pageSize);
+    Task<PagedResult<ChangeRequestDto>> GetAllChangeRequestsAsync(string? requestType, string? status, int page, int pageSize);
     Task<ChangeRequestDto> GetChangeRequestByIdAsync(long requestId);
     Task ApproveRescheduleAsync(long requestId, ProcessChangeRequestDto request);
     Task ApproveCancellationAsync(long requestId, ProcessChangeRequestDto request);

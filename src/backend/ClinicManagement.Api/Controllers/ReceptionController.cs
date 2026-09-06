@@ -68,9 +68,9 @@ public class ReceptionController : ControllerBase
     }
 
     [HttpGet("change-requests")]
-    public async Task<IActionResult> GetChangeRequests([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    public async Task<IActionResult> GetChangeRequests([FromQuery] string? requestType, [FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
-        var result = await _changeRequestService.GetAllChangeRequestsAsync(status, page, pageSize);
+        var result = await _changeRequestService.GetAllChangeRequestsAsync(requestType, status, page, pageSize);
         return Ok(ApiResponse<PagedResult<ChangeRequestDto>>.Ok(result));
     }
 

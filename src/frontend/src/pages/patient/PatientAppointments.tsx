@@ -4,7 +4,7 @@ import axiosClient from "../../api/axiosClient";
 import type { ApiResponse } from "../../types";
 import {
     CalendarDays, Clock, Stethoscope, User, AlertTriangle,
-    XCircle, History as HistoryIcon,  
+    XCircle, History as HistoryIcon, RotateCcw, Calendar, Check
 } from "lucide-react";
 import { AppModal } from "../../components/AppModal";
 import { useDialog } from "../../contexts/DialogContext";
@@ -12,10 +12,11 @@ import { Breadcrumb } from "../../components/Breadcrumb";
 
 export const PatientAppointments: React.FC = () => {
     const navigate = useNavigate();
-    const { showAlert,  } = useDialog();
+    const { showAlert, showConfirm } = useDialog();
 
     const [appointments, setAppointments] = useState<any[]>([]);
     const [specialtiesMap, setSpecialtiesMap] = useState<Record<number, string>>({});
+    const [pendingRequests, setPendingRequests] = useState<Record<number, any>>({});
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState("All");
 
@@ -28,6 +29,28 @@ export const PatientAppointments: React.FC = () => {
     }>({ isOpen: false, app: null, reason: "", inlineError: "" });
     const [canceling, setCanceling] = useState(false);
 
+    // Reschedule modal state
+    const [rescheduleModal, setRescheduleModal] = useState<{
+        isOpen: boolean;
+        app: any | null;
+        targetDate: string;
+        availableSlots: any[];
+        selectedSlotId: number | null;
+        reason: string;
+        loadingSlots: boolean;
+        inlineError: string;
+    }>({
+        isOpen: false,
+        app: null,
+        targetDate: "",
+        availableSlots: [],
+        selectedSlotId: null,
+        reason: "",
+        loadingSlots: false,
+        inlineError: ""
+    });
+    const [rescheduling, setRescheduling] = useState(false);
+
     // History modal state
     const [historyModal, setHistoryModal] = useState<{
         isOpen: boolean;
@@ -39,9 +62,10 @@ export const PatientAppointments: React.FC = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [specRes, appRes] = await Promise.all([
+            const [specRes, appRes, chgRes] = await Promise.all([
                 axiosClient.get<any, ApiResponse<any[]>>("/specialties"),
-                axiosClient.get<any, ApiResponse<any>>("/appointments/my?page=1&pageSize=100")
+                axiosClient.get<any, ApiResponse<any>>("/appointments/my?page=1&pageSize=100"),
+                axiosClient.get<any, ApiResponse<any>>("/appointment-change-requests?status=Pending&page=1&pageSize=100")
             ]);
 
             if (specRes.success && specRes.data) {
@@ -52,6 +76,14 @@ export const PatientAppointments: React.FC = () => {
 
             if (appRes.success && appRes.data?.items) {
                 setAppointments(appRes.data.items);
+            }
+
+            if (chgRes.success && chgRes.data?.items) {
+                const prMap: Record<number, any> = {};
+                chgRes.data.items.forEach((r: any) => {
+                    prMap[r.appointmentId] = r;
+                });
+                setPendingRequests(prMap);
             }
         } catch (_) {}
         finally { setLoading(false); }
@@ -81,6 +113,8 @@ export const PatientAppointments: React.FC = () => {
             case "Confirmed": return "Xác nhận";
             case "Completed": return "Hoàn thành";
             case "NoShow": return "Đánh dấu vắng";
+            case "RescheduleRequested": return "Yêu cầu đổi lịch";
+            case "CancelRequested": return "Yêu cầu hủy";
             default: return action;
         }
     };
@@ -108,7 +142,7 @@ export const PatientAppointments: React.FC = () => {
             const res = await axiosClient.post<any, ApiResponse<any>>(`/appointments/${app.id}/cancellation-requests`, { reason });
             if (res.success) {
                 handleCancelClose();
-                showAlert('Đã gửi yêu cầu hủy lịch thành công!', 'Thành công', 'success');
+                showAlert('Đã gửi yêu cầu hủy lịch thành công! Vui lòng chờ lễ tân xử lý.', 'Thành công', 'success');
                 fetchData();
             } else {
                 setCancelModal(p => ({ ...p, inlineError: res.message || "Không thể hủy lịch" }));
@@ -121,6 +155,112 @@ export const PatientAppointments: React.FC = () => {
         }
     };
 
+    const loadSlotsForDate = async (doctorId: number, dateStr: string, specialtyId?: number, currentSlotId?: number) => {
+        setRescheduleModal(p => ({ ...p, loadingSlots: true, inlineError: "", availableSlots: [], selectedSlotId: null }));
+        try {
+            const specParam = specialtyId ? `&specialtyId=${specialtyId}` : "";
+            const res = await axiosClient.get<any, ApiResponse<any[]>>(`/doctors/${doctorId}/available-slots?fromDate=${dateStr}&toDate=${dateStr}${specParam}`);
+            if (res.success && res.data) {
+                // Filter out current appointment's slot
+                const slots = res.data.filter((s: any) => s.slotId !== currentSlotId);
+                setRescheduleModal(p => ({ ...p, availableSlots: slots, loadingSlots: false }));
+            } else {
+                setRescheduleModal(p => ({ ...p, availableSlots: [], loadingSlots: false }));
+            }
+        } catch (err: any) {
+            setRescheduleModal(p => ({ ...p, loadingSlots: false, inlineError: "Không thể tải danh sách ca khám khả dụng." }));
+        }
+    };
+
+    const handleRescheduleOpen = (app: any) => {
+        // Next working day default
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        if (d.getDay() === 0) d.setDate(d.getDate() + 1); // skip Sunday
+        const dateStr = d.toISOString().split("T")[0];
+
+        setRescheduleModal({
+            isOpen: true,
+            app,
+            targetDate: dateStr,
+            availableSlots: [],
+            selectedSlotId: null,
+            reason: "",
+            loadingSlots: false,
+            inlineError: ""
+        });
+
+        loadSlotsForDate(app.doctorId, dateStr, app.specialtyId, app.appointmentSlotId);
+    };
+
+    const handleTargetDateChange = (newDate: string) => {
+        setRescheduleModal(p => ({ ...p, targetDate: newDate }));
+        if (rescheduleModal.app) {
+            loadSlotsForDate(rescheduleModal.app.doctorId, newDate, rescheduleModal.app.specialtyId, rescheduleModal.app.appointmentSlotId);
+        }
+    };
+
+    const submitReschedule = async () => {
+        const { app, selectedSlotId, reason } = rescheduleModal;
+        if (!app) return;
+        if (!selectedSlotId) {
+            setRescheduleModal(p => ({ ...p, inlineError: "Vui lòng chọn một ca khám mới." }));
+            return;
+        }
+        if (reason.trim().length < 5) {
+            setRescheduleModal(p => ({ ...p, inlineError: "Vui lòng nhập lý do đổi lịch (ít nhất 5 ký tự)." }));
+            return;
+        }
+
+        setRescheduling(true);
+        setRescheduleModal(p => ({ ...p, inlineError: "" }));
+        try {
+            const res = await axiosClient.post<any, ApiResponse<any>>(`/appointments/${app.id}/reschedule-requests`, {
+                requestedSlotId: selectedSlotId,
+                reason: reason.trim()
+            });
+            if (res.success) {
+                setRescheduleModal(p => ({ ...p, isOpen: false }));
+                showAlert("Đã gửi yêu cầu dời lịch khám thành công! Vui lòng chờ lễ tân xác nhận.", "Thành công", "success");
+                fetchData();
+            } else {
+                setRescheduleModal(p => ({ ...p, inlineError: res.message || "Không thể dời lịch khám." }));
+            }
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.message || "Có lỗi xảy ra khi gửi yêu cầu đổi lịch.";
+            setRescheduleModal(p => ({ ...p, inlineError: msg }));
+        } finally {
+            setRescheduling(false);
+        }
+    };
+
+    const handleWithdraw = (app: any) => {
+        const pendingReq = pendingRequests[app.id];
+        if (!pendingReq) {
+            showAlert("Không tìm thấy yêu cầu chờ xử lý của lịch hẹn này.", "Thông báo", "warning");
+            return;
+        }
+
+        showConfirm(
+            "Bạn có chắc chắn muốn rút yêu cầu thay đổi và tiếp tục giữ lịch khám ban đầu?",
+            async () => {
+                try {
+                    const res = await axiosClient.post<any, ApiResponse<any>>(`/appointment-change-requests/${pendingReq.id}/withdraw`);
+                    if (res.success) {
+                        showAlert("Đã rút yêu cầu thành công!", "Thành công", "success");
+                        fetchData();
+                    } else {
+                        showAlert(res.message || "Không thể rút yêu cầu.", "Lỗi", "error");
+                    }
+                } catch (err: any) {
+                    const msg = err?.response?.data?.message || err?.message || "Có lỗi xảy ra khi rút yêu cầu.";
+                    showAlert(msg, "Lỗi", "error");
+                }
+            },
+            "Xác nhận rút yêu cầu"
+        );
+    };
+
     const handleViewHistory = async (appId: number, code: string) => {
         setHistoryModal({ isOpen: true, appCode: code, histories: [], loading: true });
         try {
@@ -130,7 +270,7 @@ export const PatientAppointments: React.FC = () => {
             } else {
                 setHistoryModal(p => ({ ...p, loading: false }));
             }
-        } catch (error) {
+        } catch {
             setHistoryModal(p => ({ ...p, loading: false }));
         }
     };
@@ -140,6 +280,12 @@ export const PatientAppointments: React.FC = () => {
         if (activeTab === "Past") return ["Completed", "Cancelled", "NoShow"].includes(a.status);
         return true;
     });
+
+    const tomorrowStr = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        return d.toISOString().split("T")[0];
+    })();
 
     return (
         <div style={{ maxWidth: 1000, margin: '0 auto' }}>
@@ -189,69 +335,107 @@ export const PatientAppointments: React.FC = () => {
                 </div>
             ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                    {filtered.map(app => (
-                        <div key={app.id} className="card-panel" style={{ padding: "0" }}>
-                            <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--c-border)" }}>
-                                <div>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
-                                        <span style={{ fontWeight: 600, color: "var(--c-primary)", fontSize: "1.1rem" }}>#{app.appointmentCode}</span>
-                                        {getStatusBadge(app.status)}
-                                    </div>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--c-text)", fontSize: "0.95rem" }}>
-                                        <CalendarDays size={16} color="var(--c-muted)" />
-                                        <span>Ngày: <strong>{app.slotDate ? app.slotDate.split("T")[0] : ""}</strong></span>
-                                        <span style={{ margin: "0 8px", color: "var(--c-border)" }}>|</span>
-                                        <Clock size={16} color="var(--c-muted)" />
-                                        <span>Giờ: <strong>{app.startTime && app.startTime.substring(0, 5)} - {app.endTime && app.endTime.substring(0, 5)}</strong></span>
-                                    </div>
-                                </div>
+                    {filtered.map(app => {
+                        const hasPendingReq = app.status === "PendingReschedule" || app.status === "PendingCancellation";
+                        const pendingReq = pendingRequests[app.id];
 
-                                <div style={{ display: "flex", gap: "8px" }}>
-                                    <button
-                                        className="btn-secondary"
-                                        style={{ padding: "6px 12px", fontSize: "0.85rem" }}
-                                        onClick={() => handleViewHistory(app.id, app.appointmentCode)}
-                                    >
-                                        <HistoryIcon size={14} style={{ marginRight: "4px" }}/>
-                                        Lịch sử
-                                    </button>
+                        return (
+                            <div key={app.id} className="card-panel" style={{ padding: "0" }}>
+                                <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--c-border)" }}>
+                                    <div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+                                            <span style={{ fontWeight: 600, color: "var(--c-primary)", fontSize: "1.1rem" }}>#{app.appointmentCode}</span>
+                                            {getStatusBadge(app.status)}
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--c-text)", fontSize: "0.95rem" }}>
+                                            <CalendarDays size={16} color="var(--c-muted)" />
+                                            <span>Ngày: <strong>{app.slotDate ? app.slotDate.split("T")[0] : ""}</strong></span>
+                                            <span style={{ margin: "0 8px", color: "var(--c-border)" }}>|</span>
+                                            <Clock size={16} color="var(--c-muted)" />
+                                            <span>Giờ: <strong>{app.startTime && app.startTime.substring(0, 5)} - {app.endTime && app.endTime.substring(0, 5)}</strong></span>
+                                        </div>
+                                    </div>
 
-                                    {(app.status === "Pending" || app.status === "Confirmed") && (
+                                    <div style={{ display: "flex", gap: "8px" }}>
                                         <button
-                                            className="btn-danger"
+                                            className="btn-secondary"
                                             style={{ padding: "6px 12px", fontSize: "0.85rem" }}
-                                            onClick={() => handleCancelOpen(app)}
+                                            onClick={() => handleViewHistory(app.id, app.appointmentCode)}
                                         >
-                                            <XCircle size={14} style={{ marginRight: "4px" }}/>
-                                            Hủy lịch
+                                            <HistoryIcon size={14} style={{ marginRight: "4px" }}/>
+                                            Lịch sử
                                         </button>
-                                    )}
+
+                                        {(app.status === "Pending" || app.status === "Confirmed") && (
+                                            <>
+                                                <button
+                                                    className="btn-secondary"
+                                                    style={{ padding: "6px 12px", fontSize: "0.85rem", borderColor: "var(--c-primary)", color: "var(--c-primary)" }}
+                                                    onClick={() => handleRescheduleOpen(app)}
+                                                >
+                                                    <Calendar size={14} style={{ marginRight: "4px" }}/>
+                                                    Đổi lịch
+                                                </button>
+                                                <button
+                                                    className="btn-danger"
+                                                    style={{ padding: "6px 12px", fontSize: "0.85rem" }}
+                                                    onClick={() => handleCancelOpen(app)}
+                                                >
+                                                    <XCircle size={14} style={{ marginRight: "4px" }}/>
+                                                    Hủy lịch
+                                                </button>
+                                            </>
+                                        )}
+
+                                        {hasPendingReq && (
+                                            <button
+                                                className="btn-secondary"
+                                                style={{ padding: "6px 12px", fontSize: "0.85rem", color: "var(--c-warning)", borderColor: "var(--c-warning)" }}
+                                                onClick={() => handleWithdraw(app)}
+                                            >
+                                                <RotateCcw size={14} style={{ marginRight: "4px" }}/>
+                                                Rút yêu cầu
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {hasPendingReq && (
+                                    <div style={{ padding: "10px 20px", backgroundColor: "var(--c-warning-bg)", borderBottom: "1px solid var(--c-border)", display: "flex", alignItems: "center", gap: "8px", fontSize: "0.9rem", color: "var(--c-warning)" }}>
+                                        <AlertTriangle size={16} />
+                                        <span>
+                                            Lịch hẹn đang có yêu cầu <strong>{app.status === "PendingReschedule" ? "đổi lịch" : "hủy lịch"}</strong> chờ lễ tân duyệt.
+                                            {pendingReq?.reason && <span style={{ marginLeft: "6px", fontStyle: "italic", color: "var(--c-text)" }}>(Lý do: {pendingReq.reason})</span>}
+                                        </span>
+                                    </div>
+                                )}
+
+                                <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", backgroundColor: "#f8fafc" }}>
+                                    <div>
+                                        <p style={{ margin: "0 0 8px 0", color: "var(--c-muted)", fontSize: "0.85rem", textTransform: "uppercase", fontWeight: 600 }}>Thông tin khám</p>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                                            <Stethoscope size={16} color="var(--c-primary)" />
+                                            <span>Chuyên khoa: <strong>{specialtiesMap[app.specialtyId] || "..."}</strong></span>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                            <User size={16} color="var(--c-primary)" />
+                                            <span>Bác sĩ: <strong>{app.doctorName || "..."}</strong></span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p style={{ margin: "0 0 8px 0", color: "var(--c-muted)", fontSize: "0.85rem", textTransform: "uppercase", fontWeight: 600 }}>Triệu chứng / Ghi chú</p>
+                                        <p style={{ margin: 0, fontSize: "0.95rem", lineHeight: 1.5, color: "var(--c-text-dark)" }}>
+                                            {app.symptoms || "Không có ghi chú"}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
-                            <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", backgroundColor: "#f8fafc" }}>
-                                <div>
-                                    <p style={{ margin: "0 0 8px 0", color: "var(--c-muted)", fontSize: "0.85rem", textTransform: "uppercase", fontWeight: 600 }}>Thông tin khám</p>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                                        <Stethoscope size={16} color="var(--c-primary)" />
-                                        <span>Chuyên khoa: <strong>{specialtiesMap[app.specialtyId] || "..."}</strong></span>
-                                    </div>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                        <User size={16} color="var(--c-primary)" />
-                                        <span>Bác sĩ: <strong>{app.doctorName || "..."}</strong></span>
-                                    </div>
-                                </div>
-                                <div>
-                                    <p style={{ margin: "0 0 8px 0", color: "var(--c-muted)", fontSize: "0.85rem", textTransform: "uppercase", fontWeight: 600 }}>Triệu chứng / Ghi chú</p>
-                                    <p style={{ margin: 0, fontSize: "0.95rem", lineHeight: 1.5, color: "var(--c-text-dark)" }}>
-                                        {app.symptoms || "Không có ghi chú"}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
+            {/* Cancel Modal */}
             <AppModal
                 isOpen={cancelModal.isOpen}
                 onClose={handleCancelClose}
@@ -262,7 +446,7 @@ export const PatientAppointments: React.FC = () => {
                             Đóng
                         </button>
                         <button type="button" className="btn-danger" onClick={submitCancel} disabled={canceling}>
-                            {canceling ? "Đang xử lý..." : "Xác nhận hủy"}
+                            {canceling ? "Đang xử lý..." : "Xác nhận gửi yêu cầu"}
                         </button>
                     </>
                 }
@@ -270,7 +454,7 @@ export const PatientAppointments: React.FC = () => {
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", padding: "12px", backgroundColor: "var(--c-danger-bg)", color: "var(--c-danger)", borderRadius: "8px", marginBottom: "16px" }}>
                     <AlertTriangle size={24} style={{ flexShrink: 0 }} />
                     <p style={{ margin: 0, fontSize: "0.95rem" }}>
-                        Bạn có chắc chắn muốn hủy lịch khám này? Hãy cho chúng tôi biết lý do (bắt buộc).
+                        Yêu cầu hủy sẽ được gửi đến lễ tân duyệt. Bạn có chắc chắn muốn yêu cầu hủy lịch khám này?
                     </p>
                 </div>
                 <label style={{ display: "block", marginBottom: "8px", fontWeight: 500, color: "var(--c-text-dark)" }}>
@@ -279,7 +463,7 @@ export const PatientAppointments: React.FC = () => {
                 <textarea
                     className="form-input"
                     rows={3}
-                    placeholder="Vui lòng nhập lý do..."
+                    placeholder="Vui lòng nhập lý do (ít nhất 5 ký tự)..."
                     value={cancelModal.reason}
                     onChange={(e) => setCancelModal(p => ({ ...p, reason: e.target.value }))}
                     disabled={canceling}
@@ -292,6 +476,101 @@ export const PatientAppointments: React.FC = () => {
                 )}
             </AppModal>
 
+            {/* Reschedule Modal */}
+            <AppModal
+                isOpen={rescheduleModal.isOpen}
+                onClose={() => !rescheduling && setRescheduleModal(p => ({ ...p, isOpen: false }))}
+                title={`Đổi lịch khám #${rescheduleModal.app?.appointmentCode}`}
+                actions={
+                    <>
+                        <button type="button" className="btn-secondary" onClick={() => setRescheduleModal(p => ({ ...p, isOpen: false }))} disabled={rescheduling}>
+                            Đóng
+                        </button>
+                        <button type="button" className="btn-primary" onClick={submitReschedule} disabled={rescheduling || rescheduleModal.loadingSlots}>
+                            {rescheduling ? "Đang gửi..." : "Gửi yêu cầu dời lịch"}
+                        </button>
+                    </>
+                }
+            >
+                <div style={{ marginBottom: "16px", padding: "12px", backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", fontSize: "0.9rem" }}>
+                    <div>Bác sĩ: <strong>{rescheduleModal.app?.doctorName}</strong></div>
+                    <div>Chuyên khoa: <strong>{specialtiesMap[rescheduleModal.app?.specialtyId]}</strong></div>
+                    <div>Lịch hiện tại: <strong>{rescheduleModal.app?.slotDate?.split("T")[0]} ({rescheduleModal.app?.startTime?.substring(0, 5)} - {rescheduleModal.app?.endTime?.substring(0, 5)})</strong></div>
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                    <label style={{ display: "block", marginBottom: "6px", fontWeight: 500 }}>Chọn ngày khám mới (*)</label>
+                    <input
+                        type="date"
+                        className="form-input"
+                        min={tomorrowStr}
+                        value={rescheduleModal.targetDate}
+                        onChange={(e) => handleTargetDateChange(e.target.value)}
+                        disabled={rescheduling}
+                    />
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                    <label style={{ display: "block", marginBottom: "6px", fontWeight: 500 }}>Chọn ca khám mới (*)</label>
+                    {rescheduleModal.loadingSlots ? (
+                        <div style={{ padding: "12px", textAlign: "center", color: "var(--c-muted)" }}>Đang tìm ca khám trống...</div>
+                    ) : rescheduleModal.availableSlots.length === 0 ? (
+                        <div style={{ padding: "12px", background: "#fef2f2", color: "#dc2626", borderRadius: "6px", fontSize: "0.9rem" }}>
+                            Bác sĩ không có ca khám trống trong ngày này. Vui lòng chọn ngày khác.
+                        </div>
+                    ) : (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "8px", maxHeight: "160px", overflowY: "auto", padding: "4px" }}>
+                            {rescheduleModal.availableSlots.map(slot => {
+                                const isSelected = rescheduleModal.selectedSlotId === slot.slotId;
+                                return (
+                                    <button
+                                        key={slot.slotId}
+                                        type="button"
+                                        onClick={() => setRescheduleModal(p => ({ ...p, selectedSlotId: slot.slotId, inlineError: "" }))}
+                                        style={{
+                                            padding: "8px",
+                                            borderRadius: "6px",
+                                            border: `1.5px solid ${isSelected ? "var(--c-primary)" : "var(--c-border)"}`,
+                                            backgroundColor: isSelected ? "var(--c-primary-light, #e0f2fe)" : "white",
+                                            color: isSelected ? "var(--c-primary)" : "var(--c-text)",
+                                            fontWeight: isSelected ? 600 : 400,
+                                            cursor: "pointer",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            gap: "4px"
+                                        }}
+                                    >
+                                        {isSelected && <Check size={14} />}
+                                        {slot.startTime?.substring(0, 5)} - {slot.endTime?.substring(0, 5)}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                <div>
+                    <label style={{ display: "block", marginBottom: "6px", fontWeight: 500 }}>Lý do đổi lịch (*)</label>
+                    <textarea
+                        className="form-input"
+                        rows={2}
+                        placeholder="Vui lòng nhập lý do (ít nhất 5 ký tự)..."
+                        value={rescheduleModal.reason}
+                        onChange={(e) => setRescheduleModal(p => ({ ...p, reason: e.target.value }))}
+                        disabled={rescheduling}
+                        style={{ resize: "none" }}
+                    />
+                </div>
+
+                {rescheduleModal.inlineError && (
+                    <p style={{ color: "var(--c-danger)", fontSize: "0.85rem", marginTop: "8px", marginBottom: 0 }}>
+                        {rescheduleModal.inlineError}
+                    </p>
+                )}
+            </AppModal>
+
+            {/* History Modal */}
             <AppModal
                 isOpen={historyModal.isOpen}
                 onClose={() => setHistoryModal({ isOpen: false, appCode: "", histories: [], loading: false })}
