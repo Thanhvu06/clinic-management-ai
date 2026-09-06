@@ -21,7 +21,7 @@ public class PatientPrivacyTests : IntegrationTestBase
     public async Task Given_Patient1Appointment_When_Patient2AttemptsToAccess_Then_ReturnsNotFoundOrEmpty()
     {
         // 1. Create a dedicated slot and appointment for Patient 1
-        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(4));
+        var date = GetFutureWorkingDate(26);
         var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(10, 0, 0), new TimeOnly(10, 30, 0));
         var slotId = slot.Id;
 

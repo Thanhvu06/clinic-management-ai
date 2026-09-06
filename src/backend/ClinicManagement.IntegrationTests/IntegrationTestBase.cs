@@ -132,7 +132,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor.Id, SpecialtyId = spec.Id, IsPrimary = true });
         db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor2.Id, SpecialtyId = spec.Id, IsPrimary = true });
         
-        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        var date = GetFutureWorkingDate(1);
         var schedule = new DoctorWorkSchedule { DoctorId = doctor.Id, WorkDate = date, StartTime = new TimeOnly(8,0,0), EndTime = new TimeOnly(12,0,0), IsActive = true };
         db.DoctorWorkSchedules.Add(schedule);
         await db.SaveChangesAsync();
@@ -179,6 +179,17 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         {
             _seedLock.Release();
         }
+    }
+
+    protected static DateOnly GetFutureWorkingDate(int daysFromNow)
+    {
+        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7).AddDays(daysFromNow));
+        while (date.DayOfWeek == DayOfWeek.Sunday)
+        {
+            date = date.AddDays(1);
+        }
+
+        return date;
     }
 
     protected async Task AuthenticateAsync(string email)

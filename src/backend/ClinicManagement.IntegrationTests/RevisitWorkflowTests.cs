@@ -17,17 +17,6 @@ public class RevisitWorkflowTests : IntegrationTestBase
 {
     public RevisitWorkflowTests(CustomWebApplicationFactory factory) : base(factory) { }
 
-    private static DateOnly GetFutureWorkingDate(int daysFromNow)
-    {
-        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7).AddDays(daysFromNow));
-        while (date.DayOfWeek == DayOfWeek.Sunday)
-        {
-            date = date.AddDays(1);
-        }
-
-        return date;
-    }
-
     private async Task<long> CreatePendingRevisitRequestAsync(long patientId, DateOnly suggestedDate)
     {
         using var scope = Factory.Services.CreateScope();
@@ -95,7 +84,7 @@ public class RevisitWorkflowTests : IntegrationTestBase
         }
 
         await AuthenticateAsync("doc@test.com");
-        var suggestedDate = GetFutureWorkingDate(4);
+        var suggestedDate = GetFutureWorkingDate(40);
         var response = await Client.PostAsJsonAsync(
             $"/api/v1/doctor/appointments/{appointmentId}/revisit-requests",
             new
@@ -127,7 +116,7 @@ public class RevisitWorkflowTests : IntegrationTestBase
     [Fact]
     public async Task Given_PendingRevisit_When_OwnerSelectsValidSlot_Then_CreatesLinkedAppointmentAtomically()
     {
-        var date = GetFutureWorkingDate(5);
+        var date = GetFutureWorkingDate(41);
         var targetSlot = await CreateAvailableSlotAsync(
             DoctorEntityId,
             date,
@@ -194,7 +183,7 @@ public class RevisitWorkflowTests : IntegrationTestBase
     [Fact]
     public async Task Given_AnotherPatientsRevisit_When_PatientAccepts_Then_ReturnsNotFoundAndDoesNotBookSlot()
     {
-        var date = GetFutureWorkingDate(6);
+        var date = GetFutureWorkingDate(42);
         var targetSlot = await CreateAvailableSlotAsync(
             DoctorEntityId,
             date,
@@ -221,7 +210,7 @@ public class RevisitWorkflowTests : IntegrationTestBase
     [Fact]
     public async Task Given_BookedRevisitSlot_When_PatientAccepts_Then_ReturnsConflictAndKeepsRequestPending()
     {
-        var date = GetFutureWorkingDate(7);
+        var date = GetFutureWorkingDate(43);
         var targetSlot = await CreateAvailableSlotAsync(
             DoctorEntityId,
             date,

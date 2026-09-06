@@ -15,22 +15,11 @@ public class AppointmentConcurrencyTests : IntegrationTestBase
 {
     public AppointmentConcurrencyTests(CustomWebApplicationFactory factory) : base(factory) { }
 
-    private static DateOnly GetFutureWorkingDate(int daysFromNow)
-    {
-        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7).AddDays(daysFromNow));
-        while (date.DayOfWeek == DayOfWeek.Sunday)
-        {
-            date = date.AddDays(1);
-        }
-
-        return date;
-    }
-
     [Fact]
     public async Task Given_SameSlot_When_BookedConcurrentlyOrSequentially_Then_OnlyFirstSucceeds()
     {
         // Setup a fresh slot in database for this specific test with valid doctor schedule
-        var date = GetFutureWorkingDate(3);
+        var date = GetFutureWorkingDate(45);
         var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(14, 0, 0), new TimeOnly(14, 30, 0));
         var testSlotId = slot.Id;
 
@@ -67,7 +56,7 @@ public class AppointmentConcurrencyTests : IntegrationTestBase
     [Fact]
     public async Task Given_CheckedInAppointment_When_SamePatientBooksOverlappingSlot_Then_CanonicalPolicyBlocksIt()
     {
-        var date = GetFutureWorkingDate(9);
+        var date = GetFutureWorkingDate(46);
         var existingSlot = await CreateAvailableSlotAsync(
             DoctorEntityId,
             date,

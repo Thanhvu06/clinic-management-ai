@@ -17,7 +17,7 @@ public class AppointmentFlowTests : IntegrationTestBase
     {
         await AuthenticateAsync("pat1@test.com");
 
-        var testDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(5));
+        var testDate = GetFutureWorkingDate(20);
         var testSlot = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(10, 0, 0), new TimeOnly(10, 30, 0));
         var testSlotId = testSlot.Id;
 

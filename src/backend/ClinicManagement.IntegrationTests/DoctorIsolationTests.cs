@@ -20,7 +20,7 @@ public class DoctorIsolationTests : IntegrationTestBase
     public async Task Given_Doctor1Appointment_When_Doctor2AttemptsToManageOrPrescribe_Then_ReturnsNotFound()
     {
         // 1. Create a dedicated slot and appointment assigned to Doctor 1
-        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(5));
+        var date = GetFutureWorkingDate(21);
         var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(11, 0, 0), new TimeOnly(11, 30, 0));
         var slotId = slot.Id;
 
