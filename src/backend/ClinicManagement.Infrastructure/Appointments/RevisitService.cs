@@ -247,7 +247,7 @@ public class RevisitService : IRevisitService
                 UserId = userId,
                 Type = NotificationType.Appointment,
                 Title = "Đặt lịch tái khám thành công",
-                Message = $"Lịch tái khám #{newAppointment.AppointmentCode} ngày {newAppointment.AppointmentDate:dd/MM/yyyy} lúc {newAppointment.StartTime:HH\:mm} đã được tiếp nhận.",
+                Message = $"Lịch tái khám #{newAppointment.AppointmentCode} ngày {newAppointment.AppointmentDate:dd/MM/yyyy} lúc {newAppointment.StartTime:HH\\:mm} đã được tiếp nhận.",
                 Route = "/patient/appointments",
                 RelatedEntityType = "Appointment",
                 RelatedEntityId = newAppointment.Id.ToString(),
