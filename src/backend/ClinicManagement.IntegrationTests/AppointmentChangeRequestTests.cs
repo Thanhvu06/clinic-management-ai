@@ -1115,11 +1115,40 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         using (var scope = Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var reqCount = await db.AppointmentChangeRequests.CountAsync(r => r.AppointmentId == app.Id && r.Status == AppointmentChangeRequestStatus.Pending);
-            Assert.Equal(1, reqCount);
 
+            // Exactly 1 change request created for this appointment
+            var reqs = await db.AppointmentChangeRequests.Where(r => r.AppointmentId == app.Id).ToListAsync();
+            Assert.Single(reqs);
+            var req = reqs[0];
+            Assert.Equal(AppointmentChangeRequestStatus.Pending, req.Status);
+            Assert.Equal(AppointmentChangeRequestType.Cancellation, req.RequestType);
+
+            // Appointment in PendingCancellation status
             var appDb = await db.Appointments.FirstAsync(a => a.Id == app.Id);
             Assert.Equal(AppointmentStatus.PendingCancellation, appDb.Status);
+
+            // Exactly 1 cancel-requested history entry, no duplicates
+            var requestHistories = await db.AppointmentHistories
+                .Where(h => h.AppointmentId == app.Id && (h.Action == AppointmentHistoryAction.CancelRequested || h.Action == AppointmentHistoryAction.RescheduleRequested))
+                .ToListAsync();
+            Assert.Single(requestHistories);
+            Assert.Equal(AppointmentHistoryAction.CancelRequested, requestHistories[0].Action);
+
+            // Notifications sent to receptionists
+            var notifs = await db.Notifications
+                .Where(n => n.RelatedEntityType == "AppointmentChangeRequest" && n.RelatedEntityId == req.Id.ToString())
+                .ToListAsync();
+            Assert.NotEmpty(notifs);
+            Assert.All(notifs, n =>
+            {
+                Assert.Equal(NotificationType.AppointmentChangeRequest, n.Type);
+                Assert.Equal("/reception/change-requests", n.Route);
+                Assert.StartsWith($"chg_req_cancel_{req.Id}_", n.DedupeKey);
+            });
+
+            // Ensure distinct DedupeKeys (no duplicate notifications with identical keys)
+            var dedupeKeys = notifs.Select(n => n.DedupeKey).ToList();
+            Assert.Equal(dedupeKeys.Count, dedupeKeys.Distinct().Count());
         }
     }
 
@@ -1166,17 +1195,50 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         using (var scope = Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            // Request status Approved
             var req = await db.AppointmentChangeRequests.FirstAsync(r => r.Id == requestId);
             Assert.Equal(AppointmentChangeRequestStatus.Approved, req.Status);
+            Assert.NotNull(req.ProcessedAt);
+            Assert.Equal(ReceptionistId, req.ProcessedByUserId);
 
+            // Appointment status Cancelled
             var updatedApp = await db.Appointments.FirstAsync(a => a.Id == app.Id);
             Assert.Equal(AppointmentStatus.Cancelled, updatedApp.Status);
 
+            // Slot is released
             var slotDb = await db.AppointmentSlots.FirstAsync(s => s.Id == slot.Id);
             Assert.False(slotDb.IsBooked);
 
-            var historyCount = await db.AppointmentHistories.CountAsync(h => h.AppointmentId == app.Id && h.Action == AppointmentHistoryAction.Cancelled);
-            Assert.Equal(1, historyCount);
+            // Exactly 1 Cancelled history entry across the appointment
+            var cancelHistories = await db.AppointmentHistories
+                .Where(h => h.AppointmentId == app.Id && h.Action == AppointmentHistoryAction.Cancelled)
+                .ToListAsync();
+            Assert.Single(cancelHistories);
+            Assert.Equal(ReceptionistId, cancelHistories[0].PerformedByUserId);
+
+            // No conflicting Confirmed histories created after the request
+            var conflictingHistories = await db.AppointmentHistories
+                .Where(h => h.AppointmentId == app.Id && h.Action == AppointmentHistoryAction.Confirmed && h.CreatedAt > req.CreatedAt)
+                .ToListAsync();
+            Assert.Empty(conflictingHistories);
+
+            // Exactly 1 approved notification for this request
+            var approvedNotifs = await db.Notifications
+                .Where(n => n.DedupeKey == $"appt_chg_proc_{requestId}_approved")
+                .ToListAsync();
+            Assert.Single(approvedNotifs);
+            Assert.Equal(Patient1Id, approvedNotifs[0].UserId);
+            Assert.Equal(NotificationType.AppointmentChangeRequest, approvedNotifs[0].Type);
+            Assert.Equal("Appointment", approvedNotifs[0].RelatedEntityType);
+            Assert.Equal(app.Id.ToString(), approvedNotifs[0].RelatedEntityId);
+            Assert.Equal("/patient/appointments", approvedNotifs[0].Route);
+
+            // Zero conflicting rejected notifications
+            var rejectedNotifs = await db.Notifications
+                .Where(n => n.DedupeKey == $"appt_chg_proc_{requestId}_rejected")
+                .ToListAsync();
+            Assert.Empty(rejectedNotifs);
         }
     }
 
@@ -1223,21 +1285,58 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         using (var scope = Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
             var req = await db.AppointmentChangeRequests.FirstAsync(r => r.Id == requestId);
             Assert.True(req.Status == AppointmentChangeRequestStatus.Approved || req.Status == AppointmentChangeRequestStatus.Rejected);
+            Assert.NotNull(req.ProcessedAt);
+            Assert.Equal(ReceptionistId, req.ProcessedByUserId);
 
             var updatedApp = await db.Appointments.FirstAsync(a => a.Id == app.Id);
             var slotDb = await db.AppointmentSlots.FirstAsync(s => s.Id == slot.Id);
 
+            var approvedNotifs = await db.Notifications.Where(n => n.DedupeKey == $"appt_chg_proc_{requestId}_approved").ToListAsync();
+            var rejectedNotifs = await db.Notifications.Where(n => n.DedupeKey == $"appt_chg_proc_{requestId}_rejected").ToListAsync();
+
+            var cancelHistories = await db.AppointmentHistories
+                .Where(h => h.AppointmentId == app.Id && h.Action == AppointmentHistoryAction.Cancelled)
+                .ToListAsync();
+            var confirmedHistoriesAfterRequest = await db.AppointmentHistories
+                .Where(h => h.AppointmentId == app.Id && h.Action == AppointmentHistoryAction.Confirmed && h.CreatedAt > req.CreatedAt)
+                .ToListAsync();
+
             if (req.Status == AppointmentChangeRequestStatus.Approved)
             {
+                // Approved outcome
                 Assert.Equal(AppointmentStatus.Cancelled, updatedApp.Status);
                 Assert.False(slotDb.IsBooked);
+
+                // History: exactly 1 Cancelled history, 0 Confirmed histories
+                Assert.Single(cancelHistories);
+                Assert.Empty(confirmedHistoriesAfterRequest);
+
+                // Notifications: exactly 1 Approved notification, 0 Rejected notifications
+                Assert.Single(approvedNotifs);
+                Assert.Empty(rejectedNotifs);
+                Assert.Equal(Patient1Id, approvedNotifs[0].UserId);
+                Assert.Equal(NotificationType.AppointmentChangeRequest, approvedNotifs[0].Type);
+                Assert.Equal("/patient/appointments", approvedNotifs[0].Route);
             }
             else
             {
+                // Rejected outcome
                 Assert.Equal(AppointmentStatus.Confirmed, updatedApp.Status);
                 Assert.True(slotDb.IsBooked);
+
+                // History: exactly 1 Confirmed history, 0 Cancelled histories
+                Assert.Single(confirmedHistoriesAfterRequest);
+                Assert.Empty(cancelHistories);
+
+                // Notifications: exactly 1 Rejected notification, 0 Approved notifications
+                Assert.Single(rejectedNotifs);
+                Assert.Empty(approvedNotifs);
+                Assert.Equal(Patient1Id, rejectedNotifs[0].UserId);
+                Assert.Equal(NotificationType.AppointmentChangeRequest, rejectedNotifs[0].Type);
+                Assert.Equal("/patient/appointments", rejectedNotifs[0].Route);
             }
         }
     }
@@ -1286,6 +1385,7 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         using (var scope = Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
             var req = await db.AppointmentChangeRequests.FirstAsync(r => r.Id == requestId);
             Assert.True(req.Status == AppointmentChangeRequestStatus.Rejected || req.Status == AppointmentChangeRequestStatus.Withdrawn);
 
@@ -1294,6 +1394,38 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
 
             var slotDb = await db.AppointmentSlots.FirstAsync(s => s.Id == slot.Id);
             Assert.True(slotDb.IsBooked);
+
+            // Never approved: 0 approved notifications and 0 cancelled histories
+            var approvedNotifs = await db.Notifications.Where(n => n.DedupeKey == $"appt_chg_proc_{requestId}_approved").ToListAsync();
+            Assert.Empty(approvedNotifs);
+            var cancelHistories = await db.AppointmentHistories.Where(h => h.AppointmentId == app.Id && h.Action == AppointmentHistoryAction.Cancelled).ToListAsync();
+            Assert.Empty(cancelHistories);
+
+            var rejectedNotifs = await db.Notifications.Where(n => n.DedupeKey == $"appt_chg_proc_{requestId}_rejected").ToListAsync();
+
+            // Terminal histories created after the initial CancelRequested
+            var terminalHistories = await db.AppointmentHistories
+                .Where(h => h.AppointmentId == app.Id && h.Action == AppointmentHistoryAction.Confirmed && h.CreatedAt > req.CreatedAt)
+                .ToListAsync();
+            Assert.Single(terminalHistories);
+
+            if (req.Status == AppointmentChangeRequestStatus.Rejected)
+            {
+                // Receptionist reject won
+                Assert.Equal(ReceptionistId, req.ProcessedByUserId);
+                Assert.Single(rejectedNotifs);
+                Assert.Equal(Patient1Id, rejectedNotifs[0].UserId);
+                Assert.Equal(NotificationType.AppointmentChangeRequest, rejectedNotifs[0].Type);
+                Assert.Equal("/patient/appointments", rejectedNotifs[0].Route);
+                Assert.Equal(ReceptionistId, terminalHistories[0].PerformedByUserId);
+            }
+            else
+            {
+                // Patient withdraw won
+                // Per service policy: Withdraw does NOT send notification to patient
+                Assert.Empty(rejectedNotifs);
+                Assert.Equal(Patient1Id, terminalHistories[0].PerformedByUserId);
+            }
         }
     }
 

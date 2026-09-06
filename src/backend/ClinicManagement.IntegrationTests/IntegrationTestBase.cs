@@ -89,11 +89,18 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
             var roleManager = sp.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
 
             // Roles
-            await roleManager.CreateAsync(new IdentityRole<Guid>("Admin"));
-            await roleManager.CreateAsync(new IdentityRole<Guid>("Doctor"));
-            await roleManager.CreateAsync(new IdentityRole<Guid>("Patient"));
-            await roleManager.CreateAsync(new IdentityRole<Guid>("Receptionist"));
-            await roleManager.CreateAsync(new IdentityRole<Guid>("Pharmacist"));
+            string[] roles = { "Admin", "Doctor", "Patient", "Receptionist", "Pharmacist" };
+            foreach (var role in roles)
+            {
+                if (!await roleManager.RoleExistsAsync(role))
+                {
+                    var result = await roleManager.CreateAsync(new IdentityRole<Guid>(role));
+                    if (!result.Succeeded)
+                    {
+                        throw new Exception($"Failed to create role '{role}': {string.Join(", ", result.Errors.Select(e => e.Description))}");
+                    }
+                }
+            }
 
             AdminId = Guid.Parse("11111111-1111-1111-1111-111111111111");
             DoctorId = Guid.Parse("22222222-2222-2222-2222-222222222222");
