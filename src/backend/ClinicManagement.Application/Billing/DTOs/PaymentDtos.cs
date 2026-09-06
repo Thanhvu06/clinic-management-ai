@@ -28,7 +28,7 @@ public class ProcessPaymentRequest
     [Range(0.01, 1000000000, ErrorMessage = "Số tiền thanh toán phải lớn hơn 0.")]
     public decimal Amount { get; set; }
 
-    [Required(ErrorMessage = "Vui lòng chọn phương thức thanh toán.")]
+    [EnumDataType(typeof(PaymentMethod), ErrorMessage = "Phương thức thanh toán không hợp lệ.")]
     public PaymentMethod Method { get; set; }
 
     [MaxLength(100, ErrorMessage = "Mã tham chiếu không được vượt quá 100 ký tự.")]

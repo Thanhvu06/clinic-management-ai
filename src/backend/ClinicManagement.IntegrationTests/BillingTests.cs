@@ -218,6 +218,108 @@ public class BillingTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Given_InvalidPaymentMethod_When_ReceptionistPays_Then_ReturnsBadRequest()
+    {
+        await AuthenticateAsync("rec@test.com");
+        var aptId = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Completed);
+        var invoiceId = await CreateTestInvoiceAsync(Patient1EntityId, aptId, 200000m, InvoiceStatus.Unpaid);
+
+        var response = await Client.PostAsJsonAsync($"/api/v1/reception/billing/invoices/{invoiceId}/pay", new
+        {
+            amount = 200000m,
+            method = 99
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Given_ManualBankTransferWithoutReference_When_ReceptionistPays_Then_ReturnsBusinessError()
+    {
+        await AuthenticateAsync("rec@test.com");
+        var aptId = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Completed);
+        var invoiceId = await CreateTestInvoiceAsync(Patient1EntityId, aptId, 210000m, InvoiceStatus.Unpaid);
+
+        var response = await Client.PostAsJsonAsync($"/api/v1/reception/billing/invoices/{invoiceId}/pay", new
+        {
+            amount = 210000m,
+            method = (int)PaymentMethod.ManualBankTransfer,
+            referenceCode = "   "
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Contains("REFERENCE_CODE_REQUIRED", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Given_VietnamDayAndPatientName_When_ReceptionistFiltersInvoices_Then_ReturnsMatchingInvoiceAndCapsPageSize()
+    {
+        await AuthenticateAsync("rec@test.com");
+        var aptId = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Completed);
+        var invoiceId = await CreateTestInvoiceAsync(Patient1EntityId, aptId, 220000m, InvoiceStatus.Unpaid);
+        var vietnamDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7).AddDays(10));
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var invoice = await db.Invoices.FirstAsync(i => i.Id == invoiceId);
+            invoice.CreatedAtUtc = DateTime.SpecifyKind(
+                vietnamDate.ToDateTime(new TimeOnly(0, 30)).AddHours(-7),
+                DateTimeKind.Utc);
+            await db.SaveChangesAsync();
+        }
+
+        var date = vietnamDate.ToString("yyyy-MM-dd");
+        var search = Uri.EscapeDataString("Patient 1");
+        var response = await Client.GetAsync(
+            $"/api/v1/reception/billing/invoices?fromDate={date}&toDate={date}&search={search}&pageSize=500");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = doc.RootElement.GetProperty("data");
+        Assert.Equal(100, data.GetProperty("pageSize").GetInt32());
+        Assert.Contains(
+            data.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("id").GetInt64() == invoiceId);
+    }
+
+    [Fact]
+    public async Task Given_ZeroSpecialtyFee_When_ReceptionistCreatesInvoice_Then_RejectsUnpayableInvoice()
+    {
+        await AuthenticateAsync("rec@test.com");
+        decimal originalFee;
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var specialty = await db.Specialties.FirstAsync(s => s.Id == SpecialtyEntityId);
+            originalFee = specialty.ConsultationFee;
+            specialty.ConsultationFee = 0;
+            await db.SaveChangesAsync();
+        }
+
+        try
+        {
+            var aptId = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Completed);
+            var response = await Client.PostAsJsonAsync("/api/v1/reception/billing/invoices/appointment", new
+            {
+                appointmentId = aptId
+            });
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            Assert.Contains("FEE_NOT_CONFIGURED", await response.Content.ReadAsStringAsync());
+        }
+        finally
+        {
+            using var scope = Factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var specialty = await db.Specialties.FirstAsync(s => s.Id == SpecialtyEntityId);
+            specialty.ConsultationFee = originalFee;
+            await db.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
     public async Task Given_Patient1Invoice_When_Patient2RequestsDetail_Then_Returns404()
     {
         var aptId = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Completed);
@@ -303,12 +405,40 @@ public class BillingTests : IntegrationTestBase
         });
         Assert.Equal(HttpStatusCode.OK, updateRes.StatusCode);
 
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var audit = await db.SystemAuditLogs.AsNoTracking()
+                .OrderByDescending(log => log.Id)
+                .FirstOrDefaultAsync(log =>
+                    log.Action == "UPDATE_SPECIALTY_FEE" &&
+                    log.EntityName == "Specialty" &&
+                    log.EntityId == SpecialtyEntityId.ToString());
+
+            Assert.NotNull(audit);
+            Assert.Equal(AdminId, audit!.UserId);
+        }
+
         // Negative fee rejected
         var negRes = await Client.PatchAsJsonAsync($"/api/v1/admin/billing/specialties/{SpecialtyEntityId}/fee", new
         {
             consultationFee = -50000m
         });
         Assert.Equal(HttpStatusCode.BadRequest, negRes.StatusCode);
+    }
+
+    [Fact]
+    public async Task Given_RevenueRangeOverOneYear_When_AdminQueriesReport_Then_ReturnsBusinessError()
+    {
+        await AuthenticateAsync("admin@test.com");
+        var fromDate = DateTime.UtcNow.AddDays(-400).ToString("yyyy-MM-dd");
+        var toDate = DateTime.UtcNow.ToString("yyyy-MM-dd");
+
+        var response = await Client.GetAsync(
+            $"/api/v1/admin/billing/revenue?fromDate={fromDate}&toDate={toDate}");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Contains("DATE_RANGE_TOO_LARGE", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]

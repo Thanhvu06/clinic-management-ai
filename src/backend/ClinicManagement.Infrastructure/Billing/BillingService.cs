@@ -44,6 +44,7 @@ public class BillingService : IBillingService
             .Include(a => a.Patient)
             .Include(a => a.Doctor)
             .Include(a => a.Specialty)
+            .AsNoTracking()
             .FirstOrDefaultAsync(a => a.Id == appointmentId, cancellationToken);
 
         if (appointment == null)
@@ -58,66 +59,95 @@ public class BillingService : IBillingService
         if (existingActiveInvoice)
             throw new BusinessException("INVOICE_ALREADY_EXISTS", "Lịch khám này đã có hóa đơn đang hoạt động (chưa hủy).");
 
-        var patientUser = await _dbContext.Users.AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Id == appointment.Patient.UserId, cancellationToken);
-
         var consultationFee = appointment.Specialty.ConsultationFee;
-        var invoiceCode = GenerateInvoiceCode();
+        if (consultationFee <= 0)
+            throw new BusinessException("FEE_NOT_CONFIGURED", "Chuyên khoa chưa được cấu hình mức phí hợp lệ. Vui lòng liên hệ quản trị viên.");
 
-        var invoice = new Invoice
+        var executionStrategy = _dbContext.Database.CreateExecutionStrategy();
+        var invoiceId = await executionStrategy.ExecuteAsync(async () =>
         {
-            InvoiceCode = invoiceCode,
-            PatientId = appointment.PatientId,
-            SourceType = InvoiceSourceType.Appointment,
-            AppointmentId = appointmentId,
-            Status = InvoiceStatus.Unpaid,
-            Subtotal = consultationFee,
-            TotalAmount = consultationFee,
-            CreatedByUserId = createdByUserId,
-            CreatedAtUtc = DateTime.UtcNow
-        };
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        var item = new InvoiceItem
-        {
-            ItemCode = appointment.Specialty.SpecialtyCode,
-            Description = $"Khám chuyên khoa: {appointment.Specialty.Name}",
-            Quantity = 1,
-            UnitPrice = consultationFee,
-            LineTotal = consultationFee,
-            ReferenceType = "Specialty",
-            ReferenceId = appointment.SpecialtyId
-        };
+            try
+            {
+                var invoice = new Invoice
+                {
+                    InvoiceCode = GenerateInvoiceCode(),
+                    PatientId = appointment.PatientId,
+                    SourceType = InvoiceSourceType.Appointment,
+                    AppointmentId = appointmentId,
+                    Status = InvoiceStatus.Unpaid,
+                    Subtotal = consultationFee,
+                    TotalAmount = consultationFee,
+                    CreatedByUserId = createdByUserId,
+                    CreatedAtUtc = DateTime.UtcNow
+                };
 
-        invoice.Items.Add(item);
+                invoice.Items.Add(new InvoiceItem
+                {
+                    ItemCode = appointment.Specialty.SpecialtyCode,
+                    Description = $"Khám chuyên khoa: {appointment.Specialty.Name}",
+                    Quantity = 1,
+                    UnitPrice = consultationFee,
+                    LineTotal = consultationFee,
+                    ReferenceType = "Specialty",
+                    ReferenceId = appointment.SpecialtyId
+                });
 
-        _dbContext.Invoices.Add(invoice);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+                _dbContext.Invoices.Add(invoice);
+                await _dbContext.SaveChangesAsync(cancellationToken);
 
-        _dbContext.SystemAuditLogs.Add(new SystemAuditLog
-        {
-            UserId = createdByUserId,
-            Action = "CREATE_INVOICE",
-            EntityName = "Invoice",
-            EntityId = invoice.Id.ToString(),
-            Description = $"Lập hóa đơn #{invoice.InvoiceCode} cho lịch hẹn #{appointment.AppointmentCode} ({invoice.TotalAmount:N0}đ)",
-            CreatedAt = _dateTimeProvider.VietnamNow
+                _dbContext.SystemAuditLogs.Add(new SystemAuditLog
+                {
+                    UserId = createdByUserId,
+                    Action = "CREATE_INVOICE",
+                    EntityName = "Invoice",
+                    EntityId = invoice.Id.ToString(),
+                    Description = $"Lập hóa đơn #{invoice.InvoiceCode} cho lịch hẹn #{appointment.AppointmentCode} ({invoice.TotalAmount:N0}đ)",
+                    CreatedAt = _dateTimeProvider.VietnamNow
+                });
+
+                await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
+                {
+                    UserId = appointment.Patient.UserId,
+                    Type = NotificationType.Invoice,
+                    Title = "Hóa đơn mới được tạo",
+                    Message = $"Hóa đơn #{invoice.InvoiceCode} cho lịch khám #{appointment.AppointmentCode} đã được tạo với số tiền {invoice.TotalAmount:N0}đ.",
+                    Route = "/patient/invoices",
+                    RelatedEntityType = "Invoice",
+                    RelatedEntityId = invoice.Id.ToString(),
+                    DedupeKey = $"inv_created_{invoice.Id}"
+                }, cancellationToken);
+
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return invoice.Id;
+            }
+            catch (DbUpdateException exception)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                _dbContext.ChangeTracker.Clear();
+
+                var duplicateExists = await _dbContext.Invoices.AsNoTracking()
+                    .AnyAsync(i => i.AppointmentId == appointmentId && i.Status != InvoiceStatus.Cancelled, cancellationToken);
+
+                if (duplicateExists)
+                {
+                    _logger.LogWarning(exception, "Concurrent invoice creation was blocked for appointment {AppointmentId}.", appointmentId);
+                    throw new ConflictException("INVOICE_ALREADY_EXISTS", "Lịch khám này vừa được lập hóa đơn bởi một yêu cầu khác.");
+                }
+
+                throw;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                _dbContext.ChangeTracker.Clear();
+                throw;
+            }
         });
 
-        await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
-        {
-            UserId = appointment.Patient.UserId,
-            Type = NotificationType.Invoice,
-            Title = "Hóa đơn mới được tạo",
-            Message = $"Hóa đơn #{invoice.InvoiceCode} cho lịch khám #{appointment.AppointmentCode} đã được tạo với số tiền {invoice.TotalAmount:N0}đ.",
-            Route = "/patient/invoices",
-            RelatedEntityType = "Invoice",
-            RelatedEntityId = invoice.Id.ToString(),
-            DedupeKey = $"inv_created_{invoice.Id}"
-        }, cancellationToken);
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        return await GetInvoiceDetailAsync(invoice.Id, cancellationToken);
+        return await GetInvoiceDetailAsync(invoiceId, cancellationToken);
     }
 
     public async Task<InvoiceDetailDto> CreateInvoiceFromHealthPackageAsync(long registrationId, Guid createdByUserId, CancellationToken cancellationToken = default)
@@ -125,6 +155,7 @@ public class BillingService : IBillingService
         var registration = await _dbContext.HealthPackageRegistrations
             .Include(r => r.Patient)
             .Include(r => r.HealthPackage)
+            .AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == registrationId, cancellationToken);
 
         if (registration == null)
@@ -140,85 +171,113 @@ public class BillingService : IBillingService
             throw new BusinessException("INVOICE_ALREADY_EXISTS", "Đăng ký gói khám này đã có hóa đơn đang hoạt động (chưa hủy).");
 
         var packagePrice = registration.HealthPackage.Price;
-        var invoiceCode = GenerateInvoiceCode();
+        if (packagePrice <= 0)
+            throw new BusinessException("FEE_NOT_CONFIGURED", "Gói khám chưa được cấu hình mức giá hợp lệ. Vui lòng liên hệ quản trị viên.");
 
-        var invoice = new Invoice
+        var executionStrategy = _dbContext.Database.CreateExecutionStrategy();
+        var invoiceId = await executionStrategy.ExecuteAsync(async () =>
         {
-            InvoiceCode = invoiceCode,
-            PatientId = registration.PatientId,
-            SourceType = InvoiceSourceType.HealthPackageRegistration,
-            HealthPackageRegistrationId = registrationId,
-            Status = InvoiceStatus.Unpaid,
-            Subtotal = packagePrice,
-            TotalAmount = packagePrice,
-            CreatedByUserId = createdByUserId,
-            CreatedAtUtc = DateTime.UtcNow
-        };
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        var item = new InvoiceItem
-        {
-            ItemCode = registration.HealthPackage.Code,
-            Description = $"Gói khám sức khỏe: {registration.HealthPackage.Name}",
-            Quantity = 1,
-            UnitPrice = packagePrice,
-            LineTotal = packagePrice,
-            ReferenceType = "HealthPackage",
-            ReferenceId = registration.HealthPackageId
-        };
+            try
+            {
+                var invoice = new Invoice
+                {
+                    InvoiceCode = GenerateInvoiceCode(),
+                    PatientId = registration.PatientId,
+                    SourceType = InvoiceSourceType.HealthPackageRegistration,
+                    HealthPackageRegistrationId = registrationId,
+                    Status = InvoiceStatus.Unpaid,
+                    Subtotal = packagePrice,
+                    TotalAmount = packagePrice,
+                    CreatedByUserId = createdByUserId,
+                    CreatedAtUtc = DateTime.UtcNow
+                };
 
-        invoice.Items.Add(item);
+                invoice.Items.Add(new InvoiceItem
+                {
+                    ItemCode = registration.HealthPackage.Code,
+                    Description = $"Gói khám sức khỏe: {registration.HealthPackage.Name}",
+                    Quantity = 1,
+                    UnitPrice = packagePrice,
+                    LineTotal = packagePrice,
+                    ReferenceType = "HealthPackage",
+                    ReferenceId = registration.HealthPackageId
+                });
 
-        _dbContext.Invoices.Add(invoice);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+                _dbContext.Invoices.Add(invoice);
+                await _dbContext.SaveChangesAsync(cancellationToken);
 
-        _dbContext.SystemAuditLogs.Add(new SystemAuditLog
-        {
-            UserId = createdByUserId,
-            Action = "CREATE_INVOICE",
-            EntityName = "Invoice",
-            EntityId = invoice.Id.ToString(),
-            Description = $"Lập hóa đơn #{invoice.InvoiceCode} cho đăng ký gói #{registration.RegistrationCode} ({invoice.TotalAmount:N0}đ)",
-            CreatedAt = _dateTimeProvider.VietnamNow
+                _dbContext.SystemAuditLogs.Add(new SystemAuditLog
+                {
+                    UserId = createdByUserId,
+                    Action = "CREATE_INVOICE",
+                    EntityName = "Invoice",
+                    EntityId = invoice.Id.ToString(),
+                    Description = $"Lập hóa đơn #{invoice.InvoiceCode} cho đăng ký gói #{registration.RegistrationCode} ({invoice.TotalAmount:N0}đ)",
+                    CreatedAt = _dateTimeProvider.VietnamNow
+                });
+
+                await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
+                {
+                    UserId = registration.Patient.UserId,
+                    Type = NotificationType.Invoice,
+                    Title = "Hóa đơn mới được tạo",
+                    Message = $"Hóa đơn #{invoice.InvoiceCode} cho gói khám #{registration.RegistrationCode} đã được tạo với số tiền {invoice.TotalAmount:N0}đ.",
+                    Route = "/patient/invoices",
+                    RelatedEntityType = "Invoice",
+                    RelatedEntityId = invoice.Id.ToString(),
+                    DedupeKey = $"inv_created_{invoice.Id}"
+                }, cancellationToken);
+
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return invoice.Id;
+            }
+            catch (DbUpdateException exception)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                _dbContext.ChangeTracker.Clear();
+
+                var duplicateExists = await _dbContext.Invoices.AsNoTracking()
+                    .AnyAsync(i => i.HealthPackageRegistrationId == registrationId && i.Status != InvoiceStatus.Cancelled, cancellationToken);
+
+                if (duplicateExists)
+                {
+                    _logger.LogWarning(exception, "Concurrent invoice creation was blocked for health-package registration {RegistrationId}.", registrationId);
+                    throw new ConflictException("INVOICE_ALREADY_EXISTS", "Đăng ký gói khám này vừa được lập hóa đơn bởi một yêu cầu khác.");
+                }
+
+                throw;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                _dbContext.ChangeTracker.Clear();
+                throw;
+            }
         });
 
-        await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
-        {
-            UserId = registration.Patient.UserId,
-            Type = NotificationType.Invoice,
-            Title = "Hóa đơn mới được tạo",
-            Message = $"Hóa đơn #{invoice.InvoiceCode} cho gói khám #{registration.RegistrationCode} đã được tạo với số tiền {invoice.TotalAmount:N0}đ.",
-            Route = "/patient/invoices",
-            RelatedEntityType = "Invoice",
-            RelatedEntityId = invoice.Id.ToString(),
-            DedupeKey = $"inv_created_{invoice.Id}"
-        }, cancellationToken);
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        return await GetInvoiceDetailAsync(invoice.Id, cancellationToken);
+        return await GetInvoiceDetailAsync(invoiceId, cancellationToken);
     }
 
     public async Task<PaymentDto> ProcessPaymentAsync(long invoiceId, ProcessPaymentRequest request, Guid receivedByUserId, CancellationToken cancellationToken = default)
     {
+        if (!Enum.IsDefined(typeof(PaymentMethod), request.Method))
+            throw new BusinessException("INVALID_PAYMENT_METHOD", "Phương thức thanh toán không hợp lệ.");
+
+        if (request.Method == PaymentMethod.ManualBankTransfer && string.IsNullOrWhiteSpace(request.ReferenceCode))
+            throw new BusinessException("REFERENCE_CODE_REQUIRED", "Chuyển khoản thủ công bắt buộc phải có mã tham chiếu.");
+
         var invoice = await _dbContext.Invoices
             .Include(i => i.Patient)
-            .Include(i => i.Payments)
+            .AsNoTracking()
             .FirstOrDefaultAsync(i => i.Id == invoiceId, cancellationToken);
 
         if (invoice == null)
             throw new NotFoundException("Hóa đơn không tồn tại.");
 
-        if (invoice.Status == InvoiceStatus.Paid)
-            throw new BusinessException("ALREADY_PAID", "Hóa đơn này đã được thanh toán.");
-
-        if (invoice.Status == InvoiceStatus.Cancelled)
-            throw new BusinessException("INVOICE_CANCELLED", "Không thể thanh toán hóa đơn đã bị hủy.");
-
-        if (invoice.Status != InvoiceStatus.Unpaid)
-            throw new BusinessException("INVALID_STATUS", "Trạng thái hóa đơn không hợp lệ để thanh toán.");
-
-        if (request.Amount != invoice.TotalAmount)
-            throw new BusinessException("INVALID_AMOUNT", $"Số tiền thanh toán ({request.Amount:N0}đ) phải chính xác bằng tổng tiền hóa đơn ({invoice.TotalAmount:N0}đ).");
+        ValidatePayableInvoice(invoice, request.Amount);
 
         var executionStrategy = _dbContext.Database.CreateExecutionStrategy();
 
@@ -228,74 +287,85 @@ public class BillingService : IBillingService
 
             try
             {
-                // Re-fetch with tracking inside transaction to avoid race conditions
-                var lockedInvoice = await _dbContext.Invoices
+                var currentInvoice = await _dbContext.Invoices
                     .Include(i => i.Patient)
-                    .Include(i => i.Payments)
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(i => i.Id == invoiceId, cancellationToken);
 
-                if (lockedInvoice == null || lockedInvoice.Status != InvoiceStatus.Unpaid)
-                    throw new BusinessException("ALREADY_PAID", "Hóa đơn này đã được thanh toán hoặc không còn hiệu lực.");
+                if (currentInvoice == null)
+                    throw new NotFoundException("Hóa đơn không tồn tại.");
+
+                ValidatePayableInvoice(currentInvoice, request.Amount);
+
+                var paidAtUtc = DateTime.UtcNow;
+                var updatedRows = await _dbContext.Invoices
+                    .Where(i =>
+                        i.Id == invoiceId &&
+                        i.Status == InvoiceStatus.Unpaid &&
+                        i.TotalAmount == request.Amount)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(i => i.Status, InvoiceStatus.Paid)
+                        .SetProperty(i => i.PaidByUserId, (Guid?)receivedByUserId)
+                        .SetProperty(i => i.PaidAtUtc, (DateTime?)paidAtUtc),
+                        cancellationToken);
+
+                if (updatedRows != 1)
+                    throw new ConflictException("PAYMENT_CONFLICT", "Hóa đơn vừa được xử lý bởi một yêu cầu khác. Vui lòng tải lại dữ liệu.");
 
                 var paymentCode = GeneratePaymentCode();
-
-                lockedInvoice.Status = InvoiceStatus.Paid;
-                lockedInvoice.PaidByUserId = receivedByUserId;
-                lockedInvoice.PaidAtUtc = DateTime.UtcNow;
-
                 var payment = new Payment
                 {
                     PaymentCode = paymentCode,
-                    InvoiceId = lockedInvoice.Id,
+                    InvoiceId = currentInvoice.Id,
                     Amount = request.Amount,
                     Method = request.Method,
                     ReferenceCode = request.ReferenceCode?.Trim(),
                     Note = request.Note?.Trim(),
                     ReceivedByUserId = receivedByUserId,
-                    ReceivedAtUtc = DateTime.UtcNow,
+                    ReceivedAtUtc = paidAtUtc,
                     Status = PaymentStatus.Succeeded
                 };
 
                 _dbContext.Payments.Add(payment);
-
                 _dbContext.SystemAuditLogs.Add(new SystemAuditLog
                 {
                     UserId = receivedByUserId,
                     Action = "PROCESS_PAYMENT",
                     EntityName = "Payment",
                     EntityId = paymentCode,
-                    Description = $"Thu tiền hóa đơn #{lockedInvoice.InvoiceCode}: {payment.Amount:N0}đ ({payment.Method})",
+                    Description = $"Thu tiền hóa đơn #{currentInvoice.InvoiceCode}: {payment.Amount:N0}đ ({payment.Method})",
                     CreatedAt = _dateTimeProvider.VietnamNow
                 });
 
                 var methodLabel = payment.Method == PaymentMethod.Cash ? "Tiền mặt" : "Chuyển khoản";
                 await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
                 {
-                    UserId = lockedInvoice.Patient.UserId,
+                    UserId = currentInvoice.Patient.UserId,
                     Type = NotificationType.Payment,
                     Title = "Thanh toán thành công",
-                    Message = $"Hóa đơn #{lockedInvoice.InvoiceCode} đã được thanh toán thành công ({payment.Amount:N0}đ qua {methodLabel}).",
+                    Message = $"Hóa đơn #{currentInvoice.InvoiceCode} đã được thanh toán thành công ({payment.Amount:N0}đ qua {methodLabel}).",
                     Route = "/patient/invoices",
                     RelatedEntityType = "Invoice",
-                    RelatedEntityId = lockedInvoice.Id.ToString(),
+                    RelatedEntityId = currentInvoice.Id.ToString(),
                     DedupeKey = $"pay_success_{paymentCode}"
                 }, cancellationToken);
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
 
                 var receiver = await _dbContext.Users.AsNoTracking()
                     .FirstOrDefaultAsync(u => u.Id == receivedByUserId, cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
 
                 return new PaymentDto
                 {
                     Id = payment.Id,
                     PaymentCode = payment.PaymentCode,
                     InvoiceId = payment.InvoiceId,
-                    InvoiceCode = lockedInvoice.InvoiceCode,
+                    InvoiceCode = currentInvoice.InvoiceCode,
                     Amount = payment.Amount,
                     Method = payment.Method,
-                    MethodName = payment.Method == PaymentMethod.Cash ? "Tiền mặt" : "Chuyển khoản",
+                    MethodName = methodLabel,
                     ReferenceCode = payment.ReferenceCode,
                     Note = payment.Note,
                     ReceivedByUserId = payment.ReceivedByUserId,
@@ -308,6 +378,7 @@ public class BillingService : IBillingService
             catch
             {
                 await transaction.RollbackAsync(cancellationToken);
+                _dbContext.ChangeTracker.Clear();
                 throw;
             }
         });
@@ -383,13 +454,13 @@ public class BillingService : IBillingService
 
         if (filters.FromDate.HasValue)
         {
-            var fromUtc = filters.FromDate.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            var fromUtc = _dateTimeProvider.ConvertVietnamToUtc(filters.FromDate.Value.ToDateTime(TimeOnly.MinValue));
             query = query.Where(i => i.CreatedAtUtc >= fromUtc);
         }
 
         if (filters.ToDate.HasValue)
         {
-            var toUtc = filters.ToDate.Value.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+            var toUtc = _dateTimeProvider.ConvertVietnamToUtc(filters.ToDate.Value.ToDateTime(TimeOnly.MaxValue));
             query = query.Where(i => i.CreatedAtUtc <= toUtc);
         }
 
@@ -400,13 +471,17 @@ public class BillingService : IBillingService
                 i.InvoiceCode.Contains(search) ||
                 (i.Appointment != null && i.Appointment.AppointmentCode.Contains(search)) ||
                 (i.HealthPackageRegistration != null && i.HealthPackageRegistration.RegistrationCode.Contains(search)) ||
-                (i.HealthPackageRegistration != null && i.HealthPackageRegistration.ContactPhone.Contains(search)));
+                (i.HealthPackageRegistration != null && i.HealthPackageRegistration.ContactPhone.Contains(search)) ||
+                _dbContext.Users.Any(u =>
+                    u.Id == i.Patient.UserId &&
+                    (u.FullName.Contains(search) ||
+                     (u.PhoneNumber != null && u.PhoneNumber.Contains(search)))));
         }
 
         var totalItems = await query.CountAsync(cancellationToken);
 
         var page = filters.Page < 1 ? 1 : filters.Page;
-        var pageSize = filters.PageSize < 1 ? 10 : filters.PageSize;
+        var pageSize = filters.PageSize < 1 ? 10 : Math.Min(filters.PageSize, 100);
 
         var items = await query
             .OrderByDescending(i => i.CreatedAtUtc)
@@ -471,7 +546,7 @@ public class BillingService : IBillingService
         var totalItems = await query.CountAsync(cancellationToken);
 
         page = page < 1 ? 1 : page;
-        pageSize = pageSize < 1 ? 10 : pageSize;
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
 
         var items = await query
             .OrderByDescending(i => i.CreatedAtUtc)
@@ -556,6 +631,9 @@ public class BillingService : IBillingService
             (start, end) = (end, start);
         }
 
+        if (end.DayNumber - start.DayNumber > 365)
+            throw new BusinessException("DATE_RANGE_TOO_LARGE", "Khoảng thời gian báo cáo không được vượt quá 366 ngày.");
+
         var startUtc = _dateTimeProvider.ConvertVietnamToUtc(start.ToDateTime(TimeOnly.MinValue));
         var endUtc = _dateTimeProvider.ConvertVietnamToUtc(end.ToDateTime(TimeOnly.MaxValue));
 
@@ -633,7 +711,7 @@ public class BillingService : IBillingService
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<SpecialtyFeeDto> UpdateSpecialtyFeeAsync(long specialtyId, decimal fee, CancellationToken cancellationToken = default)
+    public async Task<SpecialtyFeeDto> UpdateSpecialtyFeeAsync(long specialtyId, decimal fee, Guid updatedByUserId, CancellationToken cancellationToken = default)
     {
         if (fee < 0)
             throw new BusinessException("INVALID_FEE", "Mức phí khám không được âm.");
@@ -642,7 +720,19 @@ public class BillingService : IBillingService
         if (specialty == null)
             throw new NotFoundException("Chuyên khoa không tồn tại.");
 
+        var previousFee = specialty.ConsultationFee;
         specialty.ConsultationFee = fee;
+
+        _dbContext.SystemAuditLogs.Add(new SystemAuditLog
+        {
+            UserId = updatedByUserId,
+            Action = "UPDATE_SPECIALTY_FEE",
+            EntityName = "Specialty",
+            EntityId = specialty.Id.ToString(),
+            Description = $"Cập nhật phí {specialty.SpecialtyCode} từ {previousFee:N0}đ thành {fee:N0}đ",
+            CreatedAt = _dateTimeProvider.VietnamNow
+        });
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return new SpecialtyFeeDto
@@ -653,6 +743,21 @@ public class BillingService : IBillingService
             ConsultationFee = specialty.ConsultationFee,
             IsActive = specialty.IsActive
         };
+    }
+
+    private static void ValidatePayableInvoice(Invoice invoice, decimal amount)
+    {
+        if (invoice.Status == InvoiceStatus.Paid)
+            throw new BusinessException("ALREADY_PAID", "Hóa đơn này đã được thanh toán.");
+
+        if (invoice.Status == InvoiceStatus.Cancelled)
+            throw new BusinessException("INVOICE_CANCELLED", "Không thể thanh toán hóa đơn đã bị hủy.");
+
+        if (invoice.Status != InvoiceStatus.Unpaid)
+            throw new BusinessException("INVALID_STATUS", "Trạng thái hóa đơn không hợp lệ để thanh toán.");
+
+        if (amount <= 0 || amount != invoice.TotalAmount)
+            throw new BusinessException("INVALID_AMOUNT", $"Số tiền thanh toán ({amount:N0}đ) phải chính xác bằng tổng tiền hóa đơn ({invoice.TotalAmount:N0}đ).");
     }
 
     private string GenerateInvoiceCode()

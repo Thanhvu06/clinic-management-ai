@@ -26,5 +26,5 @@ public interface IBillingService
     // Admin operations
     Task<RevenueReportDto> GetRevenueReportAsync(DateOnly? fromDate, DateOnly? toDate, CancellationToken cancellationToken = default);
     Task<List<SpecialtyFeeDto>> GetSpecialtyFeesAsync(CancellationToken cancellationToken = default);
-    Task<SpecialtyFeeDto> UpdateSpecialtyFeeAsync(long specialtyId, decimal fee, CancellationToken cancellationToken = default);
+    Task<SpecialtyFeeDto> UpdateSpecialtyFeeAsync(long specialtyId, decimal fee, Guid updatedByUserId, CancellationToken cancellationToken = default);
 }

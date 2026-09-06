@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Billing.DTOs;
 using ClinicManagement.Application.Billing.Interfaces;
 using ClinicManagement.Application.Common.Constants;
+using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Common.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,10 +19,12 @@ namespace ClinicManagement.Api.Controllers;
 public class AdminBillingController : ControllerBase
 {
     private readonly IBillingService _billingService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public AdminBillingController(IBillingService billingService)
+    public AdminBillingController(IBillingService billingService, ICurrentUserService currentUserService)
     {
         _billingService = billingService;
+        _currentUserService = currentUserService;
     }
 
     [HttpGet("revenue")]
@@ -46,7 +50,11 @@ public class AdminBillingController : ControllerBase
         [FromBody] UpdateSpecialtyFeeRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await _billingService.UpdateSpecialtyFeeAsync(id, request.ConsultationFee, cancellationToken);
+        var userId = _currentUserService.UserId;
+        if (userId == null)
+            throw new UnauthorizedException("Chưa đăng nhập.");
+
+        var result = await _billingService.UpdateSpecialtyFeeAsync(id, request.ConsultationFee, userId.Value, cancellationToken);
         return Ok(ApiResponse<SpecialtyFeeDto>.Ok(result, "Cập nhật phí khám chuyên khoa thành công."));
     }
 }
