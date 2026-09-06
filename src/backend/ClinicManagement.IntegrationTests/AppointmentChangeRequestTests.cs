@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
@@ -22,6 +24,14 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
     private static int _counter = 50;
 
     public AppointmentChangeRequestTests(CustomWebApplicationFactory factory) : base(factory) { }
+
+    private async Task<string> GetTokenAsync(string email)
+    {
+        var loginResponse = await Client.PostAsJsonAsync("/api/v1/auth/login", new { emailOrPhone = email, password = "Pass@123" });
+        var resStr = await loginResponse.Content.ReadAsStringAsync();
+        var doc = JsonDocument.Parse(resStr);
+        return doc.RootElement.GetProperty("data").GetProperty("accessToken").GetString()!;
+    }
 
     private async Task<(Appointment app, AppointmentSlot slot)> CreateTestAppointmentAsync(long patientId, AppointmentStatus status, long? doctorId = null)
     {
@@ -58,7 +68,7 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         return (appointment, slotDb);
     }
 
-    private async Task<AppointmentSlot> CreateAvailableTargetSlotAsync(long doctorId, int hour, int minute, DayOfWeek? forceDayOfWeek = null)
+    private async Task<AppointmentSlot> CreateAvailableTargetSlotAsync(long doctorId, int hour, int minute, DayOfWeek? forceDayOfWeek = null, int? customDurationMinutes = null)
     {
         var dayOffset = Interlocked.Increment(ref _counter);
         var date = GetFutureWorkingDate(dayOffset);
@@ -71,7 +81,8 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         }
 
         var startTime = new TimeOnly(hour, minute, 0);
-        var endTime = startTime.AddMinutes(30);
+        var duration = customDurationMinutes ?? 30;
+        var endTime = startTime.AddMinutes(duration);
 
         var slot = await CreateAvailableSlotAsync(doctorId, date, startTime, endTime);
 
@@ -108,6 +119,7 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         Assert.NotNull(changeReq);
         Assert.Equal(AppointmentChangeRequestType.Cancellation, changeReq.RequestType);
         Assert.Equal(AppointmentChangeRequestStatus.Pending, changeReq.Status);
+        Assert.Equal(AppointmentStatus.Confirmed, changeReq.OriginalAppointmentStatus);
 
         // Slot remains booked
         var slotInDb = await db.AppointmentSlots.FirstAsync(s => s.Id == slot.Id);
@@ -118,7 +130,10 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         Assert.NotNull(history);
 
         // Notification created for receptionist with /reception/change-requests
-        var notif = await db.Notifications.FirstOrDefaultAsync(n => n.RelatedEntityId == changeReq.Id.ToString() && n.Type == NotificationType.AppointmentChangeRequest);
+        var notif = await db.Notifications.FirstOrDefaultAsync(n => n.UserId == ReceptionistId
+            && n.RelatedEntityType == "AppointmentChangeRequest"
+            && n.RelatedEntityId == changeReq.Id.ToString()
+            && n.Route == "/reception/change-requests");
         Assert.NotNull(notif);
         Assert.Equal("/reception/change-requests", notif.Route);
     }
@@ -149,6 +164,7 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         Assert.Equal(AppointmentChangeRequestType.Reschedule, changeReq.RequestType);
         Assert.Equal(targetSlot.Id, changeReq.RequestedSlotId);
         Assert.Equal(AppointmentChangeRequestStatus.Pending, changeReq.Status);
+        Assert.Equal(AppointmentStatus.Confirmed, changeReq.OriginalAppointmentStatus);
 
         // Old slot still booked, target slot still NOT booked yet
         var oldSlotDb = await db.AppointmentSlots.FirstAsync(s => s.Id == slot.Id);
@@ -159,6 +175,13 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         // History recorded
         var history = await db.AppointmentHistories.FirstOrDefaultAsync(h => h.AppointmentId == app.Id && h.Action == AppointmentHistoryAction.RescheduleRequested);
         Assert.NotNull(history);
+
+        // Notification for receptionist
+        var notif = await db.Notifications.FirstOrDefaultAsync(n => n.UserId == ReceptionistId
+            && n.RelatedEntityType == "AppointmentChangeRequest"
+            && n.RelatedEntityId == changeReq.Id.ToString()
+            && n.Route == "/reception/change-requests");
+        Assert.NotNull(notif);
     }
 
     [Fact]
@@ -263,13 +286,12 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
     public async Task Scenario09_Reschedule_TargetSlotAlreadyBooked_Returns409()
     {
         var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
-        var targetSlot = await CreateAvailableTargetSlotAsync(DoctorEntityId, 11, 0);
+        var bookedTargetSlot = await CreateAvailableTargetSlotAsync(DoctorEntityId, 11, 0);
 
-        // Pre-book the target slot
         using (var scope = Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var s = await db.AppointmentSlots.FirstAsync(x => x.Id == targetSlot.Id);
+            var s = await db.AppointmentSlots.FirstAsync(x => x.Id == bookedTargetSlot.Id);
             s.IsBooked = true;
             await db.SaveChangesAsync();
         }
@@ -277,7 +299,7 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         await AuthenticateAsync("pat1@test.com");
         var res = await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/reschedule-requests", new
         {
-            requestedSlotId = targetSlot.Id,
+            requestedSlotId = bookedTargetSlot.Id,
             reason = "Xin đổi sang slot đã kín"
         });
 
@@ -287,12 +309,12 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Scenario10_Reschedule_PatientTimeConflict_Returns409()
+    public async Task Scenario10_Reschedule_PatientHasTimeConflict_Returns409()
     {
         var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
-        var targetSlot = await CreateAvailableTargetSlotAsync(DoctorEntityId, 15, 0);
+        var targetSlot = await CreateAvailableTargetSlotAsync(DoctorEntityId, 11, 30);
 
-        // Create another appointment for same patient at overlapping time
+        // Create conflicting appointment for patient 1 on the same date and time
         using (var scope = Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -364,7 +386,7 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Scenario12_Patient_CannotWithdraw_ProcessedRequest_Returns422()
+    public async Task Scenario12_Patient_CannotWithdraw_ProcessedRequest_Returns409()
     {
         var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
 
@@ -379,13 +401,15 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
             requestId = req.Id;
         }
 
-        // Withdraw once
+        // Withdraw once -> OK
         var res1 = await Client.PostAsync($"/api/v1/appointment-change-requests/{requestId}/withdraw", null);
         Assert.Equal(HttpStatusCode.OK, res1.StatusCode);
 
-        // Withdraw second time -> 422
+        // Withdraw second time -> 409 Conflict
         var res2 = await Client.PostAsync($"/api/v1/appointment-change-requests/{requestId}/withdraw", null);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, res2.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, res2.StatusCode);
+        var content = await res2.Content.ReadAsStringAsync();
+        Assert.Contains("CHANGE_REQUEST_ALREADY_PROCESSED", content);
     }
 
     [Fact]
@@ -471,7 +495,10 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
             var history = await db.AppointmentHistories.FirstOrDefaultAsync(h => h.AppointmentId == app.Id && h.Action == AppointmentHistoryAction.Cancelled);
             Assert.NotNull(history);
 
-            var notif = await db.Notifications.FirstOrDefaultAsync(n => n.UserId == Patient1Id && n.DedupeKey == $"appt_chg_proc_{requestId}_approved");
+            var notif = await db.Notifications.FirstOrDefaultAsync(n => n.UserId == Patient1Id
+                && n.RelatedEntityType == "Appointment"
+                && n.RelatedEntityId == app.Id.ToString()
+                && n.DedupeKey == $"appt_chg_proc_{requestId}_approved");
             Assert.NotNull(notif);
             Assert.Equal("/patient/appointments", notif.Route);
         }
@@ -497,7 +524,7 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         await AuthenticateAsync("rec@test.com");
         var rejectRes = await Client.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/reject", new
         {
-            reason = "Sát giờ khám quy định không cho hủy"
+            note = "Sát giờ khám quy định không cho hủy"
         });
 
         Assert.Equal(HttpStatusCode.OK, rejectRes.StatusCode);
@@ -514,8 +541,12 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
             var updatedReq = await db.AppointmentChangeRequests.FirstAsync(r => r.Id == requestId);
             Assert.Equal(AppointmentChangeRequestStatus.Rejected, updatedReq.Status);
 
-            var notif = await db.Notifications.FirstOrDefaultAsync(n => n.UserId == Patient1Id && n.DedupeKey == $"appt_chg_proc_{requestId}_rejected");
+            var notif = await db.Notifications.FirstOrDefaultAsync(n => n.UserId == Patient1Id
+                && n.RelatedEntityType == "Appointment"
+                && n.RelatedEntityId == app.Id.ToString()
+                && n.DedupeKey == $"appt_chg_proc_{requestId}_rejected");
             Assert.NotNull(notif);
+            Assert.Equal("/patient/appointments", notif.Route);
             Assert.Contains("Sát giờ khám quy định không cho hủy", notif.Message);
         }
     }
@@ -545,7 +576,7 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         await AuthenticateAsync("rec@test.com");
         var approveRes = await Client.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/approve-reschedule", new
         {
-            reason = "Lễ tân xác nhận đổi lịch hẹn"
+            note = "Lễ tân xác nhận đổi lịch hẹn"
         });
 
         Assert.Equal(HttpStatusCode.OK, approveRes.StatusCode);
@@ -572,8 +603,12 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
             var history = await db.AppointmentHistories.FirstOrDefaultAsync(h => h.AppointmentId == app.Id && h.Action == AppointmentHistoryAction.Rescheduled);
             Assert.NotNull(history);
 
-            var notif = await db.Notifications.FirstOrDefaultAsync(n => n.UserId == Patient1Id && n.DedupeKey == $"appt_chg_proc_{requestId}_approved");
+            var notif = await db.Notifications.FirstOrDefaultAsync(n => n.UserId == Patient1Id
+                && n.RelatedEntityType == "Appointment"
+                && n.RelatedEntityId == app.Id.ToString()
+                && n.DedupeKey == $"appt_chg_proc_{requestId}_approved");
             Assert.NotNull(notif);
+            Assert.Equal("/patient/appointments", notif.Route);
         }
     }
 
@@ -602,7 +637,7 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         await AuthenticateAsync("rec@test.com");
         var rejectRes = await Client.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/reject", new
         {
-            reason = "Bác sĩ có lịch hội chẩn đột xuất"
+            note = "Bác sĩ có lịch hội chẩn đột xuất"
         });
 
         Assert.Equal(HttpStatusCode.OK, rejectRes.StatusCode);
@@ -708,5 +743,526 @@ public class AppointmentChangeRequestTests : IntegrationTestBase
         Client.DefaultRequestHeaders.Authorization = null;
         var resAnon = await Client.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/approve-cancellation", new { });
         Assert.Equal(HttpStatusCode.Unauthorized, resAnon.StatusCode);
+    }
+
+    [Fact]
+    public async Task Scenario21_CreateRequest_WhitespaceOrShortReason_ReturnsBadRequest()
+    {
+        var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
+        var targetSlot = await CreateAvailableTargetSlotAsync(DoctorEntityId, 15, 0);
+
+        await AuthenticateAsync("pat1@test.com");
+
+        // Cancellation with whitespace reason
+        var resCancelSpace = await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/cancellation-requests", new
+        {
+            reason = "   "
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, resCancelSpace.StatusCode);
+
+        // Cancellation with too short reason (< 5 chars)
+        var resCancelShort = await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/cancellation-requests", new
+        {
+            reason = "abc"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, resCancelShort.StatusCode);
+
+        // Reschedule with whitespace reason
+        var resReschedSpace = await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/reschedule-requests", new
+        {
+            requestedSlotId = targetSlot.Id,
+            reason = "    "
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, resReschedSpace.StatusCode);
+
+        // Reschedule with too short reason (< 5 chars)
+        var resReschedShort = await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/reschedule-requests", new
+        {
+            requestedSlotId = targetSlot.Id,
+            reason = "1234"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, resReschedShort.StatusCode);
+    }
+
+    [Fact]
+    public async Task Scenario22_RejectReschedule_InitiallyPendingAppointment_RestoresPendingStatus()
+    {
+        // Start appointment in Pending status
+        var (app, slot) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Pending);
+        var targetSlot = await CreateAvailableTargetSlotAsync(DoctorEntityId, 16, 0);
+
+        await AuthenticateAsync("pat1@test.com");
+        var res = await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/reschedule-requests", new
+        {
+            requestedSlotId = targetSlot.Id,
+            reason = "Đổi lịch khi đang pending"
+        });
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+
+        long requestId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var req = await db.AppointmentChangeRequests.FirstAsync(r => r.AppointmentId == app.Id);
+            requestId = req.Id;
+            Assert.Equal(AppointmentStatus.Pending, req.OriginalAppointmentStatus);
+        }
+
+        // Receptionist rejects request
+        await AuthenticateAsync("rec@test.com");
+        var rejectRes = await Client.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/reject", new
+        {
+            note = "Từ chối dời lịch của lịch hẹn chờ duyệt"
+        });
+        Assert.Equal(HttpStatusCode.OK, rejectRes.StatusCode);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var updatedApp = await db.Appointments.FirstAsync(a => a.Id == app.Id);
+            Assert.Equal(AppointmentStatus.Pending, updatedApp.Status); // Correctly restored to Pending!
+            Assert.Equal(slot.Id, updatedApp.AppointmentSlotId);
+
+            var slotDb = await db.AppointmentSlots.FirstAsync(s => s.Id == slot.Id);
+            Assert.True(slotDb.IsBooked);
+        }
+    }
+
+    [Fact]
+    public async Task Scenario23_WithdrawRequest_InitiallyPendingAppointment_RestoresPendingStatus()
+    {
+        // Start appointment in Pending status
+        var (app, slot) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Pending);
+
+        await AuthenticateAsync("pat1@test.com");
+        var res = await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/cancellation-requests", new
+        {
+            reason = "Yêu cầu hủy lịch hẹn pending"
+        });
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+
+        long requestId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var req = await db.AppointmentChangeRequests.FirstAsync(r => r.AppointmentId == app.Id);
+            requestId = req.Id;
+            Assert.Equal(AppointmentStatus.Pending, req.OriginalAppointmentStatus);
+        }
+
+        // Patient withdraws
+        var withdrawRes = await Client.PostAsync($"/api/v1/appointment-change-requests/{requestId}/withdraw", null);
+        Assert.Equal(HttpStatusCode.OK, withdrawRes.StatusCode);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var updatedApp = await db.Appointments.FirstAsync(a => a.Id == app.Id);
+            Assert.Equal(AppointmentStatus.Pending, updatedApp.Status); // Correctly restored to Pending!
+
+            var slotDb = await db.AppointmentSlots.FirstAsync(s => s.Id == slot.Id);
+            Assert.True(slotDb.IsBooked);
+        }
+    }
+
+    [Fact]
+    public async Task Scenario24_ApproveReschedule_AlteringTargetSlot_Returns422()
+    {
+        var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
+        var targetSlot = await CreateAvailableTargetSlotAsync(DoctorEntityId, 13, 0);
+        var differentSlot = await CreateAvailableTargetSlotAsync(DoctorEntityId, 13, 30);
+
+        await AuthenticateAsync("pat1@test.com");
+        await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/reschedule-requests", new
+        {
+            requestedSlotId = targetSlot.Id,
+            reason = "Xin đổi sang slot A"
+        });
+
+        long requestId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var req = await db.AppointmentChangeRequests.FirstAsync(r => r.AppointmentId == app.Id);
+            requestId = req.Id;
+        }
+
+        // Receptionist attempts to approve with a different slot ID
+        await AuthenticateAsync("rec@test.com");
+        var approveRes = await Client.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/approve-reschedule", new
+        {
+            newSlotId = differentSlot.Id,
+            note = "Cố tình thay đổi sang slot khác"
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, approveRes.StatusCode);
+        var content = await approveRes.Content.ReadAsStringAsync();
+        Assert.Contains("INVALID_TARGET", content);
+    }
+
+    [Fact]
+    public async Task Scenario25_ApproveReschedule_DoctorOnApprovedLeave_Returns422()
+    {
+        var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
+        var targetSlot = await CreateAvailableTargetSlotAsync(DoctorEntityId, 15, 30);
+
+        await AuthenticateAsync("pat1@test.com");
+        await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/reschedule-requests", new
+        {
+            requestedSlotId = targetSlot.Id,
+            reason = "Xin đổi sang ca chiều"
+        });
+
+        long requestId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var req = await db.AppointmentChangeRequests.FirstAsync(r => r.AppointmentId == app.Id);
+            requestId = req.Id;
+
+            // Simulate doctor approved leave covering the target slot time
+            db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
+            {
+                DoctorId = DoctorEntityId,
+                StartDateTime = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime),
+                EndDateTime = targetSlot.SlotDate.ToDateTime(targetSlot.EndTime),
+                Reason = "Bác sĩ nghỉ phép đột xuất",
+                Status = DoctorLeaveRequestStatus.Approved
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Receptionist attempts approval
+        await AuthenticateAsync("rec@test.com");
+        var approveRes = await Client.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/approve-reschedule", new
+        {
+            note = "Duyệt dời lịch"
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, approveRes.StatusCode);
+        var content = await approveRes.Content.ReadAsStringAsync();
+        Assert.Contains("DOCTOR_NOT_AVAILABLE", content);
+    }
+
+    [Fact]
+    public async Task Scenario26_ApproveReschedule_DoctorScheduleDeactivated_Returns422()
+    {
+        var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
+        var targetSlot = await CreateAvailableTargetSlotAsync(DoctorEntityId, 16, 30);
+
+        await AuthenticateAsync("pat1@test.com");
+        await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/reschedule-requests", new
+        {
+            requestedSlotId = targetSlot.Id,
+            reason = "Xin đổi sang cuối chiều"
+        });
+
+        long requestId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var req = await db.AppointmentChangeRequests.FirstAsync(r => r.AppointmentId == app.Id);
+            requestId = req.Id;
+
+            // Deactivate the schedule for this doctor and date
+            var schedules = await db.DoctorWorkSchedules
+                .Where(ws => ws.DoctorId == DoctorEntityId && ws.WorkDate == targetSlot.SlotDate)
+                .ToListAsync();
+            foreach (var s in schedules) s.IsActive = false;
+            await db.SaveChangesAsync();
+        }
+
+        // Receptionist attempts approval
+        await AuthenticateAsync("rec@test.com");
+        var approveRes = await Client.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/approve-reschedule", new
+        {
+            note = "Duyệt dời lịch"
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, approveRes.StatusCode);
+        var content = await approveRes.Content.ReadAsStringAsync();
+        Assert.Contains("DOCTOR_NOT_AVAILABLE", content);
+    }
+
+    [Fact]
+    public async Task Scenario27_ApproveReschedule_PatientTimeConflict_Returns409()
+    {
+        var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
+        var targetSlot = await CreateAvailableTargetSlotAsync(DoctorEntityId, 17, 0);
+
+        await AuthenticateAsync("pat1@test.com");
+        await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/reschedule-requests", new
+        {
+            requestedSlotId = targetSlot.Id,
+            reason = "Xin dời sang 17:00"
+        });
+
+        long requestId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var req = await db.AppointmentChangeRequests.FirstAsync(r => r.AppointmentId == app.Id);
+            requestId = req.Id;
+
+            // In the meantime, patient booked another appointment at that exact date and time with Doctor 2
+            var slot2 = await CreateAvailableSlotAsync(Doctor2EntityId, targetSlot.SlotDate, targetSlot.StartTime, targetSlot.EndTime);
+            slot2.IsBooked = true;
+            db.Appointments.Add(new Appointment
+            {
+                AppointmentCode = $"APT-CONFL-{Guid.NewGuid():N}"[..18].ToUpper(),
+                PatientId = Patient1EntityId,
+                DoctorId = Doctor2EntityId,
+                SpecialtyId = SpecialtyEntityId,
+                AppointmentSlotId = slot2.Id,
+                AppointmentDate = targetSlot.SlotDate,
+                StartTime = targetSlot.StartTime,
+                EndTime = targetSlot.EndTime,
+                Reason = "Lịch khám khác",
+                Status = AppointmentStatus.Confirmed
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Receptionist attempts approval
+        await AuthenticateAsync("rec@test.com");
+        var approveRes = await Client.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/approve-reschedule", new
+        {
+            note = "Duyệt dời lịch"
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, approveRes.StatusCode);
+        var content = await approveRes.Content.ReadAsStringAsync();
+        Assert.Contains("PATIENT_TIME_CONFLICT", content);
+    }
+
+    [Fact]
+    public async Task Scenario28_ApproveReschedule_CompletedOrCancelledPatientAppointmentDoesNotBlock()
+    {
+        var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
+        var targetSlot = await CreateAvailableTargetSlotAsync(DoctorEntityId, 17, 30);
+
+        await AuthenticateAsync("pat1@test.com");
+        await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/reschedule-requests", new
+        {
+            requestedSlotId = targetSlot.Id,
+            reason = "Xin dời sang 17:30"
+        });
+
+        long requestId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var req = await db.AppointmentChangeRequests.FirstAsync(r => r.AppointmentId == app.Id);
+            requestId = req.Id;
+
+            // Patient has another appointment at that time, but it was CANCELLED
+            var slot2 = await CreateAvailableSlotAsync(Doctor2EntityId, targetSlot.SlotDate, targetSlot.StartTime, targetSlot.EndTime);
+            db.Appointments.Add(new Appointment
+            {
+                AppointmentCode = $"APT-CANC-{Guid.NewGuid():N}"[..18].ToUpper(),
+                PatientId = Patient1EntityId,
+                DoctorId = Doctor2EntityId,
+                SpecialtyId = SpecialtyEntityId,
+                AppointmentSlotId = slot2.Id,
+                AppointmentDate = targetSlot.SlotDate,
+                StartTime = targetSlot.StartTime,
+                EndTime = targetSlot.EndTime,
+                Reason = "Lịch đã hủy",
+                Status = AppointmentStatus.Cancelled
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Receptionist attempts approval -> Should SUCCEED!
+        await AuthenticateAsync("rec@test.com");
+        var approveRes = await Client.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/approve-reschedule", new
+        {
+            note = "Duyệt dời lịch thành công"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, approveRes.StatusCode);
+    }
+
+    [Fact]
+    public async Task Scenario29_Concurrent_CreateRequest_SameAppointment_ExactlyOneSucceeds()
+    {
+        var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
+
+        var token = await GetTokenAsync("pat1@test.com");
+
+        var client1 = Factory.CreateClient();
+        client1.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var client2 = Factory.CreateClient();
+        client2.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var task1 = client1.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/cancellation-requests", new { reason = "Hủy lịch đồng thời luồng 1" });
+        var task2 = client2.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/cancellation-requests", new { reason = "Hủy lịch đồng thời luồng 2" });
+
+        var responses = await Task.WhenAll(task1, task2);
+
+        var okCount = responses.Count(r => r.StatusCode == HttpStatusCode.OK);
+        var conflictCount = responses.Count(r => r.StatusCode == HttpStatusCode.Conflict);
+        if (okCount != 1 || conflictCount != 1)
+        {
+            var r0 = await responses[0].Content.ReadAsStringAsync();
+            var r1 = await responses[1].Content.ReadAsStringAsync();
+            throw new Exception($"Scenario29 assertion failed: okCount={okCount}, conflictCount={conflictCount}. R0: [{responses[0].StatusCode}] {r0} | R1: [{responses[1].StatusCode}] {r1}");
+        }
+        Assert.Equal(1, okCount);
+        Assert.Equal(1, conflictCount);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var reqCount = await db.AppointmentChangeRequests.CountAsync(r => r.AppointmentId == app.Id && r.Status == AppointmentChangeRequestStatus.Pending);
+            Assert.Equal(1, reqCount);
+        }
+    }
+
+    [Fact]
+    public async Task Scenario30_Concurrent_ApproveAndApprove_ExactlyOneSucceeds()
+    {
+        var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
+
+        await AuthenticateAsync("pat1@test.com");
+        await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/cancellation-requests", new { reason = "Hủy lịch để test duyệt đồng thời" });
+
+        long requestId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var req = await db.AppointmentChangeRequests.FirstAsync(r => r.AppointmentId == app.Id);
+            requestId = req.Id;
+        }
+
+        var token = await GetTokenAsync("rec@test.com");
+
+        var client1 = Factory.CreateClient();
+        client1.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var client2 = Factory.CreateClient();
+        client2.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var task1 = client1.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/approve-cancellation", new { note = "Duyệt luồng 1" });
+        var task2 = client2.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/approve-cancellation", new { note = "Duyệt luồng 2" });
+
+        var responses = await Task.WhenAll(task1, task2);
+
+        var okCount = responses.Count(r => r.StatusCode == HttpStatusCode.OK);
+        var conflictCount = responses.Count(r => r.StatusCode == HttpStatusCode.Conflict);
+        if (okCount != 1 || conflictCount != 1)
+        {
+            var r0 = await responses[0].Content.ReadAsStringAsync();
+            var r1 = await responses[1].Content.ReadAsStringAsync();
+            throw new Exception($"Scenario30 assertion failed: okCount={okCount}, conflictCount={conflictCount}. R0: [{responses[0].StatusCode}] {r0} | R1: [{responses[1].StatusCode}] {r1}");
+        }
+        Assert.Equal(1, okCount);
+        Assert.Equal(1, conflictCount);
+    }
+
+    [Fact]
+    public async Task Scenario31_Concurrent_ApproveAndReject_ExactlyOneSucceeds()
+    {
+        var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
+
+        await AuthenticateAsync("pat1@test.com");
+        await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/cancellation-requests", new { reason = "Hủy lịch test approve vs reject" });
+
+        long requestId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var req = await db.AppointmentChangeRequests.FirstAsync(r => r.AppointmentId == app.Id);
+            requestId = req.Id;
+        }
+
+        var token = await GetTokenAsync("rec@test.com");
+
+        var client1 = Factory.CreateClient();
+        client1.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var client2 = Factory.CreateClient();
+        client2.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var task1 = client1.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/approve-cancellation", new { note = "Duyệt nhanh" });
+        var task2 = client2.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/reject", new { note = "Từ chối nhanh" });
+
+        var responses = await Task.WhenAll(task1, task2);
+
+        var okCount = responses.Count(r => r.StatusCode == HttpStatusCode.OK);
+        var conflictCount = responses.Count(r => r.StatusCode == HttpStatusCode.Conflict);
+        if (okCount != 1 || conflictCount != 1)
+        {
+            var r0 = await responses[0].Content.ReadAsStringAsync();
+            var r1 = await responses[1].Content.ReadAsStringAsync();
+            throw new Exception($"Scenario31 assertion failed: okCount={okCount}, conflictCount={conflictCount}. R0: [{responses[0].StatusCode}] {r0} | R1: [{responses[1].StatusCode}] {r1}");
+        }
+        Assert.Equal(1, okCount);
+        Assert.Equal(1, conflictCount);
+    }
+
+    [Fact]
+    public async Task Scenario32_Concurrent_RejectAndWithdraw_ExactlyOneSucceeds()
+    {
+        var (app, _) = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Confirmed);
+
+        await AuthenticateAsync("pat1@test.com");
+        await Client.PostAsJsonAsync($"/api/v1/appointments/{app.Id}/cancellation-requests", new { reason = "Hủy lịch test reject vs withdraw" });
+
+        long requestId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var req = await db.AppointmentChangeRequests.FirstAsync(r => r.AppointmentId == app.Id);
+            requestId = req.Id;
+        }
+
+        var recToken = await GetTokenAsync("rec@test.com");
+        var patToken = await GetTokenAsync("pat1@test.com");
+
+        var recClient = Factory.CreateClient();
+        recClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", recToken);
+
+        var patClient = Factory.CreateClient();
+        patClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", patToken);
+
+        var task1 = recClient.PostAsJsonAsync($"/api/v1/reception/change-requests/{requestId}/reject", new { note = "Lễ tân từ chối" });
+        var task2 = patClient.PostAsync($"/api/v1/appointment-change-requests/{requestId}/withdraw", null);
+
+        var responses = await Task.WhenAll(task1, task2);
+
+        var okCount = responses.Count(r => r.StatusCode == HttpStatusCode.OK);
+        var conflictCount = responses.Count(r => r.StatusCode == HttpStatusCode.Conflict);
+        if (okCount != 1 || conflictCount != 1)
+        {
+            var r0 = await responses[0].Content.ReadAsStringAsync();
+            var r1 = await responses[1].Content.ReadAsStringAsync();
+            throw new Exception($"Scenario32 assertion failed: okCount={okCount}, conflictCount={conflictCount}. R0: [{responses[0].StatusCode}] {r0} | R1: [{responses[1].StatusCode}] {r1}");
+        }
+        Assert.Equal(1, okCount);
+        Assert.Equal(1, conflictCount);
+    }
+
+    [Fact]
+    public async Task Scenario33_GetChangeRequests_PaginationClampedAndEnumValidation()
+    {
+        await AuthenticateAsync("rec@test.com");
+
+        // Negative page clamped to 1, pageSize 200 clamped to 100
+        var resClamped = await Client.GetAsync("/api/v1/reception/change-requests?page=-5&pageSize=200");
+        Assert.Equal(HttpStatusCode.OK, resClamped.StatusCode);
+        var clampedData = await resClamped.Content.ReadFromJsonAsync<ApiResponse<PagedResult<ChangeRequestDto>>>();
+        Assert.NotNull(clampedData);
+        Assert.Equal(1, clampedData.Data!.Page);
+        Assert.Equal(100, clampedData.Data.PageSize);
+
+        // Invalid requestType -> 400 Bad Request
+        var resInvalidType = await Client.GetAsync("/api/v1/reception/change-requests?requestType=NonExistentType");
+        Assert.Equal(HttpStatusCode.BadRequest, resInvalidType.StatusCode);
+
+        // Invalid status -> 400 Bad Request
+        var resInvalidStatus = await Client.GetAsync("/api/v1/reception/change-requests?status=InvalidStatus");
+        Assert.Equal(HttpStatusCode.BadRequest, resInvalidStatus.StatusCode);
     }
 }

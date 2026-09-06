@@ -4,11 +4,12 @@ import axiosClient from "../../api/axiosClient";
 import type { ApiResponse } from "../../types";
 import {
     CalendarDays, Clock, Stethoscope, User, AlertTriangle,
-    XCircle, History as HistoryIcon, RotateCcw, Calendar, Check
+    XCircle, History as HistoryIcon, RotateCcw, Calendar, Check, RefreshCw
 } from "lucide-react";
 import { AppModal } from "../../components/AppModal";
 import { useDialog } from "../../contexts/DialogContext";
 import { Breadcrumb } from "../../components/Breadcrumb";
+import { getNextWorkingDateString, isSundayDateString } from "../../utils/doctorNameHelper";
 
 export const PatientAppointments: React.FC = () => {
     const navigate = useNavigate();
@@ -18,6 +19,7 @@ export const PatientAppointments: React.FC = () => {
     const [specialtiesMap, setSpecialtiesMap] = useState<Record<number, string>>({});
     const [pendingRequests, setPendingRequests] = useState<Record<number, any>>({});
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState("All");
 
     // Cancel modal state
@@ -61,6 +63,7 @@ export const PatientAppointments: React.FC = () => {
 
     const fetchData = async () => {
         setLoading(true);
+        setError(null);
         try {
             const [specRes, appRes, chgRes] = await Promise.all([
                 axiosClient.get<any, ApiResponse<any[]>>("/specialties"),
@@ -85,7 +88,9 @@ export const PatientAppointments: React.FC = () => {
                 });
                 setPendingRequests(prMap);
             }
-        } catch (_) {}
+        } catch (err: any) {
+            setError(err?.response?.data?.message || err?.message || "Không thể tải danh sách lịch hẹn.");
+        }
         finally { setLoading(false); }
     };
 
@@ -131,7 +136,8 @@ export const PatientAppointments: React.FC = () => {
     const submitCancel = async () => {
         const { app, reason } = cancelModal;
         if (!app) return;
-        if (reason.trim().length < 5) {
+        const trimmedReason = reason.trim();
+        if (trimmedReason.length < 5) {
             setCancelModal(p => ({ ...p, inlineError: "Vui lòng nhập lý do hủy (ít nhất 5 ký tự)." }));
             return;
         }
@@ -139,7 +145,7 @@ export const PatientAppointments: React.FC = () => {
         setCanceling(true);
         setCancelModal(p => ({ ...p, inlineError: "" }));
         try {
-            const res = await axiosClient.post<any, ApiResponse<any>>(`/appointments/${app.id}/cancellation-requests`, { reason });
+            const res = await axiosClient.post<any, ApiResponse<any>>(`/appointments/${app.id}/cancellation-requests`, { reason: trimmedReason });
             if (res.success) {
                 handleCancelClose();
                 showAlert('Đã gửi yêu cầu hủy lịch thành công! Vui lòng chờ lễ tân xử lý.', 'Thành công', 'success');
@@ -167,17 +173,13 @@ export const PatientAppointments: React.FC = () => {
             } else {
                 setRescheduleModal(p => ({ ...p, availableSlots: [], loadingSlots: false }));
             }
-        } catch (err: any) {
+        } catch {
             setRescheduleModal(p => ({ ...p, loadingSlots: false, inlineError: "Không thể tải danh sách ca khám khả dụng." }));
         }
     };
 
     const handleRescheduleOpen = (app: any) => {
-        // Next working day default
-        const d = new Date();
-        d.setDate(d.getDate() + 1);
-        if (d.getDay() === 0) d.setDate(d.getDate() + 1); // skip Sunday
-        const dateStr = d.toISOString().split("T")[0];
+        const dateStr = getNextWorkingDateString(new Date());
 
         setRescheduleModal({
             isOpen: true,
@@ -194,7 +196,18 @@ export const PatientAppointments: React.FC = () => {
     };
 
     const handleTargetDateChange = (newDate: string) => {
-        setRescheduleModal(p => ({ ...p, targetDate: newDate }));
+        if (isSundayDateString(newDate)) {
+            setRescheduleModal(p => ({
+                ...p,
+                targetDate: newDate,
+                availableSlots: [],
+                selectedSlotId: null,
+                inlineError: "Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 - Thứ 7)."
+            }));
+            return;
+        }
+
+        setRescheduleModal(p => ({ ...p, targetDate: newDate, inlineError: "" }));
         if (rescheduleModal.app) {
             loadSlotsForDate(rescheduleModal.app.doctorId, newDate, rescheduleModal.app.specialtyId, rescheduleModal.app.appointmentSlotId);
         }
@@ -322,7 +335,15 @@ export const PatientAppointments: React.FC = () => {
                 </button>
             </div>
 
-            {loading ? (
+            {error ? (
+                <div className="card-panel" style={{ textAlign: "center", padding: "40px 20px" }}>
+                    <AlertTriangle size={36} color="var(--c-danger)" style={{ marginBottom: "12px" }} />
+                    <p style={{ color: "var(--c-danger)", marginBottom: "16px" }}>{error}</p>
+                    <button className="btn-primary" onClick={() => fetchData()} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                        <RefreshCw size={14} /> Thử lại
+                    </button>
+                </div>
+            ) : loading ? (
                 <div style={{ padding: "40px", textAlign: "center", color: "var(--c-muted)" }}>Đang tải danh sách lịch hẹn...</div>
             ) : filtered.length === 0 ? (
                 <div className="card-panel" style={{ textAlign: "center", padding: "60px 20px" }}>

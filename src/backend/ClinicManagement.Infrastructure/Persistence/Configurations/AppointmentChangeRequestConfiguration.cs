@@ -44,6 +44,9 @@ public class AppointmentChangeRequestConfiguration : IEntityTypeConfiguration<Ap
             .HasConversion<string>()
             .HasDefaultValue(AppointmentChangeRequestStatus.Pending);
 
+        builder.Property(acr => acr.OriginalAppointmentStatus)
+            .HasConversion<string>();
+
         builder.Property(acr => acr.CreatedAt)
             .IsRequired()
             .HasColumnType("datetime2");

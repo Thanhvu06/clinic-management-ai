@@ -198,6 +198,74 @@ describe('Appointment Change Request UI Workflows', () => {
                 );
             });
         });
+        it('displays error state and retries fetching appointments when clicking retry button', async () => {
+            vi.mocked(axiosClient.get).mockRejectedValueOnce(new Error('Lỗi mạng khi tải dữ liệu'));
+
+            render(
+                <DialogProvider>
+                    <BrowserRouter>
+                        <PatientAppointments />
+                    </BrowserRouter>
+                </DialogProvider>
+            );
+
+            await waitFor(() => {
+                expect(screen.getByText('Lỗi mạng khi tải dữ liệu')).toBeInTheDocument();
+            });
+
+            // Set up success response for retry
+            vi.mocked(axiosClient.get).mockImplementation((url: string) => {
+                if (url.includes('/specialties')) return Promise.resolve({ success: true, data: mockSpecialties });
+                if (url.includes('/appointments/my')) return Promise.resolve({ success: true, data: { items: mockAppointments, totalItems: 2 } });
+                if (url.includes('/appointment-change-requests')) return Promise.resolve({ success: true, data: { items: [], totalItems: 0 } });
+                return Promise.resolve({ success: true, data: [] });
+            });
+
+            const retryBtn = screen.getByRole('button', { name: /Thử lại/i });
+            fireEvent.click(retryBtn);
+
+            await waitFor(() => {
+                expect(screen.getByText('#APT-101')).toBeInTheDocument();
+            });
+        });
+
+        it('displays validation error when selecting Sunday as target reschedule date', async () => {
+            vi.mocked(axiosClient.get).mockImplementation((url: string) => {
+                if (url.includes('/specialties')) return Promise.resolve({ success: true, data: mockSpecialties });
+                if (url.includes('/appointments/my')) return Promise.resolve({ success: true, data: { items: mockAppointments, totalItems: 2 } });
+                if (url.includes('/appointment-change-requests')) return Promise.resolve({ success: true, data: { items: [], totalItems: 0 } });
+                if (url.includes('/available-slots')) return Promise.resolve({ success: true, data: mockAvailableSlots });
+                return Promise.resolve({ success: true, data: [] });
+            });
+
+            const { container } = render(
+                <DialogProvider>
+                    <BrowserRouter>
+                        <PatientAppointments />
+                    </BrowserRouter>
+                </DialogProvider>
+            );
+
+            await waitFor(() => {
+                expect(screen.getByText('#APT-101')).toBeInTheDocument();
+            });
+
+            // Click "Đổi lịch"
+            fireEvent.click(screen.getByText('Đổi lịch'));
+
+            await waitFor(() => {
+                expect(screen.getByText('Đổi lịch khám #APT-101')).toBeInTheDocument();
+            });
+
+            // Find target date input and select a Sunday (2026-09-13 is Sunday)
+            const dateInput = container.querySelector('input[type="date"]') as HTMLInputElement;
+            expect(dateInput).not.toBeNull();
+            fireEvent.change(dateInput, { target: { value: '2026-09-13' } });
+
+            await waitFor(() => {
+                expect(screen.getByText('Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 - Thứ 7).')).toBeInTheDocument();
+            });
+        });
     });
 
     describe('ReceptionChangeRequests Component', () => {
@@ -226,6 +294,36 @@ describe('Appointment Change Request UI Workflows', () => {
             // Check filters exist
             expect(screen.getByText('Tất cả loại yêu cầu')).toBeInTheDocument();
             expect(screen.getByText('Tất cả trạng thái')).toBeInTheDocument();
+        });
+
+        it('displays error state on fetch failure and retries successfully', async () => {
+            vi.mocked(axiosClient.get).mockRejectedValueOnce(new Error('Không thể kết nối máy chủ'));
+
+            render(
+                <DialogProvider>
+                    <BrowserRouter>
+                        <ReceptionChangeRequests />
+                    </BrowserRouter>
+                </DialogProvider>
+            );
+
+            await waitFor(() => {
+                expect(screen.getByText('Không thể kết nối máy chủ')).toBeInTheDocument();
+            });
+
+            vi.mocked(axiosClient.get).mockImplementation((url: string) => {
+                if (url.includes('/reception/change-requests')) {
+                    return Promise.resolve({ success: true, data: { items: mockChangeRequestsList, totalItems: 2 } });
+                }
+                return Promise.resolve({ success: true, data: [] });
+            });
+
+            const retryBtn = screen.getByRole('button', { name: /Thử lại/i });
+            fireEvent.click(retryBtn);
+
+            await waitFor(() => {
+                expect(screen.getByText('#APT-102')).toBeInTheDocument();
+            });
         });
 
         it('opens detail modal and can approve reschedule', async () => {
@@ -272,6 +370,100 @@ describe('Appointment Change Request UI Workflows', () => {
                 expect(screen.getByText(/Chi tiết yêu cầu/i)).toBeInTheDocument();
                 expect(screen.getByText('Duyệt đổi lịch')).toBeInTheDocument();
                 expect(screen.getByText('Từ chối yêu cầu')).toBeInTheDocument();
+            });
+        });
+
+        it('validates reject note length and blocks rejection if note is under 5 characters', async () => {
+            vi.mocked(axiosClient.get).mockImplementation((url: string) => {
+                if (url.includes('/reception/change-requests')) {
+                    return Promise.resolve({ success: true, data: { items: mockChangeRequestsList, totalItems: 2 } });
+                }
+                if (url.includes('/reception/appointments/102')) {
+                    return Promise.resolve({
+                        success: true,
+                        data: {
+                            patientName: 'Nguyễn Văn A',
+                            patientPhone: '0912345678',
+                            doctorName: 'BS.CKI Nguyễn Minh Khải',
+                            specialtyName: 'Nội tổng quát',
+                            appointmentDate: '2026-09-10',
+                            startTime: '09:00:00',
+                            endTime: '09:30:00'
+                        }
+                    });
+                }
+                return Promise.resolve({ success: true, data: [] });
+            });
+
+            render(
+                <DialogProvider>
+                    <BrowserRouter>
+                        <ReceptionChangeRequests />
+                    </BrowserRouter>
+                </DialogProvider>
+            );
+
+            await waitFor(() => {
+                expect(screen.getByText('#APT-102')).toBeInTheDocument();
+            });
+
+            const processButtons = screen.getAllByText('Xử lý');
+            fireEvent.click(processButtons[0]);
+
+            await waitFor(() => {
+                expect(screen.getByText(/Chi tiết yêu cầu/i)).toBeInTheDocument();
+            });
+
+            // Enter a note with < 5 characters
+            const textarea = screen.getByPlaceholderText(/Nhập ghi chú khi duyệt hoặc lý do từ chối/i);
+            fireEvent.change(textarea, { target: { value: 'abc' } });
+
+            // Click "Từ chối yêu cầu"
+            const rejectBtn = screen.getByText('Từ chối yêu cầu');
+            fireEvent.click(rejectBtn);
+
+            // Expect validation alert
+            await waitFor(() => {
+                expect(screen.getByText('Lý do từ chối phải có ít nhất 5 ký tự.')).toBeInTheDocument();
+            });
+
+            // Verify axiosClient.post was not called
+            expect(axiosClient.post).not.toHaveBeenCalled();
+        });
+
+        it('handles pagination navigation and buttons correctly', async () => {
+            vi.mocked(axiosClient.get).mockImplementation((url: string) => {
+                if (url.includes('/reception/change-requests')) {
+                    return Promise.resolve({
+                        success: true,
+                        data: { items: mockChangeRequestsList, totalItems: 25 }
+                    });
+                }
+                return Promise.resolve({ success: true, data: [] });
+            });
+
+            render(
+                <DialogProvider>
+                    <BrowserRouter>
+                        <ReceptionChangeRequests />
+                    </BrowserRouter>
+                </DialogProvider>
+            );
+
+            await waitFor(() => {
+                expect(screen.getByText(/Trang 1 \/ 3/i)).toBeInTheDocument();
+            });
+
+            const prevBtn = screen.getByRole('button', { name: 'Trước' });
+            const nextBtn = screen.getByRole('button', { name: 'Sau' });
+
+            expect(prevBtn).toBeDisabled();
+            expect(nextBtn).not.toBeDisabled();
+
+            fireEvent.click(nextBtn);
+
+            await waitFor(() => {
+                expect(axiosClient.get).toHaveBeenCalledWith(expect.stringContaining('page=2'));
             });
         });
     });

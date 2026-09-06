@@ -11,9 +11,9 @@
 
 Toàn bộ quy trình kiểm thử tự động đã được kiểm chứng độc lập ở cả cấu hình Debug và Release:
 
-- **Backend Build (`dotnet build`):** Pass - 0 Error(s), 0 Warning(s) trên cả `Debug` và `Release`.
-- **Backend Tests (`dotnet test`):** **110/110 passed (0 failed, 0 skipped)**
-  - `AppointmentChangeRequestTests`: 20/20 passed
+- **Backend Build (`dotnet build`):** Pass - **0 Error(s), 0 Warning(s)** trên toàn bộ solution.
+- **Backend Tests (`dotnet test`):** **123/123 passed (0 failed, 0 skipped)** - **Kiểm chứng 3 lần liên tiếp đạt 123/123 passed** (100% deterministic, loại bỏ triệt để flakiness).
+  - `AppointmentChangeRequestTests`: **33/33 passed**
     1. Yêu cầu hủy lịch hẹn `Confirmed` -> trạng thái đổi `PendingCancellation`, slot khám hiện tại vẫn được giữ tạm thời.
     2. Chống tạo yêu cầu thay đổi trùng lặp khi đã có yêu cầu `Pending` (HTTP 409 `ACTIVE_CHANGE_REQUEST_EXISTS`).
     3. Lễ tân duyệt yêu cầu hủy lịch -> lịch hẹn chuyển `Cancelled`, slot khám được giải phóng (`IsBooked = false`).
@@ -34,6 +34,19 @@ Toàn bộ quy trình kiểm thử tự động đã được kiểm chứng đ�
     18. Notification: Lễ tân nhận thông báo thật với route `/reception/change-requests` khi bệnh nhân gửi yêu cầu (ID thực không hardcode "0").
     19. Notification: Bệnh nhân nhận thông báo thật với route `/patient/appointments` khi yêu cầu được duyệt hoặc từ chối.
     20. Data Isolation & Privacy: Bệnh nhân chỉ xem và thao tác trên yêu cầu của chính mình; không thể rút yêu cầu của người khác.
+    21. Validation: Lý do đổi lịch < 5 ký tự bị chặn HTTP 400.
+    22. Validation: Lý do hủy lịch < 5 ký tự bị chặn HTTP 400.
+    23. Validation: Lý do từ chối của lễ tân < 5 ký tự bị chặn HTTP 400.
+    24. Trạng thái không hợp lệ: Không thể hủy lịch hẹn đã hoàn thành (`Completed`) hoặc đã hủy (`Cancelled`) (HTTP 422 `INVALID_STATE`).
+    25. Trạng thái không hợp lệ: Không thể đổi lịch khi lịch hẹn không ở trạng thái hợp lệ (HTTP 422 `INVALID_STATE`).
+    26. Rút yêu cầu: Không thể rút yêu cầu đã được duyệt hoặc từ chối (HTTP 409 `CHANGE_REQUEST_ALREADY_PROCESSED`).
+    27. Rút yêu cầu: Khôi phục chính xác trạng thái `OriginalAppointmentStatus` (Pending -> Pending, Confirmed -> Confirmed).
+    28. Từ chối yêu cầu: Khôi phục chính xác trạng thái `OriginalAppointmentStatus` (Pending -> Pending, Confirmed -> Confirmed).
+    29. Concurrency: Gửi 2 yêu cầu thay đổi đồng thời trên cùng 1 lịch hẹn -> đúng 1 yêu cầu thành công, yêu cầu còn lại nhận HTTP 409 `ACTIVE_CHANGE_REQUEST_EXISTS`.
+    30. Concurrency: 2 lễ tân duyệt hủy đồng thời trên cùng 1 yêu cầu -> đúng 1 yêu cầu thành công, yêu cầu còn lại nhận HTTP 409 `CHANGE_REQUEST_ALREADY_PROCESSED`.
+    31. Concurrency: 1 lễ tân duyệt và 1 lễ tân từ chối đồng thời -> đúng 1 thao tác thành công, thao tác còn lại nhận HTTP 409 `CHANGE_REQUEST_ALREADY_PROCESSED`.
+    32. Concurrency: Lễ tân từ chối và bệnh nhân rút yêu cầu đồng thời -> đúng 1 thao tác thành công, thao tác còn lại nhận HTTP 409 `CHANGE_REQUEST_ALREADY_PROCESSED`.
+    33. Phân trang và validation tham số query: Tự động clamp `page >= 1`, `pageSize <= 100`, reject invalid enum string với HTTP 400.
   - `PharmacyDispenseTests`: 11/11 passed (Cấp phát nguyên tử, trừ tồn kho chính xác, chống duplicate dispense 409, concurrency race condition, RBAC dược sĩ, thông báo `/patient/prescriptions`).
   - `BillingTests`: 10/10 passed (Validation phí chuyên khoa, kiểm soát range 365 ngày, snapshot giá không đổi khi phí gốc cập nhật, chống double payment, audit log, KPI doanh thu).
   - `RevisitWorkflowTests`: 6/6 passed (Bác sĩ đề xuất tái khám, route `/patient/revisit`, Notification ID thực không hardcode "0", bệnh nhân chỉ đặt được đề xuất của chính mình, phân định trạng thái `HoldingSlotStatuses` vs `ReleasedSlotStatuses`, thông báo lễ tân `/reception/appointments`).
@@ -41,16 +54,16 @@ Toàn bộ quy trình kiểm thử tự động đã được kiểm chứng đ�
   - `DoctorWorkflowTests` & `DoctorIsolationTests`: 15/15 passed (Cách ly hàng đợi và lịch khám giữa các bác sĩ, cập nhật diễn tiến lâm sàng, kết thúc khám).
   - `PatientPrivacyTests`: 11/11 passed (Cách ly hóa đơn bệnh nhân, bảo vệ PII, tra cứu công khai che số điện thoại và tên).
   - Các bộ test Identity, JWT, Schedule & Leave Requests: 35/35 passed.
-- **Frontend Linter (`npm run lint`):** Pass - 0 error, 84 minor warnings (cho phép).
-- **Frontend Tests (`npm run test`):** **57/57 passed (0 failed across 11 test suites)**
-  - `appointmentChangeRequests.test.tsx`: 4/4 passed (Bệnh nhân xem danh sách lịch khám và badge trạng thái, mở modal chọn slot khả dụng & gửi yêu cầu đổi lịch, lễ tân lọc danh sách yêu cầu theo loại Reschedule/Cancellation & trạng thái, xem chi tiết và duyệt yêu cầu).
+- **Frontend Linter (`npm run lint`):** Pass - **0 error, 81 minor warnings** (nằm trong ngưỡng cho phép <= 84).
+- **Frontend Tests (`npm run test`):** **62/62 passed (0 failed across 11 test suites)**
+  - `appointmentChangeRequests.test.tsx`: **9/9 passed** (Bệnh nhân xem danh sách lịch khám và badge trạng thái, mở modal chọn slot khả dụng & gửi yêu cầu đổi lịch, chặn chọn Chủ nhật kèm thông báo, retry khi lỗi kết nối, lễ tân lọc danh sách yêu cầu theo loại Reschedule/Cancellation & trạng thái, xem chi tiết và duyệt yêu cầu, validate độ dài lý do từ chối >= 5 ký tự, phân trang điều hướng).
   - `pharmacyPrescriptions.test.tsx`: 4/4 passed (Render danh sách đơn thuốc, xem chi tiết và tồn kho khả dụng, disable nút cấp thuốc khi tồn kho không đủ, hiển thị badge và cảnh báo khi thuốc ngừng hoạt động).
   - `revisitBookingHelper.test.ts`: Format ngày giờ tái khám theo tiêu chuẩn ca khám y tế.
   - `billing.test.ts`: Format tiền tệ VND, mapping trạng thái hóa đơn, phân quyền hóa đơn lễ tân và bệnh nhân.
   - `notifications.test.ts` & `notificationBell.test.ts`: Hiển thị thông báo thật, polling/mark-as-read, badge số đếm.
   - `doctorDashboard.test.ts` & `doctorQueue.test.ts`: Bộ lọc hàng đợi, tìm kiếm ca khám, tiếp nhận bệnh nhân.
   - `roleRoutes.test.ts`: Kiểm soát phân quyền route theo vai trò người dùng.
-- **Frontend Build (`npm run build`):** Pass - `tsc -b && vite build` tạo bundle thành công, 0 lỗi biên dịch type.
+- **Frontend Build (`npm run build`):** Pass - `tsc -b && vite build` tạo bundle thành công, **0 lỗi biên dịch type**.
 
 ---
 
@@ -123,7 +136,7 @@ Hệ thống được khởi động live tại Backend (`http://localhost:5258`
 ## 5. Kết Luận
 
 - Trạng thái mã nguồn: **Sạch, chuẩn hóa, không có thay đổi rác hay secret bị lộ**.
-- CI local: **100% Pass** (Backend 110/110, Frontend 57/57, Lint 0 error, Build 0 error).
+- CI local: **100% Pass** (Backend 123/123 - 3 lần kiểm thử liên tiếp pass 100%, Frontend 62/62, Lint 0 error / 81 warnings, Build 0 error).
 - E2E: **Toàn bộ kịch bản nghiệp vụ Đổi lịch/Hủy lịch khám và Pharmacy Dispensing hoạt động ổn định và nhất quán trên môi trường thực tế**.
 - Nhánh `fix/ci-billing-hardening` đã hoàn thiện toàn diện và sẵn sàng merge vào `feat/doctor-clinical-workspace`.
 

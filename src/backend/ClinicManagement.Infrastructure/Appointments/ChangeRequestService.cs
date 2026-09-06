@@ -6,6 +6,7 @@ using ClinicManagement.Application.Appointments.DTOs.ChangeRequests;
 using ClinicManagement.Application.Appointments.Interfaces;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
@@ -18,11 +19,16 @@ public class ChangeRequestService : IChangeRequestService
 {
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public ChangeRequestService(AppDbContext dbContext, ICurrentUserService currentUserService)
+    public ChangeRequestService(
+        AppDbContext dbContext,
+        ICurrentUserService currentUserService,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     private Guid GetUserId()
@@ -33,113 +39,193 @@ public class ChangeRequestService : IChangeRequestService
         return currentUserId.Value;
     }
 
+    private static bool IsConcurrencyOrLockException(Exception ex)
+    {
+        var current = ex;
+        while (current != null)
+        {
+            if (current is DbUpdateConcurrencyException) return true;
+            if (current is DbUpdateException) return true;
+            if (current is InvalidOperationException) return true;
+            var typeName = current.GetType().Name;
+            var msg = current.Message;
+            if (typeName.Contains("SqliteException", StringComparison.OrdinalIgnoreCase) ||
+                typeName.Contains("DbException", StringComparison.OrdinalIgnoreCase) ||
+                typeName.Contains("SqlException", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            if (msg.Contains("deadlock", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("locked", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("busy", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("concurrency", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("transaction", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("connection", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            current = current.InnerException!;
+        }
+        return false;
+    }
+
     public async Task<ChangeRequestDto> CreateRescheduleRequestAsync(long appointmentId, CreateRescheduleRequestDto request)
     {
         var userId = GetUserId();
         var patient = await _dbContext.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
         if (patient == null) throw new NotFoundException("Hồ sơ bệnh nhân không tồn tại.");
 
-        var appointment = await _dbContext.Appointments
-            .Include(a => a.AppointmentSlot)
-            .FirstOrDefaultAsync(a => a.Id == appointmentId && a.PatientId == patient.Id);
+        var normalizedReason = request.Reason?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length < 5)
+            throw new ValidationException("Reason", "Lý do đổi lịch phải có ít nhất 5 ký tự.");
+        if (normalizedReason.Length > 500)
+            throw new ValidationException("Reason", "Lý do đổi lịch không được vượt quá 500 ký tự.");
 
-        if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
-
-        if (appointment.Status == AppointmentStatus.PendingReschedule || appointment.Status == AppointmentStatus.PendingCancellation)
-            throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
-
-        if (appointment.Status != AppointmentStatus.Pending && appointment.Status != AppointmentStatus.Confirmed)
-            throw new BusinessException("INVALID_STATE", "Chỉ có thể đổi lịch khi lịch hẹn đang ở trạng thái Pending hoặc Confirmed.");
-
-        var pendingRequest = await _dbContext.AppointmentChangeRequests
-            .AnyAsync(r => r.AppointmentId == appointmentId && r.Status == AppointmentChangeRequestStatus.Pending);
-        if (pendingRequest)
-            throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
-
-        var targetSlot = await _dbContext.AppointmentSlots
-            .Include(s => s.Doctor)
-            .FirstOrDefaultAsync(s => s.Id == request.RequestedSlotId);
-        if (targetSlot == null) throw new NotFoundException("Slot yêu cầu không tồn tại.");
-
-        if (targetSlot.Id == appointment.AppointmentSlotId)
-            throw new BusinessException("INVALID_TARGET", "Slot yêu cầu không được trùng với slot hiện tại.");
-
-        if (targetSlot.DoctorId != appointment.DoctorId)
-            throw new BusinessException("DOCTOR_MISMATCH", "Slot yêu cầu phải thuộc cùng bác sĩ với lịch hẹn ban đầu.");
-
-        if (targetSlot.SlotDate.DayOfWeek == DayOfWeek.Sunday)
-            throw new BusinessException("INVALID_SCHEDULE", "Phòng khám không làm việc vào Chủ nhật.");
-
-        var vnNow = DateTime.UtcNow.AddHours(7);
-        var slotDateTime = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime);
-        if (slotDateTime <= vnNow)
-            throw new BusinessException("INVALID_TARGET", "Slot yêu cầu phải ở trong tương lai.");
-
-        if (!targetSlot.Doctor.IsActive)
-            throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ hiện không hoạt động.");
-
-        var slotStart = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime);
-        var slotEnd = targetSlot.SlotDate.ToDateTime(targetSlot.EndTime);
-
-        var onLeave = await _dbContext.DoctorLeaveRequests
-            .AnyAsync(l => l.DoctorId == targetSlot.DoctorId
-                        && l.Status == DoctorLeaveRequestStatus.Approved
-                        && l.StartDateTime <= slotEnd
-                        && l.EndDateTime >= slotStart);
-        if (onLeave)
-            throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ có lịch nghỉ trong khung giờ này.");
-
-        if (targetSlot.IsBooked)
-            throw new ConflictException("TARGET_SLOT_ALREADY_BOOKED", "Slot yêu cầu đã được đặt hoặc không khả dụng.");
-
-        var hasTimeConflict = await _dbContext.Appointments
-            .AnyAsync(a => a.PatientId == patient.Id
-                        && a.Id != appointment.Id
-                        && a.AppointmentDate == targetSlot.SlotDate
-                        && a.Status != AppointmentStatus.Cancelled
-                        && a.StartTime < targetSlot.EndTime
-                        && a.EndTime > targetSlot.StartTime);
-        if (hasTimeConflict)
-            throw new ConflictException("PATIENT_TIME_CONFLICT", "Bạn đã có lịch khám khác trong khung giờ này.");
-
-        var oldStatus = appointment.Status;
-        appointment.Status = AppointmentStatus.PendingReschedule;
-
-        var changeRequest = new AppointmentChangeRequest
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            AppointmentId = appointment.Id,
-            RequestType = AppointmentChangeRequestType.Reschedule,
-            RequestedSlotId = targetSlot.Id,
-            Reason = request.Reason,
-            Status = AppointmentChangeRequestStatus.Pending,
-            RequestedByUserId = userId,
-            CreatedAt = DateTime.UtcNow
-        };
+            try
+            {
+                using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+                try
+                {
+                    var appointment = await _dbContext.Appointments
+                        .Include(a => a.AppointmentSlot)
+                        .FirstOrDefaultAsync(a => a.Id == appointmentId && a.PatientId == patient.Id);
 
-        _dbContext.AppointmentChangeRequests.Add(changeRequest);
-        
-        _dbContext.AppointmentHistories.Add(new AppointmentHistory
-        {
-            AppointmentId = appointment.Id,
-            Action = AppointmentHistoryAction.RescheduleRequested,
-            OldStatus = oldStatus,
-            NewStatus = AppointmentStatus.PendingReschedule,
-            Note = request.Reason,
-            PerformedByUserId = userId,
-            CreatedAt = DateTime.UtcNow
-        });
+                    if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
 
-        await _dbContext.SaveChangesAsync();
+                    if (appointment.Status == AppointmentStatus.PendingReschedule || appointment.Status == AppointmentStatus.PendingCancellation)
+                        throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
 
-        await NotifyReceptionistsAsync(
-            "Yêu cầu dời lịch khám mới",
-            $"Bệnh nhân yêu cầu dời lịch khám #{appointment.AppointmentCode}.",
-            changeRequest.Id.ToString(),
-            $"chg_req_resched_{changeRequest.Id}");
+                    if (appointment.Status != AppointmentStatus.Pending && appointment.Status != AppointmentStatus.Confirmed)
+                        throw new BusinessException("INVALID_STATE", "Chỉ có thể đổi lịch khi lịch hẹn đang ở trạng thái Pending hoặc Confirmed.");
 
-        await _dbContext.SaveChangesAsync();
+                    var pendingRequest = await _dbContext.AppointmentChangeRequests
+                        .AnyAsync(r => r.AppointmentId == appointmentId && r.Status == AppointmentChangeRequestStatus.Pending);
+                    if (pendingRequest)
+                        throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
 
-        return await GetChangeRequestByIdAsync(changeRequest.Id);
+                    var targetSlot = await _dbContext.AppointmentSlots
+                        .Include(s => s.Doctor)
+                        .FirstOrDefaultAsync(s => s.Id == request.RequestedSlotId);
+                    if (targetSlot == null) throw new NotFoundException("Slot yêu cầu không tồn tại.");
+
+                    if (targetSlot.Id == appointment.AppointmentSlotId)
+                        throw new BusinessException("INVALID_TARGET", "Slot yêu cầu không được trùng với slot hiện tại.");
+
+                    if (targetSlot.DoctorId != appointment.DoctorId)
+                        throw new BusinessException("DOCTOR_MISMATCH", "Slot yêu cầu phải thuộc cùng bác sĩ với lịch hẹn ban đầu.");
+
+                    if (targetSlot.SlotDate.DayOfWeek == DayOfWeek.Sunday)
+                        throw new BusinessException("INVALID_SCHEDULE", "Phòng khám không làm việc vào Chủ nhật.");
+
+                    var slotStart = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime);
+                    var slotEnd = targetSlot.SlotDate.ToDateTime(targetSlot.EndTime);
+
+                    if (slotStart <= _dateTimeProvider.VietnamNow)
+                        throw new BusinessException("INVALID_TARGET", "Slot yêu cầu phải ở trong tương lai.");
+
+                    if ((slotEnd - slotStart).TotalMinutes != 30)
+                        throw new BusinessException("INVALID_SCHEDULE", "Slot khám phải có thời lượng đúng 30 phút.");
+
+                    if (!targetSlot.Doctor.IsActive)
+                        throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ hiện không hoạt động.");
+
+                    var hasWorkSchedule = await _dbContext.DoctorWorkSchedules
+                        .AnyAsync(ws => ws.DoctorId == targetSlot.DoctorId
+                                     && ws.WorkDate == targetSlot.SlotDate
+                                     && ws.StartTime <= targetSlot.StartTime
+                                     && ws.EndTime >= targetSlot.EndTime
+                                     && ws.IsActive);
+                    if (!hasWorkSchedule)
+                        throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Slot không nằm trong lịch làm việc hoạt động của bác sĩ.");
+
+                    var onLeave = await _dbContext.DoctorLeaveRequests
+                        .AnyAsync(l => l.DoctorId == targetSlot.DoctorId
+                                    && l.Status == DoctorLeaveRequestStatus.Approved
+                                    && l.StartDateTime < slotEnd
+                                    && l.EndDateTime > slotStart);
+                    if (onLeave)
+                        throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ có lịch nghỉ trong khung giờ này.");
+
+                    if (targetSlot.IsBooked)
+                        throw new ConflictException("TARGET_SLOT_ALREADY_BOOKED", "Slot yêu cầu đã được đặt hoặc không khả dụng.");
+
+                    var hasTimeConflict = await _dbContext.Appointments
+                        .AnyAsync(a => a.PatientId == patient.Id
+                                    && a.Id != appointment.Id
+                                    && a.AppointmentDate == targetSlot.SlotDate
+                                    && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status)
+                                    && a.StartTime < targetSlot.EndTime
+                                    && a.EndTime > targetSlot.StartTime);
+                    if (hasTimeConflict)
+                        throw new ConflictException("PATIENT_TIME_CONFLICT", "Bạn đã có lịch khám khác trong khung giờ này.");
+
+                    var oldStatus = appointment.Status;
+                    appointment.Status = AppointmentStatus.PendingReschedule;
+
+                    var changeRequest = new AppointmentChangeRequest
+                    {
+                        AppointmentId = appointment.Id,
+                        RequestType = AppointmentChangeRequestType.Reschedule,
+                        RequestedSlotId = targetSlot.Id,
+                        Reason = normalizedReason,
+                        Status = AppointmentChangeRequestStatus.Pending,
+                        OriginalAppointmentStatus = oldStatus,
+                        RequestedByUserId = userId,
+                        CreatedAt = _dateTimeProvider.UtcNow
+                    };
+
+                    _dbContext.AppointmentChangeRequests.Add(changeRequest);
+
+                    _dbContext.AppointmentHistories.Add(new AppointmentHistory
+                    {
+                        AppointmentId = appointment.Id,
+                        Action = AppointmentHistoryAction.RescheduleRequested,
+                        OldStatus = oldStatus,
+                        NewStatus = AppointmentStatus.PendingReschedule,
+                        Note = normalizedReason,
+                        PerformedByUserId = userId,
+                        CreatedAt = _dateTimeProvider.UtcNow
+                    });
+
+                    await _dbContext.SaveChangesAsync();
+
+                    await NotifyReceptionistsAsync(
+                        "Yêu cầu dời lịch khám mới",
+                        $"Bệnh nhân yêu cầu dời lịch khám #{appointment.AppointmentCode}.",
+                        changeRequest.Id.ToString(),
+                        $"chg_req_resched_{changeRequest.Id}");
+
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    return await GetChangeRequestByIdAsync(changeRequest.Id);
+                }
+                catch (Exception ex) when (IsConcurrencyOrLockException(ex))
+                {
+                    try { await transaction.RollbackAsync(); } catch { }
+                    _dbContext.ChangeTracker.Clear();
+                    if (attempt == 2)
+                        throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
+                    await Task.Delay(35 * (attempt + 1));
+                }
+                catch
+                {
+                    try { await transaction.RollbackAsync(); } catch { }
+                    _dbContext.ChangeTracker.Clear();
+                    throw;
+                }
+            }
+            catch (Exception ex) when (IsConcurrencyOrLockException(ex))
+            {
+                _dbContext.ChangeTracker.Clear();
+                if (attempt == 2)
+                    throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
+                await Task.Delay(35 * (attempt + 1));
+            }
+        }
+        throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
     }
 
     public async Task<ChangeRequestDto> CreateCancellationRequestAsync(long appointmentId, CreateCancellationRequestDto request)
@@ -148,103 +234,195 @@ public class ChangeRequestService : IChangeRequestService
         var patient = await _dbContext.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
         if (patient == null) throw new NotFoundException("Hồ sơ bệnh nhân không tồn tại.");
 
-        var appointment = await _dbContext.Appointments
-            .FirstOrDefaultAsync(a => a.Id == appointmentId && a.PatientId == patient.Id);
+        var normalizedReason = request.Reason?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length < 5)
+            throw new ValidationException("Reason", "Lý do hủy lịch phải có ít nhất 5 ký tự.");
+        if (normalizedReason.Length > 500)
+            throw new ValidationException("Reason", "Lý do hủy lịch không được vượt quá 500 ký tự.");
 
-        if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
-
-        if (appointment.Status == AppointmentStatus.PendingReschedule || appointment.Status == AppointmentStatus.PendingCancellation)
-            throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
-
-        if (appointment.Status != AppointmentStatus.Pending && appointment.Status != AppointmentStatus.Confirmed)
-            throw new BusinessException("INVALID_STATE", "Chỉ có thể hủy lịch khi lịch hẹn đang ở trạng thái Pending hoặc Confirmed.");
-
-        var pendingRequest = await _dbContext.AppointmentChangeRequests
-            .AnyAsync(r => r.AppointmentId == appointmentId && r.Status == AppointmentChangeRequestStatus.Pending);
-        if (pendingRequest)
-            throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
-
-        var oldStatus = appointment.Status;
-        appointment.Status = AppointmentStatus.PendingCancellation;
-
-        var changeRequest = new AppointmentChangeRequest
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            AppointmentId = appointment.Id,
-            RequestType = AppointmentChangeRequestType.Cancellation,
-            Reason = request.Reason,
-            Status = AppointmentChangeRequestStatus.Pending,
-            RequestedByUserId = userId,
-            CreatedAt = DateTime.UtcNow
-        };
+            try
+            {
+                using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+                try
+                {
+                    var appointment = await _dbContext.Appointments
+                        .FirstOrDefaultAsync(a => a.Id == appointmentId && a.PatientId == patient.Id);
 
-        _dbContext.AppointmentChangeRequests.Add(changeRequest);
-        
-        _dbContext.AppointmentHistories.Add(new AppointmentHistory
-        {
-            AppointmentId = appointment.Id,
-            Action = AppointmentHistoryAction.CancelRequested,
-            OldStatus = oldStatus,
-            NewStatus = AppointmentStatus.PendingCancellation,
-            Note = request.Reason,
-            PerformedByUserId = userId,
-            CreatedAt = DateTime.UtcNow
-        });
+                    if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
 
-        await _dbContext.SaveChangesAsync();
+                    if (appointment.Status == AppointmentStatus.PendingReschedule || appointment.Status == AppointmentStatus.PendingCancellation)
+                        throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
 
-        await NotifyReceptionistsAsync(
-            "Yêu cầu hủy lịch khám mới",
-            $"Bệnh nhân yêu cầu hủy lịch khám #{appointment.AppointmentCode}.",
-            changeRequest.Id.ToString(),
-            $"chg_req_cancel_{changeRequest.Id}");
+                    if (appointment.Status != AppointmentStatus.Pending && appointment.Status != AppointmentStatus.Confirmed)
+                        throw new BusinessException("INVALID_STATE", "Chỉ có thể hủy lịch khi lịch hẹn đang ở trạng thái Pending hoặc Confirmed.");
 
-        await _dbContext.SaveChangesAsync();
+                    var pendingRequest = await _dbContext.AppointmentChangeRequests
+                        .AnyAsync(r => r.AppointmentId == appointmentId && r.Status == AppointmentChangeRequestStatus.Pending);
+                    if (pendingRequest)
+                        throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
 
-        return await GetChangeRequestByIdAsync(changeRequest.Id);
+                    var oldStatus = appointment.Status;
+                    appointment.Status = AppointmentStatus.PendingCancellation;
+
+                    var changeRequest = new AppointmentChangeRequest
+                    {
+                        AppointmentId = appointment.Id,
+                        RequestType = AppointmentChangeRequestType.Cancellation,
+                        Reason = normalizedReason,
+                        Status = AppointmentChangeRequestStatus.Pending,
+                        OriginalAppointmentStatus = oldStatus,
+                        RequestedByUserId = userId,
+                        CreatedAt = _dateTimeProvider.UtcNow
+                    };
+
+                    _dbContext.AppointmentChangeRequests.Add(changeRequest);
+
+                    _dbContext.AppointmentHistories.Add(new AppointmentHistory
+                    {
+                        AppointmentId = appointment.Id,
+                        Action = AppointmentHistoryAction.CancelRequested,
+                        OldStatus = oldStatus,
+                        NewStatus = AppointmentStatus.PendingCancellation,
+                        Note = normalizedReason,
+                        PerformedByUserId = userId,
+                        CreatedAt = _dateTimeProvider.UtcNow
+                    });
+
+                    await _dbContext.SaveChangesAsync();
+
+                    await NotifyReceptionistsAsync(
+                        "Yêu cầu hủy lịch khám mới",
+                        $"Bệnh nhân yêu cầu hủy lịch khám #{appointment.AppointmentCode}.",
+                        changeRequest.Id.ToString(),
+                        $"chg_req_cancel_{changeRequest.Id}");
+
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    return await GetChangeRequestByIdAsync(changeRequest.Id);
+                }
+                catch (Exception ex) when (IsConcurrencyOrLockException(ex))
+                {
+                    try { await transaction.RollbackAsync(); } catch { }
+                    _dbContext.ChangeTracker.Clear();
+                    if (attempt == 2)
+                        throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
+                    await Task.Delay(35 * (attempt + 1));
+                }
+                catch
+                {
+                    try { await transaction.RollbackAsync(); } catch { }
+                    _dbContext.ChangeTracker.Clear();
+                    throw;
+                }
+            }
+            catch (Exception ex) when (IsConcurrencyOrLockException(ex))
+            {
+                _dbContext.ChangeTracker.Clear();
+                if (attempt == 2)
+                    throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
+                await Task.Delay(35 * (attempt + 1));
+            }
+        }
+        throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
     }
 
     public async Task WithdrawRequestAsync(long requestId)
     {
         var userId = GetUserId();
-        var request = await _dbContext.AppointmentChangeRequests
-            .Include(r => r.Appointment)
-            .FirstOrDefaultAsync(r => r.Id == requestId && r.RequestedByUserId == userId);
 
-        if (request == null) throw new NotFoundException("Yêu cầu không tồn tại hoặc không có quyền rút.");
-        if (request.Status != AppointmentChangeRequestStatus.Pending)
-            throw new BusinessException("INVALID_STATE", "Chỉ có thể rút yêu cầu đang chờ xử lý.");
-
-        request.Status = AppointmentChangeRequestStatus.Withdrawn;
-        request.ProcessedByUserId = userId;
-        request.ProcessedAt = DateTime.UtcNow;
-
-        var history = await _dbContext.AppointmentHistories
-            .Where(h => h.AppointmentId == request.AppointmentId 
-                     && (h.Action == AppointmentHistoryAction.RescheduleRequested || h.Action == AppointmentHistoryAction.CancelRequested))
-            .OrderByDescending(h => h.CreatedAt)
-            .FirstOrDefaultAsync();
-
-        var restoredStatus = history?.OldStatus ?? AppointmentStatus.Confirmed;
-        var oldAppointmentStatus = request.Appointment.Status;
-        request.Appointment.Status = restoredStatus;
-
-        _dbContext.AppointmentHistories.Add(new AppointmentHistory
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            AppointmentId = request.Appointment.Id,
-            Action = restoredStatus == AppointmentStatus.Confirmed ? AppointmentHistoryAction.Confirmed : AppointmentHistoryAction.Created,
-            OldStatus = oldAppointmentStatus,
-            NewStatus = restoredStatus,
-            Note = "Bệnh nhân rút yêu cầu thay đổi",
-            PerformedByUserId = userId,
-            CreatedAt = DateTime.UtcNow
-        });
+            try
+            {
+                using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+                try
+                {
+                    var request = await _dbContext.AppointmentChangeRequests
+                        .Include(r => r.Appointment)
+                        .FirstOrDefaultAsync(r => r.Id == requestId && r.RequestedByUserId == userId);
 
-        await _dbContext.SaveChangesAsync();
+                    if (request == null) throw new NotFoundException("Yêu cầu không tồn tại hoặc không có quyền rút.");
+
+                    if (request.Status != AppointmentChangeRequestStatus.Pending)
+                        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý hoặc đã rút.");
+
+                    var reqAffected = await _dbContext.AppointmentChangeRequests
+                        .Where(r => r.Id == requestId && r.RequestedByUserId == userId && r.Status == AppointmentChangeRequestStatus.Pending)
+                        .ExecuteUpdateAsync(r => r
+                            .SetProperty(x => x.Status, AppointmentChangeRequestStatus.Withdrawn)
+                            .SetProperty(x => x.ProcessedByUserId, userId)
+                            .SetProperty(x => x.ProcessedAt, _dateTimeProvider.UtcNow));
+
+                    if (reqAffected == 0)
+                        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý hoặc đã rút.");
+
+                    var appointment = request.Appointment ?? await _dbContext.Appointments.FirstOrDefaultAsync(a => a.Id == request.AppointmentId);
+                    if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
+
+                    var restoredStatus = request.OriginalAppointmentStatus ?? AppointmentStatus.Confirmed;
+                    if (!request.OriginalAppointmentStatus.HasValue)
+                    {
+                        var history = await _dbContext.AppointmentHistories
+                            .Where(h => h.AppointmentId == request.AppointmentId 
+                                     && (h.Action == AppointmentHistoryAction.RescheduleRequested || h.Action == AppointmentHistoryAction.CancelRequested))
+                            .OrderByDescending(h => h.CreatedAt)
+                            .FirstOrDefaultAsync();
+                        restoredStatus = history?.OldStatus ?? AppointmentStatus.Confirmed;
+                    }
+
+                    var oldAppointmentStatus = appointment.Status;
+                    appointment.Status = restoredStatus;
+
+                    _dbContext.AppointmentHistories.Add(new AppointmentHistory
+                    {
+                        AppointmentId = appointment.Id,
+                        Action = restoredStatus == AppointmentStatus.Confirmed ? AppointmentHistoryAction.Confirmed : AppointmentHistoryAction.Created,
+                        OldStatus = oldAppointmentStatus,
+                        NewStatus = restoredStatus,
+                        Note = "Bệnh nhân rút yêu cầu thay đổi",
+                        PerformedByUserId = userId,
+                        CreatedAt = _dateTimeProvider.UtcNow
+                    });
+
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return;
+                }
+                catch (Exception ex) when (IsConcurrencyOrLockException(ex))
+                {
+                    try { await transaction.RollbackAsync(); } catch { }
+                    _dbContext.ChangeTracker.Clear();
+                    if (attempt == 2)
+                        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý hoặc đã rút.");
+                    await Task.Delay(35 * (attempt + 1));
+                }
+                catch
+                {
+                    try { await transaction.RollbackAsync(); } catch { }
+                    _dbContext.ChangeTracker.Clear();
+                    throw;
+                }
+            }
+            catch (Exception ex) when (IsConcurrencyOrLockException(ex))
+            {
+                _dbContext.ChangeTracker.Clear();
+                if (attempt == 2)
+                    throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý hoặc đã rút.");
+                await Task.Delay(35 * (attempt + 1));
+            }
+        }
+        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý hoặc đã rút.");
     }
 
     public async Task<PagedResult<ChangeRequestDto>> GetMyChangeRequestsAsync(string? status, int page, int pageSize)
     {
         var userId = GetUserId();
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = from cr in _dbContext.AppointmentChangeRequests
                     join a in _dbContext.Appointments on cr.AppointmentId equals a.Id
                     join p in _dbContext.Patients on a.PatientId equals p.Id
@@ -263,6 +441,7 @@ public class ChangeRequestService : IChangeRequestService
                         RequestedSlotId = cr.RequestedSlotId,
                         Reason = cr.Reason,
                         Status = cr.Status.ToString(),
+                        OriginalAppointmentStatus = cr.OriginalAppointmentStatus.HasValue ? cr.OriginalAppointmentStatus!.Value.ToString() : null,
                         RequestedByUserId = cr.RequestedByUserId,
                         ProcessedByUserId = cr.ProcessedByUserId,
                         CreatedAt = cr.CreatedAt,
@@ -279,8 +458,10 @@ public class ChangeRequestService : IChangeRequestService
                         RequestedEndTime = reqSlot != null ? reqSlot.EndTime : (TimeOnly?)null
                     };
 
-        if (!string.IsNullOrEmpty(status) && Enum.TryParse<AppointmentChangeRequestStatus>(status, true, out var parsedStatus))
+        if (!string.IsNullOrWhiteSpace(status))
         {
+            if (!Enum.TryParse<AppointmentChangeRequestStatus>(status.Trim(), true, out var parsedStatus))
+                throw new ValidationException("status", "Trạng thái yêu cầu không hợp lệ.");
             var parsedStatusStr = parsedStatus.ToString();
             query = query.Where(r => r.Status == parsedStatusStr);
         }
@@ -295,6 +476,9 @@ public class ChangeRequestService : IChangeRequestService
 
     public async Task<PagedResult<ChangeRequestDto>> GetAllChangeRequestsAsync(string? requestType, string? status, int page, int pageSize)
     {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = from cr in _dbContext.AppointmentChangeRequests
                     join a in _dbContext.Appointments on cr.AppointmentId equals a.Id
                     join p in _dbContext.Patients on a.PatientId equals p.Id
@@ -312,6 +496,7 @@ public class ChangeRequestService : IChangeRequestService
                         RequestedSlotId = cr.RequestedSlotId,
                         Reason = cr.Reason,
                         Status = cr.Status.ToString(),
+                        OriginalAppointmentStatus = cr.OriginalAppointmentStatus.HasValue ? cr.OriginalAppointmentStatus!.Value.ToString() : null,
                         RequestedByUserId = cr.RequestedByUserId,
                         ProcessedByUserId = cr.ProcessedByUserId,
                         CreatedAt = cr.CreatedAt,
@@ -328,14 +513,18 @@ public class ChangeRequestService : IChangeRequestService
                         RequestedEndTime = reqSlot != null ? reqSlot.EndTime : (TimeOnly?)null
                     };
 
-        if (!string.IsNullOrEmpty(requestType) && Enum.TryParse<AppointmentChangeRequestType>(requestType, true, out var parsedType))
+        if (!string.IsNullOrWhiteSpace(requestType))
         {
+            if (!Enum.TryParse<AppointmentChangeRequestType>(requestType.Trim(), true, out var parsedType))
+                throw new ValidationException("requestType", "Loại yêu cầu không hợp lệ.");
             var parsedTypeStr = parsedType.ToString();
             query = query.Where(r => r.RequestType == parsedTypeStr);
         }
 
-        if (!string.IsNullOrEmpty(status) && Enum.TryParse<AppointmentChangeRequestStatus>(status, true, out var parsedStatus))
+        if (!string.IsNullOrWhiteSpace(status))
         {
+            if (!Enum.TryParse<AppointmentChangeRequestStatus>(status.Trim(), true, out var parsedStatus))
+                throw new ValidationException("status", "Trạng thái yêu cầu không hợp lệ.");
             var parsedStatusStr = parsedStatus.ToString();
             query = query.Where(r => r.Status == parsedStatusStr);
         }
@@ -368,6 +557,7 @@ public class ChangeRequestService : IChangeRequestService
                         RequestedSlotId = cr.RequestedSlotId,
                         Reason = cr.Reason,
                         Status = cr.Status.ToString(),
+                        OriginalAppointmentStatus = cr.OriginalAppointmentStatus.HasValue ? cr.OriginalAppointmentStatus!.Value.ToString() : null,
                         RequestedByUserId = cr.RequestedByUserId,
                         ProcessedByUserId = cr.ProcessedByUserId,
                         CreatedAt = cr.CreatedAt,
@@ -392,220 +582,362 @@ public class ChangeRequestService : IChangeRequestService
     public async Task ApproveRescheduleAsync(long requestId, ProcessChangeRequestDto request)
     {
         var userId = GetUserId();
-        
-        using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
-        try
+
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            var changeReq = await _dbContext.AppointmentChangeRequests
-                .Include(r => r.Appointment)
-                .FirstOrDefaultAsync(r => r.Id == requestId);
-
-            if (changeReq == null) throw new NotFoundException("Yêu cầu không tồn tại.");
-            if (changeReq.Status != AppointmentChangeRequestStatus.Pending)
-                throw new BusinessException("INVALID_STATE", "Yêu cầu không ở trạng thái Pending.");
-            
-            if (changeReq.RequestType != AppointmentChangeRequestType.Reschedule || (!changeReq.RequestedSlotId.HasValue && !request.NewSlotId.HasValue))
-                throw new BusinessException("INVALID_TYPE", "Yêu cầu không phải là yêu cầu đổi lịch.");
-
-            var appointment = changeReq.Appointment;
-            if (appointment.Status != AppointmentStatus.PendingReschedule)
-                throw new BusinessException("INVALID_STATE", "Lịch hẹn không ở trạng thái chờ đổi lịch.");
-
-            var targetSlotId = request.NewSlotId ?? changeReq.RequestedSlotId!.Value;
-
-            var targetSlot = await _dbContext.AppointmentSlots
-                .Include(s => s.Doctor)
-                .FirstOrDefaultAsync(s => s.Id == targetSlotId);
-            if (targetSlot == null)
-                throw new NotFoundException("Slot yêu cầu không tồn tại.");
-
-            if (targetSlot.DoctorId != appointment.DoctorId)
-                throw new BusinessException("DOCTOR_MISMATCH", "Slot yêu cầu không thuộc bác sĩ của lịch hẹn.");
-
-            if (targetSlot.SlotDate.DayOfWeek == DayOfWeek.Sunday)
-                throw new BusinessException("INVALID_SCHEDULE", "Phòng khám không làm việc vào Chủ nhật.");
-
-            if (!targetSlot.Doctor.IsActive)
-                throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ hiện không hoạt động.");
-
-            var slotStart = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime);
-            var slotEnd = targetSlot.SlotDate.ToDateTime(targetSlot.EndTime);
-
-            var onLeave = await _dbContext.DoctorLeaveRequests
-                .AnyAsync(l => l.DoctorId == targetSlot.DoctorId
-                            && l.Status == DoctorLeaveRequestStatus.Approved
-                            && l.StartDateTime <= slotEnd
-                            && l.EndDateTime >= slotStart);
-            if (onLeave)
-                throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ có lịch nghỉ trong khung giờ này.");
-
-            // Atomic conditional update on target slot
-            var affectedRows = await _dbContext.AppointmentSlots
-                .Where(s => s.Id == targetSlotId && !s.IsBooked)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsBooked, true));
-
-            if (affectedRows == 0)
-                throw new ConflictException("TARGET_SLOT_ALREADY_BOOKED", "Slot yêu cầu đã được đặt hoặc không khả dụng.");
-
-            // Release old slot
-            var oldSlotId = appointment.AppointmentSlotId;
-            await _dbContext.AppointmentSlots
-                .Where(s => s.Id == oldSlotId)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsBooked, false));
-
-            // Update appointment
-            var oldStatus = appointment.Status;
-            appointment.AppointmentSlotId = targetSlot.Id;
-            appointment.AppointmentDate = targetSlot.SlotDate;
-            appointment.StartTime = targetSlot.StartTime;
-            appointment.EndTime = targetSlot.EndTime;
-            appointment.Status = AppointmentStatus.Confirmed;
-
-            // Update request
-            changeReq.Status = AppointmentChangeRequestStatus.Approved;
-            changeReq.RequestedSlotId = targetSlot.Id;
-            changeReq.ProcessedByUserId = userId;
-            changeReq.ProcessedAt = DateTime.UtcNow;
-
-            var processNote = request.Note ?? request.Reason ?? "Lễ tân xác nhận đổi lịch";
-
-            _dbContext.AppointmentHistories.Add(new AppointmentHistory
+            try
             {
-                AppointmentId = appointment.Id,
-                Action = AppointmentHistoryAction.Rescheduled,
-                OldStatus = oldStatus,
-                NewStatus = AppointmentStatus.Confirmed,
-                Note = processNote,
-                PerformedByUserId = userId,
-                CreatedAt = DateTime.UtcNow
-            });
+                using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+                try
+                {
+                    var changeReq = await _dbContext.AppointmentChangeRequests
+                        .Include(r => r.Appointment)
+                        .FirstOrDefaultAsync(r => r.Id == requestId);
 
-            await NotifyPatientForAppointmentAsync(
-                appointment.Id,
-                "Yêu cầu dời lịch khám đã được duyệt",
-                $"Yêu cầu dời lịch khám #{appointment.AppointmentCode} của bạn đã được chấp thuận. Lịch mới: {targetSlot.SlotDate:dd/MM/yyyy} ({targetSlot.StartTime:hh\\:mm} - {targetSlot.EndTime:hh\\:mm}).",
-                $"appt_chg_proc_{changeReq.Id}_approved");
+                    if (changeReq == null) throw new NotFoundException("Yêu cầu không tồn tại.");
 
-            await _dbContext.SaveChangesAsync();
-            await transaction.CommitAsync();
+                    if (changeReq.Status != AppointmentChangeRequestStatus.Pending)
+                        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
+
+                    if (changeReq.RequestType != AppointmentChangeRequestType.Reschedule || !changeReq.RequestedSlotId.HasValue)
+                        throw new BusinessException("INVALID_TYPE", "Yêu cầu không phải là yêu cầu đổi lịch.");
+
+                    if (request.NewSlotId.HasValue && request.NewSlotId.Value != changeReq.RequestedSlotId.Value)
+                        throw new BusinessException("INVALID_TARGET", "Không được thay đổi slot khám đã yêu cầu.");
+
+                    var appointment = changeReq.Appointment ?? await _dbContext.Appointments.FirstOrDefaultAsync(a => a.Id == changeReq.AppointmentId);
+                    if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
+
+                    if (appointment.Status != AppointmentStatus.PendingReschedule)
+                        throw new BusinessException("INVALID_STATE", "Lịch hẹn không ở trạng thái chờ đổi lịch.");
+
+                    var targetSlotId = changeReq.RequestedSlotId.Value;
+
+                    var targetSlot = await _dbContext.AppointmentSlots
+                        .Include(s => s.Doctor)
+                        .FirstOrDefaultAsync(s => s.Id == targetSlotId);
+                    if (targetSlot == null)
+                        throw new NotFoundException("Slot yêu cầu không tồn tại.");
+
+                    if (targetSlot.DoctorId != appointment.DoctorId)
+                        throw new BusinessException("DOCTOR_MISMATCH", "Slot yêu cầu không thuộc bác sĩ của lịch hẹn.");
+
+                    if (targetSlot.SlotDate.DayOfWeek == DayOfWeek.Sunday)
+                        throw new BusinessException("INVALID_SCHEDULE", "Phòng khám không làm việc vào Chủ nhật.");
+
+                    var slotStart = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime);
+                    var slotEnd = targetSlot.SlotDate.ToDateTime(targetSlot.EndTime);
+
+                    if (slotStart <= _dateTimeProvider.VietnamNow)
+                        throw new BusinessException("INVALID_TARGET", "Slot yêu cầu phải ở trong tương lai.");
+
+                    if ((slotEnd - slotStart).TotalMinutes != 30)
+                        throw new BusinessException("INVALID_SCHEDULE", "Slot khám phải có thời lượng đúng 30 phút.");
+
+                    if (!targetSlot.Doctor.IsActive)
+                        throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ hiện không hoạt động.");
+
+                    var hasWorkSchedule = await _dbContext.DoctorWorkSchedules
+                        .AnyAsync(ws => ws.DoctorId == targetSlot.DoctorId
+                                     && ws.WorkDate == targetSlot.SlotDate
+                                     && ws.StartTime <= targetSlot.StartTime
+                                     && ws.EndTime >= targetSlot.EndTime
+                                     && ws.IsActive);
+                    if (!hasWorkSchedule)
+                        throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Slot không nằm trong lịch làm việc hoạt động của bác sĩ.");
+
+                    var onLeave = await _dbContext.DoctorLeaveRequests
+                        .AnyAsync(l => l.DoctorId == targetSlot.DoctorId
+                                    && l.Status == DoctorLeaveRequestStatus.Approved
+                                    && l.StartDateTime < slotEnd
+                                    && l.EndDateTime > slotStart);
+                    if (onLeave)
+                        throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ có lịch nghỉ trong khung giờ này.");
+
+                    var hasPatientConflict = await _dbContext.Appointments
+                        .AnyAsync(a => a.PatientId == appointment.PatientId
+                                    && a.Id != appointment.Id
+                                    && a.AppointmentDate == targetSlot.SlotDate
+                                    && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status)
+                                    && a.StartTime < targetSlot.EndTime
+                                    && a.EndTime > targetSlot.StartTime);
+                    if (hasPatientConflict)
+                        throw new ConflictException("PATIENT_TIME_CONFLICT", "Bệnh nhân đã có lịch khám khác trong khung giờ này.");
+
+                    var reqAffected = await _dbContext.AppointmentChangeRequests
+                        .Where(r => r.Id == requestId && r.Status == AppointmentChangeRequestStatus.Pending)
+                        .ExecuteUpdateAsync(r => r
+                            .SetProperty(x => x.Status, AppointmentChangeRequestStatus.Approved)
+                            .SetProperty(x => x.ProcessedByUserId, userId)
+                            .SetProperty(x => x.ProcessedAt, _dateTimeProvider.UtcNow));
+
+                    if (reqAffected == 0)
+                        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
+
+                    // Atomic conditional update on target slot
+                    var slotAffected = await _dbContext.AppointmentSlots
+                        .Where(s => s.Id == targetSlotId && !s.IsBooked)
+                        .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsBooked, true));
+
+                    if (slotAffected == 0)
+                        throw new ConflictException("TARGET_SLOT_ALREADY_BOOKED", "Slot yêu cầu đã được đặt hoặc không khả dụng.");
+
+                    // Release old slot
+                    var oldSlotId = appointment.AppointmentSlotId;
+                    await _dbContext.AppointmentSlots
+                        .Where(s => s.Id == oldSlotId)
+                        .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsBooked, false));
+
+                    // Update appointment
+                    var oldStatus = appointment.Status;
+                    appointment.AppointmentSlotId = targetSlot.Id;
+                    appointment.AppointmentDate = targetSlot.SlotDate;
+                    appointment.StartTime = targetSlot.StartTime;
+                    appointment.EndTime = targetSlot.EndTime;
+                    appointment.Status = AppointmentStatus.Confirmed;
+
+                    var userNote = !string.IsNullOrWhiteSpace(request.Note) ? request.Note.Trim() : (!string.IsNullOrWhiteSpace(request.Reason) ? request.Reason.Trim() : "Lễ tân xác nhận đổi lịch");
+                    var historyNote = $"Đổi lịch sang ngày {targetSlot.SlotDate:dd/MM/yyyy} ({targetSlot.StartTime:HH\\:mm} - {targetSlot.EndTime:HH\\:mm}). Ghi chú: {userNote}";
+
+                    _dbContext.AppointmentHistories.Add(new AppointmentHistory
+                    {
+                        AppointmentId = appointment.Id,
+                        Action = AppointmentHistoryAction.Rescheduled,
+                        OldStatus = oldStatus,
+                        NewStatus = AppointmentStatus.Confirmed,
+                        Note = historyNote,
+                        PerformedByUserId = userId,
+                        CreatedAt = _dateTimeProvider.UtcNow
+                    });
+
+                    await NotifyPatientForAppointmentAsync(
+                        appointment.Id,
+                        "Yêu cầu dời lịch khám đã được duyệt",
+                        $"Yêu cầu dời lịch khám #{appointment.AppointmentCode} của bạn đã được chấp thuận. Lịch mới: {targetSlot.SlotDate:dd/MM/yyyy} ({targetSlot.StartTime:HH\\:mm} - {targetSlot.EndTime:HH\\:mm}).",
+                        $"appt_chg_proc_{requestId}_approved");
+
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return;
+                }
+                catch (Exception ex) when (IsConcurrencyOrLockException(ex))
+                {
+                    try { await transaction.RollbackAsync(); } catch { }
+                    _dbContext.ChangeTracker.Clear();
+                    if (attempt == 2)
+                        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
+                    await Task.Delay(35 * (attempt + 1));
+                }
+                catch
+                {
+                    try { await transaction.RollbackAsync(); } catch { }
+                    _dbContext.ChangeTracker.Clear();
+                    throw;
+                }
+            }
+            catch (Exception ex) when (IsConcurrencyOrLockException(ex))
+            {
+                _dbContext.ChangeTracker.Clear();
+                if (attempt == 2)
+                    throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
+                await Task.Delay(35 * (attempt + 1));
+            }
         }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
+        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
     }
 
     public async Task ApproveCancellationAsync(long requestId, ProcessChangeRequestDto request)
     {
         var userId = GetUserId();
 
-        using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
-        try
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            var changeReq = await _dbContext.AppointmentChangeRequests
-                .Include(r => r.Appointment)
-                .FirstOrDefaultAsync(r => r.Id == requestId);
-
-            if (changeReq == null) throw new NotFoundException("Yêu cầu không tồn tại.");
-            if (changeReq.Status != AppointmentChangeRequestStatus.Pending)
-                throw new BusinessException("INVALID_STATE", "Yêu cầu không ở trạng thái Pending.");
-            
-            if (changeReq.RequestType != AppointmentChangeRequestType.Cancellation)
-                throw new BusinessException("INVALID_TYPE", "Yêu cầu không phải là yêu cầu hủy lịch.");
-
-            var appointment = changeReq.Appointment;
-            if (appointment.Status != AppointmentStatus.PendingCancellation)
-                throw new BusinessException("INVALID_STATE", "Lịch hẹn không ở trạng thái chờ hủy lịch.");
-
-            // Release slot
-            await _dbContext.AppointmentSlots
-                .Where(s => s.Id == appointment.AppointmentSlotId)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsBooked, false));
-
-            var oldStatus = appointment.Status;
-            appointment.Status = AppointmentStatus.Cancelled;
-
-            changeReq.Status = AppointmentChangeRequestStatus.Approved;
-            changeReq.ProcessedByUserId = userId;
-            changeReq.ProcessedAt = DateTime.UtcNow;
-
-            var processNote = request.Note ?? request.Reason ?? "Lễ tân xác nhận hủy lịch";
-
-            _dbContext.AppointmentHistories.Add(new AppointmentHistory
+            try
             {
-                AppointmentId = appointment.Id,
-                Action = AppointmentHistoryAction.Cancelled,
-                OldStatus = oldStatus,
-                NewStatus = AppointmentStatus.Cancelled,
-                Note = processNote,
-                PerformedByUserId = userId,
-                CreatedAt = DateTime.UtcNow
-            });
+                using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+                try
+                {
+                    var changeReq = await _dbContext.AppointmentChangeRequests
+                        .Include(r => r.Appointment)
+                        .FirstOrDefaultAsync(r => r.Id == requestId);
 
-            await NotifyPatientForAppointmentAsync(
-                appointment.Id,
-                "Yêu cầu hủy lịch khám đã được duyệt",
-                $"Yêu cầu hủy lịch khám #{appointment.AppointmentCode} của bạn đã được chấp thuận.",
-                $"appt_chg_proc_{changeReq.Id}_approved");
+                    if (changeReq == null) throw new NotFoundException("Yêu cầu không tồn tại.");
 
-            await _dbContext.SaveChangesAsync();
-            await transaction.CommitAsync();
+                    if (changeReq.Status != AppointmentChangeRequestStatus.Pending)
+                        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
+
+                    if (changeReq.RequestType != AppointmentChangeRequestType.Cancellation)
+                        throw new BusinessException("INVALID_TYPE", "Yêu cầu không phải là yêu cầu hủy lịch.");
+
+                    var appointment = changeReq.Appointment ?? await _dbContext.Appointments.FirstOrDefaultAsync(a => a.Id == changeReq.AppointmentId);
+                    if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
+
+                    if (appointment.Status != AppointmentStatus.PendingCancellation)
+                        throw new BusinessException("INVALID_STATE", "Lịch hẹn không ở trạng thái chờ hủy lịch.");
+
+                    var reqAffected = await _dbContext.AppointmentChangeRequests
+                        .Where(r => r.Id == requestId && r.Status == AppointmentChangeRequestStatus.Pending)
+                        .ExecuteUpdateAsync(r => r
+                            .SetProperty(x => x.Status, AppointmentChangeRequestStatus.Approved)
+                            .SetProperty(x => x.ProcessedByUserId, userId)
+                            .SetProperty(x => x.ProcessedAt, _dateTimeProvider.UtcNow));
+
+                    if (reqAffected == 0)
+                        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
+
+                    // Release slot
+                    await _dbContext.AppointmentSlots
+                        .Where(s => s.Id == appointment.AppointmentSlotId)
+                        .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsBooked, false));
+
+                    var oldStatus = appointment.Status;
+                    appointment.Status = AppointmentStatus.Cancelled;
+
+                    var processNote = !string.IsNullOrWhiteSpace(request.Note) ? request.Note.Trim() : (!string.IsNullOrWhiteSpace(request.Reason) ? request.Reason.Trim() : "Lễ tân xác nhận hủy lịch");
+
+                    _dbContext.AppointmentHistories.Add(new AppointmentHistory
+                    {
+                        AppointmentId = appointment.Id,
+                        Action = AppointmentHistoryAction.Cancelled,
+                        OldStatus = oldStatus,
+                        NewStatus = AppointmentStatus.Cancelled,
+                        Note = processNote,
+                        PerformedByUserId = userId,
+                        CreatedAt = _dateTimeProvider.UtcNow
+                    });
+
+                    await NotifyPatientForAppointmentAsync(
+                        appointment.Id,
+                        "Yêu cầu hủy lịch khám đã được duyệt",
+                        $"Yêu cầu hủy lịch khám #{appointment.AppointmentCode} của bạn đã được chấp thuận.",
+                        $"appt_chg_proc_{requestId}_approved");
+
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return;
+                }
+                catch (Exception ex) when (IsConcurrencyOrLockException(ex))
+                {
+                    try { await transaction.RollbackAsync(); } catch { }
+                    _dbContext.ChangeTracker.Clear();
+                    if (attempt == 2)
+                        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
+                    await Task.Delay(35 * (attempt + 1));
+                }
+                catch
+                {
+                    try { await transaction.RollbackAsync(); } catch { }
+                    _dbContext.ChangeTracker.Clear();
+                    throw;
+                }
+            }
+            catch (Exception ex) when (IsConcurrencyOrLockException(ex))
+            {
+                _dbContext.ChangeTracker.Clear();
+                if (attempt == 2)
+                    throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
+                await Task.Delay(35 * (attempt + 1));
+            }
         }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
+        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
     }
 
     public async Task RejectRequestAsync(long requestId, ProcessChangeRequestDto request)
     {
         var userId = GetUserId();
-        
-        var changeReq = await _dbContext.AppointmentChangeRequests
-            .Include(r => r.Appointment)
-            .FirstOrDefaultAsync(r => r.Id == requestId);
 
-        if (changeReq == null) throw new NotFoundException("Yêu cầu không tồn tại.");
-        if (changeReq.Status != AppointmentChangeRequestStatus.Pending)
-            throw new BusinessException("INVALID_STATE", "Yêu cầu không ở trạng thái Pending.");
+        var rejectReason = !string.IsNullOrWhiteSpace(request.Note) ? request.Note.Trim() : (!string.IsNullOrWhiteSpace(request.Reason) ? request.Reason.Trim() : string.Empty);
+        if (string.IsNullOrWhiteSpace(rejectReason) || rejectReason.Length < 5)
+            throw new ValidationException("Note", "Lý do từ chối phải có ít nhất 5 ký tự.");
 
-        changeReq.Status = AppointmentChangeRequestStatus.Rejected;
-        changeReq.ProcessedByUserId = userId;
-        changeReq.ProcessedAt = DateTime.UtcNow;
-
-        var history = await _dbContext.AppointmentHistories
-            .Where(h => h.AppointmentId == changeReq.AppointmentId 
-                     && (h.Action == AppointmentHistoryAction.RescheduleRequested || h.Action == AppointmentHistoryAction.CancelRequested))
-            .OrderByDescending(h => h.CreatedAt)
-            .FirstOrDefaultAsync();
-
-        var restoredStatus = history?.OldStatus ?? AppointmentStatus.Confirmed;
-        var oldAppointmentStatus = changeReq.Appointment.Status;
-        
-        changeReq.Appointment.Status = restoredStatus;
-
-        var rejectReason = request.Note ?? request.Reason ?? "Từ chối yêu cầu thay đổi";
-
-        _dbContext.AppointmentHistories.Add(new AppointmentHistory
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            AppointmentId = changeReq.Appointment.Id,
-            Action = restoredStatus == AppointmentStatus.Confirmed ? AppointmentHistoryAction.Confirmed : AppointmentHistoryAction.Created,
-            OldStatus = oldAppointmentStatus,
-            NewStatus = restoredStatus,
-            Note = $"Từ chối yêu cầu: {rejectReason}",
-            PerformedByUserId = userId,
-            CreatedAt = DateTime.UtcNow
-        });
+            try
+            {
+                using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+                try
+                {
+                    var changeReq = await _dbContext.AppointmentChangeRequests
+                        .Include(r => r.Appointment)
+                        .FirstOrDefaultAsync(r => r.Id == requestId);
 
-        await NotifyPatientForAppointmentAsync(
-            changeReq.AppointmentId,
-            "Yêu cầu thay đổi lịch khám bị từ chối",
-            $"Yêu cầu thay đổi cho lịch khám #{changeReq.Appointment.AppointmentCode} đã bị từ chối. Lý do: {rejectReason}.",
-            $"appt_chg_proc_{changeReq.Id}_rejected");
+                    if (changeReq == null) throw new NotFoundException("Yêu cầu không tồn tại.");
 
-        await _dbContext.SaveChangesAsync();
+                    if (changeReq.Status != AppointmentChangeRequestStatus.Pending)
+                        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
+
+                    var reqAffected = await _dbContext.AppointmentChangeRequests
+                        .Where(r => r.Id == requestId && r.Status == AppointmentChangeRequestStatus.Pending)
+                        .ExecuteUpdateAsync(r => r
+                            .SetProperty(x => x.Status, AppointmentChangeRequestStatus.Rejected)
+                            .SetProperty(x => x.ProcessedByUserId, userId)
+                            .SetProperty(x => x.ProcessedAt, _dateTimeProvider.UtcNow));
+
+                    if (reqAffected == 0)
+                        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
+
+                    var appointment = changeReq.Appointment ?? await _dbContext.Appointments.FirstOrDefaultAsync(a => a.Id == changeReq.AppointmentId);
+                    if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
+
+                    var restoredStatus = changeReq.OriginalAppointmentStatus ?? AppointmentStatus.Confirmed;
+                    if (!changeReq.OriginalAppointmentStatus.HasValue)
+                    {
+                        var history = await _dbContext.AppointmentHistories
+                            .Where(h => h.AppointmentId == changeReq.AppointmentId 
+                                     && (h.Action == AppointmentHistoryAction.RescheduleRequested || h.Action == AppointmentHistoryAction.CancelRequested))
+                            .OrderByDescending(h => h.CreatedAt)
+                            .FirstOrDefaultAsync();
+                        restoredStatus = history?.OldStatus ?? AppointmentStatus.Confirmed;
+                    }
+
+                    var oldAppointmentStatus = appointment.Status;
+                    appointment.Status = restoredStatus;
+
+                    _dbContext.AppointmentHistories.Add(new AppointmentHistory
+                    {
+                        AppointmentId = appointment.Id,
+                        Action = restoredStatus == AppointmentStatus.Confirmed ? AppointmentHistoryAction.Confirmed : AppointmentHistoryAction.Created,
+                        OldStatus = oldAppointmentStatus,
+                        NewStatus = restoredStatus,
+                        Note = $"Từ chối yêu cầu: {rejectReason}",
+                        PerformedByUserId = userId,
+                        CreatedAt = _dateTimeProvider.UtcNow
+                    });
+
+                    await NotifyPatientForAppointmentAsync(
+                        changeReq.AppointmentId,
+                        "Yêu cầu thay đổi lịch khám bị từ chối",
+                        $"Yêu cầu thay đổi cho lịch khám #{appointment.AppointmentCode} đã bị từ chối. Lý do: {rejectReason}.",
+                        $"appt_chg_proc_{requestId}_rejected");
+
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return;
+                }
+                catch (Exception ex) when (IsConcurrencyOrLockException(ex))
+                {
+                    try { await transaction.RollbackAsync(); } catch { }
+                    _dbContext.ChangeTracker.Clear();
+                    if (attempt == 2)
+                        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
+                    await Task.Delay(35 * (attempt + 1));
+                }
+                catch
+                {
+                    try { await transaction.RollbackAsync(); } catch { }
+                    _dbContext.ChangeTracker.Clear();
+                    throw;
+                }
+            }
+            catch (Exception ex) when (IsConcurrencyOrLockException(ex))
+            {
+                _dbContext.ChangeTracker.Clear();
+                if (attempt == 2)
+                    throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
+                await Task.Delay(35 * (attempt + 1));
+            }
+        }
+        throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
     }
 
     private async Task NotifyReceptionistsAsync(string title, string message, string relatedEntityId, string dedupeKeyPrefix)
@@ -636,7 +968,7 @@ public class ChangeRequestService : IChangeRequestService
                 RelatedEntityId = relatedEntityId,
                 DedupeKey = $"{dedupeKeyPrefix}_{recUserId}",
                 IsRead = false,
-                CreatedAtUtc = DateTime.UtcNow
+                CreatedAtUtc = _dateTimeProvider.UtcNow
             });
         }
     }
@@ -661,7 +993,7 @@ public class ChangeRequestService : IChangeRequestService
                 RelatedEntityId = appointmentId.ToString(),
                 DedupeKey = dedupeKey,
                 IsRead = false,
-                CreatedAtUtc = DateTime.UtcNow
+                CreatedAtUtc = _dateTimeProvider.UtcNow
             });
         }
     }

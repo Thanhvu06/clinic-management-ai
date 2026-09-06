@@ -24,9 +24,31 @@ interface ChangeRequest {
     requestedEndTime?: string;
 }
 
+interface AppointmentInfo {
+    id: number;
+    appointmentCode: string;
+    patientName: string;
+    patientPhone?: string;
+    doctorName: string;
+    specialtyName: string;
+    appointmentDate: string;
+    startTime: string;
+    endTime: string;
+    status: string;
+}
+
+interface ChangeRequestPagedResult {
+    items: ChangeRequest[];
+    totalItems: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+}
+
 export const ReceptionChangeRequests: React.FC = () => {
     const [requests, setRequests] = useState<ChangeRequest[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [totalItems, setTotalItems] = useState(0);
     const [page, setPage] = useState(1);
     const [statusFilter, setStatusFilter] = useState('');
@@ -38,11 +60,12 @@ export const ReceptionChangeRequests: React.FC = () => {
     const [adminNote, setAdminNote] = useState('');
 
     // Additional data for Modal
-    const [appointmentInfo, setAppointmentInfo] = useState<any>(null);
+    const [appointmentInfo, setAppointmentInfo] = useState<AppointmentInfo | null>(null);
     const [aptLoading, setAptLoading] = useState(false);
 
     const fetchRequests = async () => {
         setLoading(true);
+        setError(null);
         try {
             const params = new URLSearchParams({
                 page: page.toString(),
@@ -51,13 +74,16 @@ export const ReceptionChangeRequests: React.FC = () => {
             if (statusFilter) params.append('status', statusFilter);
             if (typeFilter) params.append('requestType', typeFilter);
 
-            const res = await axiosClient.get<any, ApiResponse<any>>(`/reception/change-requests?${params.toString()}`);
+            const res = await axiosClient.get<unknown, ApiResponse<ChangeRequestPagedResult>>(`/reception/change-requests?${params.toString()}`);
             if (res.success && res.data) {
                 setRequests(res.data.items);
                 setTotalItems(res.data.totalItems);
+            } else {
+                setError(res.message || 'Không thể tải danh sách yêu cầu thay đổi.');
             }
-        } catch (_) {
-            //
+        } catch (err: unknown) {
+            const errorObj = err as { message?: string; response?: { data?: { message?: string } } };
+            setError(errorObj?.response?.data?.message || errorObj?.message || 'Có lỗi xảy ra khi kết nối máy chủ.');
         } finally {
             setLoading(false);
         }
@@ -75,12 +101,12 @@ export const ReceptionChangeRequests: React.FC = () => {
         // Fetch original appointment to display details
         setAptLoading(true);
         try {
-            const res = await axiosClient.get<any, ApiResponse<any>>(`/reception/appointments/${req.appointmentId}`);
-            if (res.success) {
+            const res = await axiosClient.get<unknown, ApiResponse<AppointmentInfo>>(`/reception/appointments/${req.appointmentId}`);
+            if (res.success && res.data) {
                 setAppointmentInfo(res.data);
             }
         } catch (_) {
-            //
+            // Optional appointment info fetch
         } finally {
             setAptLoading(false);
         }
@@ -91,6 +117,11 @@ export const ReceptionChangeRequests: React.FC = () => {
     const handleAction = async (action: 'approve-reschedule' | 'approve-cancellation' | 'reject') => {
         const req = modal.req;
         if (!req) return;
+
+        if (action === 'reject' && (!adminNote.trim() || adminNote.trim().length < 5)) {
+            showAlert('Lý do từ chối phải có ít nhất 5 ký tự.', 'Lỗi', 'error');
+            return;
+        }
         
         let confirmMsg = '';
         if (action === 'approve-reschedule') confirmMsg = 'Hệ thống sẽ chuyển lịch hẹn sang ca khám mới và giải phóng ca khám cũ. Xác nhận đổi lịch?';
@@ -100,20 +131,23 @@ export const ReceptionChangeRequests: React.FC = () => {
         showConfirm(confirmMsg, async () => {
             setActionLoading(true);
             try {
-                const res = await axiosClient.post<any, ApiResponse<any>>(`/reception/change-requests/${req.id}/${action}`, {
-                    reason: adminNote,
-                    note: adminNote
+                const res = await axiosClient.post<unknown, ApiResponse<null>>(`/reception/change-requests/${req.id}/${action}`, {
+                    reason: adminNote.trim(),
+                    note: adminNote.trim()
                 });
                 if (res.success) {
                     showAlert('Xử lý yêu cầu thành công.', 'Thành công', 'success');
                     fetchRequests();
                     setModal({ isOpen: false, req: null });
                 }
-            } catch (error: any) {
-                const code = error?.response?.data?.errorCode || error?.errorCode;
-                const msg = error?.response?.data?.message || error?.message;
+            } catch (err: unknown) {
+                const errorObj = err as { errorCode?: string; message?: string; response?: { data?: { errorCode?: string; message?: string } } };
+                const code = errorObj?.response?.data?.errorCode || errorObj?.errorCode;
+                const msg = errorObj?.response?.data?.message || errorObj?.message;
 
-                if (code === 'SLOT_TAKEN' || code === 'TARGET_SLOT_ALREADY_BOOKED' || code === 'SLOT_ALREADY_BOOKED') {
+                if (code === 'CHANGE_REQUEST_ALREADY_PROCESSED') {
+                    showAlert('Yêu cầu này đã được người khác xử lý hoặc đã rút.', 'Thông báo', 'warning');
+                } else if (code === 'SLOT_TAKEN' || code === 'TARGET_SLOT_ALREADY_BOOKED' || code === 'SLOT_ALREADY_BOOKED') {
                     showAlert('Khung giờ mới vừa được người khác chọn hoặc đã bị khóa. Vui lòng liên hệ bệnh nhân để chọn lịch khác.', 'Lỗi', 'error');
                 } else if (code === 'INVALID_CHANGE_REQUEST') {
                     showAlert('Yêu cầu không còn hợp lệ hoặc đã được xử lý.', 'Lỗi', 'error');
@@ -121,6 +155,8 @@ export const ReceptionChangeRequests: React.FC = () => {
                     showAlert('Lịch hẹn đang có yêu cầu chờ xử lý.', 'Lỗi', 'error');
                 } else if (code === 'DOCTOR_NOT_AVAILABLE' || code === 'DOCTOR_MISMATCH') {
                     showAlert(msg || 'Bác sĩ không khả dụng cho khung giờ này.', 'Lỗi', 'error');
+                } else if (code === 'PATIENT_TIME_CONFLICT') {
+                    showAlert('Bệnh nhân đã có lịch khám khác trùng thời gian với ca khám mới.', 'Lỗi', 'error');
                 } else if (code === 'RESOURCE_NOT_FOUND') {
                     showAlert('Không tìm thấy dữ liệu yêu cầu.', 'Lỗi', 'error');
                 } else if (code === 'FORBIDDEN') {
@@ -129,8 +165,8 @@ export const ReceptionChangeRequests: React.FC = () => {
                     showAlert(msg || 'Có lỗi xảy ra khi xử lý yêu cầu.', 'Lỗi', 'error');
                 }
                 
-                // Reload if conflict
-                if (['SLOT_TAKEN', 'TARGET_SLOT_ALREADY_BOOKED', 'SLOT_ALREADY_BOOKED', 'INVALID_CHANGE_REQUEST', 'INVALID_STATE'].includes(code)) {
+                // Reload if conflict or state mismatch
+                if (['SLOT_TAKEN', 'TARGET_SLOT_ALREADY_BOOKED', 'SLOT_ALREADY_BOOKED', 'INVALID_CHANGE_REQUEST', 'INVALID_STATE', 'CHANGE_REQUEST_ALREADY_PROCESSED'].includes(code || '')) {
                     fetchRequests();
                     setModal({ isOpen: false, req: null });
                 }
@@ -166,6 +202,8 @@ export const ReceptionChangeRequests: React.FC = () => {
             default: return <span className="badge badge-muted">{status}</span>;
         }
     };
+
+    const totalPages = Math.max(1, Math.ceil(totalItems / 10));
 
     return (
         <div>
@@ -203,7 +241,14 @@ export const ReceptionChangeRequests: React.FC = () => {
             </div>
 
             <div className="card" style={{ padding: 0 }}>
-                {loading ? (
+                {error ? (
+                    <div style={{ padding: '40px', textAlign: 'center' }}>
+                        <p style={{ color: 'var(--c-danger)', marginBottom: '16px' }}>{error}</p>
+                        <button className="btn-primary" onClick={() => fetchRequests()} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <RefreshCw size={14} /> Thử lại
+                        </button>
+                    </div>
+                ) : loading ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
                 ) : (
                     <div className="table-responsive">
@@ -277,8 +322,28 @@ export const ReceptionChangeRequests: React.FC = () => {
                 )}
             </div>
 
-            <div style={{ marginTop: '16px', color: 'var(--c-muted)', fontSize: '0.9rem' }}>
-                Tổng cộng: {totalItems} yêu cầu
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ color: 'var(--c-muted)', fontSize: '0.9rem' }}>
+                    Trang {page} / {totalPages} (Tổng cộng: {totalItems} yêu cầu)
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                        className="btn-secondary"
+                        style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={page <= 1 || loading}
+                    >
+                        Trước
+                    </button>
+                    <button
+                        className="btn-secondary"
+                        style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        disabled={page >= totalPages || loading}
+                    >
+                        Sau
+                    </button>
+                </div>
             </div>
 
             {/* Detail Modal */}
@@ -297,7 +362,7 @@ export const ReceptionChangeRequests: React.FC = () => {
                         ) : appointmentInfo ? (
                             <div style={{ marginBottom: '20px', padding: '16px', background: 'var(--c-bg)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <div style={{ fontWeight: 600, color: 'var(--c-navy-dark)' }}>Thông tin bệnh nhân</div>
-                                <div><span style={{ color: 'var(--c-muted)' }}>Tên:</span> <strong>{appointmentInfo.patientName}</strong> - <span style={{ color: 'var(--c-muted)' }}>SĐT:</span> {appointmentInfo.patientPhone}</div>
+                                <div><span style={{ color: 'var(--c-muted)' }}>Tên:</span> <strong>{appointmentInfo.patientName}</strong> {appointmentInfo.patientPhone ? <>- <span style={{ color: 'var(--c-muted)' }}>SĐT:</span> {appointmentInfo.patientPhone}</> : null}</div>
                                 <hr style={{ border: 'none', borderTop: '1px dashed var(--c-border)', margin: '8px 0' }} />
                                 <div style={{ fontWeight: 600, color: 'var(--c-navy-dark)' }}>Lịch hiện tại</div>
                                 <div><span style={{ color: 'var(--c-muted)' }}>Bác sĩ:</span> {appointmentInfo.doctorName} ({appointmentInfo.specialtyName})</div>
@@ -354,7 +419,7 @@ export const ReceptionChangeRequests: React.FC = () => {
                                         rows={2}
                                         value={adminNote} 
                                         onChange={e => setAdminNote(e.target.value)} 
-                                        placeholder="Nhập ghi chú khi duyệt hoặc lý do từ chối..."
+                                        placeholder="Nhập ghi chú khi duyệt hoặc lý do từ chối (tối thiểu 5 ký tự khi từ chối)..."
                                         style={{ resize: 'none' }}
                                     />
                                 </div>

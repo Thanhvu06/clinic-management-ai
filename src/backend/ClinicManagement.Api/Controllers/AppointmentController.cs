@@ -70,4 +70,11 @@ public class AppointmentController : ControllerBase
         var result = await changeRequestService.CreateCancellationRequestAsync(id, request);
         return Ok(ApiResponse<ClinicManagement.Application.Appointments.DTOs.ChangeRequests.ChangeRequestDto>.Ok(result, "Yêu cầu hủy lịch đã được gửi."));
     }
+
+    [HttpPost("{id}/change-requests/{requestId}/withdraw")]
+    public async Task<IActionResult> WithdrawChangeRequest(long id, long requestId, [FromServices] IChangeRequestService changeRequestService)
+    {
+        await changeRequestService.WithdrawRequestAsync(requestId);
+        return Ok(ApiResponse.Ok("Đã rút yêu cầu thành công."));
+    }
 }
