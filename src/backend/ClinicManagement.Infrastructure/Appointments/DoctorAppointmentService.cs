@@ -177,6 +177,12 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
     public async Task<List<DoctorScheduleDayDto>> GetDoctorScheduleAsync(DateOnly fromDate, DateOnly toDate)
     {
+        if (toDate < fromDate)
+            throw new BusinessException("INVALID_DATE_RANGE", "Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.");
+
+        if (toDate.DayNumber - fromDate.DayNumber > 365)
+            throw new BusinessException("DATE_RANGE_TOO_LARGE", "Khoảng xem lịch không được vượt quá 366 ngày.");
+
         var doctor = await GetCurrentDoctorAsync();
 
         var schedules = await _dbContext.DoctorWorkSchedules
@@ -277,6 +283,9 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
     public async Task<PagedResult<DoctorAppointmentDto>> GetMyAppointmentsAsync(DateOnly? date, string? status, string? search, int page, int pageSize)
     {
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
+
         var doctor = await GetCurrentDoctorAsync();
 
         var query = from a in _dbContext.Appointments
@@ -768,6 +777,9 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             if (request.SuggestedDate <= _dateTimeProvider.VietnamToday)
                 throw new BusinessException("INVALID_DATE", "Ngày hẹn tái khám phải sau ngày hôm nay.");
 
+            if (request.SuggestedDate.DayOfWeek == DayOfWeek.Sunday)
+                throw new BusinessException("INVALID_DATE", "Không thể đề xuất tái khám vào Chủ nhật vì phòng khám không làm việc.");
+
             var existingPending = await _dbContext.RevisitRequests
                 .AnyAsync(r => r.AppointmentId == appointment.Id && r.Status == RevisitRequestStatus.PendingPatientResponse);
             if (existingPending)
@@ -784,6 +796,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             };
 
             _dbContext.RevisitRequests.Add(revisitReq);
+            await _dbContext.SaveChangesAsync(); // Generate the real ID before building notification links and dedupe keys.
 
             _dbContext.AppointmentHistories.Add(new AppointmentHistory
             {
@@ -809,7 +822,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                     Type = NotificationType.Revisit,
                     Title = "Đề xuất tái khám mới",
                     Message = $"Bác sĩ đã gửi đề xuất tái khám sau buổi khám #{appointment.AppointmentCode}. Vui lòng xác nhận lịch tái khám.",
-                    Route = "/patient/revisit-requests",
+                    Route = "/patient/revisit",
                     RelatedEntityType = "RevisitRequest",
                     RelatedEntityId = revisitReq.Id.ToString(),
                     DedupeKey = $"revisit_req_{revisitReq.Id}",
@@ -827,6 +840,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 AppointmentId = revisitReq.AppointmentId,
                 PatientId = revisitReq.PatientId,
                 DoctorId = revisitReq.DoctorId,
+                SpecialtyId = appointment.SpecialtyId,
                 SuggestedDate = revisitReq.SuggestedDate,
                 Note = revisitReq.Note,
                 Status = revisitReq.Status.ToString()

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation, Link, useNavigate } from "react-router-dom";
 import axiosClient from "../../api/axiosClient";
 import styles from "./BookAppointment.module.css";
 import type { ApiResponse } from "../../types";
@@ -52,6 +52,16 @@ interface BookingSuccessData {
 
 export const BookAppointment: React.FC = () => {
     const location = useLocation();
+    const navigate = useNavigate();
+    const revisitRequestIdParam = new URLSearchParams(location.search).get("revisitRequestId");
+    const parsedRevisitRequestId = revisitRequestIdParam ? Number(revisitRequestIdParam) : null;
+    const revisitRequestId =
+        parsedRevisitRequestId &&
+        Number.isSafeInteger(parsedRevisitRequestId) &&
+        parsedRevisitRequestId > 0
+            ? parsedRevisitRequestId
+            : null;
+
     const { pendingSpecialtyId, setPendingSpecialtyId } = useChatContext();
     const { showAlert } = useDialog();
 
@@ -152,6 +162,8 @@ export const BookAppointment: React.FC = () => {
                         setDoctorId("");
                         setSlotId("");
                         showAlert("Bác sĩ đã chọn không thuộc chuyên khoa này. Vui lòng chọn lại bác sĩ.", "Thông báo", "info");
+                    } else if (revisitRequestId && doctorId) {
+                        setStep(3);
                     }
                 }
             } catch (err) {
@@ -162,7 +174,7 @@ export const BookAppointment: React.FC = () => {
         };
 
         fetchDoctors();
-    }, [specialtyId, doctorId, showAlert]);
+    }, [specialtyId, doctorId, revisitRequestId, showAlert]);
 
     // 4. Fetch Slots when doctorId and slotDate are set
     useEffect(() => {
@@ -227,12 +239,21 @@ export const BookAppointment: React.FC = () => {
         setBookingError(null);
 
         try {
-            const res = await axiosClient.post<any, ApiResponse<any>>("/appointments", {
-                doctorId,
-                specialtyId,
-                appointmentSlotId: slotId,
-                reason: reason.trim() ? reason.trim() : null
-            });
+            const normalizedReason = reason.trim() ? reason.trim() : null;
+            const res = revisitRequestId
+                ? await axiosClient.post<any, ApiResponse<any>>(
+                    `/revisit-requests/${revisitRequestId}/accept`,
+                    {
+                        targetSlotId: slotId,
+                        reason: normalizedReason
+                    }
+                )
+                : await axiosClient.post<any, ApiResponse<any>>("/appointments", {
+                    doctorId,
+                    specialtyId,
+                    appointmentSlotId: slotId,
+                    reason: normalizedReason
+                });
 
             if (res.success && res.data) {
                 setSuccessBooking({
@@ -245,6 +266,10 @@ export const BookAppointment: React.FC = () => {
                     endTime: (res.data.endTime || selectedSlot?.endTime || "").substring(0, 5),
                     reason: res.data.reason || (reason.trim() ? reason.trim() : undefined)
                 });
+
+                if (revisitRequestId) {
+                    navigate("/patient/book", { replace: true });
+                }
             }
         } catch (err: any) {
             const errorCode = err?.response?.data?.errorCode || err?.errorCode;
@@ -363,6 +388,22 @@ export const BookAppointment: React.FC = () => {
                 { label: 'Trang chủ', path: '/' },
                 { label: 'Đặt lịch khám' }
             ]} />
+
+            {revisitRequestId && (
+                <div
+                    role="status"
+                    style={{
+                        marginBottom: "16px",
+                        padding: "12px 16px",
+                        borderRadius: "10px",
+                        border: "1px solid #bfdbfe",
+                        background: "#eff6ff",
+                        color: "#1e40af"
+                    }}
+                >
+                    Bạn đang chọn khung giờ cho một đề xuất tái khám. Lịch mới chỉ được tạo sau khi xác nhận ở bước cuối.
+                </div>
+            )}
 
             <div className={styles.pageHeader}>
                 <h1 className={styles.pageTitle}>Đặt lịch khám Chuyên khoa</h1>

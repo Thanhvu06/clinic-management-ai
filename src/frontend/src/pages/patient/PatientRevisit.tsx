@@ -1,17 +1,31 @@
 import React, { useState, useEffect } from "react";
 import axiosClient from "../../api/axiosClient";
 import type { ApiResponse } from "../../types";
-import { CalendarDays, Stethoscope, CheckCircle, XCircle, AlertCircle,  } from "lucide-react";
+import { CalendarDays, Stethoscope, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AppModal } from "../../components/AppModal";
 import { useDialog } from "../../contexts/DialogContext";
 import { Breadcrumb } from "../../components/Breadcrumb";
+import { buildRevisitBookingUrl } from "../../utils/revisitBookingHelper";
+
+interface RevisitRequestView {
+    id: number;
+    appointmentId: number;
+    doctorId: number;
+    specialtyId: number;
+    suggestedDate: string;
+    note?: string;
+    status: string;
+    newAppointmentId?: number | null;
+    doctorName: string;
+    specialtyName: string;
+}
 
 export const PatientRevisit: React.FC = () => {
-    const [requests, setRequests] = useState<any[]>([]);
+    const [requests, setRequests] = useState<RevisitRequestView[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<number | null>(null);
-    const { showAlert,  } = useDialog();
+    const { showAlert } = useDialog();
     
     // Reject Modal state
     const [rejectModal, setRejectModal] = useState<{isOpen: boolean, id: number | null, reason: string, error: string}>({
@@ -22,7 +36,7 @@ export const PatientRevisit: React.FC = () => {
 
     const fetchRequests = async () => {
         try {
-            const res = await axiosClient.get<any, ApiResponse<any>>("/revisit-requests");
+            const res = await axiosClient.get<any, ApiResponse<{ items: RevisitRequestView[] } | RevisitRequestView[]>>("/revisit-requests");
             if (res.success && res.data) {
                 setRequests(Array.isArray(res.data) ? res.data : (res.data.items || []));
             }
@@ -37,9 +51,18 @@ export const PatientRevisit: React.FC = () => {
         fetchRequests();
     }, []);
 
-    const handleAccept = () => {
-        showAlert("Vui lòng đặt lịch khám mới theo ngày gợi ý.", "Chấp nhận tái khám", "success");
-        navigate("/patient/book");
+    const handleAccept = (request: RevisitRequestView) => {
+        const bookingUrl = buildRevisitBookingUrl(request);
+        if (!bookingUrl) {
+            showAlert(
+                "Đề xuất tái khám thiếu thông tin bác sĩ hoặc chuyên khoa. Vui lòng tải lại trang.",
+                "Không thể đặt lịch",
+                "error"
+            );
+            return;
+        }
+
+        navigate(bookingUrl);
     };
 
     const openRejectModal = (id: number) => {
@@ -145,7 +168,7 @@ export const PatientRevisit: React.FC = () => {
                                     </button>
                                     <button
                                         className="btn-primary"
-                                        onClick={handleAccept}
+                                        onClick={() => handleAccept(r)}
                                         disabled={actionLoading === r.id}
                                     >
                                         <CheckCircle size={18} /> Đặt lịch ngay

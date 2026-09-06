@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using ClinicManagement.Application.Common.Constants;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.Leaves.DTOs;
 using ClinicManagement.Application.Leaves.Interfaces;
@@ -15,10 +16,14 @@ namespace ClinicManagement.Api.Controllers.Leaves;
 public class DoctorLeaveController : ControllerBase
 {
     private readonly IDoctorLeaveService _doctorLeaveService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public DoctorLeaveController(IDoctorLeaveService doctorLeaveService)
+    public DoctorLeaveController(
+        IDoctorLeaveService doctorLeaveService,
+        IDateTimeProvider dateTimeProvider)
     {
         _doctorLeaveService = doctorLeaveService;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     [HttpGet]
@@ -43,7 +48,7 @@ public class DoctorLeaveController : ControllerBase
         [FromQuery] DateTime? startDate,
         [FromQuery] DateTime? endDate)
     {
-        var actualStart = startDate ?? start ?? DateTime.Today;
+        var actualStart = startDate ?? start ?? _dateTimeProvider.VietnamToday.ToDateTime(TimeOnly.MinValue);
         var actualEnd = endDate ?? end ?? actualStart;
         if (actualEnd.TimeOfDay == TimeSpan.Zero)
         {

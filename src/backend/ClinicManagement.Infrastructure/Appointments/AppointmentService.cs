@@ -88,6 +88,9 @@ public class AppointmentService : IAppointmentService
         if (slot.SlotDate < vnToday || (slot.SlotDate == vnToday && slot.StartTime <= vnTime))
             throw new BusinessException("VALIDATION_ERROR", "Không thể đặt lịch trong quá khứ.");
 
+        if (slot.SlotDate.DayOfWeek == DayOfWeek.Sunday)
+            throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Phòng khám không mở lịch khám vào Chủ nhật.");
+
         if ((slotEnd - slotStart).TotalMinutes != 30)
             throw new BusinessException("VALIDATION_ERROR", "Slot khám phải có thời lượng đúng 30 phút.");
 
@@ -118,21 +121,13 @@ public class AppointmentService : IAppointmentService
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsBooked, true));
 
             if (affectedRows == 0)
-                throw new BusinessException("SLOT_ALREADY_BOOKED", "Slot đã được đặt hoặc không khả dụng.");
+                throw new ConflictException("SLOT_ALREADY_BOOKED", "Slot đã được đặt hoặc không khả dụng.");
 
-            // 12. Check overlap for Patient
-            var activeStatuses = new[] 
-            { 
-                AppointmentStatus.Pending, 
-                AppointmentStatus.Confirmed, 
-                AppointmentStatus.PendingReschedule, 
-                AppointmentStatus.PendingCancellation 
-            };
-
+            // 12. Check overlap for Patient using the canonical slot-holding policy
             var overlappingAppointment = await _dbContext.Appointments
                 .Where(a => a.PatientId == patient.Id 
                          && a.AppointmentDate == slot.SlotDate
-                         && activeStatuses.Contains(a.Status)
+                         && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status)
                          && a.StartTime < slot.EndTime 
                          && a.EndTime > slot.StartTime)
                 .FirstOrDefaultAsync();
@@ -210,7 +205,7 @@ public class AppointmentService : IAppointmentService
                         Type = NotificationType.Appointment,
                         Title = "Lịch khám mới chờ xử lý",
                         Message = $"Bệnh nhân đã đặt lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy}.",
-                        Route = "/receptionist/appointments",
+                        Route = "/reception/appointments",
                         RelatedEntityType = "Appointment",
                         RelatedEntityId = appointment.Id.ToString(),
                         DedupeKey = $"appt_booked_rec_{appointment.Id}_{recUserId}",
@@ -250,6 +245,9 @@ public class AppointmentService : IAppointmentService
 
     public async Task<PagedResult<AppointmentDto>> GetPatientAppointmentsAsync(string? status, int page, int pageSize)
     {
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
+
         var currentUserId = _currentUserService.UserId;
         if (currentUserId == null || currentUserId == Guid.Empty)
             throw new UnauthorizedException("Chưa đăng nhập.");

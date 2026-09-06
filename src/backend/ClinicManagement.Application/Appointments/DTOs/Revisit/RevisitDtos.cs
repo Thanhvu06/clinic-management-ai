@@ -9,6 +9,7 @@ public class RevisitRequestDto
     public long AppointmentId { get; set; }
     public long PatientId { get; set; }
     public long DoctorId { get; set; }
+    public long SpecialtyId { get; set; }
     public DateOnly SuggestedDate { get; set; }
     public string? Note { get; set; }
     public string Status { get; set; } = string.Empty;
