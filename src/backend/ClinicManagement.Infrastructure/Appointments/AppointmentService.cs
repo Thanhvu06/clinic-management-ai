@@ -215,6 +215,29 @@ public class AppointmentService : IAppointmentService
                 }
             }
 
+            // Notify doctor
+            var doctorUserId = await _dbContext.Doctors
+                .Where(d => d.Id == appointment.DoctorId)
+                .Select(d => d.UserId)
+                .FirstOrDefaultAsync();
+
+            if (doctorUserId != Guid.Empty)
+            {
+                _dbContext.Notifications.Add(new Notification
+                {
+                    UserId = doctorUserId,
+                    Type = NotificationType.Appointment,
+                    Title = "Lịch khám mới chờ tiếp nhận",
+                    Message = $"Bệnh nhân đã đặt lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm}.",
+                    Route = $"/doctor/appointments/{appointment.Id}",
+                    RelatedEntityType = "Appointment",
+                    RelatedEntityId = appointment.Id.ToString(),
+                    DedupeKey = $"appt_booked_doc_{appointment.Id}_{doctorUserId}",
+                    IsRead = false,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+            }
+
             await _dbContext.SaveChangesAsync();
 
             await transaction.CommitAsync();

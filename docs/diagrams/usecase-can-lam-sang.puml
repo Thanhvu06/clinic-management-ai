@@ -1,0 +1,56 @@
+@startuml
+title Use Case Diagram - Phân hệ Cận lâm sàng & Nhân trắc học lâm sàng
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Bác sĩ" as Doctor
+actor "Kỹ thuật viên CLS" as Tech
+actor "Bệnh nhân" as Patient
+
+rectangle "Hệ thống Cận lâm sàng & Lâm sàng ClinicCare" {
+  usecase "Khám bệnh lâm sàng" as UC_EXAM
+  usecase "Ghi nhận sinh hiệu & BMI" as UC_VITALS
+  usecase "Xem nhân trắc học dọc" as UC_DELTA
+  usecase "Dùng chiều cao lần trước" as UC_REUSE_HEIGHT
+  
+  usecase "Tạo chỉ định Cận lâm sàng" as UC_CREATE_ORDER
+  usecase "Tra cứu danh mục CLS" as UC_VIEW_CATALOG
+  usecase "In phiếu chỉ định CLS" as UC_PRINT_ORDER
+  usecase "Xem kết quả CLS" as UC_VIEW_RESULTS
+  usecase "Xác nhận duyệt kết quả CLS" as UC_REVIEW_ORDER
+  usecase "Hoàn tất ca khám (Guard kiểm tra)" as UC_COMPLETE_EXAM
+  
+  usecase "Quản lý hàng đợi CLS" as UC_TECH_QUEUE
+  usecase "Tiếp nhận thực hiện CLS" as UC_TECH_START
+  usecase "Nhập kết quả xét nghiệm / CĐHA" as UC_TECH_RECORD
+  usecase "Hoàn tất phiếu chỉ định" as UC_TECH_COMPLETE
+  
+  usecase "Xem kết quả CLS cá nhân" as UC_PATIENT_DX
+  usecase "Xem lịch sử sinh hiệu cá nhân" as UC_PATIENT_VITALS
+}
+
+Doctor --> UC_EXAM
+Doctor --> UC_VITALS
+Doctor --> UC_CREATE_ORDER
+Doctor --> UC_PRINT_ORDER
+Doctor --> UC_VIEW_RESULTS
+Doctor --> UC_REVIEW_ORDER
+Doctor --> UC_COMPLETE_EXAM
+
+UC_VITALS ..> UC_DELTA : <<include>>
+UC_VITALS ..> UC_REUSE_HEIGHT : <<extend>>
+UC_CREATE_ORDER ..> UC_VIEW_CATALOG : <<include>>
+UC_COMPLETE_EXAM ..> UC_REVIEW_ORDER : <<guard condition>>
+
+Tech --> UC_TECH_QUEUE
+Tech --> UC_TECH_START
+Tech --> UC_TECH_RECORD
+Tech --> UC_TECH_COMPLETE
+
+UC_TECH_START ..> UC_TECH_QUEUE : <<include>>
+UC_TECH_COMPLETE ..> UC_TECH_RECORD : <<include>>
+
+Patient --> UC_PATIENT_DX
+Patient --> UC_PATIENT_VITALS
+
+@enduml

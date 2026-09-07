@@ -99,3 +99,5 @@ export * from './doctor';
 export * from './notification';
 export * from './billing';
 
+
+export * from './diagnostic';

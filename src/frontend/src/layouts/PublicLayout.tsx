@@ -6,7 +6,8 @@ import styles from './PublicLayout.module.css';
 import { AppointmentLookupModal } from '../components/AppointmentLookupModal';
 import { 
     Phone, Clock, MapPin, ShieldPlus, Menu, X, 
-    UserCircle, Calendar, FileText, Pill, LogOut, ChevronDown, Search, PackageCheck, Bell, Receipt
+    UserCircle, Calendar, FileText, Pill, LogOut, ChevronDown, Search, PackageCheck, Bell, Receipt,
+    FlaskConical
 } from 'lucide-react';
 import { NotificationBell } from '../components/common/NotificationBell';
 
@@ -154,6 +155,9 @@ export const PublicLayout: React.FC = () => {
                                                     <Link to="/patient/prescriptions" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
                                                         <Pill size={18} /> Đơn thuốc của tôi
                                                     </Link>
+                                                    <Link to="/patient/diagnostic-results" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
+                                                        <FlaskConical size={18} /> Kết quả cận lâm sàng
+                                                    </Link>
                                                     <Link to="/patient/invoices" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
                                                         <Receipt size={18} /> Hóa đơn của tôi
                                                     </Link>
@@ -247,6 +251,7 @@ export const PublicLayout: React.FC = () => {
                                     <Link to="/patient/health-package-registrations" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Gói khám đã đăng ký</Link>
                                     <Link to="/patient/revisit" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Lịch tái khám</Link>
                                     <Link to="/patient/prescriptions" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Đơn thuốc của tôi</Link>
+                                    <Link to="/patient/diagnostic-results" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Kết quả cận lâm sàng</Link>
                                     <Link to="/patient/invoices" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Hóa đơn của tôi</Link>
                                     <button onClick={handleLogout} className={styles.navLink} style={{ textAlign: 'left', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--c-danger)' }}>Đăng xuất</button>
                                 </>

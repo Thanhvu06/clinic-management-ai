@@ -7,6 +7,7 @@ using ClinicManagement.Application.Appointments.DTOs.Reception;
 using ClinicManagement.Application.Appointments.Interfaces;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
@@ -19,11 +20,16 @@ public class ReceptionService : IReceptionService
 {
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public ReceptionService(AppDbContext dbContext, ICurrentUserService currentUserService)
+    public ReceptionService(
+        AppDbContext dbContext,
+        ICurrentUserService currentUserService,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     private Guid GetUserId()
@@ -146,6 +152,52 @@ public class ReceptionService : IReceptionService
             CreatedAt = DateTime.UtcNow
         });
 
+        // Notify patient
+        var patientUserId = await _dbContext.Patients
+            .Where(p => p.Id == appointment.PatientId)
+            .Select(p => p.UserId)
+            .FirstOrDefaultAsync();
+
+        if (patientUserId != Guid.Empty)
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = patientUserId,
+                Type = NotificationType.Appointment,
+                Title = "Lịch khám đã được xác nhận",
+                Message = $"Lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm} đã được tiếp nhận và xác nhận.",
+                Route = "/patient/appointments",
+                RelatedEntityType = "Appointment",
+                RelatedEntityId = appointment.Id.ToString(),
+                DedupeKey = $"appt_confirmed_pat_{appointment.Id}",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
+
+        // Notify doctor
+        var doctorUserId = await _dbContext.Doctors
+            .Where(d => d.Id == appointment.DoctorId)
+            .Select(d => d.UserId)
+            .FirstOrDefaultAsync();
+
+        if (doctorUserId != Guid.Empty)
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = doctorUserId,
+                Type = NotificationType.Appointment,
+                Title = "Lịch khám đã được xác nhận",
+                Message = $"Lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} đã được xác nhận.",
+                Route = $"/doctor/appointments/{appointment.Id}",
+                RelatedEntityType = "Appointment",
+                RelatedEntityId = appointment.Id.ToString(),
+                DedupeKey = $"appt_confirmed_doc_{appointment.Id}_{doctorUserId}",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
+
         await _dbContext.SaveChangesAsync();
     }
 
@@ -173,12 +225,35 @@ public class ReceptionService : IReceptionService
             CreatedAt = DateTime.UtcNow
         });
 
+        // Notify doctor
+        var doctorUserId = await _dbContext.Doctors
+            .Where(d => d.Id == appointment.DoctorId)
+            .Select(d => d.UserId)
+            .FirstOrDefaultAsync();
+
+        if (doctorUserId != Guid.Empty)
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = doctorUserId,
+                Type = NotificationType.Appointment,
+                Title = "Bệnh nhân đã đến phòng khám",
+                Message = $"Bệnh nhân cho lịch khám #{appointment.AppointmentCode} đã có mặt tại phòng chờ.",
+                Route = $"/doctor/appointments/{appointment.Id}",
+                RelatedEntityType = "Appointment",
+                RelatedEntityId = appointment.Id.ToString(),
+                DedupeKey = $"appt_checkin_doc_{appointment.Id}_{doctorUserId}",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
+
         await _dbContext.SaveChangesAsync();
     }
 
     public async Task<ReceptionStatsDto> GetStatsAsync()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = _dateTimeProvider.VietnamToday;
         var appointmentsToday = await _dbContext.Appointments
             .Where(a => a.AppointmentDate == today)
             .ToListAsync();

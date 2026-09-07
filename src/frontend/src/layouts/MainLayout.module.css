@@ -326,3 +326,17 @@
         padding: 16px;
     }
 }
+
+@media print {
+    .sidebar, .header, .mobileHeader, .mobileOverlay {
+        display: none !important;
+    }
+    .main {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+    .content {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+}

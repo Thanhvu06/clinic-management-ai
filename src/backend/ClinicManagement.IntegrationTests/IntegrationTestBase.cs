@@ -26,6 +26,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
     public static Guid Patient2Id { get; private set; }
     public static Guid ReceptionistId { get; private set; }
     public static Guid PharmacistId { get; private set; }
+    public static Guid TechnicianId { get; private set; }
     
     public static long DoctorEntityId { get; private set; }
     public static long Doctor2EntityId { get; private set; }
@@ -80,6 +81,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
                 DoctorId = (await db.Users.FirstAsync(u => u.UserName == "doc@test.com")).Id;
                 ReceptionistId = (await db.Users.FirstAsync(u => u.UserName == "rec@test.com")).Id;
                 PharmacistId = (await db.Users.FirstAsync(u => u.UserName == "pharm@test.com")).Id;
+                TechnicianId = (await db.Users.FirstOrDefaultAsync(u => u.UserName == "tech@test.com"))?.Id ?? Guid.Empty;
                 Patient1Id = (await db.Users.FirstAsync(u => u.UserName == "pat1@test.com")).Id;
                 Patient2Id = (await db.Users.FirstAsync(u => u.UserName == "pat2@test.com")).Id;
                 return;
@@ -89,7 +91,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
             var roleManager = sp.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
 
             // Roles
-            string[] roles = { "Admin", "Doctor", "Patient", "Receptionist", "Pharmacist" };
+            string[] roles = { "Admin", "Doctor", "Patient", "Receptionist", "Pharmacist", "DiagnosticTechnician" };
             foreach (var role in roles)
             {
                 if (!await roleManager.RoleExistsAsync(role))
@@ -107,6 +109,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
             var doc2UserId = Guid.Parse("22222222-2222-2222-2222-222222222223");
             ReceptionistId = Guid.Parse("33333333-3333-3333-3333-333333333333");
             PharmacistId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+            TechnicianId = Guid.Parse("66666666-6666-6666-6666-666666666666");
             Patient1Id = Guid.Parse("44444444-4444-4444-4444-444444444441");
             Patient2Id = Guid.Parse("44444444-4444-4444-4444-444444444442");
 
@@ -130,6 +133,11 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
             var resPharm = await userManager.CreateAsync(pharm, "Pass@123");
             if (!resPharm.Succeeded) throw new Exception("Failed pharm: " + resPharm.Errors.First().Description);
             await userManager.AddToRoleAsync(pharm, "Pharmacist");
+
+            var tech = new ApplicationUser { Id = TechnicianId, UserName = "tech@test.com", Email = "tech@test.com", FullName = "Technician", PhoneNumber = "0123456787", IsActive = true };
+            var resTech = await userManager.CreateAsync(tech, "Pass@123");
+            if (!resTech.Succeeded) throw new Exception("Failed tech: " + resTech.Errors.First().Description);
+            await userManager.AddToRoleAsync(tech, "DiagnosticTechnician");
 
             var pat1 = new ApplicationUser { Id = Patient1Id, UserName = "pat1@test.com", Email = "pat1@test.com", FullName = "Patient 1", PhoneNumber = "0123456784", IsActive = true };
             var res4 = await userManager.CreateAsync(pat1, "Pass@123");
@@ -194,6 +202,11 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
                 IncludedServicesJson = "[\"Khám nội tổng quát\",\"Xét nghiệm máu\"]"
             };
             db.HealthPackages.Add(package);
+
+            var diagService1 = new DiagnosticService { Code = "LAB-TEST-01", Name = "Xét nghiệm máu test", Category = DiagnosticCategory.Laboratory, IsActive = true };
+            var diagService2 = new DiagnosticService { Code = "US-TEST-01", Name = "Siêu âm bụng test", Category = DiagnosticCategory.Ultrasound, IsActive = true };
+            db.DiagnosticServices.AddRange(diagService1, diagService2);
+
             await db.SaveChangesAsync();
 
             DoctorEntityId = doctor.Id;

@@ -16,6 +16,7 @@ public class DoctorDashboardDto
     public string CurrentShift { get; set; } = string.Empty;
     public DoctorQueueItemDto? NextPatient { get; set; }
     public List<DoctorQueueItemDto> Queue { get; set; } = new();
+    public List<DoctorQueueItemDto> UpcomingAppointments { get; set; } = new();
 }
 
 public class DoctorQueueItemDto
@@ -221,8 +222,39 @@ public class PatientClinicalContextDto
     public List<PastVisitSummaryDto> PastVisits { get; set; } = new();
     public DoctorAppointmentDto CurrentAppointment { get; set; } = null!;
     public VitalSignsDto? VitalSigns { get; set; }
+    public VitalSignsDto? LatestKnownVitals { get; set; }
     public ClinicalEncounterDto? Encounter { get; set; }
     public PrescriptionDraftDto? Prescription { get; set; }
+    public List<PatientVitalHistoryItemDto> VitalHistory { get; set; } = new();
+    public AnthropometricComparisonDto? AnthropometricComparison { get; set; }
+}
+
+public class PatientVitalHistoryItemDto
+{
+    public long AppointmentId { get; set; }
+    public string AppointmentCode { get; set; } = string.Empty;
+    public DateOnly AppointmentDate { get; set; }
+    public DateTime RecordedAtUtc { get; set; }
+    public decimal? Height { get; set; }
+    public decimal? Weight { get; set; }
+    public decimal? Bmi { get; set; }
+    public decimal? Temperature { get; set; }
+    public int? BloodPressureSystolic { get; set; }
+    public int? BloodPressureDiastolic { get; set; }
+    public int? HeartRate { get; set; }
+    public int? RespiratoryRate { get; set; }
+    public int? SpO2 { get; set; }
+    public string RecordedByUserName { get; set; } = string.Empty;
+}
+
+public class AnthropometricComparisonDto
+{
+    public PatientVitalHistoryItemDto? CurrentMeasurement { get; set; }
+    public PatientVitalHistoryItemDto? PreviousMeasurement { get; set; }
+    public decimal? WeightDeltaKg { get; set; }
+    public decimal? HeightDeltaCm { get; set; }
+    public decimal? BmiDelta { get; set; }
+    public bool HasComparableData { get; set; }
 }
 
 public class PastVisitSummaryDto

@@ -41,6 +41,7 @@ export interface DoctorDashboardDto {
     kpis: DoctorDashboardKpisDto;
     nextPatient?: DoctorQueueItemDto | null;
     todayQueue: DoctorQueueItemDto[];
+    upcomingAppointments?: DoctorQueueItemDto[];
 }
 
 export interface DoctorScheduleSlotDto {
@@ -171,6 +172,9 @@ export interface PatientClinicalContextDto {
     vitalSigns?: VitalSignsDto | null;
     encounter?: ClinicalEncounterDto | null;
     prescription?: PrescriptionDraftDto | null;
+    anthropometricComparison?: AnthropometricComparisonDto | null;
+    vitalHistory?: PatientVitalHistoryItemDto[];
+    latestKnownVitals?: VitalSignsDto | null;
 }
 
 export interface SaveEncounterRequest {
@@ -248,4 +252,30 @@ export interface CreateLeaveRequestPayload {
     startDate: string;
     endDate: string;
     reason: string;
+}
+
+export interface PatientVitalHistoryItemDto {
+    appointmentId: number;
+    appointmentCode: string;
+    appointmentDate: string;
+    recordedAtUtc: string;
+    height?: number | null;
+    weight?: number | null;
+    bmi?: number | null;
+    temperature?: number | null;
+    bloodPressureSystolic?: number | null;
+    bloodPressureDiastolic?: number | null;
+    heartRate?: number | null;
+    respiratoryRate?: number | null;
+    spO2?: number | null;
+    recordedByUserName: string;
+}
+
+export interface AnthropometricComparisonDto {
+    currentMeasurement?: PatientVitalHistoryItemDto | null;
+    previousMeasurement?: PatientVitalHistoryItemDto | null;
+    weightDeltaKg?: number | null;
+    heightDeltaCm?: number | null;
+    bmiDelta?: number | null;
+    hasComparableData: boolean;
 }

@@ -1,7 +1,9 @@
+using ClinicManagement.Application.Appointments.DTOs.Doctor;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Patients.DTOs;
 using ClinicManagement.Application.Patients.Interfaces;
+using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -131,6 +133,61 @@ public class PatientService : IPatientService
                     DurationDays = i.DurationDays,
                     Instructions = i.Instructions
                 }).ToList()
+            };
+        }).ToList();
+    }
+
+    public async Task<List<PatientVitalHistoryItemDto>> GetMyVitalsAsync(int limit)
+    {
+        var userId = _currentUserService.UserId ?? throw new UnauthorizedException();
+
+        var patient = await _dbContext.Patients.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == userId);
+        if (patient == null)
+            throw new NotFoundException("Không tìm thấy hồ sơ bệnh nhân.");
+
+        var safeLimit = Math.Clamp(limit, 1, 100);
+
+        var vitalsAppointments = await _dbContext.Appointments
+            .AsNoTracking()
+            .Include(a => a.VitalSigns)
+            .Where(a => a.PatientId == patient.Id &&
+                        a.Status != AppointmentStatus.Cancelled &&
+                        a.Status != AppointmentStatus.NoShow &&
+                        a.VitalSigns != null)
+            .OrderByDescending(a => a.AppointmentDate)
+            .ThenByDescending(a => a.StartTime)
+            .Take(safeLimit)
+            .ToListAsync();
+
+        var recorderUserIds = vitalsAppointments
+            .Select(a => a.VitalSigns!.RecordedByUserId)
+            .Distinct()
+            .ToList();
+
+        var recorderUsers = await _dbContext.Users
+            .Where(u => recorderUserIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.FullName);
+
+        return vitalsAppointments.Select(a =>
+        {
+            var vs = a.VitalSigns!;
+            recorderUsers.TryGetValue(vs.RecordedByUserId, out var recName);
+            return new PatientVitalHistoryItemDto
+            {
+                AppointmentId = a.Id,
+                AppointmentCode = a.AppointmentCode,
+                AppointmentDate = a.AppointmentDate,
+                RecordedAtUtc = vs.RecordedAtUtc,
+                Height = vs.Height,
+                Weight = vs.Weight,
+                Bmi = vs.Bmi,
+                Temperature = vs.Temperature,
+                BloodPressureSystolic = vs.BloodPressureSystolic,
+                BloodPressureDiastolic = vs.BloodPressureDiastolic,
+                HeartRate = vs.HeartRate,
+                RespiratoryRate = vs.RespiratoryRate,
+                SpO2 = vs.SpO2,
+                RecordedByUserName = recName ?? "Nhân viên y tế"
             };
         }).ToList();
     }

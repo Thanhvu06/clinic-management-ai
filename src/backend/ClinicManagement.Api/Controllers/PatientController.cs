@@ -39,4 +39,11 @@ public class PatientController : ControllerBase
         var prescriptions = await _patientService.GetMyPrescriptionsAsync();
         return Ok(ApiResponse<List<PatientPrescriptionDto>>.Ok(prescriptions));
     }
+
+    [HttpGet("me/vitals")]
+    public async Task<IActionResult> GetMyVitals([FromQuery] int limit = 20)
+    {
+        var vitals = await _patientService.GetMyVitalsAsync(limit);
+        return Ok(ApiResponse<List<ClinicManagement.Application.Appointments.DTOs.Doctor.PatientVitalHistoryItemDto>>.Ok(vitals));
+    }
 }
