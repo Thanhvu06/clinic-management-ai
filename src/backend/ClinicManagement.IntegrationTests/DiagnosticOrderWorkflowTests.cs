@@ -230,4 +230,206 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
         });
         Assert.Equal(HttpStatusCode.OK, completeRes.StatusCode);
     }
+
+    [Fact]
+    public async Task Given_DiagnosticOrder_When_SerializedToJson_Then_ContractMatchesFrontendExpectations()
+    {
+        // Setup consultation
+        var date = GetFutureWorkingDate(36);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(14, 0, 0), new TimeOnly(14, 30, 0));
+
+        await AuthenticateAsync("pat1@test.com");
+        var createAptRes = await Client.PostAsJsonAsync("/api/v1/appointments", new
+        {
+            DoctorId = DoctorEntityId,
+            SpecialtyId = SpecialtyEntityId,
+            AppointmentSlotId = slot.Id,
+            Reason = "Kiểm tra hợp đồng DTO cận lâm sàng"
+        });
+        Assert.Equal(HttpStatusCode.Created, createAptRes.StatusCode);
+        var aptDoc = JsonDocument.Parse(await createAptRes.Content.ReadAsStringAsync());
+        var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+
+        await AuthenticateAsync("rec@test.com");
+        await Client.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);
+
+        await AuthenticateAsync("doc@test.com");
+        await Client.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/check-in", null);
+        await Client.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/start-consultation", null);
+
+        // 1. Verify Catalog contract
+        var catRes = await Client.GetAsync("/api/v1/diagnostic-services");
+        Assert.Equal(HttpStatusCode.OK, catRes.StatusCode);
+        var catJson = await catRes.Content.ReadAsStringAsync();
+        Assert.Contains("\"category\":", catJson);
+        Assert.Contains("\"preparationInstructions\":", catJson);
+        Assert.DoesNotContain("\"defaultPrice\":", catJson);
+
+        var catDoc = JsonDocument.Parse(catJson);
+        var serviceId = catDoc.RootElement.GetProperty("data")[0].GetProperty("id").GetInt64();
+
+        // 2. Doctor creates order
+        var createOrderRes = await Client.PostAsJsonAsync($"/api/v1/doctor/appointments/{appointmentId}/diagnostic-orders", new CreateDiagnosticOrderRequest
+        {
+            ClinicalIndication = "Kiểm tra contract canonical",
+            ServiceIds = new List<long> { serviceId }
+        });
+        Assert.Equal(HttpStatusCode.Created, createOrderRes.StatusCode);
+        var orderJson = await createOrderRes.Content.ReadAsStringAsync();
+
+        // Must contain canonical names, must NOT contain old mismatched names
+        Assert.Contains("\"specialtyName\":", orderJson);
+        Assert.Contains("\"category\":", orderJson);
+        Assert.DoesNotContain("\"orderingDoctorSpecialty\":", orderJson);
+        Assert.DoesNotContain("\"serviceCategory\":", orderJson);
+
+        var orderDoc = JsonDocument.Parse(orderJson);
+        var orderData = orderDoc.RootElement.GetProperty("data");
+        var specialtyName = orderData.GetProperty("specialtyName").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(specialtyName));
+
+        var item = orderData.GetProperty("items")[0];
+        var category = item.GetProperty("category").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(category));
+    }
+
+    [Fact]
+    public async Task Given_CrossTenantUsers_When_AccessingDiagnosticOrder_Then_IsolationIsEnforcedWith404OrExclusion()
+    {
+        var date = GetFutureWorkingDate(37);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(15, 0, 0), new TimeOnly(15, 30, 0));
+
+        await AuthenticateAsync("pat1@test.com");
+        var createAptRes = await Client.PostAsJsonAsync("/api/v1/appointments", new
+        {
+            DoctorId = DoctorEntityId,
+            SpecialtyId = SpecialtyEntityId,
+            AppointmentSlotId = slot.Id,
+            Reason = "Khám cô lập bảo mật đa người dùng"
+        });
+        var aptDoc = JsonDocument.Parse(await createAptRes.Content.ReadAsStringAsync());
+        var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+
+        await AuthenticateAsync("rec@test.com");
+        await Client.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);
+
+        await AuthenticateAsync("doc@test.com");
+        await Client.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/check-in", null);
+        await Client.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/start-consultation", null);
+
+        var catRes = await Client.GetAsync("/api/v1/diagnostic-services");
+        var catDoc = JsonDocument.Parse(await catRes.Content.ReadAsStringAsync());
+        var serviceId = catDoc.RootElement.GetProperty("data")[0].GetProperty("id").GetInt64();
+
+        var createOrderRes = await Client.PostAsJsonAsync($"/api/v1/doctor/appointments/{appointmentId}/diagnostic-orders", new CreateDiagnosticOrderRequest
+        {
+            ClinicalIndication = "Chỉ định của bác sĩ 1 cho bệnh nhân 1",
+            ServiceIds = new List<long> { serviceId }
+        });
+        Assert.Equal(HttpStatusCode.Created, createOrderRes.StatusCode);
+        var orderDoc = JsonDocument.Parse(await createOrderRes.Content.ReadAsStringAsync());
+        var orderId = orderDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+
+        // Doctor B (doc2@test.com) CANNOT access Doctor A's order
+        await AuthenticateAsync("doc2@test.com");
+        var doc2GetRes = await Client.GetAsync($"/api/v1/doctor/diagnostic-orders/{orderId}");
+        Assert.Equal(HttpStatusCode.NotFound, doc2GetRes.StatusCode);
+
+        var doc2CancelRes = await Client.PostAsJsonAsync($"/api/v1/doctor/diagnostic-orders/{orderId}/cancel", new CancelDiagnosticOrderRequest
+        {
+            Reason = "Bác sĩ khác cố hủy"
+        });
+        Assert.Equal(HttpStatusCode.NotFound, doc2CancelRes.StatusCode);
+
+        var doc2ReviewRes = await Client.PostAsJsonAsync($"/api/v1/doctor/diagnostic-orders/{orderId}/review", new TransitionDiagnosticOrderRequest());
+        Assert.Equal(HttpStatusCode.NotFound, doc2ReviewRes.StatusCode);
+
+        // Patient B (pat2@test.com) CANNOT access Patient A's order
+        await AuthenticateAsync("pat2@test.com");
+        var pat2GetRes = await Client.GetAsync($"/api/v1/patients/me/diagnostic-orders/{orderId}");
+        Assert.Equal(HttpStatusCode.NotFound, pat2GetRes.StatusCode);
+
+        var pat2ListRes = await Client.GetAsync("/api/v1/patients/me/diagnostic-orders");
+        Assert.Equal(HttpStatusCode.OK, pat2ListRes.StatusCode);
+        var pat2ListDoc = JsonDocument.Parse(await pat2ListRes.Content.ReadAsStringAsync());
+        var pat2Items = pat2ListDoc.RootElement.GetProperty("data").GetProperty("items");
+        for (int i = 0; i < pat2Items.GetArrayLength(); i++)
+        {
+            Assert.NotEqual(orderId, pat2Items[i].GetProperty("id").GetInt64());
+        }
+    }
+
+    [Fact]
+    public async Task Given_RoleSecurity_When_UnauthorizedRolesAccessEndpoints_Then_ReturnsForbiddenOrUnauthorized()
+    {
+        // 1. Unauthenticated request to technician queue -> 401
+        Client.DefaultRequestHeaders.Authorization = null;
+        var unauthRes = await Client.GetAsync("/api/v1/diagnostics/orders");
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthRes.StatusCode);
+
+        // 2. Patient attempting to access technician dashboard -> 403
+        await AuthenticateAsync("pat1@test.com");
+        var patAccessTechRes = await Client.GetAsync("/api/v1/diagnostics/orders");
+        Assert.Equal(HttpStatusCode.Forbidden, patAccessTechRes.StatusCode);
+
+        // 3. Receptionist attempting to access technician dashboard -> 403
+        await AuthenticateAsync("rec@test.com");
+        var recAccessTechRes = await Client.GetAsync("/api/v1/diagnostics/orders");
+        Assert.Equal(HttpStatusCode.Forbidden, recAccessTechRes.StatusCode);
+
+        // 4. Pharmacist attempting to access technician dashboard -> 403
+        await AuthenticateAsync("pharm@test.com");
+        var pharmAccessTechRes = await Client.GetAsync("/api/v1/diagnostics/orders");
+        Assert.Equal(HttpStatusCode.Forbidden, pharmAccessTechRes.StatusCode);
+
+        // 5. Technician attempting to access doctor order creation -> 403
+        await AuthenticateAsync("tech@test.com");
+        var techAccessDocRes = await Client.PostAsJsonAsync("/api/v1/doctor/appointments/1/diagnostic-orders", new CreateDiagnosticOrderRequest
+        {
+            ClinicalIndication = "Kỹ thuật viên cố tạo chỉ định",
+            ServiceIds = new List<long> { 1 }
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, techAccessDocRes.StatusCode);
+    }
+
+    [Fact]
+    public async Task Given_InvalidService_When_CreatingOrder_Then_TransactionRollsBackAtomically()
+    {
+        var date = GetFutureWorkingDate(38);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(16, 0, 0), new TimeOnly(16, 30, 0));
+
+        await AuthenticateAsync("pat1@test.com");
+        var createAptRes = await Client.PostAsJsonAsync("/api/v1/appointments", new
+        {
+            DoctorId = DoctorEntityId,
+            SpecialtyId = SpecialtyEntityId,
+            AppointmentSlotId = slot.Id,
+            Reason = "Khám kiểm tra tính nguyên tử của giao dịch"
+        });
+        var aptDoc = JsonDocument.Parse(await createAptRes.Content.ReadAsStringAsync());
+        var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+
+        await AuthenticateAsync("rec@test.com");
+        await Client.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);
+
+        await AuthenticateAsync("doc@test.com");
+        await Client.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/check-in", null);
+        await Client.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/start-consultation", null);
+
+        // Try creating order with a non-existent service ID (99999999)
+        var invalidOrderRes = await Client.PostAsJsonAsync($"/api/v1/doctor/appointments/{appointmentId}/diagnostic-orders", new CreateDiagnosticOrderRequest
+        {
+            ClinicalIndication = "Chỉ định dịch vụ không tồn tại",
+            ServiceIds = new List<long> { 99999999 }
+        });
+        Assert.False(invalidOrderRes.IsSuccessStatusCode);
+
+        // Verify that no diagnostic order was created for this appointment
+        var getOrdersRes = await Client.GetAsync($"/api/v1/doctor/appointments/{appointmentId}/diagnostic-orders");
+        Assert.Equal(HttpStatusCode.OK, getOrdersRes.StatusCode);
+        var ordersDoc = JsonDocument.Parse(await getOrdersRes.Content.ReadAsStringAsync());
+        var orders = ordersDoc.RootElement.GetProperty("data");
+        Assert.Equal(0, orders.GetArrayLength());
+    }
 }
+

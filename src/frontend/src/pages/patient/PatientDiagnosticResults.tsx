@@ -16,12 +16,13 @@ export const PatientDiagnosticResults: React.FC = () => {
     const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
 
     useEffect(() => {
-        setLoading(true);
+        let isMounted = true;
         Promise.all([
             diagnosticApi.getPatientOrders(1, 50),
             diagnosticApi.getPatientVitals(30)
         ])
         .then(([ordersRes, vitalsRes]) => {
+            if (!isMounted) return;
             if (ordersRes.success && ordersRes.data) {
                 setOrders(ordersRes.data.items);
                 if (ordersRes.data.items.length > 0) {
@@ -33,9 +34,13 @@ export const PatientDiagnosticResults: React.FC = () => {
             }
         })
         .catch(err => {
+            if (!isMounted) return;
             showAlert(err.message || 'Không thể tải kết quả cận lâm sàng của bạn.', 'Lỗi', 'error');
         })
-        .finally(() => setLoading(false));
+        .finally(() => {
+            if (isMounted) setLoading(false);
+        });
+        return () => { isMounted = false; };
     }, [showAlert]);
 
     return (
@@ -124,7 +129,7 @@ export const PatientDiagnosticResults: React.FC = () => {
                                             <div>
                                                 <div style={{ fontWeight: 'bold', fontSize: '15px', color: '#0f172a' }}>{order.orderCode}</div>
                                                 <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                                                    Khám: #{order.appointmentCode} • Bác sĩ: {order.orderingDoctorName} ({order.specialtyName})
+                                                    Khám: #{order.appointmentCode} • Bác sĩ: {order.orderingDoctorName} ({order.specialtyName || '---'})
                                                 </div>
                                             </div>
                                         </div>
@@ -170,7 +175,7 @@ export const PatientDiagnosticResults: React.FC = () => {
                                                                 {idx + 1}. {item.serviceName} ({item.serviceCode})
                                                             </div>
                                                             <span style={{ fontSize: '11px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
-                                                                {item.category}
+                                                                {item.category === 'Laboratory' ? 'Xét nghiệm' : item.category === 'Ultrasound' ? 'Siêu âm' : item.category === 'Imaging' ? 'Chẩn đoán hình ảnh' : item.category}
                                                             </span>
                                                         </div>
 

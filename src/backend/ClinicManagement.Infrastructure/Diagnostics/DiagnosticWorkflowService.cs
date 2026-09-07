@@ -15,6 +15,7 @@ using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace ClinicManagement.Infrastructure.Diagnostics;
 
@@ -24,17 +25,20 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
     private readonly IDoctorContextService _doctorContextService;
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ILogger<DiagnosticWorkflowService> _logger;
 
     public DiagnosticWorkflowService(
         AppDbContext dbContext,
         IDoctorContextService doctorContextService,
         ICurrentUserService currentUserService,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        ILogger<DiagnosticWorkflowService> logger)
     {
         _dbContext = dbContext;
         _doctorContextService = doctorContextService;
         _currentUserService = currentUserService;
         _dateTimeProvider = dateTimeProvider;
+        _logger = logger;
     }
 
     private Guid GetUserId()
@@ -139,101 +143,133 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         if (services.Count != cleanServiceIds.Count)
             throw new BusinessException("INVALID_SERVICE", "Một hoặc nhiều dịch vụ chỉ định không tồn tại hoặc đã ngừng hoạt động.");
 
-        var orderCode = await GenerateOrderCodeAsync();
-
-        var order = new DiagnosticOrder
+        const int maxRetries = 3;
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
-            OrderCode = orderCode,
-            AppointmentId = appointment.Id,
-            PatientId = appointment.PatientId,
-            OrderingDoctorId = doctor.Id,
-            ClinicalIndication = request.ClinicalIndication.Trim(),
-            Note = request.Note?.Trim(),
-            Status = DiagnosticOrderStatus.Ordered,
-            OrderedAtUtc = DateTime.UtcNow,
-            RowVersion = Guid.NewGuid().ToByteArray()
-        };
-
-        foreach (var svc in services)
-        {
-            order.Items.Add(new DiagnosticOrderItem
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            try
             {
-                DiagnosticServiceId = svc.Id,
-                Status = DiagnosticItemStatus.Ordered,
-                RowVersion = Guid.NewGuid().ToByteArray()
-            });
-        }
+                var orderCode = await GenerateOrderCodeAsync();
 
-        _dbContext.DiagnosticOrders.Add(order);
-        await _dbContext.SaveChangesAsync();
-
-        _dbContext.SystemAuditLogs.Add(new SystemAuditLog
-        {
-            UserId = userId,
-            Action = "DiagnosticOrderCreated",
-            EntityName = "DiagnosticOrder",
-            EntityId = order.Id.ToString(),
-            Description = $"Bác sĩ tạo phiếu chỉ định #{order.OrderCode} gồm {services.Count} dịch vụ.",
-            CreatedAt = DateTime.UtcNow
-        });
-
-        // Notifications
-        var techRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Name == RoleNames.DiagnosticTechnician);
-        if (techRole != null)
-        {
-            var techUserIds = await _dbContext.UserRoles
-                .Where(ur => ur.RoleId == techRole.Id)
-                .Select(ur => ur.UserId)
-                .ToListAsync();
-
-            var activeTechUsers = await _dbContext.Users
-                .Where(u => techUserIds.Contains(u.Id) && u.IsActive)
-                .Select(u => u.Id)
-                .ToListAsync();
-
-            foreach (var techUserId in activeTechUsers)
-            {
-                _dbContext.Notifications.Add(new Notification
+                var order = new DiagnosticOrder
                 {
-                    UserId = techUserId,
-                    Type = NotificationType.Diagnostic,
-                    Title = "Chỉ định cận lâm sàng mới",
-                    Message = $"Phiếu chỉ định #{order.OrderCode} vừa được chỉ định. Vui lòng tiếp nhận và thực hiện.",
-                    Route = $"/diagnostics/orders/{order.Id}",
-                    RelatedEntityType = "DiagnosticOrder",
-                    RelatedEntityId = order.Id.ToString(),
-                    DedupeKey = $"diag_created_tech_{order.Id}_{techUserId}",
-                    IsRead = false,
-                    CreatedAtUtc = DateTime.UtcNow
+                    OrderCode = orderCode,
+                    AppointmentId = appointment.Id,
+                    PatientId = appointment.PatientId,
+                    OrderingDoctorId = doctor.Id,
+                    ClinicalIndication = request.ClinicalIndication.Trim(),
+                    Note = request.Note?.Trim(),
+                    Status = DiagnosticOrderStatus.Ordered,
+                    OrderedAtUtc = DateTime.UtcNow,
+                    RowVersion = Guid.NewGuid().ToByteArray()
+                };
+
+                foreach (var svc in services)
+                {
+                    order.Items.Add(new DiagnosticOrderItem
+                    {
+                        DiagnosticServiceId = svc.Id,
+                        Status = DiagnosticItemStatus.Ordered,
+                        RowVersion = Guid.NewGuid().ToByteArray()
+                    });
+                }
+
+                _dbContext.DiagnosticOrders.Add(order);
+                await _dbContext.SaveChangesAsync();
+
+                _dbContext.SystemAuditLogs.Add(new SystemAuditLog
+                {
+                    UserId = userId,
+                    Action = "DiagnosticOrderCreated",
+                    EntityName = "DiagnosticOrder",
+                    EntityId = order.Id.ToString(),
+                    Description = $"Bác sĩ tạo phiếu chỉ định #{order.OrderCode} gồm {services.Count} dịch vụ.",
+                    CreatedAt = DateTime.UtcNow
                 });
+
+                // Notifications
+                var techRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Name == RoleNames.DiagnosticTechnician);
+                if (techRole != null)
+                {
+                    var techUserIds = await _dbContext.UserRoles
+                        .Where(ur => ur.RoleId == techRole.Id)
+                        .Select(ur => ur.UserId)
+                        .ToListAsync();
+
+                    var activeTechUsers = await _dbContext.Users
+                        .Where(u => techUserIds.Contains(u.Id) && u.IsActive)
+                        .Select(u => u.Id)
+                        .ToListAsync();
+
+                    foreach (var techUserId in activeTechUsers)
+                    {
+                        _dbContext.Notifications.Add(new Notification
+                        {
+                            UserId = techUserId,
+                            Type = NotificationType.Diagnostic,
+                            Title = "Chỉ định cận lâm sàng mới",
+                            Message = $"Phiếu chỉ định #{order.OrderCode} vừa được chỉ định. Vui lòng tiếp nhận và thực hiện.",
+                            Route = $"/diagnostics/orders/{order.Id}",
+                            RelatedEntityType = "DiagnosticOrder",
+                            RelatedEntityId = order.Id.ToString(),
+                            DedupeKey = $"diag_created_tech_{order.Id}_{techUserId}",
+                            IsRead = false,
+                            CreatedAtUtc = DateTime.UtcNow
+                        });
+                    }
+                }
+
+                var patientUserId = await _dbContext.Patients
+                    .Where(p => p.Id == appointment.PatientId)
+                    .Select(p => p.UserId)
+                    .FirstOrDefaultAsync();
+
+                if (patientUserId != Guid.Empty)
+                {
+                    _dbContext.Notifications.Add(new Notification
+                    {
+                        UserId = patientUserId,
+                        Type = NotificationType.Diagnostic,
+                        Title = "Chỉ định cận lâm sàng mới",
+                        Message = $"Bác sĩ đã tạo phiếu chỉ định cận lâm sàng #{order.OrderCode} cho lịch khám của bạn.",
+                        Route = "/patient/diagnostic-results",
+                        RelatedEntityType = "DiagnosticOrder",
+                        RelatedEntityId = order.Id.ToString(),
+                        DedupeKey = $"diag_created_pat_{order.Id}",
+                        IsRead = false,
+                        CreatedAtUtc = DateTime.UtcNow
+                    });
+                }
+
+                await _dbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return (await GetOrderDtoByIdAsync(order.Id))!;
+            }
+            catch (DbUpdateException ex)
+            {
+                await transaction.RollbackAsync();
+                _dbContext.ChangeTracker.Clear();
+
+                if (attempt < maxRetries)
+                {
+                    _logger.LogWarning(ex, "DbUpdateException when creating diagnostic order (attempt {Attempt}/{MaxRetries}). Retrying with fresh order code...", attempt, maxRetries);
+                    continue;
+                }
+
+                _logger.LogError(ex, "Failed to create diagnostic order after {MaxRetries} attempts due to database constraint collision.", maxRetries);
+                throw new ConflictException("ORDER_CODE_COLLISION", "Không thể tạo mã phiếu chỉ định duy nhất. Vui lòng thử lại.");
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _dbContext.ChangeTracker.Clear();
+                _logger.LogError(ex, "Unhandled exception during atomic diagnostic order creation. Rolling back all changes.");
+                throw;
             }
         }
 
-        var patientUserId = await _dbContext.Patients
-            .Where(p => p.Id == appointment.PatientId)
-            .Select(p => p.UserId)
-            .FirstOrDefaultAsync();
-
-        if (patientUserId != Guid.Empty)
-        {
-            _dbContext.Notifications.Add(new Notification
-            {
-                UserId = patientUserId,
-                Type = NotificationType.Diagnostic,
-                Title = "Chỉ định cận lâm sàng mới",
-                Message = $"Bác sĩ đã tạo phiếu chỉ định cận lâm sàng #{order.OrderCode} cho lịch khám của bạn.",
-                Route = "/patient/diagnostic-results",
-                RelatedEntityType = "DiagnosticOrder",
-                RelatedEntityId = order.Id.ToString(),
-                DedupeKey = $"diag_created_pat_{order.Id}",
-                IsRead = false,
-                CreatedAtUtc = DateTime.UtcNow
-            });
-        }
-
-        await _dbContext.SaveChangesAsync();
-
-        return (await GetOrderDtoByIdAsync(order.Id))!;
+        throw new ConflictException("ORDER_CREATION_FAILED", "Không thể tạo phiếu chỉ định cận lâm sàng. Vui lòng thử lại.");
     }
 
     public async Task<List<DiagnosticOrderDto>> GetOrdersByAppointmentForDoctorAsync(long appointmentId)
@@ -821,7 +857,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 DiagnosticServiceId = i.DiagnosticServiceId,
                 ServiceCode = i.DiagnosticService?.Code ?? string.Empty,
                 ServiceName = i.DiagnosticService?.Name ?? string.Empty,
-                ServiceCategory = i.DiagnosticService?.Category.ToString() ?? string.Empty,
+                Category = i.DiagnosticService?.Category.ToString() ?? string.Empty,
                 PreparationInstructions = i.DiagnosticService?.PreparationInstructions,
                 Status = i.Status.ToString(),
                 RowVersion = i.RowVersion != null ? Convert.ToBase64String(i.RowVersion) : null,
@@ -844,7 +880,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             PatientAge = patientAge,
             OrderingDoctorId = order.OrderingDoctorId,
             OrderingDoctorName = orderingDocUser != null ? (string.IsNullOrWhiteSpace(order.OrderingDoctor.AcademicTitle) ? orderingDocUser.FullName : $"{order.OrderingDoctor.AcademicTitle}. {orderingDocUser.FullName}") : "Bác sĩ",
-            OrderingDoctorSpecialty = specialtyName,
+            SpecialtyName = specialtyName,
             ClinicalIndication = order.ClinicalIndication,
             Note = order.Note,
             Status = order.Status.ToString(),

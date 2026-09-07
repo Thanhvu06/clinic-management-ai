@@ -2,7 +2,7 @@
 
 ClinicCare AI cung cấp không gian làm việc lâm sàng toàn diện (**Doctor Clinical Workspace**) và phân hệ Cận lâm sàng (**Diagnostic Order & Technician Workflow**) dành cho bác sĩ, kỹ thuật viên và bệnh nhân, kết nối xuyên suốt end-to-end theo kiến trúc:
 ```
-Database (EF Core / PostgreSQL) → Backend Authorization & State Machine → Service Layer → DTOs → RESTful APIs → Frontend Types → Accessible UI Components
+Database (EF Core / SQL Server cho Development & Production, SQLite In-Memory cho Integration Tests) → Backend Authorization & State Machine → Service Layer → DTOs → RESTful APIs → Frontend Types → Accessible UI Components
 ```
 
 ---
@@ -66,7 +66,7 @@ Hệ thống cài đặt 2 chốt chặn nghiệp vụ nghiêm ngặt trong `Doc
 
 ## 3. Theo dõi Sinh hiệu & Nhân trắc học Dọc (Longitudinal Anthropometrics & Vitals)
 
-Tại giao diện khám bệnh `/doctor/examination/:id`, tab **Dấu hiệu sinh tồn** được thiết kế thành 4 khu vực thông tin trực quan:
+Tại giao diện khám bệnh `/doctor/appointments/:id/examination`, tab **Dấu hiệu sinh tồn** được thiết kế thành 4 khu vực thông tin trực quan:
 
 ### 3.1. Vùng 1: Biểu mẫu nhập số đo hiện tại (Current Measurement Form)
 - Huyết áp tâm thu / tâm trương (mmHg), Mạch (bpm), Nhiệt độ (°C), SpO2 (%), Nhịp thở.
@@ -74,7 +74,7 @@ Tại giao diện khám bệnh `/doctor/examination/:id`, tab **Dấu hiệu sin
 - **Nút "Dùng chiều cao lần trước":** Khi bấm, hệ thống tự động điền chiều cao từ lần đo gần nhất của bệnh nhân, giảm thao tác đo lại cho người trưởng thành.
 - **Tính toán chỉ số khối cơ thể (BMI) thời gian thực:**
   $$\text{BMI} = \frac{\text{Cân nặng (kg)}}{(\text{Chiều cao (m)})^2}$$
-  Kèm huy hiệu phân loại theo chuẩn WHO dành cho người châu Á (Gầy, Bình thường, Tiền béo phì, Béo phì độ 1, Béo phì độ 2).
+  Kèm huy hiệu phân loại theo cấu hình hệ thống: <18.5 Thiếu cân (Gầy), <25.0 Bình thường, <30.0 Thừa cân / Tiền béo phì, >=30.0 Béo phì.
 
 ### 3.2. Vùng 2: Số liệu lần đo liền trước (Previous Measurement)
 - Hiển thị ngày đo gần nhất, người ghi nhận, chiều cao, cân nặng và BMI quá khứ để bác sĩ có điểm tựa so sánh.
@@ -107,7 +107,7 @@ Hệ thống khởi tạo sẵn 10 danh mục kỹ thuật y tế chuẩn:
 ### 4.2. Thao tác của Bác sĩ trong Phiên khám
 1. **Tạo chỉ định:** Trong tab *"Chỉ định Cận lâm sàng"*, bác sĩ chọn một hoặc nhiều dịch vụ, nhập chẩn đoán lâm sàng / lý do chỉ định và ghi chú chuẩn bị mẫu.
 2. **In phiếu chỉ định (`/doctor/diagnostic-orders/:id/print`):**
-   - Phiếu chỉ định chuẩn y tế gồm: Thông tin cơ sở khám chữa bệnh, mã phiếu, mã vạch/mã ca khám, thông tin bệnh nhân, danh sách dịch vụ kèm hướng dẫn nhịn ăn/chuẩn bị, chữ ký bác sĩ chỉ định.
+   - Phiếu chỉ định chuẩn y tế gồm: Thông tin cơ sở khám chữa bệnh demo, mã phiếu `DX`, mã ca khám, thông tin bệnh nhân, danh sách dịch vụ kèm hướng dẫn nhịn ăn/chuẩn bị, chữ ký kỹ thuật viên và bác sĩ chỉ định.
    - Hỗ trợ in trực tiếp hoặc xuất PDF qua `@media print`.
 3. **Theo dõi tiến độ thời gian thực:** Trạng thái phiếu (`Chờ thực hiện` → `Đang thực hiện` → `Đã có kết quả`).
 4. **Xem kết quả & Xác nhận:** Khi KTV nhập xong, kết quả hiển thị chi tiết (trị số, đơn vị, khoảng tham chiếu, kết luận của KTV). Bác sĩ bấm **"Xác nhận đã xem kết quả"** để mở khóa cho phép kết thúc buổi khám.

@@ -178,4 +178,67 @@ describe('Diagnostic Workflow Frontend Tests', () => {
         expect(screen.getByText(/Bạch cầu/)).toBeInTheDocument();
         expect(screen.getByText(/Các chỉ số tế bào máu trong giới hạn sinh lý bình thường/)).toBeInTheDocument();
     });
+
+    it('DiagnosticOrderPrint handles undefined gender, fallback specialty, and displays preparation instructions', async () => {
+        const orderWithUndefinedGender: DiagnosticOrderDto = {
+            ...mockOrder,
+            id: 2,
+            patientGender: undefined,
+            specialtyName: '',
+            items: [
+                {
+                    id: 102,
+                    diagnosticOrderId: 2,
+                    diagnosticServiceId: 2,
+                    serviceCode: 'US-ABDOMEN',
+                    serviceName: 'Siêu âm ổ bụng tổng quát',
+                    category: 'Imaging',
+                    status: 'Ordered',
+                    preparationInstructions: 'Nhịn ăn ít nhất 6 tiếng trước khi siêu âm',
+                    result: null
+                }
+            ]
+        };
+
+        vi.mocked(diagnosticApi.getDoctorOrderById).mockResolvedValue({
+            success: true,
+            message: 'Success',
+            data: orderWithUndefinedGender
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/doctor/diagnostic-orders/2/print']}>
+                <Routes>
+                    <Route path="/doctor/diagnostic-orders/:id/print" element={<DiagnosticOrderPrint />} />
+                </Routes>
+            </MemoryRouter>
+        );
+
+        expect(await screen.findByRole('heading', { name: /Phiếu Chỉ Định Cận Lâm Sàng/i })).toBeInTheDocument();
+        expect(screen.getByText('Chưa cập nhật')).toBeInTheDocument();
+        expect(screen.getByText('Siêu âm ổ bụng tổng quát')).toBeInTheDocument();
+        expect(screen.getByText(/Nhịn ăn ít nhất 6 tiếng trước khi siêu âm/)).toBeInTheDocument();
+
+        // Must not contain fake hotline or address
+        expect(screen.queryByText(/123 Đường Y Tế/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/1900 1234/i)).not.toBeInTheDocument();
+    });
+
+    it('DiagnosticOrderPrint displays error state when order fetch fails', async () => {
+        vi.mocked(diagnosticApi.getDoctorOrderById).mockRejectedValue(
+            new Error('Network error or order not found')
+        );
+
+        render(
+            <MemoryRouter initialEntries={['/doctor/diagnostic-orders/999/print']}>
+                <Routes>
+                    <Route path="/doctor/diagnostic-orders/:id/print" element={<DiagnosticOrderPrint />} />
+                </Routes>
+            </MemoryRouter>
+        );
+
+        expect(await screen.findByText(/Network error or order not found/i)).toBeInTheDocument();
+    });
 });
+
+

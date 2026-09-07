@@ -15,9 +15,10 @@ export const DiagnosticOrderPrint: React.FC = () => {
 
     useEffect(() => {
         if (!orderId) return;
-        setLoading(true);
+        let isMounted = true;
         diagnosticApi.getDoctorOrderById(orderId)
             .then(res => {
+                if (!isMounted) return;
                 if (res.success && res.data) {
                     setOrder(res.data);
                 } else {
@@ -25,9 +26,13 @@ export const DiagnosticOrderPrint: React.FC = () => {
                 }
             })
             .catch(err => {
+                if (!isMounted) return;
                 setError(err.message || 'Lỗi khi tải phiếu chỉ định.');
             })
-            .finally(() => setLoading(false));
+            .finally(() => {
+                if (isMounted) setLoading(false);
+            });
+        return () => { isMounted = false; };
     }, [orderId]);
 
     const handlePrint = () => {
@@ -74,6 +79,14 @@ export const DiagnosticOrderPrint: React.FC = () => {
         hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric'
     });
 
+    const formatGender = (gender?: string | null) => {
+        if (!gender) return 'Chưa cập nhật';
+        const g = gender.trim().toLowerCase();
+        if (g === 'male' || g === 'nam') return 'Nam';
+        if (g === 'female' || g === 'nữ' || g === 'nu') return 'Nữ';
+        return 'Chưa cập nhật';
+    };
+
     return (
         <div style={{ minHeight: '100vh', background: '#f8fafc', padding: '24px' }}>
             <style>{`
@@ -116,8 +129,8 @@ export const DiagnosticOrderPrint: React.FC = () => {
                             <ShieldPlus size={32} />
                         </div>
                         <div>
-                            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#0369a1', textTransform: 'uppercase' }}>Phòng Khám Đa Khoa ClinicCare</div>
-                            <div style={{ fontSize: '12px', color: '#64748b' }}>123 Nguyễn Văn Cừ, Quận 5, TP. Hồ Chí Minh • Hotline: 1900 1234</div>
+                            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#0369a1', textTransform: 'uppercase' }}>ClinicCare AI – Hệ thống demo quản lý phòng khám</div>
+                            <div style={{ fontSize: '12px', color: '#64748b' }}>Dữ liệu phục vụ trình diễn học tập, không phải chứng từ y tế chính thức.</div>
                         </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
@@ -144,7 +157,7 @@ export const DiagnosticOrderPrint: React.FC = () => {
                             <strong>Họ và tên:</strong> <span style={{ textTransform: 'uppercase', fontWeight: 600 }}>{order.patientName}</span>
                         </div>
                         <div>
-                            <strong>Giới tính:</strong> {order.patientGender === 'Female' ? 'Nữ' : 'Nam'}
+                            <strong>Giới tính:</strong> {formatGender(order.patientGender)}
                         </div>
                         <div>
                             <strong>Tuổi:</strong> {order.patientAge ? `${order.patientAge} tuổi` : '---'}
@@ -156,7 +169,7 @@ export const DiagnosticOrderPrint: React.FC = () => {
                             <strong>Bác sĩ chỉ định:</strong> {order.orderingDoctorName}
                         </div>
                         <div>
-                            <strong>Chuyên khoa:</strong> {order.specialtyName}
+                            <strong>Chuyên khoa:</strong> {order.specialtyName || '---'}
                         </div>
                     </div>
                     <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #cbd5e1' }}>
@@ -185,7 +198,14 @@ export const DiagnosticOrderPrint: React.FC = () => {
                                 <tr key={item.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                                     <td style={{ padding: '10px', textAlign: 'center', color: '#64748b' }}>{idx + 1}</td>
                                     <td style={{ padding: '10px', fontWeight: 600, color: '#334155' }}>{item.serviceCode}</td>
-                                    <td style={{ padding: '10px', fontWeight: 500 }}>{item.serviceName}</td>
+                                    <td style={{ padding: '10px', fontWeight: 500 }}>
+                                        <div>{item.serviceName}</div>
+                                        {item.preparationInstructions && (
+                                            <div style={{ fontSize: '11px', color: '#64748b', fontStyle: 'italic', marginTop: '2px' }}>
+                                                Chuẩn bị: {item.preparationInstructions}
+                                            </div>
+                                        )}
+                                    </td>
                                     <td style={{ padding: '10px', color: '#475569' }}>{categoryMap[item.category] || item.category}</td>
                                     <td style={{ padding: '10px', textAlign: 'center' }}>
                                         <span style={{ 

@@ -106,7 +106,6 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     // Load diagnostic orders
     const loadDiagnosticOrders = useCallback(async () => {
         if (!appointmentId) return;
-        setLoadingOrders(true);
         try {
             const res = await diagnosticApi.getDoctorOrdersByAppointment(appointmentId);
             if (res.success && res.data) {
@@ -134,7 +133,6 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     // Load initial context
     const loadContext = useCallback(async () => {
         if (!appointmentId) return;
-        setLoading(true);
         try {
             const [ctxRes, medRes] = await Promise.all([
                 doctorApi.getPatientClinicalContext(appointmentId),
@@ -204,7 +202,15 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     }, [appointmentId, showAlert, loadDiagnosticOrders, loadDiagnosticCatalog]);
 
     useEffect(() => {
-        loadContext();
+        let isMounted = true;
+        const init = async () => {
+            if (!isMounted) return;
+            await loadContext();
+        };
+        void init();
+        return () => {
+            isMounted = false;
+        };
     }, [loadContext]);
 
     // Computed BMI
@@ -1292,7 +1298,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </div>
 
                             <div style={{ fontSize: '0.8rem', color: '#64748b', maxWidth: '360px' }}>
-                                * Công thức: BMI = Cân nặng (kg) / [Chiều cao (m)]². Tiêu chuẩn WHO: Gầy (&lt;18.5), Bình thường (18.5 - 24.9), Tiền béo phì (25 - 29.9), Béo phì (≥30).
+                                * BMI được tính theo công thức kg/m² và phân nhóm theo ngưỡng đang cấu hình trong hệ thống: Thiếu cân (&lt;18.5), Bình thường (18.5 - 24.9), Tiền béo phì (25 - 29.9), Béo phì (≥30).
                             </div>
                         </div>
                     </div>
@@ -1441,9 +1447,11 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0369a1' }}>
-                                                {srv.defaultPrice ? `${srv.defaultPrice.toLocaleString('vi-VN')} đ` : '---'}
-                                            </div>
+                                            {srv.preparationInstructions && (
+                                                <div style={{ fontSize: '0.75rem', color: '#0369a1', fontStyle: 'italic', maxWidth: '240px', textAlign: 'right' }}>
+                                                    {srv.preparationInstructions}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}

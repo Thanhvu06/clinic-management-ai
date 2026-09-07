@@ -8,7 +8,7 @@
 ## 1. Giới thiệu tổng quan (1 phút)
 - **Role:** Khách (Chưa đăng nhập)
 - **Trang:** `http://localhost:5173/login`
-- **Thuyết minh:** *"Chào thầy/cô, hệ thống quản lý phòng khám ClinicCare AI kết nối toàn diện 5 vai trò nghiệp vụ: Bệnh nhân, Lễ tân, Bác sĩ, Kỹ thuật viên Cận lâm sàng, và Quản trị viên. Điểm nhấn là quy trình lâm sàng khép kín từ chỉ định xét nghiệm, thực hiện CLS, bác sĩ hội chẩn đến theo dõi sinh hiệu nhân trắc học dọc."*
+- **Thuyết minh:** *"Chào thầy/cô, hệ thống quản lý phòng khám ClinicCare AI kết nối toàn diện 5 vai trò nghiệp vụ: Bệnh nhân, Lễ tân, Bác sĩ, Kỹ thuật viên Cận lâm sàng, và Quản trị viên. Điểm nhấn là quy trình lâm sàng khép kín từ chỉ định xét nghiệm, thực hiện CLS, bác sĩ xem, đối chiếu kết quả và hoàn thiện chẩn đoán đến theo dõi sinh hiệu nhân trắc học dọc."*
 
 ---
 
@@ -37,10 +37,10 @@
 - **Role:** Bác sĩ (`doctor@cliniccare.local` / `Demo@12345` – BS.CKI Nguyễn Minh Khải)
 - **Trang:** `/doctor/appointments` hoặc `/doctor/queue`
 - **Thao tác:**
-  1. Bấm **"Bắt đầu khám"** ca hẹn để vào **Không gian khám lâm sàng** (`/doctor/examination/:id`).
+  1. Bấm **"Bắt đầu khám"** ca hẹn để vào **Không gian khám lâm sàng** (`/doctor/appointments/:id/examination`).
   2. **Tab Dấu hiệu sinh tồn:**
      - Bấm nút **"Dùng chiều cao lần trước"** (tự động điền 172cm từ lịch sử đo).
-     - Nhập cân nặng 68.5kg -> Hệ thống tự động tính **BMI = 23.15** kèm nhãn *"Tiền béo phì"*.
+     - Nhập cân nặng 68.5kg -> Hệ thống tự động tính **BMI = 23.2** kèm nhãn xanh *"Bình thường"* (theo ngưỡng hệ thống: <18.5 Thiếu cân, <25.0 Bình thường, <30.0 Thừa cân / Tiền béo phì, >=30.0 Béo phì).
      - Xem **Vùng 2 & Vùng 3 (Nhân trắc học dọc)**: Đối chiếu với lần đo trước, hiển thị biến thiên cân nặng $\Delta \text{Weight}$ và $\Delta \text{BMI}$ với badge màu trực quan.
      - Xem **Vùng 4 (Bảng lịch sử sinh hiệu)**: Liệt kê các mốc đo sinh hiệu trong quá khứ của bệnh nhân.
      - Bấm **"Lưu sinh hiệu"**.
@@ -50,15 +50,15 @@
 
 ## 5. Bác sĩ Chỉ định Cận lâm sàng & Kiểm chứng Guard chặn hoàn tất (2 phút)
 - **Role:** Bác sĩ
-- **Trang:** `/doctor/examination/:id` - Tab **"Chỉ định Cận lâm sàng"**
+- **Trang:** `/doctor/appointments/:id/examination` - Tab **"Chỉ định Cận lâm sàng"**
 - **Thao tác:**
   1. Chọn dịch vụ từ Catalog: **Tổng phân tích tế bào máu (LAB-CBC)** và **Siêu âm ổ bụng tổng quát (US-ABD)**.
   2. Nhập chỉ định lâm sàng: *"Đau thắt ngực, tầm soát bệnh lý tim mạch và ổ bụng"*.
   3. Bấm **"Tạo phiếu chỉ định"**. Phiếu CLS sinh ra mã dạng `DX-2026xxxx-xxxx`.
-  4. Bấm **"In phiếu chỉ định"** -> Mở trang in phiếu y tế chuyên nghiệp (`/doctor/diagnostic-orders/:id/print`) với đầy đủ tiêu đề phòng khám, barcode, mã phiếu, chữ ký bác sĩ.
+  4. Bấm **"In phiếu chỉ định"** -> Mở trang in phiếu y tế chuyên nghiệp (`/doctor/diagnostic-orders/:id/print`) với mã phiếu `DX`, hướng dẫn chuẩn bị nhịn ăn, danh mục dịch vụ chỉ định và chữ ký xác nhận của kỹ thuật viên và bác sĩ.
   5. **Thử nghiệm Completion Guard #1:** Chuyển sang Tab Kê đơn hoặc Diễn tiến, thử bấm **"Hoàn tất ca khám"**.
   - **Kết quả:** Hệ thống hiển thị cảnh báo đỏ và chặn không cho hoàn tất: *"Không thể hoàn tất phiên khám khi còn chỉ định cận lâm sàng đang chờ kết quả."*
-  - **Thuyết minh:** *"Đây là chốt chặn an toàn y khoa tối quan trọng, ngăn bác sĩ vội vã chẩn đoán kết thúc ca khám khi xét nghiệm chưa có kết quả."*
+  - **Thuyết minh:** *"Đây là chốt chặn an toàn y khoa tối quan trọng, hỗ trợ kiểm soát chất lượng khám và ngăn kết thúc ca khám khi xét nghiệm chưa có kết quả."*
 
 ---
 
@@ -77,13 +77,13 @@
 
 ## 7. Bác sĩ Duyệt Kết quả Cận lâm sàng & Hoàn tất Ca khám (2 phút)
 - **Role:** Bác sĩ (`doctor@cliniccare.local`)
-- **Trang:** Quay lại `/doctor/examination/:id` - Tab **"Chỉ định Cận lâm sàng"**
+- **Trang:** Quay lại `/doctor/appointments/:id/examination` - Tab **"Chỉ định Cận lâm sàng"**
 - **Thao tác:**
   1. Danh sách phiếu cập nhật trạng thái **"Đã có kết quả"** với chi tiết các trị số do KTV nhập.
   2. **Thử nghiệm Completion Guard #2:** Thử bấm **"Hoàn tất ca khám"** ngay khi chưa duyệt.
      - **Kết quả:** Hệ thống tiếp tục chặn: *"Không thể hoàn tất phiên khám khi có kết quả cận lâm sàng chưa được bác sĩ xem và xác nhận."*
   3. Bác sĩ bấm nút **"Xác nhận đã xem kết quả"** -> Phiếu hiển thị dấu tích xanh và ghi nhận thời gian duyệt của bác sĩ.
-  4. Bác sĩ cập nhật kết luận điều trị cuối cùng, kê đơn thuốc và bấm **"Hoàn tất ca khám"** -> Ca khám chuyển sang `Completed` thành công.
+  4. Bác sĩ xem, đối chiếu kết quả và hoàn thiện chẩn đoán, kê đơn thuốc và bấm **"Hoàn tất ca khám"** -> Ca khám chuyển sang `Completed` thành công.
 
 ---
 
@@ -94,12 +94,13 @@
   1. Xem danh sách phiếu CLS cá nhân: Thấy huy hiệu xanh **"Đã có kết luận bác sĩ"**.
   2. Nhấp mở Accordion: Đọc chi tiết từng kết quả xét nghiệm, kết luận dễ hiểu, kèm ghi nhận bác sĩ đã xem lúc mấy giờ.
   3. Chuyển sang tab **"Chỉ số sinh hiệu"**: Xem lịch sử các lần đo sinh hiệu tại phòng khám.
-- **Thuyết minh:** *"Bệnh nhân chủ động nắm bắt hồ sơ sức khỏe của mình, đồng thời hệ thống bảo đảm cách ly dữ liệu tuyệt đối giữa các bệnh nhân."*
+  - **Thuyết minh:** *"Bệnh nhân chủ động nắm bắt hồ sơ sức khỏe của mình, đồng thời hệ thống bảo đảm cách ly dữ liệu tuyệt đối giữa các bệnh nhân."*
 
 ---
 
 ## 9. Tổng kết & Điểm nổi bật Y tế
-1. **Clinical State Machine & Completion Guards chặt chẽ:** Loại bỏ hoàn toàn sai sót y khoa do kết thúc khám trước khi có kết quả xét nghiệm hoặc quên duyệt kết quả.
-2. **Longitudinal Anthropometrics:** Bác sĩ nắm bắt nhanh chóng biến thiên thể trọng và BMI qua các lần khám.
-3. **Role-Based Workflows chuyên biệt:** Bác sĩ chỉ định -> KTV thực hiện -> Bác sĩ duyệt kết luận -> Bệnh nhân tra cứu.
+1. **Clinical State Machine & Completion Guards chặt chẽ:** Giảm thiểu tối đa sai sót quy trình do kết thúc khám trước khi có kết quả xét nghiệm hoặc quên xác nhận kết quả.
+2. **Longitudinal Anthropometrics:** Bác sĩ nắm bắt nhanh chóng biến thiên thể trọng và BMI qua các lần khám theo ngưỡng phân loại tiêu chuẩn.
+3. **Role-Based Workflows chuyên biệt:** Bác sĩ chỉ định -> KTV thực hiện -> Bác sĩ đối chiếu và xác nhận -> Bệnh nhân tra cứu.
 4. **Optimistic Concurrency & Data Isolation:** Bảo vệ an toàn dữ liệu và quyền riêng tư theo tiêu chuẩn y tế.
+

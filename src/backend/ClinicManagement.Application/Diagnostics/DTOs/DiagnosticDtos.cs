@@ -35,7 +35,7 @@ public class DiagnosticOrderItemDto
     public long DiagnosticServiceId { get; set; }
     public string ServiceCode { get; set; } = string.Empty;
     public string ServiceName { get; set; } = string.Empty;
-    public string ServiceCategory { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
     public string? PreparationInstructions { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? RowVersion { get; set; }
@@ -59,7 +59,7 @@ public class DiagnosticOrderDto
 
     public long OrderingDoctorId { get; set; }
     public string OrderingDoctorName { get; set; } = string.Empty;
-    public string OrderingDoctorSpecialty { get; set; } = string.Empty;
+    public string SpecialtyName { get; set; } = string.Empty;
 
     public string ClinicalIndication { get; set; } = string.Empty;
     public string? Note { get; set; }

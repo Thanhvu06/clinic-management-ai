@@ -51,8 +51,36 @@ export const TechnicianDashboard: React.FC = () => {
     }, [statusFilter, dateFilter, searchTerm, page, showAlert]);
 
     useEffect(() => {
-        loadData();
-    }, [loadData]);
+        let isMounted = true;
+        Promise.all([
+            diagnosticApi.getTechnicianOrders({
+                status: statusFilter || undefined,
+                date: dateFilter || undefined,
+                search: searchTerm || undefined,
+                page,
+                pageSize: 15
+            }),
+            diagnosticApi.getTechnicianStats()
+        ])
+        .then(([ordersRes, statsRes]) => {
+            if (!isMounted) return;
+            if (ordersRes.success && ordersRes.data) {
+                setOrders(ordersRes.data.items);
+                setTotalItems(ordersRes.data.totalItems);
+            }
+            if (statsRes.success && statsRes.data) {
+                setStats(statsRes.data);
+            }
+        })
+        .catch(err => {
+            if (!isMounted) return;
+            showAlert(err.message || 'Không thể tải danh sách chỉ định cận lâm sàng.', 'Lỗi', 'error');
+        })
+        .finally(() => {
+            if (isMounted) setLoading(false);
+        });
+        return () => { isMounted = false; };
+    }, [statusFilter, dateFilter, searchTerm, page, showAlert]);
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -216,7 +244,7 @@ export const TechnicianDashboard: React.FC = () => {
                                     </td>
                                     <td style={{ padding: '14px 16px' }}>
                                         <div style={{ fontWeight: 500, color: '#334155' }}>{order.orderingDoctorName}</div>
-                                        <div style={{ fontSize: '12px', color: '#64748b' }}>{order.specialtyName}</div>
+                                        <div style={{ fontSize: '12px', color: '#64748b' }}>{order.specialtyName || '---'}</div>
                                     </td>
                                     <td style={{ padding: '14px 16px' }}>
                                         <div style={{ fontWeight: 500 }}>{order.items.length} dịch vụ</div>

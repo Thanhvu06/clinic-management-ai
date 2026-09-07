@@ -28,7 +28,6 @@ export const TechnicianOrderDetail: React.FC = () => {
 
     const loadOrder = useCallback(async () => {
         if (!orderId) return;
-        setLoading(true);
         try {
             const res = await diagnosticApi.getTechnicianOrderById(orderId);
             if (res.success && res.data) {
@@ -48,14 +47,38 @@ export const TechnicianOrderDetail: React.FC = () => {
             }
         } catch (err: any) {
             showAlert(err.message || 'Không thể tải chi tiết phiếu chỉ định.', 'Lỗi', 'error');
-        } finally {
-            setLoading(false);
         }
     }, [orderId, showAlert]);
 
     useEffect(() => {
-        loadOrder();
-    }, [loadOrder]);
+        if (!orderId) return;
+        let isMounted = true;
+        diagnosticApi.getTechnicianOrderById(orderId)
+            .then(res => {
+                if (!isMounted) return;
+                if (res.success && res.data) {
+                    setOrder(res.data);
+                    const initial: Record<number, any> = {};
+                    res.data.items.forEach(item => {
+                        initial[item.id] = {
+                            resultText: item.result?.resultText || '',
+                            conclusion: item.result?.conclusion || '',
+                            referenceRange: item.result?.referenceRange || '',
+                            unit: item.result?.unit || ''
+                        };
+                    });
+                    setItemResults(initial);
+                }
+            })
+            .catch(err => {
+                if (!isMounted) return;
+                showAlert(err.message || 'Không thể tải chi tiết phiếu chỉ định.', 'Lỗi', 'error');
+            })
+            .finally(() => {
+                if (isMounted) setLoading(false);
+            });
+        return () => { isMounted = false; };
+    }, [orderId, showAlert]);
 
     const handleStartOrder = async () => {
         if (!order) return;
@@ -197,7 +220,7 @@ export const TechnicianOrderDetail: React.FC = () => {
                         <div style={{ color: '#64748b' }}>Bệnh nhân:</div>
                         <div style={{ fontWeight: 600, fontSize: '15px', color: '#0f172a', marginTop: '2px' }}>{order.patientName}</div>
                         <div style={{ color: '#64748b', marginTop: '2px' }}>
-                            {order.patientGender === 'Female' ? 'Nữ' : 'Nam'} • {order.patientAge ? `${order.patientAge} tuổi` : '---'}
+                            {order.patientGender?.toLowerCase() === 'female' ? 'Nữ' : order.patientGender?.toLowerCase() === 'male' ? 'Nam' : 'Chưa cập nhật'} • {order.patientAge ? `${order.patientAge} tuổi` : '---'}
                         </div>
                     </div>
 
@@ -209,7 +232,7 @@ export const TechnicianOrderDetail: React.FC = () => {
                     <div>
                         <div style={{ color: '#64748b' }}>Bác sĩ chỉ định:</div>
                         <div style={{ fontWeight: 600, color: '#0f172a', marginTop: '2px' }}>{order.orderingDoctorName}</div>
-                        <div style={{ color: '#64748b', marginTop: '2px' }}>{order.specialtyName}</div>
+                        <div style={{ color: '#64748b', marginTop: '2px' }}>{order.specialtyName || '---'}</div>
                     </div>
                 </div>
 
