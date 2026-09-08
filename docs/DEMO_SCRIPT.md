@@ -69,8 +69,8 @@
   1. Xem thống kê KPI (Chờ thực hiện, Đang thực hiện, Hoàn tất).
   2. Tìm phiếu chỉ định trong danh sách "Chờ thực hiện" -> Bấm **"Tiếp nhận"** (`Ordered` → `InProgress`).
   3. Bấm **"Nhập kết quả"** (`/diagnostics/orders/:id`):
-     - Dịch vụ CBC: Nhập kết quả chi tiết (*WBC: 7.2 G/L, RBC: 4.6 T/L, HGB: 142 g/L*), kết luận (*Chỉ số máu trong giới hạn bình thường*), khoảng tham chiếu (*WBC: 4.0-10.0*), đơn vị (*G/L*).
-     - Dịch vụ Siêu âm ổ bụng: Nhập kết quả (*Gan, mật, tụy, lách, thận kích thước bình thường*), kết luận (*Chưa phát hiện bất thường*).
+     - Dịch vụ CBC *(giá trị demo mô phỏng — không có giá trị lâm sàng thực)*: Kết quả (*WBC: 7.2 G/L, RBC: 4.6 T/L, HGB: 142 g/L*), kết luận (*Chỉ số máu trong giới hạn bình thường*), khoảng tham chiếu (*WBC: 4.0-10.0*), đơn vị (*G/L*).
+     - Dịch vụ Siêu âm ổ bụng *(giá trị demo mô phỏng)*: Kết quả (*Gan, mật, tụy, lách, thận kích thước bình thường*), kết luận (*Chưa phát hiện bất thường — dữ liệu mô phỏng*).
   4. Bấm **"Hoàn tất phiếu chỉ định"** (`InProgress` → `Completed`).
 
 ---

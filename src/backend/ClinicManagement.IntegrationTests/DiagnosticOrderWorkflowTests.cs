@@ -6,7 +6,10 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Appointments.DTOs.Doctor;
 using ClinicManagement.Application.Diagnostics.DTOs;
+using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace ClinicManagement.IntegrationTests;
@@ -393,8 +396,11 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Given_InvalidService_When_CreatingOrder_Then_TransactionRollsBackAtomically()
+    public async Task Given_InvalidService_When_CreatingOrder_Then_ValidationRejects_Before_Transaction()
     {
+        // This test verifies INPUT VALIDATION, not DB transaction atomicity.
+        // The INVALID_SERVICE exception is thrown BEFORE BeginTransactionAsync because the
+        // service-existence check runs eagerly. No transaction is ever started in this path.
         var date = GetFutureWorkingDate(38);
         var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(16, 0, 0), new TimeOnly(16, 30, 0));
 
@@ -404,9 +410,9 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
             DoctorId = DoctorEntityId,
             SpecialtyId = SpecialtyEntityId,
             AppointmentSlotId = slot.Id,
-            Reason = "Khám kiểm tra tính nguyên tử của giao dịch"
+            Reason = "Khám kiểm tra validation dịch vụ không hợp lệ"
         });
-        var aptDoc = JsonDocument.Parse(await createAptRes.Content.ReadAsStringAsync());
+        var aptDoc = System.Text.Json.JsonDocument.Parse(await createAptRes.Content.ReadAsStringAsync());
         var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
 
         await AuthenticateAsync("rec@test.com");
@@ -416,20 +422,194 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
         await Client.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/check-in", null);
         await Client.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/start-consultation", null);
 
-        // Try creating order with a non-existent service ID (99999999)
+        // Request with a non-existent service ID — rejected at validation layer, before any DB write
         var invalidOrderRes = await Client.PostAsJsonAsync($"/api/v1/doctor/appointments/{appointmentId}/diagnostic-orders", new CreateDiagnosticOrderRequest
         {
             ClinicalIndication = "Chỉ định dịch vụ không tồn tại",
             ServiceIds = new List<long> { 99999999 }
         });
         Assert.False(invalidOrderRes.IsSuccessStatusCode);
+        var errorBody = await invalidOrderRes.Content.ReadAsStringAsync();
+        Assert.Contains("INVALID_SERVICE", errorBody);
 
-        // Verify that no diagnostic order was created for this appointment
+        // No diagnostic order written to DB for this appointment
         var getOrdersRes = await Client.GetAsync($"/api/v1/doctor/appointments/{appointmentId}/diagnostic-orders");
         Assert.Equal(HttpStatusCode.OK, getOrdersRes.StatusCode);
-        var ordersDoc = JsonDocument.Parse(await getOrdersRes.Content.ReadAsStringAsync());
+        var ordersDoc = System.Text.Json.JsonDocument.Parse(await getOrdersRes.Content.ReadAsStringAsync());
         var orders = ordersDoc.RootElement.GetProperty("data");
         Assert.Equal(0, orders.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Given_TransactionRollback_When_AuditLogSaveFailsAfterOrderInserted_Then_NoDiagnosticDataPersisted()
+    {
+        // This is the TRUE atomicity test.
+        // We use a DbCommandInterceptor (test-only, registered via a derived factory) that
+        // throws after the first INSERT into DiagnosticOrders succeeds but before the
+        // second SaveChangesAsync (audit log + notifications) commits.
+        // After the exception, we verify that no DiagnosticOrder, DiagnosticOrderItem,
+        // SystemAuditLog, or Notification linked to this request remains in the DB.
+
+        // Setup: use a dedicated factory that injects the failure interceptor
+        await using var atomicFactory = new AtomicityTestWebApplicationFactory();
+        var atomicClient = atomicFactory.CreateClient();
+
+        // Authenticate into the atomic factory's own isolated DB
+        async Task AuthAtomic(string email)
+        {
+            var loginRes = await atomicClient.PostAsJsonAsync("/api/v1/auth/login",
+                new { emailOrPhone = email, password = "Pass@123" });
+            var doc = System.Text.Json.JsonDocument.Parse(await loginRes.Content.ReadAsStringAsync());
+            var token = doc.RootElement.GetProperty("data").GetProperty("accessToken").GetString()!;
+            atomicClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+
+        // Seed minimal data directly into the atomic factory DB
+        long atomicDoctorId, atomicSpecialtyId, atomicService1Id;
+        using (var scope = atomicFactory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicManagement.Infrastructure.Persistence.AppDbContext>();
+            db.Database.EnsureCreated();
+            await SeedAtomicTestDataAsync(db, scope.ServiceProvider, atomicFactory);
+            atomicDoctorId = db.Doctors.First().Id;
+            atomicSpecialtyId = db.Specialties.First().Id;
+            atomicService1Id = db.DiagnosticServices.First().Id;
+        }
+
+        // Create a slot, book, confirm, check-in and start consultation
+        var date = GetFutureWorkingDate(39);
+        AppointmentSlot atomicSlot;
+        using (var scope = atomicFactory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicManagement.Infrastructure.Persistence.AppDbContext>();
+            var schedule = new ClinicManagement.Domain.Entities.DoctorWorkSchedule
+            {
+                DoctorId = atomicDoctorId,
+                WorkDate = date,
+                StartTime = new TimeOnly(10, 0, 0),
+                EndTime = new TimeOnly(20, 0, 0),
+                IsActive = true
+            };
+            db.DoctorWorkSchedules.Add(schedule);
+            await db.SaveChangesAsync();
+            atomicSlot = new ClinicManagement.Domain.Entities.AppointmentSlot
+            {
+                DoctorId = atomicDoctorId,
+                SlotDate = date,
+                StartTime = new TimeOnly(10, 0, 0),
+                EndTime = new TimeOnly(10, 30, 0),
+                IsBooked = false
+            };
+            db.AppointmentSlots.Add(atomicSlot);
+            await db.SaveChangesAsync();
+        }
+
+        await AuthAtomic("pat1@test.com");
+        var aptRes = await atomicClient.PostAsJsonAsync("/api/v1/appointments", new
+        {
+            DoctorId = atomicDoctorId,
+            SpecialtyId = atomicSpecialtyId,
+            AppointmentSlotId = atomicSlot.Id,
+            Reason = "Kiểm thử tính nguyên tử giao dịch"
+        });
+        Assert.Equal(HttpStatusCode.Created, aptRes.StatusCode);
+        var aptDoc = System.Text.Json.JsonDocument.Parse(await aptRes.Content.ReadAsStringAsync());
+        var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+
+        await AuthAtomic("rec@test.com");
+        await atomicClient.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);
+
+        await AuthAtomic("doc@test.com");
+        await atomicClient.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/check-in", null);
+        await atomicClient.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/start-consultation", null);
+
+        // Arm the interceptor: fail on the SECOND SaveChanges command (after order + items are written)
+        atomicFactory.Interceptor.FailOnSaveNumber = 2;
+
+        var createOrderRes = await atomicClient.PostAsJsonAsync(
+            $"/api/v1/doctor/appointments/{appointmentId}/diagnostic-orders",
+            new CreateDiagnosticOrderRequest
+            {
+                ClinicalIndication = "Kiểm thử rollback nguyên tử",
+                ServiceIds = new List<long> { atomicService1Id }
+            });
+
+        // The request must fail (500 or 409 or similar — not a 2xx)
+        Assert.False(createOrderRes.IsSuccessStatusCode,
+            $"Expected failure but got HTTP {(int)createOrderRes.StatusCode}");
+
+        // CRITICAL: verify no partial data leaked to DB
+        using (var scope = atomicFactory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicManagement.Infrastructure.Persistence.AppDbContext>();
+
+            var orderCount = await db.DiagnosticOrders
+                .CountAsync(o => o.AppointmentId == appointmentId);
+            Assert.Equal(0, orderCount);
+
+            var itemCount = await db.DiagnosticOrderItems
+                .CountAsync(i => i.DiagnosticOrder.AppointmentId == appointmentId);
+            Assert.Equal(0, itemCount);
+
+            var auditCount = await db.SystemAuditLogs
+                .CountAsync(l => l.Action == "DiagnosticOrderCreated"
+                                 && l.Description.Contains("Kiểm thử rollback"));
+            Assert.Equal(0, auditCount);
+
+            var notifCount = await db.Notifications
+                .CountAsync(n => n.RelatedEntityType == "DiagnosticOrder"
+                                 && n.Message.Contains("Kiểm thử rollback"));
+            Assert.Equal(0, notifCount);
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Infrastructure helpers for the atomicity test
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private static async Task SeedAtomicTestDataAsync(
+        ClinicManagement.Infrastructure.Persistence.AppDbContext db,
+        IServiceProvider sp,
+        AtomicityTestWebApplicationFactory factory)
+    {
+        if (await db.Users.AnyAsync()) return;
+
+        var userManager = sp.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ClinicManagement.Infrastructure.Identity.ApplicationUser>>();
+        var roleManager = sp.GetRequiredService<Microsoft.AspNetCore.Identity.RoleManager<Microsoft.AspNetCore.Identity.IdentityRole<Guid>>>();
+
+        string[] roles = { "Admin", "Doctor", "Patient", "Receptionist", "DiagnosticTechnician" };
+        foreach (var role in roles)
+            if (!await roleManager.RoleExistsAsync(role))
+                await roleManager.CreateAsync(new Microsoft.AspNetCore.Identity.IdentityRole<Guid>(role));
+
+        var docId = Guid.NewGuid();
+        var recId = Guid.NewGuid();
+        var pat1Id = Guid.NewGuid();
+
+        var doc = new ClinicManagement.Infrastructure.Identity.ApplicationUser { Id = docId, UserName = "doc@test.com", Email = "doc@test.com", FullName = "Doctor 1", PhoneNumber = "0123456782", IsActive = true };
+        await userManager.CreateAsync(doc, "Pass@123");
+        await userManager.AddToRoleAsync(doc, "Doctor");
+
+        var rec = new ClinicManagement.Infrastructure.Identity.ApplicationUser { Id = recId, UserName = "rec@test.com", Email = "rec@test.com", FullName = "Receptionist", PhoneNumber = "0123456783", IsActive = true };
+        await userManager.CreateAsync(rec, "Pass@123");
+        await userManager.AddToRoleAsync(rec, "Receptionist");
+
+        var pat1 = new ClinicManagement.Infrastructure.Identity.ApplicationUser { Id = pat1Id, UserName = "pat1@test.com", Email = "pat1@test.com", FullName = "Patient 1", PhoneNumber = "0123456784", IsActive = true };
+        await userManager.CreateAsync(pat1, "Pass@123");
+        await userManager.AddToRoleAsync(pat1, "Patient");
+
+        var doctor = new ClinicManagement.Domain.Entities.Doctor { UserId = docId, IsActive = true, AcademicTitle = "BS", ExperienceYears = 5 };
+        db.Doctors.Add(doctor);
+        var patient = new ClinicManagement.Domain.Entities.Patient { UserId = pat1Id, DateOfBirth = new DateOnly(1990, 1, 1), Gender = ClinicManagement.Domain.Enums.Gender.Male };
+        db.Patients.Add(patient);
+        var spec = new ClinicManagement.Domain.Entities.Specialty { SpecialtyCode = "SP-AT", Name = "Chuyên Khoa Test Nguyên Tử", IsActive = true };
+        db.Specialties.Add(spec);
+        var svc = new ClinicManagement.Domain.Entities.DiagnosticService { Code = "AT-01", Name = "Dịch vụ test nguyên tử", Category = ClinicManagement.Domain.Enums.DiagnosticCategory.Laboratory, IsActive = true };
+        db.DiagnosticServices.Add(svc);
+        await db.SaveChangesAsync();
+        db.DoctorSpecialties.Add(new ClinicManagement.Domain.Entities.DoctorSpecialty { DoctorId = doctor.Id, SpecialtyId = spec.Id, IsPrimary = true });
+        await db.SaveChangesAsync();
     }
 }
 

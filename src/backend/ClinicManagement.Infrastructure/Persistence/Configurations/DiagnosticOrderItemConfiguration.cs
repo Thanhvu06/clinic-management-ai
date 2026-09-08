@@ -1,5 +1,4 @@
 using ClinicManagement.Domain.Entities;
-using ClinicManagement.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -28,8 +27,7 @@ public class DiagnosticOrderItemConfiguration : IEntityTypeConfiguration<Diagnos
 
         builder.Property(i => i.Status)
             .IsRequired()
-            .HasConversion<string>()
-            .HasDefaultValue(DiagnosticItemStatus.Ordered);
+            .HasConversion<string>();
 
         builder.Property(i => i.RowVersion).IsRowVersion();
     }

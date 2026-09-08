@@ -14,6 +14,7 @@ using ClinicManagement.Application.Doctors.Interfaces;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -84,6 +85,34 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             if (!exists) return code;
         }
         return $"DX-{todayStr}-{Guid.NewGuid().ToString("N")[..6].ToUpper()}";
+    }
+
+    /// <summary>
+    /// Returns true only when <paramref name="ex"/> was caused by a UNIQUE constraint violation
+    /// specifically on the <c>DiagnosticOrders.OrderCode</c> column.
+    /// All other <see cref="DbUpdateException"/> instances must be rethrown by the caller.
+    /// Handles both SQL Server (error numbers 2627/2601) and SQLite (message-based detection).
+    /// </summary>
+    private static bool IsOrderCodeUniqueViolation(DbUpdateException ex)
+    {
+        var inner = ex.InnerException;
+        if (inner == null) return false;
+
+        // SQL Server: 2627 = PRIMARY KEY violation, 2601 = UNIQUE KEY violation
+        if (inner is Microsoft.Data.SqlClient.SqlException sqlEx
+            && (sqlEx.Number == 2627 || sqlEx.Number == 2601))
+        {
+            return sqlEx.Message.Contains("OrderCode", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // SQLite (integration tests): "UNIQUE constraint failed: DiagnosticOrders.OrderCode"
+        if (inner.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase)
+            && inner.Message.Contains("OrderCode", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     public async Task<List<DiagnosticServiceDto>> GetDiagnosticServicesAsync(DiagnosticCategory? category, string? search)
@@ -251,13 +280,20 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 await transaction.RollbackAsync();
                 _dbContext.ChangeTracker.Clear();
 
+                if (!IsOrderCodeUniqueViolation(ex))
+                {
+                    // Not an OrderCode collision — rethrow the original error unchanged.
+                    _logger.LogError(ex, "Non-collision DbUpdateException during diagnostic order creation. Re-throwing.");
+                    throw;
+                }
+
                 if (attempt < maxRetries)
                 {
-                    _logger.LogWarning(ex, "DbUpdateException when creating diagnostic order (attempt {Attempt}/{MaxRetries}). Retrying with fresh order code...", attempt, maxRetries);
+                    _logger.LogWarning(ex, "OrderCode unique-constraint collision on attempt {Attempt}/{MaxRetries}. Retrying with fresh order code...", attempt, maxRetries);
                     continue;
                 }
 
-                _logger.LogError(ex, "Failed to create diagnostic order after {MaxRetries} attempts due to database constraint collision.", maxRetries);
+                _logger.LogError(ex, "Failed to create diagnostic order after {MaxRetries} attempts due to OrderCode constraint collision.", maxRetries);
                 throw new ConflictException("ORDER_CODE_COLLISION", "Không thể tạo mã phiếu chỉ định duy nhất. Vui lòng thử lại.");
             }
             catch (Exception ex)
