@@ -124,14 +124,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         var lowerMsg = rawMessage.ToLowerInvariant();
 
         // 1. EMERGENCY RULES - Executed FIRST before any AI provider or database search
-        var emergencyKeywords = new[]
-        {
-            "đau ngực dữ dội", "khó thở nặng", "khó thở", "ngất", "lú lẫn",
-            "đột quỵ", "co giật", "chảy máu", "nôn ra máu", "dị ứng nặng",
-            "tự tử", "làm hại", "bất tỉnh", "hôn mê", "ngừng tim", "sốc phản vệ"
-        };
-
-        if (emergencyKeywords.Any(k => lowerMsg.Contains(k)))
+        if (ContainsActiveEmergency(lowerMsg))
         {
             return new AiChatResponseDto
             {
@@ -162,7 +155,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         }
 
         // 2. PII FILTERING
-        bool hasPhone = Regex.IsMatch(rawMessage, @"(?:0|\+84)[3|5|7|8|9]\d{8}");
+        bool hasPhone = Regex.IsMatch(rawMessage, @"(?:\+84|0)[35789]\d{8}");
         bool hasEmail = Regex.IsMatch(rawMessage, @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}");
         bool hasId = Regex.IsMatch(rawMessage, @"\b\d{9}\b|\b\d{12}\b");
 
@@ -323,9 +316,12 @@ public class AiSpecialtyService : IAiSpecialtyService
                 Style = "secondary",
                 RequiresAuthentication = false,
                 RequiresConfirmation = false,
-                Payload = new AiActionPayloadDto { TargetUrl = "/patient/book" }
+                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.BookAppointment }
             });
         }
+
+        // Ensure all returned actions conform to security allowlist and safety rules
+        responseDto.Actions = responseDto.Actions.Where(a => AiActionValidator.Validate(a, out _)).ToList();
 
         return responseDto;
     }
@@ -379,14 +375,18 @@ public class AiSpecialtyService : IAiSpecialtyService
             targetDate = vnToday.AddDays(1);
         }
 
-        // Sunday Rule: Clinics do not operate on Sundays; move to Monday
+        // Sunday Rule: Detect if user selected Sunday
+        bool requestedSunday = false;
+        DateOnly sundayDate = default;
         if (targetDate.HasValue && targetDate.Value.DayOfWeek == DayOfWeek.Sunday)
         {
-            targetDate = targetDate.Value.AddDays(1);
+            requestedSunday = true;
+            sundayDate = targetDate.Value;
+            targetDate = null; // Do NOT silently move to Monday
         }
 
         // Default to next working date if looking for earliest slot
-        if (!targetDate.HasValue && (aiResult.WantsEarliest || lowerMsg.Contains("sớm nhất")))
+        if (!targetDate.HasValue && !requestedSunday && (aiResult.WantsEarliest || lowerMsg.Contains("sớm nhất")))
         {
             targetDate = vnToday.DayOfWeek == DayOfWeek.Sunday ? vnToday.AddDays(1) : vnToday;
         }
@@ -433,6 +433,48 @@ public class AiSpecialtyService : IAiSpecialtyService
                     targetDoctorName = docMatch.FullName;
                     targetDoctorAcademicTitle = docMatch.AcademicTitle;
                 }
+            }
+
+            // Sunday Rule: If user requested Sunday, do NOT query slots; inform user and suggest Monday
+            if (requestedSunday)
+            {
+                var nextMonday = sundayDate.AddDays(1);
+                responseDto.Message = $"Phòng khám không mở lịch khám vào Chủ nhật ({sundayDate:dd/MM/yyyy}). Bạn có thể chọn ngày làm việc kế tiếp (Thứ Hai, {nextMonday:dd/MM/yyyy}) hoặc một ngày khác nhé.";
+
+                var sundayReason = !string.IsNullOrWhiteSpace(request.Reason)
+                    ? request.Reason.Trim()
+                    : RecoverInitialReason(cleanMessage, request.Context, aiResult.ExtractedReason);
+
+                responseDto.BookingDraft = new AiBookingDraftDto
+                {
+                    SpecialtyId = targetSpecialty.Id,
+                    SpecialtyName = targetSpecialty.Name,
+                    DoctorId = targetDoctorId,
+                    DoctorName = targetDoctorName,
+                    Reason = sundayReason,
+                    IsComplete = false
+                };
+
+                responseDto.Actions.Add(new AiActionDto
+                {
+                    Id = $"act-change-date-{nextMonday:yyyyMMdd}",
+                    Type = AiActionTypes.ChangePreferredDate,
+                    Label = $"Đổi sang Thứ Hai ({nextMonday:dd/MM})",
+                    Description = $"Chọn ngày làm việc kế tiếp: {nextMonday:dd/MM/yyyy}",
+                    Style = "primary",
+                    RequiresAuthentication = false,
+                    RequiresConfirmation = false,
+                    Payload = new AiActionPayloadDto
+                    {
+                        SpecialtyId = targetSpecialty.Id,
+                        SpecialtyName = targetSpecialty.Name,
+                        DoctorId = targetDoctorId,
+                        DoctorName = targetDoctorName,
+                        SlotDate = nextMonday.ToString("yyyy-MM-dd"),
+                        Reason = sundayReason
+                    }
+                });
+                return;
             }
 
             // D. Query Available Slots
@@ -519,7 +561,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             // F. Build Booking Draft
             var reason = !string.IsNullOrWhiteSpace(request.Reason)
                 ? request.Reason.Trim()
-                : (!string.IsNullOrWhiteSpace(aiResult.ExtractedReason) ? aiResult.ExtractedReason.Trim() : cleanMessage);
+                : RecoverInitialReason(cleanMessage, request.Context, aiResult.ExtractedReason);
 
             var draft = new AiBookingDraftDto
             {
@@ -689,7 +731,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 Style = "primary",
                 RequiresAuthentication = true,
                 RequiresConfirmation = false,
-                Payload = new AiActionPayloadDto { TargetUrl = "/patient/appointments" }
+                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Appointments }
             });
         }
 
@@ -706,7 +748,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 Style = "primary",
                 RequiresAuthentication = true,
                 RequiresConfirmation = false,
-                Payload = new AiActionPayloadDto { TargetUrl = "/patient/diagnostic-results" }
+                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.DiagnosticResults }
             });
         }
 
@@ -723,11 +765,11 @@ public class AiSpecialtyService : IAiSpecialtyService
                 Style = "secondary",
                 RequiresAuthentication = true,
                 RequiresConfirmation = false,
-                Payload = new AiActionPayloadDto { TargetUrl = "/patient/prescriptions" }
+                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Prescriptions }
             });
         }
 
-        // 4. Bills
+        // 4. Bills (Canonically routed to /patient/invoices)
         if (string.Equals(requestedActionType, AiActionTypes.ViewBills, StringComparison.OrdinalIgnoreCase)
             || lowerMsg.Contains("hóa đơn") || lowerMsg.Contains("tiền khám") || lowerMsg.Contains("chi phí"))
         {
@@ -740,11 +782,11 @@ public class AiSpecialtyService : IAiSpecialtyService
                 Style = "secondary",
                 RequiresAuthentication = true,
                 RequiresConfirmation = false,
-                Payload = new AiActionPayloadDto { TargetUrl = "/patient/bills" }
+                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Invoices }
             });
         }
 
-        // 5. Contact Reception
+        // 5. Contact Reception (No fake /contact route; provides contact info or direct hotline)
         if (string.Equals(requestedActionType, AiActionTypes.ContactReception, StringComparison.OrdinalIgnoreCase)
             || lowerMsg.Contains("lễ tân") || lowerMsg.Contains("tiếp đón") || lowerMsg.Contains("liên hệ phòng khám"))
         {
@@ -753,11 +795,95 @@ public class AiSpecialtyService : IAiSpecialtyService
                 Id = "act-contact-reception",
                 Type = AiActionTypes.ContactReception,
                 Label = "Liên hệ bàn tiếp đón lễ tân",
-                Description = "Hỗ trợ trực tiếp tại quầy tiếp đón hoặc qua hotline",
+                Description = "Hỗ trợ trực tiếp tại quầy tiếp đón sảnh chính hoặc hotline",
                 Style = "secondary",
                 RequiresAuthentication = false,
                 RequiresConfirmation = false,
-                Payload = new AiActionPayloadDto { TargetUrl = "/contact" }
+                Payload = new AiActionPayloadDto
+                {
+                    Reason = "Thông tin liên hệ lễ tân: Quầy tiếp đón sảnh chính tầng 1."
+                }
+            });
+        }
+
+        // 6. View Doctors
+        if (string.Equals(requestedActionType, AiActionTypes.ViewDoctors, StringComparison.OrdinalIgnoreCase)
+            || lowerMsg.Contains("danh sách bác sĩ") || lowerMsg.Contains("đội ngũ bác sĩ"))
+        {
+            responseDto.Actions.Add(new AiActionDto
+            {
+                Id = "act-nav-doctors",
+                Type = AiActionTypes.ViewDoctors,
+                Label = "Xem danh sách bác sĩ",
+                Description = "Tra cứu thông tin đội ngũ bác sĩ chuyên khoa",
+                Style = "secondary",
+                RequiresAuthentication = false,
+                RequiresConfirmation = false,
+                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Doctors }
+            });
+        }
+
+        // 7. Start Booking
+        if (string.Equals(requestedActionType, AiActionTypes.StartBooking, StringComparison.OrdinalIgnoreCase))
+        {
+            responseDto.Actions.Add(new AiActionDto
+            {
+                Id = "act-nav-start-booking",
+                Type = AiActionTypes.StartBooking,
+                Label = "Mở trang Đặt lịch khám",
+                Style = "primary",
+                RequiresAuthentication = false,
+                RequiresConfirmation = false,
+                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.BookAppointment }
+            });
+        }
+
+        // 8. Open Appointment Detail
+        if (string.Equals(requestedActionType, AiActionTypes.OpenAppointmentDetail, StringComparison.OrdinalIgnoreCase))
+        {
+            responseDto.Actions.Add(new AiActionDto
+            {
+                Id = "act-nav-appointment-detail",
+                Type = AiActionTypes.OpenAppointmentDetail,
+                Label = "Xem chi tiết lịch hẹn",
+                Style = "secondary",
+                RequiresAuthentication = true,
+                RequiresConfirmation = false,
+                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Appointments }
+            });
+        }
+
+        // 9. Request Reschedule
+        if (string.Equals(requestedActionType, AiActionTypes.RequestReschedule, StringComparison.OrdinalIgnoreCase)
+            || lowerMsg.Contains("đổi lịch") || lowerMsg.Contains("dời lịch"))
+        {
+            responseDto.Actions.Add(new AiActionDto
+            {
+                Id = "act-nav-reschedule",
+                Type = AiActionTypes.RequestReschedule,
+                Label = "Yêu cầu đổi lịch khám",
+                Description = "Mở trang lịch hẹn để chọn đổi ngày/giờ khám",
+                Style = "secondary",
+                RequiresAuthentication = true,
+                RequiresConfirmation = false,
+                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Appointments }
+            });
+        }
+
+        // 10. Request Cancellation
+        if (string.Equals(requestedActionType, AiActionTypes.RequestCancellation, StringComparison.OrdinalIgnoreCase)
+            || lowerMsg.Contains("hủy lịch"))
+        {
+            responseDto.Actions.Add(new AiActionDto
+            {
+                Id = "act-nav-cancel-apt",
+                Type = AiActionTypes.RequestCancellation,
+                Label = "Yêu cầu hủy lịch khám",
+                Description = "Mở trang lịch hẹn để gửi yêu cầu hủy lịch",
+                Style = "danger",
+                RequiresAuthentication = true,
+                RequiresConfirmation = false,
+                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Appointments }
             });
         }
     }
@@ -881,4 +1007,64 @@ public class AiSpecialtyService : IAiSpecialtyService
 
         return text;
     }
+
+    private static bool ContainsActiveEmergency(string lowerMsg)
+    {
+        var emergencyKeywords = new[]
+        {
+            "đau ngực dữ dội", "khó thở nặng", "khó thở", "ngất", "lú lẫn",
+            "đột quỵ", "co giật", "chảy máu", "nôn ra máu", "dị ứng nặng",
+            "tự tử", "làm hại", "bất tỉnh", "hôn mê", "ngừng tim", "sốc phản vệ"
+        };
+
+        var negationPrefixes = new[]
+        {
+            "không ", "chẳng ", "hết ", "không còn ", "đỡ ", "không bị ", "chưa từng ", "hết hẳn "
+        };
+
+        foreach (var kw in emergencyKeywords)
+        {
+            int index = 0;
+            while ((index = lowerMsg.IndexOf(kw, index, StringComparison.Ordinal)) >= 0)
+            {
+                int prefixStart = Math.Max(0, index - 20);
+                string preceding = lowerMsg[prefixStart..index];
+                bool isNegated = negationPrefixes.Any(neg => preceding.EndsWith(neg, StringComparison.Ordinal));
+                if (!isNegated)
+                {
+                    return true;
+                }
+                index += kw.Length;
+            }
+        }
+        return false;
+    }
+
+    private static string RecoverInitialReason(string cleanMessage, List<ChatMessageDto>? context, string? extractedReason)
+    {
+        bool isActionPhrase = cleanMessage.StartsWith("Tôi chọn", StringComparison.OrdinalIgnoreCase) ||
+                              cleanMessage.StartsWith("Chọn ", StringComparison.OrdinalIgnoreCase) ||
+                              cleanMessage.StartsWith("Xem các lịch", StringComparison.OrdinalIgnoreCase) ||
+                              cleanMessage.StartsWith("Tôi muốn đặt khám với", StringComparison.OrdinalIgnoreCase);
+
+        if (isActionPhrase && context != null && context.Any())
+        {
+            var initialUserMsg = context
+                .Where(c => c.Role == "user" &&
+                            !c.Content.StartsWith("Tôi chọn", StringComparison.OrdinalIgnoreCase) &&
+                            !c.Content.StartsWith("Chọn ", StringComparison.OrdinalIgnoreCase) &&
+                            !c.Content.StartsWith("Xem các lịch", StringComparison.OrdinalIgnoreCase) &&
+                            !c.Content.StartsWith("Tôi muốn đặt khám với", StringComparison.OrdinalIgnoreCase))
+                .Select(c => c.Content.Trim())
+                .LastOrDefault();
+
+            if (!string.IsNullOrWhiteSpace(initialUserMsg))
+            {
+                return initialUserMsg;
+            }
+        }
+
+        return !string.IsNullOrWhiteSpace(extractedReason) ? extractedReason.Trim() : cleanMessage;
+    }
 }
+

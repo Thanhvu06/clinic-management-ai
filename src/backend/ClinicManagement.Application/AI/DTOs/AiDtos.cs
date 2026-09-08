@@ -89,6 +89,101 @@ public static class AiActionTypes
     }
 }
 
+public static class SafeRoutes
+{
+    public const string Invoices = "/patient/invoices";
+    public const string Appointments = "/patient/appointments";
+    public const string Prescriptions = "/patient/prescriptions";
+    public const string DiagnosticResults = "/patient/diagnostic-results";
+    public const string BookAppointment = "/patient/book";
+    public const string Doctors = "/doctors";
+    public const string Specialties = "/specialties";
+    public const string EmergencyPhone = "tel:115";
+
+    public static readonly HashSet<string> AllowedPrefixes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        Invoices,
+        Appointments,
+        Prescriptions,
+        DiagnosticResults,
+        BookAppointment,
+        Doctors,
+        Specialties,
+        EmergencyPhone
+    };
+
+    public static bool IsSafeRoute(string? route)
+    {
+        if (string.IsNullOrWhiteSpace(route)) return false;
+        var clean = route.Trim();
+        if (clean == EmergencyPhone) return true;
+        if (!clean.StartsWith('/')) return false;
+
+        var path = clean.Split('?')[0].Split('#')[0];
+        return AllowedPrefixes.Contains(path) ||
+               (path.StartsWith("/specialties/") && long.TryParse(path["/specialties/".Length..], out _)) ||
+               (path.StartsWith("/doctors/") && long.TryParse(path["/doctors/".Length..], out _));
+    }
+}
+
+public static class AiActionValidator
+{
+    private static readonly HashSet<string> AuthRequiredActions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        AiActionTypes.ConfirmBooking,
+        AiActionTypes.ReviewBooking,
+        AiActionTypes.ViewMyAppointments,
+        AiActionTypes.OpenAppointmentDetail,
+        AiActionTypes.RequestReschedule,
+        AiActionTypes.RequestCancellation,
+        AiActionTypes.ViewDiagnosticResults,
+        AiActionTypes.ViewPrescriptions,
+        AiActionTypes.ViewBills
+    };
+
+    public static bool Validate(AiActionDto? action, out string? error)
+    {
+        error = null;
+        if (action == null)
+        {
+            error = "Action cannot be null.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(action.Type) || !AiActionTypes.IsAllowed(action.Type))
+        {
+            error = $"Action type '{action.Type}' is not in allowlist.";
+            return false;
+        }
+
+        if (action.Payload == null)
+        {
+            error = "Action payload cannot be null.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(action.Payload.TargetUrl) && !SafeRoutes.IsSafeRoute(action.Payload.TargetUrl))
+        {
+            error = $"TargetUrl '{action.Payload.TargetUrl}' is not an allowlisted safe route.";
+            return false;
+        }
+
+        if (action.Type == AiActionTypes.ConfirmBooking && !action.RequiresConfirmation)
+        {
+            error = "ConfirmBooking action MUST require confirmation.";
+            return false;
+        }
+
+        if (AuthRequiredActions.Contains(action.Type) && !action.RequiresAuthentication)
+        {
+            error = $"Action type '{action.Type}' requires authentication.";
+            return false;
+        }
+
+        return true;
+    }
+}
+
 public class AiActionPayloadDto
 {
     public long? SpecialtyId { get; set; }

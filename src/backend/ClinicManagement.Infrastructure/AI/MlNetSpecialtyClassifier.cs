@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using ClinicManagement.Application.AI.Constants;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
 using Microsoft.Extensions.Logging;
@@ -63,7 +65,7 @@ public class MlNetSpecialtyClassifier : IAiSpecialtyClassifier
                 return;
             }
 
-            // Check metadata file for clinical validation
+            // Check metadata file for clinical validation & catalog compatibility
             var metadataPath = Path.Combine(Path.GetDirectoryName(_options.ModelPath) ?? "", "model_metadata.json");
             if (File.Exists(metadataPath))
             {
@@ -74,6 +76,19 @@ public class MlNetSpecialtyClassifier : IAiSpecialtyClassifier
                     if (doc.RootElement.TryGetProperty("clinicallyValidated", out var validatedProp))
                     {
                         _isClinicallyValidated = validatedProp.GetBoolean();
+                    }
+
+                    if (doc.RootElement.TryGetProperty("specialtyCodes", out var codesProp))
+                    {
+                        foreach (var c in codesProp.EnumerateArray())
+                        {
+                            var codeStr = c.GetString();
+                            if (!CanonicalSpecialties.IsCanonical(codeStr))
+                            {
+                                _logger.LogWarning("ML.NET model contains non-canonical specialty code '{Code}'. Rejecting model load for safety.", codeStr);
+                                return;
+                            }
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -94,6 +109,19 @@ public class MlNetSpecialtyClassifier : IAiSpecialtyClassifier
             {
                 var model = _mlContext.Model.Load(_options.ModelPath, out _);
                 _predictionEngine = _mlContext.Model.CreatePredictionEngine<SymptomInferenceInput, SymptomInferenceOutput>(model);
+                
+                try
+                {
+                    var schema = _predictionEngine.OutputSchema;
+                    VBuffer<ReadOnlyMemory<char>> slotNames = default;
+                    schema["Score"].Annotations.GetValue("SlotNames", ref slotNames);
+                    _scoreLabels = slotNames.DenseValues().Select(v => v.ToString()).ToArray();
+                }
+                catch
+                {
+                    _scoreLabels = Array.Empty<string>();
+                }
+
                 _isLoaded = true;
                 _logger.LogInformation("ML.NET Specialty Classifier loaded successfully from '{ModelPath}'. Validated: {IsValidated}", _options.ModelPath, _isClinicallyValidated);
             }
@@ -103,6 +131,8 @@ public class MlNetSpecialtyClassifier : IAiSpecialtyClassifier
             }
         }
     }
+
+    private string[]? _scoreLabels;
 
     public SpecialtyClassificationResult? ClassifySymptom(string symptomDescription)
     {
@@ -122,7 +152,7 @@ public class MlNetSpecialtyClassifier : IAiSpecialtyClassifier
                 prediction = _predictionEngine.Predict(input);
             }
 
-            if (string.IsNullOrWhiteSpace(prediction.PredictedLabel))
+            if (string.IsNullOrWhiteSpace(prediction.PredictedLabel) || !CanonicalSpecialties.IsCanonical(prediction.PredictedLabel))
             {
                 return null;
             }
@@ -136,11 +166,21 @@ public class MlNetSpecialtyClassifier : IAiSpecialtyClassifier
                 return null;
             }
 
+            var allScores = new Dictionary<string, float>();
+            if (prediction.Score != null && _scoreLabels != null && prediction.Score.Length == _scoreLabels.Length)
+            {
+                for (int i = 0; i < _scoreLabels.Length; i++)
+                {
+                    allScores[_scoreLabels[i]] = prediction.Score[i];
+                }
+            }
+
             return new SpecialtyClassificationResult
             {
                 SpecialtyCode = prediction.PredictedLabel,
                 Confidence = maxScore,
-                IsClinicallyValidated = _isClinicallyValidated
+                IsClinicallyValidated = _isClinicallyValidated,
+                AllScores = allScores
             };
         }
         catch (Exception ex)

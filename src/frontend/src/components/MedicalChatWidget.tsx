@@ -2,15 +2,13 @@ import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useChatContext } from "../contexts/ChatContext";
-import axiosClient from "../api/axiosClient";
+import { useAiBookingFlow } from "../hooks/useAiBookingFlow";
 import styles from "./MedicalChatWidget.module.css";
 import {
     MessageCircle, X, Trash2, Send, AlertTriangle, ArrowRight,
     Minus, Stethoscope, Calendar, Clock, CheckCircle2, Phone,
     FileText, Activity, CreditCard
 } from "lucide-react";
-import type { ApiResponse } from "../types";
-import type { ChatMessage, AiChatResponse, AiAction } from "../types/ai";
 import { useAuth } from "../auth/AuthContext";
 
 const QUICK_PROMPTS = [
@@ -23,14 +21,23 @@ const QUICK_PROMPTS = [
 
 const PatientMedicalChatWidget: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
-    const { messages, setMessages, clearChat, setPendingSpecialtyId } = useChatContext();
-    const [input, setInput] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [submittingBooking, setSubmittingBooking] = useState(false);
-    const [errorMsg, setErrorMsg] = useState("");
-
+    const launcherRef = useRef<HTMLButtonElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
+    const { setPendingSpecialtyId } = useChatContext();
+
+    const {
+        input,
+        setInput,
+        loading,
+        submittingBooking,
+        errorMsg,
+        messages,
+        clearChat,
+        handleSendMessage,
+        handleActionClick,
+        formatVietnameseDate
+    } = useAiBookingFlow(() => setIsOpen(false));
 
     useEffect(() => {
         if (isOpen) {
@@ -42,198 +49,12 @@ const PatientMedicalChatWidget: React.FC = () => {
         const handleEsc = (e: KeyboardEvent) => {
             if (e.key === "Escape" && isOpen) {
                 setIsOpen(false);
+                launcherRef.current?.focus();
             }
         };
         window.addEventListener("keydown", handleEsc);
         return () => window.removeEventListener("keydown", handleEsc);
     }, [isOpen]);
-
-    const handleSendMessage = async (
-        textToSend: string,
-        pendingPayload?: { specialtyId?: number; doctorId?: number; slotId?: number; slotDate?: string },
-        prefixMessage?: ChatMessage
-    ) => {
-        const trimmed = textToSend.trim();
-        if (!trimmed || loading) return;
-        if (trimmed.length > 500) {
-            setErrorMsg("Tin nhắn quá dài (tối đa 500 ký tự).");
-            return;
-        }
-
-        const userMsg: ChatMessage = { role: "user", content: trimmed };
-        const newMessages = prefixMessage
-            ? [...messages, prefixMessage, userMsg]
-            : [...messages, userMsg];
-        const historyMessages = newMessages
-            .slice(-9, -1)
-            .map(m => ({ role: m.role, content: m.content }));
-
-        setMessages(newMessages);
-        setInput("");
-        setErrorMsg("");
-        setLoading(true);
-
-        try {
-            const requestBody = {
-                message: trimmed,
-                context: historyMessages,
-                pendingSpecialtyId: pendingPayload?.specialtyId,
-                pendingDoctorId: pendingPayload?.doctorId,
-                pendingSlotId: pendingPayload?.slotId,
-                pendingSlotDate: pendingPayload?.slotDate
-            };
-
-            const res = await axiosClient.post<any, ApiResponse<AiChatResponse>>("/ai/chat", requestBody);
-
-            if (res.success && res.data) {
-                const data = res.data;
-                const aiMsg: ChatMessage = {
-                    role: "model",
-                    content: data.message || data.reply || "",
-                    urgency: data.urgency,
-                    safetyNotice: data.safetyNotice,
-                    suggestions: data.specialtySuggestions || data.suggestedSpecialties || [],
-                    actions: data.actions || [],
-                    bookingDraft: data.bookingDraft,
-                    missingFields: data.missingFields || []
-                };
-                setMessages(prev => [...prev, aiMsg]);
-            } else {
-                throw new Error("Invalid response");
-            }
-        } catch (err: any) {
-            if (err?.errorCode === "TOO_MANY_REQUESTS" || err?.message?.includes("quá nhiều")) {
-                setMessages(prev => [...prev, {
-                    role: "model",
-                    content: "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.",
-                    urgency: "ROUTINE"
-                }]);
-            } else {
-                setMessages(prev => [...prev, {
-                    role: "model",
-                    content: "Xin lỗi, hệ thống AI đang bận hoặc gặp sự cố kết nối. Bạn có thể chọn chuyên khoa và đặt lịch trực tiếp qua trang Đặt lịch khám.",
-                    urgency: "ROUTINE",
-                    actions: [
-                        {
-                            id: "act-fallback-book",
-                            type: "StartBooking",
-                            label: "Mở trang Đặt lịch khám",
-                            style: "primary",
-                            requiresAuthentication: false,
-                            requiresConfirmation: false,
-                            payload: { targetUrl: "/patient/book" }
-                        }
-                    ]
-                }]);
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleActionClick = async (action: AiAction) => {
-        const payload = action.payload;
-
-        // Navigation Actions
-        if (payload.targetUrl) {
-            if (payload.targetUrl.startsWith("tel:")) {
-                window.location.href = payload.targetUrl;
-                return;
-            }
-            navigate(payload.targetUrl);
-            setIsOpen(false);
-            return;
-        }
-
-        // View Specialty
-        if (action.type === "ViewSpecialty" && payload.specialtyId) {
-            navigate(`/patient/book?specialtyId=${payload.specialtyId}`);
-            setIsOpen(false);
-            return;
-        }
-
-        // Select Doctor
-        if (action.type === "SelectDoctor" && payload.doctorId) {
-            await handleSendMessage(
-                `Tôi muốn đặt khám với bác sĩ ${payload.doctorName || ""}`,
-                { specialtyId: payload.specialtyId, doctorId: payload.doctorId, slotDate: payload.slotDate }
-            );
-            return;
-        }
-
-        // Select Slot
-        if (action.type === "SelectSlot" && payload.slotId) {
-            await handleSendMessage(
-                `Tôi chọn khung giờ ${payload.startTime} ngày ${payload.slotDate}`,
-                { specialtyId: payload.specialtyId, doctorId: payload.doctorId, slotId: payload.slotId, slotDate: payload.slotDate }
-            );
-            return;
-        }
-
-        // Confirm Booking
-        if (action.type === "ConfirmBooking" && payload.slotId && payload.doctorId && payload.specialtyId) {
-            if (submittingBooking) return;
-            setSubmittingBooking(true);
-            try {
-                const bookRes = await axiosClient.post<any, ApiResponse<any>>("/appointments", {
-                    doctorId: payload.doctorId,
-                    specialtyId: payload.specialtyId,
-                    appointmentSlotId: payload.slotId,
-                    reason: payload.reason || "Đặt lịch qua Trợ lý ClinicCare AI"
-                });
-
-                if (bookRes.success && bookRes.data) {
-                    const apt = bookRes.data;
-                    const successMsg: ChatMessage = {
-                        role: "model",
-                        content: `🎉 Đặt lịch khám thành công!\n- Mã cuộc hẹn: ${apt.appointmentCode || apt.id}\n- Bác sĩ: ${payload.doctorName}\n- Thời gian: ${payload.startTime} ngày ${payload.slotDate}\n\nBạn có thể theo dõi cuộc hẹn tại danh sách lịch khám.`,
-                        actions: [
-                            {
-                                id: "act-view-created-apt",
-                                type: "ViewMyAppointments",
-                                label: "Xem lịch hẹn của tôi",
-                                style: "primary",
-                                requiresAuthentication: true,
-                                requiresConfirmation: false,
-                                payload: { targetUrl: "/patient/appointments" }
-                            }
-                        ]
-                    };
-                    setMessages(prev => [...prev, successMsg]);
-                }
-            } catch (err: any) {
-                const errorCode = err?.response?.data?.errorCode || err?.errorCode;
-                if (errorCode === "SLOT_ALREADY_BOOKED") {
-                    const conflictNotice: ChatMessage = {
-                        role: "model",
-                        content: "⚠️ Rất tiếc, khung giờ này vừa có bệnh nhân khác đặt trước. Bạn vui lòng chọn một khung giờ khác nhé.",
-                        urgency: "ROUTINE"
-                    };
-                    await handleSendMessage(
-                        `Xem các lịch trống khác của bác sĩ ${payload.doctorName}`,
-                        { specialtyId: payload.specialtyId, doctorId: payload.doctorId, slotDate: payload.slotDate },
-                        conflictNotice
-                    );
-                } else {
-                    const errorNotice = err?.response?.data?.message || err?.message || "Đặt lịch không thành công. Vui lòng thử lại.";
-                    setMessages(prev => [...prev, {
-                        role: "model",
-                        content: `⚠️ ${errorNotice}`,
-                        urgency: "ROUTINE"
-                    }]);
-                }
-            } finally {
-                setSubmittingBooking(false);
-            }
-            return;
-        }
-
-        // Manual Specialty Selection
-        if (action.type === "ManualSpecialtySelection") {
-            navigate("/patient/book");
-            setIsOpen(false);
-        }
-    };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.nativeEvent.isComposing) return;
@@ -248,6 +69,7 @@ const PatientMedicalChatWidget: React.FC = () => {
         <div className={styles.widgetContainer}>
             {!isOpen && (
                 <button
+                    ref={launcherRef}
                     className={styles.launcher}
                     onClick={() => setIsOpen(true)}
                     aria-label="Mở Trợ lý ClinicCare AI"
@@ -299,7 +121,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className={styles.messageArea}>
+                    <div className={styles.messageArea} aria-live="polite">
                         {/* Welcome Disclaimer on top */}
                         <div className={styles.welcomeContainer}>
                             <div className={styles.disclaimerBadge}>
@@ -404,7 +226,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                     </div>
                                                     <div className={styles.summaryRow}>
                                                         <span className={styles.summaryLabel}>Ngày khám:</span>
-                                                        <span className={styles.summaryValue}>{msg.bookingDraft.slotDate}</span>
+                                                        <span className={styles.summaryValue}>{formatVietnameseDate(msg.bookingDraft.slotDate)}</span>
                                                     </div>
                                                     <div className={styles.summaryRow}>
                                                         <span className={styles.summaryLabel}>Khung giờ:</span>

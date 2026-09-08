@@ -26,14 +26,16 @@ else if (command == "--train")
     string dataPath = "data/symptom_specialty_dataset.json";
     string outDir = "models";
     bool allowDemo = args.Contains("--allow-demo-data");
+    string? manifestPath = null;
 
     for (int i = 1; i < args.Length; i++)
     {
         if (args[i] == "--data" && i + 1 < args.Length) dataPath = args[++i];
         if (args[i] == "--out" && i + 1 < args.Length) outDir = args[++i];
+        if ((args[i] == "--manifest" || args[i] == "--approval-manifest") && i + 1 < args.Length) manifestPath = args[++i];
     }
 
-    return RunTrain(dataPath, outDir, allowDemo);
+    return RunTrain(dataPath, outDir, allowDemo, manifestPath);
 }
 else
 {
@@ -48,7 +50,7 @@ static void PrintUsage()
 {
     Console.WriteLine("Usage:");
     Console.WriteLine("  ClinicManagement.AI.Training --validate [datasetPath]");
-    Console.WriteLine("  ClinicManagement.AI.Training --train [--data datasetPath] [--out outputDir] [--allow-demo-data]");
+    Console.WriteLine("  ClinicManagement.AI.Training --train [--data datasetPath] [--out outputDir] [--allow-demo-data] [--manifest manifestPath]");
 }
 
 static int RunValidate(string dataPath)
@@ -73,10 +75,17 @@ static int RunValidate(string dataPath)
     var report = validator.Validate(records);
 
     Console.WriteLine($"Total Records: {report.TotalRecords} (Approved: {report.ApprovedRecords}, Unapproved: {report.UnapprovedRecords})");
-    Console.WriteLine($"Class Distribution:");
-    foreach (var kvp in report.ClassDistribution)
+    Console.WriteLine("Class Distribution (Total / Training Subset):");
+    foreach (var kvp in report.TotalClassDistribution)
     {
-        Console.WriteLine($"  {kvp.Key}: {kvp.Value} sample(s)");
+        int trainCount = report.TrainingClassDistribution.GetValueOrDefault(kvp.Key, 0);
+        Console.WriteLine($"  {kvp.Key}: {kvp.Value} total sample(s) | {trainCount} in training");
+    }
+
+    Console.WriteLine("Split Distribution:");
+    foreach (var kvp in report.SplitDistribution)
+    {
+        Console.WriteLine($"  {kvp.Key}: {kvp.Value} record(s)");
     }
 
     if (report.Warnings.Any())
@@ -102,7 +111,7 @@ static int RunValidate(string dataPath)
     return 0;
 }
 
-static int RunTrain(string dataPath, string outDir, bool allowDemo)
+static int RunTrain(string dataPath, string outDir, bool allowDemo, string? manifestPath)
 {
     if (!File.Exists(dataPath))
     {
@@ -120,8 +129,8 @@ static int RunTrain(string dataPath, string outDir, bool allowDemo)
         return 1;
     }
 
-    var trainer = new ModelTrainer();
-    var result = trainer.Train(records, json, outDir, allowDemo);
+    var trainer = new ModelTrainer(seed: 42);
+    var result = trainer.Train(records, json, outDir, allowDemo, manifestPath);
 
     if (!result.Success)
     {
@@ -132,9 +141,19 @@ static int RunTrain(string dataPath, string outDir, bool allowDemo)
     }
 
     Console.ForegroundColor = ConsoleColor.Green;
-    Console.WriteLine(result.Message);
+    Console.WriteLine("Training completed successfully.");
+    Console.WriteLine($"Status: {result.Message}");
     Console.WriteLine($"Model exported: {result.ModelPath}");
     Console.WriteLine($"Metadata exported: {result.MetadataPath}");
+    Console.WriteLine($"ClinicallyValidated: {result.Metadata.ClinicallyValidated}");
+    Console.WriteLine("Evaluation Metrics (Honest Evaluation on Test Split):");
+    Console.WriteLine($"  - Micro Accuracy:  {result.Metadata.Metrics.MicroAccuracy:P2}");
+    Console.WriteLine($"  - Macro Accuracy:  {result.Metadata.Metrics.MacroAccuracy:P2}");
+    Console.WriteLine($"  - Macro Precision: {result.Metadata.Metrics.MacroPrecision:P2}");
+    Console.WriteLine($"  - Macro Recall:    {result.Metadata.Metrics.MacroRecall:P2}");
+    Console.WriteLine($"  - Macro F1:        {result.Metadata.Metrics.MacroF1:P2}");
+    Console.WriteLine($"  - Top-3 Accuracy:  {result.Metadata.Metrics.Top3Accuracy:P2}");
+    Console.WriteLine($"  - Log Loss:        {result.Metadata.Metrics.LogLoss:F4}");
     Console.ResetColor();
     return 0;
 }

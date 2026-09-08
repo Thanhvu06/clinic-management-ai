@@ -15,21 +15,27 @@
 ## 2. Trợ Lý Hành Động ClinicCare AI & Đặt Lịch Thông Minh (3 phút)
 - **Role:** Bệnh nhân (`patient@cliniccare.local` / `Demo@12345`)
 - **Trang:** Floating Widget góc màn hình hoặc trang chuyên sâu `/patient/ai-consultation` (hoặc `/patient/book`)
-- **Thuyết minh:** *"ClinicCare AI Action Assistant là trợ lý y tế hội thoại định hướng hành động (Action Assistant). Trợ lý không chỉ trả lời câu hỏi mà còn kết nối trực tiếp với DB thật để định hướng chuyên khoa, gợi ý bác sĩ, tra cứu slot trống và cho phép bệnh nhân bấm nút đặt lịch ngay trong luồng chat."*
+- **Thuyết minh:** *"ClinicCare AI Action Assistant là trợ lý y tế hội thoại định hướng hành động (Action Assistant). Trợ lý không chỉ trả lời câu hỏi mà còn kết nối trực tiếp với DB thật để định hướng 11 chuyên khoa chuẩn hóa (SP01 - SP11), gợi ý bác sĩ, tra cứu slot trống, bảo tồn lý do khám gốc và cho phép bệnh nhân bấm nút đặt lịch ngay trong luồng chat."*
 - **Thao tác Demo:**
-  1. **Thử nghiệm Cấp cứu (Emergency Guard):**
-     - Nhập: *"Bệnh nhân bị đau thắt ngực dữ dội kèm khó thở và toát mồ hôi lạnh"*
-     - AI phát hiện dấu hiệu nguy hiểm (Red Flags), lập tức chuyển sang trạng thái khẩn cấp (`EMERGENCY`), hiển thị thẻ cảnh báo đỏ và nút bấm **"Gọi Cấp cứu 115 ngay"**, không cho phép đặt lịch khám thường.
+  1. **Thử nghiệm Cấp cứu & Phủ định (Emergency Guard & Negation):**
+     - Thử phủ định: *"Tôi thấy mệt mỏi nhưng không khó thở và không đau ngực"* -> AI phân loại bình thường (`ROUTINE`), không báo động giả.
+     - Thử cấp cứu thật: *"Bệnh nhân bị đau thắt ngực dữ dội kèm khó thở và toát mồ hôi lạnh"* -> AI phát hiện Red Flags, lập tức chuyển sang trạng thái khẩn cấp (`EMERGENCY`), hiển thị thẻ cảnh báo đỏ và nút bấm **"Gọi Cấp cứu 115 ngay"** (`tel:115`), không cho phép đặt lịch khám thường.
   2. **Thử nghiệm Bảo vệ Riêng tư (PII Defense):**
-     - Nhập: *"Tôi là Nguyễn Văn A, số CCCD 034098012345, SĐT 0912345678, muốn khám bệnh"*
+     - Nhập: *"Tôi là Nguyễn Văn A, số CCCD 034098012345, SĐT 0900000003, muốn khám bệnh"*
      - AI chủ động chặn dữ liệu định danh, từ chối gửi thông tin nhạy cảm và nhắc nhở bệnh nhân chỉ mô tả triệu chứng sức khỏe.
-  3. **Hội thoại & Đặt lịch trực tiếp (Action-Driven Booking):**
+  3. **Thử nghiệm Quy tắc Chủ nhật (Sunday Clinic Rule):**
+     - Nhập: *"Tôi muốn đặt lịch khám vào Chủ nhật tới"*
+     - AI giải thích rõ ràng phòng khám không làm việc vào Chủ nhật, tự động đưa ra action `ChangePreferredDate` cho Thứ Hai kế tiếp để người dùng chủ động chọn, không âm thầm chuyển ngày.
+  4. **Hội thoại, Bảo tồn Lý do Khám & Đặt lịch trực tiếp (Action-Driven Booking):**
      - Bấm câu hỏi gợi ý nhanh: *"Tôi nên khám chuyên khoa nào?"* hoặc nhập *"Dạo này tôi hay bị đau tức ngực trái khi đi bộ nhanh, mệt mỏi"*.
-     - AI phân tích và gợi ý chuyên khoa **Tim Mạch** (kèm thẻ `SpecialtyCard` có nút *Xem lịch khám* và *Chi tiết khoa*).
-     - Chọn bác sĩ chuyên khoa (BS.CKI Nguyễn Minh Khải) và khung giờ khám mong muốn.
-     - Trợ lý hiển thị thẻ **"Tóm tắt thông tin đặt lịch"** (`BookingSummaryCard`) với đầy đủ chuyên khoa, bác sĩ, ngày khám, khung giờ và lý do.
-     - Bấm nút **"Xác nhận đặt lịch ngay"** trực tiếp trên thẻ chat.
-- **Kết quả:** Cuộc hẹn được tạo thành công trên hệ thống với mã hẹn cụ thể (trạng thái `Pending`). Đồng thời, AI cung cấp các nút thao tác nhanh: *Xem lịch hẹn của tôi*, *Xem kết quả CLS*, *Xem đơn thuốc*, *Liên hệ lễ tân*.
+     - AI phân tích và gợi ý chuyên khoa **Tim Mạch (SP06)** (kèm thẻ `SpecialtyCard` có nút *Xem lịch khám* và *Chi tiết khoa*).
+     - Chọn bác sĩ chuyên khoa (BS.CKI Nguyễn Minh Khải) và khung giờ khám mong muốn. Lý do khám *"Đau tức ngực trái khi đi bộ nhanh"* được lưu giữ tự động.
+     - Trợ lý hiển thị thẻ **"Tóm tắt thông tin đặt lịch"** (`BookingSummaryCard`) với đầy đủ chuyên khoa, bác sĩ, ngày khám (định dạng tiếng Việt `dd/MM/yyyy`), khung giờ và lý do khám gốc.
+     - Bấm nút **"Xác nhận đặt lịch ngay"** trực tiếp trên thẻ chat (có guard chống click đúp).
+     - Thử bấm xác nhận lại cùng slot: Hệ thống xử lý idempotent an toàn, trả về lịch hẹn đã đặt mà không phát sinh lỗi 409.
+  5. **Hành động Liên kết Nghiệp vụ Nhanh:**
+     - AI cung cấp các nút hành động đồng bộ: *Xem lịch hẹn của tôi* (`/patient/appointments`), *Xem kết quả CLS* (`/patient/diagnostic-results`), *Xem đơn thuốc* (`/patient/prescriptions`), *Xem hóa đơn* (`/patient/invoices` - Canonical route), và *Liên hệ lễ tân* (hiển thị hotline 1900 1234 cùng địa chỉ quầy ngay trong chat).
+- **Kết quả:** Cuộc hẹn được tạo thành công trên hệ thống với mã hẹn cụ thể (trạng thái `Pending`). Toàn bộ luồng hội thoại mượt mà, responsive và bảo vệ an toàn y khoa tuyệt đối.
 
 ---
 

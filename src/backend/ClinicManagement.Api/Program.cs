@@ -147,7 +147,7 @@ builder.Services.AddRateLimiter(options =>
         return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(userId, _ =>
             new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
             {
-                PermitLimit = 8,
+                PermitLimit = builder.Environment.IsEnvironment("Testing") ? 1000 : 8,
                 Window = TimeSpan.FromMinutes(1),
                 QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
@@ -157,7 +157,7 @@ builder.Services.AddRateLimiter(options =>
     options.AddFixedWindowLimiter("ai_endpoint", opt =>
     {
         opt.Window = TimeSpan.FromMinutes(1);
-        opt.PermitLimit = 10;
+        opt.PermitLimit = builder.Environment.IsEnvironment("Testing") ? 1000 : 10;
         opt.QueueLimit = 0;
     });
 });

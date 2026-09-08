@@ -115,6 +115,34 @@ public class AppointmentService : IAppointmentService
         using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
+            // Idempotency check: If same patient already has an active appointment for this slot, return it
+            var existingAppointment = await _dbContext.Appointments
+                .Where(a => a.PatientId == patient.Id 
+                         && a.AppointmentSlotId == request.AppointmentSlotId
+                         && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
+                .FirstOrDefaultAsync();
+
+            if (existingAppointment != null)
+            {
+                await transaction.RollbackAsync();
+                return new AppointmentDto
+                {
+                    Id = existingAppointment.Id,
+                    AppointmentCode = existingAppointment.AppointmentCode,
+                    PatientId = existingAppointment.PatientId,
+                    DoctorId = existingAppointment.DoctorId,
+                    DoctorName = doctorName,
+                    SpecialtyId = existingAppointment.SpecialtyId,
+                    SpecialtyName = specialty.Name,
+                    AppointmentSlotId = existingAppointment.AppointmentSlotId,
+                    AppointmentDate = existingAppointment.AppointmentDate,
+                    StartTime = existingAppointment.StartTime,
+                    EndTime = existingAppointment.EndTime,
+                    Reason = existingAppointment.Reason,
+                    Status = existingAppointment.Status.ToString()
+                };
+            }
+
             // 11. Lock and update slot atomically
             var affectedRows = await _dbContext.AppointmentSlots
                 .Where(s => s.Id == request.AppointmentSlotId && !s.IsBooked)

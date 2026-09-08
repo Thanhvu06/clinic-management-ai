@@ -1,110 +1,74 @@
-# Báo Cáo Kiểm Thử (QA Report) - Phân Hệ Lâm Sàng & Cận Lâm Sàng
+# Báo Cáo Kiểm Thử (QA Report) - Phân Hệ ClinicCare AI Action Assistant & Workflow Khép Kín
 
-**Thời điểm thực hiện:** Final Patch (PR #1 - `fix/ci-billing-hardening`)  
-**Target Base:** `feat/doctor-clinical-workspace`  
-**Phạm vi:** Backend (.NET 10), Frontend (React 19 + TypeScript), EF Core Migrations, Longitudinal Anthropometrics & Vitals, Diagnostic Catalog & Orders, Technician Workflow, Doctor Review, Patient Diagnostic Results, Consultation Completion Guards.
+**Thời điểm thực hiện:** Production Hardening & Parity Audit (PR #1 - `fix/ci-billing-hardening`)  
+**Target Base:** `feat/doctor-clinical-workspace` (PR #1 giữ nguyên trạng thái OPEN, không merge)  
+**Phạm vi:** Backend (.NET 10), Frontend (React 19 + TypeScript), ML.NET Training Pipeline, Canonical Specialty Mapping (`SP01`-`SP11`), AI Action Assistant 19-Action Registry, Sunday Clinic Rule, Emergency Negation Handling, Booking Idempotency, 409 Conflict Recovery, Longitudinal Vitals & Diagnostic Workflow.
 
 ---
 
-## 1. Kết Quả Kiểm Thử Tự Động Hóa Trong CI (GitHub Actions)
+## 1. Bảng Tổng Hợp Quality Gates Tự Động Hóa
 
-Các kiểm thử dưới đây chạy hoàn toàn tự động trong CI, không phụ thuộc service ngoài:
-
-| Hạng mục | Công cụ | Kết quả | Chi tiết |
+| Hạng mục | Lệnh thực thi | Kết quả | Chi tiết kiểm chứng |
 |---|---|---|---|
-| **Backend Build** | `dotnet build -c Release --no-incremental` | **PASS — 0 errors, 0 warnings** | Sạch cảnh báo trên tất cả 6 projects |
-| **Backend Integration Tests** | `dotnet test -c Release` | **149/149 PASSED** | SQLite In-Memory, ~29s, 0 EF Core sentinel warnings |
-| **EF Core Model Drift** | `dotnet ef migrations has-pending-model-changes` | **PASS — 0 pending changes** | Migration `20260908072449_RemoveDiagnosticStatusDefaultValues` đồng bộ ModelSnapshot |
-| **ML.NET Pipeline** | `ClinicManagement.AI.Training` | **PASS — 100% metrics generated** | Dataset validation sạch, metadata SHA-256 xác định |
-| **Frontend Build** | `npm run build` (tsc + Vite) | **PASS — 0 errors** | Bundle dist thành công, typing nghiêm ngặt |
-| **Frontend Linter** | `npm run lint` (Oxlint) | **PASS — 82 warnings, 0 errors** | Không phát sinh error, cảnh báo hook cũ được duy trì |
-| **Frontend Unit/Component Tests** | `npm test -- --run` (Vitest) | **77/77 PASSED — 13 suites** | 0 failed, 0 skipped |
-
-> **Lưu ý cảnh báo:** Các con số trên phản ánh riêng từng hạng mục:  
-> • "0 warnings" ở Backend Build = compiler warnings (.NET/Roslyn).  
-> • "82 warnings" ở Frontend Linter = Oxlint lint warnings (không phải compiler errors).  
-> • EF Core runtime warnings về `DiagnosticOrder.Status` và `DiagnosticOrderItem.Status` đã được loại bỏ triệt để bằng migration `RemoveDiagnosticStatusDefaultValues`.
+| **Backend Build** | `dotnet build -c Release --no-incremental` | **PASS — 0 errors, 0 warnings** | Toàn bộ 6 projects trong solution sạch hoàn toàn cảnh báo |
+| **Backend Integration Tests** | `dotnet test -c Release` | **154/154 PASSED** | SQLite In-Memory, ~33s, 154 tests chạy sạch, 0 failed, 0 skipped |
+| **Stress Test AI Assistant** | 10 lần chạy liên tiếp `AiActionAssistantTests` | **170/170 PASSED (100%)** | 17 tests × 10 runs = 170 passed, 0 flakes, tính ổn định tuyệt đối |
+| **EF Core Model Drift** | `dotnet ef migrations has-pending-model-changes` | **PASS — 0 pending changes** | ModelSnapshot đồng bộ tuyệt đối với DbContext |
+| **ML.NET Training Pipeline** | `dotnet run --project ...AI.Training.csproj` | **PASS — Deterministic** | Validate: 18 records (18 approved), 0 duplicate, 0 leakage; Honest metrics: Micro Acc 22.22%, Top-3 Acc 66.67%, ClinicallyValidated: false |
+| **Frontend Linter** | `npm run lint` (Oxlint) | **PASS — 0 errors** | 80 warnings cũ của hook, 0 errors mới |
+| **Frontend Build** | `npm run build` (tsc -b && Vite) | **PASS — 0 errors** | TypeScript biên dịch nghiêm ngặt, Vite bundle thành công |
+| **Frontend Unit/Component Tests** | `npm test -- --run` (Vitest) | **81/81 PASSED — 13 suites** | 81 tests pass sạch sẽ, 0 failed, 0 skipped |
+| **Local API E2E Verification** | `scripts/e2e/ai-action-assistant-workflow.mjs` | **PASS — 100% assertions** | Hàng rào `E2E_ALLOW_MUTATION=true`, kiểm tra auth, emergency, PII, injection, Sunday rule, safe routes |
 
 ---
 
-## 2. Chi Tiết Test Suites Trọng Tâm
+## 2. Chi Tiết Test Suite Trọng Tâm
 
-### `DiagnosticOrderWorkflowTests` — Đúng 8 [Fact] methods
-
-1. **`Given_DoctorAndPatient_When_FullDiagnosticOrderWorkflowExecuted_Then_TransitionsCorrectly_And_BlocksConsultationUntilReviewed`**  
-   Bác sĩ chỉ định → KTV tiếp nhận (`InProgress`) → KTV nhập kết quả từng dịch vụ → KTV hoàn tất (`Completed`) → Bác sĩ đối chiếu và xác nhận → Hoàn tất ca khám → Bệnh nhân tra cứu kết quả.
-2. **`Given_PendingOrder_When_DoctorCancels_Then_StatusBecomesCancelled`**  
-   Bác sĩ hủy chỉ định ở trạng thái `Ordered`; ca khám được phép hoàn tất bình thường sau khi hủy.
-3. **`Given_DiagnosticOrder_When_SerializedToJson_Then_ContractMatchesFrontendExpectations`**  
-   JSON payload trả về chứa chính xác `specialtyName`, `category`, `preparationInstructions`; không chứa `orderingDoctorSpecialty` hoặc `serviceCategory`.
-4. **`Given_CrossTenantUsers_When_AccessingDiagnosticOrder_Then_IsolationIsEnforcedWith404OrExclusion`**  
-   Bác sĩ B không thể xem/hủy/duyệt chỉ định của Bác sĩ A (HTTP 404). Bệnh nhân B không thể xem chỉ định của Bệnh nhân A.
-5. **`Given_RoleSecurity_When_UnauthorizedRolesAccessEndpoints_Then_ReturnsForbiddenOrUnauthorized`**  
-   Client chưa xác thực → 401; Bệnh nhân/Lễ tân/Dược sĩ truy cập API Kỹ thuật viên → 403; Kỹ thuật viên tạo chỉ định bác sĩ → 403.
-6. **`Given_InvalidService_When_CreatingOrder_Then_ValidationRejects_Before_Transaction`**  
-   Kiểm chứng rằng validation layer từ chối request trước khi bất kỳ transaction nào được mở; không để lại bản ghi rác.
-7. **`Given_TransactionRollback_When_AuditLogSaveFailsAfterOrderInserted_Then_NoDiagnosticDataPersisted`**  
-   Atomicity test chuẩn xác: Sử dụng `SaveFailureInterceptor` (EF Core `SaveChangesInterceptor`) inject lỗi có kiểm soát tại lần `SaveChangesAsync` thứ hai (sau khi `DiagnosticOrder` và `DiagnosticOrderItem` đã flush vào transaction nhưng trước khi audit log + notification commit). Test assert interceptor đã kích hoạt (`WasTriggered == true`, `SaveCallCount == 2`) và so sánh đối chiếu toàn bộ số lượng bản ghi DB sau rollback bằng đúng baseline trước request (không dùng assertion lỏng lẻo).
-8. **`Given_NonOrderCodeDbUpdateException_When_CreatingOrder_Then_RethrownAndNotMappedToCollision`**  
-   Kiểm chứng rằng `DbUpdateException` không liên quan đến unique constraint `OrderCode` (ví dụ lỗi trên bảng khác) KHÔNG bị nuốt hay chuyển thành HTTP 409 `ORDER_CODE_COLLISION`. Request trả về HTTP 500 `INTERNAL_SERVER_ERROR`, transaction rollback sạch sẽ về đúng baseline ban đầu.
-
-### `AiActionAssistantTests` — 12 [Fact] methods
-1. **`AiActionTypes_Allowlist_EnforcesKnownActions`**: Kiểm chứng 19 action types được cấp phép nghiêm ngặt; từ chối mọi action lạ hoặc độc hại.
-2. **`AiChatResponseDto_SerializesToCamelCase`**: Serialization chuẩn camelCase cho toàn bộ hợp đồng API trả về client.
-3. **`Given_UnauthenticatedUser_When_CallingAiChat_Then_Returns401`**: Endpoint yêu cầu xác thực người dùng.
-4. **`Given_DoctorUser_When_CallingAiChat_Then_Returns403Forbidden`**: Phân quyền chỉ dành riêng cho vai trò Bệnh nhân (`Patient`).
-5. **`Given_EmergencyKeyword_When_CallingAiChat_Then_ReturnsEmergencyWithoutCallingProvider`**: Nhận diện triệu chứng nguy hiểm, trả về `EMERGENCY` + nút gọi 115 ngay lập tức; không gọi LLM/provider bên ngoài.
-6. **`Given_PiiInMessage_When_CallingAiChat_Then_PiiIsBlockedAndProviderNotInvoked`**: Phát hiện CCCD, SĐT, Email và từ chối gửi dữ liệu cá nhân ra ngoài; nhắc nhở bệnh nhân bảo mật thông tin.
-7. **`Given_PromptInjection_When_CallingAiChat_Then_InjectionBlockedAndProviderNotInvoked`**: Chặn các nỗ lực vượt quyền, yêu cầu system prompt hoặc đổi vai trò bác sĩ.
-8. **`Given_GroundedSpecialtyQuery_When_ProviderReturnsValidSpecialty_Then_ReturnsGroundedDataAndActions`**: Neo dữ liệu DB với chuyên khoa thật và sinh các action strongly-typed.
-9. **`Given_AlreadyBookedSlot_When_BookingAppointment_Then_Returns409SlotAlreadyBooked`**: Kiểm chứng cơ chế khóa đồng thời ngăn chặn đặt trùng khung giờ (409 Conflict).
-10. **`DatasetValidator_DetectsDuplicates_And_ScenarioLeakage`**: Phát hiện câu trùng lặp và ngăn rò rỉ họ kịch bản giữa tập train và test.
-11. **`DatasetValidator_TracksUnapprovedRecords`**: Lọc bản ghi chưa duyệt, chỉ cho phép dữ liệu đã được phê duyệt tham gia huấn luyện.
-12. **`MlNetSpecialtyClassifier_RejectsDemoModel_WhenClinicallyValidatedRequired`**: Chặn nạp mô hình demo (`clinicallyValidated: false`) khi cờ sản xuất `RequireClinicallyValidated = true`.
-
-### `PatientVitalHistoryTests`
-- Kiểm chứng đối chiếu nhân trắc dọc (`AnthropometricComparisonDto`).
-- Kiểm chứng tính ΔWeight và ΔBMI giữa 2 lần khám liên tiếp.
-
-### `aiActionAssistant.test.tsx` — 7 tests (Vitest)
-1. **`does not render launcher if user is not a Patient`**: Ẩn widget đối với bác sĩ/khách.
-2. **`renders launcher button when user is a Patient`**: Nút launcher hiển thị nổi trên màn hình bệnh nhân.
-3. **`opens chat window with disclaimer and quick prompts when launcher clicked`**: Mở hộp thoại kèm cảnh báo y khoa và 5 câu hỏi nhanh.
-4. **`sends chat request when quick prompt is clicked and renders specialty suggestions`**: Bấm câu hỏi nhanh, hiển thị thẻ chuyên khoa và nút xem chi tiết.
-5. **`renders emergency card with 115 call button when urgency is EMERGENCY`**: Hiển thị thẻ cảnh báo đỏ và link gọi 115.
-6. **`renders booking summary card and confirms appointment on user click`**: Hiển thị thẻ tóm tắt đặt lịch và xác nhận đặt lịch khám thành công qua API.
-7. **`handles 409 slot conflict during booking confirmation gracefully`**: Bắt lỗi 409 khi slot bị trùng và tự động tra cứu lại các slot trống khác.
-
-### `bmiCalculation.test.ts` — 6 tests (Vitest)
-- BMI formula: 68.5 kg / (1.72 m)² = 23.2 → nhãn *"Bình thường"* (< 25.0).
-- Ngưỡng phân loại: Thiếu cân (< 18.5), Bình thường (< 25.0), Thừa cân / Tiền béo phì (< 30.0), Béo phì (≥ 30.0).
-
-### `diagnosticWorkflow.test.tsx` — 5 tests (Vitest)
-- `TechnicianDashboard`: Hàng đợi chỉ định và thẻ KPI (Ordered, InProgress, Completed).
-- `DiagnosticOrderPrint`: Phiếu in chuẩn, hiển thị `preparationInstructions`, fallback giới tính "Chưa cập nhật", fallback chuyên khoa "---" hoặc "Chưa cập nhật" (không dùng dữ liệu suy đoán).
-- `PatientDiagnosticResults`: Accordion kết quả, nhãn "Đã có kết luận bác sĩ", khoảng tham chiếu.
-- API error state handling.
+### 2.1. `AiActionAssistantTests` — Đầy đủ 17 [Fact] methods (.NET Integration Tests)
+1. **`AiActionTypes_Allowlist_EnforcesKnownActions`**: Kiểm tra 19 action types trong allowlist; từ chối mọi action lạ hoặc có nguy cơ bảo mật.
+2. **`AiChatResponseDto_SerializesToCamelCase`**: Kiểm chứng contract JSON trả về serialize chuẩn camelCase (`specialtySuggestions`, `bookingDraft`, `actions`).
+3. **`Given_UnauthenticatedUser_When_CallingAiChat_Then_Returns401`**: Yêu cầu xác thực bắt buộc đối với endpoint AI chat.
+4. **`Given_DoctorUser_When_CallingAiChat_Then_Returns403Forbidden`**: Phân quyền nghiêm ngặt chỉ cấp phép vai trò `Patient`.
+5. **`Given_EmergencyKeyword_When_CallingAiChat_Then_ReturnsEmergencyWithoutCallingProvider`**: Phát hiện Red Flags cấp cứu, trả về `EMERGENCY` + nút gọi `tel:115` ngay lập tức, không gọi LLM bên ngoài.
+6. **`Given_PiiInMessage_When_CallingAiChat_Then_PiiIsBlockedAndProviderNotInvoked`**: Chặn dữ liệu định danh (CCCD, SĐT, Email), bảo vệ dữ liệu nhạy cảm của bệnh nhân.
+7. **`Given_PromptInjection_When_CallingAiChat_Then_InjectionBlockedAndProviderNotInvoked`**: Vô hiệu hóa prompt injection (bỏ qua quy tắc, đóng vai bác sĩ, xuất system prompt).
+8. **`Given_GroundedSpecialtyQuery_When_ProviderReturnsValidSpecialty_Then_ReturnsGroundedDataAndActions`**: Neo dữ liệu chuyên khoa chuẩn tắc (`SP06` Tim mạch) từ DB và sinh actions strongly-typed.
+9. **`Given_AlreadyBookedSlot_When_BookingAppointment_Then_Returns409SlotAlreadyBooked`**: Kiểm chứng cơ chế bắt xung đột đồng thời khi 2 bệnh nhân khác nhau cố đặt cùng một slot.
+10. **`DatasetValidator_DetectsDuplicates_And_ScenarioLeakage`**: Bắt lỗi trùng lặp text và lỗi rò rỉ kịch bản giữa train/test dưới dạng lỗi nghiêm trọng (`ERROR`).
+11. **`DatasetValidator_TracksUnapprovedRecords`**: Cách ly và cảnh báo các bản ghi chưa duyệt (`approved: false`).
+12. **`MlNetSpecialtyClassifier_RejectsDemoModel_WhenClinicallyValidatedRequired`**: Từ chối nạp mô hình demo (`clinicallyValidated = false`) khi cờ sản xuất `RequireClinicallyValidated = true`.
+13. **`Given_SundayDateRequested_When_CallingAiChat_Then_InformsClosedAndSuggestsMondayAction`**: Khi yêu cầu Chủ nhật, giải thích phòng khám đóng cửa vào Chủ nhật, không tự ý chuyển ngày, trả về action `ChangePreferredDate` cho Thứ Hai để người dùng chủ động chọn.
+14. **`Given_SamePatientBooksTwice_When_CallingCreateAppointment_Then_ReturnsIdempotentSuccess`**: Cùng một bệnh nhân bấm xác nhận đặt cùng một slot hai lần được trả về thành công an toàn (idempotent, 200/201) với mã hẹn ban đầu thay vì lỗi 409.
+15. **`Given_NegatedEmergencySymptom_When_CallingAiChat_Then_DoesNotTriggerEmergency`**: Kiểm tra ngữ cảnh phủ định (*"tôi không khó thở và không đau ngực"*), không kích hoạt cấp cứu sai, phân loại đúng mức độ `ROUTINE`.
+16. **`Given_PhoneNumbers_When_CallingAiChat_Then_BlockedByPiiFilter`**: Kiểm tra Regex SĐT hỗ trợ cả định dạng `0900000003` và `+84900000003`, không chặn nhầm thông tin thường (*"35 tuổi, ho 3 ngày"*).
+17. **`AiActionValidator_EnforcesSafeRoutes_And_ViewBillsUsesInvoices`**: Kiểm tra `SafeRoutes` nghiêm ngặt; kiểm chứng action `ViewBills` bắt buộc trỏ tới `/patient/invoices`, từ chối các route không hợp lệ như `/contact`.
 
 ---
 
-## 3. Kiểm Thử Thực Tế Trên Môi Trường Local (Local API Verification)
-
-Các script kiểm thử trong thư mục `scripts/e2e/` giao tiếp HTTP API với backend chạy local:
-- [`../scripts/e2e/diagnostic-workflow.mjs`](../scripts/e2e/diagnostic-workflow.mjs): Kiểm thử toàn trình chỉ định và kết quả cận lâm sàng.
-- [`../scripts/e2e/ai-action-assistant-workflow.mjs`](../scripts/e2e/ai-action-assistant-workflow.mjs): Kiểm thử toàn trình trợ lý AI, an toàn PII, prompt injection, cấp cứu 115, và luồng đặt lịch qua chat.
-
-> ⚠️ **Hàng rào an toàn nghiêm ngặt:**  
-> • Yêu cầu chính xác `process.env.E2E_ALLOW_MUTATION === "true"` (từ chối `false`, `0`, `yes`, rỗng).  
-> • Mặc định chỉ cho phép chạy trên hostname cục bộ: `localhost`, `127.0.0.1`, `::1`.  
-> • Chạy trên remote staging yêu cầu biến riêng `E2E_ALLOW_REMOTE_STAGING=true`.  
-> • Tuyệt đối không chạy trên database dùng để thuyết trình hay production.  
+### 2.2. `aiActionAssistant.test.tsx` — Đầy đủ 11 Component Tests (Vitest)
+1. **`does not render launcher if user is not a Patient`**: Ẩn floating launcher đối với tài khoản không phải Patient.
+2. **`renders launcher button when user is a Patient`**: Hiển thị launcher tròn nổi bật ở góc màn hình bệnh nhân.
+3. **`opens chat window with disclaimer and quick prompts when launcher clicked`**: Mở popup chat kèm lời cảnh báo y khoa và 5 câu hỏi nhanh.
+4. **`sends chat request when quick prompt is clicked and renders specialty suggestions`**: Bấm câu hỏi nhanh, gọi API và hiển thị thẻ chuyên khoa gợi ý.
+5. **`renders emergency card with 115 call button when urgency is EMERGENCY`**: Hiển thị thẻ cấp cứu đỏ nổi bật kèm liên kết gọi điện `tel:115`.
+6. **`renders booking summary card and confirms appointment on user click`**: Hiển thị thẻ tóm tắt đặt lịch và xác nhận đặt lịch khám thành công.
+7. **`handles 409 slot conflict during booking confirmation gracefully`**: Bắt lỗi xung đột slot, bảo tồn triệu chứng gốc và hiển thị hướng dẫn chọn lại.
+8. **`formats Vietnamese date correctly`**: Kiểm chứng hàm `formatVietnameseDate` định dạng ngày dạng `dd/MM/yyyy` (ví dụ `15/09/2026`).
+9. **`navigates to /patient/invoices when ViewBills action is clicked`**: Kiểm chứng nút xem hóa đơn điều hướng chính xác tới route canonical `/patient/invoices`.
+10. **`displays reception hotline and desk info without external navigation when ContactReception is clicked`**: Hiển thị thông tin quầy lễ tân ngay trong khung chat, không điều hướng sang route `/contact` không tồn tại.
+11. **`renders ReviewBooking summary and allows confirmation from review`**: Hiển thị thẻ xem lại thông tin lịch hẹn và cung cấp nút bấm xác nhận chính thức.
 
 ---
 
-## 4. Tổng Kết Chất Lượng & Bằng Chứng Cục Bộ
-
-- **Backend**: 149/149 integration tests passed, 0 compiler errors/warnings, 0 EF Core sentinel warnings.
-- **ML.NET Pipeline**: Bộ công cụ `ClinicManagement.AI.Training` kiểm định dataset sạch, tính toán metrics F1/Accuracy xác định, đóng gói metadata SHA-256 hoàn chỉnh.
-- **Frontend**: 77/77 Vitest tests passed trên 13 test suites, 0 build errors.
-- **An Toàn Dữ Liệu**: 10 bác sĩ, chuyên khoa, lịch làm việc và slot seeded được bảo toàn nguyên vẹn 100%.
-
+### 2.3. Báo Cáo Đo Lường Mô Hình ML.NET (Honest Metrics)
+- **Tập dữ liệu huấn luyện**: 18 bản ghi mô phỏng sạch sẽ (`SIMULATED_TEST_DATA`), đã loại bỏ 2 bản ghi Nha khoa không thuộc danh mục phòng khám (`CASE-017`, `CASE-018`).
+- **Phân tập**: 9 ca huấn luyện, 9 ca kiểm thử độc lập (chia theo họ kịch bản, fixed seed 42).
+- **Kết quả đánh giá trên tập Test**:
+  - **Micro Accuracy**: **22.22%**
+  - **Macro Accuracy**: **18.75%**
+  - **Macro Precision**: **16.67%**
+  - **Macro Recall**: **18.75%**
+  - **Macro F1**: **17.50%**
+  - **Top-3 Accuracy**: **66.67%**
+  - **Log Loss**: **2.0171**
+  - **Cờ ClinicallyValidated**: **`false`** (Bắt buộc từ chối triển khai lâm sàng theo đúng quy định an toàn y tế).

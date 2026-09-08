@@ -202,14 +202,65 @@ async function run() {
         const suggestions = chatRes.data?.data?.specialtySuggestions || [];
         assert(suggestions.length > 0, 'Returns at least one grounded specialty suggestion');
         assert(
-            suggestions.some(s => s.specialtyCode === 'SP-01' || s.specialtyName?.toLowerCase().includes('tim')),
+            suggestions.some(s => s.specialtyCode === 'SP06' || s.specialtyCode === 'SP01' || s.specialtyName?.toLowerCase().includes('tim')),
             'Suggestion matches seeded specialty'
         );
         const actions = chatRes.data?.data?.actions || [];
         assert(actions.length > 0, 'Actions are generated and strongly typed');
 
-        // Step 7: Available Slots Query
-        console.log('\n--- Step 7: Query Real Available Slots ---');
+        // Verify targetUrl safety
+        const safePrefixes = ['/patient/invoices', '/patient/appointments', '/patient/prescriptions', '/patient/diagnostic-results', '/patient/book', '/doctors', '/specialties', 'tel:115'];
+        for (const act of actions) {
+            if (act.payload?.targetUrl) {
+                const url = act.payload.targetUrl;
+                assert(!url.includes('/contact'), `Action ${act.id} does not route to unsafe /contact`);
+                const isSafe = safePrefixes.some(p => url.startsWith(p));
+                assert(isSafe, `Action targetUrl "${url}" matches safe route allowlist`);
+            }
+        }
+
+        // Step 7: Sunday Rule Check
+        console.log('\n--- Step 7: Sunday Rule Enforcement ---');
+        const today = new Date();
+        const daysUntilSunday = (7 - today.getUTCDay()) % 7 || 7;
+        const nextSunday = new Date(today.getTime() + daysUntilSunday * 24 * 60 * 60 * 1000);
+        const sundayStr = nextSunday.toISOString().split('T')[0];
+
+        const sundayRes = await apiRequest('/api/v1/ai/chat', {
+            method: 'POST',
+            token,
+            body: {
+                message: 'Tôi muốn khám vào Chủ nhật',
+                pendingSlotDate: sundayStr,
+                pendingSpecialtyId: suggestions[0]?.specialtyId || 1
+            }
+        });
+        assert(sundayRes.status === 200, 'Sunday request returns 200 OK');
+        assert(
+            sundayRes.data?.data?.message?.includes('Chủ nhật'),
+            'Sunday response explains clinic is closed on Sunday'
+        );
+        const sundayActions = sundayRes.data?.data?.actions || [];
+        assert(
+            sundayActions.some(a => a.type === 'ChangePreferredDate'),
+            'Sunday response provides ChangePreferredDate action for Monday'
+        );
+
+        // Step 8: Emergency Negation Check
+        console.log('\n--- Step 8: Emergency Negation Check ---');
+        const negRes = await apiRequest('/api/v1/ai/chat', {
+            method: 'POST',
+            token,
+            body: { message: 'Tôi hơi mệt nhưng không khó thở và không đau ngực dữ dội' }
+        });
+        assert(negRes.status === 200, 'Negated emergency request returns 200 OK');
+        assert(
+            negRes.data?.data?.urgency !== 'EMERGENCY',
+            'Negated symptoms ("không khó thở") do NOT escalate to EMERGENCY'
+        );
+
+        // Step 9: Available Slots Query
+        console.log('\n--- Step 9: Query Real Available Slots ---');
         const slotsRes = await apiRequest('/api/v1/ai/chat', {
             method: 'POST',
             token,
@@ -220,9 +271,9 @@ async function run() {
         });
         assert(slotsRes.status === 200, 'Slots chat query returns 200 OK');
 
-        // Step 8: Double-Booking / 409 Conflict Test (if Patient B provided)
+        // Step 10: Double-Booking / 409 Conflict Test (if Patient B provided)
         if (PATIENT_B_EMAIL && PATIENT_B_PASSWORD) {
-            console.log('\n--- Step 8: 409 Slot Conflict Guard ---');
+            console.log('\n--- Step 10: 409 Slot Conflict Guard ---');
             const tokenB = await login(PATIENT_B_EMAIL, PATIENT_B_PASSWORD);
             assert(!!tokenB, `Patient B authenticated successfully (${PATIENT_B_EMAIL})`);
             console.log('  ℹ️ 409 Conflict test ready for dual-patient validation.');

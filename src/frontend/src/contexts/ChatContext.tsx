@@ -63,8 +63,36 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.error("Failed to parse chat history", e);
         }
 
+        const draftKey = `cliniccare_booking_draft_${user.id}`;
+        try {
+            const savedDraft = sessionStorage.getItem(draftKey);
+            if (savedDraft) {
+                const parsedDraft = JSON.parse(savedDraft);
+                if (parsedDraft && typeof parsedDraft === "object") {
+                    setActiveDraft(parsedDraft);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to parse booking draft", e);
+        }
+
         setMessages([defaultMessage]);
     }, [user, loading]);
+
+    // Save activeDraft when it changes
+    useEffect(() => {
+        if (!user || loading) return;
+        const draftKey = `cliniccare_booking_draft_${user.id}`;
+        try {
+            if (activeDraft) {
+                sessionStorage.setItem(draftKey, JSON.stringify(activeDraft));
+            } else {
+                sessionStorage.removeItem(draftKey);
+            }
+        } catch (e) {
+            console.error("Failed to save booking draft", e);
+        }
+    }, [activeDraft, user, loading]);
 
     // Save messages when they change
     useEffect(() => {
@@ -89,7 +117,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setActiveDraft(null);
         if (user) {
             const key = `cliniccare_chat_history_${user.id}`;
+            const draftKey = `cliniccare_booking_draft_${user.id}`;
             sessionStorage.removeItem(key);
+            sessionStorage.removeItem(draftKey);
         }
     };
 

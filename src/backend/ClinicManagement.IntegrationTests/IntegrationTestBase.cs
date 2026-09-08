@@ -33,6 +33,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
     public static long Patient1EntityId { get; private set; }
     public static long Patient2EntityId { get; private set; }
     public static long SpecialtyEntityId { get; private set; }
+    public static long CardiologySpecialtyId { get; private set; }
     public static long SlotEntityId { get; private set; }
     public static long MedicineEntityId { get; private set; }
     public static long PackageEntityId { get; private set; }
@@ -73,6 +74,8 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
                 Patient1EntityId = pat1Existing.Id;
                 Patient2EntityId = pat2Existing?.Id ?? 0;
                 SpecialtyEntityId = specExisting.Id;
+                var cardExisting = await db.Specialties.FirstOrDefaultAsync(s => s.SpecialtyCode == "SP06");
+                CardiologySpecialtyId = cardExisting?.Id ?? specExisting.Id;
                 SlotEntityId = slotExisting.Id;
                 MedicineEntityId = medExisting.Id;
                 PackageEntityId = pkgExisting.Id;
@@ -165,12 +168,29 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
             db.Patients.Add(patient1);
             db.Patients.Add(patient2);
 
-            var spec = new Specialty { SpecialtyCode = "SP-01", Name = "Tim Mạch", IsActive = true, AiEnabled = true };
-            db.Specialties.Add(spec);
+            var canonicalSpecialties = new[]
+            {
+                new Specialty { SpecialtyCode = "SP01", Name = "Nội tổng quát", Description = "Khám và điều trị các bệnh lý nội khoa chung (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 150000m },
+                new Specialty { SpecialtyCode = "SP02", Name = "Nhi khoa", Description = "Khám, chẩn đoán và điều trị bệnh cho trẻ em (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
+                new Specialty { SpecialtyCode = "SP03", Name = "Sản phụ khoa", Description = "Khám thai định kỳ và tư vấn sức khỏe phụ khoa (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 200000m },
+                new Specialty { SpecialtyCode = "SP04", Name = "Da liễu", Description = "Chuyên trị các vấn đề về da, tóc và móng (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 200000m },
+                new Specialty { SpecialtyCode = "SP05", Name = "Tai mũi họng", Description = "Khám và điều trị bệnh lý tai mũi họng (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
+                new Specialty { SpecialtyCode = "SP06", Name = "Tim mạch", Description = "Kiểm tra huyết áp, đo điện tâm đồ và bệnh lý tim mạch (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 250000m },
+                new Specialty { SpecialtyCode = "SP07", Name = "Cơ xương khớp", Description = "Điều trị viêm khớp, thoái hóa khớp và các chấn thương (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 220000m },
+                new Specialty { SpecialtyCode = "SP08", Name = "Thần kinh", Description = "Khám và điều trị các bệnh lý thần kinh và đau đầu (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 250000m },
+                new Specialty { SpecialtyCode = "SP09", Name = "Nội tiết", Description = "Khám và điều trị bệnh lý tiểu đường, tuyến giáp và rối loạn nội tiết (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 220000m },
+                new Specialty { SpecialtyCode = "SP10", Name = "Nhãn khoa", Description = "Khám và điều trị các bệnh lý về mắt và thị lực (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
+                new Specialty { SpecialtyCode = "SP11", Name = "Tiêu hóa", Description = "Khám và điều trị các bệnh lý dạ dày, đại tràng và tiêu hóa (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 200000m }
+            };
+            db.Specialties.AddRange(canonicalSpecialties);
             await db.SaveChangesAsync();
 
-            db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor.Id, SpecialtyId = spec.Id, IsPrimary = true });
-            db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor2.Id, SpecialtyId = spec.Id, IsPrimary = true });
+            var spec01 = canonicalSpecialties[0];
+            var spec06 = canonicalSpecialties[5];
+
+            db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor.Id, SpecialtyId = spec01.Id, IsPrimary = true });
+            db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor.Id, SpecialtyId = spec06.Id, IsPrimary = false });
+            db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor2.Id, SpecialtyId = spec01.Id, IsPrimary = true });
 
             var date = GetFutureWorkingDate(1);
             var schedule = new DoctorWorkSchedule { DoctorId = doctor.Id, WorkDate = date, StartTime = new TimeOnly(8,0,0), EndTime = new TimeOnly(12,0,0), IsActive = true };
@@ -213,7 +233,8 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
             Doctor2EntityId = doctor2.Id;
             Patient1EntityId = patient1.Id;
             Patient2EntityId = patient2.Id;
-            SpecialtyEntityId = spec.Id;
+            SpecialtyEntityId = spec01.Id;
+            CardiologySpecialtyId = spec06.Id;
             SlotEntityId = slot.Id;
             MedicineEntityId = medicine.Id;
             PackageEntityId = package.Id;

@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { MedicalChatWidget } from '../components/MedicalChatWidget';
 import { ChatProvider } from '../contexts/ChatContext';
+import { formatVietnameseDate } from '../hooks/useAiBookingFlow';
 import axiosClient from '../api/axiosClient';
+
+const LocationDisplay = () => {
+    const location = useLocation();
+    return <div data-testid="location-display">{location.pathname}</div>;
+};
 
 // Mock AuthContext
 let mockUser: { id: string; fullName: string; role: string } | null = {
@@ -347,6 +353,163 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         await waitFor(() => {
             expect(screen.getByText(/vừa có bệnh nhân khác đặt trước/i)).toBeInTheDocument();
+        });
+    });
+
+    it('formats Vietnamese date correctly', () => {
+        expect(formatVietnameseDate('2026-09-15')).toBe('15/09/2026');
+        expect(formatVietnameseDate('2026-01-05')).toBe('05/01/2026');
+        expect(formatVietnameseDate('')).toBe('');
+    });
+
+    it('navigates to /patient/invoices when ViewBills action is clicked', async () => {
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: '',
+            data: {
+                message: 'Bạn có thể xem hóa đơn tại đây:',
+                urgency: 'ROUTINE',
+                actions: [
+                    {
+                        id: 'act-bills',
+                        type: 'ViewBills',
+                        label: 'Xem hóa đơn viện phí',
+                        style: 'secondary',
+                        requiresAuthentication: true,
+                        requiresConfirmation: false,
+                        payload: { targetUrl: '/patient/invoices' }
+                    }
+                ]
+            }
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/patient']}>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                    <LocationDisplay />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(input, { target: { value: 'Tôi muốn xem hóa đơn' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Xem hóa đơn viện phí')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Xem hóa đơn viện phí'));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('location-display').textContent).toBe('/patient/invoices');
+        });
+    });
+
+    it('displays reception hotline and desk info without external navigation when ContactReception is clicked', async () => {
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: '',
+            data: {
+                message: 'Thông tin quầy lễ tân:',
+                urgency: 'ROUTINE',
+                actions: [
+                    {
+                        id: 'act-reception',
+                        type: 'ContactReception',
+                        label: 'Liên hệ lễ tân',
+                        style: 'secondary',
+                        requiresAuthentication: false,
+                        requiresConfirmation: false,
+                        payload: { phoneNumber: '1900 1234' }
+                    }
+                ]
+            }
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/patient']}>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                    <LocationDisplay />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(input, { target: { value: 'Cho tôi gặp lễ tân' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Liên hệ lễ tân')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Liên hệ lễ tân'));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Thông tin Quầy Tiếp Đón & Lễ Tân/i)).toBeInTheDocument();
+            expect(screen.getByText(/1900 1234/i)).toBeInTheDocument();
+            // Did not navigate to /contact
+            expect(screen.getByTestId('location-display').textContent).toBe('/patient');
+        });
+    });
+
+    it('renders ReviewBooking summary and allows confirmation from review', async () => {
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: '',
+            data: {
+                message: 'Vui lòng kiểm tra lại thông tin:',
+                urgency: 'ROUTINE',
+                actions: [
+                    {
+                        id: 'act-review',
+                        type: 'ReviewBooking',
+                        label: 'Kiểm tra lại thông tin',
+                        style: 'secondary',
+                        requiresAuthentication: true,
+                        requiresConfirmation: false,
+                        payload: {
+                            specialtyId: 1,
+                            specialtyName: 'Tim Mạch',
+                            doctorId: 10,
+                            doctorName: 'BS. CKII Nguyễn Văn B',
+                            slotId: 105,
+                            slotDate: '2026-09-18',
+                            startTime: '10:00',
+                            endTime: '10:30',
+                            reason: 'Tái khám huyết áp'
+                        }
+                    }
+                ]
+            }
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/patient']}>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(input, { target: { value: 'Xem lại thông tin đặt' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Kiểm tra lại thông tin')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Kiểm tra lại thông tin'));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Thông tin xác nhận lịch hẹn/i)).toBeInTheDocument();
+            expect(screen.getByText('Xác nhận đặt lịch')).toBeInTheDocument();
         });
     });
 });

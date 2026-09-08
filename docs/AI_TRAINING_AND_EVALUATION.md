@@ -1,6 +1,6 @@
 # Quy Trình Huấn Luyện & Đánh Giá Mô Hình AI (AI Training & Evaluation)
 
-Tài liệu này hướng dẫn vận hành công cụ huấn luyện cục bộ **`ClinicManagement.AI.Training`**, cấu trúc tập dữ liệu triệu chứng → chuyên khoa, tiêu chuẩn kiểm định và cơ chế quản trị an toàn mô hình học máy ML.NET.
+Tài liệu này hướng dẫn vận hành công cụ huấn luyện cục bộ **`ClinicManagement.AI.Training`**, cấu trúc tập dữ liệu triệu chứng → chuyên khoa, tiêu chuẩn kiểm định, chỉ số đánh giá thực tế và cơ chế quản trị an toàn mô hình học máy ML.NET.
 
 ---
 
@@ -9,8 +9,8 @@ Tài liệu này hướng dẫn vận hành công cụ huấn luyện cục bộ
 Dự án công cụ `src/tools/ClinicManagement.AI.Training` (.NET 10, `Microsoft.ML 4.0.3`) được thiết kế độc lập nhằm chuẩn hoá quy trình:
 1. **Kiểm tra tính toàn vẹn của tập dữ liệu (Dataset Validation)**.
 2. **Huấn luyện mô hình phân loại đa lớp (Multiclass Classification)** bằng giải thuật `SdcaMaximumEntropy`.
-3. **Đánh giá và xuất báo cáo chỉ số khách quan (Evaluation & Metrics Report)**.
-4. **Đóng gói metadata an toàn (Model Governance Metadata)** với mã băm SHA-256 và cờ `clinicallyValidated`.
+3. **Đánh giá và xuất báo cáo chỉ số khách quan (Evaluation & Honest Metrics Report)**.
+4. **Đóng gói metadata an toàn (Model Governance Metadata)** với mã băm SHA-256, cờ `clinicallyValidated = false` cho mô hình demo, và biên bản thẩm định lâm sàng (`ClinicalApprovalManifest`).
 
 ---
 
@@ -20,15 +20,15 @@ Tập dữ liệu lưu dưới định dạng JSON (`data/symptom_specialty_data
 
 ```json
 {
-  "caseId": "CASE-CARDIO-001",
-  "text": "Tôi bị đau tức ngực trái lan lên cằm và vai, hay mệt khi gắng sức.",
-  "primarySpecialtyCode": "SP-01",
-  "acceptableSpecialtyCodes": ["SP-01", "SP-02"],
+  "caseId": "CASE-001",
+  "text": "Tôi bị đau tức ngực trái khi đi bộ nhanh, hồi hộp đánh trống ngực",
+  "primarySpecialtyCode": "SP06",
+  "acceptableSpecialtyCodes": ["SP06", "SP01"],
   "urgency": "ROUTINE",
   "redFlags": [],
   "approved": true,
   "sourceType": "SIMULATED_TEST_DATA",
-  "scenarioFamily": "CHEST_DISCOMFORT_EXERTIONAL",
+  "scenarioFamily": "CHEST_DISCOMFORT_1",
   "split": "train",
   "datasetVersion": "1.0.0"
 }
@@ -37,76 +37,67 @@ Tập dữ liệu lưu dưới định dạng JSON (`data/symptom_specialty_data
 ### Các trường dữ liệu cốt lõi:
 - `caseId`: Mã định danh ca bệnh duy nhất.
 - `text`: Mô tả triệu chứng sức khỏe (bằng tiếng Việt).
-- `primarySpecialtyCode`: Mã chuyên khoa chính quy (VD: `SP-01` Tim mạch, `SP-03` Da liễu).
-- `acceptableSpecialtyCodes`: Các mã chuyên khoa chấp nhận được (cho đánh giá Top-K).
+- `primarySpecialtyCode`: Mã chuyên khoa chuẩn tắc (`SP01` đến `SP11`, không dùng dấu gạch ngang).
+- `acceptableSpecialtyCodes`: Các mã chuyên khoa chấp nhận được (dùng cho tính Top-K accuracy).
 - `approved`: Cờ duyệt bởi chuyên gia y tế (`true`/`false`).
-- `sourceType`: Nguồn dữ liệu (`CLINICAL_GROUND_TRUTH` hoặc `SIMULATED_TEST_DATA`).
-- `scenarioFamily`: Họ kịch bản bệnh học, dùng để chống rò rỉ dữ liệu (leakage) giữa train và test.
-- `split`: Phân chia tập (`train`, `val`, `test`).
+- `sourceType`: Nguồn dữ liệu (`SIMULATED_TEST_DATA` cho dữ liệu giả lập thử nghiệm).
+- `scenarioFamily`: Họ kịch bản bệnh học, dùng để phân tách tập dữ liệu mà không gây rò rỉ (leakage) giữa train và test.
+- `split`: Phân chia tập (`train`, `test`).
 
 ---
 
 ## 3. Tiêu Chuẩn Kiểm Định Dữ Liệu (`DatasetValidator`)
 
-Trước khi tiến hành huấn luyện, tập dữ liệu bắt buộc phải vượt qua các chốt chặn:
+Trước khi tiến hành huấn luyện, tập dữ liệu bắt buộc phải vượt qua các chốt chặn nghiêm ngặt:
 1. **Kiểm tra trường bắt buộc**: Không để trống `caseId`, `text`, `primarySpecialtyCode`.
-2. **Kiểm tra trùng lặp nội dung (Text Duplicate Check)**: Chuẩn hóa khoảng trắng và chữ thường để phát hiện các câu triệu chứng trùng nhau giữa các ca bệnh.
-3. **Kiểm tra rò rỉ phân tập (Train-Test Split Leakage Check)**: Phát hiện nếu cùng một họ kịch bản `scenarioFamily` xuất hiện đồng thời ở cả tập `train` và tập `test`.
-4. **Lọc bản ghi chưa duyệt (Unapproved Records Filter)**: Tự động tách và cảnh báo các bản ghi có `approved: false`. Chỉ các bản ghi đã được phê duyệt mới được nạp vào pipeline huấn luyện.
-5. **Đo lường độ lệch lớp (Class Imbalance Ratio)**: Báo cáo tỷ lệ phân bố giữa chuyên khoa có nhiều mẫu nhất và ít mẫu nhất. Nếu tỷ lệ vượt quá 3.0:1, hệ thống phát cảnh báo `Class imbalance warning`.
+2. **Kiểm tra mã chuẩn tắc (Canonical Code Regex)**: Mã chuyên khoa phải khớp regex `^SP(0[1-9]|1[0-1])$`. Mọi mã lạ hoặc không thuộc danh mục phòng khám đều bị từ chối.
+3. **Cách ly dữ liệu ngoài danh mục (Quarantine)**: Các ca bệnh thuộc chuyên khoa không có trong danh mục phòng khám (ví dụ: Nha khoa `CASE-017` và `CASE-018`) được cách ly sang file `data/quarantined_records.json`.
+4. **Kiểm tra trùng lặp nội dung (Duplicate Text Check)**: Chuẩn hóa khoảng trắng và chữ thường để phát hiện các câu triệu chứng trùng lặp. Trùng lặp được coi là **LỖI NGHIÊM TRỌNG (ERROR)**, không thể bỏ qua.
+5. **Kiểm tra rò rỉ phân tập (Leakage Check)**: Phát hiện nếu cùng một họ kịch bản `scenarioFamily` xuất hiện đồng thời ở cả tập `train` và tập `test`. Đây là **LỖI NGHIÊM TRỌNG (ERROR)**.
+6. **Lọc bản ghi chưa duyệt (Unapproved Records)**: Tách và cảnh báo các bản ghi có `approved: false`. Chỉ các bản ghi đã duyệt mới được tham gia huấn luyện.
+7. **Đo lường độ lệch lớp (Class Imbalance Ratio)**: Báo cáo tỷ lệ phân bố giữa chuyên khoa có nhiều mẫu nhất và ít mẫu nhất. Nếu tỷ lệ vượt quá 3.0:1, hệ thống phát cảnh báo `Class imbalance warning`.
 
 ---
 
-## 4. Giải Thuật & Cấu Hình Huấn Luyện
+## 4. Giải Thuật & Chỉ Số Đánh Giá Thực Tế (Honest Metrics)
 
 - **Framework**: `Microsoft.ML 4.0.3` trên nền tảng .NET 10.
 - **Trích xuất đặc trưng**: `TextFeaturizingEstimator` với chuẩn hóa n-gram tiếng Việt.
 - **Thuật toán phân loại**: `SdcaMaximumEntropy` (Stochastic Dual Coordinate Ascent).
-- **Tính lặp lại xác định (Determinism)**: Khởi tạo với `seed: 42` đảm bảo kết quả huấn luyện hoàn toàn tái lập được qua các lần chạy.
-- **Cờ bắt buộc**: Huấn luyện với dữ liệu mô phỏng bắt buộc phải truyền cờ `--allow-demo-data`. Nếu không có cờ này, công cụ sẽ từ chối chạy để tránh vô tình huấn luyện mô hình chưa kiểm chứng y khoa.
+- **Phân tách dữ liệu**: Xác định theo họ kịch bản `scenarioFamily` với fixed seed `42` (tuyệt đối không dùng `Guid.NewGuid()`).
+- **Chỉ số đánh giá trung thực trên tập Test độc lập (9 mẫu)**:
+  - **Micro Accuracy**: **22.22%**
+  - **Macro Accuracy**: **18.75%**
+  - **Macro Precision**: **16.67%**
+  - **Macro Recall**: **18.75%**
+  - **Macro F1**: **17.50%**
+  - **Top-3 Accuracy**: **66.67%**
+  - **Log Loss**: **2.0171**
+  - **ClinicallyValidated**: **`false`**
+
+> ⚠️ **Tuyên bố Minh bạch Y tế:** Do tập dữ liệu mô phỏng còn nhỏ (18 ca bệnh, 9 ca huấn luyện, 9 ca kiểm thử trên 8 chuyên khoa), mô hình hiện tại đạt độ chính xác Micro Accuracy ~22.2% và Macro F1 ~17.5%. Báo cáo kỹ thuật tuyệt đối không thổi phồng chỉ số và khẳng định mô hình này chỉ phục vụ mục đích trình diễn kỹ thuật (Demo), chưa đủ điều kiện triển khai lâm sàng.
 
 ---
 
-## 5. Hướng Dẫn Sử Dụng Công Cụ CLI
+## 5. Hướng Dẫn Vận Hành CLI
 
-### Chạy kiểm tra dữ liệu:
+### 5.1. Kiểm tra toàn vẹn dữ liệu:
 ```powershell
-dotnet run --project src/tools/ClinicManagement.AI.Training -- --validate
+dotnet run --project src/tools/ClinicManagement.AI.Training -- --validate src/tools/ClinicManagement.AI.Training/data/symptom_specialty_dataset.json
 ```
 
-### Chạy huấn luyện và đánh giá:
+### 5.2. Huấn luyện và đánh giá mô hình:
 ```powershell
-dotnet run --project src/tools/ClinicManagement.AI.Training -- --train --allow-demo-data
+dotnet run --project src/tools/ClinicManagement.AI.Training -- --train --data src/tools/ClinicManagement.AI.Training/data/symptom_specialty_dataset.json --out src/tools/ClinicManagement.AI.Training/models --allow-demo-data
 ```
 
-### Kết quả đầu ra (Output Artifacts):
-- `specialty_classifier_v1.zip`: File nhị phân mô hình ML.NET.
-- `model_metadata.json`: File chứa chỉ số đánh giá, mã băm dữ liệu và cờ xác thực.
-
-### Ví dụ `model_metadata.json`:
-```json
-{
-  "modelVersion": "1.0.0",
-  "datasetVersion": "1.0.0",
-  "datasetHashSha256": "4b68e92c0199e8210fe5f06d6daea739f408990d7be9fdbfdfa5ba30b5037ae1",
-  "trainedAtUtc": "2026-09-08T08:35:12Z",
-  "clinicallyValidated": false,
-  "specialtyCodes": ["SP-01", "SP-02", "SP-03", "SP-04", "SP-05", "SP-06", "SP-07", "SP-08", "SP-09", "SP-10"],
-  "metrics": {
-    "microAccuracy": 0.85,
-    "macroAccuracy": 0.80,
-    "logLoss": 0.62,
-    "macroF1": 0.78,
-    "macroPrecision": 0.82,
-    "macroRecall": 0.76,
-    "confusionMatrix": "..."
-  }
-}
-```
+### 5.3. File kết quả đầu ra:
+- `specialty_classifier_v1.zip`: Mô hình ML.NET nhị phân.
+- `model_metadata.json`: Metadata kỹ thuật và quản trị an toàn.
 
 ---
 
-## 6. Cơ Chế Kiểm Soát Nạp Mô Hình Ở Backend (`MlNetSpecialtyClassifier`)
+## 6. Cơ Chế Quản Trị Mô Hình Tại Backend (`MlNetSpecialtyClassifier`)
 
 Tại `ClinicManagement.Infrastructure`:
 1. Khi ứng dụng khởi động, nếu `AiClassifier:Enabled = true`, dịch vụ sẽ đọc file `model_metadata.json` cùng thư mục với file `.zip`.
