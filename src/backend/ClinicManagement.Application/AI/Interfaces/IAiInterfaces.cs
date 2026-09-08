@@ -21,3 +21,8 @@ public interface IClinicAiContextService
 {
     Task<string> GetClinicContextJsonAsync(CancellationToken cancellationToken = default);
 }
+
+public interface IAiSpecialtyClassifier
+{
+    SpecialtyClassificationResult? ClassifySymptom(string symptomDescription);
+}

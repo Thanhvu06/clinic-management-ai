@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.AI.Interfaces;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,10 +13,12 @@ namespace ClinicManagement.Infrastructure.AI;
 public class ClinicAiContextService : IClinicAiContextService
 {
     private readonly AppDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public ClinicAiContextService(AppDbContext dbContext)
+    public ClinicAiContextService(AppDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<string> GetClinicContextJsonAsync(CancellationToken cancellationToken = default)
@@ -34,24 +37,8 @@ public class ClinicAiContextService : IClinicAiContextService
 
         var specialtyIds = activeSpecialties.Select(s => s.Id).ToList();
 
-        var activeDoctors = await (from ds in _dbContext.DoctorSpecialties
-                                   join d in _dbContext.Doctors on ds.DoctorId equals d.Id
-                                   join u in _dbContext.Users on d.UserId equals u.Id
-                                   where d.IsActive && u.IsActive && specialtyIds.Contains(ds.SpecialtyId)
-                                   select new
-                                   {
-                                       ds.SpecialtyId,
-                                       DoctorName = u.FullName,
-                                       d.AcademicTitle,
-                                       d.ExperienceYears,
-                                       d.Description
-                                   })
-                                   .AsNoTracking()
-                                   .ToListAsync(cancellationToken);
-
-        var today = DateTime.UtcNow;
-        var dateToday = DateOnly.FromDateTime(today);
-        var timeNow = TimeOnly.FromDateTime(today);
+        var dateToday = _dateTimeProvider.VietnamToday;
+        var timeNow = _dateTimeProvider.VietnamTime;
         var toDate = dateToday.AddDays(7); // Next 7 days
 
         var availableSlots = await _dbContext.AppointmentSlots
@@ -63,10 +50,7 @@ public class ClinicAiContextService : IClinicAiContextService
             .Select(s => new { s.DoctorId, s.SlotDate })
             .Distinct()
             .ToListAsync(cancellationToken);
-            
-        var activeDoctorIds = activeDoctors.Select(d => d.SpecialtyId).Distinct().ToList(); // Wait, DoctorId is needed for available slots.
 
-        // Fix: Query active doctors with DoctorId
         var activeDoctorsWithId = await (from ds in _dbContext.DoctorSpecialties
                                          join d in _dbContext.Doctors on ds.DoctorId equals d.Id
                                          join u in _dbContext.Users on d.UserId equals u.Id
