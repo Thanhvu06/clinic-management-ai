@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { MedicalChatWidget } from '../components/MedicalChatWidget';
 import { ChatProvider } from '../contexts/ChatContext';
-import { formatVietnameseDate } from '../hooks/useAiBookingFlow';
+import { formatVietnameseDate, isSafeClientRoute } from '../hooks/useAiBookingFlow';
 import axiosClient from '../api/axiosClient';
 
 const LocationDisplay = () => {
@@ -512,4 +512,135 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
             expect(screen.getByText('Xác nhận đặt lịch')).toBeInTheDocument();
         });
     });
+
+    it('validates isSafeClientRoute rejecting unsafe and allowing valid routes', () => {
+        expect(isSafeClientRoute('//evil.com')).toBe(false);
+        expect(isSafeClientRoute('https://evil.com')).toBe(false);
+        expect(isSafeClientRoute('/patient/invoices.evil')).toBe(false);
+        expect(isSafeClientRoute('/malicious/path')).toBe(false);
+        expect(isSafeClientRoute('')).toBe(false);
+        expect(isSafeClientRoute(undefined)).toBe(false);
+
+        expect(isSafeClientRoute('/patient/invoices')).toBe(true);
+        expect(isSafeClientRoute('/patient/appointments?appointmentId=10&action=reschedule')).toBe(true);
+        expect(isSafeClientRoute('/patient/book?specialtyId=2')).toBe(true);
+        expect(isSafeClientRoute('/doctors?specialtyId=1')).toBe(true);
+        expect(isSafeClientRoute('tel:115')).toBe(true);
+    });
+
+    it('displays unconfigured message when ContactReception has no phoneNumber', async () => {
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: '',
+            data: {
+                message: 'Thông tin quầy lễ tân:',
+                urgency: 'ROUTINE',
+                actions: [
+                    {
+                        id: 'act-reception-unconfigured',
+                        type: 'ContactReception',
+                        label: 'Liên hệ lễ tân',
+                        style: 'secondary',
+                        requiresAuthentication: false,
+                        requiresConfirmation: false,
+                        payload: {}
+                    }
+                ]
+            }
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/patient']}>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(input, { target: { value: 'Liên hệ lễ tân giúp tôi' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Liên hệ lễ tân')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Liên hệ lễ tân'));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống/i)).toBeInTheDocument();
+        });
+    });
+
+    it('rejects incomplete ReviewBooking and does not generate ConfirmBooking', async () => {
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: '',
+            data: {
+                message: 'Thông tin chưa hoàn tất:',
+                urgency: 'ROUTINE',
+                actions: [
+                    {
+                        id: 'act-review-incomplete',
+                        type: 'ReviewBooking',
+                        label: 'Xem lại thông tin',
+                        style: 'secondary',
+                        requiresAuthentication: true,
+                        requiresConfirmation: false,
+                        payload: {
+                            specialtyId: 1,
+                            // doctorId and slotId missing
+                            reason: ''
+                        }
+                    }
+                ]
+            }
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/patient']}>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(input, { target: { value: 'Xem lại' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Xem lại thông tin')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Xem lại thông tin'));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Thông tin đặt lịch chưa đầy đủ/i)).toBeInTheDocument();
+            expect(screen.queryByText('Xác nhận đặt lịch')).not.toBeInTheDocument();
+        });
+    });
+
+    it('handles Escape key to close chat widget', async () => {
+        render(
+            <MemoryRouter initialEntries={['/patient']}>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        expect(screen.getByRole('dialog', { name: /ClinicCare AI/i })).toBeInTheDocument();
+
+        fireEvent.keyDown(window, { key: 'Escape' });
+
+        await waitFor(() => {
+            expect(screen.queryByRole('dialog', { name: /ClinicCare AI/i })).not.toBeInTheDocument();
+            expect(screen.getByLabelText('Mở Trợ lý ClinicCare AI')).toBeInTheDocument();
+        });
+    });
 });
+

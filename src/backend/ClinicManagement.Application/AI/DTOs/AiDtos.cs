@@ -83,6 +83,8 @@ public static class AiActionTypes
         ManualSpecialtySelection, CallEmergency
     };
 
+    public static IReadOnlyCollection<string> All => AllAllowed;
+
     public static bool IsAllowed(string? actionType)
     {
         return !string.IsNullOrWhiteSpace(actionType) && AllAllowed.Contains(actionType);
@@ -168,16 +170,90 @@ public static class AiActionValidator
             return false;
         }
 
-        if (action.Type == AiActionTypes.ConfirmBooking && !action.RequiresConfirmation)
-        {
-            error = "ConfirmBooking action MUST require confirmation.";
-            return false;
-        }
-
         if (AuthRequiredActions.Contains(action.Type) && !action.RequiresAuthentication)
         {
             error = $"Action type '{action.Type}' requires authentication.";
             return false;
+        }
+
+        // Per-action specific payload validation
+        switch (action.Type)
+        {
+            case AiActionTypes.SelectDoctor:
+                if (!action.Payload.SpecialtyId.HasValue || action.Payload.SpecialtyId.Value <= 0)
+                {
+                    error = "SelectDoctor action requires a valid SpecialtyId.";
+                    return false;
+                }
+                if (!action.Payload.DoctorId.HasValue || action.Payload.DoctorId.Value <= 0)
+                {
+                    error = "SelectDoctor action requires a valid DoctorId.";
+                    return false;
+                }
+                break;
+
+            case AiActionTypes.SelectSlot:
+                if (!action.Payload.DoctorId.HasValue || action.Payload.DoctorId.Value <= 0)
+                {
+                    error = "SelectSlot action requires a valid DoctorId.";
+                    return false;
+                }
+                if (!action.Payload.SlotId.HasValue || action.Payload.SlotId.Value <= 0)
+                {
+                    error = "SelectSlot action requires a valid SlotId.";
+                    return false;
+                }
+                if (string.IsNullOrWhiteSpace(action.Payload.SlotDate) ||
+                    string.IsNullOrWhiteSpace(action.Payload.StartTime) ||
+                    string.IsNullOrWhiteSpace(action.Payload.EndTime))
+                {
+                    error = "SelectSlot action requires SlotDate, StartTime, and EndTime.";
+                    return false;
+                }
+                break;
+
+            case AiActionTypes.ConfirmBooking:
+                if (!action.RequiresConfirmation)
+                {
+                    error = "ConfirmBooking action MUST require confirmation.";
+                    return false;
+                }
+                if (!action.Payload.SpecialtyId.HasValue || action.Payload.SpecialtyId.Value <= 0 ||
+                    !action.Payload.DoctorId.HasValue || action.Payload.DoctorId.Value <= 0 ||
+                    !action.Payload.SlotId.HasValue || action.Payload.SlotId.Value <= 0 ||
+                    string.IsNullOrWhiteSpace(action.Payload.Reason))
+                {
+                    error = "ConfirmBooking action requires valid SpecialtyId, DoctorId, SlotId, and non-empty Reason.";
+                    return false;
+                }
+                break;
+
+            case AiActionTypes.ReviewBooking:
+                if (!action.Payload.SpecialtyId.HasValue || action.Payload.SpecialtyId.Value <= 0 ||
+                    !action.Payload.DoctorId.HasValue || action.Payload.DoctorId.Value <= 0 ||
+                    !action.Payload.SlotId.HasValue || action.Payload.SlotId.Value <= 0 ||
+                    string.IsNullOrWhiteSpace(action.Payload.Reason))
+                {
+                    error = "ReviewBooking action requires valid SpecialtyId, DoctorId, SlotId, and non-empty Reason.";
+                    return false;
+                }
+                break;
+
+            case AiActionTypes.ChangePreferredDate:
+                if (string.IsNullOrWhiteSpace(action.Payload.SlotDate))
+                {
+                    error = "ChangePreferredDate action requires a valid SlotDate.";
+                    return false;
+                }
+                break;
+
+            case AiActionTypes.CallEmergency:
+                if (action.Payload.TargetUrl != SafeRoutes.EmergencyPhone)
+                {
+                    error = $"CallEmergency action must route to '{SafeRoutes.EmergencyPhone}'.";
+                    return false;
+                }
+                break;
         }
 
         return true;

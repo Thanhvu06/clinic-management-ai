@@ -26,6 +26,24 @@ const ChatContext = createContext<ChatContextType>({
     clearChat: () => {}
 });
 
+function validateChatMessageSchema(item: unknown): item is ChatMessage {
+    if (!item || typeof item !== "object") return false;
+    const msg = item as Record<string, unknown>;
+    if (msg.role !== "user" && msg.role !== "model") return false;
+    if (typeof msg.content !== "string") return false;
+    return true;
+}
+
+function validateBookingDraftSchema(item: unknown): item is AiBookingDraft {
+    if (!item || typeof item !== "object") return false;
+    const draft = item as Record<string, unknown>;
+    if (typeof draft.isComplete !== "boolean") return false;
+    if (draft.specialtyId !== undefined && draft.specialtyId !== null && typeof draft.specialtyId !== "number") return false;
+    if (draft.doctorId !== undefined && draft.doctorId !== null && typeof draft.doctorId !== "number") return false;
+    if (draft.slotId !== undefined && draft.slotId !== null && typeof draft.slotId !== "number") return false;
+    return true;
+}
+
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAuth();
     const [pendingSpecialtyId, setPendingSpecialtyId] = useState<number | null>(null);
@@ -37,25 +55,36 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         content: "Chào bạn, tôi là Trợ lý ClinicCare AI. Tôi có thể hỗ trợ giải đáp thông tin sức khỏe tham khảo, gợi ý chuyên khoa, tra cứu bác sĩ và đặt lịch khám trực tiếp qua trò chuyện. Bạn đang cần tư vấn vấn đề gì hôm nay?"
     };
 
-    // Load messages when user changes
+    // Load messages and draft when user changes with race-condition protection
     useEffect(() => {
+        let active = true;
+
         if (loading) return;
+
         if (!user) {
             setMessages([]);
             setActiveDraft(null);
+            setPendingSpecialtyId(null);
             return;
         }
 
+        // Synchronously reset transient state on user switch
+        setPendingSpecialtyId(null);
+        setActiveDraft(null);
+
+        let loadedMessages: ChatMessage[] | null = null;
+        let loadedDraft: AiBookingDraft | null = null;
+
+        // 1. Load chat history
         const key = `cliniccare_chat_history_${user.id}`;
         try {
             const saved = sessionStorage.getItem(key);
             if (saved) {
                 const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    const validMessages = parsed.filter(m => m && (m.role === 'user' || m.role === 'model') && typeof m.content === 'string');
+                if (Array.isArray(parsed)) {
+                    const validMessages = parsed.filter(validateChatMessageSchema);
                     if (validMessages.length > 0) {
-                        setMessages(validMessages);
-                        return;
+                        loadedMessages = validMessages;
                     }
                 }
             }
@@ -63,20 +92,32 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.error("Failed to parse chat history", e);
         }
 
+        // 2. Load draft independently (do not allow early return from messages to block draft)
         const draftKey = `cliniccare_booking_draft_${user.id}`;
         try {
             const savedDraft = sessionStorage.getItem(draftKey);
             if (savedDraft) {
                 const parsedDraft = JSON.parse(savedDraft);
-                if (parsedDraft && typeof parsedDraft === "object") {
-                    setActiveDraft(parsedDraft);
+                if (validateBookingDraftSchema(parsedDraft)) {
+                    loadedDraft = parsedDraft;
                 }
             }
         } catch (e) {
             console.error("Failed to parse booking draft", e);
         }
 
-        setMessages([defaultMessage]);
+        if (!active) return;
+
+        if (loadedMessages && loadedMessages.length > 0) {
+            setMessages(loadedMessages);
+        } else {
+            setMessages([defaultMessage]);
+        }
+        setActiveDraft(loadedDraft);
+
+        return () => {
+            active = false;
+        };
     }, [user, loading]);
 
     // Save activeDraft when it changes

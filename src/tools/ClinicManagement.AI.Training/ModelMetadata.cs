@@ -80,6 +80,12 @@ public class ModelMetadata
 
     [JsonPropertyName("metrics")]
     public EvaluationMetricsDto Metrics { get; set; } = new();
+
+    [JsonPropertyName("validationMetrics")]
+    public EvaluationMetricsDto? ValidationMetrics { get; set; }
+
+    [JsonPropertyName("warningMessage")]
+    public string? WarningMessage { get; set; }
 }
 
 public class ClinicalApprovalManifest

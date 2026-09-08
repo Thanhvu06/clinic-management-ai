@@ -10,6 +10,7 @@ import {
     FileText, Activity, CreditCard
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
+import type { AiAction } from "../types/ai";
 
 const QUICK_PROMPTS = [
     "Tôi nên khám chuyên khoa nào?",
@@ -21,7 +22,10 @@ const QUICK_PROMPTS = [
 
 const PatientMedicalChatWidget: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
+    const [executingActionId, setExecutingActionId] = useState<string | null>(null);
     const launcherRef = useRef<HTMLButtonElement>(null);
+    const chatWindowRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
     const { setPendingSpecialtyId } = useChatContext();
@@ -42,26 +46,71 @@ const PatientMedicalChatWidget: React.FC = () => {
     useEffect(() => {
         if (isOpen) {
             messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            requestAnimationFrame(() => {
+                inputRef.current?.focus();
+            });
         }
     }, [messages, isOpen]);
 
+    // Accessible keyboard handling: Escape and Tab Focus Trap
     useEffect(() => {
-        const handleEsc = (e: KeyboardEvent) => {
-            if (e.key === "Escape" && isOpen) {
+        if (!isOpen) return;
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
                 setIsOpen(false);
-                launcherRef.current?.focus();
+                setTimeout(() => {
+                    launcherRef.current?.focus();
+                }, 50);
+                return;
+            }
+
+            if (e.key === "Tab") {
+                const container = chatWindowRef.current;
+                if (!container) return;
+
+                const focusableElements = container.querySelectorAll<HTMLElement>(
+                    'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), a[href]:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                );
+                if (focusableElements.length === 0) return;
+
+                const firstElement = focusableElements[0];
+                const lastElement = focusableElements[focusableElements.length - 1];
+
+                if (e.shiftKey) {
+                    if (document.activeElement === firstElement) {
+                        e.preventDefault();
+                        lastElement.focus();
+                    }
+                } else {
+                    if (document.activeElement === lastElement) {
+                        e.preventDefault();
+                        firstElement.focus();
+                    }
+                }
             }
         };
-        window.addEventListener("keydown", handleEsc);
-        return () => window.removeEventListener("keydown", handleEsc);
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
     }, [isOpen]);
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.nativeEvent.isComposing) return;
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             e.stopPropagation();
             handleSendMessage(input);
+        }
+    };
+
+    const onActionClick = async (act: AiAction) => {
+        if (executingActionId || submittingBooking) return;
+        setExecutingActionId(act.id);
+        try {
+            await handleActionClick(act);
+        } finally {
+            setExecutingActionId(null);
         }
     };
 
@@ -80,9 +129,15 @@ const PatientMedicalChatWidget: React.FC = () => {
             )}
 
             {isOpen && (
-                <div className={styles.chatWindow} role="dialog" aria-label="Cửa sổ trò chuyện ClinicCare AI">
+                <div
+                    ref={chatWindowRef}
+                    className={styles.chatWindow}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="cliniccare-chat-title"
+                >
                     <div className={styles.header}>
-                        <div className={styles.headerTitle}>
+                        <div className={styles.headerTitle} id="cliniccare-chat-title">
                             <Stethoscope size={22} />
                             <span>ClinicCare AI</span>
                             <span className={styles.statusPill}>
@@ -103,7 +158,10 @@ const PatientMedicalChatWidget: React.FC = () => {
                             <button
                                 type="button"
                                 className={styles.iconBtn}
-                                onClick={() => setIsOpen(false)}
+                                onClick={() => {
+                                    setIsOpen(false);
+                                    setTimeout(() => launcherRef.current?.focus(), 50);
+                                }}
                                 title="Thu nhỏ"
                                 aria-label="Thu nhỏ"
                             >
@@ -112,7 +170,10 @@ const PatientMedicalChatWidget: React.FC = () => {
                             <button
                                 type="button"
                                 className={styles.iconBtn}
-                                onClick={() => setIsOpen(false)}
+                                onClick={() => {
+                                    setIsOpen(false);
+                                    setTimeout(() => launcherRef.current?.focus(), 50);
+                                }}
                                 title="Đóng"
                                 aria-label="Đóng"
                             >
@@ -258,8 +319,8 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                         key={act.id}
                                                         type="button"
                                                         className={btnClass}
-                                                        disabled={submittingBooking}
-                                                        onClick={() => handleActionClick(act)}
+                                                        disabled={submittingBooking || executingActionId !== null}
+                                                        onClick={() => onActionClick(act)}
                                                     >
                                                         {act.type === "ConfirmBooking" && <CheckCircle2 size={16} />}
                                                         {act.type === "SelectSlot" && <Clock size={16} />}
@@ -268,7 +329,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                         {act.type === "ViewDiagnosticResults" && <Activity size={16} />}
                                                         {act.type === "ViewPrescriptions" && <FileText size={16} />}
                                                         {act.type === "ViewBills" && <CreditCard size={16} />}
-                                                        {submittingBooking && act.type === "ConfirmBooking" ? "Đang xử lý..." : act.label}
+                                                        {executingActionId === act.id ? "Đang xử lý..." : (submittingBooking && act.type === "ConfirmBooking" ? "Đang xử lý..." : act.label)}
                                                     </button>
                                                 );
                                             })}
@@ -294,11 +355,12 @@ const PatientMedicalChatWidget: React.FC = () => {
 
                     <div className={styles.inputArea}>
                         <textarea
+                            ref={inputRef}
                             className={styles.textarea}
                             placeholder="Mô tả triệu chứng hoặc đặt câu hỏi..."
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={handleKeyDown}
+                            onKeyDown={handleTextareaKeyDown}
                             rows={1}
                             maxLength={500}
                             aria-label="Nội dung tin nhắn gửi tới ClinicCare AI"

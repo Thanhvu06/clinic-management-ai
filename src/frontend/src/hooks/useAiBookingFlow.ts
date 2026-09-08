@@ -10,6 +10,58 @@ import type {
     AiBookingDraft
 } from "../types/ai";
 
+export interface AiChatRequestPayload {
+    message: string;
+    context: Array<{ role: "user" | "model"; content: string }>;
+    pendingSpecialtyId?: number;
+    pendingDoctorId?: number;
+    pendingSlotId?: number;
+    pendingSlotDate?: string;
+    reason?: string;
+}
+
+export interface CreateAppointmentPayload {
+    doctorId: number;
+    specialtyId: number;
+    appointmentSlotId: number;
+    reason: string;
+}
+
+export interface AppointmentEntityDto {
+    id: number;
+    appointmentCode: string;
+    patientId: number;
+    doctorId: number;
+    doctorName?: string;
+    specialtyId: number;
+    specialtyName?: string;
+    appointmentSlotId: number;
+    appointmentDate: string;
+    startTime: string;
+    endTime: string;
+    reason: string;
+    status: string;
+}
+
+export const isSafeClientRoute = (url?: string): boolean => {
+    if (!url || typeof url !== "string") return false;
+    if (url === "tel:115") return true;
+    if (!url.startsWith("/") || url.startsWith("//")) return false;
+    if (url.includes("://") || url.includes(":") || url.includes("\\") || /\s/.test(url)) return false;
+
+    const [path] = url.split(/[?#]/);
+    const allowedPathPrefixes = [
+        "/patient/book",
+        "/patient/appointments",
+        "/patient/diagnostic-results",
+        "/patient/prescriptions",
+        "/patient/invoices",
+        "/doctors"
+    ];
+
+    return allowedPathPrefixes.some(prefix => path === prefix || path.startsWith(prefix + "/"));
+};
+
 export const formatVietnameseDate = (dateStr?: string): string => {
     if (!dateStr) return "";
     try {
@@ -75,7 +127,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             ? [...messages, prefixMessage, userMsg]
             : [...messages, userMsg];
 
-        const historyMessages = newMessages
+        const historyMessages: Array<{ role: "user" | "model"; content: string }> = newMessages
             .slice(-9, -1)
             .map(m => ({ role: m.role, content: m.content }));
 
@@ -87,7 +139,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         try {
             const preservedReason = pendingPayload?.reason || activeDraft?.reason;
 
-            const requestBody = {
+            const requestBody: AiChatRequestPayload = {
                 message: trimmed,
                 context: historyMessages,
                 pendingSpecialtyId: pendingPayload?.pendingSpecialtyId ?? pendingPayload?.specialtyId ?? activeDraft?.specialtyId,
@@ -97,7 +149,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 reason: preservedReason
             };
 
-            const res = await axiosClient.post<any, ApiResponse<AiChatResponse>>("/ai/chat", requestBody);
+            const res = await axiosClient.post<AiChatRequestPayload, ApiResponse<AiChatResponse>>("/ai/chat", requestBody);
 
             if (res.success && res.data) {
                 const data = res.data;
@@ -166,7 +218,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     setPendingSpecialtyId(action.payload.specialtyId);
                     navigate(`/patient/book?specialtyId=${action.payload.specialtyId}`);
                     onNavigate?.();
-                } else if (action.payload.targetUrl) {
+                } else if (action.payload.targetUrl && isSafeClientRoute(action.payload.targetUrl)) {
                     navigate(action.payload.targetUrl);
                     onNavigate?.();
                 }
@@ -174,9 +226,11 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }
 
             case "ViewDoctors": {
-                const targetUrl = action.payload.targetUrl || (action.payload.specialtyId
-                    ? `/doctors?specialtyId=${action.payload.specialtyId}`
-                    : "/doctors");
+                const targetUrl = action.payload.targetUrl && isSafeClientRoute(action.payload.targetUrl)
+                    ? action.payload.targetUrl
+                    : (action.payload.specialtyId
+                        ? `/doctors?specialtyId=${action.payload.specialtyId}`
+                        : "/doctors");
                 navigate(targetUrl);
                 onNavigate?.();
                 break;
@@ -200,9 +254,11 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }
 
             case "StartBooking": {
-                const url = action.payload.targetUrl || (action.payload.specialtyId
-                    ? `/patient/book?specialtyId=${action.payload.specialtyId}`
-                    : "/patient/book");
+                const url = action.payload.targetUrl && isSafeClientRoute(action.payload.targetUrl)
+                    ? action.payload.targetUrl
+                    : (action.payload.specialtyId
+                        ? `/patient/book?specialtyId=${action.payload.specialtyId}`
+                        : "/patient/book");
                 navigate(url);
                 onNavigate?.();
                 break;
@@ -262,10 +318,29 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }
 
             case "ReviewBooking": {
-                const formattedDate = formatVietnameseDate(action.payload.slotDate || activeDraft?.slotDate);
+                const specId = action.payload.specialtyId || activeDraft?.specialtyId;
+                const docId = action.payload.doctorId || activeDraft?.doctorId;
+                const slotId = action.payload.slotId || activeDraft?.slotId;
+                const slotDate = action.payload.slotDate || activeDraft?.slotDate;
+                const startTime = action.payload.startTime || activeDraft?.startTime;
+                const endTime = action.payload.endTime || activeDraft?.endTime;
+                const specName = action.payload.specialtyName || activeDraft?.specialtyName;
+                const docName = action.payload.doctorName || activeDraft?.doctorName;
+                const reason = action.payload.reason?.trim() || activeDraft?.reason?.trim();
+
+                if (!specId || !docId || !slotId || !slotDate || !startTime || !reason) {
+                    setMessages(prev => [...prev, {
+                        role: "model",
+                        content: "Thông tin đặt lịch chưa đầy đủ (thiếu chuyên khoa, bác sĩ, khung giờ hoặc lý do khám). Vui lòng chọn đầy đủ thông tin trước khi xác nhận.",
+                        urgency: "ROUTINE"
+                    }]);
+                    break;
+                }
+
+                const formattedDate = formatVietnameseDate(slotDate);
                 const reviewMsg: ChatMessage = {
                     role: "model",
-                    content: `📋 **Thông tin xác nhận lịch hẹn:**\n- **Chuyên khoa:** ${action.payload.specialtyName || activeDraft?.specialtyName || "N/A"}\n- **Bác sĩ:** ${action.payload.doctorName || activeDraft?.doctorName || "N/A"}\n- **Thời gian:** ${action.payload.startTime || activeDraft?.startTime} ngày ${formattedDate}\n- **Lý do khám:** ${action.payload.reason || activeDraft?.reason || "Khám sức khỏe"}\n\nBạn vui lòng xác nhận để hoàn tất đặt lịch.`,
+                    content: `📋 **Thông tin xác nhận lịch hẹn:**\n- **Chuyên khoa:** ${specName || "Chuyên khoa"}\n- **Bác sĩ:** ${docName || "Bác sĩ"}\n- **Thời gian:** ${startTime} ngày ${formattedDate}\n- **Lý do khám:** ${reason}\n\nBạn vui lòng xác nhận để hoàn tất đặt lịch.`,
                     urgency: "ROUTINE",
                     actions: [
                         {
@@ -276,15 +351,15 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                             requiresAuthentication: true,
                             requiresConfirmation: true,
                             payload: {
-                                specialtyId: action.payload.specialtyId || activeDraft?.specialtyId || 0,
-                                specialtyName: action.payload.specialtyName || activeDraft?.specialtyName,
-                                doctorId: action.payload.doctorId || activeDraft?.doctorId || 0,
-                                doctorName: action.payload.doctorName || activeDraft?.doctorName,
-                                slotId: action.payload.slotId || activeDraft?.slotId || 0,
-                                slotDate: action.payload.slotDate || activeDraft?.slotDate || "",
-                                startTime: action.payload.startTime || activeDraft?.startTime || "",
-                                endTime: action.payload.endTime || activeDraft?.endTime || "",
-                                reason: action.payload.reason || activeDraft?.reason || "Khám sức khỏe"
+                                specialtyId: specId,
+                                specialtyName: specName,
+                                doctorId: docId,
+                                doctorName: docName,
+                                slotId: slotId,
+                                slotDate: slotDate,
+                                startTime: startTime,
+                                endTime: endTime || "",
+                                reason: reason
                             }
                         }
                     ]
@@ -301,12 +376,12 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 const slotDate = action.payload.slotDate || activeDraft?.slotDate;
                 const startTime = action.payload.startTime || activeDraft?.startTime;
                 const docName = action.payload.doctorName || activeDraft?.doctorName;
-                const reason = action.payload.reason || activeDraft?.reason || "Đặt lịch qua Trợ lý ClinicCare AI";
+                const reason = action.payload.reason?.trim() || activeDraft?.reason?.trim() || "Đặt lịch qua Trợ lý ClinicCare AI";
 
                 if (!slotId || !docId || !specId) {
                     setMessages(prev => [...prev, {
                         role: "model",
-                        content: "Thông tin đặt lịch chưa đầy đủ (thiếu bác sĩ hoặc khung giờ). Vui lòng chọn lại khung giờ.",
+                        content: "Thông tin đặt lịch chưa đầy đủ (thiếu bác sĩ hoặc khung giờ). Vui lòng kiểm tra lại.",
                         urgency: "ROUTINE"
                     }]);
                     return;
@@ -314,19 +389,21 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 
                 setSubmittingBooking(true);
                 try {
-                    const bookRes = await axiosClient.post<any, ApiResponse<any>>("/appointments", {
+                    const bookPayload: CreateAppointmentPayload = {
                         doctorId: docId,
                         specialtyId: specId,
                         appointmentSlotId: slotId,
                         reason
-                    });
+                    };
+
+                    const bookRes = await axiosClient.post<CreateAppointmentPayload, ApiResponse<AppointmentEntityDto>>("/appointments", bookPayload);
 
                     if (bookRes.success && bookRes.data) {
                         const apt = bookRes.data;
                         const formattedDate = formatVietnameseDate(slotDate);
                         const successMsg: ChatMessage = {
                             role: "model",
-                            content: `🎉 **Đặt lịch khám thành công!**\n- **Mã cuộc hẹn:** ${apt.appointmentCode || apt.id}\n- **Bác sĩ:** ${docName || "Bác sĩ phụ trách"}\n- **Thời gian:** ${startTime || ""} ngày ${formattedDate}\n- **Lý do khám:** ${reason}\n\nCuộc hẹn của bạn đã được lưu vào hệ thống phòng khám.`,
+                            content: `🎉 **Đặt lịch khám thành công!**\n- **Mã cuộc hẹn:** ${apt.appointmentCode || apt.id}\n- **Bác sĩ:** ${docName || apt.doctorName || "Bác sĩ phụ trách"}\n- **Thời gian:** ${startTime || apt.startTime} ngày ${formattedDate}\n- **Lý do khám:** ${reason}\n\nCuộc hẹn của bạn đã được lưu vào hệ thống phòng khám.`,
                             actions: [
                                 {
                                     id: "act-view-created-apt",
@@ -410,35 +487,55 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             case "OpenAppointmentDetail":
             case "RequestReschedule":
             case "RequestCancellation": {
-                navigate(action.payload.targetUrl || "/patient/appointments");
+                const target = action.payload.targetUrl && isSafeClientRoute(action.payload.targetUrl)
+                    ? action.payload.targetUrl
+                    : "/patient/appointments";
+                navigate(target);
                 onNavigate?.();
                 break;
             }
 
             case "ViewDiagnosticResults": {
-                navigate(action.payload.targetUrl || "/patient/diagnostic-results");
+                const target = action.payload.targetUrl && isSafeClientRoute(action.payload.targetUrl)
+                    ? action.payload.targetUrl
+                    : "/patient/diagnostic-results";
+                navigate(target);
                 onNavigate?.();
                 break;
             }
 
             case "ViewPrescriptions": {
-                navigate(action.payload.targetUrl || "/patient/prescriptions");
+                const target = action.payload.targetUrl && isSafeClientRoute(action.payload.targetUrl)
+                    ? action.payload.targetUrl
+                    : "/patient/prescriptions";
+                navigate(target);
                 onNavigate?.();
                 break;
             }
 
             case "ViewBills": {
-                // Strictly canonical /patient/invoices
-                navigate(action.payload.targetUrl || "/patient/invoices");
+                const target = action.payload.targetUrl && isSafeClientRoute(action.payload.targetUrl)
+                    ? action.payload.targetUrl
+                    : "/patient/invoices";
+                navigate(target);
                 onNavigate?.();
                 break;
             }
 
             case "ContactReception": {
-                const phone = action.payload.phoneNumber || "1900 1234 (Nhánh 1)";
+                const phone = action.payload.phoneNumber?.trim();
+                const reason = action.payload.reason?.trim();
+                
+                let content: string;
+                if (phone) {
+                    content = `📞 **Thông tin Quầy Tiếp Đón & Lễ Tân:**\n- **Hotline hỗ trợ:** ${phone}${reason ? `\n- **Ghi chú:** ${reason}` : ""}\n\nNếu cần hỗ trợ thêm, bạn có thể liên hệ số điện thoại trên.`;
+                } else {
+                    content = `📞 **Thông tin Quầy Tiếp Đón & Lễ Tân:**\nThông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.`;
+                }
+
                 const receptionMsg: ChatMessage = {
                     role: "model",
-                    content: `📞 **Thông tin Quầy Tiếp Đón & Lễ Tân:**\n- **Hotline hỗ trợ:** ${phone}\n- **Thời gian làm việc:** Thứ 2 - Thứ 7 (07:30 - 17:30)\n- **Vị trí quầy:** Tầng trệt, sảnh chính Phòng khám ClinicCare\n\nNếu cần đổi lịch gấp hoặc hỗ trợ đặc biệt, bạn có thể gọi trực tiếp hoặc đến quầy lễ tân để được tiếp đón chu đáo.`,
+                    content,
                     urgency: "ROUTINE"
                 };
                 setMessages(prev => [...prev, receptionMsg]);
@@ -446,18 +543,23 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }
 
             case "ManualSpecialtySelection": {
-                navigate(action.payload.targetUrl || "/patient/book");
+                const target = action.payload.targetUrl && isSafeClientRoute(action.payload.targetUrl)
+                    ? action.payload.targetUrl
+                    : "/patient/book";
+                navigate(target);
                 onNavigate?.();
                 break;
             }
 
             case "CallEmergency": {
-                window.location.href = action.payload.targetUrl || "tel:115";
+                const target = action.payload.targetUrl && isSafeClientRoute(action.payload.targetUrl)
+                    ? action.payload.targetUrl
+                    : "tel:115";
+                window.location.href = target;
                 break;
             }
 
             default: {
-                // Exhaustive check
                 const _exhaustiveCheck: never = action;
                 console.warn("Unhandled action type:", _exhaustiveCheck);
                 break;
@@ -480,3 +582,4 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         formatVietnameseDate
     };
 };
+

@@ -206,8 +206,7 @@ FORMAT ĐẦU RA (BẮT BUỘC JSON object thuần túy):
             var response = await _httpClient.PostAsync(url, requestContent, cts.Token);
             if (!response.IsSuccessStatusCode)
             {
-                var errorBody = await response.Content.ReadAsStringAsync(cts.Token);
-                _logger.LogError("AI Chat Provider returned status code {StatusCode}. Body: {ErrorBody}", response.StatusCode, errorBody);
+                _logger.LogError("AI Chat Provider returned status code {StatusCode}.", response.StatusCode);
                 return new AiChatProviderResult { Reply = "Lỗi kết nối đến AI. Vui lòng thử lại sau.", Urgency = "ROUTINE" };
             }
 

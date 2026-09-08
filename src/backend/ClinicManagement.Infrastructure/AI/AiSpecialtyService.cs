@@ -23,6 +23,8 @@ public class AiSpecialtyService : IAiSpecialtyService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<AiSpecialtyService> _logger;
     private readonly IAiSpecialtyClassifier? _classifier;
+    private readonly ClinicManagement.Application.Appointments.Interfaces.IAppointmentAvailabilityPolicy? _availabilityPolicy;
+    private readonly ClinicManagement.Application.Authentication.Interfaces.ICurrentUserService? _currentUserService;
 
     public AiSpecialtyService(
         AppDbContext dbContext,
@@ -30,7 +32,9 @@ public class AiSpecialtyService : IAiSpecialtyService
         IClinicAiContextService clinicAiContextService,
         IDateTimeProvider dateTimeProvider,
         ILogger<AiSpecialtyService> logger,
-        IAiSpecialtyClassifier? classifier = null)
+        IAiSpecialtyClassifier? classifier = null,
+        ClinicManagement.Application.Appointments.Interfaces.IAppointmentAvailabilityPolicy? availabilityPolicy = null,
+        ClinicManagement.Application.Authentication.Interfaces.ICurrentUserService? currentUserService = null)
     {
         _dbContext = dbContext;
         _aiProvider = aiProvider;
@@ -38,6 +42,8 @@ public class AiSpecialtyService : IAiSpecialtyService
         _dateTimeProvider = dateTimeProvider;
         _logger = logger;
         _classifier = classifier;
+        _availabilityPolicy = availabilityPolicy;
+        _currentUserService = currentUserService;
     }
 
     public async Task<AiSuggestionResponseDto> GetSuggestionsAsync(AiSuggestionRequestDto request, CancellationToken cancellationToken = default)
@@ -243,10 +249,25 @@ public class AiSpecialtyService : IAiSpecialtyService
         }
 
         // 7. DB GROUNDING & ACTION SYNTHESIS
+        var validUrgencies = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ROUTINE", "SOON", "EMERGENCY" };
+        var cleanUrgency = (!string.IsNullOrWhiteSpace(aiResult.Urgency) && validUrgencies.Contains(aiResult.Urgency.Trim()))
+            ? aiResult.Urgency.Trim().ToUpperInvariant()
+            : "ROUTINE";
+
+        var sanitizedReply = aiResult.Reply.Trim();
+        if (sanitizedReply.Length > 1000)
+        {
+            sanitizedReply = sanitizedReply[..1000];
+        }
+
+        // Response Boundary: Sanitize unverified URLs and ungrounded contact numbers from LLM output
+        sanitizedReply = Regex.Replace(sanitizedReply, @"https?://[^\s]+", "[liên kết nội bộ]", RegexOptions.IgnoreCase);
+        sanitizedReply = Regex.Replace(sanitizedReply, @"1900\s*\d{4}", "[liên hệ lễ tân]", RegexOptions.IgnoreCase);
+
         var responseDto = new AiChatResponseDto
         {
-            Message = aiResult.Reply.Trim(),
-            Urgency = string.IsNullOrWhiteSpace(aiResult.Urgency) ? "ROUTINE" : aiResult.Urgency,
+            Message = sanitizedReply,
+            Urgency = cleanUrgency,
             PromptVersion = GeminiAiProvider.CurrentPromptVersion
         };
 
@@ -300,7 +321,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         }
 
         // 7.2 Synthesize Quick Navigation Actions if requested
-        AddNavigationActionsIfRequested(cleanMessage, lowerMsg, aiResult.RequestedActionType, responseDto);
+        await AddNavigationActionsIfRequestedAsync(cleanMessage, lowerMsg, aiResult.RequestedActionType, responseDto, cancellationToken);
 
         // 7.3 Ground Booking Flow: Resolve Specialty, Doctor, Date, Slots
         await GroundBookingFlowAsync(request, cleanMessage, lowerMsg, aiResult, whitelistData, responseDto, cancellationToken);
@@ -320,8 +341,15 @@ public class AiSpecialtyService : IAiSpecialtyService
             });
         }
 
-        // Ensure all returned actions conform to security allowlist and safety rules
-        responseDto.Actions = responseDto.Actions.Where(a => AiActionValidator.Validate(a, out _)).ToList();
+        // Ensure all returned actions conform to security allowlist and safety rules, capped at max 6 actions
+        responseDto.Actions = responseDto.Actions
+            .Where(a => AiActionValidator.Validate(a, out _))
+            .Take(6)
+            .ToList();
+
+        responseDto.SpecialtySuggestions = responseDto.SpecialtySuggestions
+            .Take(3)
+            .ToList();
 
         return responseDto;
     }
@@ -528,21 +556,60 @@ public class AiSpecialtyService : IAiSpecialtyService
             ClinicManagement.Domain.Entities.AppointmentSlot? chosenSlot = null;
             if (request.PendingSlotId.HasValue && request.PendingSlotId.Value > 0)
             {
-                chosenSlot = await _dbContext.AppointmentSlots
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(s => s.Id == request.PendingSlotId.Value && !s.IsBooked
-                        && (s.SlotDate > vnToday || (s.SlotDate == vnToday && s.StartTime > vnTime)), cancellationToken);
-
-                if (chosenSlot != null)
+                if (_availabilityPolicy != null)
                 {
-                    targetDoctorId = chosenSlot.DoctorId;
-                    var doc = activeDoctorsInSpec.FirstOrDefault(d => d.Id == chosenSlot.DoctorId);
-                    if (doc != null)
+                    var availResult = await _availabilityPolicy.EvaluateSlotAvailabilityAsync(new ClinicManagement.Application.Appointments.Interfaces.SlotAvailabilityRequest
                     {
-                        targetDoctorName = doc.FullName;
-                        targetDoctorAcademicTitle = doc.AcademicTitle;
+                        SlotId = request.PendingSlotId.Value,
+                        DoctorId = targetDoctorId,
+                        SpecialtyId = targetSpecialty.Id,
+                        CheckAiEnabledSpecialty = true
+                    }, cancellationToken);
+
+                    if (availResult.IsAvailable)
+                    {
+                        targetDoctorId = availResult.DoctorId;
+                        targetDoctorName = availResult.DoctorName;
+                        targetDoctorAcademicTitle = availResult.AcademicTitle;
+                        targetDate = availResult.SlotDate;
+                        chosenSlot = new ClinicManagement.Domain.Entities.AppointmentSlot
+                        {
+                            Id = availResult.SlotId!.Value,
+                            DoctorId = availResult.DoctorId!.Value,
+                            SlotDate = availResult.SlotDate!.Value,
+                            StartTime = availResult.StartTime!.Value,
+                            EndTime = availResult.EndTime!.Value
+                        };
                     }
-                    targetDate = chosenSlot.SlotDate;
+                    else
+                    {
+                        responseDto.Message = $"Khung giờ đã chọn không khả dụng ({availResult.FailureReason}). Vui lòng chọn một khung giờ khác bên dưới.";
+                        chosenSlot = null;
+                    }
+                }
+                else
+                {
+                    chosenSlot = await _dbContext.AppointmentSlots
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(s => s.Id == request.PendingSlotId.Value && !s.IsBooked
+                            && (s.SlotDate > vnToday || (s.SlotDate == vnToday && s.StartTime > vnTime)), cancellationToken);
+
+                    if (chosenSlot != null)
+                    {
+                        var doc = activeDoctorsInSpec.FirstOrDefault(d => d.Id == chosenSlot.DoctorId);
+                        if (doc != null)
+                        {
+                            targetDoctorId = chosenSlot.DoctorId;
+                            targetDoctorName = doc.FullName;
+                            targetDoctorAcademicTitle = doc.AcademicTitle;
+                            targetDate = chosenSlot.SlotDate;
+                        }
+                        else
+                        {
+                            responseDto.Message = "Bác sĩ của khung giờ đã chọn không thuộc chuyên khoa này. Vui lòng chọn lại khung giờ.";
+                            chosenSlot = null;
+                        }
+                    }
                 }
             }
             else if (aiResult.WantsEarliest && availableSlots.Any())
@@ -690,6 +757,28 @@ public class AiSpecialtyService : IAiSpecialtyService
                             }
                         });
                     }
+
+                    if (targetDoctorId.HasValue && !responseDto.Actions.Any(a => a.Type == AiActionTypes.ViewAvailableSlots))
+                    {
+                        responseDto.Actions.Add(new AiActionDto
+                        {
+                            Id = $"act-view-available-slots-{targetDoctorId.Value}",
+                            Type = AiActionTypes.ViewAvailableSlots,
+                            Label = "Xem tất cả lịch trống",
+                            Description = $"Xem các khung giờ khám còn trống của {targetDoctorName}",
+                            Style = "secondary",
+                            RequiresAuthentication = false,
+                            RequiresConfirmation = false,
+                            Payload = new AiActionPayloadDto
+                            {
+                                SpecialtyId = currentSpecialty.Id,
+                                SpecialtyName = currentSpecialty.Name,
+                                DoctorId = targetDoctorId,
+                                DoctorName = targetDoctorName,
+                                SlotDate = targetDate?.ToString("yyyy-MM-dd")
+                            }
+                        });
+                    }
                 }
 
                 // Action to view specialty details
@@ -712,12 +801,36 @@ public class AiSpecialtyService : IAiSpecialtyService
         }
     }
 
-    private static void AddNavigationActionsIfRequested(
+    private async Task AddNavigationActionsIfRequestedAsync(
         string cleanMessage,
         string lowerMsg,
         string? requestedActionType,
-        AiChatResponseDto responseDto)
+        AiChatResponseDto responseDto,
+        CancellationToken cancellationToken = default)
     {
+        var currentUserId = _currentUserService?.UserId;
+        long? verifiedAppointmentId = null;
+        string? verifiedAppointmentCode = null;
+
+        if (currentUserId.HasValue && currentUserId.Value != Guid.Empty)
+        {
+            var pat = await _dbContext.Patients.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.UserId == currentUserId.Value, cancellationToken);
+            if (pat != null)
+            {
+                var apt = await _dbContext.Appointments.AsNoTracking()
+                    .Where(a => a.PatientId == pat.Id && ClinicManagement.Domain.Enums.AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
+                    .OrderByDescending(a => a.AppointmentDate)
+                    .ThenByDescending(a => a.StartTime)
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (apt != null)
+                {
+                    verifiedAppointmentId = apt.Id;
+                    verifiedAppointmentCode = apt.AppointmentCode;
+                }
+            }
+        }
+
         // 1. Appointments
         if (string.Equals(requestedActionType, AiActionTypes.ViewMyAppointments, StringComparison.OrdinalIgnoreCase)
             || lowerMsg.Contains("lịch hẹn") || lowerMsg.Contains("lịch khám của tôi"))
@@ -786,7 +899,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             });
         }
 
-        // 5. Contact Reception (No fake /contact route; provides contact info or direct hotline)
+        // 5. Contact Reception (No fake /contact route; strictly honest contact info)
         if (string.Equals(requestedActionType, AiActionTypes.ContactReception, StringComparison.OrdinalIgnoreCase)
             || lowerMsg.Contains("lễ tân") || lowerMsg.Contains("tiếp đón") || lowerMsg.Contains("liên hệ phòng khám"))
         {
@@ -795,13 +908,13 @@ public class AiSpecialtyService : IAiSpecialtyService
                 Id = "act-contact-reception",
                 Type = AiActionTypes.ContactReception,
                 Label = "Liên hệ bàn tiếp đón lễ tân",
-                Description = "Hỗ trợ trực tiếp tại quầy tiếp đón sảnh chính hoặc hotline",
+                Description = "Thông tin liên hệ quầy tiếp đón của phòng khám",
                 Style = "secondary",
                 RequiresAuthentication = false,
                 RequiresConfirmation = false,
                 Payload = new AiActionPayloadDto
                 {
-                    Reason = "Thông tin liên hệ lễ tân: Quầy tiếp đón sảnh chính tầng 1."
+                    Reason = "Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống."
                 }
             });
         }
@@ -838,18 +951,28 @@ public class AiSpecialtyService : IAiSpecialtyService
             });
         }
 
-        // 8. Open Appointment Detail
+        // 8. Open Appointment Detail (highlights or opens modal for verified appointment, or opens list)
         if (string.Equals(requestedActionType, AiActionTypes.OpenAppointmentDetail, StringComparison.OrdinalIgnoreCase))
         {
+            var target = verifiedAppointmentId.HasValue
+                ? $"{SafeRoutes.Appointments}?appointmentId={verifiedAppointmentId.Value}"
+                : SafeRoutes.Appointments;
+
             responseDto.Actions.Add(new AiActionDto
             {
                 Id = "act-nav-appointment-detail",
                 Type = AiActionTypes.OpenAppointmentDetail,
                 Label = "Xem chi tiết lịch hẹn",
+                Description = "Mở danh sách lịch hẹn và xem chi tiết cuộc hẹn",
                 Style = "secondary",
                 RequiresAuthentication = true,
                 RequiresConfirmation = false,
-                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Appointments }
+                Payload = new AiActionPayloadDto
+                {
+                    AppointmentId = verifiedAppointmentId,
+                    AppointmentCode = verifiedAppointmentCode,
+                    TargetUrl = target
+                }
             });
         }
 
@@ -857,6 +980,10 @@ public class AiSpecialtyService : IAiSpecialtyService
         if (string.Equals(requestedActionType, AiActionTypes.RequestReschedule, StringComparison.OrdinalIgnoreCase)
             || lowerMsg.Contains("đổi lịch") || lowerMsg.Contains("dời lịch"))
         {
+            var target = verifiedAppointmentId.HasValue
+                ? $"{SafeRoutes.Appointments}?appointmentId={verifiedAppointmentId.Value}&action=reschedule"
+                : SafeRoutes.Appointments;
+
             responseDto.Actions.Add(new AiActionDto
             {
                 Id = "act-nav-reschedule",
@@ -866,7 +993,12 @@ public class AiSpecialtyService : IAiSpecialtyService
                 Style = "secondary",
                 RequiresAuthentication = true,
                 RequiresConfirmation = false,
-                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Appointments }
+                Payload = new AiActionPayloadDto
+                {
+                    AppointmentId = verifiedAppointmentId,
+                    AppointmentCode = verifiedAppointmentCode,
+                    TargetUrl = target
+                }
             });
         }
 
@@ -874,6 +1006,10 @@ public class AiSpecialtyService : IAiSpecialtyService
         if (string.Equals(requestedActionType, AiActionTypes.RequestCancellation, StringComparison.OrdinalIgnoreCase)
             || lowerMsg.Contains("hủy lịch"))
         {
+            var target = verifiedAppointmentId.HasValue
+                ? $"{SafeRoutes.Appointments}?appointmentId={verifiedAppointmentId.Value}&action=cancel"
+                : SafeRoutes.Appointments;
+
             responseDto.Actions.Add(new AiActionDto
             {
                 Id = "act-nav-cancel-apt",
@@ -883,8 +1019,36 @@ public class AiSpecialtyService : IAiSpecialtyService
                 Style = "danger",
                 RequiresAuthentication = true,
                 RequiresConfirmation = false,
-                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Appointments }
+                Payload = new AiActionPayloadDto
+                {
+                    AppointmentId = verifiedAppointmentId,
+                    AppointmentCode = verifiedAppointmentCode,
+                    TargetUrl = target
+                }
             });
+        }
+
+        // 11. View Available Slots
+        if (string.Equals(requestedActionType, AiActionTypes.ViewAvailableSlots, StringComparison.OrdinalIgnoreCase)
+            || lowerMsg.Contains("lịch trống") || lowerMsg.Contains("khung giờ trống") || lowerMsg.Contains("xem slot"))
+        {
+            if (!responseDto.Actions.Any(a => a.Type == AiActionTypes.ViewAvailableSlots))
+            {
+                responseDto.Actions.Add(new AiActionDto
+                {
+                    Id = "act-view-available-slots",
+                    Type = AiActionTypes.ViewAvailableSlots,
+                    Label = "Xem lịch trống khả dụng",
+                    Description = "Tra cứu các khung giờ khám khả dụng",
+                    Style = "secondary",
+                    RequiresAuthentication = false,
+                    RequiresConfirmation = false,
+                    Payload = new AiActionPayloadDto
+                    {
+                        Reason = "Tra cứu khung giờ khám khả dụng."
+                    }
+                });
+            }
         }
     }
 

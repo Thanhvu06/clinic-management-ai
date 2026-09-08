@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import axiosClient from "../../api/axiosClient";
 import type { ApiResponse } from "../../types";
 import {
@@ -13,6 +13,7 @@ import { getNextWorkingDateString, isSundayDateString } from "../../utils/doctor
 
 export const PatientAppointments: React.FC = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { showAlert, showConfirm } = useDialog();
 
     const [appointments, setAppointments] = useState<any[]>([]);
@@ -21,6 +22,7 @@ export const PatientAppointments: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState("All");
+    const [highlightedAppId, setHighlightedAppId] = useState<number | null>(null);
 
     // Cancel modal state
     const [cancelModal, setCancelModal] = useState<{
@@ -213,6 +215,32 @@ export const PatientAppointments: React.FC = () => {
         }
     };
 
+    // Deep-link handling for ?appointmentId=...&action=...
+    useEffect(() => {
+        const appointmentIdParam = searchParams.get("appointmentId");
+        const actionParam = searchParams.get("action");
+        if (!appointmentIdParam || appointments.length === 0) return;
+
+        const targetId = parseInt(appointmentIdParam, 10);
+        if (isNaN(targetId)) return;
+
+        const targetApp = appointments.find(a => a.id === targetId);
+        if (!targetApp) return;
+
+        setHighlightedAppId(targetId);
+
+        setTimeout(() => {
+            const el = document.getElementById(`appointment-card-${targetId}`);
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 150);
+
+        if (actionParam === "reschedule" && (targetApp.status === "Pending" || targetApp.status === "Confirmed")) {
+            handleRescheduleOpen(targetApp);
+        } else if (actionParam === "cancel" && (targetApp.status === "Pending" || targetApp.status === "Confirmed")) {
+            handleCancelOpen(targetApp);
+        }
+    }, [appointments, searchParams]);
+
     const submitReschedule = async () => {
         const { app, selectedSlotId, reason } = rescheduleModal;
         if (!app) return;
@@ -361,7 +389,17 @@ export const PatientAppointments: React.FC = () => {
                         const pendingReq = pendingRequests[app.id];
 
                         return (
-                            <div key={app.id} className="card-panel" style={{ padding: "0" }}>
+                            <div
+                                key={app.id}
+                                id={`appointment-card-${app.id}`}
+                                className="card-panel"
+                                style={{
+                                    padding: "0",
+                                    border: highlightedAppId === app.id ? "2px solid var(--c-primary)" : undefined,
+                                    boxShadow: highlightedAppId === app.id ? "0 0 12px rgba(13, 148, 136, 0.35)" : undefined,
+                                    transition: "all 0.3s ease"
+                                }}
+                            >
                                 <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--c-border)" }}>
                                     <div>
                                         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>

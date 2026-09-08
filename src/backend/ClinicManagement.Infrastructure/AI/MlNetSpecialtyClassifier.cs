@@ -65,6 +65,7 @@ public class MlNetSpecialtyClassifier : IAiSpecialtyClassifier
                 return;
             }
 
+            var expectedCodes = new List<string>();
             // Check metadata file for clinical validation & catalog compatibility
             var metadataPath = Path.Combine(Path.GetDirectoryName(_options.ModelPath) ?? "", "model_metadata.json");
             if (File.Exists(metadataPath))
@@ -87,6 +88,10 @@ public class MlNetSpecialtyClassifier : IAiSpecialtyClassifier
                             {
                                 _logger.LogWarning("ML.NET model contains non-canonical specialty code '{Code}'. Rejecting model load for safety.", codeStr);
                                 return;
+                            }
+                            if (!string.IsNullOrEmpty(codeStr))
+                            {
+                                expectedCodes.Add(codeStr);
                             }
                         }
                     }
@@ -120,6 +125,18 @@ public class MlNetSpecialtyClassifier : IAiSpecialtyClassifier
                 catch
                 {
                     _scoreLabels = Array.Empty<string>();
+                }
+
+                if (_scoreLabels == null || _scoreLabels.Length == 0 || !_scoreLabels.All(CanonicalSpecialties.IsCanonical))
+                {
+                    _logger.LogWarning("ML.NET model Score SlotNames contain invalid or non-canonical specialty codes. Rejecting model load for safety.");
+                    return;
+                }
+
+                if (expectedCodes.Count > 0 && !_scoreLabels.OrderBy(c => c).SequenceEqual(expectedCodes.OrderBy(c => c)))
+                {
+                    _logger.LogWarning("ML.NET model SlotNames do not match metadata specialtyCodes. Rejecting model load for safety.");
+                    return;
                 }
 
                 _isLoaded = true;

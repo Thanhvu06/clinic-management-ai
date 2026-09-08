@@ -106,6 +106,7 @@ builder.Services.AddSingleton<ClinicManagement.Application.Common.Interfaces.IDa
 builder.Services.AddScoped<IDoctorService, DoctorService>();
 builder.Services.AddScoped<IScheduleService, ScheduleService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
+builder.Services.AddScoped<ClinicManagement.Application.Appointments.Interfaces.IAppointmentAvailabilityPolicy, ClinicManagement.Infrastructure.Appointments.AppointmentAvailabilityPolicy>();
 builder.Services.AddScoped<IChangeRequestService, ChangeRequestService>();
 builder.Services.AddScoped<IReceptionService, ReceptionService>();
 builder.Services.AddScoped<ClinicManagement.Application.Doctors.Interfaces.IDoctorContextService, ClinicManagement.Infrastructure.Doctors.DoctorContextService>();

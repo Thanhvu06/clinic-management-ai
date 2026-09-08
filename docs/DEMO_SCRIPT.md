@@ -34,7 +34,7 @@
      - Bấm nút **"Xác nhận đặt lịch ngay"** trực tiếp trên thẻ chat (có guard chống click đúp).
      - Thử bấm xác nhận lại cùng slot: Hệ thống xử lý idempotent an toàn, trả về lịch hẹn đã đặt mà không phát sinh lỗi 409.
   5. **Hành động Liên kết Nghiệp vụ Nhanh:**
-     - AI cung cấp các nút hành động đồng bộ: *Xem lịch hẹn của tôi* (`/patient/appointments`), *Xem kết quả CLS* (`/patient/diagnostic-results`), *Xem đơn thuốc* (`/patient/prescriptions`), *Xem hóa đơn* (`/patient/invoices` - Canonical route), và *Liên hệ lễ tân* (hiển thị hotline 1900 1234 cùng địa chỉ quầy ngay trong chat).
+     - AI cung cấp các nút hành động đồng bộ: *Xem lịch hẹn của tôi* (`/patient/appointments`), *Xem kết quả CLS* (`/patient/diagnostic-results`), *Xem đơn thuốc* (`/patient/prescriptions`), *Xem hóa đơn* (`/patient/invoices` - Canonical route), và *Liên hệ lễ tân* (hiển thị thông tin quầy lễ tân ngay trong chat; nếu chưa cấu hình trong DB/hệ thống thì thông báo rõ ràng, không bịa hotline).
 - **Kết quả:** Cuộc hẹn được tạo thành công trên hệ thống với mã hẹn cụ thể (trạng thái `Pending`). Toàn bộ luồng hội thoại mượt mà, responsive và bảo vệ an toàn y khoa tuyệt đối.
 
 ---

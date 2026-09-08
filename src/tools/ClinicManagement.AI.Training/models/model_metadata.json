@@ -2,7 +2,7 @@
   "modelVersion": "1.0.0",
   "datasetVersion": "1.0.0",
   "datasetHashSha256": "6077c7a6c0bfa9f880ebda320546621f397a8688368b29cc8ffd500375ffa094",
-  "trainedAtUtc": "2026-09-08T10:00:04.7684316Z",
+  "trainedAtUtc": "2026-09-08T11:58:29.14629Z",
   "clinicallyValidated": false,
   "approvalManifestPath": null,
   "approvedBy": null,
@@ -18,33 +18,15 @@
     "SP11"
   ],
   "metrics": {
-    "microAccuracy": 0.2222222222222222,
-    "macroAccuracy": 0.1875,
-    "logLoss": 2.0171283348202134,
-    "macroPrecision": 0.16666666666666666,
-    "macroRecall": 0.1875,
-    "macroF1": 0.175,
-    "top3Accuracy": 0.6666666666666666,
+    "microAccuracy": 0,
+    "macroAccuracy": 0,
+    "logLoss": 2.9985196713909255,
+    "macroPrecision": 0,
+    "macroRecall": 0,
+    "macroF1": 0,
+    "top3Accuracy": 0.3333333333333333,
     "perClassMetrics": {
-      "SP01": {
-        "precision": 0,
-        "recall": 0,
-        "f1": 0,
-        "support": 1
-      },
       "SP04": {
-        "precision": 0,
-        "recall": 0,
-        "f1": 0,
-        "support": 1
-      },
-      "SP05": {
-        "precision": 0.3333333333333333,
-        "recall": 0.5,
-        "f1": 0.4,
-        "support": 2
-      },
-      "SP06": {
         "precision": 0,
         "recall": 0,
         "f1": 0,
@@ -61,11 +43,35 @@
         "recall": 0,
         "f1": 0,
         "support": 1
+      }
+    },
+    "confusionMatrix": "\r\nConfusion table\r\n          ||================================================================\r\nPREDICTED ||  SP05 |  SP10 |  SP04 |  SP06 |  SP07 |  SP08 |  SP11 |  SP01 | Recall\r\nTRUTH     ||================================================================\r\n     SP05 ||     0 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP10 ||     0 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP04 ||     1 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP06 ||     0 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP07 ||     1 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP08 ||     1 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP11 ||     0 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP01 ||     0 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n          ||================================================================\r\nPrecision ||0.0000 |0.0000 |0.0000 |0.0000 |0.0000 |0.0000 |0.0000 |0.0000 |\r\n"
+  },
+  "validationMetrics": {
+    "microAccuracy": 0.25,
+    "macroAccuracy": 0.25,
+    "logLoss": 2.8042878144853596,
+    "macroPrecision": 0.0625,
+    "macroRecall": 0.25,
+    "macroF1": 0.1,
+    "top3Accuracy": 0.5,
+    "perClassMetrics": {
+      "SP05": {
+        "precision": 0.25,
+        "recall": 1,
+        "f1": 0.4,
+        "support": 1
+      },
+      "SP06": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "support": 1
       },
       "SP10": {
-        "precision": 1,
-        "recall": 1,
-        "f1": 1,
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
         "support": 1
       },
       "SP11": {
@@ -75,6 +81,7 @@
         "support": 1
       }
     },
-    "confusionMatrix": "\r\nConfusion table\r\n          ||================================================================\r\nPREDICTED ||  SP01 |  SP06 |  SP05 |  SP11 |  SP08 |  SP04 |  SP10 |  SP07 | Recall\r\nTRUTH     ||================================================================\r\n     SP01 ||     0 |     0 |     0 |     1 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP06 ||     0 |     0 |     0 |     1 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP05 ||     0 |     1 |     1 |     0 |     0 |     0 |     0 |     0 | 0.5000\r\n     SP11 ||     0 |     0 |     1 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP08 ||     1 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP04 ||     0 |     0 |     1 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP10 ||     0 |     0 |     0 |     0 |     0 |     0 |     1 |     0 | 1.0000\r\n     SP07 ||     0 |     0 |     0 |     1 |     0 |     0 |     0 |     0 | 0.0000\r\n          ||================================================================\r\nPrecision ||0.0000 |0.0000 |0.3333 |0.0000 |0.0000 |0.0000 |1.0000 |0.0000 |\r\n"
-  }
+    "confusionMatrix": "\r\nConfusion table\r\n          ||================================================================\r\nPREDICTED ||  SP05 |  SP10 |  SP04 |  SP06 |  SP07 |  SP08 |  SP11 |  SP01 | Recall\r\nTRUTH     ||================================================================\r\n     SP05 ||     1 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 1.0000\r\n     SP10 ||     1 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP04 ||     0 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP06 ||     1 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP07 ||     0 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP08 ||     0 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP11 ||     1 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n     SP01 ||     0 |     0 |     0 |     0 |     0 |     0 |     0 |     0 | 0.0000\r\n          ||================================================================\r\nPrecision ||0.2500 |0.0000 |0.0000 |0.0000 |0.0000 |0.0000 |0.0000 |0.0000 |\r\n"
+  },
+  "warningMessage": "Dataset contains simulated test data (18 cases across 8 classes). Model is intended solely for integration/demo testing and has not been clinically validated."
 }

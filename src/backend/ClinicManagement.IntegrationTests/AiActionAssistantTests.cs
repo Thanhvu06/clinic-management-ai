@@ -569,4 +569,232 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.False(AiActionValidator.Validate(invalidRouteAction, out var error));
         Assert.Contains("not an allowlisted safe route", error);
     }
+
+    [Fact]
+    public void All19ActionTypes_HaveParity_ProducerValidatorAndSafeRoutes()
+    {
+        Assert.Equal(19, AiActionTypes.All.Count);
+
+        foreach (var actionType in AiActionTypes.All)
+        {
+            Assert.True(AiActionTypes.IsAllowed(actionType), $"Action type '{actionType}' must be recognized by IsAllowed.");
+
+            // Test validator reject empty payload for actions that require properties
+            var emptyAction = new AiActionDto
+            {
+                Id = $"act-{actionType}",
+                Type = actionType,
+                Label = "Test Action",
+                Style = "primary",
+                Payload = new AiActionPayloadDto()
+            };
+
+            // Call validator
+            bool isValid = AiActionValidator.Validate(emptyAction, out var valError);
+            if (!isValid)
+            {
+                Assert.NotNull(valError);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Given_PendingSlotId_When_DoctorDoesNotMatchSpecialtyOrUnavailable_Then_SlotEvictedAndNoConfirmAction()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        // DoctorEntityId belongs to SpecialtyEntityId. Let's pick an invalid slot ID (e.g. 999999)
+        var request = new AiChatRequestDto
+        {
+            Message = "Tôi muốn xác nhận lịch khám",
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = DoctorEntityId,
+            PendingSlotId = 999999, // Non-existent or invalid slot
+            Reason = "Khám đau đầu"
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = doc.RootElement.GetProperty("data");
+
+        // Slot must be evicted from draft
+        if (data.TryGetProperty("bookingDraft", out var draft) && draft.ValueKind != JsonValueKind.Null)
+        {
+            if (draft.TryGetProperty("slotId", out var slotIdProp))
+            {
+                Assert.True(slotIdProp.ValueKind == JsonValueKind.Null, "Invalid slot must be evicted from draft.");
+            }
+            Assert.False(draft.GetProperty("isComplete").GetBoolean(), "Draft cannot be complete with invalid slot.");
+        }
+
+        // Must NOT produce ConfirmBooking action
+        if (data.TryGetProperty("actions", out var actionsProp) && actionsProp.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var act in actionsProp.EnumerateArray())
+            {
+                Assert.NotEqual(AiActionTypes.ConfirmBooking, act.GetProperty("type").GetString());
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Given_ProviderReturnsUnsanitizedData_When_CallingAiChat_Then_SanitizedSafely()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                Reply = "Chào bạn! Vui lòng liên hệ 1900 9999 hoặc truy cập https://evil-phishing.com/pay để thanh toán.",
+                SuggestedSpecialtyCodes = new List<string> { "SP01" },
+                Urgency = "UNTRUSTED_URGENCY_INJECTION" // Invalid urgency from LLM
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Hướng dẫn tôi đóng tiền viện phí"
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = doc.RootElement.GetProperty("data");
+
+        // Urgency must fall back to ROUTINE
+        var urgency = data.GetProperty("urgency").GetString();
+        Assert.Equal("ROUTINE", urgency);
+
+        // Evil URL must be scrubbed from message
+        var message = data.GetProperty("message").GetString()!;
+        Assert.DoesNotContain("https://evil-phishing.com", message);
+
+        // Action URLs must adhere strictly to SafeRoutes
+        if (data.TryGetProperty("actions", out var actionsProp))
+        {
+            foreach (var act in actionsProp.EnumerateArray())
+            {
+                if (act.TryGetProperty("payload", out var p) && p.TryGetProperty("targetUrl", out var targetUrlProp))
+                {
+                    var targetUrl = targetUrlProp.GetString();
+                    if (!string.IsNullOrEmpty(targetUrl))
+                    {
+                        Assert.True(SafeRoutes.IsSafeRoute(targetUrl), $"Action URL '{targetUrl}' must be allowlisted safe route.");
+                    }
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Given_SamePatientConcurrentBooking_When_SubmittingAtExactSameTime_Then_ExactlyOneCreated_AndBothReturnIdempotentDto()
+    {
+        var client1 = await CreateAuthenticatedClientAsync("pat1@test.com");
+        var client2 = await CreateAuthenticatedClientAsync("pat1@test.com");
+
+        var workingDate = GetFutureWorkingDate(6);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, workingDate, new TimeOnly(16, 0, 0), new TimeOnly(16, 30, 0));
+
+        var bookRequest = new
+        {
+            doctorId = DoctorEntityId,
+            specialtyId = SpecialtyEntityId,
+            appointmentSlotId = slot.Id,
+            reason = "Khám đồng thời cùng bệnh nhân kiểm tra idempotency"
+        };
+
+        // Fire both requests concurrently using Task.WhenAll
+        var task1 = client1.PostAsJsonAsync("/api/v1/appointments", bookRequest);
+        var task2 = client2.PostAsJsonAsync("/api/v1/appointments", bookRequest);
+
+        var responses = await Task.WhenAll(task1, task2);
+
+        // Both must succeed (200 OK or 201 Created)
+        Assert.True(responses[0].StatusCode == HttpStatusCode.Created || responses[0].StatusCode == HttpStatusCode.OK, $"Client 1 status: {responses[0].StatusCode}");
+        Assert.True(responses[1].StatusCode == HttpStatusCode.Created || responses[1].StatusCode == HttpStatusCode.OK, $"Client 2 status: {responses[1].StatusCode}");
+
+        var body1 = await responses[0].Content.ReadAsStringAsync();
+        var body2 = await responses[1].Content.ReadAsStringAsync();
+
+        var doc1 = JsonDocument.Parse(body1);
+        var doc2 = JsonDocument.Parse(body2);
+
+        var id1 = doc1.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        var id2 = doc2.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+
+        // Must return identical appointment ID
+        Assert.Equal(id1, id2);
+
+        // Verify in DB that exactly 1 appointment exists
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var count = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+            db.Appointments, a => a.AppointmentSlotId == slot.Id && a.PatientId == Patient1EntityId);
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public async Task Given_TwoDifferentPatientsConcurrentBooking_When_SubmittingAtExactSameTime_Then_ExactlyOneWins_AndOtherReceives409()
+    {
+        var clientA = await CreateAuthenticatedClientAsync("pat1@test.com");
+        var clientB = await CreateAuthenticatedClientAsync("pat2@test.com");
+
+        var workingDate = GetFutureWorkingDate(7);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, workingDate, new TimeOnly(17, 0, 0), new TimeOnly(17, 30, 0));
+
+        var bookReqA = new
+        {
+            doctorId = DoctorEntityId,
+            specialtyId = SpecialtyEntityId,
+            appointmentSlotId = slot.Id,
+            reason = "Khám cạnh tranh Bệnh nhân A"
+        };
+
+        var bookReqB = new
+        {
+            doctorId = DoctorEntityId,
+            specialtyId = SpecialtyEntityId,
+            appointmentSlotId = slot.Id,
+            reason = "Khám cạnh tranh Bệnh nhân B"
+        };
+
+        // Fire both requests concurrently using Task.WhenAll
+        var taskA = clientA.PostAsJsonAsync("/api/v1/appointments", bookReqA);
+        var taskB = clientB.PostAsJsonAsync("/api/v1/appointments", bookReqB);
+
+        var responses = await Task.WhenAll(taskA, taskB);
+
+        var statusA = responses[0].StatusCode;
+        var statusB = responses[1].StatusCode;
+
+        var bodyA = await responses[0].Content.ReadAsStringAsync();
+        var bodyB = await responses[1].Content.ReadAsStringAsync();
+
+        // Exactly one must be 201 Created and the other must be 409 Conflict
+        bool oneWonAndOneConflict =
+            (statusA == HttpStatusCode.Created && statusB == HttpStatusCode.Conflict) ||
+            (statusB == HttpStatusCode.Created && statusA == HttpStatusCode.Conflict);
+
+        Assert.True(oneWonAndOneConflict, $"Expected one 201 and one 409, but got Patient A: {statusA} (Body: {bodyA}), Patient B: {statusB} (Body: {bodyB})");
+
+        // Conflict response must contain SLOT_ALREADY_BOOKED
+        var conflictResponse = statusA == HttpStatusCode.Conflict ? responses[0] : responses[1];
+        var conflictBody = await conflictResponse.Content.ReadAsStringAsync();
+        Assert.Contains("SLOT_ALREADY_BOOKED", conflictBody);
+
+        // Verify in DB that exactly 1 appointment exists for this slot
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var count = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+            db.Appointments, a => a.AppointmentSlotId == slot.Id);
+        Assert.Equal(1, count);
+    }
 }

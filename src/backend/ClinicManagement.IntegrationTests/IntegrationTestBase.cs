@@ -269,6 +269,17 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
     }
 
+    protected async Task<HttpClient> CreateAuthenticatedClientAsync(string email)
+    {
+        var client = Factory.CreateClient();
+        var loginResponse = await client.PostAsJsonAsync("/api/v1/auth/login", new { emailOrPhone = email, password = "Pass@123" });
+        var resStr = await loginResponse.Content.ReadAsStringAsync();
+        var doc = System.Text.Json.JsonDocument.Parse(resStr);
+        string token = doc.RootElement.GetProperty("data").GetProperty("accessToken").GetString()!;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
     protected async Task<AppointmentSlot> CreateAvailableSlotAsync(long doctorId, DateOnly date, TimeOnly startTime, TimeOnly endTime)
     {
         using var scope = Factory.Services.CreateScope();

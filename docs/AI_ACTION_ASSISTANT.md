@@ -73,13 +73,13 @@ Dưới đây là ma trận đối soát tuyệt đối giữa Backend (`AiActio
 | 8 | `ConfirmBooking` | Xác nhận đặt lịch chính thức qua API | `primary` | ✅ | ✅ | `POST /api/v1/appointments` | Gọi API với guard chống click đúp, xử lý 409 conflict |
 | 9 | `ChangePreferredDate` | Đổi ngày khám mong muốn (VD: sang Thứ Hai) | `secondary` | ❌ | ❌ | Chat query | Cập nhật draft slotDate, gửi message tra cứu ngày mới |
 | 10 | `ViewMyAppointments` | Điều hướng xem danh sách lịch hẹn cá nhân | `primary` | ✅ | ❌ | `/patient/appointments` | `navigate('/patient/appointments')` |
-| 11 | `OpenAppointmentDetail` | Xem chi tiết một cuộc hẹn cụ thể | `secondary` | ✅ | ❌ | `/patient/appointments` | `navigate('/patient/appointments')` |
-| 12 | `RequestReschedule` | Yêu cầu đổi lịch cuộc hẹn đã đặt | `secondary` | ✅ | ❌ | `/patient/appointments` | `navigate('/patient/appointments')` |
-| 13 | `RequestCancellation` | Yêu cầu hủy cuộc hẹn đã đặt | `secondary` | ✅ | ❌ | `/patient/appointments` | `navigate('/patient/appointments')` |
+| 11 | `OpenAppointmentDetail` | Xem chi tiết một cuộc hẹn cụ thể | `secondary` | ✅ | ❌ | `/patient/appointments?appointmentId={id}` | Điều hướng deep-link mở modal chi tiết cuộc hẹn, không auto-submit |
+| 12 | `RequestReschedule` | Yêu cầu đổi lịch cuộc hẹn đã đặt | `secondary` | ✅ | ❌ | `/patient/appointments?appointmentId={id}&action=reschedule` | Điều hướng deep-link mở modal đổi lịch, không auto-submit |
+| 13 | `RequestCancellation` | Yêu cầu hủy cuộc hẹn đã đặt | `secondary` | ✅ | ❌ | `/patient/appointments?appointmentId={id}&action=cancel` | Điều hướng deep-link mở modal hủy lịch, không auto-submit |
 | 14 | `ViewDiagnosticResults`| Điều hướng xem kết quả cận lâm sàng | `secondary` | ✅ | ❌ | `/patient/diagnostic-results` | `navigate('/patient/diagnostic-results')` |
 | 15 | `ViewPrescriptions` | Điều hướng xem danh sách đơn thuốc | `secondary` | ✅ | ❌ | `/patient/prescriptions` | `navigate('/patient/prescriptions')` |
 | 16 | `ViewBills` | Điều hướng xem hóa đơn & viện phí | `secondary` | ✅ | ❌ | `/patient/invoices` *(Canonical Route)* | `navigate('/patient/invoices')` *(Tuyệt đối không `/contact`)* |
-| 17 | `ContactReception` | Xem hotline và địa chỉ quầy lễ tân | `secondary` | ❌ | ❌ | In-chat desk info (`1900 1234`) | Render thông tin quầy tiếp đón trực tiếp trong chat |
+| 17 | `ContactReception` | Xem thông tin liên hệ lễ tân | `secondary` | ❌ | ❌ | In-chat desk info | Hiển thị thông báo quầy lễ tân (thông báo rõ chưa cấu hình nếu hệ thống chưa có hotline/giờ mở cửa) |
 | 18 | `ManualSpecialtySelection`| Tự chọn chuyên khoa thủ công | `secondary` | ❌ | ❌ | `/patient/book` | `navigate('/patient/book')` |
 | 19 | `CallEmergency` | Gọi cấp cứu y tế 115 khẩn cấp | `danger` | ❌ | ❌ | `tel:115` | `window.location.href = 'tel:115'` |
 

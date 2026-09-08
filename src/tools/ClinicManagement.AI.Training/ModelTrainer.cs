@@ -109,6 +109,12 @@ public class ModelTrainer
                 var manifestJson = File.ReadAllText(approvalManifestPath);
                 var manifest = JsonSerializer.Deserialize<ClinicalApprovalManifest>(manifestJson);
                 if (manifest != null &&
+                    !string.IsNullOrWhiteSpace(manifest.ManifestVersion) &&
+                    !string.IsNullOrWhiteSpace(manifest.ApprovedBy) &&
+                    !string.IsNullOrWhiteSpace(manifest.Authority) &&
+                    !string.IsNullOrWhiteSpace(manifest.Scope) &&
+                    manifest.ApprovedAtUtc <= DateTime.UtcNow &&
+                    manifest.ApprovedAtUtc > DateTime.UtcNow.AddYears(-10) &&
                     string.Equals(manifest.Status, "APPROVED", StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(manifest.DatasetHashSha256, datasetHash, StringComparison.OrdinalIgnoreCase) &&
                     !containsDemoData)
@@ -119,7 +125,7 @@ public class ModelTrainer
                 }
                 else
                 {
-                    Console.WriteLine("[GOVERNANCE] Clinical approval manifest rejected: Hash mismatch or dataset contains demo data.");
+                    Console.WriteLine("[GOVERNANCE] Clinical approval manifest rejected: Missing required fields, future approval date, status not APPROVED, hash mismatch, or dataset contains demo data.");
                 }
             }
             catch (Exception ex)
@@ -136,38 +142,67 @@ public class ModelTrainer
         var valRecords = approvedRecords.Where(r => string.Equals(r.Split, "val", StringComparison.OrdinalIgnoreCase)).ToList();
         var testRecords = approvedRecords.Where(r => string.Equals(r.Split, "test", StringComparison.OrdinalIgnoreCase)).ToList();
 
-        // Deterministic grouped split fallback if no train/test split present
-        if (!testRecords.Any() || !trainRecords.Any())
+        // Deterministic grouped 3-way split by scenarioFamily using seed
+        if (!valRecords.Any() || !testRecords.Any() || !trainRecords.Any())
         {
-            var groupedFamilies = approvedRecords
-                .GroupBy(r => string.IsNullOrWhiteSpace(r.ScenarioFamily) ? r.CaseId : r.ScenarioFamily)
-                .OrderBy(g => g.Key, StringComparer.Ordinal) // Deterministic ordering
-                .ToList();
-
             trainRecords = new List<DatasetRecord>();
+            valRecords = new List<DatasetRecord>();
             testRecords = new List<DatasetRecord>();
 
-            int targetTestCount = Math.Max(1, (int)(approvedRecords.Count * 0.2));
-            int currentTestCount = 0;
+            // Group by scenarioFamily
+            var familyGroups = approvedRecords
+                .GroupBy(r => string.IsNullOrWhiteSpace(r.ScenarioFamily) ? r.CaseId : r.ScenarioFamily)
+                .OrderBy(g => g.Key, StringComparer.Ordinal)
+                .ToList();
 
-            foreach (var group in groupedFamilies)
+            // Shuffle families deterministically with seed
+            var rng = new Random(_seed);
+            var shuffled = familyGroups.OrderBy(_ => rng.Next()).ToList();
+
+            // Phase 1: Give 1 family per class to train to ensure all classes exist in train
+            var coveredInTrain = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var remaining = new List<IGrouping<string, DatasetRecord>>();
+
+            foreach (var group in shuffled)
             {
-                if (currentTestCount < targetTestCount && trainRecords.Any())
+                var code = group.First().PrimarySpecialtyCode;
+                if (!coveredInTrain.Contains(code))
+                {
+                    trainRecords.AddRange(group);
+                    coveredInTrain.Add(code);
+                }
+                else
+                {
+                    remaining.Add(group);
+                }
+            }
+
+            // Phase 2: Alternate remaining families between val, test, and train
+            int toggle = 0;
+            foreach (var group in remaining)
+            {
+                if (toggle % 3 == 0)
+                {
+                    valRecords.AddRange(group);
+                }
+                else if (toggle % 3 == 1)
                 {
                     testRecords.AddRange(group);
-                    currentTestCount += group.Count();
                 }
                 else
                 {
                     trainRecords.AddRange(group);
                 }
+                toggle++;
             }
         }
 
         var trainData = trainRecords.Select(r => new SymptomInput { Text = r.Text, Label = r.PrimarySpecialtyCode }).ToList();
+        var valData = valRecords.Select(r => new SymptomInput { Text = r.Text, Label = r.PrimarySpecialtyCode }).ToList();
         var testData = testRecords.Select(r => new SymptomInput { Text = r.Text, Label = r.PrimarySpecialtyCode }).ToList();
 
         var trainDataView = mlContext.Data.LoadFromEnumerable(trainData);
+        var valDataView = mlContext.Data.LoadFromEnumerable(valData);
         var testDataView = mlContext.Data.LoadFromEnumerable(testData);
 
         // Build text classification pipeline
@@ -179,14 +214,8 @@ public class ModelTrainer
         // Fit model
         var model = pipeline.Fit(trainDataView);
 
-        // Evaluate model
-        var testPredictions = model.Transform(testDataView);
-        var metrics = mlContext.MulticlassClassification.Evaluate(testPredictions, labelColumnName: "KeyLabel", scoreColumnName: "Score");
-
-        // Read evaluated records to calculate honest, exact per-class metrics, confusion matrix, top-3 accuracy
-        var evaluationResults = mlContext.Data.CreateEnumerable<SymptomEvaluationResult>(testPredictions, reuseRowObject: false).ToList();
-
         // Retrieve class slot names for score vector
+        var testPredictions = model.Transform(testDataView);
         string[] scoreLabels = Array.Empty<string>();
         try
         {
@@ -196,25 +225,81 @@ public class ModelTrainer
         }
         catch
         {
-            // If slot names metadata is unavailable, fallback to distinct labels in training
             scoreLabels = trainRecords.Select(r => r.PrimarySpecialtyCode).Distinct().OrderBy(c => c).ToArray();
         }
 
-        // Calculate per-class metrics & confusion matrix
+        // Evaluate both Val and Test
+        var valMetrics = valRecords.Any() ? ComputeEvaluationMetrics(mlContext, model, valDataView, scoreLabels) : null;
+        var testMetrics = ComputeEvaluationMetrics(mlContext, model, testDataView, scoreLabels);
+
+        string? warningMessage = containsDemoData
+            ? $"Dataset contains simulated test data ({approvedRecords.Count} cases across {approvedRecords.Select(r => r.PrimarySpecialtyCode).Distinct().Count()} classes). Model is intended solely for integration/demo testing and has not been clinically validated."
+            : null;
+
+        // Prepare metadata
+        var specialtyCodes = approvedRecords.Select(r => r.PrimarySpecialtyCode).Distinct().OrderBy(c => c).ToList();
+        var metadata = new ModelMetadata
+        {
+            ModelVersion = "1.0.0",
+            DatasetVersion = approvedRecords.FirstOrDefault()?.DatasetVersion ?? "1.0.0",
+            DatasetHashSha256 = datasetHash,
+            TrainedAtUtc = DateTime.UtcNow,
+            ClinicallyValidated = isClinicallyValidated,
+            ApprovalManifestPath = isClinicallyValidated ? approvalManifestPath : null,
+            ApprovedBy = approvedBy,
+            ApprovedAtUtc = approvedAtUtc,
+            SpecialtyCodes = specialtyCodes,
+            Metrics = testMetrics,
+            ValidationMetrics = valMetrics,
+            WarningMessage = warningMessage
+        };
+
+        // Export model & metadata
+        Directory.CreateDirectory(outputDirectory);
+        var modelPath = Path.Combine(outputDirectory, "specialty_classifier_v1.zip");
+        var metadataPath = Path.Combine(outputDirectory, "model_metadata.json");
+
+        mlContext.Model.Save(model, trainDataView.Schema, modelPath);
+        File.WriteAllText(metadataPath, JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true }));
+
+        result.Success = true;
+        result.ModelPath = modelPath;
+        result.MetadataPath = metadataPath;
+        result.Metadata = metadata;
+        result.Message = $"Model successfully trained and exported. Train: {trainRecords.Count}, Val: {valRecords.Count}, Test: {testRecords.Count}. Test MacroAccuracy: {testMetrics.MacroAccuracy:P2}, MacroF1: {testMetrics.MacroF1:P2}, Top3Accuracy: {testMetrics.Top3Accuracy:P2}. ClinicallyValidated: {metadata.ClinicallyValidated}";
+
+        return result;
+    }
+
+    private EvaluationMetricsDto ComputeEvaluationMetrics(
+        MLContext mlContext,
+        ITransformer model,
+        IDataView dataView,
+        string[] scoreLabels)
+    {
+        var predictions = model.Transform(dataView);
+        var evalResults = mlContext.Data.CreateEnumerable<SymptomEvaluationResult>(predictions, reuseRowObject: false).ToList();
+        if (!evalResults.Any())
+        {
+            return new EvaluationMetricsDto();
+        }
+
+        var metrics = mlContext.MulticlassClassification.Evaluate(predictions, labelColumnName: "KeyLabel", scoreColumnName: "Score");
+
         var perClassMetrics = new Dictionary<string, ClassMetricDto>();
-        var testLabels = evaluationResults.Select(r => r.Label).Distinct().OrderBy(l => l).ToList();
+        var distinctLabels = evalResults.Select(r => r.Label).Distinct().OrderBy(l => l, StringComparer.Ordinal).ToList();
 
         double sumPrecision = 0;
         double sumRecall = 0;
         double sumF1 = 0;
         int evaluatedClassesCount = 0;
 
-        foreach (var c in testLabels)
+        foreach (var c in distinctLabels)
         {
-            int tp = evaluationResults.Count(r => r.Label == c && r.PredictedLabel == c);
-            int fp = evaluationResults.Count(r => r.Label != c && r.PredictedLabel == c);
-            int fn = evaluationResults.Count(r => r.Label == c && r.PredictedLabel != c);
-            int support = evaluationResults.Count(r => r.Label == c);
+            int tp = evalResults.Count(r => r.Label == c && r.PredictedLabel == c);
+            int fp = evalResults.Count(r => r.Label != c && r.PredictedLabel == c);
+            int fn = evalResults.Count(r => r.Label == c && r.PredictedLabel != c);
+            int support = evalResults.Count(r => r.Label == c);
 
             double prec = (tp + fp) > 0 ? (double)tp / (tp + fp) : 0.0;
             double rec = (tp + fn) > 0 ? (double)tp / (tp + fn) : 0.0;
@@ -238,9 +323,8 @@ public class ModelTrainer
         double macroRecall = evaluatedClassesCount > 0 ? sumRecall / evaluatedClassesCount : 0.0;
         double macroF1 = evaluatedClassesCount > 0 ? sumF1 / evaluatedClassesCount : 0.0;
 
-        // Calculate Top-3 Accuracy
         int top3Hits = 0;
-        foreach (var r in evaluationResults)
+        foreach (var r in evalResults)
         {
             if (r.Score != null && r.Score.Length > 0 && scoreLabels.Length == r.Score.Length)
             {
@@ -258,7 +342,6 @@ public class ModelTrainer
             }
             else
             {
-                // Fallback: if single prediction matches
                 if (string.Equals(r.PredictedLabel, r.Label, StringComparison.OrdinalIgnoreCase))
                 {
                     top3Hits++;
@@ -266,49 +349,19 @@ public class ModelTrainer
             }
         }
 
-        double top3Accuracy = evaluationResults.Count > 0 ? (double)top3Hits / evaluationResults.Count : 0.0;
+        double top3Accuracy = evalResults.Count > 0 ? (double)top3Hits / evalResults.Count : 0.0;
 
-        // Prepare metadata
-        var specialtyCodes = approvedRecords.Select(r => r.PrimarySpecialtyCode).Distinct().OrderBy(c => c).ToList();
-        var metadata = new ModelMetadata
+        return new EvaluationMetricsDto
         {
-            ModelVersion = "1.0.0",
-            DatasetVersion = approvedRecords.FirstOrDefault()?.DatasetVersion ?? "1.0.0",
-            DatasetHashSha256 = datasetHash,
-            TrainedAtUtc = DateTime.UtcNow,
-            ClinicallyValidated = isClinicallyValidated,
-            ApprovalManifestPath = isClinicallyValidated ? approvalManifestPath : null,
-            ApprovedBy = approvedBy,
-            ApprovedAtUtc = approvedAtUtc,
-            SpecialtyCodes = specialtyCodes,
-            Metrics = new EvaluationMetricsDto
-            {
-                MicroAccuracy = metrics.MicroAccuracy,
-                MacroAccuracy = metrics.MacroAccuracy,
-                LogLoss = metrics.LogLoss,
-                MacroPrecision = macroPrecision,
-                MacroRecall = macroRecall,
-                MacroF1 = macroF1,
-                Top3Accuracy = top3Accuracy,
-                PerClassMetrics = perClassMetrics,
-                ConfusionMatrix = metrics.ConfusionMatrix.GetFormattedConfusionTable()
-            }
+            MicroAccuracy = metrics.MicroAccuracy,
+            MacroAccuracy = metrics.MacroAccuracy,
+            LogLoss = metrics.LogLoss,
+            MacroPrecision = macroPrecision,
+            MacroRecall = macroRecall,
+            MacroF1 = macroF1,
+            Top3Accuracy = top3Accuracy,
+            PerClassMetrics = perClassMetrics,
+            ConfusionMatrix = metrics.ConfusionMatrix.GetFormattedConfusionTable()
         };
-
-        // Export model & metadata
-        Directory.CreateDirectory(outputDirectory);
-        var modelPath = Path.Combine(outputDirectory, "specialty_classifier_v1.zip");
-        var metadataPath = Path.Combine(outputDirectory, "model_metadata.json");
-
-        mlContext.Model.Save(model, trainDataView.Schema, modelPath);
-        File.WriteAllText(metadataPath, JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true }));
-
-        result.Success = true;
-        result.ModelPath = modelPath;
-        result.MetadataPath = metadataPath;
-        result.Metadata = metadata;
-        result.Message = $"Model successfully trained and exported. Train: {trainRecords.Count}, Test: {testRecords.Count}. MacroAccuracy: {metrics.MacroAccuracy:P2}, MacroF1: {macroF1:P2}, Top3Accuracy: {top3Accuracy:P2}. ClinicallyValidated: {metadata.ClinicallyValidated}";
-
-        return result;
     }
 }
