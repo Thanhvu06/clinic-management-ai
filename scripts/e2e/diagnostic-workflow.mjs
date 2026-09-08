@@ -36,16 +36,40 @@
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:5258';
 
-if (!process.env.E2E_ALLOW_MUTATION) {
-    console.error('\n[ABORT] E2E_ALLOW_MUTATION is not set.');
+if (process.env.E2E_ALLOW_MUTATION?.trim().toLowerCase() !== 'true') {
+    console.error('\n[ABORT] E2E_ALLOW_MUTATION must be set exactly to "true".');
+    console.error(`Current value: "${process.env.E2E_ALLOW_MUTATION || ''}" (rejected).`);
     console.error('This script mutates the database. Set E2E_ALLOW_MUTATION=true to confirm.');
     process.exit(2);
 }
 
-if (/prod/i.test(API_BASE_URL)) {
-    console.error('\n[ABORT] API_BASE_URL appears to be a production URL:', API_BASE_URL);
-    console.error('This script must not run against production databases.');
+let parsedUrl;
+try {
+    parsedUrl = new URL(API_BASE_URL);
+} catch {
+    console.error(`\n[ABORT] Invalid API_BASE_URL: "${API_BASE_URL}". Must be a valid HTTP/HTTPS URL.`);
     process.exit(2);
+}
+
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+const isLocal = LOCAL_HOSTNAMES.has(parsedUrl.hostname.toLowerCase());
+
+if (!isLocal) {
+    // Non-local targets require explicit acknowledgment separate from prod checking
+    const allowRemote = process.env.E2E_ALLOW_REMOTE_STAGING?.trim().toLowerCase() === 'true';
+    if (!allowRemote) {
+        console.error(`\n[ABORT] Target hostname "${parsedUrl.hostname}" is not a recognized local address.`);
+        console.error('By default, Local API E2E only permits: localhost, 127.0.0.1, ::1');
+        console.error('To run against a remote staging server, you must explicitly set:');
+        console.error('  E2E_ALLOW_REMOTE_STAGING=true');
+        process.exit(2);
+    }
+
+    if (/prod/i.test(API_BASE_URL)) {
+        console.error('\n[ABORT] Target URL appears to be production even with remote staging allowed:', API_BASE_URL);
+        console.error('This script mutates database entries and must NEVER run on production.');
+        process.exit(2);
+    }
 }
 
 // ─── Credential validation ────────────────────────────────────────────────────

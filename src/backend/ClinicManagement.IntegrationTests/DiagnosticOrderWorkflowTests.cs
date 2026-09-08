@@ -444,11 +444,13 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
     public async Task Given_TransactionRollback_When_AuditLogSaveFailsAfterOrderInserted_Then_NoDiagnosticDataPersisted()
     {
         // This is the TRUE atomicity test.
-        // We use a DbCommandInterceptor (test-only, registered via a derived factory) that
-        // throws after the first INSERT into DiagnosticOrders succeeds but before the
-        // second SaveChangesAsync (audit log + notifications) commits.
-        // After the exception, we verify that no DiagnosticOrder, DiagnosticOrderItem,
-        // SystemAuditLog, or Notification linked to this request remains in the DB.
+        // We use a SaveChangesInterceptor (test-only, registered via AtomicityTestWebApplicationFactory) that
+        // throws after the first SaveChanges executed/flushed inside the still-uncommitted transaction
+        // (DiagnosticOrders and DiagnosticOrderItems written), but before the second SaveChangesAsync
+        // (audit log + notifications) commits.
+        // We record baseline counts before the order creation request and verify that after failure and rollback,
+        // all entity counts exactly match baseline (no partial DiagnosticOrder, DiagnosticOrderItem,
+        // SystemAuditLog, or Notification leaked).
 
         // Setup: use a dedicated factory that injects the failure interceptor
         await using var atomicFactory = new AtomicityTestWebApplicationFactory();
@@ -505,6 +507,7 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
             await db.SaveChangesAsync();
         }
 
+        // 1. Assert setup requests: booking, confirm, check-in, start consultation
         await AuthAtomic("pat1@test.com");
         var aptRes = await atomicClient.PostAsJsonAsync("/api/v1/appointments", new
         {
@@ -518,13 +521,28 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
         var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
 
         await AuthAtomic("rec@test.com");
-        await atomicClient.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);
+        var confRes = await atomicClient.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);
+        Assert.Equal(HttpStatusCode.OK, confRes.StatusCode);
 
         await AuthAtomic("doc@test.com");
-        await atomicClient.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/check-in", null);
-        await atomicClient.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/start-consultation", null);
+        var checkinRes = await atomicClient.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/check-in", null);
+        Assert.Equal(HttpStatusCode.OK, checkinRes.StatusCode);
+        var startRes = await atomicClient.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/start-consultation", null);
+        Assert.Equal(HttpStatusCode.OK, startRes.StatusCode);
 
-        // Arm the interceptor: fail on the SECOND SaveChanges command (after order + items are written)
+        // 2. Record baseline entity counts before attempting order creation
+        int baselineOrders, baselineItems, baselineAudits, baselineNotifs;
+        using (var scope = atomicFactory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicManagement.Infrastructure.Persistence.AppDbContext>();
+            baselineOrders = await db.DiagnosticOrders.CountAsync();
+            baselineItems = await db.DiagnosticOrderItems.CountAsync();
+            baselineAudits = await db.SystemAuditLogs.CountAsync();
+            baselineNotifs = await db.Notifications.CountAsync();
+        }
+
+        // 3. Reset and arm interceptor to fail on save call #2
+        atomicFactory.Interceptor.Reset();
         atomicFactory.Interceptor.FailOnSaveNumber = 2;
 
         var createOrderRes = await atomicClient.PostAsJsonAsync(
@@ -535,32 +553,173 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
                 ServiceIds = new List<long> { atomicService1Id }
             });
 
-        // The request must fail (500 or 409 or similar — not a 2xx)
+        // 4. Request must fail
         Assert.False(createOrderRes.IsSuccessStatusCode,
             $"Expected failure but got HTTP {(int)createOrderRes.StatusCode}");
 
-        // CRITICAL: verify no partial data leaked to DB
+        // 5. Assert interceptor was indeed triggered on save call 2
+        Assert.True(atomicFactory.Interceptor.WasTriggered, "Interceptor must have been triggered on save call 2.");
+        Assert.Equal(2, atomicFactory.Interceptor.SaveCallCount);
+
+        // 6. Verify complete rollback: all counts match baseline exactly
         using (var scope = atomicFactory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ClinicManagement.Infrastructure.Persistence.AppDbContext>();
 
-            var orderCount = await db.DiagnosticOrders
+            var currentOrders = await db.DiagnosticOrders.CountAsync();
+            var currentItems = await db.DiagnosticOrderItems.CountAsync();
+            var currentAudits = await db.SystemAuditLogs.CountAsync();
+            var currentNotifs = await db.Notifications.CountAsync();
+
+            Assert.Equal(baselineOrders, currentOrders);
+            Assert.Equal(baselineItems, currentItems);
+            Assert.Equal(baselineAudits, currentAudits);
+            Assert.Equal(baselineNotifs, currentNotifs);
+
+            var appointmentOrderCount = await db.DiagnosticOrders
                 .CountAsync(o => o.AppointmentId == appointmentId);
-            Assert.Equal(0, orderCount);
+            Assert.Equal(0, appointmentOrderCount);
+        }
+    }
 
-            var itemCount = await db.DiagnosticOrderItems
-                .CountAsync(i => i.DiagnosticOrder.AppointmentId == appointmentId);
-            Assert.Equal(0, itemCount);
+    [Fact]
+    public async Task Given_NonOrderCodeDbUpdateException_When_CreatingOrder_Then_RethrownAndNotMappedToCollision()
+    {
+        // This test proves that DbUpdateExceptions NOT caused by DiagnosticOrders.OrderCode unique constraint
+        // are NOT swallowed or converted to HTTP 409 Conflict (ORDER_CODE_COLLISION).
+        // Instead, they are rethrown, resulting in HTTP 500 (INTERNAL_SERVER_ERROR),
+        // and the transaction is atomically rolled back with zero dangling state.
 
-            var auditCount = await db.SystemAuditLogs
-                .CountAsync(l => l.Action == "DiagnosticOrderCreated"
-                                 && l.Description.Contains("Kiểm thử rollback"));
-            Assert.Equal(0, auditCount);
+        await using var atomicFactory = new AtomicityTestWebApplicationFactory();
+        var atomicClient = atomicFactory.CreateClient();
 
-            var notifCount = await db.Notifications
-                .CountAsync(n => n.RelatedEntityType == "DiagnosticOrder"
-                                 && n.Message.Contains("Kiểm thử rollback"));
-            Assert.Equal(0, notifCount);
+        async Task AuthAtomic(string email)
+        {
+            var loginRes = await atomicClient.PostAsJsonAsync("/api/v1/auth/login",
+                new { emailOrPhone = email, password = "Pass@123" });
+            var doc = System.Text.Json.JsonDocument.Parse(await loginRes.Content.ReadAsStringAsync());
+            var token = doc.RootElement.GetProperty("data").GetProperty("accessToken").GetString()!;
+            atomicClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+
+        long atomicDoctorId, atomicSpecialtyId, atomicService1Id;
+        using (var scope = atomicFactory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicManagement.Infrastructure.Persistence.AppDbContext>();
+            db.Database.EnsureCreated();
+            await SeedAtomicTestDataAsync(db, scope.ServiceProvider, atomicFactory);
+            atomicDoctorId = db.Doctors.First().Id;
+            atomicSpecialtyId = db.Specialties.First().Id;
+            atomicService1Id = db.DiagnosticServices.First().Id;
+        }
+
+        var date = GetFutureWorkingDate(40);
+        AppointmentSlot atomicSlot;
+        using (var scope = atomicFactory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicManagement.Infrastructure.Persistence.AppDbContext>();
+            var schedule = new ClinicManagement.Domain.Entities.DoctorWorkSchedule
+            {
+                DoctorId = atomicDoctorId,
+                WorkDate = date,
+                StartTime = new TimeOnly(11, 0, 0),
+                EndTime = new TimeOnly(20, 0, 0),
+                IsActive = true
+            };
+            db.DoctorWorkSchedules.Add(schedule);
+            await db.SaveChangesAsync();
+            atomicSlot = new ClinicManagement.Domain.Entities.AppointmentSlot
+            {
+                DoctorId = atomicDoctorId,
+                SlotDate = date,
+                StartTime = new TimeOnly(11, 0, 0),
+                EndTime = new TimeOnly(11, 30, 0),
+                IsBooked = false
+            };
+            db.AppointmentSlots.Add(atomicSlot);
+            await db.SaveChangesAsync();
+        }
+
+        // 1. Setup appointment to InConsultation
+        await AuthAtomic("pat1@test.com");
+        var aptRes = await atomicClient.PostAsJsonAsync("/api/v1/appointments", new
+        {
+            DoctorId = atomicDoctorId,
+            SpecialtyId = atomicSpecialtyId,
+            AppointmentSlotId = atomicSlot.Id,
+            Reason = "Kiểm thử DbUpdateException không phải collision"
+        });
+        Assert.Equal(HttpStatusCode.Created, aptRes.StatusCode);
+        var aptDoc = System.Text.Json.JsonDocument.Parse(await aptRes.Content.ReadAsStringAsync());
+        var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+
+        await AuthAtomic("rec@test.com");
+        var confRes = await atomicClient.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);
+        Assert.Equal(HttpStatusCode.OK, confRes.StatusCode);
+
+        await AuthAtomic("doc@test.com");
+        var checkinRes = await atomicClient.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/check-in", null);
+        Assert.Equal(HttpStatusCode.OK, checkinRes.StatusCode);
+        var startRes = await atomicClient.PostAsync($"/api/v1/doctor/appointments/{appointmentId}/start-consultation", null);
+        Assert.Equal(HttpStatusCode.OK, startRes.StatusCode);
+
+        // 2. Record baseline entity counts
+        int baselineOrders, baselineItems, baselineAudits, baselineNotifs;
+        using (var scope = atomicFactory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicManagement.Infrastructure.Persistence.AppDbContext>();
+            baselineOrders = await db.DiagnosticOrders.CountAsync();
+            baselineItems = await db.DiagnosticOrderItems.CountAsync();
+            baselineAudits = await db.SystemAuditLogs.CountAsync();
+            baselineNotifs = await db.Notifications.CountAsync();
+        }
+
+        // 3. Arm interceptor to throw a DbUpdateException unrelated to OrderCode
+        atomicFactory.Interceptor.Reset();
+        atomicFactory.Interceptor.FailOnSaveNumber = 1;
+        atomicFactory.Interceptor.ExceptionFactory = () => new DbUpdateException(
+            "An error occurred while updating entries. Unique constraint on DiagnosticServices.Code.",
+            new Exception("UNIQUE constraint failed: DiagnosticServices.Code"));
+
+        var createOrderRes = await atomicClient.PostAsJsonAsync(
+            $"/api/v1/doctor/appointments/{appointmentId}/diagnostic-orders",
+            new CreateDiagnosticOrderRequest
+            {
+                ClinicalIndication = "Kiểm thử non-OrderCode DbUpdateException",
+                ServiceIds = new List<long> { atomicService1Id }
+            });
+
+        // 4. Interceptor was triggered on save #1
+        Assert.True(atomicFactory.Interceptor.WasTriggered, "Interceptor must have been triggered.");
+        Assert.Equal(1, atomicFactory.Interceptor.SaveCallCount);
+
+        // 5. Must NOT be HTTP 409 Conflict, but HTTP 500
+        Assert.NotEqual(HttpStatusCode.Conflict, createOrderRes.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, createOrderRes.StatusCode);
+
+        // 6. Response body must NOT contain ORDER_CODE_COLLISION
+        var responseBody = await createOrderRes.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("ORDER_CODE_COLLISION", responseBody);
+
+        // 7. Verify rollback atomicity: counts match baseline exactly
+        using (var scope = atomicFactory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicManagement.Infrastructure.Persistence.AppDbContext>();
+
+            var currentOrders = await db.DiagnosticOrders.CountAsync();
+            var currentItems = await db.DiagnosticOrderItems.CountAsync();
+            var currentAudits = await db.SystemAuditLogs.CountAsync();
+            var currentNotifs = await db.Notifications.CountAsync();
+
+            Assert.Equal(baselineOrders, currentOrders);
+            Assert.Equal(baselineItems, currentItems);
+            Assert.Equal(baselineAudits, currentAudits);
+            Assert.Equal(baselineNotifs, currentNotifs);
+
+            var appointmentOrderCount = await db.DiagnosticOrders
+                .CountAsync(o => o.AppointmentId == appointmentId);
+            Assert.Equal(0, appointmentOrderCount);
         }
     }
 
