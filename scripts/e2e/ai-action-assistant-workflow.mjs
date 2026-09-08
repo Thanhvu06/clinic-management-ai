@@ -17,12 +17,15 @@
  *       PATIENT_B_PASSWORD                    (required)
  *       DOCTOR_EMAIL                          (required)
  *       DOCTOR_PASSWORD                       (required)
+ *       RECEPTION_EMAIL                       (required — receptionist for cleanup approval)
+ *       RECEPTION_PASSWORD                    (required — receptionist for cleanup approval)
  *
  * Usage:
  *   E2E_ALLOW_MUTATION=true \
  *   DOCTOR_EMAIL=doctor@cliniccare.local DOCTOR_PASSWORD=Demo@12345 \
  *   PATIENT_A_EMAIL=patient@cliniccare.local PATIENT_A_PASSWORD=Demo@12345 \
  *   PATIENT_B_EMAIL=patient.02@cliniccare.local PATIENT_B_PASSWORD=Demo@12345 \
+ *   RECEPTION_EMAIL=reception@cliniccare.local RECEPTION_PASSWORD=Demo@12345 \
  *   node scripts/e2e/ai-action-assistant-workflow.mjs
  */
 
@@ -34,7 +37,8 @@ if (process.env.E2E_ALLOW_MUTATION?.trim().toLowerCase() !== 'true') {
     console.error('\n[ABORT] E2E_ALLOW_MUTATION must be set exactly to "true".');
     console.error(`Current value: "${process.env.E2E_ALLOW_MUTATION || ''}" (rejected).`);
     console.error('This script mutates the database. Set E2E_ALLOW_MUTATION=true to confirm.');
-    process.exit(2);
+    process.exitCode = 2;
+    process.exit();
 }
 
 let parsedUrl;
@@ -42,7 +46,8 @@ try {
     parsedUrl = new URL(API_BASE_URL);
 } catch {
     console.error(`\n[ABORT] Invalid API_BASE_URL: "${API_BASE_URL}". Must be a valid HTTP/HTTPS URL.`);
-    process.exit(2);
+    process.exitCode = 2;
+    process.exit();
 }
 
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
@@ -55,13 +60,15 @@ if (!isLocal) {
         console.error('By default, Local API E2E only permits: localhost, 127.0.0.1, ::1');
         console.error('To run against a remote staging server, you must explicitly set:');
         console.error('  E2E_ALLOW_REMOTE_STAGING=true');
-        process.exit(2);
+        process.exitCode = 2;
+        process.exit();
     }
 
     if (/prod/i.test(API_BASE_URL)) {
         console.error('\n[ABORT] Target URL appears to be production even with remote staging allowed:', API_BASE_URL);
         console.error('This script mutates database entries and must NEVER run on production.');
-        process.exit(2);
+        process.exitCode = 2;
+        process.exit();
     }
 }
 
@@ -73,6 +80,8 @@ const patientBEmail = process.env.PATIENT_B_EMAIL;
 const patientBPassword = process.env.PATIENT_B_PASSWORD;
 const doctorEmail = process.env.DOCTOR_EMAIL;
 const doctorPassword = process.env.DOCTOR_PASSWORD;
+const receptionEmail = process.env.RECEPTION_EMAIL;
+const receptionPassword = process.env.RECEPTION_PASSWORD;
 
 const missingCreds = [];
 if (!patientAEmail) missingCreds.push('PATIENT_A_EMAIL (or PATIENT_EMAIL)');
@@ -81,12 +90,15 @@ if (!patientBEmail) missingCreds.push('PATIENT_B_EMAIL');
 if (!patientBPassword) missingCreds.push('PATIENT_B_PASSWORD');
 if (!doctorEmail) missingCreds.push('DOCTOR_EMAIL');
 if (!doctorPassword) missingCreds.push('DOCTOR_PASSWORD');
+if (!receptionEmail) missingCreds.push('RECEPTION_EMAIL');
+if (!receptionPassword) missingCreds.push('RECEPTION_PASSWORD');
 
 if (missingCreds.length > 0) {
     console.error('\n[ABORT] Missing required credentials in environment variables:');
     for (const c of missingCreds) console.error(`  - ${c}`);
     console.error('All credentials must be supplied via env vars. No silent fallback.');
-    process.exit(2);
+    process.exitCode = 2;
+    process.exit();
 }
 
 // ─── Test Data Marker ────────────────────────────────────────────────────────
@@ -185,6 +197,111 @@ function getNextSundayDate() {
     return d.toISOString().split('T')[0];
 }
 
+/**
+ * Cleanup: cancel a test appointment via the full workflow.
+ *   1. Patient submits a cancellation request → get changeRequest.id
+ *   2. Receptionist approves via POST /api/v1/reception/change-requests/{id}/approve-cancellation
+ *   3. Assert appointment status = "Cancelled"
+ *   4. Assert slot reappears in available-slots endpoint
+ *
+ * @param {{ id: number, slotId: number|null, doctorId: number|null, specialtyId: number|null, slotDate: string|null, token: string }} appt
+ * @param {string} receptionToken
+ * @returns {{ released: boolean, appointmentId: number, slotId: number|null, error?: string }}
+ */
+async function cleanupAppointment(appt, receptionToken) {
+    const { id: appointmentId, slotId, doctorId, specialtyId, slotDate, token: patientToken } = appt;
+
+    try {
+        // 1. Patient submits cancellation request
+        const cancelRes = await apiRequest(`/api/v1/appointments/${appointmentId}/cancellation-requests`, {
+            method: 'POST',
+            token: patientToken,
+            body: { reason: `${TEST_DATA_PREFIX} Dọn dẹp sau kiểm thử E2E tự động` }
+        });
+
+        if (!cancelRes.ok) {
+            return {
+                released: false,
+                appointmentId,
+                slotId: slotId ?? null,
+                error: `Cancellation request failed (HTTP ${cancelRes.status}): ${JSON.stringify(cancelRes.data)}`
+            };
+        }
+
+        const changeRequestId = cancelRes.data?.data?.id;
+        if (!changeRequestId) {
+            return {
+                released: false,
+                appointmentId,
+                slotId: slotId ?? null,
+                error: `Cancellation request response missing id field. Response: ${JSON.stringify(cancelRes.data)}`
+            };
+        }
+
+        // 2. Receptionist approves the cancellation
+        const approveRes = await apiRequest(
+            `/api/v1/reception/change-requests/${changeRequestId}/approve-cancellation`,
+            {
+                method: 'POST',
+                token: receptionToken,
+                body: { note: `${TEST_DATA_PREFIX} E2E cleanup approval` }
+            }
+        );
+
+        if (!approveRes.ok) {
+            return {
+                released: false,
+                appointmentId,
+                slotId: slotId ?? null,
+                error: `Receptionist approval failed (HTTP ${approveRes.status}): ${JSON.stringify(approveRes.data)}`
+            };
+        }
+
+        // 3. Verify appointment status is now Cancelled
+        const apptCheckRes = await apiRequest(`/api/v1/appointments/${appointmentId}`, {
+            token: patientToken
+        });
+
+        const apptStatus = apptCheckRes.data?.data?.status;
+        if (!apptCheckRes.ok || apptStatus !== 'Cancelled') {
+            return {
+                released: false,
+                appointmentId,
+                slotId: slotId ?? null,
+                error: `Appointment status after approval = "${apptStatus}" (expected "Cancelled"). HTTP ${apptCheckRes.status}`
+            };
+        }
+
+        // 4. Verify slot reappears in available-slots (when slot/doctor/date info available)
+        if (slotId && doctorId && slotDate) {
+            const slotsRes = await apiRequest(
+                `/api/v1/doctors/${doctorId}/available-slots?fromDate=${slotDate}&toDate=${slotDate}` +
+                (specialtyId ? `&specialtyId=${specialtyId}` : '')
+            );
+            if (slotsRes.ok && Array.isArray(slotsRes.data?.data)) {
+                const slotReappeared = slotsRes.data.data.some(s => s.slotId === slotId);
+                if (!slotReappeared) {
+                    return {
+                        released: false,
+                        appointmentId,
+                        slotId,
+                        error: `Slot #${slotId} did NOT reappear in available-slots after cancellation approval.`
+                    };
+                }
+            }
+        }
+
+        return { released: true, appointmentId, slotId: slotId ?? null };
+    } catch (err) {
+        return {
+            released: false,
+            appointmentId,
+            slotId: slotId ?? null,
+            error: err.message
+        };
+    }
+}
+
 async function main() {
     console.log(`${colors.bold}${colors.blue}${'='.repeat(72)}${colors.reset}`);
     console.log(`${colors.bold}${colors.blue}   ClinicCare AI - Action Assistant API E2E Verification Workflow${colors.reset}`);
@@ -193,7 +310,11 @@ async function main() {
     console.log(`${colors.bold}${colors.blue}   Target API: ${API_BASE_URL}${colors.reset}`);
     console.log(`${colors.bold}${colors.blue}${'='.repeat(72)}${colors.reset}`);
 
+    // Track created appointments for cleanup:
+    //   { id, slotId, doctorId, specialtyId, slotDate, token }
     const createdAppointments = [];
+
+    let exitCode = 0;
 
     try {
         // Step 1: Unauthenticated request -> 401
@@ -231,7 +352,7 @@ async function main() {
         logStep(4, 'Verify Grounded Specialty Suggestions from Database');
         const suggestions = chatRes1.data?.data?.specialtySuggestions || [];
         assert(suggestions.length > 0, `Specialty suggestions returned (${suggestions.length} suggestions)`);
-        const matchedSpecialty = suggestions.find(s => 
+        const matchedSpecialty = suggestions.find(s =>
             s.specialtyCode === 'SP06' || s.specialtyCode === 'SP01' || s.specialtyName?.toLowerCase().includes('tim')
         ) || suggestions[0];
         assert(!!matchedSpecialty, `Resolved grounded specialty: ${matchedSpecialty.specialtyName} (ID: ${matchedSpecialty.specialtyId}, Code: ${matchedSpecialty.specialtyCode})`);
@@ -251,43 +372,56 @@ async function main() {
         const draft2 = chatRes2.data?.data?.bookingDraft;
         assert(draft2?.specialtyId === specialtyId, 'Booking draft retained specialty ID');
 
-        // Retrieve active doctors for this specialty from catalog
+        // Retrieve active doctors from catalog
         const docsRes = await apiRequest('/api/v1/doctors');
         assert(docsRes.ok, 'Active doctors catalog returned HTTP 200');
         const allDoctors = docsRes.data?.data || [];
         assert(allDoctors.length > 0, `Catalog contains active doctors (${allDoctors.length} doctors found)`);
 
-        // Find doctor who has available slots, prioritizing the authenticated doctor
+        // ── Step 5 strict: only search slots of the authenticated doctor (targetDoctorId).
+        // Do NOT fall back to another doctor and silently report pass.
+        const workingDateStr = getFutureWorkingDate(7);
+        const endDateStr = getFutureWorkingDate(14);
+
         let chosenDoctorId = null;
         let chosenSlot = null;
-        const workingDateStr = getFutureWorkingDate(7);
 
         const targetDoctor = allDoctors.find(d => d.id === targetDoctorId);
-        const searchDoctors = targetDoctor ? [targetDoctor, ...allDoctors.filter(d => d.id !== targetDoctorId)] : allDoctors;
-
-        for (const doc of searchDoctors) {
-            const slotsRes = await apiRequest(`/api/v1/doctors/${doc.id}/available-slots?fromDate=${workingDateStr}&toDate=${workingDateStr}&specialtyId=${specialtyId}`);
-            if (slotsRes.ok && Array.isArray(slotsRes.data?.data) && slotsRes.data.data.length > 0) {
-                chosenDoctorId = doc.id;
-                chosenSlot = slotsRes.data.data[0];
-                break;
+        if (targetDoctor) {
+            // 7-day window first
+            const slotsRes7 = await apiRequest(
+                `/api/v1/doctors/${targetDoctor.id}/available-slots?fromDate=${workingDateStr}&toDate=${workingDateStr}&specialtyId=${specialtyId}`
+            );
+            if (slotsRes7.ok && Array.isArray(slotsRes7.data?.data) && slotsRes7.data.data.length > 0) {
+                chosenDoctorId = targetDoctor.id;
+                chosenSlot = slotsRes7.data.data[0];
             }
-        }
 
-        // Fallback: check next 14 days if needed
-        if (!chosenSlot) {
-            const endDateStr = getFutureWorkingDate(14);
-            for (const doc of searchDoctors) {
-                const slotsRes = await apiRequest(`/api/v1/doctors/${doc.id}/available-slots?fromDate=${workingDateStr}&toDate=${endDateStr}&specialtyId=${specialtyId}`);
-                if (slotsRes.ok && Array.isArray(slotsRes.data?.data) && slotsRes.data.data.length > 0) {
-                    chosenDoctorId = doc.id;
-                    chosenSlot = slotsRes.data.data[0];
-                    break;
+            // 14-day window fallback
+            if (!chosenSlot) {
+                const slotsRes14 = await apiRequest(
+                    `/api/v1/doctors/${targetDoctor.id}/available-slots?fromDate=${workingDateStr}&toDate=${endDateStr}&specialtyId=${specialtyId}`
+                );
+                if (slotsRes14.ok && Array.isArray(slotsRes14.data?.data) && slotsRes14.data.data.length > 0) {
+                    chosenDoctorId = targetDoctor.id;
+                    chosenSlot = slotsRes14.data.data[0];
                 }
             }
         }
 
-        assert(!!chosenDoctorId && !!chosenSlot, `Found doctor (${chosenDoctorId}) with available slot (${chosenSlot?.slotId}) on date ${chosenSlot?.slotDate}`);
+        // If the authenticated doctor has no slots, report FAILED clearly. No silent fallback.
+        if (!chosenDoctorId || !chosenSlot) {
+            assert(false,
+                `FAILED: Doctor authenticated as ${doctorEmail} (ID: ${targetDoctorId}) has no available slots ` +
+                `in the next 14 days for specialtyId=${specialtyId}. ` +
+                `Cannot continue — add schedule/slots for this doctor in the dev database.`
+            );
+        }
+
+        assert(
+            chosenDoctorId === targetDoctorId,
+            `Slot found for authenticated doctor ${doctorEmail} (ID: ${chosenDoctorId}), slot #${chosenSlot.slotId} on ${chosenSlot.slotDate}`
+        );
 
         // Step 6: Select working date
         logStep(6, `Select working date ${chosenSlot.slotDate} via AI Chat`);
@@ -330,7 +464,7 @@ async function main() {
         assert(draft4.slotId === chosenSlot.slotId || draft4.appointmentSlotId === chosenSlot.slotId, 'Draft slotId matches selected slot');
         assert(typeof draft4.reason === 'string' && draft4.reason.length >= 10, 'Draft reason is preserved and has length >= 10');
         assert(draft4.reason.includes('Tim Mạch') || draft4.reason.includes('ngực') || draft4.reason.includes(TEST_DATA_PREFIX), 'Draft reason preserves symptom description or test marker');
-        
+
         const actions4 = chatRes4.data?.data?.actions || [];
         const hasReviewOrConfirm = actions4.some(a => a.type === 'ReviewBooking' || a.type === 'ConfirmBooking');
         assert(hasReviewOrConfirm, 'AI actions include ReviewBooking or ConfirmBooking');
@@ -355,7 +489,14 @@ async function main() {
         assert(!!createdAppt?.appointmentCode, `Created appointment code: ${createdAppt?.appointmentCode}`);
         const appointmentId = createdAppt.id;
         const appointmentCode = createdAppt.appointmentCode;
-        createdAppointments.push({ id: appointmentId, token: tokenA });
+        createdAppointments.push({
+            id: appointmentId,
+            slotId: chosenSlot.slotId,
+            doctorId: chosenDoctorId,
+            specialtyId,
+            slotDate: chosenSlot.slotDate,
+            token: tokenA
+        });
 
         // Step 10: Verify Appointment in Patient A's list
         logStep(10, `Verify Appointment #${appointmentId} appears in Patient A's list`);
@@ -368,6 +509,8 @@ async function main() {
         assert(!!foundInPatientList, `Appointment ${appointmentCode} verified in Patient A's my-appointments list`);
 
         // Step 11: Authenticate Doctor & verify appointment in Doctor workspace
+        // STRICT: no else-bypass. chosenDoctorId === targetDoctorId always (enforced in Step 5).
+        // Appointment must appear in doctor's list; FAILED if not found.
         logStep(11, `Authenticate Doctor (${doctorEmail}) & verify appointment in Doctor list`);
         const docApptRes = await apiRequest(`/api/v1/doctor/appointments?date=${chosenSlot.slotDate}&page=1&pageSize=50`, {
             token: doctorToken
@@ -375,12 +518,11 @@ async function main() {
         assert(docApptRes.ok, `Doctor appointments returned HTTP 200 (Got ${docApptRes.status})`);
         const docAppointments = docApptRes.data?.data?.items || [];
         const foundInDocList = docAppointments.find(a => a.id === appointmentId || a.appointmentCode === appointmentCode);
-        if (chosenDoctorId === targetDoctorId) {
-            assert(!!foundInDocList, `Appointment ${appointmentCode} (ID: ${appointmentId}) found and verified in Doctor's appointment list`);
-            logSuccess(`Doctor schedule queried successfully: verified appointment #${appointmentId} (${appointmentCode}) in Doctor list`);
-        } else {
-            logSuccess(`Doctor schedule queried successfully for date ${chosenSlot.slotDate} (${docAppointments.length} appointments listed)`);
-        }
+        assert(
+            !!foundInDocList,
+            `Appointment ${appointmentCode} (ID: ${appointmentId}) found and verified in Doctor's appointment list`
+        );
+        logSuccess(`Doctor schedule confirmed: appointment #${appointmentId} (${appointmentCode}) visible in doctor list`);
 
         // Step 12: Scenario Patient B books another slot first
         logStep(12, `Authenticate Patient B (${patientBEmail}) & hold a slot first`);
@@ -417,7 +559,14 @@ async function main() {
         assert(bookBRes.status === 201, `Patient B booked Slot #${slotB.slotId} (HTTP 201)`);
         const apptBId = bookBRes.data?.data?.id;
         if (apptBId) {
-            createdAppointments.push({ id: apptBId, token: tokenB });
+            createdAppointments.push({
+                id: apptBId,
+                slotId: slotB.slotId,
+                doctorId: docBId,
+                specialtyId,
+                slotDate: slotB.slotDate,
+                token: tokenB
+            });
         }
         logSuccess(`Patient B successfully booked Slot #${slotB.slotId} (Appointment ID: ${apptBId})`);
 
@@ -438,8 +587,8 @@ async function main() {
         assert(conflictJson.includes('SLOT_ALREADY_BOOKED'), 'Response body contains canonical error code SLOT_ALREADY_BOOKED');
         logSuccess('409 Conflict properly returned with SLOT_ALREADY_BOOKED');
 
-        // Step 14: API Recovery - Verify Patient A draft retention after 409 and slot recovery
-        logStep(14, 'API Recovery: Verify alternative available slots are returned and draft context preserved after 409 conflict');
+        // Step 14: API Recovery — strict assertions (no OR shortcut, no weak conditions)
+        logStep(14, 'API Recovery: strict alternative slot assertion, draft preservation, and canonical endpoint cross-check');
         const recoverRes = await apiRequest('/api/v1/ai/chat', {
             method: 'POST',
             token: tokenA,
@@ -452,11 +601,43 @@ async function main() {
             }
         });
         assert(recoverRes.ok, `Recovery chat query returned HTTP 200 (Got ${recoverRes.status})`);
-        assert(recoverRes.data?.data?.bookingDraft?.specialtyId === specialtyId, 'Draft specialtyId preserved after conflict');
+
+        // Assert draft still retains specialtyId, doctorId, and reason
+        const recoverDraft = recoverRes.data?.data?.bookingDraft;
+        assert(recoverDraft?.specialtyId === specialtyId, 'Draft specialtyId preserved after conflict');
+        assert(recoverDraft?.doctorId === docBId, 'Draft doctorId preserved after conflict');
+        assert(
+            typeof recoverDraft?.reason === 'string' && recoverDraft.reason.length >= 10,
+            'Draft reason preserved after conflict (length >= 10)'
+        );
+
+        // Assert alternative SelectSlot actions strictly present (not OR Array.isArray)
         const recoverActions = recoverRes.data?.data?.actions || [];
         const alternativeSlotActions = recoverActions.filter(a => a.type === 'SelectSlot');
-        assert(alternativeSlotActions.length > 0 || Array.isArray(recoverActions), 'Alternative slot actions returned in API recovery');
-        logSuccess(`API Recovery verified: alternative options returned (${alternativeSlotActions.length} slot actions) and draft context preserved`);
+        assert(
+            alternativeSlotActions.length > 0,
+            `At least one alternative SelectSlot action returned (got ${alternativeSlotActions.length})`
+        );
+
+        // Assert none of the alternatives is slotB (held by Patient B)
+        const noSlotBInAlternatives = alternativeSlotActions.every(a => a.payload?.slotId !== slotB.slotId);
+        assert(noSlotBInAlternatives, `No alternative slot equals held slotB (#${slotB.slotId})`);
+
+        // Assert first alternative exists in canonical available-slots endpoint
+        const firstAltSlotId = alternativeSlotActions[0]?.payload?.slotId;
+        if (firstAltSlotId) {
+            const altSlotsRes = await apiRequest(
+                `/api/v1/doctors/${docBId}/available-slots?fromDate=${slotB.slotDate}&toDate=${slotB.slotDate}`
+            );
+            assert(altSlotsRes.ok, `available-slots endpoint returned HTTP 200 for docBId=${docBId} on ${slotB.slotDate}`);
+            const availableSlotIds = (altSlotsRes.data?.data || []).map(s => s.slotId);
+            assert(
+                availableSlotIds.includes(firstAltSlotId),
+                `First alternative slot #${firstAltSlotId} exists in canonical available-slots endpoint`
+            );
+        }
+
+        logSuccess(`API Recovery verified: ${alternativeSlotActions.length} alternative slot action(s), none == slotB, draft intact`);
 
         // Step 15: Sunday Rule Enforcement
         logStep(15, 'Verify Sunday Rule Enforcement via AI Chat');
@@ -534,27 +715,54 @@ async function main() {
         console.log(`${colors.bold}${colors.green}   Passed: ${passedCount} assertions | Failed: ${failedCount} assertions${colors.reset}`);
         console.log(`${colors.bold}${colors.green}${'='.repeat(72)}${colors.reset}\n`);
 
-        process.exit(0);
+        exitCode = 0;
     } catch (err) {
         console.error(`\n${colors.bold}${colors.red}[FATAL ERROR in E2E]: ${err.message}${colors.reset}`);
-        console.error(`Status: ${passedCount} passed, ${failedCount + 1} failed.\n`);
-        process.exit(1);
+        console.error(`Status: ${passedCount} passed, ${failedCount} failed.\n`);
+        exitCode = 1;
     } finally {
+        // ─── Real Cleanup: full cancellation workflow via receptionist approval ──
+        // POST cancellation-request (patient) → approve-cancellation (receptionist)
+        // → assert status=Cancelled → assert slot reappears in available-slots
+        // If any step fails → exitCode=1 and print remaining appointmentId/slotId.
         if (createdAppointments.length > 0) {
-            console.log(`\n[CLEANUP] Cleaning up ${createdAppointments.length} test appointment(s)...`);
+            console.log(`\n[CLEANUP] Cleaning up ${createdAppointments.length} test appointment(s) via receptionist approval workflow...`);
+
+            let receptionToken = null;
+            try {
+                const authRec = await login(receptionEmail, receptionPassword);
+                receptionToken = authRec.token;
+                console.log(`[CLEANUP] Receptionist authenticated (${receptionEmail})`);
+            } catch (err) {
+                console.error(`[CLEANUP FAILED] Cannot login as receptionist (${receptionEmail}): ${err.message}`);
+                console.error('[CLEANUP FAILED] The following test appointments were NOT released:');
+                for (const appt of createdAppointments) {
+                    console.error(`  appointmentId=${appt.id}  slotId=${appt.slotId ?? 'unknown'}`);
+                }
+                process.exitCode = 1;
+                return;
+            }
+
+            let allReleased = true;
             for (const appt of createdAppointments) {
-                try {
-                    await apiRequest(`/api/v1/appointments/${appt.id}/cancellation-requests`, {
-                        method: 'POST',
-                        token: appt.token,
-                        body: { reason: `${TEST_DATA_PREFIX} Dọn dẹp sau kiểm thử E2E tự động` }
-                    });
-                    console.log(`[CLEANUP] Requested cancellation for appointment #${appt.id}`);
-                } catch (err) {
-                    console.warn(`[CLEANUP] Cleanup warning for appointment #${appt.id}: ${err.message}`);
+                const result = await cleanupAppointment(appt, receptionToken);
+                if (result.released) {
+                    console.log(`[CLEANUP] ✔ appointment #${result.appointmentId} cancelled, slot #${result.slotId ?? 'n/a'} released`);
+                } else {
+                    allReleased = false;
+                    console.error(`[CLEANUP FAILED] appointment #${result.appointmentId} slot #${result.slotId ?? 'unknown'} NOT released: ${result.error}`);
                 }
             }
+
+            if (!allReleased) {
+                console.error('[CLEANUP] One or more appointments could not be cleaned up. Exiting FAILED.');
+                exitCode = 1;
+            } else {
+                console.log('[CLEANUP] All test appointments cancelled and slots verified as released.');
+            }
         }
+
+        process.exitCode = exitCode;
     }
 }
 
