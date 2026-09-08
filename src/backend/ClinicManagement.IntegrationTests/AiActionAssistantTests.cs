@@ -797,4 +797,313 @@ public class AiActionAssistantTests : IntegrationTestBase
             db.Appointments, a => a.AppointmentSlotId == slot.Id);
         Assert.Equal(1, count);
     }
+
+    [Fact]
+    public async Task Given_SlotWithHoldingAppointment_When_QueryingDoctorSpecialtyAndAi_Then_AllExcludeSlot_AndBookingReturns409()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        var workingDate = GetFutureWorkingDate(8);
+        var slot1 = await CreateAvailableSlotAsync(DoctorEntityId, workingDate, new TimeOnly(8, 0, 0), new TimeOnly(8, 30, 0));
+        var slot2 = await CreateAvailableSlotAsync(DoctorEntityId, workingDate, new TimeOnly(8, 30, 0), new TimeOnly(9, 0, 0));
+
+        // Create an active appointment holding slot1 (Pending status) without setting IsBooked=true on slot1
+        using (var setupScope = Factory.Services.CreateScope())
+        {
+            var setupDb = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var holdingAppointment = new Appointment
+            {
+                DoctorId = DoctorEntityId,
+                PatientId = Patient2EntityId,
+                SpecialtyId = SpecialtyEntityId,
+                AppointmentSlotId = slot1.Id,
+                AppointmentDate = workingDate,
+                StartTime = slot1.StartTime,
+                EndTime = slot1.EndTime,
+                Reason = "Khám tim mạch giữ chỗ thử nghiệm",
+                Status = AppointmentStatus.Pending,
+                AppointmentCode = "APT-TEST-PARITY"
+            };
+            setupDb.Appointments.Add(holdingAppointment);
+            await setupDb.SaveChangesAsync();
+        }
+
+        // Verify slot1.IsBooked is still false in DB
+        using (var verifyScope = Factory.Services.CreateScope())
+        {
+            var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var s1 = await verifyDb.AppointmentSlots.FindAsync(slot1.Id);
+            Assert.NotNull(s1);
+            Assert.False(s1.IsBooked);
+        }
+
+        // 1. Check Doctor available slots endpoint
+        var docSlotsRes = await Client.GetAsync($"/api/v1/doctors/{DoctorEntityId}/available-slots?fromDate={workingDate:yyyy-MM-dd}&toDate={workingDate:yyyy-MM-dd}&specialtyId={SpecialtyEntityId}");
+        Assert.Equal(HttpStatusCode.OK, docSlotsRes.StatusCode);
+        var docSlotsDoc = JsonDocument.Parse(await docSlotsRes.Content.ReadAsStringAsync());
+        var docSlots = docSlotsDoc.RootElement.GetProperty("data").EnumerateArray()
+            .Select(s => s.GetProperty("slotId").GetInt64())
+            .ToList();
+
+        Assert.DoesNotContain(slot1.Id, docSlots);
+        Assert.Contains(slot2.Id, docSlots);
+
+        // 2. Check Specialty recommended doctors endpoint (earliest slot cannot be slot1)
+        var specDocRes = await Client.GetAsync($"/api/v1/specialties/{SpecialtyEntityId}/recommended-doctors?fromDate={workingDate:yyyy-MM-dd}&days=1");
+        Assert.Equal(HttpStatusCode.OK, specDocRes.StatusCode);
+        var specDoc = JsonDocument.Parse(await specDocRes.Content.ReadAsStringAsync());
+        var recommended = specDoc.RootElement.GetProperty("data").EnumerateArray()
+            .FirstOrDefault(d => d.GetProperty("doctorId").GetInt64() == DoctorEntityId);
+        if (recommended.ValueKind != JsonValueKind.Undefined)
+        {
+            var earliestStr = recommended.GetProperty("earliestAvailableSlot").GetString();
+            Assert.NotNull(earliestStr);
+            var earliestDto = DateTimeOffset.Parse(earliestStr);
+            Assert.Equal(slot2.StartTime.Hour, earliestDto.Hour);
+            Assert.Equal(slot2.StartTime.Minute, earliestDto.Minute);
+        }
+
+        // 3. Check AI chat endpoint for slots
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                Reply = "Đây là danh sách lịch khám của bác sĩ.",
+                SuggestedSpecialtyCodes = new List<string> { "SP06" },
+                Urgency = "ROUTINE"
+            });
+
+        var aiReq = new AiChatRequestDto
+        {
+            Message = "Xem lịch khám của bác sĩ",
+            PendingDoctorId = DoctorEntityId,
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingSlotDate = workingDate.ToString("yyyy-MM-dd")
+        };
+
+        var aiRes = await Client.PostAsJsonAsync("/api/v1/ai/chat", aiReq);
+        Assert.Equal(HttpStatusCode.OK, aiRes.StatusCode);
+        var aiDoc = JsonDocument.Parse(await aiRes.Content.ReadAsStringAsync());
+        var aiActions = aiDoc.RootElement.GetProperty("data").GetProperty("actions").EnumerateArray().ToList();
+        var aiSlotIds = aiActions
+            .Where(a => a.GetProperty("type").GetString() == AiActionTypes.SelectSlot)
+            .Select(a => a.GetProperty("payload").GetProperty("slotId").GetInt64())
+            .ToList();
+
+        Assert.DoesNotContain(slot1.Id, aiSlotIds);
+        Assert.Contains(slot2.Id, aiSlotIds);
+
+        // 4. Parity: The available slot IDs from doctor endpoint and AI SelectSlot actions match
+        Assert.True(docSlots.Contains(slot2.Id) && aiSlotIds.Contains(slot2.Id));
+
+        // 5. Booking slot1 returns 409 Conflict with SLOT_ALREADY_BOOKED
+        var bookReq = new
+        {
+            doctorId = DoctorEntityId,
+            specialtyId = SpecialtyEntityId,
+            appointmentSlotId = slot1.Id,
+            reason = "Thử nghiệm đặt khung giờ đã có cuộc hẹn giữ"
+        };
+        var bookRes = await Client.PostAsJsonAsync("/api/v1/appointments", bookReq);
+        Assert.Equal(HttpStatusCode.Conflict, bookRes.StatusCode);
+        var bookBody = await bookRes.Content.ReadAsStringAsync();
+        Assert.Contains("SLOT_ALREADY_BOOKED", bookBody);
+    }
+
+    [Fact]
+    public async Task Given_ProviderReturnsUnverifiedMedicalData_When_CallingAiChat_Then_SanitizesBoundaryAndReplacesUnverifiedClaims()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                Reply = "Bác sĩ Nguyễn Văn Giả thuộc Khoa Phẫu thuật Vũ trụ với giá 500.000 VNĐ tại tầng 5 phòng 502, số điện thoại 0912345678 hoặc truy cập https://phishing.com",
+                SuggestedSpecialtyCodes = new List<string> { "SP06" }, // Cardiology is valid in DB
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Tư vấn cho tôi chuyên khoa và bác sĩ"
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = doc.RootElement.GetProperty("data");
+        var message = data.GetProperty("message").GetString()!;
+
+        // Grounding boundary verification: Unverified claims MUST be scrubbed from the reply
+        Assert.DoesNotContain("Nguyễn Văn Giả", message);
+        Assert.DoesNotContain("Khoa Phẫu thuật Vũ trụ", message);
+        Assert.DoesNotContain("500.000", message);
+        Assert.DoesNotContain("0912345678", message);
+        Assert.DoesNotContain("tầng 5", message);
+        Assert.DoesNotContain("phishing.com", message);
+
+        // Safe message notice is rendered
+        Assert.Contains("đối soát an toàn", message);
+
+        // Valid DB-grounded suggestions are preserved
+        var suggestions = data.GetProperty("specialtySuggestions").EnumerateArray().ToList();
+        Assert.NotEmpty(suggestions);
+        Assert.Equal("SP06", suggestions[0].GetProperty("specialtyCode").GetString());
+    }
+
+    [Fact]
+    public async Task Given_BookingRequestWithInvalidReasonLength_When_Submitting_Then_Returns400BadRequest()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        var workingDate = GetFutureWorkingDate(9);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, workingDate, new TimeOnly(10, 0, 0), new TimeOnly(10, 30, 0));
+
+        // Short reason (< 10 chars)
+        var shortReasonReq = new
+        {
+            doctorId = DoctorEntityId,
+            specialtyId = SpecialtyEntityId,
+            appointmentSlotId = slot.Id,
+            reason = "Đau đầu"
+        };
+
+        var shortRes = await Client.PostAsJsonAsync("/api/v1/appointments", shortReasonReq);
+        Assert.Equal(HttpStatusCode.BadRequest, shortRes.StatusCode);
+        var shortBody = await shortRes.Content.ReadAsStringAsync();
+        Assert.True(shortBody.Contains("Reason") || shortBody.Contains("Lý do khám") || shortBody.Contains("10") || shortBody.Contains("VALIDATION_ERROR"));
+
+        // Empty reason
+        var emptyReasonReq = new
+        {
+            doctorId = DoctorEntityId,
+            specialtyId = SpecialtyEntityId,
+            appointmentSlotId = slot.Id,
+            reason = "    "
+        };
+
+        var emptyRes = await Client.PostAsJsonAsync("/api/v1/appointments", emptyReasonReq);
+        Assert.Equal(HttpStatusCode.BadRequest, emptyRes.StatusCode);
+    }
+
+    [Fact]
+    public void AiActionValidator_ValidatesAll19ActionTypes_And_EnforcesSecurityContracts()
+    {
+        Assert.Equal(19, AiActionTypes.All.Count);
+
+        // 1. ViewSpecialty
+        var act1 = new AiActionDto { Id = "1", Type = AiActionTypes.ViewSpecialty, Label = "L", Style = "primary", Payload = new AiActionPayloadDto { SpecialtyId = 1 } };
+        Assert.True(AiActionValidator.Validate(act1, out _));
+        var act1Bad = new AiActionDto { Id = "1", Type = AiActionTypes.ViewSpecialty, Label = "L", Style = "primary", Payload = new AiActionPayloadDto { SpecialtyId = 0 } };
+        Assert.False(AiActionValidator.Validate(act1Bad, out _));
+
+        // 2. ViewDoctors
+        var act2 = new AiActionDto { Id = "2", Type = AiActionTypes.ViewDoctors, Label = "L", Style = "secondary", Payload = new AiActionPayloadDto { TargetUrl = "/doctors" } };
+        Assert.True(AiActionValidator.Validate(act2, out _));
+        var act2Bad = new AiActionDto { Id = "2", Type = AiActionTypes.ViewDoctors, Label = "L", Style = "secondary", Payload = new AiActionPayloadDto { TargetUrl = "/unsafe" } };
+        Assert.False(AiActionValidator.Validate(act2Bad, out _));
+
+        // 3. ViewAvailableSlots
+        var act3 = new AiActionDto { Id = "3", Type = AiActionTypes.ViewAvailableSlots, Label = "L", Style = "primary", Payload = new AiActionPayloadDto { DoctorId = 1, SlotDate = "2026-09-10" } };
+        Assert.True(AiActionValidator.Validate(act3, out _));
+        var act3Bad = new AiActionDto { Id = "3", Type = AiActionTypes.ViewAvailableSlots, Label = "L", Style = "primary", Payload = new AiActionPayloadDto { DoctorId = 0 } };
+        Assert.False(AiActionValidator.Validate(act3Bad, out _));
+
+        // 4. StartBooking
+        var act4 = new AiActionDto { Id = "4", Type = AiActionTypes.StartBooking, Label = "L", Style = "primary", Payload = new AiActionPayloadDto { SpecialtyId = 1, TargetUrl = "/patient/book" } };
+        Assert.True(AiActionValidator.Validate(act4, out _));
+
+        // 5. SelectDoctor
+        var act5 = new AiActionDto { Id = "5", Type = AiActionTypes.SelectDoctor, Label = "L", Style = "primary", Payload = new AiActionPayloadDto { SpecialtyId = 1, DoctorId = 2 } };
+        Assert.True(AiActionValidator.Validate(act5, out _));
+        var act5Bad = new AiActionDto { Id = "5", Type = AiActionTypes.SelectDoctor, Label = "L", Style = "primary", Payload = new AiActionPayloadDto { SpecialtyId = 1, DoctorId = 0 } };
+        Assert.False(AiActionValidator.Validate(act5Bad, out _));
+
+        // 6. SelectSlot
+        var act6 = new AiActionDto { Id = "6", Type = AiActionTypes.SelectSlot, Label = "L", Style = "primary", Payload = new AiActionPayloadDto { DoctorId = 1, SlotId = 10, SlotDate = "2026-09-10", StartTime = "08:00:00", EndTime = "08:30:00" } };
+        Assert.True(AiActionValidator.Validate(act6, out _));
+        var act6Bad = new AiActionDto { Id = "6", Type = AiActionTypes.SelectSlot, Label = "L", Style = "primary", Payload = new AiActionPayloadDto { DoctorId = 1, SlotId = 0, SlotDate = "2026-09-10", StartTime = "08:00:00", EndTime = "08:30:00" } };
+        Assert.False(AiActionValidator.Validate(act6Bad, out _));
+
+        // 7. ReviewBooking
+        var act7 = new AiActionDto { Id = "7", Type = AiActionTypes.ReviewBooking, Label = "L", Style = "secondary", RequiresAuthentication = true, Payload = new AiActionPayloadDto { SpecialtyId = 1, DoctorId = 1, SlotId = 10, Reason = "Khám tim mạch" } };
+        Assert.True(AiActionValidator.Validate(act7, out _));
+        var act7BadAuth = new AiActionDto { Id = "7", Type = AiActionTypes.ReviewBooking, Label = "L", Style = "secondary", RequiresAuthentication = false, Payload = new AiActionPayloadDto { SpecialtyId = 1, DoctorId = 1, SlotId = 10, Reason = "Khám tim mạch" } };
+        Assert.False(AiActionValidator.Validate(act7BadAuth, out _));
+
+        // 8. ConfirmBooking
+        var act8 = new AiActionDto { Id = "8", Type = AiActionTypes.ConfirmBooking, Label = "L", Style = "primary", RequiresAuthentication = true, RequiresConfirmation = true, Payload = new AiActionPayloadDto { SpecialtyId = 1, DoctorId = 1, SlotId = 10, SlotDate = "2026-09-10", StartTime = "08:00:00", EndTime = "08:30:00", Reason = "Khám sức khỏe tổng quát" } };
+        Assert.True(AiActionValidator.Validate(act8, out _));
+        var act8BadConfirm = new AiActionDto { Id = "8", Type = AiActionTypes.ConfirmBooking, Label = "L", Style = "primary", RequiresAuthentication = true, RequiresConfirmation = false, Payload = new AiActionPayloadDto { SpecialtyId = 1, DoctorId = 1, SlotId = 10, SlotDate = "2026-09-10", StartTime = "08:00:00", EndTime = "08:30:00", Reason = "Khám sức khỏe" } };
+        Assert.False(AiActionValidator.Validate(act8BadConfirm, out _));
+
+        // 9. ChangePreferredDate
+        var act9 = new AiActionDto { Id = "9", Type = AiActionTypes.ChangePreferredDate, Label = "L", Style = "secondary", Payload = new AiActionPayloadDto { SlotDate = "2026-09-11" } };
+        Assert.True(AiActionValidator.Validate(act9, out _));
+        var act9Bad = new AiActionDto { Id = "9", Type = AiActionTypes.ChangePreferredDate, Label = "L", Style = "secondary", Payload = new AiActionPayloadDto { SlotDate = "" } };
+        Assert.False(AiActionValidator.Validate(act9Bad, out _));
+
+        // 10. ViewMyAppointments
+        var act10 = new AiActionDto { Id = "10", Type = AiActionTypes.ViewMyAppointments, Label = "L", Style = "secondary", RequiresAuthentication = true, Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Appointments } };
+        Assert.True(AiActionValidator.Validate(act10, out _));
+
+        // 11. OpenAppointmentDetail
+        var act11 = new AiActionDto { Id = "11", Type = AiActionTypes.OpenAppointmentDetail, Label = "L", Style = "secondary", RequiresAuthentication = true, Payload = new AiActionPayloadDto { AppointmentId = 123, TargetUrl = "/patient/appointments/123" } };
+        Assert.True(AiActionValidator.Validate(act11, out _));
+        var act11Mismatch = new AiActionDto { Id = "11", Type = AiActionTypes.OpenAppointmentDetail, Label = "L", Style = "secondary", RequiresAuthentication = true, Payload = new AiActionPayloadDto { AppointmentId = 123, TargetUrl = "/patient/appointments/456" } };
+        Assert.False(AiActionValidator.Validate(act11Mismatch, out _));
+        var act11Zero = new AiActionDto { Id = "11", Type = AiActionTypes.OpenAppointmentDetail, Label = "L", Style = "secondary", RequiresAuthentication = true, Payload = new AiActionPayloadDto { AppointmentId = 0, TargetUrl = "/patient/appointments/0" } };
+        Assert.False(AiActionValidator.Validate(act11Zero, out _));
+
+        // 12. RequestReschedule
+        var act12 = new AiActionDto { Id = "12", Type = AiActionTypes.RequestReschedule, Label = "L", Style = "secondary", RequiresAuthentication = true, RequiresConfirmation = true, Payload = new AiActionPayloadDto { AppointmentId = 123, TargetUrl = "/patient/appointments/123?action=reschedule" } };
+        Assert.True(AiActionValidator.Validate(act12, out _));
+        var act12NoConfirm = new AiActionDto { Id = "12", Type = AiActionTypes.RequestReschedule, Label = "L", Style = "secondary", RequiresAuthentication = true, RequiresConfirmation = false, Payload = new AiActionPayloadDto { AppointmentId = 123 } };
+        Assert.False(AiActionValidator.Validate(act12NoConfirm, out _));
+
+        // 13. RequestCancellation
+        var act13 = new AiActionDto { Id = "13", Type = AiActionTypes.RequestCancellation, Label = "L", Style = "danger", RequiresAuthentication = true, RequiresConfirmation = true, Payload = new AiActionPayloadDto { AppointmentId = 123, TargetUrl = "/patient/appointments/123?action=cancel" } };
+        Assert.True(AiActionValidator.Validate(act13, out _));
+        var act13NoConfirm = new AiActionDto { Id = "13", Type = AiActionTypes.RequestCancellation, Label = "L", Style = "danger", RequiresAuthentication = true, RequiresConfirmation = false, Payload = new AiActionPayloadDto { AppointmentId = 123 } };
+        Assert.False(AiActionValidator.Validate(act13NoConfirm, out _));
+
+        // 14. ViewDiagnosticResults
+        var act14 = new AiActionDto { Id = "14", Type = AiActionTypes.ViewDiagnosticResults, Label = "L", Style = "secondary", RequiresAuthentication = true, Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.DiagnosticResults } };
+        Assert.True(AiActionValidator.Validate(act14, out _));
+
+        // 15. ViewPrescriptions
+        var act15 = new AiActionDto { Id = "15", Type = AiActionTypes.ViewPrescriptions, Label = "L", Style = "secondary", RequiresAuthentication = true, Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Prescriptions } };
+        Assert.True(AiActionValidator.Validate(act15, out _));
+
+        // 16. ViewBills
+        var act16 = new AiActionDto { Id = "16", Type = AiActionTypes.ViewBills, Label = "L", Style = "secondary", RequiresAuthentication = true, Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Invoices } };
+        Assert.True(AiActionValidator.Validate(act16, out _));
+
+        // 17. ContactReception
+        var act17 = new AiActionDto { Id = "17", Type = AiActionTypes.ContactReception, Label = "L", Style = "secondary", Payload = new AiActionPayloadDto() };
+        Assert.True(AiActionValidator.Validate(act17, out _));
+
+        // 18. ManualSpecialtySelection
+        var act18 = new AiActionDto { Id = "18", Type = AiActionTypes.ManualSpecialtySelection, Label = "L", Style = "secondary", Payload = new AiActionPayloadDto { TargetUrl = "/patient/book" } };
+        Assert.True(AiActionValidator.Validate(act18, out _));
+
+        // 19. CallEmergency
+        var act19 = new AiActionDto { Id = "19", Type = AiActionTypes.CallEmergency, Label = "L", Style = "danger", Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.EmergencyPhone } };
+        Assert.True(AiActionValidator.Validate(act19, out _));
+        var act19Bad = new AiActionDto { Id = "19", Type = AiActionTypes.CallEmergency, Label = "L", Style = "danger", Payload = new AiActionPayloadDto { TargetUrl = "tel:911" } };
+        Assert.False(AiActionValidator.Validate(act19Bad, out _));
+    }
 }
+

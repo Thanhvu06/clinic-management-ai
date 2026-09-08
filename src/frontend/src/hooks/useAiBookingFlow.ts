@@ -376,12 +376,21 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 const slotDate = action.payload.slotDate || activeDraft?.slotDate;
                 const startTime = action.payload.startTime || activeDraft?.startTime;
                 const docName = action.payload.doctorName || activeDraft?.doctorName;
-                const reason = action.payload.reason?.trim() || activeDraft?.reason?.trim() || "Đặt lịch qua Trợ lý ClinicCare AI";
+                const reason = (action.payload.reason || activeDraft?.reason || "").trim();
 
-                if (!slotId || !docId || !specId) {
+                if (!slotId || !docId || !specId || !slotDate || !startTime) {
                     setMessages(prev => [...prev, {
                         role: "model",
                         content: "Thông tin đặt lịch chưa đầy đủ (thiếu bác sĩ hoặc khung giờ). Vui lòng kiểm tra lại.",
+                        urgency: "ROUTINE"
+                    }]);
+                    return;
+                }
+
+                if (!reason || reason.length < 10 || reason.length > 500) {
+                    setMessages(prev => [...prev, {
+                        role: "model",
+                        content: "Lý do khám phải từ 10 đến 500 ký tự. Vui lòng nhập lý do khám hoặc mô tả triệu chứng trước khi xác nhận đặt lịch.",
                         urgency: "ROUTINE"
                     }]);
                     return;

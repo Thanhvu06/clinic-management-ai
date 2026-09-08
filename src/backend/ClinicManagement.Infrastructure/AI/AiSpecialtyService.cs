@@ -22,9 +22,9 @@ public class AiSpecialtyService : IAiSpecialtyService
     private readonly IClinicAiContextService _clinicAiContextService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<AiSpecialtyService> _logger;
+    private readonly ClinicManagement.Application.Appointments.Interfaces.IAppointmentAvailabilityPolicy _availabilityPolicy;
+    private readonly ClinicManagement.Application.Authentication.Interfaces.ICurrentUserService _currentUserService;
     private readonly IAiSpecialtyClassifier? _classifier;
-    private readonly ClinicManagement.Application.Appointments.Interfaces.IAppointmentAvailabilityPolicy? _availabilityPolicy;
-    private readonly ClinicManagement.Application.Authentication.Interfaces.ICurrentUserService? _currentUserService;
 
     public AiSpecialtyService(
         AppDbContext dbContext,
@@ -32,18 +32,18 @@ public class AiSpecialtyService : IAiSpecialtyService
         IClinicAiContextService clinicAiContextService,
         IDateTimeProvider dateTimeProvider,
         ILogger<AiSpecialtyService> logger,
-        IAiSpecialtyClassifier? classifier = null,
-        ClinicManagement.Application.Appointments.Interfaces.IAppointmentAvailabilityPolicy? availabilityPolicy = null,
-        ClinicManagement.Application.Authentication.Interfaces.ICurrentUserService? currentUserService = null)
+        ClinicManagement.Application.Appointments.Interfaces.IAppointmentAvailabilityPolicy availabilityPolicy,
+        ClinicManagement.Application.Authentication.Interfaces.ICurrentUserService currentUserService,
+        IAiSpecialtyClassifier? classifier = null)
     {
         _dbContext = dbContext;
         _aiProvider = aiProvider;
         _clinicAiContextService = clinicAiContextService;
         _dateTimeProvider = dateTimeProvider;
         _logger = logger;
-        _classifier = classifier;
         _availabilityPolicy = availabilityPolicy;
         _currentUserService = currentUserService;
+        _classifier = classifier;
     }
 
     public async Task<AiSuggestionResponseDto> GetSuggestionsAsync(AiSuggestionRequestDto request, CancellationToken cancellationToken = default)
@@ -254,15 +254,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             ? aiResult.Urgency.Trim().ToUpperInvariant()
             : "ROUTINE";
 
-        var sanitizedReply = aiResult.Reply.Trim();
-        if (sanitizedReply.Length > 1000)
-        {
-            sanitizedReply = sanitizedReply[..1000];
-        }
-
-        // Response Boundary: Sanitize unverified URLs and ungrounded contact numbers from LLM output
-        sanitizedReply = Regex.Replace(sanitizedReply, @"https?://[^\s]+", "[liên kết nội bộ]", RegexOptions.IgnoreCase);
-        sanitizedReply = Regex.Replace(sanitizedReply, @"1900\s*\d{4}", "[liên hệ lễ tân]", RegexOptions.IgnoreCase);
+        var sanitizedReply = await ComposeGroundedReplyAsync(aiResult.Reply, whitelistData, cancellationToken);
 
         var responseDto = new AiChatResponseDto
         {
@@ -505,111 +497,71 @@ public class AiSpecialtyService : IAiSpecialtyService
                 return;
             }
 
-            // D. Query Available Slots
-            var slotsQuery = _dbContext.AppointmentSlots
-                .AsNoTracking()
-                .Where(s => !s.IsBooked);
-
-            if (targetDoctorId.HasValue)
+            // D. Query Available Slots via Canonical Availability Policy
+            long? currentPatientId = null;
+            if (_currentUserService.UserId.HasValue)
             {
-                slotsQuery = slotsQuery.Where(s => s.DoctorId == targetDoctorId.Value);
-            }
-            else
-            {
-                var docIds = activeDoctorsInSpec.Select(d => d.Id).ToList();
-                slotsQuery = slotsQuery.Where(s => docIds.Contains(s.DoctorId));
+                var pat = await _dbContext.Patients
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(p => p.UserId == _currentUserService.UserId.Value, cancellationToken);
+                currentPatientId = pat?.Id;
             }
 
-            if (targetDate.HasValue)
+            var batchRequest = new ClinicManagement.Application.Appointments.Interfaces.BatchSlotAvailabilityRequest
             {
-                slotsQuery = slotsQuery.Where(s => s.SlotDate == targetDate.Value
-                    && (s.SlotDate > vnToday || s.StartTime > vnTime));
-            }
-            else
+                DoctorId = targetDoctorId,
+                DoctorIds = targetDoctorId.HasValue ? null : activeDoctorsInSpec.Select(d => d.Id).ToList(),
+                SpecialtyId = targetSpecialty.Id,
+                FromDate = targetDate ?? vnToday,
+                ToDate = targetDate ?? vnToday.AddDays(7),
+                CheckAiEnabledSpecialty = true,
+                TimePreference = aiResult.ExtractedTimePreference,
+                Limit = 6,
+                PatientId = currentPatientId
+            };
+
+            var availableSlotDtos = await _availabilityPolicy.GetAvailableSlotsAsync(batchRequest, cancellationToken);
+            var availableSlots = availableSlotDtos.Select(s => new ClinicManagement.Domain.Entities.AppointmentSlot
             {
-                var maxDate = vnToday.AddDays(7);
-                slotsQuery = slotsQuery.Where(s => s.SlotDate >= vnToday && s.SlotDate <= maxDate
-                    && (s.SlotDate > vnToday || s.StartTime > vnTime));
-            }
+                Id = s.SlotId,
+                DoctorId = s.DoctorId,
+                SlotDate = s.SlotDate,
+                StartTime = s.StartTime,
+                EndTime = s.EndTime
+            }).ToList();
 
-            // Filter time preference if specified
-            if (!string.IsNullOrWhiteSpace(aiResult.ExtractedTimePreference))
-            {
-                var pref = aiResult.ExtractedTimePreference.ToLowerInvariant();
-                if (pref.Contains("sáng"))
-                {
-                    slotsQuery = slotsQuery.Where(s => s.StartTime < new TimeOnly(12, 0, 0));
-                }
-                else if (pref.Contains("chiều"))
-                {
-                    slotsQuery = slotsQuery.Where(s => s.StartTime >= new TimeOnly(12, 0, 0));
-                }
-            }
-
-            var availableSlots = await slotsQuery
-                .OrderBy(s => s.SlotDate)
-                .ThenBy(s => s.StartTime)
-                .Take(6)
-                .ToListAsync(cancellationToken);
-
-            // E. Resolve Selected Slot
+            // E. Resolve Selected Slot via Canonical Availability Policy
             ClinicManagement.Domain.Entities.AppointmentSlot? chosenSlot = null;
             if (request.PendingSlotId.HasValue && request.PendingSlotId.Value > 0)
             {
-                if (_availabilityPolicy != null)
+                var availResult = await _availabilityPolicy.EvaluateSlotAvailabilityAsync(new ClinicManagement.Application.Appointments.Interfaces.SlotAvailabilityRequest
                 {
-                    var availResult = await _availabilityPolicy.EvaluateSlotAvailabilityAsync(new ClinicManagement.Application.Appointments.Interfaces.SlotAvailabilityRequest
-                    {
-                        SlotId = request.PendingSlotId.Value,
-                        DoctorId = targetDoctorId,
-                        SpecialtyId = targetSpecialty.Id,
-                        CheckAiEnabledSpecialty = true
-                    }, cancellationToken);
+                    SlotId = request.PendingSlotId.Value,
+                    DoctorId = targetDoctorId,
+                    SpecialtyId = targetSpecialty.Id,
+                    PatientId = currentPatientId,
+                    CheckAiEnabledSpecialty = true
+                }, cancellationToken);
 
-                    if (availResult.IsAvailable)
+                if (availResult.IsAvailable)
+                {
+                    targetDoctorId = availResult.DoctorId;
+                    targetDoctorName = availResult.DoctorName;
+                    targetDoctorAcademicTitle = availResult.AcademicTitle;
+                    targetDate = availResult.SlotDate;
+                    chosenSlot = new ClinicManagement.Domain.Entities.AppointmentSlot
                     {
-                        targetDoctorId = availResult.DoctorId;
-                        targetDoctorName = availResult.DoctorName;
-                        targetDoctorAcademicTitle = availResult.AcademicTitle;
-                        targetDate = availResult.SlotDate;
-                        chosenSlot = new ClinicManagement.Domain.Entities.AppointmentSlot
-                        {
-                            Id = availResult.SlotId!.Value,
-                            DoctorId = availResult.DoctorId!.Value,
-                            SlotDate = availResult.SlotDate!.Value,
-                            StartTime = availResult.StartTime!.Value,
-                            EndTime = availResult.EndTime!.Value
-                        };
-                    }
-                    else
-                    {
-                        responseDto.Message = $"Khung giờ đã chọn không khả dụng ({availResult.FailureReason}). Vui lòng chọn một khung giờ khác bên dưới.";
-                        chosenSlot = null;
-                    }
+                        Id = availResult.SlotId!.Value,
+                        DoctorId = availResult.DoctorId!.Value,
+                        SlotDate = availResult.SlotDate!.Value,
+                        StartTime = availResult.StartTime!.Value,
+                        EndTime = availResult.EndTime!.Value
+                    };
                 }
                 else
                 {
-                    chosenSlot = await _dbContext.AppointmentSlots
-                        .AsNoTracking()
-                        .FirstOrDefaultAsync(s => s.Id == request.PendingSlotId.Value && !s.IsBooked
-                            && (s.SlotDate > vnToday || (s.SlotDate == vnToday && s.StartTime > vnTime)), cancellationToken);
-
-                    if (chosenSlot != null)
-                    {
-                        var doc = activeDoctorsInSpec.FirstOrDefault(d => d.Id == chosenSlot.DoctorId);
-                        if (doc != null)
-                        {
-                            targetDoctorId = chosenSlot.DoctorId;
-                            targetDoctorName = doc.FullName;
-                            targetDoctorAcademicTitle = doc.AcademicTitle;
-                            targetDate = chosenSlot.SlotDate;
-                        }
-                        else
-                        {
-                            responseDto.Message = "Bác sĩ của khung giờ đã chọn không thuộc chuyên khoa này. Vui lòng chọn lại khung giờ.";
-                            chosenSlot = null;
-                        }
-                    }
+                    responseDto.Message = $"Khung giờ đã chọn không khả dụng ({availResult.FailureReason}). Vui lòng chọn một khung giờ khác bên dưới.";
+                    chosenSlot = null;
                 }
             }
             else if (aiResult.WantsEarliest && availableSlots.Any())
@@ -1229,6 +1181,96 @@ public class AiSpecialtyService : IAiSpecialtyService
         }
 
         return !string.IsNullOrWhiteSpace(extractedReason) ? extractedReason.Trim() : cleanMessage;
+    }
+
+    private async Task<string> ComposeGroundedReplyAsync(
+        string rawReply,
+        List<WhitelistItemDto> activeSpecialties,
+        CancellationToken cancellationToken)
+    {
+        const string neutralFallback = "Thông tin tư vấn định hướng đã được đối soát an toàn với hệ thống phòng khám. Vui lòng tham khảo các gợi ý chuyên khoa và thao tác hỗ trợ bên dưới.";
+
+        if (string.IsNullOrWhiteSpace(rawReply))
+        {
+            return neutralFallback;
+        }
+
+        var trimmed = rawReply.Trim();
+
+        // 1. Check for unverified URLs or markdown links
+        if (Regex.IsMatch(trimmed, @"https?://", RegexOptions.IgnoreCase) ||
+            Regex.IsMatch(trimmed, @"\[[^\]]+\]\([^)]+\)") ||
+            Regex.IsMatch(trimmed, @"\bwww\.[a-z0-9]", RegexOptions.IgnoreCase))
+        {
+            return neutralFallback;
+        }
+
+        // 2. Check for unverified phone numbers (allow only 115 for emergency)
+        var phoneMatches = Regex.Matches(trimmed, @"(?:\+84|0|\b1\d{3})[\d\s\.\-]{6,15}\b");
+        foreach (Match match in phoneMatches)
+        {
+            var digitsOnly = Regex.Replace(match.Value, @"\D", "");
+            if (digitsOnly != "115")
+            {
+                return neutralFallback;
+            }
+        }
+
+        // 3. Check for unverified prices / monetary amounts
+        if (Regex.IsMatch(trimmed, @"\b\d+[\.,]?\d*\s*(vnđ|vnd|đ|đồng|k\b|nghìn|triệu|usd|\$)\b|\b(giá|chi phí|học phí|tiền khám)\s*[:=]?\s*\d+", RegexOptions.IgnoreCase))
+        {
+            return neutralFallback;
+        }
+
+        // 4. Check for unverified addresses, clinic locations, floors, rooms, or hours
+        if (Regex.IsMatch(trimmed, @"\b(tầng\s+\d+|phòng\s+\d+|quầy\s+\d+|sảnh\s+[\p{L}\d]+|đường\s+[\p{L}\d]+|quận\s+\d+|hàng ngày|\d{1,2}[:h]\d{2}\s*[-–]\s*\d{1,2}[:h]\d{2})\b", RegexOptions.IgnoreCase))
+        {
+            return neutralFallback;
+        }
+
+        // 5. Check for doctor mentions: must match active doctors in DB
+        var docMatches = Regex.Matches(trimmed, @"\b(?:bác sĩ|bs\.|dr\.)\s+([A-ZÀ-Ỹ\p{Lu}][a-zà-ỹ\p{Ll}]+(?:\s+[A-ZÀ-Ỹ\p{Lu}][a-zà-ỹ\p{Ll}]+)+)", RegexOptions.IgnoreCase);
+        if (docMatches.Count > 0)
+        {
+            var activeDocNames = await _dbContext.Doctors
+                .Join(_dbContext.Users, d => d.UserId, u => u.Id, (d, u) => new { d, u })
+                .Where(x => x.d.IsActive && x.u.IsActive)
+                .Select(x => x.u.FullName)
+                .ToListAsync(cancellationToken);
+
+            foreach (Match match in docMatches)
+            {
+                var docName = match.Groups[1].Value.Trim();
+                bool matchesActive = activeDocNames.Any(realName =>
+                    realName.Contains(docName, StringComparison.OrdinalIgnoreCase) ||
+                    docName.Contains(realName, StringComparison.OrdinalIgnoreCase));
+
+                if (!matchesActive)
+                {
+                    return neutralFallback;
+                }
+            }
+        }
+
+        // 6. Check for specialty mentions: must match active specialties in DB
+        var specMatches = Regex.Matches(trimmed, @"\b(?:chuyên khoa|khoa)\s+([A-ZÀ-Ỹ\p{Lu}][a-zà-ỹ\p{Ll}]+(?:\s+[A-ZÀ-Ỹ\p{Lu}][a-zà-ỹ\p{Ll}]+)*)", RegexOptions.IgnoreCase);
+        if (specMatches.Count > 0)
+        {
+            foreach (Match match in specMatches)
+            {
+                var specName = match.Groups[1].Value.Trim();
+                bool matchesActive = activeSpecialties.Any(s =>
+                    s.Name.Contains(specName, StringComparison.OrdinalIgnoreCase) ||
+                    specName.Contains(s.Name, StringComparison.OrdinalIgnoreCase));
+
+                if (!matchesActive)
+                {
+                    return neutralFallback;
+                }
+            }
+        }
+
+        return trimmed.Length > 1000 ? trimmed[..1000] : trimmed;
     }
 }
 

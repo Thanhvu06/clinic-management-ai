@@ -44,7 +44,7 @@ public class AppointmentService : IAppointmentService
             throw new UnauthorizedAccessException("Bạn cần đăng nhập để đặt lịch khám.");
 
         var normalizedReason = request.Reason?.Trim();
-        if (normalizedReason != null && (normalizedReason.Length < 10 || normalizedReason.Length > 500))
+        if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length < 10 || normalizedReason.Length > 500)
             throw new BusinessException("VALIDATION_ERROR", "Lý do khám phải từ 10 đến 500 ký tự.");
 
         // 1 & 2 & 3. Validate Patient

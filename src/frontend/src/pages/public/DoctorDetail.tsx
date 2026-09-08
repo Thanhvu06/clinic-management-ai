@@ -345,11 +345,8 @@ export const DoctorDetail: React.FC = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--c-navy)', fontWeight: 600, fontSize: '0.95rem', marginBottom: '6px' }}>
                             <Phone size={18} color="var(--c-primary)" /> Tổng đài phòng khám
                         </div>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--c-primary)', marginBottom: '4px' }}>
-                            028 3930 1234
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)' }}>
-                            Tư vấn và hỗ trợ đặt hẹn 07:30 - 17:30 hàng ngày.
+                        <div style={{ fontSize: '0.85rem', color: 'var(--c-text-muted)', lineHeight: 1.5 }}>
+                            Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.
                         </div>
                     </div>
                 </aside>

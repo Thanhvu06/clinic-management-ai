@@ -283,6 +283,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
                     slotDate: '2026-09-15',
                     startTime: '09:00',
                     endTime: '09:30',
+                    reason: 'Khám định kỳ tim mạch',
                     isComplete: true
                 },
                 actions: [
@@ -301,7 +302,8 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
                             slotId: 102,
                             slotDate: '2026-09-15',
                             startTime: '09:00',
-                            endTime: '09:30'
+                            endTime: '09:30',
+                            reason: 'Khám định kỳ tim mạch'
                         }
                     }
                 ]
@@ -423,7 +425,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
                         style: 'secondary',
                         requiresAuthentication: false,
                         requiresConfirmation: false,
-                        payload: { phoneNumber: '1900 1234' }
+                        payload: {}
                     }
                 ]
             }
@@ -451,7 +453,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         await waitFor(() => {
             expect(screen.getByText(/Thông tin Quầy Tiếp Đón & Lễ Tân/i)).toBeInTheDocument();
-            expect(screen.getByText(/1900 1234/i)).toBeInTheDocument();
+            expect(screen.getByText(/Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống/i)).toBeInTheDocument();
             // Did not navigate to /contact
             expect(screen.getByTestId('location-display').textContent).toBe('/patient');
         });
@@ -641,6 +643,65 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
             expect(screen.queryByRole('dialog', { name: /ClinicCare AI/i })).not.toBeInTheDocument();
             expect(screen.getByLabelText('Mở Trợ lý ClinicCare AI')).toBeInTheDocument();
         });
+    });
+
+    it('rejects ConfirmBooking when reason is under 10 characters and does not call appointment api', async () => {
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: '',
+            data: {
+                message: 'Vui lòng xác nhận lịch:',
+                urgency: 'ROUTINE',
+                actions: [
+                    {
+                        id: 'act-confirm-short-reason',
+                        type: 'ConfirmBooking',
+                        label: 'Xác nhận đặt lịch',
+                        style: 'primary',
+                        requiresAuthentication: true,
+                        requiresConfirmation: true,
+                        payload: {
+                            specialtyId: 1,
+                            doctorId: 1,
+                            slotId: 101,
+                            slotDate: '2026-09-15',
+                            startTime: '08:00',
+                            endTime: '08:30',
+                            reason: 'Đau đầu' // Only 7 chars (< 10)
+                        }
+                    }
+                ]
+            }
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/patient']}>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(input, { target: { value: 'Xác nhận giúp tôi' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Xác nhận đặt lịch')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Xác nhận đặt lịch'));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Lý do khám phải từ 10 đến 500 ký tự/i)).toBeInTheDocument();
+        });
+
+        // Must NOT have called /appointments
+        expect(axiosClient.post).not.toHaveBeenCalledWith(
+            '/appointments',
+            expect.anything()
+        );
     });
 });
 

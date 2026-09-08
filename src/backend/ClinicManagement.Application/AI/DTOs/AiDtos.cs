@@ -124,7 +124,8 @@ public static class SafeRoutes
         var path = clean.Split('?')[0].Split('#')[0];
         return AllowedPrefixes.Contains(path) ||
                (path.StartsWith("/specialties/") && long.TryParse(path["/specialties/".Length..], out _)) ||
-               (path.StartsWith("/doctors/") && long.TryParse(path["/doctors/".Length..], out _));
+               (path.StartsWith("/doctors/") && long.TryParse(path["/doctors/".Length..], out _)) ||
+               (path.StartsWith("/patient/appointments/") && long.TryParse(path["/patient/appointments/".Length..], out _));
     }
 }
 
@@ -243,6 +244,85 @@ public static class AiActionValidator
                 if (string.IsNullOrWhiteSpace(action.Payload.SlotDate))
                 {
                     error = "ChangePreferredDate action requires a valid SlotDate.";
+                    return false;
+                }
+                break;
+
+            case AiActionTypes.OpenAppointmentDetail:
+                if (!action.Payload.AppointmentId.HasValue || action.Payload.AppointmentId.Value <= 0)
+                {
+                    error = "OpenAppointmentDetail action requires a valid AppointmentId > 0.";
+                    return false;
+                }
+                if (!string.IsNullOrWhiteSpace(action.Payload.TargetUrl))
+                {
+                    var cleanUrl = action.Payload.TargetUrl.Split('?')[0].Split('#')[0];
+                    if (cleanUrl.StartsWith("/patient/appointments/"))
+                    {
+                        var idStr = cleanUrl["/patient/appointments/".Length..];
+                        if (long.TryParse(idStr, out var parsedId) && parsedId != action.Payload.AppointmentId.Value)
+                        {
+                            error = "TargetUrl appointment ID does not match payload AppointmentId.";
+                            return false;
+                        }
+                    }
+                }
+                break;
+
+            case AiActionTypes.RequestReschedule:
+                if (!action.RequiresConfirmation)
+                {
+                    error = "RequestReschedule action MUST require confirmation.";
+                    return false;
+                }
+                if (!action.Payload.AppointmentId.HasValue || action.Payload.AppointmentId.Value <= 0)
+                {
+                    error = "RequestReschedule action requires a valid AppointmentId > 0.";
+                    return false;
+                }
+                break;
+
+            case AiActionTypes.RequestCancellation:
+                if (!action.RequiresConfirmation)
+                {
+                    error = "RequestCancellation action MUST require confirmation.";
+                    return false;
+                }
+                if (!action.Payload.AppointmentId.HasValue || action.Payload.AppointmentId.Value <= 0)
+                {
+                    error = "RequestCancellation action requires a valid AppointmentId > 0.";
+                    return false;
+                }
+                break;
+
+            case AiActionTypes.ViewSpecialty:
+                if (action.Payload.SpecialtyId.HasValue && action.Payload.SpecialtyId.Value <= 0)
+                {
+                    error = "ViewSpecialty SpecialtyId must be > 0.";
+                    return false;
+                }
+                break;
+
+            case AiActionTypes.ViewDoctors:
+                if (action.Payload.SpecialtyId.HasValue && action.Payload.SpecialtyId.Value <= 0)
+                {
+                    error = "ViewDoctors SpecialtyId must be > 0.";
+                    return false;
+                }
+                break;
+
+            case AiActionTypes.ViewAvailableSlots:
+                if (!action.Payload.DoctorId.HasValue || action.Payload.DoctorId.Value <= 0)
+                {
+                    error = "ViewAvailableSlots requires a valid DoctorId > 0.";
+                    return false;
+                }
+                break;
+
+            case AiActionTypes.StartBooking:
+                if (action.Payload.SpecialtyId.HasValue && action.Payload.SpecialtyId.Value <= 0)
+                {
+                    error = "StartBooking SpecialtyId must be > 0.";
                     return false;
                 }
                 break;

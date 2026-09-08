@@ -60,7 +60,22 @@ public class SlotAvailabilityResult
     };
 }
 
+public class BatchSlotAvailabilityRequest
+{
+    public long? DoctorId { get; set; }
+    public List<long>? DoctorIds { get; set; }
+    public long? SpecialtyId { get; set; }
+    public DateOnly FromDate { get; set; }
+    public DateOnly ToDate { get; set; }
+    public long? PatientId { get; set; }
+    public bool CheckAiEnabledSpecialty { get; set; } = false;
+    public string? TimePreference { get; set; }
+    public int? Limit { get; set; }
+    public bool ThrowOnValidationFailure { get; set; } = false;
+}
+
 public interface IAppointmentAvailabilityPolicy
 {
     Task<SlotAvailabilityResult> EvaluateSlotAvailabilityAsync(SlotAvailabilityRequest request, CancellationToken cancellationToken = default);
+    Task<List<ClinicManagement.Application.Doctors.DTOs.AvailableSlotDto>> GetAvailableSlotsAsync(BatchSlotAvailabilityRequest request, CancellationToken cancellationToken = default);
 }

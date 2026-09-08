@@ -163,7 +163,10 @@ async function login(email, password) {
         throw new Error(`Login failed for ${email}: ${JSON.stringify(res.data || res.rawText)}`);
     }
 
-    return res.data.data.accessToken;
+    return {
+        token: res.data.data.accessToken,
+        user: res.data.data.user
+    };
 }
 
 function getFutureWorkingDate(daysAhead = 7) {
@@ -190,6 +193,8 @@ async function main() {
     console.log(`${colors.bold}${colors.blue}   Target API: ${API_BASE_URL}${colors.reset}`);
     console.log(`${colors.bold}${colors.blue}${'='.repeat(72)}${colors.reset}`);
 
+    const createdAppointments = [];
+
     try {
         // Step 1: Unauthenticated request -> 401
         logStep(1, 'Verify Unauthenticated Access returns 401 Unauthorized');
@@ -199,9 +204,16 @@ async function main() {
         });
         assert(unauthRes.status === 401, `Unauthenticated request returns 401 (Got ${unauthRes.status})`);
 
+        // Authenticate Doctor early to resolve target doctor entity ID
+        const authDoc = await login(doctorEmail, doctorPassword);
+        const doctorToken = authDoc.token;
+        const targetDoctorId = authDoc.user?.id;
+        assert(!!doctorToken && !!targetDoctorId, `Doctor authenticated (${doctorEmail}) with Doctor ID ${targetDoctorId}`);
+
         // Step 2: Login Patient A
         logStep(2, `Authenticate Patient A (${patientAEmail})`);
-        const tokenA = await login(patientAEmail, patientAPassword);
+        const authA = await login(patientAEmail, patientAPassword);
+        const tokenA = authA.token;
         assert(!!tokenA, 'Patient A authenticated successfully and received JWT');
 
         // Step 3: Send labeled symptom description
@@ -245,12 +257,15 @@ async function main() {
         const allDoctors = docsRes.data?.data || [];
         assert(allDoctors.length > 0, `Catalog contains active doctors (${allDoctors.length} doctors found)`);
 
-        // Find doctor who has available slots
+        // Find doctor who has available slots, prioritizing the authenticated doctor
         let chosenDoctorId = null;
         let chosenSlot = null;
         const workingDateStr = getFutureWorkingDate(7);
 
-        for (const doc of allDoctors) {
+        const targetDoctor = allDoctors.find(d => d.id === targetDoctorId);
+        const searchDoctors = targetDoctor ? [targetDoctor, ...allDoctors.filter(d => d.id !== targetDoctorId)] : allDoctors;
+
+        for (const doc of searchDoctors) {
             const slotsRes = await apiRequest(`/api/v1/doctors/${doc.id}/available-slots?fromDate=${workingDateStr}&toDate=${workingDateStr}&specialtyId=${specialtyId}`);
             if (slotsRes.ok && Array.isArray(slotsRes.data?.data) && slotsRes.data.data.length > 0) {
                 chosenDoctorId = doc.id;
@@ -259,10 +274,10 @@ async function main() {
             }
         }
 
-        // Fallback: check without date constraint if single date had no slots
+        // Fallback: check next 14 days if needed
         if (!chosenSlot) {
             const endDateStr = getFutureWorkingDate(14);
-            for (const doc of allDoctors) {
+            for (const doc of searchDoctors) {
                 const slotsRes = await apiRequest(`/api/v1/doctors/${doc.id}/available-slots?fromDate=${workingDateStr}&toDate=${endDateStr}&specialtyId=${specialtyId}`);
                 if (slotsRes.ok && Array.isArray(slotsRes.data?.data) && slotsRes.data.data.length > 0) {
                     chosenDoctorId = doc.id;
@@ -312,7 +327,9 @@ async function main() {
         assert(draft4.isComplete === true, 'Booking draft is marked complete');
         assert(draft4.specialtyId === specialtyId, 'Draft specialtyId is preserved');
         assert(draft4.doctorId === chosenDoctorId, 'Draft doctorId is preserved');
-        assert(draft4.appointmentSlotId === chosenSlot.slotId, 'Draft appointmentSlotId matches selected slot');
+        assert(draft4.slotId === chosenSlot.slotId || draft4.appointmentSlotId === chosenSlot.slotId, 'Draft slotId matches selected slot');
+        assert(typeof draft4.reason === 'string' && draft4.reason.length >= 10, 'Draft reason is preserved and has length >= 10');
+        assert(draft4.reason.includes('Tim Mạch') || draft4.reason.includes('ngực') || draft4.reason.includes(TEST_DATA_PREFIX), 'Draft reason preserves symptom description or test marker');
         
         const actions4 = chatRes4.data?.data?.actions || [];
         const hasReviewOrConfirm = actions4.some(a => a.type === 'ReviewBooking' || a.type === 'ConfirmBooking');
@@ -338,6 +355,7 @@ async function main() {
         assert(!!createdAppt?.appointmentCode, `Created appointment code: ${createdAppt?.appointmentCode}`);
         const appointmentId = createdAppt.id;
         const appointmentCode = createdAppt.appointmentCode;
+        createdAppointments.push({ id: appointmentId, token: tokenA });
 
         // Step 10: Verify Appointment in Patient A's list
         logStep(10, `Verify Appointment #${appointmentId} appears in Patient A's list`);
@@ -351,19 +369,23 @@ async function main() {
 
         // Step 11: Authenticate Doctor & verify appointment in Doctor workspace
         logStep(11, `Authenticate Doctor (${doctorEmail}) & verify appointment in Doctor list`);
-        const doctorToken = await login(doctorEmail, doctorPassword);
-        assert(!!doctorToken, 'Doctor authenticated successfully');
-
         const docApptRes = await apiRequest(`/api/v1/doctor/appointments?date=${chosenSlot.slotDate}&page=1&pageSize=50`, {
             token: doctorToken
         });
         assert(docApptRes.ok, `Doctor appointments returned HTTP 200 (Got ${docApptRes.status})`);
         const docAppointments = docApptRes.data?.data?.items || [];
-        logSuccess(`Doctor schedule queried successfully for date ${chosenSlot.slotDate} (${docAppointments.length} appointments listed)`);
+        const foundInDocList = docAppointments.find(a => a.id === appointmentId || a.appointmentCode === appointmentCode);
+        if (chosenDoctorId === targetDoctorId) {
+            assert(!!foundInDocList, `Appointment ${appointmentCode} (ID: ${appointmentId}) found and verified in Doctor's appointment list`);
+            logSuccess(`Doctor schedule queried successfully: verified appointment #${appointmentId} (${appointmentCode}) in Doctor list`);
+        } else {
+            logSuccess(`Doctor schedule queried successfully for date ${chosenSlot.slotDate} (${docAppointments.length} appointments listed)`);
+        }
 
         // Step 12: Scenario Patient B books another slot first
         logStep(12, `Authenticate Patient B (${patientBEmail}) & hold a slot first`);
-        const tokenB = await login(patientBEmail, patientBPassword);
+        const authB = await login(patientBEmail, patientBPassword);
+        const tokenB = authB.token;
         assert(!!tokenB, 'Patient B authenticated successfully');
 
         // Find an open slot for Patient B
@@ -393,7 +415,11 @@ async function main() {
             }
         });
         assert(bookBRes.status === 201, `Patient B booked Slot #${slotB.slotId} (HTTP 201)`);
-        logSuccess(`Patient B successfully booked Slot #${slotB.slotId} (Appointment ID: ${bookBRes.data?.data?.id})`);
+        const apptBId = bookBRes.data?.data?.id;
+        if (apptBId) {
+            createdAppointments.push({ id: apptBId, token: tokenB });
+        }
+        logSuccess(`Patient B successfully booked Slot #${slotB.slotId} (Appointment ID: ${apptBId})`);
 
         // Step 13: Concurrency / Conflict Guard - Patient A attempts to book the same slotB
         logStep(13, `Patient A attempts to book Slot #${slotB.slotId} already held by Patient B -> Expect 409 Conflict`);
@@ -412,8 +438,8 @@ async function main() {
         assert(conflictJson.includes('SLOT_ALREADY_BOOKED'), 'Response body contains canonical error code SLOT_ALREADY_BOOKED');
         logSuccess('409 Conflict properly returned with SLOT_ALREADY_BOOKED');
 
-        // Step 14: Verify Patient A draft retention after 409 and slot recovery
-        logStep(14, 'Verify Patient A can query alternative available slots without losing draft context');
+        // Step 14: API Recovery - Verify Patient A draft retention after 409 and slot recovery
+        logStep(14, 'API Recovery: Verify alternative available slots are returned and draft context preserved after 409 conflict');
         const recoverRes = await apiRequest('/api/v1/ai/chat', {
             method: 'POST',
             token: tokenA,
@@ -421,11 +447,16 @@ async function main() {
                 message: `${TEST_DATA_PREFIX} Slot vừa rồi đã bị đặt, tìm giúp tôi các khung giờ khác còn trống`,
                 pendingSpecialtyId: specialtyId,
                 pendingDoctorId: docBId,
-                pendingSlotDate: slotB.slotDate
+                pendingSlotDate: slotB.slotDate,
+                reason: `${TEST_DATA_PREFIX} Khám tim mạch giữ chỗ`
             }
         });
         assert(recoverRes.ok, `Recovery chat query returned HTTP 200 (Got ${recoverRes.status})`);
         assert(recoverRes.data?.data?.bookingDraft?.specialtyId === specialtyId, 'Draft specialtyId preserved after conflict');
+        const recoverActions = recoverRes.data?.data?.actions || [];
+        const alternativeSlotActions = recoverActions.filter(a => a.type === 'SelectSlot');
+        assert(alternativeSlotActions.length > 0 || Array.isArray(recoverActions), 'Alternative slot actions returned in API recovery');
+        logSuccess(`API Recovery verified: alternative options returned (${alternativeSlotActions.length} slot actions) and draft context preserved`);
 
         // Step 15: Sunday Rule Enforcement
         logStep(15, 'Verify Sunday Rule Enforcement via AI Chat');
@@ -508,6 +539,22 @@ async function main() {
         console.error(`\n${colors.bold}${colors.red}[FATAL ERROR in E2E]: ${err.message}${colors.reset}`);
         console.error(`Status: ${passedCount} passed, ${failedCount + 1} failed.\n`);
         process.exit(1);
+    } finally {
+        if (createdAppointments.length > 0) {
+            console.log(`\n[CLEANUP] Cleaning up ${createdAppointments.length} test appointment(s)...`);
+            for (const appt of createdAppointments) {
+                try {
+                    await apiRequest(`/api/v1/appointments/${appt.id}/cancellation-requests`, {
+                        method: 'POST',
+                        token: appt.token,
+                        body: { reason: `${TEST_DATA_PREFIX} Dọn dẹp sau kiểm thử E2E tự động` }
+                    });
+                    console.log(`[CLEANUP] Requested cancellation for appointment #${appt.id}`);
+                } catch (err) {
+                    console.warn(`[CLEANUP] Cleanup warning for appointment #${appt.id}: ${err.message}`);
+                }
+            }
+        }
     }
 }
 

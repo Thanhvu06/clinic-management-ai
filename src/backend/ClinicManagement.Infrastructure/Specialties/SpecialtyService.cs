@@ -1,3 +1,4 @@
+using ClinicManagement.Application.Appointments.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
@@ -13,11 +14,16 @@ public class SpecialtyService : ISpecialtyService
 {
     private readonly AppDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IAppointmentAvailabilityPolicy _availabilityPolicy;
 
-    public SpecialtyService(AppDbContext dbContext, IDateTimeProvider dateTimeProvider)
+    public SpecialtyService(
+        AppDbContext dbContext,
+        IDateTimeProvider dateTimeProvider,
+        IAppointmentAvailabilityPolicy availabilityPolicy)
     {
         _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
+        _availabilityPolicy = availabilityPolicy;
     }
 
     public async Task<List<SpecialtyDto>> GetSpecialtiesAsync()
@@ -120,55 +126,13 @@ public class SpecialtyService : ISpecialtyService
         var toDate = fromDate.AddDays(days - 1);
         var doctorIds = doctors.Select(d => d.Id).ToList();
 
-        var dateToday = _dateTimeProvider.VietnamToday;
-        var timeNow = _dateTimeProvider.VietnamTime;
-        var vnNow = _dateTimeProvider.VietnamNow;
-
-        var activeSchedules = await _dbContext.DoctorWorkSchedules
-            .AsNoTracking()
-            .Where(ws => doctorIds.Contains(ws.DoctorId) && ws.IsActive && ws.WorkDate >= fromDate && ws.WorkDate <= toDate)
-            .ToListAsync();
-
-        var availableSlots = await _dbContext.AppointmentSlots
-            .AsNoTracking()
-            .Where(s => doctorIds.Contains(s.DoctorId)
-                        && !s.IsBooked
-                        && s.SlotDate >= fromDate
-                        && s.SlotDate <= toDate
-                        && (s.SlotDate > dateToday || (s.SlotDate == dateToday && s.StartTime > timeNow)))
-            .ToListAsync();
-
-        var fromDateTime = fromDate.ToDateTime(TimeOnly.MinValue);
-        var toDateTime = toDate.ToDateTime(TimeOnly.MaxValue);
-
-        var activeHoldingSlotIds = await _dbContext.Appointments
-            .AsNoTracking()
-            .Where(a => doctorIds.Contains(a.DoctorId)
-                     && a.AppointmentDate >= fromDate
-                     && a.AppointmentDate <= toDate
-                     && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
-            .Select(a => a.AppointmentSlotId)
-            .Distinct()
-            .ToListAsync();
-        var holdingSlotIdSet = new HashSet<long>(activeHoldingSlotIds);
-
-        var leaves = await _dbContext.DoctorLeaveRequests
-            .AsNoTracking()
-            .Where(l => doctorIds.Contains(l.DoctorId) && l.Status == DoctorLeaveRequestStatus.Approved 
-                     && l.StartDateTime <= toDateTime && l.EndDateTime >= fromDateTime)
-            .ToListAsync();
-
-        var validSlots = availableSlots.Where(s => {
-            if (holdingSlotIdSet.Contains(s.Id)) return false;
-
-            var isInActiveSchedule = activeSchedules.Any(ws => 
-                ws.DoctorId == s.DoctorId && ws.WorkDate == s.SlotDate && ws.StartTime <= s.StartTime && ws.EndTime >= s.EndTime);
-            if (!isInActiveSchedule) return false;
-
-            var slotStart = s.SlotDate.ToDateTime(s.StartTime);
-            var slotEnd = s.SlotDate.ToDateTime(s.EndTime);
-            return !leaves.Any(l => l.DoctorId == s.DoctorId && slotStart < l.EndDateTime && slotEnd > l.StartDateTime);
-        }).ToList();
+        var validSlots = await _availabilityPolicy.GetAvailableSlotsAsync(new BatchSlotAvailabilityRequest
+        {
+            DoctorIds = doctorIds,
+            SpecialtyId = specialtyId,
+            FromDate = fromDate,
+            ToDate = toDate
+        });
 
         var earliestSlots = validSlots
             .GroupBy(s => s.DoctorId)
