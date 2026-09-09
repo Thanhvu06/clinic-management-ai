@@ -345,6 +345,8 @@ public class AppointmentAvailabilityPolicy : IAppointmentAvailabilityPolicy
                         && (s.SlotDate > vnToday || (s.SlotDate == vnToday && s.StartTime > vnTime)))
             .OrderBy(s => s.SlotDate)
             .ThenBy(s => s.StartTime)
+            .ThenBy(s => s.DoctorId)
+            .ThenBy(s => s.Id)
             .ToListAsync(cancellationToken);
 
         if (slots.Count == 0)

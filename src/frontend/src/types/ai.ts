@@ -21,6 +21,8 @@ export type AiActionType =
 
 export type AiActionStyle = "primary" | "secondary" | "danger";
 
+export type AiChatIntent = "FindEarliestAvailableSlot";
+
 export interface BaseAiAction {
     id: string;
     label: string;

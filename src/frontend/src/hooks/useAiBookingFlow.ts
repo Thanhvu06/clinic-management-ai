@@ -1,18 +1,21 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useChatContext } from "../contexts/ChatContext";
+import { useAuth } from "../auth/AuthContext";
 import axiosClient from "../api/axiosClient";
 import type { ApiResponse } from "../types";
 import type {
     ChatMessage,
     AiChatResponse,
     AiAction,
-    AiBookingDraft
+    AiBookingDraft,
+    AiChatIntent
 } from "../types/ai";
 
 export interface AiChatRequestPayload {
     message: string;
     context: Array<{ role: "user" | "model"; content: string }>;
+    intent?: AiChatIntent;
     pendingSpecialtyId?: number;
     pendingDoctorId?: number;
     pendingSlotId?: number;
@@ -83,6 +86,7 @@ export const formatVietnameseDate = (dateStr?: string): string => {
 };
 
 interface SendMessageOptions {
+    intent?: AiChatIntent;
     specialtyId?: number;
     pendingSpecialtyId?: number;
     doctorId?: number;
@@ -101,14 +105,27 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         clearChat,
         setPendingSpecialtyId,
         activeDraft,
-        setActiveDraft
+        setActiveDraft,
+        getBookingContextVersion
     } = useChatContext();
+    const { user } = useAuth();
 
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
     const [submittingBooking, setSubmittingBooking] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
     const navigate = useNavigate();
+    const activeRequestIdRef = useRef(0);
+    const activeRequestControllerRef = useRef<AbortController | null>(null);
+    const accountKey = user ? (user.userId || (user.id !== undefined ? String(user.id) : null)) : null;
+    const accountKeyRef = useRef(accountKey);
+
+    useEffect(() => {
+        accountKeyRef.current = accountKey;
+        return () => {
+            activeRequestControllerRef.current?.abort();
+        };
+    }, [accountKey]);
 
     const handleSendMessage = async (
         textToSend: string,
@@ -135,6 +152,17 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         setInput("");
         setErrorMsg("");
         setLoading(true);
+        const requestId = ++activeRequestIdRef.current;
+        const bookingContextVersion = getBookingContextVersion();
+        const requesterAccountKey = accountKeyRef.current;
+        const requestController = new AbortController();
+        activeRequestControllerRef.current?.abort();
+        activeRequestControllerRef.current = requestController;
+
+        const isCurrentRequest = () =>
+            requestId === activeRequestIdRef.current &&
+            requesterAccountKey === accountKeyRef.current &&
+            bookingContextVersion === getBookingContextVersion();
 
         try {
             const preservedReason = pendingPayload?.reason || activeDraft?.reason;
@@ -142,6 +170,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             const requestBody: AiChatRequestPayload = {
                 message: trimmed,
                 context: historyMessages,
+                intent: pendingPayload?.intent,
                 pendingSpecialtyId: pendingPayload?.pendingSpecialtyId ?? pendingPayload?.specialtyId ?? activeDraft?.specialtyId,
                 pendingDoctorId: pendingPayload?.pendingDoctorId ?? pendingPayload?.doctorId ?? activeDraft?.doctorId,
                 pendingSlotId: pendingPayload?.pendingSlotId ?? pendingPayload?.slotId ?? activeDraft?.slotId,
@@ -149,7 +178,13 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 reason: preservedReason
             };
 
-            const res = await axiosClient.post<AiChatRequestPayload, ApiResponse<AiChatResponse>>("/ai/chat", requestBody);
+            const res = await axiosClient.post<AiChatRequestPayload, ApiResponse<AiChatResponse>>(
+                "/ai/chat",
+                requestBody,
+                { signal: requestController.signal }
+            );
+
+            if (!isCurrentRequest()) return;
 
             if (res.success && res.data) {
                 const data = res.data;
@@ -178,6 +213,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 throw new Error("Invalid response");
             }
         } catch (err: unknown) {
+            if (requestController.signal.aborted || !isCurrentRequest()) return;
             const apiErr = err as { errorCode?: string; message?: string; response?: { data?: { errorCode?: string; message?: string } } };
             const errorCode = apiErr?.response?.data?.errorCode || apiErr?.errorCode;
             const message = apiErr?.response?.data?.message || apiErr?.message || "";
@@ -207,7 +243,10 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 }]);
             }
         } finally {
-            setLoading(false);
+            if (requestId === activeRequestIdRef.current) {
+                setLoading(false);
+                activeRequestControllerRef.current = null;
+            }
         }
     };
 
@@ -271,6 +310,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     specialtyName: action.payload.specialtyName || activeDraft?.specialtyName,
                     doctorId: action.payload.doctorId,
                     doctorName: action.payload.doctorName,
+                    slotId: undefined,
+                    startTime: undefined,
+                    endTime: undefined,
                     isComplete: false,
                     reason: activeDraft?.reason
                 };
@@ -299,8 +341,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     slotDate: action.payload.slotDate,
                     startTime: action.payload.startTime,
                     endTime: action.payload.endTime,
-                    isComplete: true,
-                    reason: action.payload.reason || activeDraft?.reason
+                    reason: action.payload.reason || activeDraft?.reason,
+                    isComplete: isValidBookingReason(action.payload.reason || activeDraft?.reason)
                 };
                 setActiveDraft(nextDraft);
 
@@ -326,9 +368,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 const endTime = action.payload.endTime || activeDraft?.endTime;
                 const specName = action.payload.specialtyName || activeDraft?.specialtyName;
                 const docName = action.payload.doctorName || activeDraft?.doctorName;
-                const reason = action.payload.reason?.trim() || activeDraft?.reason?.trim();
+                const reason = action.payload.reason?.trim() || activeDraft?.reason?.trim() || "";
 
-                if (!specId || !docId || !slotId || !slotDate || !startTime || !reason) {
+                if (!specId || !docId || !slotId || !slotDate || !startTime || !endTime || !isValidBookingReason(reason)) {
                     setMessages(prev => [...prev, {
                         role: "model",
                         content: "Thông tin đặt lịch chưa đầy đủ (thiếu chuyên khoa, bác sĩ, khung giờ hoặc lý do khám). Vui lòng chọn đầy đủ thông tin trước khi xác nhận.",
@@ -370,6 +412,14 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 
             case "ConfirmBooking": {
                 if (submittingBooking) return;
+                if (!action.requiresConfirmation) {
+                    setMessages(prev => [...prev, {
+                        role: "model",
+                        content: "Yêu cầu xác nhận đặt lịch không hợp lệ. Vui lòng xem lại thông tin trước khi thử lại.",
+                        urgency: "ROUTINE"
+                    }]);
+                    return;
+                }
                 const slotId = action.payload.slotId || activeDraft?.slotId;
                 const docId = action.payload.doctorId || activeDraft?.doctorId;
                 const specId = action.payload.specialtyId || activeDraft?.specialtyId;
@@ -387,7 +437,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     return;
                 }
 
-                if (!reason || reason.length < 10 || reason.length > 500) {
+                if (!isValidBookingReason(reason)) {
                     setMessages(prev => [...prev, {
                         role: "model",
                         content: "Lý do khám phải từ 10 đến 500 ký tự. Vui lòng nhập lý do khám hoặc mô tả triệu chứng trước khi xác nhận đặt lịch.",
@@ -442,6 +492,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         await handleSendMessage(
                             `Xem các lịch trống khác của bác sĩ ${docName || ""}`,
                             {
+                                intent: "FindEarliestAvailableSlot",
                                 pendingSpecialtyId: specId,
                                 pendingDoctorId: docId,
                                 pendingSlotDate: slotDate,
@@ -592,3 +643,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     };
 };
 
+export const isValidBookingReason = (reason?: string): boolean => {
+    const normalized = reason?.trim() ?? "";
+    return normalized.length >= 10 && normalized.length <= 500;
+};

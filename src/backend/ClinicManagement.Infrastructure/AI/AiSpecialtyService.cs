@@ -17,6 +17,7 @@ namespace ClinicManagement.Infrastructure.AI;
 
 public class AiSpecialtyService : IAiSpecialtyService
 {
+    private const int EarliestSlotSearchHorizonDays = 7;
     private readonly AppDbContext _dbContext;
     private readonly IAiSpecialtySuggestionProvider _aiProvider;
     private readonly IClinicAiContextService _clinicAiContextService;
@@ -209,6 +210,13 @@ public class AiSpecialtyService : IAiSpecialtyService
             };
         }
 
+        // Operational booking intents are resolved from authenticated context and the
+        // canonical availability policy. They must not wait for or depend on an AI provider.
+        if (string.Equals(request.Intent, AiChatIntentTypes.FindEarliestAvailableSlot, StringComparison.Ordinal))
+        {
+            return await FindEarliestAvailableSlotsAsync(request, cancellationToken);
+        }
+
         // 4. ML.NET Classifier Evaluation (if enabled & present)
         SpecialtyClassificationResult? mlClassification = null;
         if (_classifier != null)
@@ -346,6 +354,281 @@ public class AiSpecialtyService : IAiSpecialtyService
         return responseDto;
     }
 
+    private async Task<AiChatResponseDto> FindEarliestAvailableSlotsAsync(
+        AiChatRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var response = new AiChatResponseDto
+        {
+            Urgency = "ROUTINE",
+            PromptVersion = GeminiAiProvider.CurrentPromptVersion
+        };
+
+        var reason = request.Reason?.Trim();
+        if (!request.PendingSpecialtyId.HasValue)
+        {
+            response.Message = "Bạn chưa chọn chuyên khoa. Vui lòng chọn chuyên khoa hoặc mô tả triệu chứng để hệ thống tìm lịch phù hợp.";
+            response.ManualSelectionRequired = true;
+            response.MissingFields = new List<string> { "Specialty", "Doctor", "TimeSlot" };
+            if (!AiActionValidator.IsValidBookingReason(reason))
+            {
+                response.MissingFields.Add("Reason");
+            }
+            response.Actions.Add(BuildManualSpecialtySelectionAction());
+            return response;
+        }
+
+        var specialty = await _dbContext.Specialties
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == request.PendingSpecialtyId.Value, cancellationToken);
+
+        if (specialty == null || !specialty.IsActive)
+        {
+            response.Message = "Chuyên khoa đã chọn không tồn tại hoặc đã ngừng hoạt động. Vui lòng chọn lại chuyên khoa.";
+            response.ManualSelectionRequired = true;
+            response.MissingFields = new List<string> { "Specialty", "Doctor", "TimeSlot" };
+            response.Actions.Add(BuildManualSpecialtySelectionAction());
+            return response;
+        }
+
+        if (!specialty.AiEnabled)
+        {
+            response.Message = $"Chuyên khoa {specialty.Name} hiện chưa hỗ trợ tìm lịch qua trợ lý AI. Vui lòng chọn lịch trực tiếp trên trang đặt khám.";
+            response.ManualSelectionRequired = true;
+            response.BookingDraft = new AiBookingDraftDto
+            {
+                SpecialtyId = specialty.Id,
+                SpecialtyName = specialty.Name,
+                Reason = reason,
+                IsComplete = false
+            };
+            response.MissingFields = new List<string> { "Doctor", "TimeSlot" };
+            return response;
+        }
+
+        var searchFrom = _dateTimeProvider.VietnamToday;
+        if (!string.IsNullOrWhiteSpace(request.PendingSlotDate))
+        {
+            if (!DateOnly.TryParseExact(
+                    request.PendingSlotDate,
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out searchFrom))
+            {
+                response.Message = "Ngày bắt đầu tìm lịch không hợp lệ. Vui lòng chọn lại ngày theo định dạng ngày/tháng/năm.";
+                response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, request.PendingDoctorId, null, null, reason);
+                response.MissingFields = new List<string> { "DesiredDate", "TimeSlot" };
+                return response;
+            }
+        }
+
+        if (searchFrom < _dateTimeProvider.VietnamToday)
+        {
+            response.Message = "Ngày bắt đầu tìm lịch đã qua. Vui lòng chọn hôm nay hoặc một ngày trong tương lai.";
+            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, request.PendingDoctorId, null, null, reason);
+            response.MissingFields = new List<string> { "DesiredDate", "TimeSlot" };
+            return response;
+        }
+
+        var activeDoctors = await (from ds in _dbContext.DoctorSpecialties
+                                   join d in _dbContext.Doctors on ds.DoctorId equals d.Id
+                                   join u in _dbContext.Users on d.UserId equals u.Id
+                                   where ds.SpecialtyId == specialty.Id && d.IsActive && u.IsActive
+                                   orderby d.Id
+                                   select new
+                                   {
+                                       d.Id,
+                                       u.FullName,
+                                       d.AcademicTitle
+                                   })
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        if (activeDoctors.Count == 0)
+        {
+            response.Message = $"Hiện không có bác sĩ đang hoạt động thuộc chuyên khoa {specialty.Name}.";
+            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, null, null, searchFrom, reason);
+            response.MissingFields = new List<string> { "Doctor", "TimeSlot" };
+            return response;
+        }
+
+        var selectedDoctor = request.PendingDoctorId.HasValue
+            ? activeDoctors.FirstOrDefault(d => d.Id == request.PendingDoctorId.Value)
+            : null;
+
+        if (request.PendingDoctorId.HasValue && selectedDoctor == null)
+        {
+            var doctorIsActive = await _dbContext.Doctors
+                .Join(_dbContext.Users, d => d.UserId, u => u.Id, (d, u) => new { d, u })
+                .AnyAsync(x => x.d.Id == request.PendingDoctorId.Value && x.d.IsActive && x.u.IsActive, cancellationToken);
+
+            response.Message = doctorIsActive
+                ? $"Bác sĩ đã chọn không thuộc chuyên khoa {specialty.Name}. Vui lòng chọn lại bác sĩ."
+                : "Bác sĩ đã chọn không tồn tại hoặc đã ngừng hoạt động. Vui lòng chọn lại bác sĩ.";
+            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, null, null, searchFrom, reason);
+            response.MissingFields = new List<string> { "Doctor", "TimeSlot" };
+            return response;
+        }
+
+        if (!_currentUserService.UserId.HasValue)
+        {
+            response.Message = "Không thể xác định tài khoản bệnh nhân để kiểm tra lịch trùng. Vui lòng đăng nhập lại.";
+            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, selectedDoctor?.Id, FormatDoctorName(selectedDoctor?.AcademicTitle, selectedDoctor?.FullName), searchFrom, reason);
+            response.MissingFields = new List<string> { "TimeSlot" };
+            return response;
+        }
+
+        var patientId = await _dbContext.Patients
+            .AsNoTracking()
+            .Where(p => p.UserId == _currentUserService.UserId.Value)
+            .Select(p => (long?)p.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (!patientId.HasValue)
+        {
+            response.Message = "Không thể xác định hồ sơ bệnh nhân để kiểm tra lịch trùng. Vui lòng liên hệ quản trị hệ thống.";
+            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, selectedDoctor?.Id, FormatDoctorName(selectedDoctor?.AcademicTitle, selectedDoctor?.FullName), searchFrom, reason);
+            response.MissingFields = new List<string> { "TimeSlot" };
+            return response;
+        }
+
+        var searchTo = searchFrom.AddDays(EarliestSlotSearchHorizonDays);
+        var slots = await _availabilityPolicy.GetAvailableSlotsAsync(
+            new ClinicManagement.Application.Appointments.Interfaces.BatchSlotAvailabilityRequest
+            {
+                DoctorId = selectedDoctor?.Id,
+                DoctorIds = selectedDoctor == null ? activeDoctors.Select(d => d.Id).ToList() : null,
+                SpecialtyId = specialty.Id,
+                FromDate = searchFrom,
+                ToDate = searchTo,
+                PatientId = patientId,
+                CheckAiEnabledSpecialty = true,
+                Limit = 6,
+                ThrowOnValidationFailure = true
+            },
+            cancellationToken);
+
+        var doctorLookup = activeDoctors.ToDictionary(d => d.Id);
+        response.BookingDraft = BuildSearchDraft(
+            specialty.Id,
+            specialty.Name,
+            selectedDoctor?.Id,
+            FormatDoctorName(selectedDoctor?.AcademicTitle, selectedDoctor?.FullName),
+            searchFrom,
+            reason);
+        response.MissingFields = new List<string>();
+        if (selectedDoctor == null)
+        {
+            response.MissingFields.Add("Doctor");
+        }
+        response.MissingFields.Add("TimeSlot");
+        if (!AiActionValidator.IsValidBookingReason(reason))
+        {
+            response.MissingFields.Add("Reason");
+        }
+
+        if (slots.Count == 0)
+        {
+            var doctorScope = selectedDoctor == null
+                ? $"các bác sĩ đang hoạt động của chuyên khoa {specialty.Name}"
+                : FormatDoctorName(selectedDoctor.AcademicTitle, selectedDoctor.FullName);
+            response.Message = $"Không có lịch trống phù hợp của {doctorScope} trong khoảng {searchFrom:dd/MM/yyyy} đến {searchTo:dd/MM/yyyy}. Bạn có thể chọn ngày bắt đầu khác để tìm tiếp.";
+            return response;
+        }
+
+        var selectedScope = selectedDoctor == null
+            ? "tất cả bác sĩ phù hợp"
+            : FormatDoctorName(selectedDoctor.AcademicTitle, selectedDoctor.FullName);
+        response.Message = $"Mình đang dùng chuyên khoa {specialty.Name} bạn vừa chọn và tìm trong khoảng {searchFrom:dd/MM/yyyy} đến {searchTo:dd/MM/yyyy} cho {selectedScope}. Dưới đây là các lịch trống lấy trực tiếp từ hệ thống, theo thứ tự sớm nhất. Đây mới là gợi ý, chưa phải lịch đã đặt.";
+
+        foreach (var slot in slots)
+        {
+            if (!doctorLookup.TryGetValue(slot.DoctorId, out var doctor))
+            {
+                continue;
+            }
+
+            var doctorName = FormatDoctorName(doctor.AcademicTitle, doctor.FullName);
+            response.Actions.Add(new AiActionDto
+            {
+                Id = $"act-select-slot-{slot.SlotId}",
+                Type = AiActionTypes.SelectSlot,
+                Label = $"{slot.StartTime:HH\\:mm} - {slot.SlotDate:dd/MM} · {doctorName}",
+                Description = $"Chọn lịch trống của {doctorName} thuộc chuyên khoa {specialty.Name}",
+                Style = "primary",
+                RequiresAuthentication = false,
+                RequiresConfirmation = false,
+                Payload = new AiActionPayloadDto
+                {
+                    SpecialtyId = specialty.Id,
+                    SpecialtyCode = specialty.SpecialtyCode,
+                    SpecialtyName = specialty.Name,
+                    DoctorId = doctor.Id,
+                    DoctorName = doctorName,
+                    AcademicTitle = doctor.AcademicTitle,
+                    SlotId = slot.SlotId,
+                    SlotDate = slot.SlotDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    StartTime = slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+                    EndTime = slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+                    Reason = reason
+                }
+            });
+        }
+
+        response.Actions = response.Actions
+            .Where(a => AiActionValidator.Validate(a, out _))
+            .Take(6)
+            .ToList();
+        return response;
+    }
+
+    private static AiBookingDraftDto BuildSearchDraft(
+        long specialtyId,
+        string specialtyName,
+        long? doctorId,
+        string? doctorName,
+        DateOnly? searchFrom,
+        string? reason)
+    {
+        return new AiBookingDraftDto
+        {
+            SpecialtyId = specialtyId,
+            SpecialtyName = specialtyName,
+            DoctorId = doctorId,
+            DoctorName = doctorName,
+            SlotDate = searchFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            Reason = reason,
+            IsComplete = false
+        };
+    }
+
+    private static string? FormatDoctorName(string? academicTitle, string? fullName)
+    {
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(academicTitle)
+            ? fullName.Trim()
+            : $"{academicTitle.Trim()} {fullName.Trim()}";
+    }
+
+    private static AiActionDto BuildManualSpecialtySelectionAction()
+    {
+        return new AiActionDto
+        {
+            Id = "act-manual-spec",
+            Type = AiActionTypes.ManualSpecialtySelection,
+            Label = "Chọn chuyên khoa",
+            Style = "secondary",
+            RequiresAuthentication = false,
+            RequiresConfirmation = false,
+            Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.BookAppointment }
+        };
+    }
+
     private async Task GroundBookingFlowAsync(
         AiChatRequestDto request,
         string cleanMessage,
@@ -363,6 +646,15 @@ public class AiSpecialtyService : IAiSpecialtyService
         if (request.PendingSpecialtyId.HasValue && request.PendingSpecialtyId.Value > 0)
         {
             targetSpecialty = whitelistData.FirstOrDefault(w => w.Id == request.PendingSpecialtyId.Value);
+
+            if (targetSpecialty == null)
+            {
+                responseDto.Message = "Chuyên khoa đã chọn không tồn tại, đã ngừng hoạt động hoặc chưa hỗ trợ AI. Vui lòng chọn lại chuyên khoa.";
+                responseDto.ManualSelectionRequired = true;
+                responseDto.MissingFields = new List<string> { "Specialty", "Doctor", "TimeSlot" };
+                responseDto.Actions.Add(BuildManualSpecialtySelectionAction());
+                return;
+            }
         }
 
         if (targetSpecialty == null && !string.IsNullOrWhiteSpace(aiResult.ExtractedSpecialtyCode))
@@ -378,9 +670,16 @@ public class AiSpecialtyService : IAiSpecialtyService
 
         // B. Resolve Preferred Date
         DateOnly? targetDate = null;
-        if (!string.IsNullOrWhiteSpace(request.PendingSlotDate) && DateOnly.TryParse(request.PendingSlotDate, out var parsedDate))
+        if (!string.IsNullOrWhiteSpace(request.PendingSlotDate) &&
+            DateOnly.TryParseExact(request.PendingSlotDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
         {
             targetDate = parsedDate;
+        }
+        else if (!string.IsNullOrWhiteSpace(request.PendingSlotDate))
+        {
+            responseDto.Message = "Ngày khám đã chọn không hợp lệ. Vui lòng chọn lại ngày theo định dạng ngày/tháng/năm.";
+            responseDto.MissingFields = new List<string> { "DesiredDate", "TimeSlot" };
+            return;
         }
         else if (!string.IsNullOrWhiteSpace(aiResult.ExtractedDate))
         {
@@ -428,7 +727,25 @@ public class AiSpecialtyService : IAiSpecialtyService
                                                  d.Id,
                                                  u.FullName,
                                                  d.AcademicTitle
-                                             }).AsNoTracking().ToListAsync(cancellationToken);
+                                             }).AsNoTracking().OrderBy(d => d.Id).ToListAsync(cancellationToken);
+
+            if (activeDoctorsInSpec.Count == 0)
+            {
+                var unresolvedReason = !string.IsNullOrWhiteSpace(request.Reason)
+                    ? request.Reason.Trim()
+                    : RecoverInitialReason(cleanMessage, request.Context, aiResult.ExtractedReason);
+                responseDto.Message = $"Hiện không có bác sĩ đang hoạt động thuộc chuyên khoa {targetSpecialty.Name}.";
+                responseDto.BookingDraft = new AiBookingDraftDto
+                {
+                    SpecialtyId = targetSpecialty.Id,
+                    SpecialtyName = targetSpecialty.Name,
+                    SlotDate = targetDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    Reason = unresolvedReason,
+                    IsComplete = false
+                };
+                responseDto.MissingFields = new List<string> { "Doctor", "TimeSlot" };
+                return;
+            }
 
             if (targetDoctorId.HasValue)
             {
@@ -440,7 +757,22 @@ public class AiSpecialtyService : IAiSpecialtyService
                 }
                 else
                 {
-                    targetDoctorId = null; // Discard invalid doctor ID
+                    var doctorIsActive = await _dbContext.Doctors
+                        .Join(_dbContext.Users, d => d.UserId, u => u.Id, (d, u) => new { d, u })
+                        .AnyAsync(x => x.d.Id == targetDoctorId.Value && x.d.IsActive && x.u.IsActive, cancellationToken);
+                    responseDto.Message = doctorIsActive
+                        ? $"Bác sĩ đã chọn không thuộc chuyên khoa {targetSpecialty.Name}. Vui lòng chọn lại bác sĩ."
+                        : "Bác sĩ đã chọn không tồn tại hoặc đã ngừng hoạt động. Vui lòng chọn lại bác sĩ.";
+                    responseDto.BookingDraft = new AiBookingDraftDto
+                    {
+                        SpecialtyId = targetSpecialty.Id,
+                        SpecialtyName = targetSpecialty.Name,
+                        SlotDate = targetDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        Reason = request.Reason?.Trim(),
+                        IsComplete = false
+                    };
+                    responseDto.MissingFields = new List<string> { "Doctor", "TimeSlot" };
+                    return;
                 }
             }
             else if (!string.IsNullOrWhiteSpace(aiResult.ExtractedDoctorName))
@@ -581,6 +913,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             var reason = !string.IsNullOrWhiteSpace(request.Reason)
                 ? request.Reason.Trim()
                 : RecoverInitialReason(cleanMessage, request.Context, aiResult.ExtractedReason);
+            var hasValidReason = AiActionValidator.IsValidBookingReason(reason);
 
             var draft = new AiBookingDraftDto
             {
@@ -595,7 +928,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 StartTime = chosenSlot?.StartTime.ToString("HH:mm"),
                 EndTime = chosenSlot?.EndTime.ToString("HH:mm"),
                 Reason = reason,
-                IsComplete = targetSpecialty != null && targetDoctorId.HasValue && chosenSlot != null && !string.IsNullOrWhiteSpace(reason)
+                IsComplete = targetDoctorId.HasValue && chosenSlot != null && hasValidReason
             };
 
             responseDto.BookingDraft = draft;
@@ -606,7 +939,19 @@ public class AiSpecialtyService : IAiSpecialtyService
             if (draft.DoctorId == null) missing.Add("Doctor");
             if (draft.SlotDate == null) missing.Add("DesiredDate");
             if (draft.SlotId == null) missing.Add("TimeSlot");
+            if (!hasValidReason) missing.Add("Reason");
             responseDto.MissingFields = missing;
+
+            if (chosenSlot != null && !hasValidReason)
+            {
+                responseDto.Message = "Đã ghi nhận chuyên khoa, bác sĩ và khung giờ bạn chọn. Vui lòng bổ sung lý do khám từ 10 đến 500 ký tự trước khi xem lại và xác nhận đặt lịch.";
+            }
+            else if (availableSlots.Count == 0 && chosenSlot == null && !request.PendingSlotId.HasValue)
+            {
+                var rangeFrom = batchRequest.FromDate;
+                var rangeTo = batchRequest.ToDate;
+                responseDto.Message = $"Không có lịch trống phù hợp trong khoảng {rangeFrom:dd/MM/yyyy} đến {rangeTo:dd/MM/yyyy}. Vui lòng chọn một khoảng ngày khác để tìm tiếp.";
+            }
 
             // G. Add Contextual Actions
             if (draft.IsComplete)
@@ -1156,21 +1501,15 @@ public class AiSpecialtyService : IAiSpecialtyService
         return false;
     }
 
-    private static string RecoverInitialReason(string cleanMessage, List<ChatMessageDto>? context, string? extractedReason)
+    private static string? RecoverInitialReason(string cleanMessage, List<ChatMessageDto>? context, string? extractedReason)
     {
-        bool isActionPhrase = cleanMessage.StartsWith("Tôi chọn", StringComparison.OrdinalIgnoreCase) ||
-                              cleanMessage.StartsWith("Chọn ", StringComparison.OrdinalIgnoreCase) ||
-                              cleanMessage.StartsWith("Xem các lịch", StringComparison.OrdinalIgnoreCase) ||
-                              cleanMessage.StartsWith("Tôi muốn đặt khám với", StringComparison.OrdinalIgnoreCase);
+        var isActionPhrase = IsBookingActionPhrase(cleanMessage);
 
         if (isActionPhrase && context != null && context.Any())
         {
             var initialUserMsg = context
                 .Where(c => c.Role == "user" &&
-                            !c.Content.StartsWith("Tôi chọn", StringComparison.OrdinalIgnoreCase) &&
-                            !c.Content.StartsWith("Chọn ", StringComparison.OrdinalIgnoreCase) &&
-                            !c.Content.StartsWith("Xem các lịch", StringComparison.OrdinalIgnoreCase) &&
-                            !c.Content.StartsWith("Tôi muốn đặt khám với", StringComparison.OrdinalIgnoreCase))
+                            !IsBookingActionPhrase(c.Content))
                 .Select(c => c.Content.Trim())
                 .LastOrDefault();
 
@@ -1180,7 +1519,25 @@ public class AiSpecialtyService : IAiSpecialtyService
             }
         }
 
+        if (isActionPhrase)
+        {
+            return !string.IsNullOrWhiteSpace(extractedReason) &&
+                   !string.Equals(extractedReason.Trim(), cleanMessage, StringComparison.OrdinalIgnoreCase)
+                ? extractedReason.Trim()
+                : null;
+        }
+
         return !string.IsNullOrWhiteSpace(extractedReason) ? extractedReason.Trim() : cleanMessage;
+    }
+
+    private static bool IsBookingActionPhrase(string message)
+    {
+        return message.StartsWith("Tôi chọn", StringComparison.OrdinalIgnoreCase) ||
+               message.StartsWith("Chọn ", StringComparison.OrdinalIgnoreCase) ||
+               message.StartsWith("Xem các lịch", StringComparison.OrdinalIgnoreCase) ||
+               message.StartsWith("Tôi muốn đặt khám với", StringComparison.OrdinalIgnoreCase) ||
+               message.StartsWith("Tôi muốn xem lịch khám vào ngày", StringComparison.OrdinalIgnoreCase) ||
+               message.StartsWith("Tìm lịch khám sớm nhất", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<string> ComposeGroundedReplyAsync(
@@ -1273,4 +1630,3 @@ public class AiSpecialtyService : IAiSpecialtyService
         return trimmed.Length > 1000 ? trimmed[..1000] : trimmed;
     }
 }
-

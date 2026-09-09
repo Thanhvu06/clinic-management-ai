@@ -10,14 +10,14 @@ import {
     FileText, Activity, CreditCard
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
-import type { AiAction } from "../types/ai";
+import type { AiAction, AiChatIntent } from "../types/ai";
 
-const QUICK_PROMPTS = [
-    "Tôi nên khám chuyên khoa nào?",
-    "Tìm lịch khám sớm nhất.",
-    "Xem lịch hẹn của tôi.",
-    "Xem kết quả cận lâm sàng.",
-    "Liên hệ lễ tân."
+const QUICK_PROMPTS: Array<{ label: string; intent?: AiChatIntent }> = [
+    { label: "Tôi nên khám chuyên khoa nào?" },
+    { label: "Tìm lịch khám sớm nhất.", intent: "FindEarliestAvailableSlot" },
+    { label: "Xem lịch hẹn của tôi." },
+    { label: "Xem kết quả cận lâm sàng." },
+    { label: "Liên hệ lễ tân." }
 ];
 
 const PatientMedicalChatWidget: React.FC = () => {
@@ -194,14 +194,14 @@ const PatientMedicalChatWidget: React.FC = () => {
                                 <>
                                     <p className={styles.quickPromptsTitle}>Gợi ý câu hỏi nhanh:</p>
                                     <div className={styles.quickPrompts}>
-                                        {QUICK_PROMPTS.map((qp, idx) => (
+                                        {QUICK_PROMPTS.map((qp) => (
                                             <button
-                                                key={idx}
+                                                key={qp.label}
                                                 type="button"
                                                 className={styles.quickPromptChip}
-                                                onClick={() => handleSendMessage(qp)}
+                                                onClick={() => handleSendMessage(qp.label, { intent: qp.intent })}
                                             >
-                                                {qp}
+                                                {qp.label}
                                             </button>
                                         ))}
                                     </div>

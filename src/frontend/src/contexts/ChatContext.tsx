@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { ChatMessage, AiBookingDraft, AiAction } from "../types/ai";
 
@@ -8,7 +8,8 @@ interface ChatContextType {
     pendingSpecialtyId: number | null;
     setPendingSpecialtyId: (id: number | null) => void;
     activeDraft: AiBookingDraft | null;
-    setActiveDraft: (draft: AiBookingDraft | null) => void;
+    setActiveDraft: React.Dispatch<React.SetStateAction<AiBookingDraft | null>>;
+    getBookingContextVersion: () => number;
     messages: ChatMessage[];
     setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
     addMessage: (message: ChatMessage) => void;
@@ -20,6 +21,7 @@ const ChatContext = createContext<ChatContextType>({
     setPendingSpecialtyId: () => {},
     activeDraft: null,
     setActiveDraft: () => {},
+    getBookingContextVersion: () => 0,
     messages: [],
     setMessages: () => {},
     addMessage: () => {},
@@ -96,144 +98,110 @@ export const DEFAULT_AI_MESSAGE: ChatMessage = {
     content: "Chào bạn, tôi là Trợ lý ClinicCare AI. Tôi có thể hỗ trợ giải đáp thông tin sức khỏe tham khảo, gợi ý chuyên khoa, tra cứu bác sĩ và đặt lịch khám trực tiếp qua trò chuyện. Bạn đang cần tư vấn vấn đề gì hôm nay?"
 };
 
-export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { user, loading } = useAuth();
-    const currentUserId = user?.id ?? null;
-    const [boundUserId, setBoundUserId] = useState<number | null>(currentUserId);
-    const [pendingSpecialtyId, setPendingSpecialtyId] = useState<number | null>(null);
-    const [activeDraft, setActiveDraft] = useState<AiBookingDraft | null>(null);
-    const [messages, setMessages] = useState<ChatMessage[]>(currentUserId ? [DEFAULT_AI_MESSAGE] : []);
-
-    // Zero-frame leakage: If user changed since last render, reset synchronously during render
-    if (currentUserId !== boundUserId) {
-        setBoundUserId(currentUserId);
-        setPendingSpecialtyId(null);
-        setActiveDraft(null);
-        setMessages(currentUserId ? [DEFAULT_AI_MESSAGE] : []);
+const loadStoredMessages = (accountKey: string | null): ChatMessage[] => {
+    if (!accountKey) return [];
+    try {
+        const saved = sessionStorage.getItem(`cliniccare_chat_history_${accountKey}`);
+        if (saved) {
+            const parsed: unknown = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+                const validMessages = parsed.filter(validateChatMessageSchema);
+                if (validMessages.length > 0) return validMessages;
+            }
+        }
+    } catch (error) {
+        console.error("Failed to parse chat history", error);
     }
+    return [DEFAULT_AI_MESSAGE];
+};
 
-    // Load messages and draft when user changes with race-condition protection
+const loadStoredDraft = (accountKey: string | null): AiBookingDraft | null => {
+    if (!accountKey) return null;
+    try {
+        const saved = sessionStorage.getItem(`cliniccare_booking_draft_${accountKey}`);
+        if (saved) {
+            const parsed: unknown = JSON.parse(saved);
+            if (validateBookingDraftSchema(parsed)) return parsed;
+        }
+    } catch (error) {
+        console.error("Failed to parse booking draft", error);
+    }
+    return null;
+};
+
+const AccountBoundChatProvider: React.FC<{
+    accountKey: string | null;
+    children: React.ReactNode;
+}> = ({ accountKey, children }) => {
+    const [pendingSpecialtyId, setPendingSpecialtyIdState] = useState<number | null>(null);
+    const [activeDraft, setActiveDraftState] = useState<AiBookingDraft | null>(() => loadStoredDraft(accountKey));
+    const [messages, setMessagesState] = useState<ChatMessage[]>(() => loadStoredMessages(accountKey));
+    const bookingContextVersionRef = useRef(0);
+
+    const setActiveDraft = useCallback<React.Dispatch<React.SetStateAction<AiBookingDraft | null>>>((update) => {
+        if (!accountKey) return;
+        bookingContextVersionRef.current += 1;
+        setActiveDraftState(update);
+    }, [accountKey]);
+
+    const setPendingSpecialtyId = useCallback((id: number | null) => {
+        if (!accountKey) return;
+        setPendingSpecialtyIdState(id);
+    }, [accountKey]);
+
+    const setMessages = useCallback<React.Dispatch<React.SetStateAction<ChatMessage[]>>>((update) => {
+        if (!accountKey) return;
+        setMessagesState(update);
+    }, [accountKey]);
+
+    const getBookingContextVersion = useCallback(() => bookingContextVersionRef.current, []);
+
     useEffect(() => {
-        let active = true;
-
-        if (loading) return;
-
-        if (!user) {
-            setMessages([]);
-            setActiveDraft(null);
-            setPendingSpecialtyId(null);
-            return;
-        }
-
-        let loadedMessages: ChatMessage[] | null = null;
-        let loadedDraft: AiBookingDraft | null = null;
-
-        // 1. Load chat history
-        const key = `cliniccare_chat_history_${user.id}`;
-        try {
-            const saved = sessionStorage.getItem(key);
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed)) {
-                    const validMessages = parsed.filter(validateChatMessageSchema);
-                    if (validMessages.length > 0) {
-                        loadedMessages = validMessages;
-                    }
-                }
-            }
-        } catch (e) {
-            console.error("Failed to parse chat history", e);
-        }
-
-        // 2. Load draft independently
-        const draftKey = `cliniccare_booking_draft_${user.id}`;
-        try {
-            const savedDraft = sessionStorage.getItem(draftKey);
-            if (savedDraft) {
-                const parsedDraft = JSON.parse(savedDraft);
-                if (validateBookingDraftSchema(parsedDraft)) {
-                    loadedDraft = parsedDraft;
-                }
-            }
-        } catch (e) {
-            console.error("Failed to parse booking draft", e);
-        }
-
-        if (!active) return;
-
-        if (loadedMessages && loadedMessages.length > 0) {
-            setMessages(loadedMessages);
-        } else {
-            setMessages([DEFAULT_AI_MESSAGE]);
-        }
-        setActiveDraft(loadedDraft);
-
-        return () => {
-            active = false;
-        };
-    }, [user?.id, loading]);
-
-    // Save activeDraft when it changes
-    useEffect(() => {
-        if (!user || loading || user.id !== boundUserId) return;
-        const draftKey = `cliniccare_booking_draft_${user.id}`;
+        if (!accountKey) return;
+        const draftKey = `cliniccare_booking_draft_${accountKey}`;
         try {
             if (activeDraft) {
                 sessionStorage.setItem(draftKey, JSON.stringify(activeDraft));
             } else {
                 sessionStorage.removeItem(draftKey);
             }
-        } catch (e) {
-            console.error("Failed to save booking draft", e);
+        } catch (error) {
+            console.error("Failed to save booking draft", error);
         }
-    }, [activeDraft, user?.id, boundUserId, loading]);
+    }, [activeDraft, accountKey]);
 
-    // Save messages when they change
     useEffect(() => {
-        if (!user || loading || user.id !== boundUserId || messages.length === 0) return;
-
-        const key = `cliniccare_chat_history_${user.id}`;
+        if (!accountKey || messages.length === 0) return;
         try {
-            // Keep last 30 messages to avoid quota issues
-            const messagesToSave = messages.slice(-30);
-            sessionStorage.setItem(key, JSON.stringify(messagesToSave));
-        } catch (e) {
-            console.error("Failed to save chat history", e);
+            sessionStorage.setItem(`cliniccare_chat_history_${accountKey}`, JSON.stringify(messages.slice(-30)));
+        } catch (error) {
+            console.error("Failed to save chat history", error);
         }
-    }, [messages, user?.id, boundUserId, loading]);
+    }, [messages, accountKey]);
 
     const addMessage = (message: ChatMessage) => {
-        if (!user || user.id !== boundUserId) return;
-        if (!validateChatMessageSchema(message)) return;
-        setMessages(prev => [...prev, message]);
+        if (!accountKey || !validateChatMessageSchema(message)) return;
+        setMessagesState(previous => [...previous, message]);
     };
 
     const clearChat = () => {
-        setMessages(user ? [DEFAULT_AI_MESSAGE] : []);
-        setActiveDraft(null);
-        setPendingSpecialtyId(null);
-        if (user) {
-            const key = `cliniccare_chat_history_${user.id}`;
-            const draftKey = `cliniccare_booking_draft_${user.id}`;
-            sessionStorage.removeItem(key);
-            sessionStorage.removeItem(draftKey);
-        }
+        if (!accountKey) return;
+        bookingContextVersionRef.current += 1;
+        setMessagesState([DEFAULT_AI_MESSAGE]);
+        setActiveDraftState(null);
+        setPendingSpecialtyIdState(null);
+        sessionStorage.removeItem(`cliniccare_chat_history_${accountKey}`);
+        sessionStorage.removeItem(`cliniccare_booking_draft_${accountKey}`);
     };
-
-    // Loaded-user guard: Provider value ensures that if user is not authenticated or boundUserId hasn't matched,
-    // we never expose another user's messages or draft
-    const isUserActive = !!user && user.id === boundUserId;
-    const safeMessages = isUserActive ? messages : (user ? [DEFAULT_AI_MESSAGE] : []);
-    const safeDraft = isUserActive ? activeDraft : null;
-    const safePendingSpecialtyId = isUserActive ? pendingSpecialtyId : null;
 
     return (
         <ChatContext.Provider value={{
-            pendingSpecialtyId: safePendingSpecialtyId,
+            pendingSpecialtyId,
             setPendingSpecialtyId,
-            activeDraft: safeDraft,
+            activeDraft,
             setActiveDraft,
-            messages: safeMessages,
+            getBookingContextVersion,
+            messages,
             setMessages,
             addMessage,
             clearChat
@@ -243,5 +211,17 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 };
 
-export const useChatContext = () => useContext(ChatContext);
+export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { user } = useAuth();
+    const accountKey = user
+        ? (user.userId || (user.id !== undefined ? String(user.id) : null))
+        : null;
 
+    return (
+        <AccountBoundChatProvider key={accountKey ?? "anonymous"} accountKey={accountKey}>
+            {children}
+        </AccountBoundChatProvider>
+    );
+};
+
+export const useChatContext = () => useContext(ChatContext);

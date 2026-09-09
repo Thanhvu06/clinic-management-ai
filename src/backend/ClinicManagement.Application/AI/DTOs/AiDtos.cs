@@ -91,6 +91,27 @@ public static class AiActionTypes
     }
 }
 
+/// <summary>
+/// Client-to-server intents are deliberately separate from response action types.
+/// Only operational intents that the server can execute deterministically belong here.
+/// </summary>
+public static class AiChatIntentTypes
+{
+    public const string FindEarliestAvailableSlot = "FindEarliestAvailableSlot";
+
+    private static readonly HashSet<string> AllAllowed = new(StringComparer.Ordinal)
+    {
+        FindEarliestAvailableSlot
+    };
+
+    public static IReadOnlyCollection<string> All => AllAllowed;
+
+    public static bool IsAllowed(string? intent)
+    {
+        return !string.IsNullOrWhiteSpace(intent) && AllAllowed.Contains(intent);
+    }
+}
+
 public static class SafeRoutes
 {
     public const string Invoices = "/patient/invoices";
@@ -131,6 +152,12 @@ public static class SafeRoutes
 
 public static class AiActionValidator
 {
+    public static bool IsValidBookingReason(string? reason)
+    {
+        var normalized = reason?.Trim();
+        return normalized is { Length: >= 10 and <= 500 };
+    }
+
     private static readonly HashSet<string> AuthRequiredActions = new(StringComparer.OrdinalIgnoreCase)
     {
         AiActionTypes.ConfirmBooking,
@@ -222,9 +249,12 @@ public static class AiActionValidator
                 if (!action.Payload.SpecialtyId.HasValue || action.Payload.SpecialtyId.Value <= 0 ||
                     !action.Payload.DoctorId.HasValue || action.Payload.DoctorId.Value <= 0 ||
                     !action.Payload.SlotId.HasValue || action.Payload.SlotId.Value <= 0 ||
-                    string.IsNullOrWhiteSpace(action.Payload.Reason))
+                    string.IsNullOrWhiteSpace(action.Payload.SlotDate) ||
+                    string.IsNullOrWhiteSpace(action.Payload.StartTime) ||
+                    string.IsNullOrWhiteSpace(action.Payload.EndTime) ||
+                    !IsValidBookingReason(action.Payload.Reason))
                 {
-                    error = "ConfirmBooking action requires valid SpecialtyId, DoctorId, SlotId, and non-empty Reason.";
+                    error = "ConfirmBooking action requires valid specialty, doctor, slot, date/time, and a 10-500 character reason.";
                     return false;
                 }
                 break;
@@ -233,9 +263,12 @@ public static class AiActionValidator
                 if (!action.Payload.SpecialtyId.HasValue || action.Payload.SpecialtyId.Value <= 0 ||
                     !action.Payload.DoctorId.HasValue || action.Payload.DoctorId.Value <= 0 ||
                     !action.Payload.SlotId.HasValue || action.Payload.SlotId.Value <= 0 ||
-                    string.IsNullOrWhiteSpace(action.Payload.Reason))
+                    string.IsNullOrWhiteSpace(action.Payload.SlotDate) ||
+                    string.IsNullOrWhiteSpace(action.Payload.StartTime) ||
+                    string.IsNullOrWhiteSpace(action.Payload.EndTime) ||
+                    !IsValidBookingReason(action.Payload.Reason))
                 {
-                    error = "ReviewBooking action requires valid SpecialtyId, DoctorId, SlotId, and non-empty Reason.";
+                    error = "ReviewBooking action requires valid specialty, doctor, slot, date/time, and a 10-500 character reason.";
                     return false;
                 }
                 break;
@@ -394,10 +427,22 @@ public class AiChatRequestDto
     [MaxLength(10, ErrorMessage = "Lịch sử không được vượt quá 10 tin nhắn.")]
     public List<ChatMessageDto> Context { get; set; } = new();
 
+    [MaxLength(64)]
+    public string? Intent { get; set; }
+
+    [Range(1, long.MaxValue)]
     public long? PendingSpecialtyId { get; set; }
+
+    [Range(1, long.MaxValue)]
     public long? PendingDoctorId { get; set; }
+
+    [Range(1, long.MaxValue)]
     public long? PendingSlotId { get; set; }
+
+    [RegularExpression(@"^\d{4}-\d{2}-\d{2}$", ErrorMessage = "Ngày khám phải có định dạng yyyy-MM-dd.")]
     public string? PendingSlotDate { get; set; }
+
+    [MaxLength(500)]
     public string? Reason { get; set; }
 }
 

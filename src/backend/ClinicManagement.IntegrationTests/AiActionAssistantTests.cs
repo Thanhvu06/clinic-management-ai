@@ -1038,7 +1038,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.False(AiActionValidator.Validate(act6Bad, out _));
 
         // 7. ReviewBooking
-        var act7 = new AiActionDto { Id = "7", Type = AiActionTypes.ReviewBooking, Label = "L", Style = "secondary", RequiresAuthentication = true, Payload = new AiActionPayloadDto { SpecialtyId = 1, DoctorId = 1, SlotId = 10, Reason = "Khám tim mạch" } };
+        var act7 = new AiActionDto { Id = "7", Type = AiActionTypes.ReviewBooking, Label = "L", Style = "secondary", RequiresAuthentication = true, Payload = new AiActionPayloadDto { SpecialtyId = 1, DoctorId = 1, SlotId = 10, SlotDate = "2026-09-10", StartTime = "08:00:00", EndTime = "08:30:00", Reason = "Khám tim mạch" } };
         Assert.True(AiActionValidator.Validate(act7, out _));
         var act7BadAuth = new AiActionDto { Id = "7", Type = AiActionTypes.ReviewBooking, Label = "L", Style = "secondary", RequiresAuthentication = false, Payload = new AiActionPayloadDto { SpecialtyId = 1, DoctorId = 1, SlotId = 10, Reason = "Khám tim mạch" } };
         Assert.False(AiActionValidator.Validate(act7BadAuth, out _));
@@ -1106,4 +1106,3 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.False(AiActionValidator.Validate(act19Bad, out _));
     }
 }
-
