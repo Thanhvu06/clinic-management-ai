@@ -239,19 +239,23 @@ public class AuthenticationService : IAuthenticationService
         };
     }
 
+    public const string ResetPasswordGenericFailureMessage =
+        "Đặt lại mật khẩu không thành công. Mã xác thực không hợp lệ hoặc đã hết hạn.";
+
     public async Task ResetPasswordAsync(ResetPasswordRequest request)
     {
         var email = request.Email?.Trim() ?? string.Empty;
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null || !user.IsActive)
-            throw new NotFoundException("Tài khoản không tồn tại hoặc đã bị vô hiệu hóa.");
+        {
+            throw new BusinessException("RESET_PASSWORD_FAILED", ResetPasswordGenericFailureMessage);
+        }
 
         var token = request.Token?.Trim() ?? string.Empty;
         var result = await _userManager.ResetPasswordAsync(user, token, request.NewPassword);
         if (!result.Succeeded)
         {
-            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            throw new BusinessException("RESET_PASSWORD_FAILED", $"Đặt lại mật khẩu không thành công: {errors}");
+            throw new BusinessException("RESET_PASSWORD_FAILED", ResetPasswordGenericFailureMessage);
         }
     }
 }

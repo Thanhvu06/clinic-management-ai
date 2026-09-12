@@ -103,6 +103,43 @@ public class AuthTests : IntegrationTestBase
         using var doc = JsonDocument.Parse(resetJson);
         Assert.False(doc.RootElement.GetProperty("success").GetBoolean());
         Assert.Equal("RESET_PASSWORD_FAILED", doc.RootElement.GetProperty("errorCode").GetString());
+        Assert.Equal("Đặt lại mật khẩu không thành công. Mã xác thực không hợp lệ hoặc đã hết hạn.", doc.RootElement.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task Given_NonexistentEmail_When_ResetPassword_Then_RejectedWith422AndExactSameContractAsInvalidToken()
+    {
+        var nonexistentEmail = $"nonexistent_{Guid.NewGuid():N}@test.com";
+        var resetRes = await Client.PostAsJsonAsync("/api/v1/auth/reset-password", new
+        {
+            email = nonexistentEmail,
+            token = "dummy-token-xyz",
+            newPassword = "ValidPassword@123"
+        });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, resetRes.StatusCode);
+        var resetJson = await resetRes.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(resetJson);
+        Assert.False(doc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal("RESET_PASSWORD_FAILED", doc.RootElement.GetProperty("errorCode").GetString());
+        Assert.Equal("Đặt lại mật khẩu không thành công. Mã xác thực không hợp lệ hoặc đã hết hạn.", doc.RootElement.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task Given_InactiveUser_When_ResetPassword_Then_RejectedWith422AndExactSameContractAsInvalidToken()
+    {
+        var email = await CreateUniqueUserAsync(isActive: false);
+        var resetRes = await Client.PostAsJsonAsync("/api/v1/auth/reset-password", new
+        {
+            email,
+            token = "dummy-token-xyz",
+            newPassword = "ValidPassword@123"
+        });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, resetRes.StatusCode);
+        var resetJson = await resetRes.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(resetJson);
+        Assert.False(doc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal("RESET_PASSWORD_FAILED", doc.RootElement.GetProperty("errorCode").GetString());
+        Assert.Equal("Đặt lại mật khẩu không thành công. Mã xác thực không hợp lệ hoặc đã hết hạn.", doc.RootElement.GetProperty("message").GetString());
     }
 
     [Fact]
