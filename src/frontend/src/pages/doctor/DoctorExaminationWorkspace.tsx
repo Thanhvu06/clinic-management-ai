@@ -3,15 +3,19 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
     Stethoscope, HeartPulse, Pill, History, Save, CheckCircle, 
     AlertCircle, ArrowLeft, Trash2, Search, Clock, Calendar, 
-    User, Phone, MapPin, RefreshCw 
+    User, Phone, MapPin, RefreshCw, FlaskConical, Printer,
+    Check, AlertTriangle
 } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
+import { diagnosticApi } from '../../api/diagnosticApi';
 import type { 
     PatientClinicalContextDto,
     SaveEncounterRequest,
     SaveVitalSignsRequest,
     SavePrescriptionDraftRequest,
-    CompleteConsultationRequest
+    CompleteConsultationRequest,
+    DiagnosticServiceDto,
+    DiagnosticOrderDto
 } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 
@@ -31,7 +35,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
     const [context, setContext] = useState<PatientClinicalContextDto | null>(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'encounter' | 'vitals' | 'prescription' | 'history'>('encounter');
+    const [activeTab, setActiveTab] = useState<'encounter' | 'vitals' | 'diagnostics' | 'prescription' | 'history'>('encounter');
 
     // Medicine Catalog
     const [medicines, setMedicines] = useState<ActiveMedicine[]>([]);
@@ -60,7 +64,18 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const [vitalsRowVersion, setVitalsRowVersion] = useState<string | null>(null);
     const [savingVitals, setSavingVitals] = useState(false);
 
-    // Tab 3: Prescription Form
+    // Tab 3: Diagnostic Orders Form & State
+    const [diagnosticCatalog, setDiagnosticCatalog] = useState<DiagnosticServiceDto[]>([]);
+    const [selectedServiceIds, setSelectedServiceIds] = useState<number[]>([]);
+    const [clinicalIndication, setClinicalIndication] = useState('');
+    const [orderNotes, setOrderNotes] = useState('');
+    const [diagnosticOrders, setDiagnosticOrders] = useState<DiagnosticOrderDto[]>([]);
+    const [loadingOrders, setLoadingOrders] = useState(false);
+    const [creatingOrder, setCreatingOrder] = useState(false);
+    const [actionOrderId, setActionOrderId] = useState<number | null>(null);
+    const [catalogCategory, setCatalogCategory] = useState<string>('All');
+
+    // Tab 4: Prescription Form
     const [prescriptionNotes, setPrescriptionNotes] = useState('');
     const [prescriptionItems, setPrescriptionItems] = useState<Array<{
         medicineId: number;
@@ -88,14 +103,42 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const [issuePrescriptionCheck, setIssuePrescriptionCheck] = useState(true);
     const [completing, setCompleting] = useState(false);
 
+    // Load diagnostic orders
+    const loadDiagnosticOrders = useCallback(async () => {
+        if (!appointmentId) return;
+        try {
+            const res = await diagnosticApi.getDoctorOrdersByAppointment(appointmentId);
+            if (res.success && res.data) {
+                setDiagnosticOrders(res.data);
+            }
+        } catch {
+            // Ignored
+        } finally {
+            setLoadingOrders(false);
+        }
+    }, [appointmentId]);
+
+    // Load diagnostic catalog
+    const loadDiagnosticCatalog = useCallback(async () => {
+        try {
+            const res = await diagnosticApi.getCatalog();
+            if (res.success && res.data) {
+                setDiagnosticCatalog(res.data);
+            }
+        } catch {
+            // Ignored
+        }
+    }, []);
+
     // Load initial context
     const loadContext = useCallback(async () => {
         if (!appointmentId) return;
-        setLoading(true);
         try {
             const [ctxRes, medRes] = await Promise.all([
                 doctorApi.getPatientClinicalContext(appointmentId),
-                doctorApi.getActiveMedicines()
+                doctorApi.getActiveMedicines(),
+                loadDiagnosticOrders(),
+                loadDiagnosticCatalog()
             ]);
 
             if (ctxRes.success && ctxRes.data) {
@@ -138,12 +181,12 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         medicineCode: i.medicineCode,
                         medicineName: i.medicineName,
                         unit: i.unit,
-                        availableStock: i.availableStock,
+                        availableStock: 999,
                         quantity: i.quantity,
-                        dosage: i.dosage || '1 viên',
-                        frequency: i.frequency || 'Ngày 2 lần',
+                        dosage: i.dosage || '',
+                        frequency: i.frequency || '',
                         durationDays: i.durationDays || 5,
-                        instructions: i.instructions || 'Uống sau bữa ăn'
+                        instructions: i.instructions || ''
                     })));
                 }
             }
@@ -156,10 +199,18 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [appointmentId, showAlert]);
+    }, [appointmentId, showAlert, loadDiagnosticOrders, loadDiagnosticCatalog]);
 
     useEffect(() => {
-        loadContext();
+        let isMounted = true;
+        const init = async () => {
+            if (!isMounted) return;
+            await loadContext();
+        };
+        void init();
+        return () => {
+            isMounted = false;
+        };
     }, [loadContext]);
 
     // Computed BMI
@@ -185,6 +236,20 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         tomorrow.setDate(tomorrow.getDate() + 1);
         return tomorrow.toISOString().split('T')[0];
     }, []);
+
+    // Previous height for reuse
+    const previousHeight = useMemo(() => {
+        return context?.latestKnownVitals?.height || context?.anthropometricComparison?.previousMeasurement?.height || null;
+    }, [context]);
+
+    // Diagnostic completion guards
+    const pendingDiagnosticOrder = useMemo(() => {
+        return diagnosticOrders.find(o => o.status === 'Ordered' || o.status === 'InProgress');
+    }, [diagnosticOrders]);
+
+    const unreviewedDiagnosticOrder = useMemo(() => {
+        return diagnosticOrders.find(o => o.status === 'Completed' && !o.reviewedAtUtc);
+    }, [diagnosticOrders]);
 
     // Handlers: Save Encounter
     const handleSaveEncounter = async () => {
@@ -236,6 +301,11 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             if (res.success && res.data) {
                 setVitalsRowVersion(res.data.rowVersion || null);
                 showToast('Đã lưu dấu hiệu sinh tồn thành công.', 'success');
+                // Refresh context to reload updated longitudinal comparison deltas
+                const ctxRes = await doctorApi.getPatientClinicalContext(appointmentId);
+                if (ctxRes.success && ctxRes.data) {
+                    setContext(ctxRes.data);
+                }
             }
         } catch (err: any) {
             if (err.response?.status === 409) {
@@ -246,6 +316,72 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             }
         } finally {
             setSavingVitals(false);
+        }
+    };
+
+    // Handlers: Diagnostic Orders
+    const handleToggleSelectService = (serviceId: number) => {
+        setSelectedServiceIds(prev => 
+            prev.includes(serviceId) ? prev.filter(id => id !== serviceId) : [...prev, serviceId]
+        );
+    };
+
+    const handleCreateDiagnosticOrder = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (selectedServiceIds.length === 0) {
+            showAlert('Vui lòng chọn ít nhất một dịch vụ cận lâm sàng để chỉ định.', 'Chưa chọn dịch vụ', 'warning');
+            return;
+        }
+
+        setCreatingOrder(true);
+        try {
+            const res = await diagnosticApi.createDoctorOrder(appointmentId, {
+                serviceIds: selectedServiceIds,
+                clinicalIndication: clinicalIndication.trim() || 'Chỉ định cận lâm sàng',
+                note: orderNotes.trim() || undefined
+            });
+
+            if (res.success) {
+                showToast('Đã tạo phiếu chỉ định cận lâm sàng thành công!', 'success');
+                setSelectedServiceIds([]);
+                setClinicalIndication('');
+                setOrderNotes('');
+                await loadDiagnosticOrders();
+            }
+        } catch (err: any) {
+            showAlert(err.response?.data?.message || 'Không thể tạo phiếu chỉ định cận lâm sàng.', 'Lỗi', 'error');
+        } finally {
+            setCreatingOrder(false);
+        }
+    };
+
+    const handleReviewOrder = async (orderId: number) => {
+        setActionOrderId(orderId);
+        try {
+            const res = await diagnosticApi.reviewDoctorOrder(orderId);
+            if (res.success) {
+                showToast('Đã xác nhận xem kết quả cận lâm sàng.', 'success');
+                await loadDiagnosticOrders();
+            }
+        } catch (err: any) {
+            showAlert(err.response?.data?.message || 'Không thể xác nhận kết quả.', 'Lỗi', 'error');
+        } finally {
+            setActionOrderId(null);
+        }
+    };
+
+    const handleCancelOrder = async (orderId: number) => {
+        setActionOrderId(orderId);
+        try {
+            const res = await diagnosticApi.cancelDoctorOrder(orderId, { reason: 'Bác sĩ hủy chỉ định.' });
+            if (res.success) {
+                showToast('Đã hủy phiếu chỉ định cận lâm sàng.', 'info');
+                await loadDiagnosticOrders();
+            }
+        } catch (err: any) {
+            showAlert(err.response?.data?.message || 'Không thể hủy phiếu chỉ định.', 'Lỗi', 'error');
+        } finally {
+            setActionOrderId(null);
         }
     };
 
@@ -320,7 +456,43 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         });
     };
 
-    // Handle Complete Consultation
+    // Handle Complete Consultation with Diagnostic Guards
+    const handleOpenCompleteModal = () => {
+        if (!diagnosis.trim()) {
+            showAlert('Vui lòng nhập chẩn đoán bệnh trước khi hoàn tất khám.', 'Thiếu thông tin', 'warning');
+            setActiveTab('encounter');
+            return;
+        }
+
+        if (!summary.trim()) {
+            showAlert('Vui lòng nhập tóm tắt kết luận khám trước khi hoàn tất.', 'Thiếu thông tin', 'warning');
+            setActiveTab('encounter');
+            return;
+        }
+
+        if (pendingDiagnosticOrder) {
+            showAlert(
+                `Phiếu chỉ định "${pendingDiagnosticOrder.orderCode}" đang ở trạng thái ${pendingDiagnosticOrder.status === 'Ordered' ? 'Chờ thực hiện' : 'Đang thực hiện'}. Bạn chỉ có thể hoàn tất ca khám sau khi có kết quả hoặc hủy phiếu chỉ định nếu không còn nhu cầu thực hiện.`,
+                'Chưa thể hoàn tất ca khám',
+                'warning'
+            );
+            setActiveTab('diagnostics');
+            return;
+        }
+
+        if (unreviewedDiagnosticOrder) {
+            showAlert(
+                `Phiếu chỉ định "${unreviewedDiagnosticOrder.orderCode}" đã có kết quả cận lâm sàng nhưng chưa được bác sĩ bấm xác nhận đã xem kết quả. Vui lòng kiểm tra và bấm "Xác nhận đã xem kết quả" trước khi hoàn tất ca khám.`,
+                'Chưa thể hoàn tất ca khám',
+                'warning'
+            );
+            setActiveTab('diagnostics');
+            return;
+        }
+
+        setIsCompleteModalOpen(true);
+    };
+
     const handleCompleteConsultation = async () => {
         if (!diagnosis.trim()) {
             showAlert('Vui lòng nhập chẩn đoán bệnh trước khi hoàn tất khám.', 'Thiếu thông tin', 'warning');
@@ -331,6 +503,28 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         if (!summary.trim()) {
             showAlert('Vui lòng nhập tóm tắt kết luận khám trước khi hoàn tất.', 'Thiếu thông tin', 'warning');
             setActiveTab('encounter');
+            return;
+        }
+
+        if (pendingDiagnosticOrder) {
+            showAlert(
+                `Phiếu chỉ định "${pendingDiagnosticOrder.orderCode}" đang ở trạng thái ${pendingDiagnosticOrder.status === 'Ordered' ? 'Chờ thực hiện' : 'Đang thực hiện'}. Bạn chỉ có thể hoàn tất ca khám sau khi có kết quả hoặc hủy phiếu chỉ định.`,
+                'Chưa thể hoàn tất ca khám',
+                'warning'
+            );
+            setIsCompleteModalOpen(false);
+            setActiveTab('diagnostics');
+            return;
+        }
+
+        if (unreviewedDiagnosticOrder) {
+            showAlert(
+                `Phiếu chỉ định "${unreviewedDiagnosticOrder.orderCode}" đã có kết quả nhưng bác sĩ chưa xác nhận đã xem. Vui lòng bấm "Xác nhận đã xem kết quả" trước.`,
+                'Chưa thể hoàn tất ca khám',
+                'warning'
+            );
+            setIsCompleteModalOpen(false);
+            setActiveTab('diagnostics');
             return;
         }
 
@@ -368,6 +562,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             if (err.response?.status === 409) {
                 showAlert('Hồ sơ bệnh án đã bị sửa đổi đồng thời bởi một phiên khác. Vui lòng tải lại và kiểm tra.', 'Xung đột dữ liệu', 'error');
                 await loadContext();
+            } else if (err.response?.data?.errorCode === 'PENDING_DIAGNOSTIC_RESULTS' || err.response?.data?.errorCode === 'UNREVIEWED_DIAGNOSTIC_RESULTS') {
+                showAlert(err.response?.data?.message || 'Chưa thể kết thúc ca khám do chưa hoàn tất quy trình cận lâm sàng.', 'Chặn hoàn tất khám', 'warning');
+                setActiveTab('diagnostics');
             } else {
                 showAlert(err.response?.data?.message || 'Không thể hoàn tất ca khám.', 'Lỗi', 'error');
             }
@@ -405,6 +602,33 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         )
     );
 
+    const filteredCatalog = useMemo(() => {
+        if (catalogCategory === 'All') return diagnosticCatalog;
+        return diagnosticCatalog.filter(s => s.category === catalogCategory);
+    }, [diagnosticCatalog, catalogCategory]);
+
+    const categoryMap: Record<string, string> = {
+        Laboratory: 'Xét nghiệm',
+        Ultrasound: 'Siêu âm',
+        Imaging: 'CĐ Hình ảnh',
+        Other: 'Khác'
+    };
+
+    const statusBadge = (status: string) => {
+        switch (status) {
+            case 'Ordered':
+                return <span style={{ backgroundColor: '#fef3c7', color: '#b45309', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>Chờ thực hiện</span>;
+            case 'InProgress':
+                return <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>Đang thực hiện</span>;
+            case 'Completed':
+                return <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>Đã hoàn tất</span>;
+            case 'Cancelled':
+                return <span style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>Đã hủy</span>;
+            default:
+                return <span style={{ backgroundColor: '#f1f5f9', color: '#475569', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>{status}</span>;
+        }
+    };
+
     if (loading) {
         return (
             <div style={{ textAlign: 'center', padding: '80px 0', color: '#64748b' }}>
@@ -429,6 +653,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const patient = context;
     const apt = context.currentAppointment;
     const isCompleted = apt?.status === 'Completed';
+    const comparison = context.anthropometricComparison;
+    const prevMeasurement = comparison?.previousMeasurement;
+    const historyList = context.vitalHistory || [];
 
     return (
         <div style={{ paddingBottom: '90px' }}>
@@ -468,6 +695,56 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     <div style={{ fontSize: '0.9rem', color: '#92400e' }}>
                         <strong>Ca khám này đã hoàn tất:</strong> Hồ sơ bệnh án và đơn thuốc đang ở trạng thái lưu trữ chính thức (chỉ đọc) để bảo toàn tính xác thực y khoa.
                     </div>
+                </div>
+            )}
+
+            {/* Pending or Unreviewed Diagnostic Warning Banner */}
+            {!isCompleted && pendingDiagnosticOrder && (
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '12px 18px',
+                    backgroundColor: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: '8px',
+                    color: '#92400e',
+                    marginBottom: '16px'
+                }}>
+                    <AlertTriangle size={20} style={{ flexShrink: 0, color: '#d97706' }} />
+                    <div style={{ fontSize: '0.88rem' }}>
+                        <strong>Chỉ định CLS đang chờ:</strong> Phiếu <code>{pendingDiagnosticOrder.orderCode}</code> đang được kỹ thuật viên tiếp nhận/thực hiện. Ca khám chưa thể kết thúc cho đến khi có kết quả đầy đủ.
+                    </div>
+                </div>
+            )}
+
+            {!isCompleted && !pendingDiagnosticOrder && unreviewedDiagnosticOrder && (
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    padding: '12px 18px',
+                    backgroundColor: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: '8px',
+                    color: '#166534',
+                    marginBottom: '16px'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <CheckCircle size={20} style={{ flexShrink: 0, color: '#15803d' }} />
+                        <div style={{ fontSize: '0.88rem' }}>
+                            <strong>Đã có kết quả CLS:</strong> Phiếu <code>{unreviewedDiagnosticOrder.orderCode}</code> đã có kết quả. Vui lòng chuyển sang tab Cận lâm sàng và bấm "Xác nhận đã xem kết quả" để hoàn tất ca khám.
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('diagnostics')}
+                        className="btn-primary"
+                        style={{ padding: '6px 12px', fontSize: '0.82rem', whiteSpace: 'nowrap' }}
+                    >
+                        Xem kết quả ngay
+                    </button>
                 </div>
             )}
 
@@ -523,7 +800,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             </div>
 
             {/* Workspace Tab Navigation */}
-            <div style={{ display: 'flex', borderBottom: '2px solid #e2e8f0', marginBottom: '20px', gap: '8px' }}>
+            <div style={{ display: 'flex', borderBottom: '2px solid #e2e8f0', marginBottom: '20px', gap: '8px', overflowX: 'auto' }}>
                 <button
                     onClick={() => setActiveTab('encounter')}
                     style={{
@@ -538,7 +815,8 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         gap: '8px',
                         color: activeTab === 'encounter' ? '#0284c7' : '#64748b',
                         borderBottom: activeTab === 'encounter' ? '3px solid #0284c7' : '3px solid transparent',
-                        marginBottom: '-2px'
+                        marginBottom: '-2px',
+                        whiteSpace: 'nowrap'
                     }}
                 >
                     <Stethoscope size={18} />
@@ -559,11 +837,34 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         gap: '8px',
                         color: activeTab === 'vitals' ? '#0284c7' : '#64748b',
                         borderBottom: activeTab === 'vitals' ? '3px solid #0284c7' : '3px solid transparent',
-                        marginBottom: '-2px'
+                        marginBottom: '-2px',
+                        whiteSpace: 'nowrap'
                     }}
                 >
                     <HeartPulse size={18} />
                     <span>Dấu hiệu sinh tồn {computedBmi ? `(BMI ${computedBmi})` : ''}</span>
+                </button>
+
+                <button
+                    onClick={() => setActiveTab('diagnostics')}
+                    style={{
+                        padding: '12px 18px',
+                        border: 'none',
+                        background: 'none',
+                        fontWeight: 700,
+                        fontSize: '0.95rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        color: activeTab === 'diagnostics' ? '#0284c7' : '#64748b',
+                        borderBottom: activeTab === 'diagnostics' ? '3px solid #0284c7' : '3px solid transparent',
+                        marginBottom: '-2px',
+                        whiteSpace: 'nowrap'
+                    }}
+                >
+                    <FlaskConical size={18} />
+                    <span>Chỉ định Cận lâm sàng ({diagnosticOrders.length})</span>
                 </button>
 
                 <button
@@ -580,7 +881,8 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         gap: '8px',
                         color: activeTab === 'prescription' ? '#0284c7' : '#64748b',
                         borderBottom: activeTab === 'prescription' ? '3px solid #0284c7' : '3px solid transparent',
-                        marginBottom: '-2px'
+                        marginBottom: '-2px',
+                        whiteSpace: 'nowrap'
                     }}
                 >
                     <Pill size={18} />
@@ -601,7 +903,8 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         gap: '8px',
                         color: activeTab === 'history' ? '#0284c7' : '#64748b',
                         borderBottom: activeTab === 'history' ? '3px solid #0284c7' : '3px solid transparent',
-                        marginBottom: '-2px'
+                        marginBottom: '-2px',
+                        whiteSpace: 'nowrap'
                     }}
                 >
                     <History size={18} />
@@ -726,184 +1029,662 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 </div>
             )}
 
-            {/* Tab 2: Vital Signs with computed BMI */}
+            {/* Tab 2: Longitudinal Vital Signs with 3 Distinct Regions */}
             {activeTab === 'vitals' && (
-                <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                        <div>
-                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
-                                Đo lường & Ghi nhận dấu hiệu sinh tồn
-                            </h3>
-                            <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
-                                Tự động tính chỉ số BMI và phân loại theo tiêu chuẩn y tế quốc tế.
-                            </p>
-                        </div>
-                        <button
-                            type="button"
-                            className="btn-secondary"
-                            onClick={handleSaveVitals}
-                            disabled={savingVitals}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}
-                        >
-                            <Save size={16} />
-                            <span>{savingVitals ? 'Đang lưu...' : 'Lưu dấu hiệu sinh tồn'}</span>
-                        </button>
-                    </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {/* Region 2 & Region 3: Historical Comparison & Anthropometric Deltas */}
+                    {prevMeasurement ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                            {/* Region 2: Previous Measurement */}
+                            <div className="card" style={{ padding: '20px', borderRadius: '8px', borderLeft: '4px solid #0284c7', backgroundColor: '#f8fafc' }}>
+                                <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    VÙNG 2: SỐ LIỆU ĐO LẦN TRƯỚC
+                                </div>
+                                <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: 600, marginTop: '4px' }}>
+                                    Ngày đo: {new Date(prevMeasurement.recordedAtUtc).toLocaleDateString('vi-VN')} ({new Date(prevMeasurement.recordedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })})
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '14px' }}>
+                                    <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Cân nặng</div>
+                                        <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                                            {prevMeasurement.weight ? `${prevMeasurement.weight} kg` : '--'}
+                                        </div>
+                                    </div>
+                                    <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Chiều cao</div>
+                                        <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                                            {prevMeasurement.height ? `${prevMeasurement.height} cm` : '--'}
+                                        </div>
+                                    </div>
+                                    <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>BMI cũ</div>
+                                        <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                                            {prevMeasurement.bmi ? prevMeasurement.bmi : '--'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                Nhiệt độ (°C)
-                            </label>
-                            <input
-                                type="number"
-                                step="0.1"
-                                min="30"
-                                max="45"
-                                value={temperature}
-                                onChange={(e) => setTemperature(e.target.value)}
-                                placeholder="37.0"
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                            />
+                            {/* Region 3: Anthropometric Deltas (Color & Badge) */}
+                            <div className="card" style={{ padding: '20px', borderRadius: '8px', borderLeft: '4px solid #10b981', backgroundColor: '#f0fdf4' }}>
+                                <div style={{ fontSize: '0.78rem', color: '#166534', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    VÙNG 3: BIẾN ĐỘNG THỂ TRẠNG (DELTAS)
+                                </div>
+                                <div style={{ fontSize: '0.9rem', color: '#166534', fontWeight: 600, marginTop: '4px' }}>
+                                    Chênh lệch so với lần khám trước
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '14px' }}>
+                                    <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #bbf7d0', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Δ Cân nặng</div>
+                                        <div style={{ fontSize: '1.15rem', fontWeight: 800, color: (comparison?.weightDeltaKg || 0) > 0 ? '#ea580c' : (comparison?.weightDeltaKg || 0) < 0 ? '#0284c7' : '#15803d' }}>
+                                            {comparison?.weightDeltaKg !== undefined && comparison?.weightDeltaKg !== null 
+                                                ? (comparison.weightDeltaKg > 0 ? `+${comparison.weightDeltaKg} kg` : `${comparison.weightDeltaKg} kg`) 
+                                                : '--'}
+                                        </div>
+                                    </div>
+                                    <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #bbf7d0', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Δ Chiều cao</div>
+                                        <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#15803d' }}>
+                                            {comparison?.heightDeltaCm !== undefined && comparison?.heightDeltaCm !== null 
+                                                ? (comparison.heightDeltaCm > 0 ? `+${comparison.heightDeltaCm} cm` : `${comparison.heightDeltaCm} cm`) 
+                                                : '--'}
+                                        </div>
+                                    </div>
+                                    <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #bbf7d0', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Δ BMI</div>
+                                        <div style={{ fontSize: '1.15rem', fontWeight: 800, color: (comparison?.bmiDelta || 0) > 0 ? '#ea580c' : (comparison?.bmiDelta || 0) < 0 ? '#0284c7' : '#15803d' }}>
+                                            {comparison?.bmiDelta !== undefined && comparison?.bmiDelta !== null 
+                                                ? (comparison.bmiDelta > 0 ? `+${comparison.bmiDelta}` : `${comparison.bmiDelta}`) 
+                                                : '--'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="card" style={{ padding: '14px 20px', borderRadius: '8px', backgroundColor: '#f8fafc', color: '#64748b', fontSize: '0.88rem' }}>
+                            ℹ️ Đây là lần đầu bệnh nhân ghi nhận dấu hiệu sinh tồn tại phòng khám. Dữ liệu so sánh thể trạng (deltas) sẽ xuất hiện từ lần khám kế tiếp.
+                        </div>
+                    )}
+
+                    {/* Region 1: Current Measurement Form */}
+                    <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                                    VÙNG 1: ĐO LƯỜNG SINH HIỆU HIỆN TẠI
+                                </h3>
+                                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                                    Nhập kết quả đo tại phòng khám hôm nay. BMI được tự động tính và phân loại.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn-secondary"
+                                onClick={handleSaveVitals}
+                                disabled={savingVitals}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}
+                            >
+                                <Save size={16} />
+                                <span>{savingVitals ? 'Đang lưu...' : 'Lưu dấu hiệu sinh tồn'}</span>
+                            </button>
                         </div>
 
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                Huyết áp (Tâm thu / Tâm trương)
-                            </label>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                    Nhiệt độ (°C)
+                                </label>
                                 <input
                                     type="number"
-                                    min="40"
-                                    max="260"
-                                    value={bpSystolic}
-                                    onChange={(e) => setBpSystolic(e.target.value)}
-                                    placeholder="120"
-                                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                    step="0.1"
+                                    min="30"
+                                    max="45"
+                                    value={temperature}
+                                    onChange={(e) => setTemperature(e.target.value)}
+                                    placeholder="37.0"
+                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
                                 />
-                                <span style={{ color: '#64748b', fontWeight: 700 }}>/</span>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                    Huyết áp (Tâm thu / Tâm trương)
+                                </label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <input
+                                        type="number"
+                                        min="40"
+                                        max="260"
+                                        value={bpSystolic}
+                                        onChange={(e) => setBpSystolic(e.target.value)}
+                                        placeholder="120"
+                                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                    />
+                                    <span style={{ color: '#64748b', fontWeight: 700 }}>/</span>
+                                    <input
+                                        type="number"
+                                        min="30"
+                                        max="180"
+                                        value={bpDiastolic}
+                                        onChange={(e) => setBpDiastolic(e.target.value)}
+                                        placeholder="80"
+                                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                    />
+                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>mmHg</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                    Nhịp tim / Mạch (nhịp/phút)
+                                </label>
                                 <input
                                     type="number"
                                     min="30"
-                                    max="180"
-                                    value={bpDiastolic}
-                                    onChange={(e) => setBpDiastolic(e.target.value)}
-                                    placeholder="80"
-                                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                    max="220"
+                                    value={heartRate}
+                                    onChange={(e) => setHeartRate(e.target.value)}
+                                    placeholder="75"
+                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
                                 />
-                                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>mmHg</span>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                    Nhịp thở (lần/phút)
+                                </label>
+                                <input
+                                    type="number"
+                                    min="8"
+                                    max="60"
+                                    value={respiratoryRate}
+                                    onChange={(e) => setRespiratoryRate(e.target.value)}
+                                    placeholder="18"
+                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                />
+                            </div>
+
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}>
+                                        Chiều cao (cm)
+                                    </label>
+                                    {previousHeight && !height && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setHeight(previousHeight.toString())}
+                                            style={{
+                                                padding: '2px 8px',
+                                                fontSize: '0.75rem',
+                                                backgroundColor: '#e0f2fe',
+                                                color: '#0284c7',
+                                                border: '1px solid #bae6fd',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                fontWeight: 600
+                                            }}
+                                            title="Tái sử dụng chiều cao từ lần đo trước"
+                                        >
+                                            Dùng chiều cao lần trước ({previousHeight} cm)
+                                        </button>
+                                    )}
+                                </div>
+                                <input
+                                    type="number"
+                                    step="0.5"
+                                    min="30"
+                                    max="250"
+                                    value={height}
+                                    onChange={(e) => setHeight(e.target.value)}
+                                    placeholder="170"
+                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                    Cân nặng (kg)
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    min="2"
+                                    max="300"
+                                    value={weight}
+                                    onChange={(e) => setWeight(e.target.value)}
+                                    placeholder="65.0"
+                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                    Nồng độ oxy SpO2 (%)
+                                </label>
+                                <input
+                                    type="number"
+                                    min="50"
+                                    max="100"
+                                    value={spO2}
+                                    onChange={(e) => setSpO2(e.target.value)}
+                                    placeholder="98"
+                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                />
                             </div>
                         </div>
 
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                Nhịp tim / Mạch (nhịp/phút)
-                            </label>
-                            <input
-                                type="number"
-                                min="30"
-                                max="220"
-                                value={heartRate}
-                                onChange={(e) => setHeartRate(e.target.value)}
-                                placeholder="75"
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                            />
-                        </div>
+                        {/* Calculated BMI Badge Card */}
+                        <div style={{ backgroundColor: '#f8fafc', padding: '18px 24px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                            <div>
+                                <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>CHỈ SỐ KHỐI CƠ THỂ (BMI) TỰ ĐỘNG</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px' }}>
+                                    <span style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0f172a' }}>
+                                        {computedBmi !== null ? computedBmi : '--'}
+                                    </span>
+                                    {bmiClassification && (
+                                        <span style={{ 
+                                            backgroundColor: bmiClassification.color === '#15803d' ? '#dcfce7' : bmiClassification.color === '#d97706' ? '#fef3c7' : '#fee2e2',
+                                            color: bmiClassification.color,
+                                            fontWeight: 700,
+                                            padding: '4px 12px',
+                                            borderRadius: '20px',
+                                            fontSize: '0.85rem'
+                                        }}>
+                                            {bmiClassification.label}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
 
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                Nhịp thở (lần/phút)
-                            </label>
-                            <input
-                                type="number"
-                                min="8"
-                                max="60"
-                                value={respiratoryRate}
-                                onChange={(e) => setRespiratoryRate(e.target.value)}
-                                placeholder="18"
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                            />
-                        </div>
-
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                Chiều cao (cm)
-                            </label>
-                            <input
-                                type="number"
-                                step="0.5"
-                                min="30"
-                                max="250"
-                                value={height}
-                                onChange={(e) => setHeight(e.target.value)}
-                                placeholder="170"
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                            />
-                        </div>
-
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                Cân nặng (kg)
-                            </label>
-                            <input
-                                type="number"
-                                step="0.1"
-                                min="2"
-                                max="300"
-                                value={weight}
-                                onChange={(e) => setWeight(e.target.value)}
-                                placeholder="65.0"
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                            />
-                        </div>
-
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                Nồng độ oxy trong máu SpO2 (%)
-                            </label>
-                            <input
-                                type="number"
-                                min="50"
-                                max="100"
-                                value={spO2}
-                                onChange={(e) => setSpO2(e.target.value)}
-                                placeholder="98"
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                            />
+                            <div style={{ fontSize: '0.8rem', color: '#64748b', maxWidth: '360px' }}>
+                                * BMI được tính theo công thức kg/m² và phân nhóm theo ngưỡng đang cấu hình trong hệ thống: Thiếu cân (&lt;18.5), Bình thường (18.5 - 24.9), Tiền béo phì (25 - 29.9), Béo phì (≥30).
+                            </div>
                         </div>
                     </div>
 
-                    {/* Calculated BMI Badge Card */}
-                    <div style={{ backgroundColor: '#f8fafc', padding: '18px 24px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-                        <div>
-                            <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>CHỈ SỐ KHỐI CƠ THỂ (BMI) TỰ ĐỘNG</div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px' }}>
-                                <span style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0f172a' }}>
-                                    {computedBmi !== null ? computedBmi : '--'}
-                                </span>
-                                {bmiClassification && (
-                                    <span style={{ 
-                                        backgroundColor: bmiClassification.color === '#15803d' ? '#dcfce7' : bmiClassification.color === '#d97706' ? '#fef3c7' : '#fee2e2',
-                                        color: bmiClassification.color,
-                                        fontWeight: 700,
-                                        padding: '4px 12px',
-                                        borderRadius: '20px',
-                                        fontSize: '0.85rem'
-                                    }}>
-                                        {bmiClassification.label}
-                                    </span>
-                                )}
-                            </div>
+                    {/* Region 4: Vital Signs Longitudinal History Table */}
+                    <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>
+                                Bảng theo dõi lịch sử sinh hiệu qua các lần khám ({historyList.length} lần đo)
+                            </h3>
                         </div>
 
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', maxWidth: '360px' }}>
-                            * Công thức: BMI = Cân nặng (kg) / [Chiều cao (m)]². Tiêu chuẩn: Gầy (&lt;18.5), Bình thường (18.5 - 24.9), Tiền béo phì (25 - 29.9), Béo phì (≥30).
-                        </div>
+                        {historyList.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '30px 0', color: '#64748b', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                                Chưa có dữ liệu lịch sử sinh hiệu từ các lần khám trước.
+                            </div>
+                        ) : (
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                                    <thead>
+                                        <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                                            <th style={{ padding: '10px' }}>Thời điểm đo</th>
+                                            <th style={{ padding: '10px' }}>Huyết áp (mmHg)</th>
+                                            <th style={{ padding: '10px' }}>Mạch (nhịp/phút)</th>
+                                            <th style={{ padding: '10px' }}>Nhiệt độ (°C)</th>
+                                            <th style={{ padding: '10px' }}>SpO2 (%)</th>
+                                            <th style={{ padding: '10px' }}>Cân nặng (kg)</th>
+                                            <th style={{ padding: '10px' }}>Chiều cao (cm)</th>
+                                            <th style={{ padding: '10px' }}>BMI</th>
+                                            <th style={{ padding: '10px' }}>Người đo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {historyList.map((item, idx) => (
+                                            <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                <td style={{ padding: '10px', fontWeight: 600, color: '#0f172a' }}>
+                                                    {new Date(item.recordedAtUtc).toLocaleDateString('vi-VN')} {new Date(item.recordedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                                </td>
+                                                <td style={{ padding: '10px' }}>
+                                                    {item.bloodPressureSystolic && item.bloodPressureDiastolic ? `${item.bloodPressureSystolic}/${item.bloodPressureDiastolic}` : '--'}
+                                                </td>
+                                                <td style={{ padding: '10px' }}>{item.heartRate || '--'}</td>
+                                                <td style={{ padding: '10px' }}>{item.temperature ? `${item.temperature}°C` : '--'}</td>
+                                                <td style={{ padding: '10px' }}>{item.spO2 ? `${item.spO2}%` : '--'}</td>
+                                                <td style={{ padding: '10px' }}>{item.weight || '--'}</td>
+                                                <td style={{ padding: '10px' }}>{item.height || '--'}</td>
+                                                <td style={{ padding: '10px', fontWeight: 700, color: '#0284c7' }}>{item.bmi || '--'}</td>
+                                                <td style={{ padding: '10px', color: '#64748b' }}>{item.recordedByUserName || '--'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
 
-            {/* Tab 3: Prescription */}
+            {/* Tab 3: Diagnostic Orders (Chỉ định Cận lâm sàng) */}
+            {activeTab === 'diagnostics' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    {/* Diagnostic Create Form */}
+                    {!isCompleted && (
+                        <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                                        Tạo phiếu chỉ định Cận lâm sàng mới
+                                    </h3>
+                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                                        Chọn các xét nghiệm hoặc chẩn đoán hình ảnh từ danh mục để chuyển đến Kỹ thuật viên.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Category filter tabs */}
+                            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                                {['All', 'Laboratory', 'Ultrasound', 'Imaging', 'Other'].map(cat => (
+                                    <button
+                                        key={cat}
+                                        type="button"
+                                        onClick={() => setCatalogCategory(cat)}
+                                        style={{
+                                            padding: '6px 14px',
+                                            borderRadius: '6px',
+                                            border: '1px solid',
+                                            borderColor: catalogCategory === cat ? '#0284c7' : '#cbd5e1',
+                                            backgroundColor: catalogCategory === cat ? '#e0f2fe' : '#ffffff',
+                                            color: catalogCategory === cat ? '#0284c7' : '#475569',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {cat === 'All' ? 'Tất cả danh mục' : categoryMap[cat] || cat}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Services Catalog Selection Grid */}
+                            <div style={{ 
+                                display: 'grid', 
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
+                                gap: '10px', 
+                                maxHeight: '280px', 
+                                overflowY: 'auto', 
+                                padding: '10px',
+                                backgroundColor: '#f8fafc',
+                                borderRadius: '8px',
+                                border: '1px solid #e2e8f0',
+                                marginBottom: '16px'
+                            }}>
+                                {filteredCatalog.map(srv => {
+                                    const isSelected = selectedServiceIds.includes(srv.id);
+                                    return (
+                                        <div
+                                            key={srv.id}
+                                            onClick={() => handleToggleSelectService(srv.id)}
+                                            style={{
+                                                padding: '10px 12px',
+                                                borderRadius: '6px',
+                                                border: '1px solid',
+                                                borderColor: isSelected ? '#0284c7' : '#e2e8f0',
+                                                backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                gap: '8px',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSelected}
+                                                    onChange={() => {}}
+                                                    style={{ cursor: 'pointer' }}
+                                                />
+                                                <div>
+                                                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#0f172a' }}>
+                                                        {srv.name}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                                        <code>{srv.code}</code> • {categoryMap[srv.category] || srv.category}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {srv.preparationInstructions && (
+                                                <div style={{ fontSize: '0.75rem', color: '#0369a1', fontStyle: 'italic', maxWidth: '240px', textAlign: 'right' }}>
+                                                    {srv.preparationInstructions}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Indication and Notes */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                        Chỉ định lâm sàng / Mục đích cận lâm sàng
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={clinicalIndication}
+                                        onChange={(e) => setClinicalIndication(e.target.value)}
+                                        placeholder="Ví dụ: Kiểm tra men gan / Nghi ngờ sỏi thận..."
+                                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                        Ghi chú / Lưu ý cho Kỹ thuật viên
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={orderNotes}
+                                        onChange={(e) => setOrderNotes(e.target.value)}
+                                        placeholder="Ví dụ: Bệnh nhân nhịn ăn sáng / Lấy máu cẩn thận..."
+                                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ fontSize: '0.88rem', color: '#475569' }}>
+                                    Đã chọn: <strong>{selectedServiceIds.length}</strong> dịch vụ
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleCreateDiagnosticOrder}
+                                    disabled={creatingOrder || selectedServiceIds.length === 0}
+                                    className="btn-primary"
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 18px', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+                                >
+                                    <FlaskConical size={16} />
+                                    <span>{creatingOrder ? 'Đang tạo...' : 'Tạo phiếu chỉ định'}</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Diagnostic Orders List */}
+                    <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                                Danh sách phiếu chỉ định cận lâm sàng ({diagnosticOrders.length})
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={loadDiagnosticOrders}
+                                className="btn-secondary"
+                                style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            >
+                                <RefreshCw size={14} className={loadingOrders ? 'animate-spin' : ''} />
+                                <span>Cập nhật kết quả</span>
+                            </button>
+                        </div>
+
+                        {diagnosticOrders.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
+                                <FlaskConical size={36} style={{ margin: '0 auto 10px auto', color: '#cbd5e1' }} />
+                                <p style={{ fontWeight: 600, margin: 0 }}>Chưa có phiếu chỉ định cận lâm sàng nào trong ca khám này.</p>
+                                <p style={{ fontSize: '0.85rem', margin: '4px 0 0 0' }}>Sử dụng danh mục phía trên để lập phiếu chỉ định gửi sang Kỹ thuật viên.</p>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                {diagnosticOrders.map(order => (
+                                    <div 
+                                        key={order.id} 
+                                        style={{ 
+                                            borderRadius: '8px', 
+                                            border: '1px solid #e2e8f0', 
+                                            backgroundColor: '#ffffff',
+                                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                            overflow: 'hidden'
+                                        }}
+                                    >
+                                        {/* Order Header */}
+                                        <div style={{ 
+                                            padding: '14px 20px', 
+                                            backgroundColor: '#f8fafc', 
+                                            borderBottom: '1px solid #e2e8f0', 
+                                            display: 'flex', 
+                                            justifyContent: 'space-between', 
+                                            alignItems: 'center', 
+                                            flexWrap: 'wrap', 
+                                            gap: '10px' 
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                                                <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>
+                                                    {order.orderCode}
+                                                </span>
+                                                {statusBadge(order.status)}
+                                                {order.reviewedAtUtc ? (
+                                                    <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                        <Check size={12} />
+                                                        <span>Bác sĩ đã xem: {new Date(order.reviewedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                    </span>
+                                                ) : (
+                                                    order.status === 'Completed' && (
+                                                        <span style={{ backgroundColor: '#fee2e2', color: '#dc2626', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
+                                                            Chưa duyệt kết quả
+                                                        </span>
+                                                    )
+                                                )}
+                                                <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                                                    Thời gian lập: {new Date(order.orderedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            </div>
+
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                {/* Print Slip Button */}
+                                                <a
+                                                    href={`/doctor/diagnostic-orders/${order.id}/print`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="btn-secondary"
+                                                    style={{ padding: '6px 12px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                                                >
+                                                    <Printer size={14} />
+                                                    <span>In phiếu chỉ định</span>
+                                                </a>
+
+                                                {/* Doctor Review Confirmation Button */}
+                                                {order.status === 'Completed' && !order.reviewedAtUtc && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleReviewOrder(order.id)}
+                                                        disabled={actionOrderId === order.id}
+                                                        className="btn-primary"
+                                                        style={{ padding: '6px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#059669' }}
+                                                    >
+                                                        <Check size={14} />
+                                                        <span>{actionOrderId === order.id ? 'Đang xử lý...' : 'Xác nhận đã xem kết quả'}</span>
+                                                    </button>
+                                                )}
+
+                                                {/* Cancel Button */}
+                                                {order.status === 'Ordered' && !isCompleted && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleCancelOrder(order.id)}
+                                                        disabled={actionOrderId === order.id}
+                                                        style={{ padding: '6px 10px', fontSize: '0.82rem', borderRadius: '6px', border: '1px solid #fecaca', backgroundColor: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}
+                                                    >
+                                                        Hủy
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Order Items & Results Table */}
+                                        <div style={{ padding: '16px 20px' }}>
+                                            {order.clinicalIndication && (
+                                                <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '12px' }}>
+                                                    <strong>Chỉ định lâm sàng:</strong> {order.clinicalIndication}
+                                                </div>
+                                            )}
+
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                                                <thead>
+                                                    <tr style={{ borderBottom: '2px solid #e2e8f0', textAlign: 'left', color: '#64748b', fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                                                        <th style={{ padding: '8px 10px' }}>Dịch vụ chỉ định</th>
+                                                        <th style={{ padding: '8px 10px' }}>Phân loại</th>
+                                                        <th style={{ padding: '8px 10px' }}>Trạng thái</th>
+                                                        <th style={{ padding: '8px 10px' }}>Kết quả đo / Trị số</th>
+                                                        <th style={{ padding: '8px 10px' }}>Chỉ số tham chiếu</th>
+                                                        <th style={{ padding: '8px 10px' }}>Kết luận / Nhận xét</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {order.items.map(item => (
+                                                        <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                            <td style={{ padding: '12px 10px' }}>
+                                                                <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.serviceName}</div>
+                                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{item.serviceCode}</div>
+                                                            </td>
+                                                            <td style={{ padding: '12px 10px', color: '#475569' }}>
+                                                                {categoryMap[item.category] || item.category}
+                                                            </td>
+                                                            <td style={{ padding: '12px 10px' }}>
+                                                                {statusBadge(item.status)}
+                                                            </td>
+                                                            <td style={{ padding: '12px 10px' }}>
+                                                                {item.result ? (
+                                                                    <div style={{ fontWeight: 700, color: '#0f172a' }}>
+                                                                        {item.result.resultText || '--'} {item.result.unit}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span style={{ color: '#94a3b8' }}>Chưa có</span>
+                                                                )}
+                                                            </td>
+                                                            <td style={{ padding: '12px 10px', color: '#64748b' }}>
+                                                                {item.result?.referenceRange || '--'}
+                                                            </td>
+                                                            <td style={{ padding: '12px 10px' }}>
+                                                                {item.result ? (
+                                                                    <div>
+                                                                        {item.result.conclusion && (
+                                                                            <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.result.conclusion}</div>
+                                                                        )}
+                                                                        <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>
+                                                                            KTV: {item.result.resultedByUserName} • {new Date(item.result.resultedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span style={{ color: '#94a3b8' }}>--</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Tab 4: Prescription */}
             {activeTab === 'prescription' && (
                 <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
@@ -1099,7 +1880,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 </div>
             )}
 
-            {/* Tab 4: Past Visits History */}
+            {/* Tab 5: Past Visits History */}
             {activeTab === 'history' && (
                 <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
                     <h3 style={{ margin: '0 0 16px 0', fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
@@ -1178,6 +1959,11 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     }}>
                         {isCompleted ? 'Đã hoàn tất' : 'Đang khám'}
                     </span>
+                    {diagnosticOrders.length > 0 && (
+                        <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '3px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>
+                            CLS ({diagnosticOrders.length} phiếu)
+                        </span>
+                    )}
                     {prescriptionItems.length > 0 && (
                         <span style={{ backgroundColor: '#f0fdf4', color: '#15803d', padding: '3px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>
                             Đơn thuốc ({prescriptionItems.length} loại)
@@ -1192,6 +1978,17 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     </div>
                 ) : (
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        {pendingDiagnosticOrder && (
+                            <span style={{ fontSize: '0.82rem', color: '#b45309', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <AlertTriangle size={14} /> Có chỉ định CLS chờ xử lý
+                            </span>
+                        )}
+                        {!pendingDiagnosticOrder && unreviewedDiagnosticOrder && (
+                            <span style={{ fontSize: '0.82rem', color: '#dc2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <AlertCircle size={14} /> Có kết quả CLS chưa duyệt
+                            </span>
+                        )}
+
                         <button
                             type="button"
                             onClick={() => setIsRevisitModalOpen(true)}
@@ -1204,12 +2001,13 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
                         <button
                             type="button"
-                            onClick={() => setIsCompleteModalOpen(true)}
+                            onClick={handleOpenCompleteModal}
                             className="btn-primary"
                             style={{ 
                                 display: 'flex', alignItems: 'center', gap: '6px', 
                                 padding: '10px 20px', borderRadius: '6px', 
-                                fontWeight: 700, backgroundColor: '#059669', 
+                                fontWeight: 700, 
+                                backgroundColor: (pendingDiagnosticOrder || unreviewedDiagnosticOrder) ? '#94a3b8' : '#059669', 
                                 cursor: 'pointer', fontSize: '0.95rem' 
                             }}
                         >
@@ -1294,6 +2092,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             <div style={{ marginBottom: '6px' }}>
                                 <strong>Tóm tắt:</strong> {summary || '<Chưa nhập>'}
                             </div>
+                            <div style={{ marginBottom: '6px' }}>
+                                <strong>Cận lâm sàng:</strong> {diagnosticOrders.length > 0 ? `${diagnosticOrders.length} phiếu chỉ định (Đã có kết quả & đã xem)` : 'Không có chỉ định CLS'}
+                            </div>
                             <div>
                                 <strong>Đơn thuốc:</strong> {prescriptionItems.length > 0 ? `${prescriptionItems.length} loại thuốc` : 'Không kê đơn'}
                             </div>
@@ -1325,7 +2126,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             <button 
                                 type="button" 
                                 onClick={handleCompleteConsultation} 
-                                disabled={completing || !diagnosis.trim() || !summary.trim()} 
+                                disabled={completing || !diagnosis.trim() || !summary.trim() || Boolean(pendingDiagnosticOrder) || Boolean(unreviewedDiagnosticOrder)} 
                                 className="btn-primary" 
                                 style={{ padding: '8px 20px', borderRadius: '6px', backgroundColor: '#059669', fontWeight: 700, cursor: 'pointer' }}
                             >

@@ -161,6 +161,46 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                        ?? queue.FirstOrDefault(q => q.Status == nameof(AppointmentStatus.CheckedIn))
                        ?? queue.FirstOrDefault(q => q.Status == nameof(AppointmentStatus.Confirmed));
 
+        var upcomingEndDate = targetDate.AddDays(7);
+        var upcomingQuery = from a in _dbContext.Appointments
+                            join p in _dbContext.Patients on a.PatientId equals p.Id
+                            join u in _dbContext.Users on p.UserId equals u.Id
+                            join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
+                            where a.DoctorId == doctor.Id
+                                  && a.AppointmentDate > targetDate
+                                  && a.AppointmentDate <= upcomingEndDate
+                                  && (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed)
+                            orderby a.AppointmentDate ascending, a.StartTime ascending
+                            select new DoctorQueueItemDto
+                            {
+                                AppointmentId = a.Id,
+                                AppointmentCode = a.AppointmentCode,
+                                AppointmentDate = a.AppointmentDate,
+                                StartTime = a.StartTime,
+                                EndTime = a.EndTime,
+                                PatientId = p.Id,
+                                PatientName = u.FullName,
+                                PatientPhone = u.PhoneNumber ?? string.Empty,
+                                PatientGender = p.Gender.HasValue ? p.Gender.Value.ToString() : string.Empty,
+                                PatientDob = p.DateOfBirth,
+                                Reason = a.Reason,
+                                Status = a.Status.ToString(),
+                                SpecialtyName = s.Name
+                            };
+
+        var upcomingList = await upcomingQuery.ToListAsync();
+        for (int i = 0; i < upcomingList.Count; i++)
+        {
+            var item = upcomingList[i];
+            item.QueueOrder = i + 1;
+            if (item.PatientDob.HasValue)
+            {
+                var age = item.AppointmentDate.Year - item.PatientDob.Value.Year;
+                if (item.AppointmentDate < item.PatientDob.Value.AddYears(age)) age--;
+                item.PatientAge = age;
+            }
+        }
+
         return new DoctorDashboardDto
         {
             TodayDate = targetDate,
@@ -171,12 +211,19 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             NoShowTodayCount = noShow,
             CurrentShift = currentShift,
             NextPatient = nextPatient,
-            Queue = queue
+            Queue = queue,
+            UpcomingAppointments = upcomingList
         };
     }
 
     public async Task<List<DoctorScheduleDayDto>> GetDoctorScheduleAsync(DateOnly fromDate, DateOnly toDate)
     {
+        if (toDate < fromDate)
+            throw new BusinessException("INVALID_DATE_RANGE", "Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.");
+
+        if (toDate.DayNumber - fromDate.DayNumber > 365)
+            throw new BusinessException("DATE_RANGE_TOO_LARGE", "Khoảng xem lịch không được vượt quá 366 ngày.");
+
         var doctor = await GetCurrentDoctorAsync();
 
         var schedules = await _dbContext.DoctorWorkSchedules
@@ -277,6 +324,9 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
     public async Task<PagedResult<DoctorAppointmentDto>> GetMyAppointmentsAsync(DateOnly? date, string? status, string? search, int page, int pageSize)
     {
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
+
         var doctor = await GetCurrentDoctorAsync();
 
         var query = from a in _dbContext.Appointments
@@ -430,6 +480,111 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             vitalsDto = MapVitalsToDto(appointment.VitalSigns, recorder?.FullName ?? "Nhân viên y tế");
         }
 
+        // 1. Vital history query across appointments for this patient (exclude Cancelled and NoShow)
+        var vitalsAppointments = await _dbContext.Appointments
+            .AsNoTracking()
+            .Include(a => a.VitalSigns)
+            .Where(a => a.PatientId == appointment.PatientId &&
+                        a.Status != AppointmentStatus.Cancelled &&
+                        a.Status != AppointmentStatus.NoShow &&
+                        a.VitalSigns != null)
+            .OrderByDescending(a => a.AppointmentDate)
+            .ThenByDescending(a => a.StartTime)
+            .Take(20)
+            .ToListAsync();
+
+        var vitalRecorderUserIds = vitalsAppointments
+            .Select(a => a.VitalSigns!.RecordedByUserId)
+            .Distinct()
+            .ToList();
+
+        var vitalRecorderUsers = await _dbContext.Users
+            .Where(u => vitalRecorderUserIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.FullName);
+
+        var vitalHistoryDtos = vitalsAppointments.Select(a =>
+        {
+            var vs = a.VitalSigns!;
+            vitalRecorderUsers.TryGetValue(vs.RecordedByUserId, out var recName);
+            return new PatientVitalHistoryItemDto
+            {
+                AppointmentId = a.Id,
+                AppointmentCode = a.AppointmentCode,
+                AppointmentDate = a.AppointmentDate,
+                RecordedAtUtc = vs.RecordedAtUtc,
+                Height = vs.Height,
+                Weight = vs.Weight,
+                Bmi = vs.Bmi,
+                Temperature = vs.Temperature,
+                BloodPressureSystolic = vs.BloodPressureSystolic,
+                BloodPressureDiastolic = vs.BloodPressureDiastolic,
+                HeartRate = vs.HeartRate,
+                RespiratoryRate = vs.RespiratoryRate,
+                SpO2 = vs.SpO2,
+                RecordedByUserName = recName ?? "Nhân viên y tế"
+            };
+        }).ToList();
+
+        // 2. Current measurement (from current appointment if recorded)
+        var currentMeasurement = vitalHistoryDtos.FirstOrDefault(vh => vh.AppointmentId == appointment.Id);
+
+        // 3. Previous measurement (most recent prior to current appointment)
+        var previousMeasurement = vitalHistoryDtos.FirstOrDefault(vh => vh.AppointmentId != appointment.Id);
+
+        // 4. Compute anthropometric deltas
+        AnthropometricComparisonDto? anthropometricComparison = null;
+        if (currentMeasurement != null || previousMeasurement != null)
+        {
+            decimal? weightDelta = null;
+            if (currentMeasurement?.Weight.HasValue == true && previousMeasurement?.Weight.HasValue == true)
+            {
+                weightDelta = Math.Round(currentMeasurement.Weight.Value - previousMeasurement.Weight.Value, 2);
+            }
+
+            decimal? heightDelta = null;
+            if (currentMeasurement?.Height.HasValue == true && previousMeasurement?.Height.HasValue == true)
+            {
+                heightDelta = Math.Round(currentMeasurement.Height.Value - previousMeasurement.Height.Value, 1);
+            }
+
+            decimal? bmiDelta = null;
+            if (currentMeasurement?.Bmi.HasValue == true && previousMeasurement?.Bmi.HasValue == true)
+            {
+                bmiDelta = Math.Round(currentMeasurement.Bmi.Value - previousMeasurement.Bmi.Value, 1);
+            }
+
+            anthropometricComparison = new AnthropometricComparisonDto
+            {
+                CurrentMeasurement = currentMeasurement,
+                PreviousMeasurement = previousMeasurement,
+                WeightDeltaKg = weightDelta,
+                HeightDeltaCm = heightDelta,
+                BmiDelta = bmiDelta,
+                HasComparableData = weightDelta.HasValue || heightDelta.HasValue || bmiDelta.HasValue
+            };
+        }
+
+        // 5. Latest known vitals if current appointment hasn't been measured yet (reference only)
+        VitalSignsDto? latestKnownVitals = null;
+        if (appointment.VitalSigns == null && previousMeasurement != null)
+        {
+            latestKnownVitals = new VitalSignsDto
+            {
+                AppointmentId = previousMeasurement.AppointmentId,
+                Temperature = previousMeasurement.Temperature,
+                BloodPressureSystolic = previousMeasurement.BloodPressureSystolic,
+                BloodPressureDiastolic = previousMeasurement.BloodPressureDiastolic,
+                HeartRate = previousMeasurement.HeartRate,
+                RespiratoryRate = previousMeasurement.RespiratoryRate,
+                Weight = previousMeasurement.Weight,
+                Height = previousMeasurement.Height,
+                Bmi = previousMeasurement.Bmi,
+                SpO2 = previousMeasurement.SpO2,
+                RecordedAtUtc = previousMeasurement.RecordedAtUtc,
+                RecordedByUserName = previousMeasurement.RecordedByUserName
+            };
+        }
+
         ClinicalEncounterDto? encounterDto = null;
         if (appointment.VisitSummary != null)
         {
@@ -454,8 +609,11 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             PastVisits = pastVisitDtos,
             CurrentAppointment = MapToDto(appointment, patientUser?.FullName ?? "", patientUser?.PhoneNumber ?? "", appointment.Patient.Gender, appointment.Patient.DateOfBirth),
             VitalSigns = vitalsDto,
+            LatestKnownVitals = latestKnownVitals,
             Encounter = encounterDto,
-            Prescription = presDto
+            Prescription = presDto,
+            VitalHistory = vitalHistoryDtos,
+            AnthropometricComparison = anthropometricComparison
         };
     }
 
@@ -564,6 +722,29 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         {
             if (appointment.Status != AppointmentStatus.InConsultation)
                 throw new BusinessException("INVALID_STATE_TRANSITION", "Chỉ có thể hoàn tất lịch hẹn đang trong phiên khám (InConsultation).");
+
+            // Diagnostic orders completion guards
+            var diagnosticOrders = await _dbContext.DiagnosticOrders
+                .Where(o => o.AppointmentId == appointment.Id)
+                .ToListAsync();
+
+            var pendingOrders = diagnosticOrders
+                .Where(o => o.Status == DiagnosticOrderStatus.Ordered || o.Status == DiagnosticOrderStatus.InProgress)
+                .ToList();
+
+            if (pendingOrders.Count > 0)
+            {
+                throw new BusinessException("PENDING_DIAGNOSTIC_RESULTS", "Không thể hoàn tất phiên khám khi còn chỉ định cận lâm sàng đang chờ kết quả.");
+            }
+
+            var unreviewedOrders = diagnosticOrders
+                .Where(o => o.Status == DiagnosticOrderStatus.Completed && !o.ReviewedAtUtc.HasValue)
+                .ToList();
+
+            if (unreviewedOrders.Count > 0)
+            {
+                throw new BusinessException("UNREVIEWED_DIAGNOSTIC_RESULTS", "Không thể hoàn tất phiên khám khi có kết quả cận lâm sàng chưa được bác sĩ xem và xác nhận.");
+            }
 
             var oldStatus = appointment.Status;
             appointment.Status = AppointmentStatus.Completed;
@@ -768,6 +949,9 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             if (request.SuggestedDate <= _dateTimeProvider.VietnamToday)
                 throw new BusinessException("INVALID_DATE", "Ngày hẹn tái khám phải sau ngày hôm nay.");
 
+            if (request.SuggestedDate.DayOfWeek == DayOfWeek.Sunday)
+                throw new BusinessException("INVALID_DATE", "Không thể đề xuất tái khám vào Chủ nhật vì phòng khám không làm việc.");
+
             var existingPending = await _dbContext.RevisitRequests
                 .AnyAsync(r => r.AppointmentId == appointment.Id && r.Status == RevisitRequestStatus.PendingPatientResponse);
             if (existingPending)
@@ -784,6 +968,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             };
 
             _dbContext.RevisitRequests.Add(revisitReq);
+            await _dbContext.SaveChangesAsync(); // Generate the real ID before building notification links and dedupe keys.
 
             _dbContext.AppointmentHistories.Add(new AppointmentHistory
             {
@@ -809,7 +994,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                     Type = NotificationType.Revisit,
                     Title = "Đề xuất tái khám mới",
                     Message = $"Bác sĩ đã gửi đề xuất tái khám sau buổi khám #{appointment.AppointmentCode}. Vui lòng xác nhận lịch tái khám.",
-                    Route = "/patient/revisit-requests",
+                    Route = "/patient/revisit",
                     RelatedEntityType = "RevisitRequest",
                     RelatedEntityId = revisitReq.Id.ToString(),
                     DedupeKey = $"revisit_req_{revisitReq.Id}",
@@ -827,6 +1012,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 AppointmentId = revisitReq.AppointmentId,
                 PatientId = revisitReq.PatientId,
                 DoctorId = revisitReq.DoctorId,
+                SpecialtyId = appointment.SpecialtyId,
                 SuggestedDate = revisitReq.SuggestedDate,
                 Note = revisitReq.Note,
                 Status = revisitReq.Status.ToString()
@@ -939,6 +1125,18 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
         if (appointment.Status == AppointmentStatus.Completed || appointment.Status == AppointmentStatus.Cancelled || appointment.Status == AppointmentStatus.NoShow)
             throw new BusinessException("INVALID_STATE", "Không thể chỉnh sửa dấu hiệu sinh tồn cho lịch hẹn đã kết thúc.");
+
+        if (request.Weight.HasValue && request.Weight.Value <= 0)
+            throw new BusinessException("VALIDATION_ERROR", "Cân nặng phải lớn hơn 0.");
+
+        if (request.Height.HasValue && request.Height.Value <= 0)
+            throw new BusinessException("VALIDATION_ERROR", "Chiều cao phải lớn hơn 0.");
+
+        if (request.BloodPressureSystolic.HasValue != request.BloodPressureDiastolic.HasValue)
+            throw new BusinessException("VALIDATION_ERROR", "Huyết áp tâm thu và tâm trương phải cùng có hoặc cùng để trống.");
+
+        if (request.SpO2.HasValue && (request.SpO2.Value < 0 || request.SpO2.Value > 100))
+            throw new BusinessException("VALIDATION_ERROR", "Chỉ số SpO2 phải nằm trong khoảng 0 - 100%.");
 
         var vitals = appointment.VitalSigns;
         var computedBmi = AppointmentVitalSigns.CalculateBmi(request.Weight, request.Height);
@@ -1095,11 +1293,12 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 var clientBytes = Convert.FromBase64String(clientVersion);
                 if (!entityVersion.SequenceEqual(clientBytes))
                 {
-                    throw new ConflictException("Dữ liệu đã bị sửa đổi bởi phiên làm việc khác. Vui lòng tải lại trang.");
+                    throw new ConflictException("CONCURRENCY_CONFLICT", "Dữ liệu đã bị sửa đổi bởi phiên làm việc khác. Vui lòng tải lại trang.");
                 }
             }
             catch (FormatException)
             {
+                throw new ConflictException("INVALID_ROW_VERSION", "RowVersion không hợp lệ.");
             }
         }
     }

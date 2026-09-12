@@ -24,6 +24,20 @@ export interface AuthResponse {
     user: UserDto;
 }
 
+export interface ForgotPasswordRequest {
+    email: string;
+}
+
+export interface ForgotPasswordResponse {
+    resetToken?: string | null;
+}
+
+export interface ResetPasswordRequest {
+    email: string;
+    token: string;
+    newPassword: string;
+}
+
 export interface ClinicLocationDto {
     id: number;
     code: string;
@@ -99,3 +113,5 @@ export * from './doctor';
 export * from './notification';
 export * from './billing';
 
+
+export * from './diagnostic';

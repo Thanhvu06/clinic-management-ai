@@ -6,7 +6,7 @@ import {
     LayoutDashboard, CalendarDays, CalendarCheck, 
     History, Users, Stethoscope, 
     ShieldPlus, LogOut, Menu, X, ShieldAlert, Pill, Package, Calendar,
-    Receipt, TrendingUp
+    Receipt, TrendingUp, FlaskConical
 } from 'lucide-react';
 import { NotificationBell } from '../components/common/NotificationBell';
 
@@ -34,6 +34,7 @@ export const MainLayout: React.FC = () => {
             case 'Receptionist': return 'Lễ tân';
             case 'Admin': return 'Quản trị viên';
             case 'Pharmacist': return 'Dược sĩ';
+            case 'DiagnosticTechnician': return 'Kỹ thuật viên CLS';
             case 'Patient': return 'Bệnh nhân';
             default: return role || 'Người dùng';
         }
@@ -69,6 +70,9 @@ export const MainLayout: React.FC = () => {
         if (pathname.startsWith('/pharmacy/inventory')) return 'Biến động tồn kho';
         if (pathname.startsWith('/pharmacy')) return 'Bàn làm việc Dược sĩ';
 
+        if (pathname.startsWith('/diagnostics/orders/')) return 'Thực hiện phiếu chỉ định CLS';
+        if (pathname.startsWith('/diagnostics')) return 'Bàn làm việc Cận lâm sàng';
+
         return 'ClinicCare AI - Quản trị y tế';
     };
 
@@ -81,7 +85,7 @@ export const MainLayout: React.FC = () => {
     }).format(new Date());
 
     const NavItem = ({ to, icon: Icon, label }: { to: string; icon: any; label: string }) => {
-        const isActive = location.pathname === to || (to !== '/doctor' && to !== '/admin' && to !== '/reception' && to !== '/pharmacy' && location.pathname.startsWith(to));
+        const isActive = location.pathname === to || (to !== '/doctor' && to !== '/admin' && to !== '/reception' && to !== '/pharmacy' && to !== '/diagnostics' && location.pathname.startsWith(to));
         return (
             <li>
                 <Link 
@@ -140,6 +144,12 @@ export const MainLayout: React.FC = () => {
                         <NavItem to="/pharmacy/prescriptions" icon={CalendarCheck} label="Đơn thuốc chờ cấp" />
                         <NavItem to="/pharmacy/medicines" icon={Pill} label="Danh mục thuốc" />
                         <NavItem to="/pharmacy/inventory" icon={History} label="Lịch sử kho" />
+                    </>
+                );
+            case 'DiagnosticTechnician':
+                return (
+                    <>
+                        <NavItem to="/diagnostics" icon={FlaskConical} label="Hàng đợi chỉ định" />
                     </>
                 );
             default:

@@ -1,0 +1,43 @@
+@startuml
+title Activity Diagram - Quy trình Chỉ định, Thực hiện & Duyệt Cận lâm sàng
+
+|Bác sĩ|
+start
+:Bắt đầu phiên khám lâm sàng (InConsultation);
+:Ghi nhận sinh hiệu & xem biến thiên nhân trắc (BMI delta);
+:Lựa chọn các xét nghiệm / CĐHA từ Catalog;
+:Nhập chỉ định lâm sàng & ghi chú mẫu;
+:Tạo phiếu chỉ định Cận lâm sàng (Ordered);
+:In phiếu chỉ định gửi cho bệnh nhân;
+
+|Kỹ thuật viên CLS|
+:Xem hàng đợi chỉ định cận lâm sàng (/diagnostics);
+:Tiếp nhận bệnh nhân & đổi trạng thái (InProgress);
+fork
+  :Thực hiện xét nghiệm / chụp chiếu;
+  :Ghi nhận trị số kết quả & đơn vị đo;
+fork again
+  :Phân tích & nhập kết luận chuyên môn;
+  :Đối chiếu khoảng giá trị tham chiếu;
+end fork
+:Lưu kết quả chi tiết từng dịch vụ;
+:Bấm Hoàn tất phiếu chỉ định (Completed);
+
+|Bác sĩ|
+:Hệ thống cập nhật kết quả trên giao diện khám;
+if (Bác sĩ cố bấm Hoàn tất ca khám?) then (Có)
+  :Completion Guard chặn và cảnh báo:
+  "Cần xem và xác nhận kết quả trước khi hoàn tất";
+endif
+:Bác sĩ xem xét toàn bộ kết quả CLS;
+:Bấm "Xác nhận đã xem kết quả";
+:Đưa ra chẩn đoán xác định & kê đơn thuốc;
+:Hoàn tất ca khám (Completed);
+
+|Bệnh nhân|
+:Truy cập Cổng thông tin (/patient/diagnostic-results);
+:Xem chi tiết kết quả xét nghiệm, kết luận & xác nhận của bác sĩ;
+:Xem biểu đồ theo dõi các chỉ số sinh hiệu cá nhân;
+stop
+
+@enduml

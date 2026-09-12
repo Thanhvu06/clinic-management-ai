@@ -38,6 +38,9 @@ public class DoctorLeaveService : IDoctorLeaveService
 
     public async Task<PagedResult<LeaveRequestDto>> GetMyLeaveRequestsAsync(string? status, int page, int pageSize)
     {
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
+
         var doctor = await GetCurrentDoctorAsync();
 
         var query = from l in _dbContext.DoctorLeaveRequests
@@ -98,6 +101,12 @@ public class DoctorLeaveService : IDoctorLeaveService
 
     public async Task<LeavePreviewDto> PreviewLeaveAffectedAppointmentsAsync(DateTime start, DateTime end)
     {
+        if (end <= start)
+            throw new BusinessException("INVALID_TIME", "Thời gian kết thúc phải sau thời gian bắt đầu.");
+
+        if ((end - start).TotalDays > 366)
+            throw new BusinessException("DATE_RANGE_TOO_LARGE", "Khoảng xem trước lịch nghỉ không được vượt quá 366 ngày.");
+
         var doctor = await GetCurrentDoctorAsync();
         
         var startDateOnly = DateOnly.FromDateTime(start.Date);

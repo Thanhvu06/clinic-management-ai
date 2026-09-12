@@ -13,8 +13,10 @@ public class CreateAppointmentRequest
     [Required]
     public long AppointmentSlotId { get; set; }
     
-    [MaxLength(500)]
-    public string? Reason { get; set; }
+    [Required(ErrorMessage = "Lý do khám không được để trống.")]
+    [MinLength(10, ErrorMessage = "Lý do khám phải từ 10 đến 500 ký tự.")]
+    [MaxLength(500, ErrorMessage = "Lý do khám phải từ 10 đến 500 ký tự.")]
+    public string Reason { get; set; } = string.Empty;
 }
 
 public class AppointmentDto

@@ -39,6 +39,15 @@ public class AiSpecialtyController : ControllerBase
     [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("AiChatPolicy")]
     public async Task<IActionResult> Chat([FromBody] AiChatRequestDto request, CancellationToken cancellationToken)
     {
+        if (!string.IsNullOrWhiteSpace(request.Intent) && !AiChatIntentTypes.IsAllowed(request.Intent))
+        {
+            return BadRequest(new ApiErrorResponse
+            {
+                ErrorCode = "INVALID_AI_INTENT",
+                Message = "Thao tác AI không được hỗ trợ."
+            });
+        }
+
         if (!ModelState.IsValid)
         {
             return Ok(ApiResponse<AiChatResponseDto>.Ok(new AiChatResponseDto { Reply = "Dữ liệu không hợp lệ." }));

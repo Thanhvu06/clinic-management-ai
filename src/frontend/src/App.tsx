@@ -48,6 +48,10 @@ import { PharmacyDashboard } from './pages/pharmacy/PharmacyDashboard';
 import { PharmacyPrescriptions } from './pages/pharmacy/PharmacyPrescriptions';
 import { PharmacyInventory } from './pages/pharmacy/PharmacyInventory';
 import { NotificationsPage } from './pages/common/NotificationsPage';
+import { DiagnosticOrderPrint } from './pages/doctor/DiagnosticOrderPrint';
+import { TechnicianDashboard } from './pages/technician/TechnicianDashboard';
+import { TechnicianOrderDetail } from './pages/technician/TechnicianOrderDetail';
+import { PatientDiagnosticResults } from './pages/patient/PatientDiagnosticResults';
 import { ChatProvider } from './contexts/ChatContext';
 import { DialogProvider } from './contexts/DialogContext';
 import { MedicalChatWidget } from './components/MedicalChatWidget';
@@ -92,6 +96,7 @@ function App() {
                                         <Route path="/patient/appointments" element={<PatientAppointments />} />
                                         <Route path="/patient/revisit" element={<PatientRevisit />} />
                                         <Route path="/patient/prescriptions" element={<PatientPrescriptions />} />
+                                        <Route path="/patient/diagnostic-results" element={<PatientDiagnosticResults />} />
                                         <Route path="/patient/invoices" element={<PatientInvoices />} />
                                         <Route path="/patient/ai-consultation" element={<PatientAiConsultation />} />
                                         <Route path="/patient/notifications" element={<NotificationsPage />} />
@@ -120,6 +125,7 @@ function App() {
                                         <Route path="/doctor/appointments" element={<DoctorAppointments />} />
                                         <Route path="/doctor/appointments/:id" element={<DoctorAppointmentDetail />} />
                                         <Route path="/doctor/appointments/:id/examination" element={<DoctorExaminationWorkspace />} />
+                                        <Route path="/doctor/diagnostic-orders/:id/print" element={<DiagnosticOrderPrint />} />
                                         <Route path="/doctor/leave-requests" element={<DoctorLeaveRequests />} />
                                     </Route>
 
@@ -143,6 +149,12 @@ function App() {
                                         <Route path="/pharmacy/prescriptions" element={<PharmacyPrescriptions />} />
                                         <Route path="/pharmacy/medicines" element={<AdminMedicines />} />
                                         <Route path="/pharmacy/inventory" element={<PharmacyInventory />} />
+                                    </Route>
+
+                                    {/* Diagnostic Technician Routes */}
+                                    <Route element={<RoleRoute roles={['DiagnosticTechnician']} />}>
+                                        <Route path="/diagnostics" element={<TechnicianDashboard />} />
+                                        <Route path="/diagnostics/orders/:id" element={<TechnicianOrderDetail />} />
                                     </Route>
                                 </Route>
                             </Route>

@@ -142,6 +142,9 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("OriginalAppointmentStatus")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("ProcessedAt")
                         .HasColumnType("datetime2");
 
@@ -379,6 +382,207 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.HasIndex("IsActive");
 
                     b.ToTable("ClinicLocations");
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticOrder", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AppointmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("CancelledAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ClinicalIndication")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CompletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("OrderCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("OrderedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("OrderingDoctorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("PatientId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("ReviewedByDoctorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("StartedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("StartedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppointmentId");
+
+                    b.HasIndex("OrderCode")
+                        .IsUnique();
+
+                    b.HasIndex("ReviewedByDoctorId");
+
+                    b.HasIndex("OrderingDoctorId", "Status");
+
+                    b.HasIndex("PatientId", "OrderedAtUtc");
+
+                    b.HasIndex("Status", "OrderedAtUtc");
+
+                    b.ToTable("DiagnosticOrders", (string)null);
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticOrderItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("DiagnosticOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DiagnosticServiceId")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DiagnosticServiceId");
+
+                    b.HasIndex("DiagnosticOrderId", "DiagnosticServiceId")
+                        .IsUnique();
+
+                    b.ToTable("DiagnosticOrderItems", (string)null);
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticResult", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Conclusion")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<long>("DiagnosticOrderItemId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ReferenceRange")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ResultText")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<DateTime>("ResultedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("ResultedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DiagnosticOrderItemId")
+                        .IsUnique();
+
+                    b.ToTable("DiagnosticResults", (string)null);
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticService", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PreparationInstructions")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("DiagnosticServices", (string)null);
                 });
 
             modelBuilder.Entity("ClinicManagement.Domain.Entities.Doctor", b =>
@@ -1639,6 +1843,70 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("Appointment");
                 });
 
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticOrder", b =>
+                {
+                    b.HasOne("ClinicManagement.Domain.Entities.Appointment", "Appointment")
+                        .WithMany()
+                        .HasForeignKey("AppointmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ClinicManagement.Domain.Entities.Doctor", "OrderingDoctor")
+                        .WithMany()
+                        .HasForeignKey("OrderingDoctorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ClinicManagement.Domain.Entities.Patient", "Patient")
+                        .WithMany()
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ClinicManagement.Domain.Entities.Doctor", "ReviewedByDoctor")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByDoctorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Appointment");
+
+                    b.Navigation("OrderingDoctor");
+
+                    b.Navigation("Patient");
+
+                    b.Navigation("ReviewedByDoctor");
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticOrderItem", b =>
+                {
+                    b.HasOne("ClinicManagement.Domain.Entities.DiagnosticOrder", "DiagnosticOrder")
+                        .WithMany("Items")
+                        .HasForeignKey("DiagnosticOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ClinicManagement.Domain.Entities.DiagnosticService", "DiagnosticService")
+                        .WithMany()
+                        .HasForeignKey("DiagnosticServiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DiagnosticOrder");
+
+                    b.Navigation("DiagnosticService");
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticResult", b =>
+                {
+                    b.HasOne("ClinicManagement.Domain.Entities.DiagnosticOrderItem", "DiagnosticOrderItem")
+                        .WithOne("Result")
+                        .HasForeignKey("ClinicManagement.Domain.Entities.DiagnosticResult", "DiagnosticOrderItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DiagnosticOrderItem");
+                });
+
             modelBuilder.Entity("ClinicManagement.Domain.Entities.Doctor", b =>
                 {
                     b.HasOne("ClinicManagement.Infrastructure.Identity.ApplicationUser", null)
@@ -1960,6 +2228,16 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("ClinicManagement.Domain.Entities.AppointmentSlot", b =>
                 {
                     b.Navigation("Appointments");
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticOrder", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticOrderItem", b =>
+                {
+                    b.Navigation("Result");
                 });
 
             modelBuilder.Entity("ClinicManagement.Domain.Entities.Doctor", b =>

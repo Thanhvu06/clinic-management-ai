@@ -82,7 +82,7 @@ public class DoctorWorkflowTests : IntegrationTestBase
     public async Task Given_Appointment_When_TransitioningStatuses_Then_EnforcesStrictStateMachine()
     {
         // 1. Book appointment
-        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(7));
+        var date = GetFutureWorkingDate(22);
         var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(14, 0, 0), new TimeOnly(14, 30, 0));
         
         await AuthenticateAsync("pat1@test.com");
@@ -153,7 +153,7 @@ public class DoctorWorkflowTests : IntegrationTestBase
     public async Task Given_InConsultation_When_CompleteConsultationWithPrescription_Then_AtomicTransactionExecutes()
     {
         // 1. Setup slot, appointment, check-in, start consultation
-        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(8));
+        var date = GetFutureWorkingDate(23);
         var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(15, 0, 0), new TimeOnly(15, 30, 0));
 
         await AuthenticateAsync("pat1@test.com");
@@ -234,7 +234,7 @@ public class DoctorWorkflowTests : IntegrationTestBase
     public async Task Given_EncounterOrVitals_When_ConcurrentUpdateWithStaleVersion_Then_ReturnsConflict409()
     {
         // 1. Setup active consultation
-        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(9));
+        var date = GetFutureWorkingDate(24);
         var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(16, 0, 0), new TimeOnly(16, 30, 0));
 
         await AuthenticateAsync("pat1@test.com");
@@ -330,7 +330,7 @@ public class DoctorWorkflowTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.Forbidden, patDashboardRes.StatusCode);
 
         // 2. Doctor 1 has an appointment
-        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10));
+        var date = GetFutureWorkingDate(25);
         var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(17, 0, 0), new TimeOnly(17, 30, 0));
 
         await AuthenticateAsync("pat1@test.com");

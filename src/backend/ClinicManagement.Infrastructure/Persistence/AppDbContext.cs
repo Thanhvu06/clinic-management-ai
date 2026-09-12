@@ -50,6 +50,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<InvoiceItem> InvoiceItems { get; set; } = null!;
     public DbSet<Payment> Payments { get; set; } = null!;
 
+    // Diagnostics
+    public DbSet<DiagnosticService> DiagnosticServices { get; set; } = null!;
+    public DbSet<DiagnosticOrder> DiagnosticOrders { get; set; } = null!;
+    public DbSet<DiagnosticOrderItem> DiagnosticOrderItems { get; set; } = null!;
+    public DbSet<DiagnosticResult> DiagnosticResults { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

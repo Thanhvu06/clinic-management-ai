@@ -9,17 +9,23 @@ export const calculateBmi = (weightKg?: number, heightCm?: number): { bmi: numbe
     const bmi = Math.round(rawBmi * 10) / 10;
 
     let category = '';
-    if (bmi < 18.5) category = 'Gầy / Thiếu cân';
-    else if (bmi < 23) category = 'Bình thường';
-    else if (bmi < 25) category = 'Tiền béo phì / Thừa cân';
-    else if (bmi < 30) category = 'Béo phì độ I';
-    else category = 'Béo phì độ II trở lên';
+    if (bmi < 18.5) category = 'Thiếu cân (Gầy)';
+    else if (bmi < 25.0) category = 'Bình thường';
+    else if (bmi < 30.0) category = 'Thừa cân / Tiền béo phì';
+    else category = 'Béo phì';
 
     return { bmi, category };
 };
 
-describe('Clinical BMI Calculation & WHO Asian Classification', () => {
-    it('should correctly calculate normal BMI', () => {
+describe('Clinical BMI Calculation & System Standard Classification', () => {
+    it('should correctly calculate normal BMI for 68.5kg and 172cm', () => {
+        // 68.5 / (1.72 * 1.72) = 23.154... -> 23.2
+        const result = calculateBmi(68.5, 172);
+        expect(result.bmi).toBe(23.2);
+        expect(result.category).toBe('Bình thường');
+    });
+
+    it('should correctly calculate normal BMI for 70kg and 175cm', () => {
         // 70kg, 175cm -> 70 / (1.75 * 1.75) = 22.857... -> 22.9
         const result = calculateBmi(70, 175);
         expect(result.bmi).toBe(22.9);
@@ -30,21 +36,21 @@ describe('Clinical BMI Calculation & WHO Asian Classification', () => {
         // 45kg, 165cm -> 45 / (1.65 * 1.65) = 16.5
         const result = calculateBmi(45, 165);
         expect(result.bmi).toBe(16.5);
-        expect(result.category).toBe('Gầy / Thiếu cân');
+        expect(result.category).toBe('Thiếu cân (Gầy)');
     });
 
-    it('should classify pre-obesity / overweight correctly', () => {
-        // 65kg, 165cm -> 65 / (1.65 * 1.65) = 23.87 -> 23.9
-        const result = calculateBmi(65, 165);
-        expect(result.bmi).toBe(23.9);
-        expect(result.category).toBe('Tiền béo phì / Thừa cân');
+    it('should classify overweight / pre-obesity correctly', () => {
+        // 75kg, 165cm -> 75 / (1.65 * 1.65) = 27.54 -> 27.5
+        const result = calculateBmi(75, 165);
+        expect(result.bmi).toBe(27.5);
+        expect(result.category).toBe('Thừa cân / Tiền béo phì');
     });
 
-    it('should classify obesity grade 1 correctly', () => {
-        // 78kg, 165cm -> 78 / (1.65 * 1.65) = 28.65 -> 28.7
-        const result = calculateBmi(78, 165);
-        expect(result.bmi).toBe(28.7);
-        expect(result.category).toBe('Béo phì độ I');
+    it('should classify obesity correctly', () => {
+        // 85kg, 165cm -> 85 / (1.65 * 1.65) = 31.22 -> 31.2
+        const result = calculateBmi(85, 165);
+        expect(result.bmi).toBe(31.2);
+        expect(result.category).toBe('Béo phì');
     });
 
     it('should return null and empty category for missing or non-positive values', () => {
@@ -55,3 +61,4 @@ describe('Clinical BMI Calculation & WHO Asian Classification', () => {
         expect(calculateBmi(-10, 170).bmi).toBeNull();
     });
 });
+

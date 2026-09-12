@@ -43,6 +43,6 @@ public interface IRevisitService
 {
     Task<PagedResult<RevisitRequestDto>> GetMyRevisitRequestsAsync(string? status, int page, int pageSize);
     Task<RevisitRequestDto> GetRevisitRequestByIdAsync(long id);
-    Task AcceptRevisitRequestAsync(long id, AcceptRevisitRequestDto request);
+    Task<AppointmentDto> AcceptRevisitRequestAsync(long id, AcceptRevisitRequestDto request);
     Task RejectRevisitRequestAsync(long id, RejectRevisitRequestDto request);
 }

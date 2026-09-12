@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation, Link, useNavigate } from "react-router-dom";
 import axiosClient from "../../api/axiosClient";
 import styles from "./BookAppointment.module.css";
 import type { ApiResponse } from "../../types";
@@ -52,15 +52,35 @@ interface BookingSuccessData {
 
 export const BookAppointment: React.FC = () => {
     const location = useLocation();
-    const { pendingSpecialtyId, setPendingSpecialtyId } = useChatContext();
+    const navigate = useNavigate();
+    const revisitRequestIdParam = new URLSearchParams(location.search).get("revisitRequestId");
+    const parsedRevisitRequestId = revisitRequestIdParam ? Number(revisitRequestIdParam) : null;
+    const revisitRequestId =
+        parsedRevisitRequestId &&
+        Number.isSafeInteger(parsedRevisitRequestId) &&
+        parsedRevisitRequestId > 0
+            ? parsedRevisitRequestId
+            : null;
+
+    const {
+        pendingSpecialtyId,
+        setPendingSpecialtyId,
+        activeDraft,
+        setActiveDraft
+    } = useChatContext();
     const { showAlert } = useDialog();
 
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-    const [specialtyId, setSpecialtyId] = useState<number | "">("");
-    const [doctorId, setDoctorId] = useState<number | "">("");
-    const [slotDate, setSlotDate] = useState<string>(() => getNextWorkingDateString());
-    const [slotId, setSlotId] = useState<number | "">("");
-    const [reason, setReason] = useState("");
+    const [pageSpecialtyId, setPageSpecialtyId] = useState<number | "">("");
+    const [pageDoctorId, setPageDoctorId] = useState<number | "">("");
+    const [pageSlotDate, setPageSlotDate] = useState<string>(() => getNextWorkingDateString());
+    const [pageSlotId, setPageSlotId] = useState<number | "">("");
+    const [pageReason, setPageReason] = useState("");
+    const specialtyId = activeDraft?.specialtyId ?? pageSpecialtyId;
+    const doctorId = activeDraft?.doctorId ?? pageDoctorId;
+    const slotDate = activeDraft?.slotDate ?? pageSlotDate;
+    const slotId = activeDraft?.slotId ?? pageSlotId;
+    const reason = activeDraft?.reason ?? pageReason;
 
     const [specialties, setSpecialties] = useState<Specialty[]>([]);
     const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -98,6 +118,7 @@ export const BookAppointment: React.FC = () => {
 
         let targetSpecId: number | null = null;
         let targetDocId: number | null = null;
+        let targetSlotDate = slotDate;
 
         if (pendingSpecialtyId) {
             targetSpecId = pendingSpecialtyId;
@@ -116,21 +137,47 @@ export const BookAppointment: React.FC = () => {
             if (queryDate) {
                 if (isSundayDateString(queryDate)) {
                     showAlert("Phòng khám không mở lịch khám vào Chủ nhật. Hệ thống đã tự động chuyển sang ngày làm việc gần nhất.", "Lưu ý", "info");
-                    setSlotDate(getNextWorkingDateString(new Date(queryDate)));
+                    targetSlotDate = getNextWorkingDateString(new Date(queryDate));
                 } else {
-                    setSlotDate(queryDate);
+                    targetSlotDate = queryDate;
                 }
+                setPageSlotDate(targetSlotDate);
             }
         }
 
-        if (targetSpecId && !isNaN(targetSpecId)) {
-            setSpecialtyId(targetSpecId);
+        if (targetSpecId && !isNaN(targetSpecId) && specialties.some(s => s.id === targetSpecId)) {
+            setPageSpecialtyId(targetSpecId);
+            const specialty = specialties.find(s => s.id === targetSpecId);
+            setActiveDraft(previous => {
+                const specialtyChanged = previous?.specialtyId !== targetSpecId;
+                return {
+                    ...previous,
+                    specialtyId: targetSpecId,
+                    specialtyName: specialty?.specialtyName,
+                    doctorId: specialtyChanged ? undefined : previous?.doctorId,
+                    doctorName: specialtyChanged ? undefined : previous?.doctorName,
+                    slotId: specialtyChanged ? undefined : previous?.slotId,
+                    startTime: specialtyChanged ? undefined : previous?.startTime,
+                    endTime: specialtyChanged ? undefined : previous?.endTime,
+                    slotDate: targetSlotDate,
+                    reason: previous?.reason,
+                    isComplete: false
+                };
+            });
         }
 
         if (targetDocId && !isNaN(targetDocId)) {
-            setDoctorId(targetDocId);
+            setPageDoctorId(targetDocId);
+            setActiveDraft(previous => ({
+                ...previous,
+                doctorId: targetDocId,
+                slotId: undefined,
+                startTime: undefined,
+                endTime: undefined,
+                isComplete: false
+            }));
         }
-    }, [specialties, pendingSpecialtyId, location.search, setPendingSpecialtyId, showAlert]);
+    }, [specialties, pendingSpecialtyId, location.search, setPendingSpecialtyId, setActiveDraft, showAlert, slotDate]);
 
     // 3. Fetch Doctors when specialtyId changes
     useEffect(() => {
@@ -139,44 +186,64 @@ export const BookAppointment: React.FC = () => {
             return;
         }
 
+        let active = true;
+
         const fetchDoctors = async () => {
             try {
                 setLoadingDocs(true);
                 const res = await axiosClient.get<any, ApiResponse<any>>(`/specialties/${specialtyId}/doctors`);
+                if (!active) return;
                 if (res.success && res.data) {
                     const list = Array.isArray(res.data) ? res.data : (res.data.items ?? []);
                     setDoctors(list);
                     
                     // If current doctorId is not in the specialty's doctor list, prompt and reset
                     if (doctorId && !list.some((d: Doctor) => d.id === doctorId)) {
-                        setDoctorId("");
-                        setSlotId("");
+                        setPageDoctorId("");
+                        setPageSlotId("");
+                        setActiveDraft(previous => previous ? {
+                            ...previous,
+                            doctorId: undefined,
+                            doctorName: undefined,
+                            slotId: undefined,
+                            startTime: undefined,
+                            endTime: undefined,
+                            isComplete: false
+                        } : previous);
                         showAlert("Bác sĩ đã chọn không thuộc chuyên khoa này. Vui lòng chọn lại bác sĩ.", "Thông báo", "info");
+                    } else if (revisitRequestId && doctorId) {
+                        setStep(3);
                     }
                 }
             } catch (err) {
+                if (!active) return;
                 console.error("Failed to fetch doctors", err);
             } finally {
-                setLoadingDocs(false);
+                if (active) setLoadingDocs(false);
             }
         };
 
         fetchDoctors();
-    }, [specialtyId, doctorId, showAlert]);
+        return () => {
+            active = false;
+        };
+    }, [specialtyId, doctorId, revisitRequestId, setActiveDraft, showAlert]);
 
     // 4. Fetch Slots when doctorId and slotDate are set
     useEffect(() => {
         if (!doctorId || !slotDate) {
             setSlots([]);
-            setSlotId("");
+            setPageSlotId("");
             return;
         }
 
         if (isSundayDateString(slotDate)) {
             setSlots([]);
-            setSlotId("");
+            setPageSlotId("");
             return;
         }
+
+        let active = true;
 
         const fetchSlots = async () => {
             try {
@@ -185,39 +252,122 @@ export const BookAppointment: React.FC = () => {
                 const res = await axiosClient.get<any, ApiResponse<Slot[]>>(
                     `/doctors/${doctorId}/available-slots?fromDate=${slotDate}&toDate=${slotDate}${specParam}`
                 );
+                if (!active) return;
                 if (res.success && res.data) {
                     setSlots(res.data);
+                    if (slotId && !res.data.some(slot => slot.slotId === slotId)) {
+                        setPageSlotId("");
+                        setActiveDraft(previous => previous ? {
+                            ...previous,
+                            slotId: undefined,
+                            startTime: undefined,
+                            endTime: undefined,
+                            isComplete: false
+                        } : previous);
+                    }
                 } else {
                     setSlots([]);
                 }
             } catch (err) {
+                if (!active) return;
                 console.error("Failed to fetch slots", err);
                 setSlots([]);
             } finally {
-                setLoadingSlots(false);
+                if (active) setLoadingSlots(false);
             }
         };
 
         fetchSlots();
-    }, [doctorId, slotDate, specialtyId]);
+        return () => {
+            active = false;
+        };
+    }, [doctorId, slotDate, specialtyId, slotId, setActiveDraft]);
 
     // Handler when selecting specialty: discards doctor & slot
     const handleSelectSpecialty = (id: number) => {
         if (specialtyId !== id) {
-            setSpecialtyId(id);
-            setDoctorId("");
-            setSlotId("");
+            const specialty = specialties.find(item => item.id === id);
+            setPageSpecialtyId(id);
+            setPageDoctorId("");
+            setPageSlotId("");
             setSlots([]);
+            setActiveDraft(previous => ({
+                specialtyId: id,
+                specialtyName: specialty?.specialtyName,
+                slotDate,
+                reason: previous?.reason ?? reason,
+                isComplete: false
+            }));
         }
     };
 
     // Handler when selecting doctor: discards slot
     const handleSelectDoctor = (id: number) => {
         if (doctorId !== id) {
-            setDoctorId(id);
-            setSlotId("");
+            const doctor = doctors.find(item => item.id === id);
+            setPageDoctorId(id);
+            setPageSlotId("");
             setSlots([]);
+            setActiveDraft(previous => ({
+                ...previous,
+                specialtyId: Number(specialtyId),
+                specialtyName: selectedSpec?.specialtyName,
+                doctorId: id,
+                doctorName: doctor ? formatDoctorName(doctor.academicTitle, doctor.fullName) : undefined,
+                slotId: undefined,
+                startTime: undefined,
+                endTime: undefined,
+                slotDate,
+                reason: previous?.reason ?? reason,
+                isComplete: false
+            }));
         }
+    };
+
+    const handleSelectSlot = (slot: Slot) => {
+        setPageSlotId(slot.slotId);
+        setActiveDraft(previous => ({
+            ...previous,
+            specialtyId: Number(specialtyId),
+            specialtyName: selectedSpec?.specialtyName,
+            doctorId: Number(doctorId),
+            doctorName: selectedDoc ? formatDoctorName(selectedDoc.academicTitle, selectedDoc.fullName) : undefined,
+            slotId: slot.slotId,
+            slotDate: slot.slotDate,
+            startTime: slot.startTime.substring(0, 5),
+            endTime: slot.endTime.substring(0, 5),
+            reason,
+            isComplete: reason.trim().length >= 10 && reason.trim().length <= 500
+        }));
+    };
+
+    const handleSlotDateChange = (nextDate: string) => {
+        setPageSlotDate(nextDate);
+        setPageSlotId("");
+        setActiveDraft(previous => previous ? {
+            ...previous,
+            slotDate: nextDate,
+            slotId: undefined,
+            startTime: undefined,
+            endTime: undefined,
+            isComplete: false
+        } : previous);
+    };
+
+    const handleReasonChange = (nextReason: string) => {
+        setPageReason(nextReason);
+        const normalizedLength = nextReason.trim().length;
+        setActiveDraft(previous => previous ? {
+            ...previous,
+            reason: nextReason,
+            isComplete: Boolean(
+                previous.specialtyId &&
+                previous.doctorId &&
+                previous.slotId &&
+                normalizedLength >= 10 &&
+                normalizedLength <= 500
+            )
+        } : previous);
     };
 
     // Confirm booking submit
@@ -227,12 +377,21 @@ export const BookAppointment: React.FC = () => {
         setBookingError(null);
 
         try {
-            const res = await axiosClient.post<any, ApiResponse<any>>("/appointments", {
-                doctorId,
-                specialtyId,
-                appointmentSlotId: slotId,
-                reason: reason.trim() ? reason.trim() : null
-            });
+            const normalizedReason = reason.trim() ? reason.trim() : null;
+            const res = revisitRequestId
+                ? await axiosClient.post<any, ApiResponse<any>>(
+                    `/revisit-requests/${revisitRequestId}/accept`,
+                    {
+                        targetSlotId: slotId,
+                        reason: normalizedReason
+                    }
+                )
+                : await axiosClient.post<any, ApiResponse<any>>("/appointments", {
+                    doctorId,
+                    specialtyId,
+                    appointmentSlotId: slotId,
+                    reason: normalizedReason
+                });
 
             if (res.success && res.data) {
                 setSuccessBooking({
@@ -245,20 +404,46 @@ export const BookAppointment: React.FC = () => {
                     endTime: (res.data.endTime || selectedSlot?.endTime || "").substring(0, 5),
                     reason: res.data.reason || (reason.trim() ? reason.trim() : undefined)
                 });
+
+                if (revisitRequestId) {
+                    navigate("/patient/book", { replace: true });
+                }
             }
         } catch (err: any) {
             const errorCode = err?.response?.data?.errorCode || err?.errorCode;
             let msg = err?.response?.data?.message || err?.message || "Có lỗi xảy ra khi đặt lịch.";
             if (errorCode === "SLOT_ALREADY_BOOKED") {
                 msg = "Khung giờ này vừa được đặt bởi người khác. Vui lòng chọn giờ khác.";
-                setSlotId("");
+                setPageSlotId("");
+                setActiveDraft(previous => previous ? {
+                    ...previous,
+                    slotId: undefined,
+                    startTime: undefined,
+                    endTime: undefined,
+                    isComplete: false
+                } : previous);
                 setStep(3);
             } else if (errorCode === "PATIENT_TIME_CONFLICT") {
                 msg = "Bạn đã có một lịch khám khác trùng vào khung giờ này.";
+                setPageSlotId("");
+                setActiveDraft(previous => previous ? {
+                    ...previous,
+                    slotId: undefined,
+                    startTime: undefined,
+                    endTime: undefined,
+                    isComplete: false
+                } : previous);
                 setStep(3);
             } else if (errorCode === "DOCTOR_NOT_AVAILABLE") {
                 msg = "Bác sĩ không có ca trực hoặc nghỉ phép vào giờ này.";
-                setSlotId("");
+                setPageSlotId("");
+                setActiveDraft(previous => previous ? {
+                    ...previous,
+                    slotId: undefined,
+                    startTime: undefined,
+                    endTime: undefined,
+                    isComplete: false
+                } : previous);
                 setStep(3);
             }
             setBookingError(msg);
@@ -271,6 +456,7 @@ export const BookAppointment: React.FC = () => {
     const selectedSpec = specialties.find(s => s.id === specialtyId);
     const selectedDoc = doctors.find(d => d.id === doctorId);
     const selectedSlot = slots.find(s => s.slotId === slotId);
+    const displayStep = step === 1 && activeDraft?.slotId ? 3 : step;
 
     // Success Screen
     if (successBooking) {
@@ -332,10 +518,11 @@ export const BookAppointment: React.FC = () => {
                             onClick={() => {
                                 setSuccessBooking(null);
                                 setStep(1);
-                                setSpecialtyId("");
-                                setDoctorId("");
-                                setSlotId("");
-                                setReason("");
+                                setPageSpecialtyId("");
+                                setPageDoctorId("");
+                                setPageSlotId("");
+                                setPageReason("");
+                                setActiveDraft(null);
                             }}
                             style={{ padding: '12px 24px' }}
                         >
@@ -364,6 +551,22 @@ export const BookAppointment: React.FC = () => {
                 { label: 'Đặt lịch khám' }
             ]} />
 
+            {revisitRequestId && (
+                <div
+                    role="status"
+                    style={{
+                        marginBottom: "16px",
+                        padding: "12px 16px",
+                        borderRadius: "10px",
+                        border: "1px solid #bfdbfe",
+                        background: "#eff6ff",
+                        color: "#1e40af"
+                    }}
+                >
+                    Bạn đang chọn khung giờ cho một đề xuất tái khám. Lịch mới chỉ được tạo sau khi xác nhận ở bước cuối.
+                </div>
+            )}
+
             <div className={styles.pageHeader}>
                 <h1 className={styles.pageTitle}>Đặt lịch khám Chuyên khoa</h1>
                 <p className={styles.pageSubtitle}>
@@ -372,16 +575,16 @@ export const BookAppointment: React.FC = () => {
             </div>
 
             {/* Stepper Progress Bar */}
-            <div className={styles.stepperContainer} role="progressbar" aria-valuenow={step} aria-valuemin={1} aria-valuemax={4}>
+            <div className={styles.stepperContainer} role="progressbar" aria-valuenow={displayStep} aria-valuemin={1} aria-valuemax={4}>
                 {[
                     { num: 1, label: "1. Chuyên khoa" },
                     { num: 2, label: "2. Bác sĩ" },
                     { num: 3, label: "3. Thời gian" },
                     { num: 4, label: "4. Xác nhận" }
                 ].map((s, idx) => (
-                    <div key={s.num} className={`${styles.stepItem} ${step >= s.num ? styles.stepItemActive : ""}`}>
+                    <div key={s.num} className={`${styles.stepItem} ${displayStep >= s.num ? styles.stepItemActive : ""}`}>
                         <div className={styles.stepCircle}>
-                            {step > s.num ? <CheckCircle2 size={20} /> : s.num}
+                            {displayStep > s.num ? <CheckCircle2 size={20} /> : s.num}
                         </div>
                         <span className={styles.stepLabel}>{s.label}</span>
                         {idx < 3 && <div className={styles.stepLine}></div>}
@@ -400,7 +603,7 @@ export const BookAppointment: React.FC = () => {
                     )}
 
                     {/* Step 1: Chọn Chuyên khoa */}
-                    {step === 1 && (
+                    {displayStep === 1 && (
                         <div>
                             <h2 className={styles.stepTitle}>Bước 1: Chọn chuyên khoa khám</h2>
                             <p className={styles.stepSubtitle}>
@@ -446,7 +649,7 @@ export const BookAppointment: React.FC = () => {
                     )}
 
                     {/* Step 2: Chọn Bác sĩ */}
-                    {step === 2 && (
+                    {displayStep === 2 && (
                         <div>
                             <h2 className={styles.stepTitle}>
                                 Bước 2: Chọn bác sĩ ({selectedSpec?.specialtyName})
@@ -510,7 +713,7 @@ export const BookAppointment: React.FC = () => {
                     )}
 
                     {/* Step 3: Chọn Ngày, Giờ & Triệu chứng */}
-                    {step === 3 && (
+                    {displayStep === 3 && (
                         <div>
                             <h2 className={styles.stepTitle}>
                                 Bước 3: Chọn ngày & giờ khám
@@ -526,10 +729,7 @@ export const BookAppointment: React.FC = () => {
                                         type="date"
                                         min={new Date().toISOString().split("T")[0]}
                                         value={slotDate}
-                                        onChange={(e) => {
-                                            setSlotDate(e.target.value);
-                                            setSlotId("");
-                                        }}
+                                        onChange={(e) => handleSlotDateChange(e.target.value)}
                                     />
                                 </FormField>
                             </div>
@@ -568,7 +768,7 @@ export const BookAppointment: React.FC = () => {
                                                 key={s.slotId}
                                                 type="button"
                                                 className={`${styles.slotBtn} ${slotId === s.slotId ? styles.slotBtnActive : ""}`}
-                                                onClick={() => setSlotId(s.slotId)}
+                                                onClick={() => handleSelectSlot(s)}
                                             >
                                                 <Clock size={14} />
                                                 {s.startTime.substring(0, 5)}
@@ -588,14 +788,28 @@ export const BookAppointment: React.FC = () => {
                                         id="reason"
                                         placeholder="Ví dụ: Đau đầu kéo dài 3 ngày, ho sốt nhẹ, khám định kỳ..."
                                         value={reason}
-                                        onChange={(e) => setReason(e.target.value)}
+                                        onChange={(e) => handleReasonChange(e.target.value)}
                                         rows={3}
                                     />
                                 </FormField>
                             </div>
 
                             <div className={styles.stepFooter}>
-                                <Button variant="secondary" size="md" onClick={() => setStep(2)}>
+                                <Button
+                                    variant="secondary"
+                                    size="md"
+                                    onClick={() => {
+                                        setPageSlotId("");
+                                        setActiveDraft(previous => previous ? {
+                                            ...previous,
+                                            slotId: undefined,
+                                            startTime: undefined,
+                                            endTime: undefined,
+                                            isComplete: false
+                                        } : previous);
+                                        setStep(2);
+                                    }}
+                                >
                                     <ArrowLeft size={16} /> Quay lại
                                 </Button>
                                 <Button 
@@ -611,7 +825,7 @@ export const BookAppointment: React.FC = () => {
                     )}
 
                     {/* Step 4: Xác nhận & Đặt hẹn */}
-                    {step === 4 && (
+                    {displayStep === 4 && (
                         <div>
                             <h2 className={styles.stepTitle}>
                                 Bước 4: Kiểm tra & Xác nhận thông tin
@@ -746,7 +960,7 @@ export const BookAppointment: React.FC = () => {
 
                     <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '14px', border: '1px solid var(--c-border-light)', fontSize: '0.85rem', color: 'var(--c-text-muted)', lineHeight: 1.5 }}>
                         <div style={{ fontWeight: 600, color: 'var(--c-navy)', marginBottom: '4px' }}>Hỗ trợ đặt hẹn</div>
-                        Hotline: <strong style={{ color: 'var(--c-primary)' }}>1900 1234</strong> (07:00 - 19:00 hàng ngày)
+                        Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.
                     </div>
                 </aside>
             </div>

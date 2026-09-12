@@ -31,6 +31,7 @@ public static class DevelopmentDataSeeder
         var adminId2 = await SeedUserAsync(userManager, "admin.02@cliniccare.local", "Quản trị viên 2", "0980000002", "Admin", password);
 
         var pharmacist = await SeedUserAsync(userManager, "pharmacist@cliniccare.local", "Dược sĩ Lâm Sàng", "0977777777", "Pharmacist", password);
+        var technician = await SeedUserAsync(userManager, "technician@cliniccare.local", "Kỹ thuật viên cận lâm sàng", "0966666666", ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician, password);
 
         var rec1 = await SeedUserAsync(userManager, "reception@cliniccare.local", "Lễ tân Nguyễn Thu Trang", "0900000002", "Receptionist", password);
         var rec2 = await SeedUserAsync(userManager, "letan.02@cliniccare.local", "Lễ tân Trần Mai Anh", "0981000002", "Receptionist", password);
@@ -963,6 +964,39 @@ public static class DevelopmentDataSeeder
                 logger.LogInformation("Sample Prescriptions seeded.");
             }
         }
+        
+        // Diagnostic Services Catalog (Idempotent)
+        var diagnosticServiceDefs = new[]
+        {
+            new DiagnosticService { Code = "LAB-CBC", Name = "Tổng phân tích tế bào máu ngoại vi", Category = DiagnosticCategory.Laboratory, PreparationInstructions = "Không cần nhịn ăn đặc biệt.", IsActive = true },
+            new DiagnosticService { Code = "LAB-GLU", Name = "Định lượng Glucose máu", Category = DiagnosticCategory.Laboratory, PreparationInstructions = "Nhịn đói ít nhất 8 tiếng trước khi lấy mẫu.", IsActive = true },
+            new DiagnosticService { Code = "LAB-LIPID", Name = "Bộ mỡ máu toàn phần (Lipid panel)", Category = DiagnosticCategory.Laboratory, PreparationInstructions = "Nhịn ăn 10-12 tiếng trước khi lấy máu.", IsActive = true },
+            new DiagnosticService { Code = "LAB-LFT", Name = "Đánh giá chức năng gan (AST, ALT)", Category = DiagnosticCategory.Laboratory, PreparationInstructions = "Tránh uống rượu bia 24 giờ trước khi xét nghiệm.", IsActive = true },
+            new DiagnosticService { Code = "LAB-RFT", Name = "Đánh giá chức năng thận (Ure, Creatinin)", Category = DiagnosticCategory.Laboratory, PreparationInstructions = "Uống đủ nước, sinh hoạt bình thường.", IsActive = true },
+            new DiagnosticService { Code = "US-ABD", Name = "Siêu âm ổ bụng tổng quát", Category = DiagnosticCategory.Ultrasound, PreparationInstructions = "Nhịn ăn ít nhất 6 tiếng, uống nhiều nước và nhịn tiểu.", IsActive = true },
+            new DiagnosticService { Code = "US-THY", Name = "Siêu âm tuyến giáp", Category = DiagnosticCategory.Ultrasound, PreparationInstructions = "Không cần chuẩn bị trước.", IsActive = true },
+            new DiagnosticService { Code = "US-ECHO", Name = "Siêu âm Doppler tim màu", Category = DiagnosticCategory.Ultrasound, PreparationInstructions = "Nghỉ ngơi 15 phút trước khi thực hiện.", IsActive = true },
+            new DiagnosticService { Code = "IMG-CXR", Name = "Chụp X-quang ngực thẳng", Category = DiagnosticCategory.Imaging, PreparationInstructions = "Tháo bỏ trang sức kim loại vùng ngực và cổ.", IsActive = true },
+            new DiagnosticService { Code = "IMG-ECG", Name = "Điện tâm đồ (ECG 12 chuyển đạo)", Category = DiagnosticCategory.Other, PreparationInstructions = "Nghỉ ngơi yên tĩnh 10 phút trước khi đo.", IsActive = true }
+        };
+
+        foreach (var ds in diagnosticServiceDefs)
+        {
+            var existing = await db.DiagnosticServices.FirstOrDefaultAsync(s => s.Code == ds.Code);
+            if (existing == null)
+            {
+                db.DiagnosticServices.Add(ds);
+            }
+            else
+            {
+                existing.Name = ds.Name;
+                existing.Category = ds.Category;
+                existing.PreparationInstructions = ds.PreparationInstructions;
+                existing.IsActive = true;
+            }
+        }
+        await db.SaveChangesAsync();
+        logger.LogInformation("Diagnostic Services catalog seeded.");
 
         logger.LogInformation("Development Data Seeding completed.");
     }

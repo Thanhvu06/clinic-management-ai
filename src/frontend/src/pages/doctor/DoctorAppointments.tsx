@@ -50,6 +50,7 @@ export const DoctorAppointments: React.FC = () => {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [dateFilter, setDateFilter] = useState(''); // 'today' or ''
+    const [fetchError, setFetchError] = useState<string | null>(null);
 
     // Modals
     const [modal, setModal] = useState<{ isOpen: boolean, apt: DoctorAppointment | null, view: 'detail' | 'complete' | 'revisit' | 'noshow' }>({ isOpen: false, apt: null, view: 'detail' });
@@ -84,6 +85,7 @@ export const DoctorAppointments: React.FC = () => {
 
     const fetchAppointments = async () => {
         setLoading(true);
+        setFetchError(null);
         try {
             const params = new URLSearchParams({
                 page: page.toString(),
@@ -91,6 +93,10 @@ export const DoctorAppointments: React.FC = () => {
             });
             if (search) params.append('search', search);
             if (statusFilter) params.append('status', statusFilter);
+            if (dateFilter === 'today') {
+                const todayStr = new Date().toISOString().split('T')[0];
+                params.append('date', todayStr);
+            }
 
             const res = await axiosClient.get<any, ApiResponse<any>>(`/doctor/appointments?${params.toString()}`);
             if (res.success && res.data) {
@@ -109,8 +115,8 @@ export const DoctorAppointments: React.FC = () => {
                 setAppointments(items);
                 setTotalItems(res.data.totalItems);
             }
-        } catch {
-            // Handled
+        } catch (err: any) {
+            setFetchError(err.response?.data?.message || err.message || 'Lỗi tải danh sách lịch khám. Vui lòng thử lại.');
         } finally {
             setLoading(false);
         }
@@ -345,6 +351,13 @@ export const DoctorAppointments: React.FC = () => {
                     <button type="submit" className="btn-secondary">Tìm kiếm</button>
                 </form>
             </div>
+
+            {fetchError && (
+                <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{fetchError}</span>
+                    <button type="button" onClick={() => fetchAppointments()} className="btn-secondary" style={{ padding: '4px 12px', fontSize: '0.85rem' }}>Thử lại</button>
+                </div>
+            )}
 
             <div className="card table-responsive" style={{ padding: 0 }}>
                 {loading ? (

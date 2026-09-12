@@ -167,11 +167,8 @@ export const HealthPackageDetail: React.FC = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--c-navy)', fontWeight: 600, fontSize: '0.95rem', marginBottom: '6px' }}>
                             <Phone size={18} color="var(--c-primary)" /> Hotline tư vấn gói khám
                         </div>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--c-primary)', marginBottom: '4px' }}>
-                            1900 1234
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)' }}>
-                            Hỗ trợ tư vấn lựa chọn gói khám phù hợp theo độ tuổi và tiền sử bệnh.
+                        <div style={{ fontSize: '0.85rem', color: 'var(--c-text-muted)', lineHeight: 1.5 }}>
+                            Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.
                         </div>
                     </div>
                 </aside>

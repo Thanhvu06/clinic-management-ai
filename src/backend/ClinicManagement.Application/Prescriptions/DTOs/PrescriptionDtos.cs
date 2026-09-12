@@ -60,6 +60,7 @@ public class PrescriptionDetailItemDto
     public string Unit { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public int AvailableStock { get; set; }
+    public bool IsActive { get; set; } = true;
     public string Dosage { get; set; } = string.Empty;
     public string Frequency { get; set; } = string.Empty;
     public int? DurationDays { get; set; }

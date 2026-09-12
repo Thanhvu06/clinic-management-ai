@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using ClinicManagement.Application.Appointments.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Doctors.DTOs;
@@ -17,11 +14,16 @@ public class DoctorService : IDoctorService
 {
     private readonly AppDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IAppointmentAvailabilityPolicy _availabilityPolicy;
 
-    public DoctorService(AppDbContext dbContext, IDateTimeProvider dateTimeProvider)
+    public DoctorService(
+        AppDbContext dbContext,
+        IDateTimeProvider dateTimeProvider,
+        IAppointmentAvailabilityPolicy availabilityPolicy)
     {
         _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
+        _availabilityPolicy = availabilityPolicy;
     }
 
     public async Task<List<DoctorBasicDto>> GetAllActiveDoctorsAsync()
@@ -91,93 +93,14 @@ public class DoctorService : IDoctorService
 
     public async Task<List<AvailableSlotDto>> GetAvailableSlotsAsync(long doctorId, DateOnly fromDate, DateOnly toDate, long? specialtyId)
     {
-        var doctorExists = await _dbContext.Doctors
-            .Join(_dbContext.Users, d => d.UserId, u => u.Id, (d, u) => new { d, u })
-            .AnyAsync(x => x.d.Id == doctorId && x.d.IsActive && x.u.IsActive);
-
-        if (!doctorExists)
-            throw new NotFoundException("Bác sĩ không tồn tại hoặc đã ngừng hoạt động.");
-
-        if (specialtyId.HasValue)
+        return await _availabilityPolicy.GetAvailableSlotsAsync(new BatchSlotAvailabilityRequest
         {
-            var hasSpecialty = await _dbContext.DoctorSpecialties.AnyAsync(ds => ds.DoctorId == doctorId && ds.SpecialtyId == specialtyId.Value);
-            if (!hasSpecialty)
-                throw new NotFoundException("Bác sĩ không thuộc chuyên khoa này.");
-            
-            var specialtyActive = await _dbContext.Specialties.AnyAsync(s => s.Id == specialtyId.Value && s.IsActive);
-            if (!specialtyActive)
-                throw new BusinessException("SPECIALTY_NOT_AVAILABLE", "Chuyên khoa không hoạt động.");
-        }
-
-        var dateToday = _dateTimeProvider.VietnamToday;
-        var timeNow = _dateTimeProvider.VietnamTime;
-        var vnNow = _dateTimeProvider.VietnamNow;
-
-        var activeSchedules = await _dbContext.DoctorWorkSchedules
-            .AsNoTracking()
-            .Where(ws => ws.DoctorId == doctorId && ws.IsActive && ws.WorkDate >= fromDate && ws.WorkDate <= toDate)
-            .ToListAsync();
-
-        if (activeSchedules.Count == 0)
-        {
-            return new List<AvailableSlotDto>();
-        }
-
-        var slots = await _dbContext.AppointmentSlots
-            .AsNoTracking()
-            .Where(s => s.DoctorId == doctorId
-                        && !s.IsBooked
-                        && s.SlotDate >= fromDate
-                        && s.SlotDate <= toDate
-                        && (s.SlotDate > dateToday || (s.SlotDate == dateToday && s.StartTime > timeNow)))
-            .OrderBy(s => s.SlotDate).ThenBy(s => s.StartTime)
-            .ToListAsync();
-
-        var fromDateTime = fromDate.ToDateTime(TimeOnly.MinValue);
-        var toDateTime = toDate.ToDateTime(TimeOnly.MaxValue);
-
-        var activeHoldingSlotIds = await _dbContext.Appointments
-            .AsNoTracking()
-            .Where(a => a.DoctorId == doctorId 
-                     && a.AppointmentDate >= fromDate 
-                     && a.AppointmentDate <= toDate 
-                     && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
-            .Select(a => a.AppointmentSlotId)
-            .Distinct()
-            .ToListAsync();
-        var holdingSlotIdSet = new HashSet<long>(activeHoldingSlotIds);
-
-        var leaves = await _dbContext.DoctorLeaveRequests
-            .AsNoTracking()
-            .Where(l => l.DoctorId == doctorId && l.Status == DoctorLeaveRequestStatus.Approved 
-                     && l.StartDateTime <= toDateTime && l.EndDateTime >= fromDateTime)
-            .ToListAsync();
-
-        var validSlots = slots.Where(s => {
-            if (holdingSlotIdSet.Contains(s.Id)) return false;
-
-            // Must belong to an active schedule block
-            var isInActiveSchedule = activeSchedules.Any(ws => 
-                ws.WorkDate == s.SlotDate && ws.StartTime <= s.StartTime && ws.EndTime >= s.EndTime);
-            if (!isInActiveSchedule) return false;
-
-            // Must not overlap with approved leave
-            var slotStart = s.SlotDate.ToDateTime(s.StartTime);
-            var slotEnd = s.SlotDate.ToDateTime(s.EndTime);
-            if (leaves.Any(l => slotStart < l.EndDateTime && slotEnd > l.StartDateTime))
-                return false;
-
-            return true;
-        }).Select(s => new AvailableSlotDto
-        {
-            SlotId = s.Id,
-            DoctorId = s.DoctorId,
-            SlotDate = s.SlotDate,
-            StartTime = s.StartTime,
-            EndTime = s.EndTime
-        }).ToList();
-
-        return validSlots;
+            DoctorId = doctorId,
+            FromDate = fromDate,
+            ToDate = toDate,
+            SpecialtyId = specialtyId,
+            ThrowOnValidationFailure = true
+        });
     }
 
     public async Task<DoctorAvailabilityDto> GetDoctorAvailabilityAsync(long doctorId, DateOnly fromDate, DateOnly toDate, long? specialtyId)

@@ -5,8 +5,9 @@ import { getRoleDashboardPath } from '../utils/roleRoutes';
 import styles from './PublicLayout.module.css';
 import { AppointmentLookupModal } from '../components/AppointmentLookupModal';
 import { 
-    Phone, Clock, MapPin, ShieldPlus, Menu, X, 
-    UserCircle, Calendar, FileText, Pill, LogOut, ChevronDown, Search, PackageCheck, Bell, Receipt
+    MapPin, ShieldPlus, Menu, X, 
+    UserCircle, Calendar, FileText, Pill, LogOut, ChevronDown, Search, PackageCheck, Bell, Receipt,
+    FlaskConical
 } from 'lucide-react';
 import { NotificationBell } from '../components/common/NotificationBell';
 
@@ -68,10 +69,7 @@ export const PublicLayout: React.FC = () => {
                 <div className={styles.topBarContainer}>
                     <div className={styles.topBarInfo}>
                         <div className={styles.topBarInfoItem}>
-                            <Clock size={14} /> Giờ làm việc: 07:00 - 19:00 (Hàng ngày)
-                        </div>
-                        <div className={styles.topBarInfoItem}>
-                            <Phone size={14} /> Hotline: <strong>1900 1234</strong>
+                            Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.
                         </div>
                     </div>
                     <div className={styles.topBarInfo}>
@@ -153,6 +151,9 @@ export const PublicLayout: React.FC = () => {
                                                     </Link>
                                                     <Link to="/patient/prescriptions" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
                                                         <Pill size={18} /> Đơn thuốc của tôi
+                                                    </Link>
+                                                    <Link to="/patient/diagnostic-results" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
+                                                        <FlaskConical size={18} /> Kết quả cận lâm sàng
                                                     </Link>
                                                     <Link to="/patient/invoices" className={styles.dropdownItem} onClick={() => setIsDropdownOpen(false)}>
                                                         <Receipt size={18} /> Hóa đơn của tôi
@@ -247,6 +248,7 @@ export const PublicLayout: React.FC = () => {
                                     <Link to="/patient/health-package-registrations" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Gói khám đã đăng ký</Link>
                                     <Link to="/patient/revisit" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Lịch tái khám</Link>
                                     <Link to="/patient/prescriptions" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Đơn thuốc của tôi</Link>
+                                    <Link to="/patient/diagnostic-results" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Kết quả cận lâm sàng</Link>
                                     <Link to="/patient/invoices" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Hóa đơn của tôi</Link>
                                     <button onClick={handleLogout} className={styles.navLink} style={{ textAlign: 'left', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--c-danger)' }}>Đăng xuất</button>
                                 </>
@@ -280,8 +282,7 @@ export const PublicLayout: React.FC = () => {
                             ClinicCare AI
                         </div>
                         <p>Hệ thống phòng khám đa khoa thông minh tích hợp trí tuệ nhân tạo, mang lại trải nghiệm khám chữa bệnh nhanh chóng, chính xác và tiện lợi.</p>
-                        <p style={{ marginTop: '20px' }}><MapPin size={16} /> 123 Nguyễn Thị Minh Khai, Phường Bến Thành, Quận 1, TP.HCM</p>
-                        <p><Phone size={16} /> Hotline: 1900 1234 - (028) 3930 1234 (7:00 - 19:00)</p>
+                        <p style={{ marginTop: '20px' }}>Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.</p>
                     </div>
                     <div className={styles.footerCol}>
                         <h3>Dịch vụ & Đặt hẹn</h3>

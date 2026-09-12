@@ -15,6 +15,10 @@ describe('Role Routes and Security Sanitization', () => {
             expect(getRoleDashboardPath('Pharmacist')).toBe('/pharmacy');
         });
 
+        it('should map DiagnosticTechnician to /diagnostics', () => {
+            expect(getRoleDashboardPath('DiagnosticTechnician')).toBe('/diagnostics');
+        });
+
         it('should map Patient to /patient', () => {
             expect(getRoleDashboardPath('Patient')).toBe('/patient');
         });
@@ -61,6 +65,12 @@ describe('Role Routes and Security Sanitization', () => {
         it('should allow Doctor to access doctor paths', () => {
             expect(isPathAllowedForRole('Doctor', '/doctor')).toBe(true);
             expect(isPathAllowedForRole('Doctor', '/doctor/appointments/5')).toBe(true);
+        });
+
+        it('should allow DiagnosticTechnician to access diagnostics paths', () => {
+            expect(isPathAllowedForRole('DiagnosticTechnician', '/diagnostics')).toBe(true);
+            expect(isPathAllowedForRole('DiagnosticTechnician', '/diagnostics/orders/12')).toBe(true);
+            expect(isPathAllowedForRole('DiagnosticTechnician', '/doctor/appointments/5')).toBe(false);
         });
 
         it('should prevent Doctor from accessing patient or admin paths', () => {

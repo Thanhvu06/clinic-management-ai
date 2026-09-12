@@ -10,5 +10,6 @@ public enum NotificationType
     Prescription = 5,
     HealthPackage = 6,
     Invoice = 7,
-    Payment = 8
+    Payment = 8,
+    Diagnostic = 9
 }

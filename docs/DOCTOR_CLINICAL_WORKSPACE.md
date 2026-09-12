@@ -1,114 +1,152 @@
-# Doctor Clinical Workspace - Tài liệu Kiến trúc & Hướng dẫn Vận hành
+# Doctor Clinical Workspace & Diagnostic Workflow - Tài liệu Kiến trúc & Hướng dẫn Vận hành
 
-ClinicCare AI cung cấp không gian làm việc lâm sàng toàn diện (**Doctor Clinical Workspace**) dành cho bác sĩ phòng khám và bệnh viện, kết nối xuyên suốt end-to-end theo kiến trúc:
+ClinicCare AI cung cấp không gian làm việc lâm sàng toàn diện (**Doctor Clinical Workspace**) và phân hệ Cận lâm sàng (**Diagnostic Order & Technician Workflow**) dành cho bác sĩ, kỹ thuật viên và bệnh nhân, kết nối xuyên suốt end-to-end theo kiến trúc:
 ```
-Database → Backend Authorization & State Machine → Service → DTO → API → Frontend Type → Accessible UI
+Database (EF Core / SQL Server cho Development & Production, SQLite In-Memory cho Integration Tests) → Backend Authorization & State Machine → Service Layer → DTOs → RESTful APIs → Frontend Types → Accessible UI Components
 ```
 
 ---
 
-## 1. Tài khoản Demo Bác sĩ
+## 1. Tài khoản Demo & Phân quyền (RBAC)
 
-Khi khởi chạy hệ thống ở môi trường `Development`, hệ thống đã cấu hình sẵn 10 bác sĩ chính thức với hồ sơ chuyên khoa, lịch làm việc và các ca hẹn mẫu:
+Khi khởi chạy hệ thống ở môi trường `Development`, dữ liệu mẫu đã được chuẩn hóa sẵn cho toàn bộ các vai trò:
 
-| STT | Bác sĩ | Học hàm / Học vị | Chuyên khoa chính | Email đăng nhập | Mật khẩu |
+| STT | Vai trò / Họ tên | Chuyên khoa / Vị trí | Email đăng nhập | Mật khẩu | Phạm vi truy cập |
 |:---:|---|---|---|---|---|
-| **1** | **BS.CKI Nguyễn Minh Khải** | BS.CKI | **Nội Tổng Quát, Tim Mạch** | `doctor@cliniccare.local` | `Demo@12345` |
-| 2 | BS Trần Thu Hà | BS | Sản - Phụ Khoa | `bacsi.02@cliniccare.local` | `Demo@12345` |
-| 3 | BS.CKII Lê Hoàng Nam | BS.CKII | Chấn Thương Chỉnh Hình | `bacsi.03@cliniccare.local` | `Demo@12345` |
-| 4 | ThS.BS Phạm Văn Hùng | ThS.BS | Tai Mũi Họng | `bacsi.04@cliniccare.local` | `Demo@12345` |
-| 5 | BS Đinh Thị Yến | BS | Da Liễu | `bacsi.05@cliniccare.local` | `Demo@12345` |
-| 6 | BS.CKI Vũ Quang Vinh | BS.CKI | Thần Kinh | `bacsi.06@cliniccare.local` | `Demo@12345` |
-| 7 | TS.BS Bùi Hải Yến | TS.BS | Nội Tiết | `bacsi.07@cliniccare.local` | `Demo@12345` |
-| 8 | BS Đỗ Tuấn Anh | BS | Nhãn Khoa | `bacsi.08@cliniccare.local` | `Demo@12345` |
-| 9 | BS.CKI Lý Kim Dung | BS.CKI | Nhi Khoa | `bacsi.09@cliniccare.local` | `Demo@12345` |
-| 10 | BS Hoàng Văn Đạt | BS | Tiêu Hóa | `bacsi.10@cliniccare.local` | `Demo@12345` |
-
-> [!NOTE]
-> Tài khoản bác sĩ mẫu chính là **`doctor@cliniccare.local`** (BS.CKI Nguyễn Minh Khải). Bác sĩ có sẵn lịch trực và danh sách bệnh nhân chờ khám trong ngày.
+| **1** | **BS.CKI Nguyễn Minh Khải** | **Nội Tổng Quát, Tim Mạch** | `doctor@cliniccare.local` | `Demo@12345` | Bàn khám bác sĩ, chỉ định CLS, xem kết quả, hoàn tất khám |
+| 2-10 | 9 Bác sĩ chuyên khoa khác | Sản, Chấn thương, Da liễu, Nhi... | `bacsi.02` → `bacsi.10@cliniccare.local` | `Demo@12345` | Bàn khám theo phân công chuyên khoa |
+| **11** | **KTV Cận Lâm Sàng** | **Kỹ thuật viên Xét nghiệm & CĐHA** | `technician@cliniccare.local` | `Demo@12345` | `/diagnostics`: Hàng đợi chỉ định, tiếp nhận, nhập kết quả |
+| **12** | **Lễ tân Nguyễn Thu Trang** | **Bộ phận Tiếp đón & Lễ tân** | `reception@cliniccare.local` | `Demo@12345` | Tiếp nhận, check-in, phân luồng bệnh nhân |
+| **13** | **Bệnh nhân Nguyễn Đình Thành** | **Người bệnh** | `patient@cliniccare.local` | `Demo@12345` | Đặt lịch, xem kết quả CLS & lịch sử sinh hiệu (`/patient/diagnostic-results`) |
 
 ---
 
-## 2. Luồng Nghiệp vụ Lâm sàng (Clinical State Machine)
+## 2. Quy trình Nghiệp vụ Lâm sàng & Cận lâm sàng (Clinical & Diagnostic State Machine)
 
-Hệ thống tuân thủ nghiêm ngặt máy trạng thái y tế (Medical State Machine), bảo đảm tính toàn vẹn và ngăn chặn các bước nhảy trạng thái trái phép:
+Hệ thống quản lý trạng thái kép giữa **Phiên khám của Bác sĩ (Encounter/Appointment)** và **Phiếu chỉ định Cận lâm sàng (Diagnostic Order)**:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Pending : Bệnh nhân đặt lịch
-    Pending --> Confirmed : Lễ tân duyệt / xác nhận
-    Pending --> Cancelled : Hủy lịch
-    Confirmed --> CheckedIn : Lễ tân / Bác sĩ check-in khi bệnh nhân có mặt
-    Confirmed --> NoShow : Đánh dấu vắng mặt (quá giờ)
-    CheckedIn --> InConsultation : Bác sĩ bấm "Bắt đầu khám"
-    InConsultation --> Completed : Bác sĩ hoàn tất khám + Kê đơn (Atomic Transaction)
-    Completed --> RevisitPending : Bác sĩ tạo đề xuất tái khám
+    direction TB
+
+    state "Lịch hẹn (Appointment)" as Appt {
+        [*] --> Confirmed : Lễ tân xác nhận
+        Confirmed --> CheckedIn : Check-in tại phòng khám
+        CheckedIn --> InConsultation : Bác sĩ "Bắt đầu khám"
+        
+        state InConsultation {
+            [*] --> RecordVitals : Đo sinh hiệu & đối chiếu nhân trắc
+            RecordVitals --> CreateOrder : Bác sĩ tạo chỉ định CLS
+            CreateOrder --> AwaitResults : Chờ KTV thực hiện CLS
+            AwaitResults --> ReviewResults : Bác sĩ duyệt kết quả CLS
+            ReviewResults --> FinalizeRx : Kê đơn & chẩn đoán kết luận
+        }
+
+        InConsultation --> Completed : Hoàn tất ca khám (Guard kiểm tra)
+        Completed --> [*]
+    }
+
+    state "Phiếu Cận Lâm Sàng (Diagnostic Order)" as Dx {
+        [*] --> Ordered : Bác sĩ tạo phiếu (serviceIds)
+        Ordered --> InProgress : KTV bấm "Bắt đầu thực hiện"
+        InProgress --> CompletedDx : KTV nhập kết quả & bấm "Hoàn tất"
+        CompletedDx --> Reviewed : Bác sĩ bấm "Xác nhận đã xem kết quả"
+        Reviewed --> [*]
+    }
 ```
 
-### Bảng Quy tắc Chuyển Trạng thái:
-
-| Trạng thái hiện tại | Thao tác | Trạng thái tiếp theo | Điều kiện kiểm tra |
-|---|---|---|---|
-| `Confirmed` | **Tiếp nhận (Check-in)** | `CheckedIn` | Bệnh nhân có mặt tại phòng khám. |
-| `Confirmed` | **Vắng mặt (No-show)** | `NoShow` | Giờ hẹn đã qua giờ hiện tại. |
-| `CheckedIn` | **Bắt đầu khám (Start)** | `InConsultation` | Tạo bản ghi `VisitSummary` phiên khám ban đầu. |
-| `InConsultation` | **Hoàn tất ca khám** | `Completed` | Yêu cầu bắt buộc có Chẩn đoán (`Diagnosis`) hoặc Kết luận (`Summary`). Chốt đơn thuốc thành `Issued`. |
-| `Completed` | **Tạo đề xuất tái khám** | `PendingPatientResponse` | Ngày hẹn tái khám phải sau ngày hiện tại. |
-
-> [!IMPORTANT]
-> Bất kỳ thao tác chuyển trạng thái không hợp lệ (ví dụ: cố tình bấm hoàn tất khi chưa bắt đầu khám, hoặc check-in khi lịch đang ở trạng thái `Pending`) sẽ bị Backend chặn với mã lỗi `422 UnprocessableEntity` (`INVALID_STATE_TRANSITION`).
+### Điều kiện Ràng buộc Hoàn tất Khám (Consultation Completion Guards):
+Hệ thống cài đặt 2 chốt chặn nghiệp vụ nghiêm ngặt trong `DoctorAppointmentService.CompleteAppointmentAsync`:
+1. **Chặn khi còn chỉ định đang chờ kết quả (`PENDING_DIAGNOSTIC_RESULTS` - HTTP 422):**
+   Nếu ca khám có phiếu CLS ở trạng thái `Ordered` hoặc `InProgress`, bác sĩ KHÔNG THỂ bấm "Hoàn tất ca khám".
+2. **Chặn khi có kết quả nhưng bác sĩ chưa duyệt (`UNREVIEWED_DIAGNOSTIC_RESULTS` - HTTP 422):**
+   Nếu KTV đã hoàn thành phiếu (`Completed`) nhưng bác sĩ chưa bấm **"Xác nhận đã xem kết quả"** (`ReviewedAtUtc == null`), hệ thống sẽ từ chối hoàn tất ca khám để bảo đảm bác sĩ không bỏ sót dữ liệu chẩn đoán của bệnh nhân.
 
 ---
 
-## 3. Không gian Làm việc Khám bệnh (Clinical Workspace UI/UX)
+## 3. Theo dõi Sinh hiệu & Nhân trắc học Dọc (Longitudinal Anthropometrics & Vitals)
 
-Tại đường dẫn `/doctor/examination/:id`, bác sĩ được cung cấp giao diện khám tập trung với 4 tab nghiệp vụ:
+Tại giao diện khám bệnh `/doctor/appointments/:id/examination`, tab **Dấu hiệu sinh tồn** được thiết kế thành 4 khu vực thông tin trực quan:
 
-### 3.1. Tổng quan & Bối cảnh bệnh nhân (Patient Summary & Context)
-- Thông tin hành chính: Mã hồ sơ, Họ tên, Tuổi, Giới tính, Số điện thoại, Địa chỉ.
-- Lý do đến khám (`Chief Complaint`).
-- Lịch sử tiền sử bệnh và các lần khám trước đó tại phòng khám.
-
-### 3.2. Dấu hiệu sinh tồn (Vital Signs)
-- Các chỉ số: Nhiệt độ (°C), Huyết áp tâm thu/tâm trương (mmHg), Mạch (lần/phút), Nhịp thở, SpO2 (%), Cân nặng (kg), Chiều cao (cm).
-- **Tính toán BMI tự động thời gian thực** theo chuẩn WHO dành cho người châu Á:
+### 3.1. Vùng 1: Biểu mẫu nhập số đo hiện tại (Current Measurement Form)
+- Huyết áp tâm thu / tâm trương (mmHg), Mạch (bpm), Nhiệt độ (°C), SpO2 (%), Nhịp thở.
+- Cân nặng (kg), Chiều cao (cm).
+- **Nút "Dùng chiều cao lần trước":** Khi bấm, hệ thống tự động điền chiều cao từ lần đo gần nhất của bệnh nhân, giảm thao tác đo lại cho người trưởng thành.
+- **Tính toán chỉ số khối cơ thể (BMI) thời gian thực:**
   $$\text{BMI} = \frac{\text{Cân nặng (kg)}}{(\text{Chiều cao (m)})^2}$$
-  - $\text{BMI} < 18.5$: Thiếu cân / Gầy (Xanh dương).
-  - $18.5 \le \text{BMI} < 23.0$: Bình thường (Xanh lá cây).
-  - $23.0 \le \text{BMI} < 25.0$: Tiền béo phì / Thừa cân (Vàng da cam).
-  - $25.0 \le \text{BMI} < 30.0$: Béo phì độ I (Đỏ cam).
-  - $\text{BMI} \ge 30.0$: Béo phì độ II trở lên (Đỏ đậm).
+  Kèm huy hiệu phân loại theo cấu hình hệ thống: <18.5 Thiếu cân (Gầy), <25.0 Bình thường, <30.0 Thừa cân / Tiền béo phì, >=30.0 Béo phì.
 
-### 3.3. Diễn tiến & Bệnh án (Clinical Encounter)
-- Chẩn đoán chính (`Diagnosis`) và Mã bệnh quốc tế ICD-10 (`DiagnosisCode`).
-- Triệu chứng lâm sàng (`ClinicalFindings`).
-- Kế hoạch điều trị (`TreatmentPlan`).
-- Kết luận & Lời dặn theo dõi (`Summary` & `FollowUpInstruction`).
+### 3.2. Vùng 2: Số liệu lần đo liền trước (Previous Measurement)
+- Hiển thị ngày đo gần nhất, người ghi nhận, chiều cao, cân nặng và BMI quá khứ để bác sĩ có điểm tựa so sánh.
 
-### 3.4. Kê đơn thuốc điện tử (Prescription Drafting)
-- Tìm kiếm thuốc thời gian thực từ danh mục kho thuốc thật của phòng khám.
-- Hiển thị số lượng tồn kho khả dụng tức thời (`AvailableStock`).
-- Cấu hình chi tiết từng dòng thuốc: Liều dùng, Đường dùng, Số lần/ngày, Số ngày uống, Tổng số lượng, Hướng dẫn sử dụng.
-- Lưu nháp đơn thuốc (`Draft`) độc lập hoặc phát hành đơn (`Issued`) đồng bộ cùng ca khám.
+### 3.3. Vùng 3: Biến thiên nhân trắc (Anthropometric Deltas)
+- **Độ chênh lệch cân nặng ($\Delta \text{Weight}$):** $\text{Weight}_{\text{hiện tại}} - \text{Weight}_{\text{trước}}$ (kg).
+- **Độ chênh lệch BMI ($\Delta \text{BMI}$):** $\text{BMI}_{\text{hiện tại}} - \text{BMI}_{\text{trước}}$.
+- Mã màu trực quan: Tăng cân (Cam/Đỏ cảnh báo), Giảm cân (Xanh dương), Ổn định (Xanh lá).
+
+### 3.4. Vùng 4: Bảng lịch sử sinh hiệu (Longitudinal Vital History Table)
+- Bảng thống kê các lần đo sinh hiệu trước đây của bệnh nhân (thời gian, người đo, các chỉ số HA, mạch, nhiệt độ, SpO2, BMI).
 
 ---
 
-## 4. Cơ chế Kiểm soát Đồng thời & Bảo vệ Dữ liệu (Concurrency & Privacy)
+## 4. Phân hệ Cận lâm sàng (Diagnostic Services & Workflow)
 
-1. **Kiểm soát đồng thời lạc quan (Optimistic Concurrency Control):**
-   - Thực thể `VisitSummary`, `AppointmentVitalSigns`, và `Prescription` được trang bị Concurrency Token `RowVersion` (`byte[]`).
-   - Mỗi lần lưu, client gửi `RowVersion` hiện tại. Nếu có phiên làm việc khác đã ghi đè dữ liệu trước đó, hệ thống phản hồi `409 Conflict` kèm thông báo tiếng Việt rõ ràng: *"Dữ liệu đã bị sửa đổi bởi phiên làm việc khác. Vui lòng tải lại trang."*
+### 4.1. Danh mục Dịch vụ Cận lâm sàng (Catalog)
+Hệ thống khởi tạo sẵn 10 danh mục kỹ thuật y tế chuẩn:
+1. `LAB-CBC`: Tổng phân tích tế bào máu ngoại vi (Laboratory)
+2. `LAB-GLU`: Định lượng Glucose máu (Laboratory)
+3. `LAB-LIPID`: Bộ mỡ máu toàn phần (Laboratory)
+4. `LAB-LFT`: Đánh giá chức năng gan AST/ALT (Laboratory)
+5. `LAB-RFT`: Đánh giá chức năng thận Ure/Creatinin (Laboratory)
+6. `US-ABD`: Siêu âm ổ bụng tổng quát (Ultrasound)
+7. `US-THY`: Siêu âm tuyến giáp (Ultrasound)
+8. `US-ECHO`: Siêu âm Doppler tim màu (Ultrasound)
+9. `IMG-CXR`: Chụp X-quang ngực thẳng (Imaging)
+10. `IMG-ECG`: Điện tâm đồ ECG 12 chuyển đạo (Other)
 
-2. **Cách ly dữ liệu bác sĩ (Data Privacy & Isolation):**
-   - Mọi truy vấn lịch hẹn, hồ sơ bệnh án, dấu hiệu sinh tồn đều được thẩm tra qua `DoctorContextService` dựa trên JWT Claims.
-   - Bác sĩ A không thể xem hoặc sửa ca khám của Bác sĩ B. Trường hợp truy cập trái phép sẽ trả về `404 NotFound` hoặc `403 Forbidden`.
+### 4.2. Thao tác của Bác sĩ trong Phiên khám
+1. **Tạo chỉ định:** Trong tab *"Chỉ định Cận lâm sàng"*, bác sĩ chọn một hoặc nhiều dịch vụ, nhập chẩn đoán lâm sàng / lý do chỉ định và ghi chú chuẩn bị mẫu.
+2. **In phiếu chỉ định (`/doctor/diagnostic-orders/:id/print`):**
+   - Phiếu chỉ định chuẩn y tế gồm: Thông tin cơ sở khám chữa bệnh demo, mã phiếu `DX`, mã ca khám, thông tin bệnh nhân, danh sách dịch vụ kèm hướng dẫn nhịn ăn/chuẩn bị, chữ ký kỹ thuật viên và bác sĩ chỉ định.
+   - Hỗ trợ in trực tiếp hoặc xuất PDF qua `@media print`.
+3. **Theo dõi tiến độ thời gian thực:** Trạng thái phiếu (`Chờ thực hiện` → `Đang thực hiện` → `Đã có kết quả`).
+4. **Xem kết quả & Xác nhận:** Khi KTV nhập xong, kết quả hiển thị chi tiết (trị số, đơn vị, khoảng tham chiếu, kết luận của KTV). Bác sĩ bấm **"Xác nhận đã xem kết quả"** để mở khóa cho phép kết thúc buổi khám.
 
-3. **Giao dịch nguyên tử (Atomic Database Transaction):**
-   - Khi hoàn tất ca khám, việc chuyển trạng thái cuộc hẹn sang `Completed`, lưu `VisitSummary`, cập nhật lịch sử `AppointmentHistory`, và phát hành đơn thuốc `Prescription` sang trạng thái `Issued` được thực thi trong cùng 1 Database Transaction (`Serializable` Isolation Level). Nếu một thao tác thất bại, toàn bộ sẽ được rollback nguyên vẹn.
+### 4.3. Bàn làm việc Kỹ thuật viên Cận lâm sàng (`/diagnostics`)
+- **Dashboard KTV:**
+  - Thống kê KPI hôm nay: Chờ thực hiện, Đang thực hiện, Hoàn tất trong ngày.
+  - Bộ lọc: Trạng thái, ngày tháng, tìm kiếm bệnh nhân / mã phiếu.
+  - Phân luồng công việc: Nhận bệnh nhân (`start`) → Nhập kết quả từng xét nghiệm/siêu âm (`RecordItemResult`) → Hoàn tất phiếu (`complete`).
+- **Màn hình Nhập kết quả (`/diagnostics/orders/:id`):**
+  - Form nhập liệu cho từng dịch vụ: Trị số kết quả (`ResultText`), Kết luận chuyên môn (`Conclusion`), Khoảng tham chiếu (`ReferenceRange`), Đơn vị đo (`Unit`).
+  - Hỗ trợ lưu nháp từng chỉ số trước khi nhấn hoàn tất toàn bộ phiếu.
+
+### 4.4. Cổng thông tin Bệnh nhân (`/patient/diagnostic-results`)
+- Người bệnh tự tra cứu lịch sử xét nghiệm và chẩn đoán hình ảnh cá nhân.
+- Giao diện dạng Accordion: Mã phiếu, bác sĩ chỉ định, trạng thái duyệt của bác sĩ (`Đã có kết luận bác sĩ`), chi tiết từng xét nghiệm kèm kết luận dễ hiểu.
+- Tab chuyển đổi xem biểu đồ/lịch sử các chỉ số sinh hiệu theo thời gian.
+- **Bảo mật tuyệt đối:** API áp dụng RBAC xác thực `PatientId`, ngăn chặn bệnh nhân xem kết quả của người khác.
 
 ---
 
-## 5. Lịch Trực & Đăng ký Nghỉ phép (Schedule & Leave Preview)
+## 5. Danh sách API Cận lâm sàng & Sinh hiệu
 
-- **Lịch trực tuần (`/doctor/schedule`):** Xem lưới ca trực hàng tuần, trạng thái các slot khám (trống, đã có người đặt, đã khám xong).
-- **Xem trước ảnh hưởng khi xin nghỉ (`/doctor/leaves/preview-impact`):** Khi bác sĩ chọn khoảng thời gian xin nghỉ phép, hệ thống tự động quét và thống kê số lượng cuộc hẹn của bệnh nhân bị ảnh hưởng, hiển thị danh sách chi tiết để bác sĩ và lễ tân chủ động phối hợp dời lịch.
+| Phương thức | Endpoint | Vai trò | Mô tả nghiệp vụ |
+|---|---|---|---|
+| `GET` | `/api/v1/diagnostic-services` | Doctor, Tech, Admin | Danh mục dịch vụ cận lâm sàng |
+| `POST` | `/api/v1/doctor/appointments/{id}/diagnostic-orders` | Doctor | Tạo phiếu chỉ định cận lâm sàng |
+| `GET` | `/api/v1/doctor/appointments/{id}/diagnostic-orders` | Doctor | Danh sách phiếu CLS của ca khám |
+| `GET` | `/api/v1/doctor/diagnostic-orders/{id}` | Doctor | Chi tiết phiếu chỉ định (dùng để in) |
+| `POST` | `/api/v1/doctor/diagnostic-orders/{id}/review` | Doctor | Bác sĩ xác nhận đã xem kết quả CLS |
+| `POST` | `/api/v1/doctor/diagnostic-orders/{id}/cancel` | Doctor | Hủy phiếu chỉ định (khi còn `Ordered`) |
+| `GET` | `/api/v1/diagnostics/orders` | DiagnosticTechnician | Danh sách hàng đợi CLS (phân trang, lọc) |
+| `GET` | `/api/v1/diagnostics/orders/stats` | DiagnosticTechnician | Thống kê số lượng chỉ định theo trạng thái |
+| `GET` | `/api/v1/diagnostics/orders/{id}` | DiagnosticTechnician | Chi tiết phiếu CLS cho KTV |
+| `POST` | `/api/v1/diagnostics/orders/{id}/start` | DiagnosticTechnician | Tiếp nhận thực hiện phiếu chỉ định |
+| `PUT` | `/api/v1/diagnostics/orders/{id}/items/{itemId}/result` | DiagnosticTechnician | Ghi nhận kết quả cho từng dịch vụ |
+| `POST` | `/api/v1/diagnostics/orders/{id}/complete` | DiagnosticTechnician | Hoàn tất toàn bộ phiếu chỉ định |
+| `GET` | `/api/v1/patients/me/diagnostic-orders` | Patient | Bệnh nhân xem danh sách phiếu CLS của mình |
+| `GET` | `/api/v1/patients/me/diagnostic-orders/{id}` | Patient | Bệnh nhân xem chi tiết kết quả phiếu CLS |
+| `GET` | `/api/v1/patients/me/vitals` | Patient | Bệnh nhân xem lịch sử các chỉ số sinh hiệu |
+| `GET` | `/api/v1/doctor/appointments/{id}/patient-context` | Doctor | Lấy thông tin nhân trắc học & so sánh delta |
+| `PUT` | `/api/v1/doctor/appointments/{id}/vitals` | Doctor | Lưu sinh hiệu & cập nhật nhân trắc học |

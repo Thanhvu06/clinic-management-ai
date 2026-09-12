@@ -96,9 +96,8 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
                                     HỆ THỐNG PHÒNG KHÁM ĐA KHOA CLINICCARE AI
                                 </div>
                                 <div className={styles.clinicSub}>
-                                    Địa chỉ: 123 Đường Sức Khỏe, Quận 1, TP. Hồ Chí Minh<br />
-                                    Hotline: 1900 1234 — Email: billing@cliniccare.ai<br />
-                                    <em>(Dữ liệu demo vận hành phòng khám)</em>
+                                    Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.<br />
+                                    <em>(Dữ liệu minh họa)</em>
                                 </div>
                             </div>
 

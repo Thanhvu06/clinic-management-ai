@@ -11,6 +11,7 @@ using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using System.Data;
 
 using ClinicManagement.Application.Common.Interfaces;
@@ -22,22 +23,28 @@ public class AppointmentService : IAppointmentService
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IAppointmentAvailabilityPolicy _availabilityPolicy;
 
-    public AppointmentService(AppDbContext dbContext, ICurrentUserService currentUserService, IDateTimeProvider dateTimeProvider)
+    public AppointmentService(
+        AppDbContext dbContext,
+        ICurrentUserService currentUserService,
+        IDateTimeProvider dateTimeProvider,
+        IAppointmentAvailabilityPolicy availabilityPolicy)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _dateTimeProvider = dateTimeProvider;
+        _availabilityPolicy = availabilityPolicy;
     }
 
     public async Task<AppointmentDto> CreateAppointmentAsync(CreateAppointmentRequest request)
     {
         var currentUserId = _currentUserService.UserId;
-        if (currentUserId == null || currentUserId == Guid.Empty)
-            throw new UnauthorizedException("Chưa đăng nhập.");
+        if (!currentUserId.HasValue)
+            throw new UnauthorizedAccessException("Bạn cần đăng nhập để đặt lịch khám.");
 
-        var normalizedReason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
-        if (normalizedReason != null && (normalizedReason.Length < 10 || normalizedReason.Length > 500))
+        var normalizedReason = request.Reason?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length < 10 || normalizedReason.Length > 500)
             throw new BusinessException("VALIDATION_ERROR", "Lý do khám phải từ 10 đến 500 ký tự.");
 
         // 1 & 2 & 3. Validate Patient
@@ -54,85 +61,154 @@ public class AppointmentService : IAppointmentService
         if (patient.Gender == null || patient.DateOfBirth == null)
             throw new BusinessException("VALIDATION_ERROR", "Vui lòng cập nhật đầy đủ Giới tính và Ngày sinh trước khi đặt lịch.");
 
-        // 4. Validate Doctor
-        var doctor = await _dbContext.Doctors.FirstOrDefaultAsync(d => d.Id == request.DoctorId && d.IsActive);
-        if (doctor == null)
-            throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ không tồn tại hoặc đã ngừng hoạt động.");
+        // Idempotency check: If same patient already holds this slot with an active appointment, return it immediately
+        var initialExisting = await _dbContext.Appointments
+            .AsNoTracking()
+            .Include(a => a.Doctor)
+            .Include(a => a.Specialty)
+            .Where(a => a.PatientId == patient.Id 
+                     && a.AppointmentSlotId == request.AppointmentSlotId
+                     && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
+            .FirstOrDefaultAsync();
 
-        var doctorUser = await _dbContext.Users.FindAsync(doctor.UserId);
-        var doctorName = doctorUser?.FullName ?? "Bác sĩ";
+        if (initialExisting != null)
+        {
+            var initialDoctorName = "Bác sĩ";
+            if (initialExisting.Doctor != null)
+            {
+                var docUser = await _dbContext.Users.FindAsync(initialExisting.Doctor.UserId);
+                if (docUser != null) initialDoctorName = docUser.FullName;
+            }
 
-        // 5 & 6. Validate Specialty
-        var specialty = await _dbContext.Specialties.FirstOrDefaultAsync(s => s.Id == request.SpecialtyId && s.IsActive);
-        if (specialty == null)
-            throw new BusinessException("SPECIALTY_NOT_AVAILABLE", "Chuyên khoa không tồn tại hoặc đã ngừng hoạt động.");
+            return new AppointmentDto
+            {
+                Id = initialExisting.Id,
+                AppointmentCode = initialExisting.AppointmentCode,
+                PatientId = initialExisting.PatientId,
+                DoctorId = initialExisting.DoctorId,
+                DoctorName = initialDoctorName,
+                SpecialtyId = initialExisting.SpecialtyId,
+                SpecialtyName = initialExisting.Specialty?.Name ?? "Chuyên khoa",
+                AppointmentSlotId = initialExisting.AppointmentSlotId,
+                AppointmentDate = initialExisting.AppointmentDate,
+                StartTime = initialExisting.StartTime,
+                EndTime = initialExisting.EndTime,
+                Reason = initialExisting.Reason,
+                Status = initialExisting.Status.ToString()
+            };
+        }
 
-        var hasSpecialty = await _dbContext.DoctorSpecialties
-            .AnyAsync(ds => ds.DoctorId == request.DoctorId && ds.SpecialtyId == request.SpecialtyId);
-        if (!hasSpecialty)
-            throw new BusinessException("VALIDATION_ERROR", "Bác sĩ không thuộc chuyên khoa này.");
+        // 4. Canonical Availability Policy Evaluation
+        var availResult = await _availabilityPolicy.EvaluateSlotAvailabilityAsync(new SlotAvailabilityRequest
+        {
+            SlotId = request.AppointmentSlotId,
+            DoctorId = request.DoctorId,
+            SpecialtyId = request.SpecialtyId,
+            PatientId = patient.Id,
+            CheckAiEnabledSpecialty = false
+        });
 
-        // 7, 8, 9, 10. Validate Slot basic (time, existence)
-        var slot = await _dbContext.AppointmentSlots
-            .FirstOrDefaultAsync(s => s.Id == request.AppointmentSlotId && s.DoctorId == request.DoctorId);
-            
-        if (slot == null)
-            throw new NotFoundException("Slot không tồn tại.");
+        if (!availResult.IsAvailable)
+        {
+            if (availResult.ReasonCode == "SLOT_NOT_FOUND")
+                throw new NotFoundException(availResult.FailureReason ?? "Slot không tồn tại.");
+            if (availResult.ReasonCode == "SLOT_ALREADY_BOOKED")
+                throw new ConflictException("SLOT_ALREADY_BOOKED", availResult.FailureReason ?? "Slot đã được đặt.");
+            if (availResult.ReasonCode == "PATIENT_TIME_CONFLICT")
+                throw new BusinessException("PATIENT_TIME_CONFLICT", availResult.FailureReason ?? "Trùng thời gian khám.");
+            if (availResult.ReasonCode == "SPECIALTY_NOT_AVAILABLE")
+                throw new BusinessException("SPECIALTY_NOT_AVAILABLE", availResult.FailureReason ?? "Chuyên khoa không khả dụng.");
+            if (availResult.ReasonCode == "DOCTOR_NOT_AVAILABLE" || availResult.ReasonCode == "SUNDAY_CLOSED" 
+                || availResult.ReasonCode == "DOCTOR_NOT_SCHEDULED" || availResult.ReasonCode == "DOCTOR_ON_LEAVE")
+                throw new BusinessException("DOCTOR_NOT_AVAILABLE", availResult.FailureReason ?? "Bác sĩ không khả dụng.");
 
-        var slotStart = slot.SlotDate.ToDateTime(slot.StartTime);
-        var slotEnd = slot.SlotDate.ToDateTime(slot.EndTime);
+            throw new BusinessException("VALIDATION_ERROR", availResult.FailureReason ?? "Thông tin đặt lịch không hợp lệ.");
+        }
 
-        var vnToday = _dateTimeProvider.VietnamToday;
-        var vnTime = _dateTimeProvider.VietnamTime;
-
-        if (slot.SlotDate < vnToday || (slot.SlotDate == vnToday && slot.StartTime <= vnTime))
-            throw new BusinessException("VALIDATION_ERROR", "Không thể đặt lịch trong quá khứ.");
-
-        if ((slotEnd - slotStart).TotalMinutes != 30)
-            throw new BusinessException("VALIDATION_ERROR", "Slot khám phải có thời lượng đúng 30 phút.");
-
-        var hasWorkSchedule = await _dbContext.DoctorWorkSchedules
-            .AnyAsync(ws => ws.DoctorId == request.DoctorId 
-                         && ws.WorkDate == slot.SlotDate 
-                         && ws.StartTime <= slot.StartTime 
-                         && ws.EndTime >= slot.EndTime 
-                         && ws.IsActive);
-        if (!hasWorkSchedule)
-            throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Slot không nằm trong lịch làm việc hoạt động của bác sĩ.");
-
-        var inLeave = await _dbContext.DoctorLeaveRequests
-            .AnyAsync(l => l.DoctorId == request.DoctorId 
-                        && l.Status == DoctorLeaveRequestStatus.Approved 
-                        && slotStart < l.EndDateTime 
-                        && slotEnd > l.StartDateTime);
-        if (inLeave)
-            throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ đang trong lịch nghỉ đã được duyệt.");
+        var doctorName = availResult.DoctorName ?? "Bác sĩ";
+        var specialtyName = availResult.SpecialtyName ?? "Chuyên khoa";
 
         // TRANSACTION: Serializable to prevent overlapping inserts
-        using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        IDbContextTransaction? transaction = null;
         try
         {
+            transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            // Idempotency check: If same patient already has an active appointment for this slot, return it
+            var existingAppointment = await _dbContext.Appointments
+                .Where(a => a.PatientId == patient.Id 
+                         && a.AppointmentSlotId == request.AppointmentSlotId
+                         && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
+                .FirstOrDefaultAsync();
+
+            if (existingAppointment != null)
+            {
+                await transaction.RollbackAsync();
+                return new AppointmentDto
+                {
+                    Id = existingAppointment.Id,
+                    AppointmentCode = existingAppointment.AppointmentCode,
+                    PatientId = existingAppointment.PatientId,
+                    DoctorId = existingAppointment.DoctorId,
+                    DoctorName = doctorName,
+                    SpecialtyId = existingAppointment.SpecialtyId,
+                    SpecialtyName = specialtyName,
+                    AppointmentSlotId = existingAppointment.AppointmentSlotId,
+                    AppointmentDate = existingAppointment.AppointmentDate,
+                    StartTime = existingAppointment.StartTime,
+                    EndTime = existingAppointment.EndTime,
+                    Reason = existingAppointment.Reason,
+                    Status = existingAppointment.Status.ToString()
+                };
+            }
+
             // 11. Lock and update slot atomically
             var affectedRows = await _dbContext.AppointmentSlots
                 .Where(s => s.Id == request.AppointmentSlotId && !s.IsBooked)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsBooked, true));
 
             if (affectedRows == 0)
-                throw new BusinessException("SLOT_ALREADY_BOOKED", "Slot đã được đặt hoặc không khả dụng.");
+            {
+                // Rollback current transaction first to break snapshot isolation
+                await transaction.RollbackAsync();
 
-            // 12. Check overlap for Patient
-            var activeStatuses = new[] 
-            { 
-                AppointmentStatus.Pending, 
-                AppointmentStatus.Confirmed, 
-                AppointmentStatus.PendingReschedule, 
-                AppointmentStatus.PendingCancellation 
-            };
+                // Check if the slot was booked by the SAME patient in another concurrent request
+                var samePatientAppointment = await _dbContext.Appointments
+                    .AsNoTracking()
+                    .Where(a => a.PatientId == patient.Id 
+                             && a.AppointmentSlotId == request.AppointmentSlotId
+                             && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
+                    .FirstOrDefaultAsync();
 
+                if (samePatientAppointment != null)
+                {
+                    return new AppointmentDto
+                    {
+                        Id = samePatientAppointment.Id,
+                        AppointmentCode = samePatientAppointment.AppointmentCode,
+                        PatientId = samePatientAppointment.PatientId,
+                        DoctorId = samePatientAppointment.DoctorId,
+                        DoctorName = doctorName,
+                        SpecialtyId = samePatientAppointment.SpecialtyId,
+                        SpecialtyName = specialtyName,
+                        AppointmentSlotId = samePatientAppointment.AppointmentSlotId,
+                        AppointmentDate = samePatientAppointment.AppointmentDate,
+                        StartTime = samePatientAppointment.StartTime,
+                        EndTime = samePatientAppointment.EndTime,
+                        Reason = samePatientAppointment.Reason,
+                        Status = samePatientAppointment.Status.ToString()
+                    };
+                }
+
+                throw new ConflictException("SLOT_ALREADY_BOOKED", "Slot đã được đặt hoặc không khả dụng.");
+            }
+
+            // 12. Check overlap for Patient using the canonical slot-holding policy
+            var slot = await _dbContext.AppointmentSlots.FindAsync(request.AppointmentSlotId)
+                ?? throw new NotFoundException("Slot không tồn tại.");
             var overlappingAppointment = await _dbContext.Appointments
                 .Where(a => a.PatientId == patient.Id 
                          && a.AppointmentDate == slot.SlotDate
-                         && activeStatuses.Contains(a.Status)
+                         && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status)
                          && a.StartTime < slot.EndTime 
                          && a.EndTime > slot.StartTime)
                 .FirstOrDefaultAsync();
@@ -210,7 +286,7 @@ public class AppointmentService : IAppointmentService
                         Type = NotificationType.Appointment,
                         Title = "Lịch khám mới chờ xử lý",
                         Message = $"Bệnh nhân đã đặt lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy}.",
-                        Route = "/receptionist/appointments",
+                        Route = "/reception/appointments",
                         RelatedEntityType = "Appointment",
                         RelatedEntityId = appointment.Id.ToString(),
                         DedupeKey = $"appt_booked_rec_{appointment.Id}_{recUserId}",
@@ -218,6 +294,29 @@ public class AppointmentService : IAppointmentService
                         CreatedAtUtc = DateTime.UtcNow
                     });
                 }
+            }
+
+            // Notify doctor
+            var doctorUserId = await _dbContext.Doctors
+                .Where(d => d.Id == appointment.DoctorId)
+                .Select(d => d.UserId)
+                .FirstOrDefaultAsync();
+
+            if (doctorUserId != Guid.Empty)
+            {
+                _dbContext.Notifications.Add(new Notification
+                {
+                    UserId = doctorUserId,
+                    Type = NotificationType.Appointment,
+                    Title = "Lịch khám mới chờ tiếp nhận",
+                    Message = $"Bệnh nhân đã đặt lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm}.",
+                    Route = $"/doctor/appointments/{appointment.Id}",
+                    RelatedEntityType = "Appointment",
+                    RelatedEntityId = appointment.Id.ToString(),
+                    DedupeKey = $"appt_booked_doc_{appointment.Id}_{doctorUserId}",
+                    IsRead = false,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
             }
 
             await _dbContext.SaveChangesAsync();
@@ -232,7 +331,7 @@ public class AppointmentService : IAppointmentService
                 DoctorId = appointment.DoctorId,
                 DoctorName = doctorName,
                 SpecialtyId = appointment.SpecialtyId,
-                SpecialtyName = specialty.Name,
+                SpecialtyName = specialtyName,
                 AppointmentSlotId = appointment.AppointmentSlotId,
                 AppointmentDate = appointment.AppointmentDate,
                 StartTime = appointment.StartTime,
@@ -241,15 +340,65 @@ public class AppointmentService : IAppointmentService
                 Status = appointment.Status.ToString()
             };
         }
+        catch (Exception ex) when (IsConcurrencyOrConflictException(ex))
+        {
+            if (transaction != null)
+            {
+                try { await transaction.RollbackAsync(); } catch { }
+            }
+
+            // Outside transaction, check if this patient already holds this slot (idempotency)
+            var samePatientAppointment = await _dbContext.Appointments
+                .AsNoTracking()
+                .Where(a => a.PatientId == patient.Id 
+                         && a.AppointmentSlotId == request.AppointmentSlotId
+                         && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
+                .FirstOrDefaultAsync();
+
+            if (samePatientAppointment != null)
+            {
+                return new AppointmentDto
+                {
+                    Id = samePatientAppointment.Id,
+                    AppointmentCode = samePatientAppointment.AppointmentCode,
+                    PatientId = samePatientAppointment.PatientId,
+                    DoctorId = samePatientAppointment.DoctorId,
+                    DoctorName = doctorName,
+                    SpecialtyId = samePatientAppointment.SpecialtyId,
+                    SpecialtyName = specialtyName,
+                    AppointmentSlotId = samePatientAppointment.AppointmentSlotId,
+                    AppointmentDate = samePatientAppointment.AppointmentDate,
+                    StartTime = samePatientAppointment.StartTime,
+                    EndTime = samePatientAppointment.EndTime,
+                    Reason = samePatientAppointment.Reason,
+                    Status = samePatientAppointment.Status.ToString()
+                };
+            }
+
+            throw new ConflictException("SLOT_ALREADY_BOOKED", "Slot đã được đặt hoặc đang có giao dịch xử lý đồng thời.");
+        }
         catch
         {
-            await transaction.RollbackAsync();
+            if (transaction != null)
+            {
+                try { await transaction.RollbackAsync(); } catch { }
+            }
             throw;
+        }
+        finally
+        {
+            if (transaction != null)
+            {
+                await transaction.DisposeAsync();
+            }
         }
     }
 
     public async Task<PagedResult<AppointmentDto>> GetPatientAppointmentsAsync(string? status, int page, int pageSize)
     {
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
+
         var currentUserId = _currentUserService.UserId;
         if (currentUserId == null || currentUserId == Guid.Empty)
             throw new UnauthorizedException("Chưa đăng nhập.");
@@ -425,5 +574,46 @@ public class AppointmentService : IAppointmentService
     {
         if (string.IsNullOrWhiteSpace(phone) || phone.Length < 6) return "***";
         return phone.Substring(0, 3) + "****" + phone.Substring(phone.Length - 3);
+    }
+
+    private static bool IsConcurrencyOrConflictException(Exception ex)
+    {
+        if (ex is ConflictException || ex is BusinessException || ex is NotFoundException)
+            return false;
+
+        var curr = ex;
+        while (curr != null)
+        {
+            if (curr is DbUpdateConcurrencyException)
+                return true;
+
+            var typeName = curr.GetType().FullName ?? string.Empty;
+            if (typeName.Contains("SqliteException", StringComparison.OrdinalIgnoreCase) ||
+                typeName.Contains("SqlException", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var msg = curr.Message;
+            if (msg.Contains("concurrency", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("conflict", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("deadlock", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("database is locked", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("busy", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("snapshot", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("unique constraint", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (curr is DbUpdateException)
+            {
+                return true;
+            }
+
+            curr = curr.InnerException;
+        }
+
+        return false;
     }
 }

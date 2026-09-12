@@ -381,7 +381,7 @@ export const PublicLanding: React.FC = () => {
                     ) : (
                         <div className={styles.emptyState}>
                             <Package size={40} style={{ opacity: 0.3, marginBottom: '8px' }} />
-                            <div>{packagesError ? 'Không thể tải danh sách gói khám. Vui lòng thử lại sau hoặc liên hệ hotline 1900 1234 để được tư vấn.' : 'Danh sách gói khám đang được cập nhật. Quý khách vui lòng liên hệ hotline 1900 1234 để được tư vấn.'}</div>
+                            <div>{packagesError ? 'Không thể tải danh sách gói khám. Vui lòng thử lại sau. Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.' : 'Danh sách gói khám đang được cập nhật. Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.'}</div>
                         </div>
                     )}
                 </div>

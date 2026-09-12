@@ -36,6 +36,22 @@ export const DoctorDashboard: React.FC = () => {
 
     useEffect(() => {
         loadDashboard();
+
+        const interval = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                loadDashboard();
+            }
+        }, 30000);
+
+        const onFocus = () => {
+            loadDashboard();
+        };
+        window.addEventListener('focus', onFocus);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('focus', onFocus);
+        };
     }, [loadDashboard]);
 
     const handleCheckIn = async (appointmentId: number) => {
@@ -459,6 +475,87 @@ export const DoctorDashboard: React.FC = () => {
                                                     </button>
                                                 )}
                                             </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+            {/* Upcoming 7 Days Appointments Section */}
+            <div className="card" style={{ padding: '24px', borderRadius: '12px', marginTop: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7' }}>
+                            <CalendarDays size={18} />
+                        </div>
+                        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--c-text-dark)', margin: 0 }}>
+                            Lịch khám 7 ngày tới ({dashboardData?.upcomingAppointments?.length || 0} bệnh nhân)
+                        </h2>
+                    </div>
+                    <Link to="/doctor/appointments" style={{ fontSize: '0.88rem', color: 'var(--c-primary)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span>Xem tất cả lịch hẹn</span>
+                        <ArrowRight size={14} />
+                    </Link>
+                </div>
+
+                {loading ? (
+                    <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--c-text-light)' }}>
+                        <RefreshCw size={20} className="animate-spin" style={{ margin: '0 auto 8px auto' }} />
+                        <p style={{ fontSize: '0.85rem' }}>Đang nạp lịch sắp tới...</p>
+                    </div>
+                ) : (!dashboardData?.upcomingAppointments || dashboardData.upcomingAppointments.length === 0) ? (
+                    <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--c-text-light)', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                        Không có lịch hẹn nào được ghi nhận trong 7 ngày tới.
+                    </div>
+                ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '2px solid var(--c-border)', textAlign: 'left', color: 'var(--c-text-light)', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    <th style={{ padding: '12px 10px' }}>Ngày khám</th>
+                                    <th style={{ padding: '12px 10px' }}>Khung giờ</th>
+                                    <th style={{ padding: '12px 10px' }}>Mã lịch</th>
+                                    <th style={{ padding: '12px 10px' }}>Bệnh nhân</th>
+                                    <th style={{ padding: '12px 10px' }}>Lý do khám</th>
+                                    <th style={{ padding: '12px 10px' }}>Trạng thái</th>
+                                    <th style={{ padding: '12px 10px', textAlign: 'right' }}>Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {dashboardData.upcomingAppointments.map((item) => (
+                                    <tr key={item.appointmentId} style={{ borderBottom: '1px solid var(--c-border-light)' }}>
+                                        <td style={{ padding: '14px 10px', fontWeight: 600, color: 'var(--c-text-dark)' }}>
+                                            {item.appointmentDate ? new Date(item.appointmentDate).toLocaleDateString('vi-VN') : '--'}
+                                        </td>
+                                        <td style={{ padding: '14px 10px', fontWeight: 600, color: 'var(--c-text-dark)', whiteSpace: 'nowrap' }}>
+                                            {item.startTime?.substring(0, 5) || '--:--'} - {item.endTime?.substring(0, 5) || '--:--'}
+                                        </td>
+                                        <td style={{ padding: '14px 10px', fontFamily: 'monospace', fontSize: '0.82rem', color: 'var(--c-text-light)' }}>
+                                            {item.appointmentCode}
+                                        </td>
+                                        <td style={{ padding: '14px 10px' }}>
+                                            <div style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>{item.patientName}</div>
+                                            <div style={{ fontSize: '0.78rem', color: 'var(--c-text-light)', marginTop: '2px' }}>
+                                                {item.patientPhone} {item.patientGender === 'Male' ? '• Nam' : item.patientGender === 'Female' ? '• Nữ' : ''} {item.patientAge ? `• ${item.patientAge}t` : ''}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '14px 10px', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-text)' }}>
+                                            {item.reason || 'Khám theo lịch hẹn'}
+                                        </td>
+                                        <td style={{ padding: '14px 10px' }}>
+                                            <StatusBadge status={item.status} size="sm" />
+                                        </td>
+                                        <td style={{ padding: '14px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                            <button 
+                                                className="btn-secondary"
+                                                onClick={() => navigate(`/doctor/appointments/${item.appointmentId}`)}
+                                                style={{ padding: '5px 10px', fontSize: '0.78rem' }}
+                                            >
+                                                Chi tiết
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}

@@ -12,6 +12,8 @@ export const getRoleDashboardPath = (role?: string): string => {
             return '/reception';
         case 'Pharmacist':
             return '/pharmacy';
+        case 'DiagnosticTechnician':
+            return '/diagnostics';
         case 'Patient':
             return '/patient';
         default:
@@ -64,6 +66,7 @@ export const isPathAllowedForRole = (role?: string, path?: string | null): boole
     if (cleanPath.startsWith('/admin')) return role === 'Admin';
     if (cleanPath.startsWith('/reception')) return role === 'Receptionist';
     if (cleanPath.startsWith('/pharmacy')) return role === 'Pharmacist';
+    if (cleanPath.startsWith('/diagnostics')) return role === 'DiagnosticTechnician';
 
     // Public sections are accessible by any authenticated user
     return true;
