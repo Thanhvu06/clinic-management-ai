@@ -55,8 +55,8 @@ public class AuthController : ControllerBase
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
-        var token = await _authService.ForgotPasswordAsync(request);
-        return Ok(ApiResponse<string>.Ok(token, "Yêu cầu khôi phục mật khẩu đã được xử lý."));
+        var response = await _authService.ForgotPasswordAsync(request);
+        return Ok(ApiResponse<ForgotPasswordResponse>.Ok(response, "Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu đã được xử lý."));
     }
 
     [HttpPost("reset-password")]

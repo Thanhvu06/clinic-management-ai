@@ -182,3 +182,7 @@ npm test
 1. Tuyệt đối không commit API Key thật, JWT secret key sản xuất hoặc connection string production lên git.
 2. Tất cả các endpoint nghiệp vụ đều được kiểm soát phân quyền chặt chẽ trên Backend (JWT Authorize role-based).
 3. AI chỉ đóng vai trò phân luồng thông tin tham khảo, không thay thế chẩn đoán y khoa.
+4. **Cơ chế Quên / Đặt lại mật khẩu:**
+   - Luồng trả mã token reset trực tiếp trong response API (`POST /api/v1/auth/forgot-password`) chỉ dành riêng cho môi trường Development/demo/Testing nhằm phục vụ phát triển và kiểm thử giao diện.
+   - Khi chạy ở môi trường Production, hệ thống tự động ẩn reset token (`resetToken: null`) và trả về thông báo chung để chống rò rỉ token và ngăn ngừa rủi ro dò quét tài khoản (account enumeration).
+   - Hệ thống hiện tại **chưa gửi email thật** (chưa tích hợp SMTP/email provider). Khi triển khai môi trường Production thực tế, bắt buộc phải tích hợp email provider riêng (ví dụ SMTP, SendGrid, AWS SES) để gửi liên kết đặt lại mật khẩu an toàn.
