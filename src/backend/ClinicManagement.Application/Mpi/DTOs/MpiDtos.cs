@@ -88,6 +88,7 @@ public class RegisterWalkInPatientRequest
     public string? Email { get; set; }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
+    [EnumDataType(typeof(Gender), ErrorMessage = "Giới tính không hợp lệ")]
     public Gender? Gender { get; set; }
     public DateOnly? DateOfBirth { get; set; }
 
@@ -121,6 +122,7 @@ public class UpdateMpiPatientRequest
     public string? PhoneNumber { get; set; }
     public string? Email { get; set; }
     [JsonConverter(typeof(JsonStringEnumConverter))]
+    [EnumDataType(typeof(Gender), ErrorMessage = "Giới tính không hợp lệ")]
     public Gender? Gender { get; set; }
     public DateOnly? DateOfBirth { get; set; }
     public string? Address { get; set; }
@@ -140,5 +142,11 @@ public class PatientSearchQuery
     public string? PhoneNumber { get; set; }
     public long? FacilityId { get; set; }
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 20;
+
+    private int _pageSize = 20;
+    public int PageSize
+    {
+        get => _pageSize;
+        set => _pageSize = Math.Clamp(value, 1, 100);
+    }
 }

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.Mpi.DTOs;
 using ClinicManagement.Domain.Entities;
@@ -261,53 +262,210 @@ public class HospitalCorePhase1FoundationsTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task WalkInRegistration_RollbackOnFailure_LeavesNoDirtyData()
+    public async Task WalkInRegistration_MidTransactionFailureAfterMrnSequenceUpdate_RollsBackAllEntitiesAndSequence()
     {
-        await AuthenticateAsync("rec@test.com");
+        await using var atomicFactory = new AtomicityTestWebApplicationFactory();
 
-        var nid = $"0790{Random.Shared.Next(10000000, 99999999)}";
+        int currentYear = DateTime.UtcNow.Year;
+        long initialSequence;
+        int initialPatientCount;
+        int initialAllergyCount;
+        int initialEmergencyCount;
 
-        var firstReq = new RegisterWalkInPatientRequest
+        using (var scope = atomicFactory.Services.CreateScope())
         {
-            FullName = "Bệnh Nhân Gốc",
-            NationalId = nid,
-            PhoneNumber = "0911000111"
-        };
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var seq = await db.MrnSequences.FirstOrDefaultAsync(s => s.Year == currentYear);
+            initialSequence = seq?.LastSequenceNumber ?? 0;
+            initialPatientCount = await db.Patients.CountAsync();
+            initialAllergyCount = await db.PatientAllergies.CountAsync();
+            initialEmergencyCount = await db.EmergencyContacts.CountAsync();
+        }
 
-        var firstRes = await Client.PostAsJsonAsync("/api/v1/mpi/patients/walk-in", firstReq);
-        Assert.Equal(HttpStatusCode.Created, firstRes.StatusCode);
+        // Arm interceptor to fail on Save #2 (after MrnGenerator has saved sequence update on Save #1)
+        atomicFactory.Interceptor.Reset();
+        atomicFactory.Interceptor.FailOnSaveNumber = 2;
+        atomicFactory.Interceptor.ExceptionFactory = () => new DbUpdateException(
+            "[TEST] Injected failure on Save #2 (after MRN sequence update in transaction)",
+            new Exception("Simulated DB disk failure during patient insert"));
 
-        using var scope = Factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var initialAllergyCount = await db.PatientAllergies.CountAsync();
-        var initialEmergencyCount = await db.EmergencyContacts.CountAsync();
-        var initialPatientCount = await db.Patients.CountAsync();
-
-        var duplicateReq = new RegisterWalkInPatientRequest
+        var req = new RegisterWalkInPatientRequest
         {
-            FullName = "Bệnh Nhân Bị Trùng",
-            NationalId = nid,
-            PhoneNumber = "0922000222",
+            FullName = "Bệnh Nhân Thất Bại Giữa Chừng",
+            PhoneNumber = "0988777666",
+            NationalId = "079011223344",
             Allergies = new List<CreatePatientAllergyRequest>
             {
-                new() { AllergenType = AllergenType.Drug, AllergenName = "Aspirin", Severity = AllergySeverity.Severe }
+                new() { AllergenType = AllergenType.Drug, AllergenName = "Penicillin", Severity = AllergySeverity.Severe }
             },
             EmergencyContact = new EmergencyContactDto
             {
                 FullName = "Người Thân",
-                PhoneNumber = "0933000333",
-                Relationship = "Bố"
+                Relationship = "Mẹ",
+                PhoneNumber = "0988111222"
             }
         };
 
-        var dupRes = await Client.PostAsJsonAsync("/api/v1/mpi/patients/walk-in", duplicateReq);
-        Assert.Equal(HttpStatusCode.Conflict, dupRes.StatusCode);
+        using (var scope = atomicFactory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var mrnGen = new MrnGenerator(db);
+            var mpiService = new MpiPatientService(db, mrnGen);
 
-        using var verifyScope = Factory.Services.CreateScope();
-        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
-        Assert.Equal(initialPatientCount, await verifyDb.Patients.CountAsync());
-        Assert.Equal(initialAllergyCount, await verifyDb.PatientAllergies.CountAsync());
-        Assert.Equal(initialEmergencyCount, await verifyDb.EmergencyContacts.CountAsync());
+            await Assert.ThrowsAsync<DbUpdateException>(() => mpiService.RegisterWalkInPatientAsync(req));
+        }
+
+        Assert.True(atomicFactory.Interceptor.WasTriggered, "Interceptor must have been triggered on save #2.");
+
+        // 3. Verify that the transaction completely rolled back:
+        // - MrnSequences was rolled back to its initialSequence!
+        // - Patients count was not incremented!
+        // - PatientAllergies count was not incremented!
+        // - EmergencyContacts count was not incremented!
+        using (var verifyScope = atomicFactory.Services.CreateScope())
+        {
+            var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var finalSeq = await verifyDb.MrnSequences.FirstOrDefaultAsync(s => s.Year == currentYear);
+            var finalSeqNumber = finalSeq?.LastSequenceNumber ?? 0;
+
+            Assert.Equal(initialSequence, finalSeqNumber);
+            Assert.Equal(initialPatientCount, await verifyDb.Patients.CountAsync());
+            Assert.Equal(initialAllergyCount, await verifyDb.PatientAllergies.CountAsync());
+            Assert.Equal(initialEmergencyCount, await verifyDb.EmergencyContacts.CountAsync());
+        }
+    }
+
+    [Fact]
+    public async Task WalkInRegistration_HighConcurrency_AllSucceedWithUniqueMrns()
+    {
+        await AuthenticateAsync("rec@test.com");
+
+        const int concurrency = 15;
+        var startBarrier = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var tasks = Enumerable.Range(0, concurrency).Select(async i =>
+        {
+            await startBarrier.Task;
+            var req = new RegisterWalkInPatientRequest
+            {
+                FullName = $"Bệnh Nhân Đồng Thời {i:D2}",
+                PhoneNumber = $"09{Random.Shared.Next(10000000, 99999999)}",
+                NationalId = $"079{Random.Shared.Next(100000000, 999999999)}",
+                Gender = Gender.Male,
+                DateOfBirth = new DateOnly(1990, 1, 1),
+                Address = $"Địa chỉ test {i}"
+            };
+
+            var res = await Client.PostAsJsonAsync("/api/v1/mpi/patients/walk-in", req);
+            var content = await res.Content.ReadAsStringAsync();
+            Assert.True(res.StatusCode == HttpStatusCode.Created, $"Expected Created but got {res.StatusCode}: {content}");
+            var dto = await res.Content.ReadFromJsonAsync<ApiResponse<MpiPatientDto>>();
+            return dto!.Data!;
+        }).ToList();
+
+        startBarrier.SetResult(true);
+        var results = await Task.WhenAll(tasks);
+
+        Assert.Equal(concurrency, results.Length);
+        var distinctMrns = results.Select(r => r.MedicalRecordNumber).Distinct().ToList();
+        Assert.Equal(concurrency, distinctMrns.Count);
+
+        var currentYear = DateTime.UtcNow.Year;
+        foreach (var p in results)
+        {
+            Assert.Matches($@"^BN-{currentYear}-\d{{6}}$", p.MedicalRecordNumber);
+            Assert.Null(p.UserId);
+        }
+    }
+
+    [Fact]
+    public async Task WalkInRegistration_SqlServerConcurrency_SameCccd_ExactlyOneSucceedsOthersGet409()
+    {
+        if (!await SqlServerTestHelper.IsSqlServerAvailableAsync())
+        {
+            return;
+        }
+
+        var dbName = $"ClinicCccdConc_{Guid.NewGuid():N}";
+        var connStr = SqlServerTestHelper.GetTestDatabaseConnectionString(dbName);
+
+        try
+        {
+            await SqlServerTestHelper.CreateDatabaseAsync(dbName);
+            var options = SqlServerTestHelper.CreateSqlServerOptions(connStr);
+
+            using (var initContext = new AppDbContext(options))
+            {
+                await initContext.Database.MigrateAsync();
+            }
+
+            const string duplicateCccd = "079199887766";
+            const int concurrency = 5;
+            var startBarrier = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var tasks = Enumerable.Range(0, concurrency).Select(async i =>
+            {
+                await startBarrier.Task;
+                using var context = new AppDbContext(options);
+                var mrnGen = new MrnGenerator(context);
+                var mpiService = new MpiPatientService(context, mrnGen);
+
+                var req = new RegisterWalkInPatientRequest
+                {
+                    FullName = $"Bệnh Nhân CCCD Trùng {i}",
+                    NationalId = duplicateCccd,
+                    PhoneNumber = $"09{Random.Shared.Next(10000000, 99999999)}"
+                };
+
+                try
+                {
+                    var result = await mpiService.RegisterWalkInPatientAsync(req);
+                    return (Success: true, Error: (string?)null);
+                }
+                catch (ConflictException ex)
+                {
+                    return (Success: false, Error: ex.Message);
+                }
+            }).ToList();
+
+            startBarrier.SetResult(true);
+            var results = await Task.WhenAll(tasks);
+
+            var successCount = results.Count(r => r.Success);
+            var conflictCount = results.Count(r => !r.Success && r.Error != null && r.Error.Contains(duplicateCccd));
+
+            Assert.Equal(1, successCount);
+            Assert.Equal(concurrency - 1, conflictCount);
+
+            using (var verifyCtx = new AppDbContext(options))
+            {
+                var patientsWithCccd = await verifyCtx.Patients.Where(p => p.NationalId == duplicateCccd).ToListAsync();
+                Assert.Single(patientsWithCccd);
+            }
+        }
+        finally
+        {
+            await SqlServerTestHelper.DropDatabaseAsync(dbName);
+        }
+    }
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(99)]
+    [InlineData(-1)]
+    public async Task GenderContract_UndefinedNumericEnum_MustBeRejectedWith400(int invalidGenderValue)
+    {
+        await AuthenticateAsync("rec@test.com");
+
+        var rawJson = $@"{{
+            ""fullName"": ""Bệnh Nhân Giới Tính Sai"",
+            ""phoneNumber"": ""0912345678"",
+            ""gender"": {invalidGenderValue}
+        }}";
+
+        var content = new System.Net.Http.StringContent(rawJson, System.Text.Encoding.UTF8, "application/json");
+        var res = await Client.PostAsync("/api/v1/mpi/patients/walk-in", content);
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
     }
 
     [Theory]

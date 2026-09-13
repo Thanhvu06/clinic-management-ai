@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, AlertTriangle, UserCheck, ShieldAlert, Phone, CreditCard } from 'lucide-react';
-import { mpiApi, type MpiPatientDto } from '../../api/mpiApi';
+import { mpiApi, type MpiPatientDto, type GenderType } from '../../api/mpiApi';
 
-export const formatGender = (gender?: string | number | null, genderName?: string | null): string => {
+export const formatGender = (gender?: GenderType | number | null, genderName?: string | null): string => {
     if (genderName) return genderName;
-    if (gender === 'Male' || gender === 1 || gender === 0) return 'Nam';
-    if (gender === 'Female' || gender === 2) return 'Nữ';
-    if (gender === 'Other' || gender === 3) return 'Khác';
-    if (typeof gender === 'string' && gender.trim()) return gender;
+    if (gender === 'Male' || gender === 0) return 'Nam';
+    if (gender === 'Female' || gender === 1) return 'Nữ';
+    if (gender === 'Other' || gender === 2) return 'Khác';
     return 'Chưa rõ';
 };
 

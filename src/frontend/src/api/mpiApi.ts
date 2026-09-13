@@ -10,7 +10,7 @@ export interface MpiPatientDto {
     fullName: string;
     phoneNumber?: string;
     email?: string;
-    gender?: GenderType | string | null;
+    gender?: GenderType | null;
     genderName?: string;
     dateOfBirth?: string;
     age?: number;

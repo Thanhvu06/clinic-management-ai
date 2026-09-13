@@ -40,10 +40,10 @@ public class MpiPatientService : IMpiPatientService
             dbQuery = dbQuery.Where(p => p.MedicalRecordNumber.Contains(mrn));
         }
 
-        if (!string.IsNullOrWhiteSpace(query.NationalId))
+        var normalizedNid = NormalizeNationalId(query.NationalId);
+        if (!string.IsNullOrWhiteSpace(normalizedNid))
         {
-            var nid = query.NationalId.Trim();
-            dbQuery = dbQuery.Where(p => p.NationalId != null && p.NationalId.Contains(nid));
+            dbQuery = dbQuery.Where(p => p.NationalId != null && p.NationalId.Contains(normalizedNid));
         }
 
         if (!string.IsNullOrWhiteSpace(query.BhytNumber))
@@ -76,7 +76,7 @@ public class MpiPatientService : IMpiPatientService
 
         var totalItems = await dbQuery.CountAsync(cancellationToken);
         var page = query.Page > 0 ? query.Page : 1;
-        var pageSize = query.PageSize > 0 ? query.PageSize : 20;
+        var pageSize = Math.Clamp(query.PageSize > 0 ? query.PageSize : 20, 1, 100);
 
         var items = await dbQuery
             .OrderByDescending(p => p.Id)
@@ -121,8 +121,14 @@ public class MpiPatientService : IMpiPatientService
 
     public async Task<MpiPatientDto> RegisterWalkInPatientAsync(RegisterWalkInPatientRequest request, CancellationToken cancellationToken = default)
     {
+        // 0. Validate Gender enum
+        if (request.Gender.HasValue && !Enum.IsDefined(typeof(Gender), request.Gender.Value))
+        {
+            throw new ValidationException("Gender", "Giới tính không hợp lệ.");
+        }
+
         // 1. Check duplicate NationalId if provided
-        var cleanNid = string.IsNullOrWhiteSpace(request.NationalId) ? null : request.NationalId.Trim();
+        var cleanNid = NormalizeNationalId(request.NationalId);
         if (cleanNid != null)
         {
             var existingByNid = await _dbContext.Patients
@@ -187,6 +193,11 @@ public class MpiPatientService : IMpiPatientService
 
             return await GetPatientByIdAsync(patient.Id, cancellationToken);
         }
+        catch (DbUpdateException ex) when (IsNationalIdUniqueViolation(ex))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw new ConflictException($"Bệnh nhân với số CCCD/Định danh '{cleanNid}' đã tồn tại trong hệ thống.");
+        }
         catch
         {
             await transaction.RollbackAsync(cancellationToken);
@@ -196,6 +207,12 @@ public class MpiPatientService : IMpiPatientService
 
     public async Task<MpiPatientDto> UpdatePatientMpiAsync(long patientId, UpdateMpiPatientRequest request, CancellationToken cancellationToken = default)
     {
+        // 0. Validate Gender enum
+        if (request.Gender.HasValue && !Enum.IsDefined(typeof(Gender), request.Gender.Value))
+        {
+            throw new ValidationException("Gender", "Giới tính không hợp lệ.");
+        }
+
         var patient = await _dbContext.Patients
             .Include(p => p.PrimaryFacility)
             .Include(p => p.Allergies)
@@ -205,13 +222,16 @@ public class MpiPatientService : IMpiPatientService
         if (patient == null)
             throw new NotFoundException($"Không tìm thấy hồ sơ bệnh nhân với ID: {patientId}");
 
-        if (!string.IsNullOrWhiteSpace(request.NationalId) && request.NationalId.Trim() != patient.NationalId)
+        var cleanNid = NormalizeNationalId(request.NationalId);
+        if (cleanNid != patient.NationalId)
         {
-            var cleanNid = request.NationalId.Trim();
-            var nidConflict = await _dbContext.Patients
-                .AnyAsync(p => p.Id != patientId && p.NationalId == cleanNid, cancellationToken);
-            if (nidConflict)
-                throw new ConflictException($"Số CCCD/Định danh '{cleanNid}' đã được sử dụng bởi một hồ sơ bệnh nhân khác.");
+            if (cleanNid != null)
+            {
+                var nidConflict = await _dbContext.Patients
+                    .AnyAsync(p => p.Id != patientId && p.NationalId == cleanNid, cancellationToken);
+                if (nidConflict)
+                    throw new ConflictException($"Số CCCD/Định danh '{cleanNid}' đã được sử dụng bởi một hồ sơ bệnh nhân khác.");
+            }
             patient.NationalId = cleanNid;
         }
 
@@ -226,7 +246,15 @@ public class MpiPatientService : IMpiPatientService
         patient.RhFactor = request.RhFactor?.Trim();
         patient.PrimaryFacilityId = request.PrimaryFacilityId;
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsNationalIdUniqueViolation(ex))
+        {
+            throw new ConflictException($"Số CCCD/Định danh '{cleanNid}' đã được sử dụng bởi một hồ sơ bệnh nhân khác.");
+        }
+
         return MapToMpiDto(patient);
     }
 
@@ -326,5 +354,33 @@ public class MpiPatientService : IMpiPatientService
                 IsPrimary = c.IsPrimary
             }).ToList()
         };
+    }
+
+    private static string? NormalizeNationalId(string? nationalId)
+    {
+        if (string.IsNullOrWhiteSpace(nationalId)) return null;
+        var trimmed = System.Text.RegularExpressions.Regex.Replace(nationalId.Trim(), @"\s+", "");
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
+
+    private static bool IsNationalIdUniqueViolation(DbUpdateException ex)
+    {
+        var inner = ex.InnerException;
+        if (inner == null) return false;
+
+        if (inner is Microsoft.Data.SqlClient.SqlException sqlEx
+            && (sqlEx.Number == 2627 || sqlEx.Number == 2601))
+        {
+            return sqlEx.Message.Contains("NationalId", StringComparison.OrdinalIgnoreCase)
+                || sqlEx.Message.Contains("IX_Patients_NationalId", StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (inner.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase)
+            && inner.Message.Contains("NationalId", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
     }
 }

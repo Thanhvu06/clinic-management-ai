@@ -21,7 +21,9 @@ public class PatientConfiguration : IEntityTypeConfiguration<Patient>
         builder.Property(p => p.PhoneNumber).HasMaxLength(50);
         builder.Property(p => p.Email).HasMaxLength(150);
         builder.Property(p => p.NationalId).HasMaxLength(50);
-        builder.HasIndex(p => p.NationalId);
+        builder.HasIndex(p => p.NationalId)
+            .IsUnique()
+            .HasFilter("[NationalId] IS NOT NULL");
         builder.Property(p => p.BhytNumber).HasMaxLength(50);
         builder.HasIndex(p => p.BhytNumber);
         builder.Property(p => p.BloodType).HasMaxLength(10);

@@ -291,6 +291,18 @@ public class OrganizationService : IOrganizationService
         if (!facilityExists)
             throw new NotFoundException($"Không tìm thấy cơ sở y tế với ID: {request.FacilityId}");
 
+        if (request.BuildingId.HasValue)
+        {
+            var building = await _dbContext.Buildings.FirstOrDefaultAsync(b => b.Id == request.BuildingId.Value, cancellationToken);
+            if (building == null)
+                throw new NotFoundException($"Không tìm thấy tòa nhà với ID: {request.BuildingId.Value}");
+
+            if (building.FacilityId != request.FacilityId)
+            {
+                throw new BusinessException("FACILITY_MISMATCH", "Tòa nhà không thuộc cơ sở y tế đã chỉ định cho khoa phòng.");
+            }
+        }
+
         var codeExists = await _dbContext.Departments
             .AnyAsync(d => d.FacilityId == request.FacilityId && d.Code == request.Code, cancellationToken);
         if (codeExists)
@@ -392,9 +404,33 @@ public class OrganizationService : IOrganizationService
 
     public async Task<RoomDto> CreateRoomAsync(CreateRoomRequest request, CancellationToken cancellationToken = default)
     {
-        var departmentExists = await _dbContext.Departments.AnyAsync(d => d.Id == request.DepartmentId, cancellationToken);
-        if (!departmentExists)
+        var department = await _dbContext.Departments
+            .FirstOrDefaultAsync(d => d.Id == request.DepartmentId, cancellationToken);
+        if (department == null)
             throw new NotFoundException($"Không tìm thấy khoa phòng với ID: {request.DepartmentId}");
+
+        if (request.BuildingId.HasValue)
+        {
+            var building = await _dbContext.Buildings
+                .FirstOrDefaultAsync(b => b.Id == request.BuildingId.Value, cancellationToken);
+            if (building == null)
+                throw new NotFoundException($"Không tìm thấy tòa nhà với ID: {request.BuildingId.Value}");
+
+            if (building.FacilityId != department.FacilityId)
+            {
+                throw new BusinessException("FACILITY_MISMATCH", "Tòa nhà của phòng phải thuộc cùng cơ sở y tế với khoa phòng.");
+            }
+
+            if (request.FloorNumber > building.NumberOfFloors)
+            {
+                throw new BusinessException("INVALID_FLOOR", $"Số tầng ({request.FloorNumber}) vượt quá số tầng tối đa của tòa nhà ({building.NumberOfFloors}).");
+            }
+        }
+
+        if (request.FloorNumber < 1)
+        {
+            throw new ValidationException("FloorNumber", "Số tầng phải lớn hơn hoặc bằng 1.");
+        }
 
         var numberExists = await _dbContext.Rooms
             .AnyAsync(r => r.DepartmentId == request.DepartmentId && r.RoomNumber == request.RoomNumber, cancellationToken);
@@ -476,6 +512,13 @@ public class OrganizationService : IOrganizationService
         if (room == null)
             throw new NotFoundException($"Không tìm thấy phòng với ID: {request.RoomId}");
 
+        var activeBedCount = await _dbContext.Beds
+            .CountAsync(b => b.RoomId == request.RoomId && b.IsActive, cancellationToken);
+        if (activeBedCount + 1 > room.MaxCapacity)
+        {
+            throw new BusinessException("CAPACITY_EXCEEDED", $"Số lượng giường hoạt động ({activeBedCount + 1}) vượt quá sức chứa tối đa của phòng ({room.MaxCapacity}).");
+        }
+
         var bedNumberExists = await _dbContext.Beds
             .AnyAsync(b => b.RoomId == request.RoomId && b.BedNumber == request.BedNumber, cancellationToken);
         if (bedNumberExists)
@@ -522,6 +565,20 @@ public class OrganizationService : IOrganizationService
 
         if (bed == null)
             throw new NotFoundException($"Không tìm thấy giường bệnh với ID: {id}");
+
+        if (request.IsActive.HasValue)
+        {
+            if (request.IsActive.Value && !bed.IsActive)
+            {
+                var activeBedCount = await _dbContext.Beds
+                    .CountAsync(b => b.RoomId == bed.RoomId && b.IsActive && b.Id != id, cancellationToken);
+                if (activeBedCount + 1 > bed.Room.MaxCapacity)
+                {
+                    throw new BusinessException("CAPACITY_EXCEEDED", $"Số lượng giường hoạt động ({activeBedCount + 1}) vượt quá sức chứa tối đa của phòng ({bed.Room.MaxCapacity}).");
+                }
+            }
+            bed.IsActive = request.IsActive.Value;
+        }
 
         bed.Status = request.Status;
         if (!string.IsNullOrWhiteSpace(request.Notes))

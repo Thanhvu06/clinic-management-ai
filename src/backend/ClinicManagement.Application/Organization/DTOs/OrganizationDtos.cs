@@ -213,4 +213,5 @@ public class UpdateBedStatusRequest
     [Required]
     public BedStatus Status { get; set; }
     public string? Notes { get; set; }
+    public bool? IsActive { get; set; }
 }
