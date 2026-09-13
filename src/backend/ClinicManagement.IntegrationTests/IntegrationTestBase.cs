@@ -163,10 +163,33 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
             var doctor2 = new Doctor { UserId = doc2.Id, IsActive = true, AcademicTitle = "BS", ExperienceYears = 5 };
             db.Doctors.Add(doctor2);
 
-            var patient1 = new Patient { UserId = Patient1Id, DateOfBirth = new DateOnly(1990, 1, 1), Gender = Gender.Male };
-            var patient2 = new Patient { UserId = Patient2Id, DateOfBirth = new DateOnly(1995, 1, 1), Gender = Gender.Female };
+            var patient1 = new Patient
+            {
+                UserId = Patient1Id,
+                FullName = pat1.FullName,
+                PhoneNumber = pat1.PhoneNumber,
+                Email = pat1.Email,
+                MedicalRecordNumber = $"BN-{DateTime.UtcNow.Year}-000001",
+                DateOfBirth = new DateOnly(1990, 1, 1),
+                Gender = Gender.Male
+            };
+            var patient2 = new Patient
+            {
+                UserId = Patient2Id,
+                FullName = pat2.FullName,
+                PhoneNumber = pat2.PhoneNumber,
+                Email = pat2.Email,
+                MedicalRecordNumber = $"BN-{DateTime.UtcNow.Year}-000002",
+                DateOfBirth = new DateOnly(1995, 1, 1),
+                Gender = Gender.Female
+            };
             db.Patients.Add(patient1);
             db.Patients.Add(patient2);
+            db.MrnSequences.Add(new MrnSequence
+            {
+                Year = DateTime.UtcNow.Year,
+                LastSequenceNumber = 2
+            });
 
             var canonicalSpecialties = new[]
             {

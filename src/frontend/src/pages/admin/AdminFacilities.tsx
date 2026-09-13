@@ -62,7 +62,7 @@ export const AdminFacilities: React.FC = () => {
                     selectFacility(res.data[0]);
                 }
             }
-        } catch (error: any) {
+        } catch {
             showAlert('Lỗi', 'Không thể tải danh sách cơ sở bệnh viện.', 'error');
         } finally {
             setLoading(false);

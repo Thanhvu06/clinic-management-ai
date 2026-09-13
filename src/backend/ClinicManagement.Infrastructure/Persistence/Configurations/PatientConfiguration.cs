@@ -28,11 +28,13 @@ public class PatientConfiguration : IEntityTypeConfiguration<Patient>
         builder.Property(p => p.RhFactor).HasMaxLength(10);
 
         builder.HasIndex(p => p.UserId)
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("[UserId] IS NOT NULL");
 
         builder.HasOne<ApplicationUser>()
             .WithOne()
             .HasForeignKey<Patient>(p => p.UserId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
         builder.HasOne(p => p.PrimaryFacility)

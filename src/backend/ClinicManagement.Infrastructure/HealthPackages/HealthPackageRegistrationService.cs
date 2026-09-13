@@ -381,23 +381,28 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
         });
 
         // Notify patient
-        _dbContext.Notifications.Add(new Notification
+        if (reg.Patient.UserId.HasValue)
         {
-            UserId = reg.Patient.UserId,
-            Type = NotificationType.HealthPackage,
-            Title = "Gói khám đã được xác nhận",
-            Message = $"Đăng ký gói khám '{reg.HealthPackage.Name}' của bạn đã được xác nhận thành công.",
-            Route = "/patient/health-packages",
-            RelatedEntityType = "HealthPackageRegistration",
-            RelatedEntityId = reg.Id.ToString(),
-            DedupeKey = $"pkg_reg_proc_{reg.Id}_confirmed",
-            IsRead = false,
-            CreatedAtUtc = DateTime.UtcNow
-        });
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = reg.Patient.UserId.Value,
+                Type = NotificationType.HealthPackage,
+                Title = "Gói khám đã được xác nhận",
+                Message = $"Đăng ký gói khám '{reg.HealthPackage.Name}' của bạn đã được xác nhận thành công.",
+                Route = "/patient/health-packages",
+                RelatedEntityType = "HealthPackageRegistration",
+                RelatedEntityId = reg.Id.ToString(),
+                DedupeKey = $"pkg_reg_proc_{reg.Id}_confirmed",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        var patientUser = await _dbContext.Users.FindAsync(new object[] { reg.Patient.UserId }, cancellationToken);
+        var patientUser = reg.Patient.UserId.HasValue
+            ? await _dbContext.Users.FindAsync(new object[] { reg.Patient.UserId.Value }, cancellationToken)
+            : null;
 
         return new HealthPackageRegistrationDto
         {
@@ -408,8 +413,8 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
             HealthPackageName = reg.HealthPackage.Name,
             HealthPackagePrice = reg.HealthPackage.Price,
             PatientId = reg.Patient.Id,
-            PatientName = patientUser?.FullName ?? "Bệnh nhân",
-            PatientPhone = patientUser?.PhoneNumber ?? "",
+            PatientName = patientUser?.FullName ?? reg.Patient.FullName ?? "Bệnh nhân",
+            PatientPhone = patientUser?.PhoneNumber ?? reg.Patient.PhoneNumber ?? reg.ContactPhone ?? "",
             PreferredDate = reg.PreferredDate,
             ContactPhone = reg.ContactPhone,
             Note = reg.Note,
@@ -454,23 +459,28 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
         });
 
         // Notify patient
-        _dbContext.Notifications.Add(new Notification
+        if (reg.Patient.UserId.HasValue)
         {
-            UserId = reg.Patient.UserId,
-            Type = NotificationType.HealthPackage,
-            Title = "Đăng ký gói khám đã bị hủy",
-            Message = $"Đăng ký gói khám '{reg.HealthPackage.Name}' của bạn đã bị hủy. Lý do: {reg.CancellationReason ?? "Không có lý do cụ thể"}.",
-            Route = "/patient/health-packages",
-            RelatedEntityType = "HealthPackageRegistration",
-            RelatedEntityId = reg.Id.ToString(),
-            DedupeKey = $"pkg_reg_proc_{reg.Id}_cancelled",
-            IsRead = false,
-            CreatedAtUtc = DateTime.UtcNow
-        });
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = reg.Patient.UserId.Value,
+                Type = NotificationType.HealthPackage,
+                Title = "Đăng ký gói khám đã bị hủy",
+                Message = $"Đăng ký gói khám '{reg.HealthPackage.Name}' của bạn đã bị hủy. Lý do: {reg.CancellationReason ?? "Không có lý do cụ thể"}.",
+                Route = "/patient/health-packages",
+                RelatedEntityType = "HealthPackageRegistration",
+                RelatedEntityId = reg.Id.ToString(),
+                DedupeKey = $"pkg_reg_proc_{reg.Id}_cancelled",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        var patientUser = await _dbContext.Users.FindAsync(new object[] { reg.Patient.UserId }, cancellationToken);
+        var patientUser = reg.Patient.UserId.HasValue
+            ? await _dbContext.Users.FindAsync(new object[] { reg.Patient.UserId.Value }, cancellationToken)
+            : null;
 
         return new HealthPackageRegistrationDto
         {
@@ -481,8 +491,8 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
             HealthPackageName = reg.HealthPackage.Name,
             HealthPackagePrice = reg.HealthPackage.Price,
             PatientId = reg.Patient.Id,
-            PatientName = patientUser?.FullName ?? "Bệnh nhân",
-            PatientPhone = patientUser?.PhoneNumber ?? "",
+            PatientName = patientUser?.FullName ?? reg.Patient.FullName ?? "Bệnh nhân",
+            PatientPhone = patientUser?.PhoneNumber ?? reg.Patient.PhoneNumber ?? "",
             PreferredDate = reg.PreferredDate,
             ContactPhone = reg.ContactPhone,
             Note = reg.Note,

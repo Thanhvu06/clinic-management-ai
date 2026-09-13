@@ -122,90 +122,76 @@ public class MpiPatientService : IMpiPatientService
     public async Task<MpiPatientDto> RegisterWalkInPatientAsync(RegisterWalkInPatientRequest request, CancellationToken cancellationToken = default)
     {
         // 1. Check duplicate NationalId if provided
-        if (!string.IsNullOrWhiteSpace(request.NationalId))
+        var cleanNid = string.IsNullOrWhiteSpace(request.NationalId) ? null : request.NationalId.Trim();
+        if (cleanNid != null)
         {
-            var cleanNid = request.NationalId.Trim();
             var existingByNid = await _dbContext.Patients
                 .FirstOrDefaultAsync(p => p.NationalId == cleanNid, cancellationToken);
             if (existingByNid != null)
                 throw new ConflictException($"Bệnh nhân với số CCCD/Định danh '{cleanNid}' đã tồn tại trong hệ thống (Mã MRN: {existingByNid.MedicalRecordNumber}).");
         }
 
-        // 2. Generate new MRN
-        var mrn = await _mrnGenerator.GenerateNextMrnAsync(cancellationToken);
-
-        // 3. Create ApplicationUser shadow account for walk-in patient
-        var cleanEmail = request.Email?.Trim() ?? $"{mrn.ToLowerInvariant().Replace("-", "")}@guest.cliniccare.local";
-        var cleanPhone = !string.IsNullOrWhiteSpace(request.PhoneNumber)
-            ? request.PhoneNumber.Trim()
-            : $"09{Math.Abs(mrn.GetHashCode()) % 90000000 + 10000000}";
-
-        var shadowUser = new ClinicManagement.Infrastructure.Identity.ApplicationUser
+        // 2. Generate new MRN and persist Patient inside transaction
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        try
         {
-            UserName = $"walkin_{mrn.ToLowerInvariant().Replace("-", "_")}",
-            NormalizedUserName = $"WALKIN_{mrn.ToUpperInvariant().Replace("-", "_")}",
-            Email = cleanEmail,
-            NormalizedEmail = cleanEmail.ToUpperInvariant(),
-            FullName = request.FullName.Trim(),
-            PhoneNumber = cleanPhone,
-            SecurityStamp = Guid.NewGuid().ToString(),
-            ConcurrencyStamp = Guid.NewGuid().ToString(),
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-        _dbContext.Users.Add(shadowUser);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            var mrn = await _mrnGenerator.GenerateNextMrnAsync(cancellationToken);
 
-        // 4. Create Patient
-        var patient = new Patient
-        {
-            UserId = shadowUser.Id,
-            MedicalRecordNumber = mrn,
-            FullName = request.FullName.Trim(),
-            PhoneNumber = request.PhoneNumber?.Trim() ?? cleanPhone,
-            Email = request.Email?.Trim() ?? cleanEmail,
-            Gender = request.Gender,
-            DateOfBirth = request.DateOfBirth,
-            Address = request.Address?.Trim(),
-            NationalId = request.NationalId?.Trim(),
-            BhytNumber = request.BhytNumber?.Trim(),
-            BloodType = request.BloodType?.Trim(),
-            RhFactor = request.RhFactor?.Trim(),
-            PrimaryFacilityId = request.PrimaryFacilityId
-        };
-
-        if (request.Allergies != null && request.Allergies.Count > 0)
-        {
-            foreach (var a in request.Allergies)
+            var patient = new Patient
             {
-                patient.Allergies.Add(new PatientAllergy
+                UserId = null,
+                MedicalRecordNumber = mrn,
+                FullName = request.FullName.Trim(),
+                PhoneNumber = request.PhoneNumber?.Trim(),
+                Email = request.Email?.Trim(),
+                Gender = request.Gender,
+                DateOfBirth = request.DateOfBirth,
+                Address = request.Address?.Trim(),
+                NationalId = cleanNid,
+                BhytNumber = request.BhytNumber?.Trim(),
+                BloodType = request.BloodType?.Trim(),
+                RhFactor = request.RhFactor?.Trim(),
+                PrimaryFacilityId = request.PrimaryFacilityId
+            };
+
+            if (request.Allergies != null && request.Allergies.Count > 0)
+            {
+                foreach (var a in request.Allergies)
                 {
-                    AllergenType = a.AllergenType,
-                    AllergenName = a.AllergenName.Trim(),
-                    Severity = a.Severity,
-                    ReactionDescription = a.ReactionDescription?.Trim(),
-                    RecordedAtUtc = DateTime.UtcNow
+                    patient.Allergies.Add(new PatientAllergy
+                    {
+                        AllergenType = a.AllergenType,
+                        AllergenName = a.AllergenName.Trim(),
+                        Severity = a.Severity,
+                        ReactionDescription = a.ReactionDescription?.Trim(),
+                        RecordedAtUtc = DateTime.UtcNow
+                    });
+                }
+            }
+
+            if (request.EmergencyContact != null && !string.IsNullOrWhiteSpace(request.EmergencyContact.FullName))
+            {
+                patient.EmergencyContacts.Add(new EmergencyContact
+                {
+                    FullName = request.EmergencyContact.FullName.Trim(),
+                    Relationship = request.EmergencyContact.Relationship.Trim(),
+                    PhoneNumber = request.EmergencyContact.PhoneNumber.Trim(),
+                    Address = request.EmergencyContact.Address?.Trim(),
+                    IsPrimary = true
                 });
             }
-        }
 
-        if (request.EmergencyContact != null && !string.IsNullOrWhiteSpace(request.EmergencyContact.FullName))
+            _dbContext.Patients.Add(patient);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            return await GetPatientByIdAsync(patient.Id, cancellationToken);
+        }
+        catch
         {
-            patient.EmergencyContacts.Add(new EmergencyContact
-            {
-                FullName = request.EmergencyContact.FullName.Trim(),
-                Relationship = request.EmergencyContact.Relationship.Trim(),
-                PhoneNumber = request.EmergencyContact.PhoneNumber.Trim(),
-                Address = request.EmergencyContact.Address?.Trim(),
-                IsPrimary = true
-            });
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
         }
-
-        _dbContext.Patients.Add(patient);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        return await GetPatientByIdAsync(patient.Id, cancellationToken);
     }
 
     public async Task<MpiPatientDto> UpdatePatientMpiAsync(long patientId, UpdateMpiPatientRequest request, CancellationToken cancellationToken = default)

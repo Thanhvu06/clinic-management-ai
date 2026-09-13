@@ -263,10 +263,72 @@ describe('Hospital Core Phase 1 Frontend Components', () => {
             fireEvent.click(submitBtn);
 
             await waitFor(() => {
-                expect(mpiApi.registerWalkIn).toHaveBeenCalled();
+                expect(mpiApi.registerWalkIn).toHaveBeenCalledWith(expect.objectContaining({
+                    fullName: 'NGUYỄN VĂN AN',
+                    gender: 'Male'
+                }));
                 expect(screen.getByText('Tiếp nhận bệnh nhân thành công!')).toBeInTheDocument();
                 expect(screen.getByText('BN-2026-000001')).toBeInTheDocument();
             });
+        });
+
+        it('submits correct gender enum payload when Female or Other is selected', async () => {
+            vi.mocked(organizationApi.getFacilities).mockResolvedValue({
+                success: true,
+                message: 'OK',
+                data: mockFacilities
+            });
+
+            vi.mocked(mpiApi.registerWalkIn).mockResolvedValue({
+                success: true,
+                message: 'Đăng ký thành công',
+                data: { ...mockMpiPatient, gender: 'Female', fullName: 'TRẦN THỊ HOA' }
+            });
+
+            render(
+                <DialogProvider>
+                    <BrowserRouter>
+                        <WalkInPatientRegistration />
+                    </BrowserRouter>
+                </DialogProvider>
+            );
+
+            await waitFor(() => {
+                expect(screen.getByText(/Tiếp nhận bệnh nhân vãng lai/i)).toBeInTheDocument();
+            });
+
+            const nameInput = screen.getByPlaceholderText(/NGUYỄN VĂN A/i);
+            fireEvent.change(nameInput, { target: { value: 'TRẦN THỊ HOA' } });
+
+            const genderSelect = screen.getByDisplayValue('Nam');
+            fireEvent.change(genderSelect, { target: { value: 'Female' } });
+
+            const submitBtn = screen.getByRole('button', { name: /Xác nhận tiếp nhận & Cấp MRN/i });
+            fireEvent.click(submitBtn);
+
+            await waitFor(() => {
+                expect(mpiApi.registerWalkIn).toHaveBeenCalledWith(expect.objectContaining({
+                    fullName: 'TRẦN THỊ HOA',
+                    gender: 'Female'
+                }));
+            });
+        });
+    });
+
+    describe('formatGender helper', () => {
+        it('correctly maps enum values, legacy numbers, and null/falsy', async () => {
+            const { formatGender } = await import('../pages/reception/MpiPatientSearchModal');
+            expect(formatGender('Male')).toBe('Nam');
+            expect(formatGender('Female')).toBe('Nữ');
+            expect(formatGender('Other')).toBe('Khác');
+            expect(formatGender(undefined, 'Nam')).toBe('Nam');
+            expect(formatGender(undefined, 'Nữ')).toBe('Nữ');
+            expect(formatGender(0)).toBe('Nam'); // 0 must NOT evaluate as 'Chưa rõ'
+            expect(formatGender(1)).toBe('Nam');
+            expect(formatGender(2)).toBe('Nữ');
+            expect(formatGender(3)).toBe('Khác');
+            expect(formatGender(null)).toBe('Chưa rõ');
+            expect(formatGender(undefined)).toBe('Chưa rõ');
         });
     });
 });

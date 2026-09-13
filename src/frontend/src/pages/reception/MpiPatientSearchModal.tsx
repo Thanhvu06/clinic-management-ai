@@ -2,6 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Search, X, AlertTriangle, UserCheck, ShieldAlert, Phone, CreditCard } from 'lucide-react';
 import { mpiApi, type MpiPatientDto } from '../../api/mpiApi';
 
+export const formatGender = (gender?: string | number | null, genderName?: string | null): string => {
+    if (genderName) return genderName;
+    if (gender === 'Male' || gender === 1 || gender === 0) return 'Nam';
+    if (gender === 'Female' || gender === 2) return 'Nữ';
+    if (gender === 'Other' || gender === 3) return 'Khác';
+    if (typeof gender === 'string' && gender.trim()) return gender;
+    return 'Chưa rõ';
+};
+
 interface MpiPatientSearchModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -258,7 +267,7 @@ export const MpiPatientSearchModal: React.FC<MpiPatientSearchModalProps> = ({
                                                     {p.fullName}
                                                 </span>
                                                 <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                                                    ({p.gender || 'Chưa rõ'}{p.age ? ` - ${p.age} tuổi` : ''})
+                                                    ({formatGender(p.gender, p.genderName)}{p.age ? ` - ${p.age} tuổi` : ''})
                                                 </span>
                                                 {p.bloodType && (
                                                     <span style={{

@@ -54,7 +54,8 @@ public class MasterPatientIndexTests : IntegrationTestBase
 
         var created = await res.Content.ReadFromJsonAsync<ApiResponse<MpiPatientDto>>();
         Assert.NotNull(created?.Data);
-        Assert.StartsWith("MRN-", created.Data.MedicalRecordNumber);
+        Assert.Null(created.Data.UserId);
+        Assert.StartsWith("BN-", created.Data.MedicalRecordNumber);
         Assert.Equal("Nguyễn Văn Cấp Cứu", created.Data.FullName);
         Assert.Equal("079085001234", created.Data.NationalId);
         Assert.Single(created.Data.Allergies);

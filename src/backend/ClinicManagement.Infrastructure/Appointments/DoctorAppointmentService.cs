@@ -59,7 +59,8 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
         var query = from a in _dbContext.Appointments
                     join p in _dbContext.Patients on a.PatientId equals p.Id
-                    join u in _dbContext.Users on p.UserId equals u.Id
+                    join u in _dbContext.Users on p.UserId equals (Guid?)u.Id into uGroup
+                    from u in uGroup.DefaultIfEmpty()
                     join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
                     where a.DoctorId == doctor.Id && a.AppointmentDate == targetDate
                     orderby a.StartTime ascending
@@ -71,8 +72,8 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                         StartTime = a.StartTime,
                         EndTime = a.EndTime,
                         PatientId = p.Id,
-                        PatientName = u.FullName,
-                        PatientPhone = u.PhoneNumber ?? string.Empty,
+                        PatientName = u != null ? u.FullName : (p.FullName ?? string.Empty),
+                        PatientPhone = u != null ? (u.PhoneNumber ?? string.Empty) : (p.PhoneNumber ?? string.Empty),
                         PatientGender = p.Gender.HasValue ? p.Gender.Value.ToString() : string.Empty,
                         PatientDob = p.DateOfBirth,
                         Reason = a.Reason,
@@ -164,7 +165,8 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         var upcomingEndDate = targetDate.AddDays(7);
         var upcomingQuery = from a in _dbContext.Appointments
                             join p in _dbContext.Patients on a.PatientId equals p.Id
-                            join u in _dbContext.Users on p.UserId equals u.Id
+                            join u in _dbContext.Users on p.UserId equals (Guid?)u.Id into uGroup
+                            from u in uGroup.DefaultIfEmpty()
                             join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
                             where a.DoctorId == doctor.Id
                                   && a.AppointmentDate > targetDate
@@ -179,8 +181,8 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                                 StartTime = a.StartTime,
                                 EndTime = a.EndTime,
                                 PatientId = p.Id,
-                                PatientName = u.FullName,
-                                PatientPhone = u.PhoneNumber ?? string.Empty,
+                                PatientName = u != null ? u.FullName : (p.FullName ?? string.Empty),
+                                PatientPhone = u != null ? (u.PhoneNumber ?? string.Empty) : (p.PhoneNumber ?? string.Empty),
                                 PatientGender = p.Gender.HasValue ? p.Gender.Value.ToString() : string.Empty,
                                 PatientDob = p.DateOfBirth,
                                 Reason = a.Reason,
@@ -240,7 +242,8 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
         var appointments = await (from a in _dbContext.Appointments
                                   join p in _dbContext.Patients on a.PatientId equals p.Id
-                                  join u in _dbContext.Users on p.UserId equals u.Id
+                                  join u in _dbContext.Users on p.UserId equals (Guid?)u.Id into uGroup
+                                  from u in uGroup.DefaultIfEmpty()
                                   where a.DoctorId == doctor.Id && a.AppointmentDate >= fromDate && a.AppointmentDate <= toDate
                                   select new
                                   {
@@ -248,7 +251,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                                       a.AppointmentSlotId,
                                       a.AppointmentCode,
                                       a.Status,
-                                      PatientName = u.FullName
+                                      PatientName = u != null ? u.FullName : (p.FullName ?? string.Empty)
                                   }).ToListAsync();
 
         var apptMap = appointments.ToDictionary(a => a.AppointmentSlotId);
@@ -331,13 +334,14 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
         var query = from a in _dbContext.Appointments
                     join p in _dbContext.Patients on a.PatientId equals p.Id
-                    join pu in _dbContext.Users on p.UserId equals pu.Id
+                    join pu in _dbContext.Users on p.UserId equals (Guid?)pu.Id into puGroup
+                    from pu in puGroup.DefaultIfEmpty()
                     where a.DoctorId == doctor.Id
                     select new
                     {
                         Appointment = a,
-                        PatientName = pu.FullName,
-                        PatientPhone = pu.PhoneNumber ?? string.Empty,
+                        PatientName = pu != null ? pu.FullName : (p.FullName ?? string.Empty),
+                        PatientPhone = pu != null ? (pu.PhoneNumber ?? string.Empty) : (p.PhoneNumber ?? string.Empty),
                         PatientGender = p.Gender,
                         PatientDob = p.DateOfBirth
                     };
@@ -375,13 +379,14 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
         var query = from a in _dbContext.Appointments
                     join p in _dbContext.Patients on a.PatientId equals p.Id
-                    join pu in _dbContext.Users on p.UserId equals pu.Id
+                    join pu in _dbContext.Users on p.UserId equals (Guid?)pu.Id into puGroup
+                    from pu in puGroup.DefaultIfEmpty()
                     where a.Id == appointmentId && a.DoctorId == doctor.Id
                     select new
                     {
                         Appointment = a,
-                        PatientName = pu.FullName,
-                        PatientPhone = pu.PhoneNumber,
+                        PatientName = pu != null ? pu.FullName : (p.FullName ?? string.Empty),
+                        PatientPhone = pu != null ? (pu.PhoneNumber ?? string.Empty) : (p.PhoneNumber ?? string.Empty),
                         PatientGender = p.Gender,
                         PatientDob = p.DateOfBirth
                     };
@@ -435,7 +440,9 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         if (appointment == null)
             throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
 
-        var patientUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == appointment.Patient.UserId);
+        var patientUser = appointment.Patient.UserId.HasValue
+            ? await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == appointment.Patient.UserId.Value)
+            : null;
         var doctorUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == doctor.UserId);
 
         var pastAppointments = await _dbContext.Appointments
@@ -594,20 +601,20 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         PrescriptionDraftDto? presDto = null;
         if (appointment.Prescription != null)
         {
-            presDto = MapPrescriptionToDto(appointment.Prescription, doctorUser?.FullName ?? "Bác sĩ", patientUser?.FullName ?? "Bệnh nhân");
+            presDto = MapPrescriptionToDto(appointment.Prescription, doctorUser?.FullName ?? "Bác sĩ", patientUser?.FullName ?? appointment.Patient.FullName ?? "Bệnh nhân");
         }
 
         return new PatientClinicalContextDto
         {
             PatientId = appointment.PatientId,
-            PatientName = patientUser?.FullName ?? "Bệnh nhân",
-            PatientPhone = patientUser?.PhoneNumber ?? string.Empty,
+            PatientName = patientUser?.FullName ?? appointment.Patient.FullName ?? "Bệnh nhân",
+            PatientPhone = patientUser?.PhoneNumber ?? appointment.Patient.PhoneNumber ?? string.Empty,
             PatientGender = appointment.Patient.Gender.HasValue ? appointment.Patient.Gender.Value.ToString() : string.Empty,
             PatientDob = appointment.Patient.DateOfBirth,
             Address = appointment.Patient.Address,
             TotalPastVisits = pastVisitDtos.Count,
             PastVisits = pastVisitDtos,
-            CurrentAppointment = MapToDto(appointment, patientUser?.FullName ?? "", patientUser?.PhoneNumber ?? "", appointment.Patient.Gender, appointment.Patient.DateOfBirth),
+            CurrentAppointment = MapToDto(appointment, patientUser?.FullName ?? appointment.Patient.FullName ?? "", patientUser?.PhoneNumber ?? appointment.Patient.PhoneNumber ?? "", appointment.Patient.Gender, appointment.Patient.DateOfBirth),
             VitalSigns = vitalsDto,
             LatestKnownVitals = latestKnownVitals,
             Encounter = encounterDto,
@@ -852,11 +859,11 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 .Select(p => p.UserId)
                 .FirstOrDefaultAsync();
 
-            if (patientUserId != Guid.Empty)
+            if (patientUserId.HasValue && patientUserId.Value != Guid.Empty)
             {
                 _dbContext.Notifications.Add(new Notification
                 {
-                    UserId = patientUserId,
+                    UserId = patientUserId.Value,
                     Type = NotificationType.Prescription,
                     Title = "Hoàn thành buổi khám bệnh",
                     Message = $"Buổi khám #{appointment.AppointmentCode} đã hoàn tất. Bạn có thể xem kết luận khám và đơn thuốc trực tuyến.",
@@ -986,11 +993,11 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 .Select(p => p.UserId)
                 .FirstOrDefaultAsync();
 
-            if (patientUserId != Guid.Empty)
+            if (patientUserId.HasValue && patientUserId.Value != Guid.Empty)
             {
                 _dbContext.Notifications.Add(new Notification
                 {
-                    UserId = patientUserId,
+                    UserId = patientUserId.Value,
                     Type = NotificationType.Revisit,
                     Title = "Đề xuất tái khám mới",
                     Message = $"Bác sĩ đã gửi đề xuất tái khám sau buổi khám #{appointment.AppointmentCode}. Vui lòng xác nhận lịch tái khám.",
@@ -1204,9 +1211,11 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         if (prescription == null) return null;
 
         var doctorUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == doctor.UserId);
-        var patientUser = prescription.Patient != null ? await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == prescription.Patient.UserId) : null;
+        var patientUser = prescription.Patient != null && prescription.Patient.UserId.HasValue
+            ? await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == prescription.Patient.UserId.Value)
+            : null;
 
-        return MapPrescriptionToDto(prescription, doctorUser?.FullName ?? "Bác sĩ", patientUser?.FullName ?? "Bệnh nhân");
+        return MapPrescriptionToDto(prescription, doctorUser?.FullName ?? "Bác sĩ", patientUser?.FullName ?? prescription.Patient?.FullName ?? "Bệnh nhân");
     }
 
     public async Task<PrescriptionDraftDto> SavePrescriptionDraftAsync(long appointmentId, SavePrescriptionDraftRequest request)

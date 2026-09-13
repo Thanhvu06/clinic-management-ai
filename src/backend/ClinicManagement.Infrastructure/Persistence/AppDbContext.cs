@@ -130,14 +130,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
 
     public override System.Threading.Tasks.Task<int> SaveChangesAsync(System.Threading.CancellationToken cancellationToken = default)
     {
-        foreach (var entry in ChangeTracker.Entries<Patient>())
-        {
-            if (entry.State == EntityState.Added && string.IsNullOrWhiteSpace(entry.Entity.MedicalRecordNumber))
-            {
-                entry.Entity.MedicalRecordNumber = $"MRN-{DateTime.UtcNow.Year}-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
-            }
-        }
-
         if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
         {
             foreach (var entry in ChangeTracker.Entries())

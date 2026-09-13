@@ -30,7 +30,7 @@ public class PatientService : IPatientService
                              select new PatientProfileDto
                              {
                                  Id = p.Id,
-                                 UserId = p.UserId,
+                                 UserId = userId,
                                  FullName = u.FullName,
                                  Email = u.Email ?? string.Empty,
                                  PhoneNumber = u.PhoneNumber ?? string.Empty,

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using ClinicManagement.Domain.Enums;
 
 namespace ClinicManagement.Application.Mpi.DTOs;
@@ -8,12 +9,20 @@ namespace ClinicManagement.Application.Mpi.DTOs;
 public class MpiPatientDto
 {
     public long Id { get; set; }
-    public Guid UserId { get; set; }
+    public Guid? UserId { get; set; }
     public string MedicalRecordNumber { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
     public string? Email { get; set; }
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public Gender? Gender { get; set; }
+    public string? GenderName => Gender switch
+    {
+        Domain.Enums.Gender.Male => "Nam",
+        Domain.Enums.Gender.Female => "Nữ",
+        Domain.Enums.Gender.Other => "Khác",
+        _ => null
+    };
     public DateOnly? DateOfBirth { get; set; }
     public int? Age { get; set; }
     public string? Address { get; set; }
@@ -78,6 +87,7 @@ public class RegisterWalkInPatientRequest
     [EmailAddress(ErrorMessage = "Email không hợp lệ")]
     public string? Email { get; set; }
 
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public Gender? Gender { get; set; }
     public DateOnly? DateOfBirth { get; set; }
 
@@ -110,6 +120,7 @@ public class UpdateMpiPatientRequest
 
     public string? PhoneNumber { get; set; }
     public string? Email { get; set; }
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public Gender? Gender { get; set; }
     public DateOnly? DateOfBirth { get; set; }
     public string? Address { get; set; }

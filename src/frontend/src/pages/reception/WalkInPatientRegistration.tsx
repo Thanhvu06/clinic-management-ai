@@ -3,7 +3,7 @@ import {
     UserPlus, Search, ShieldAlert, HeartPulse, User, Phone, 
     Plus, Trash2, CheckCircle2, Printer, RotateCcw
 } from 'lucide-react';
-import { mpiApi, type RegisterWalkInPatientPayload, type MpiPatientDto } from '../../api/mpiApi';
+import { mpiApi, type RegisterWalkInPatientPayload, type MpiPatientDto, type GenderType } from '../../api/mpiApi';
 import { organizationApi, type FacilityDto } from '../../api/organizationApi';
 import { useDialog } from '../../contexts/DialogContext';
 import { MpiPatientSearchModal } from './MpiPatientSearchModal';
@@ -29,7 +29,7 @@ export const WalkInPatientRegistration: React.FC = () => {
     const [fullName, setFullName] = useState('');
     const [phoneNumber, setPhoneNumber] = useState('');
     const [email, setEmail] = useState('');
-    const [gender, setGender] = useState('1'); // 1: Male, 2: Female, 3: Other
+    const [gender, setGender] = useState<GenderType>('Male');
     const [dateOfBirth, setDateOfBirth] = useState('');
     const [address, setAddress] = useState('');
     const [nationalId, setNationalId] = useState('');
@@ -101,7 +101,7 @@ export const WalkInPatientRegistration: React.FC = () => {
         setFullName('');
         setPhoneNumber('');
         setEmail('');
-        setGender('1');
+        setGender('Male');
         setDateOfBirth('');
         setAddress('');
         setNationalId('');
@@ -138,7 +138,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                 fullName: fullName.trim(),
                 phoneNumber: phoneNumber.trim() || undefined,
                 email: email.trim() || undefined,
-                gender: parseInt(gender, 10),
+                gender: gender,
                 dateOfBirth: dateOfBirth || undefined,
                 address: address.trim() || undefined,
                 nationalId: nationalId.trim() || undefined,
@@ -380,12 +380,12 @@ export const WalkInPatientRegistration: React.FC = () => {
                                 <select
                                     className="form-select"
                                     value={gender}
-                                    onChange={(e) => setGender(e.target.value)}
+                                    onChange={(e) => setGender(e.target.value as GenderType)}
                                     style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
                                 >
-                                    <option value="1">Nam</option>
-                                    <option value="2">Nữ</option>
-                                    <option value="3">Khác</option>
+                                    <option value="Male">Nam</option>
+                                    <option value="Female">Nữ</option>
+                                    <option value="Other">Khác</option>
                                 </select>
                             </div>
 

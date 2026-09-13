@@ -885,11 +885,11 @@ public class ChangeRequestService : IChangeRequestService
                                    where a.Id == appointmentId
                                    select p.UserId).FirstOrDefaultAsync();
 
-        if (patientUserId != Guid.Empty)
+        if (patientUserId.HasValue && patientUserId.Value != Guid.Empty)
         {
             _dbContext.Notifications.Add(new Notification
             {
-                UserId = patientUserId,
+                UserId = patientUserId.Value,
                 Type = NotificationType.AppointmentChangeRequest,
                 Title = title,
                 Message = message,

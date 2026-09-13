@@ -253,11 +253,11 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                     .Select(p => p.UserId)
                     .FirstOrDefaultAsync();
 
-                if (patientUserId != Guid.Empty)
+                if (patientUserId.HasValue && patientUserId.Value != Guid.Empty)
                 {
                     _dbContext.Notifications.Add(new Notification
                     {
-                        UserId = patientUserId,
+                        UserId = patientUserId.Value,
                         Type = NotificationType.Diagnostic,
                         Title = "Chỉ định cận lâm sàng mới",
                         Message = $"Bác sĩ đã tạo phiếu chỉ định cận lâm sàng #{order.OrderCode} cho lịch khám của bạn.",
@@ -476,7 +476,10 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             var clean = search.Trim().ToLower();
             query = query.Where(o => o.OrderCode.ToLower().Contains(clean) ||
                                      o.Appointment.AppointmentCode.ToLower().Contains(clean) ||
-                                     _dbContext.Users.Any(u => u.Id == o.Patient.UserId && (u.FullName.ToLower().Contains(clean) || (u.PhoneNumber != null && u.PhoneNumber.Contains(clean)))));
+                                     (o.Patient.FullName != null && o.Patient.FullName.ToLower().Contains(clean)) ||
+                                     (o.Patient.PhoneNumber != null && o.Patient.PhoneNumber.Contains(clean)) ||
+                                     (o.Patient.MedicalRecordNumber != null && o.Patient.MedicalRecordNumber.ToLower().Contains(clean)) ||
+                                     _dbContext.Users.Any(u => o.Patient.UserId != null && u.Id == o.Patient.UserId && (u.FullName.ToLower().Contains(clean) || (u.PhoneNumber != null && u.PhoneNumber.Contains(clean)))));
         }
 
         var totalItems = await query.CountAsync();
@@ -826,7 +829,9 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         if (order == null) return null;
 
-        var patientUser = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == order.Patient.UserId);
+        var patientUser = order.Patient.UserId.HasValue
+            ? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == order.Patient.UserId.Value)
+            : null;
         var orderingDocUser = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == order.OrderingDoctor.UserId);
         var reviewedDocUser = order.ReviewedByDoctor != null
             ? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == order.ReviewedByDoctor.UserId)
@@ -909,8 +914,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             AppointmentCode = order.Appointment?.AppointmentCode ?? string.Empty,
             AppointmentDate = order.Appointment?.AppointmentDate ?? DateOnly.FromDateTime(order.OrderedAtUtc),
             PatientId = order.PatientId,
-            PatientName = patientUser?.FullName ?? "Bệnh nhân",
-            PatientPhone = patientUser?.PhoneNumber ?? string.Empty,
+            PatientName = patientUser?.FullName ?? order.Patient.FullName ?? "Bệnh nhân",
+            PatientPhone = patientUser?.PhoneNumber ?? order.Patient.PhoneNumber ?? string.Empty,
             PatientGender = order.Patient.Gender.HasValue ? order.Patient.Gender.Value.ToString() : string.Empty,
             PatientDob = order.Patient.DateOfBirth,
             PatientAge = patientAge,

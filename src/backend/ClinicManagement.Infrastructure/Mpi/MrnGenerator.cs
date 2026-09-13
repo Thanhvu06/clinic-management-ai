@@ -20,7 +20,7 @@ public class MrnGenerator : IMrnGenerator
     public async Task<string> GenerateNextMrnAsync(CancellationToken cancellationToken = default)
     {
         var currentYear = DateTime.UtcNow.Year;
-        const int maxRetries = 3;
+        const int maxRetries = 10;
 
         for (var attempt = 0; attempt < maxRetries; attempt++)
         {
@@ -31,10 +31,27 @@ public class MrnGenerator : IMrnGenerator
 
                 if (sequence == null)
                 {
+                    var prefix = $"BN-{currentYear}-";
+                    var maxExistingMrn = await _dbContext.Patients
+                        .Where(p => p.MedicalRecordNumber.StartsWith(prefix))
+                        .Select(p => p.MedicalRecordNumber)
+                        .OrderByDescending(m => m)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                    long initialSeq = 0;
+                    if (maxExistingMrn != null && maxExistingMrn.Length >= prefix.Length + 6)
+                    {
+                        var seqPart = maxExistingMrn.Substring(prefix.Length);
+                        if (long.TryParse(seqPart, out var parsed))
+                        {
+                            initialSeq = parsed;
+                        }
+                    }
+
                     sequence = new MrnSequence
                     {
                         Year = currentYear,
-                        LastSequenceNumber = 1
+                        LastSequenceNumber = initialSeq + 1
                     };
                     _dbContext.MrnSequences.Add(sequence);
                 }
@@ -45,16 +62,25 @@ public class MrnGenerator : IMrnGenerator
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
 
-                return $"MRN-{currentYear}-{sequence.LastSequenceNumber:D6}";
+                return $"BN-{currentYear}-{sequence.LastSequenceNumber:D6}";
             }
-            catch (DbUpdateConcurrencyException) when (attempt < maxRetries - 1)
+            catch (Exception ex) when (ex is DbUpdateConcurrencyException or DbUpdateException)
             {
-                // Retry on concurrency collision
-                await Task.Delay(50 * (attempt + 1), cancellationToken);
+                // Always clear change tracker to purge the failed entity state before retry
+                _dbContext.ChangeTracker.Clear();
+
+                if (attempt == maxRetries - 1)
+                {
+                    throw new InvalidOperationException(
+                        $"Không thể phát sinh mã bệnh án duy nhất sau {maxRetries} lần thử do xung đột dữ liệu đồng thời.", ex);
+                }
+
+                // Exponential backoff with random jitter to prevent lock-step retry collisions
+                var delayMs = Random.Shared.Next(25, 75) * (attempt + 1);
+                await Task.Delay(delayMs, cancellationToken);
             }
         }
 
-        // Fallback in case of persistent collision
-        return $"MRN-{currentYear}-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+        throw new InvalidOperationException($"Không thể phát sinh mã bệnh án duy nhất cho năm {currentYear}.");
     }
 }

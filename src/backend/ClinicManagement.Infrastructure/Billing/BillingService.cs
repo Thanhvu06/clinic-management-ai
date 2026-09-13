@@ -107,17 +107,20 @@ public class BillingService : IBillingService
                     CreatedAt = _dateTimeProvider.VietnamNow
                 });
 
-                await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
+                if (appointment.Patient.UserId.HasValue)
                 {
-                    UserId = appointment.Patient.UserId,
-                    Type = NotificationType.Invoice,
-                    Title = "Hóa đơn mới được tạo",
-                    Message = $"Hóa đơn #{invoice.InvoiceCode} cho lịch khám #{appointment.AppointmentCode} đã được tạo với số tiền {invoice.TotalAmount:N0}đ.",
-                    Route = "/patient/invoices",
-                    RelatedEntityType = "Invoice",
-                    RelatedEntityId = invoice.Id.ToString(),
-                    DedupeKey = $"inv_created_{invoice.Id}"
-                }, cancellationToken);
+                    await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
+                    {
+                        UserId = appointment.Patient.UserId.Value,
+                        Type = NotificationType.Invoice,
+                        Title = "Hóa đơn mới được tạo",
+                        Message = $"Hóa đơn #{invoice.InvoiceCode} cho lịch khám #{appointment.AppointmentCode} đã được tạo với số tiền {invoice.TotalAmount:N0}đ.",
+                        Route = "/patient/invoices",
+                        RelatedEntityType = "Invoice",
+                        RelatedEntityId = invoice.Id.ToString(),
+                        DedupeKey = $"inv_created_{invoice.Id}"
+                    }, cancellationToken);
+                }
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -218,17 +221,20 @@ public class BillingService : IBillingService
                     CreatedAt = _dateTimeProvider.VietnamNow
                 });
 
-                await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
+                if (registration.Patient.UserId.HasValue)
                 {
-                    UserId = registration.Patient.UserId,
-                    Type = NotificationType.Invoice,
-                    Title = "Hóa đơn mới được tạo",
-                    Message = $"Hóa đơn #{invoice.InvoiceCode} cho gói khám #{registration.RegistrationCode} đã được tạo với số tiền {invoice.TotalAmount:N0}đ.",
-                    Route = "/patient/invoices",
-                    RelatedEntityType = "Invoice",
-                    RelatedEntityId = invoice.Id.ToString(),
-                    DedupeKey = $"inv_created_{invoice.Id}"
-                }, cancellationToken);
+                    await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
+                    {
+                        UserId = registration.Patient.UserId.Value,
+                        Type = NotificationType.Invoice,
+                        Title = "Hóa đơn mới được tạo",
+                        Message = $"Hóa đơn #{invoice.InvoiceCode} cho gói khám #{registration.RegistrationCode} đã được tạo với số tiền {invoice.TotalAmount:N0}đ.",
+                        Route = "/patient/invoices",
+                        RelatedEntityType = "Invoice",
+                        RelatedEntityId = invoice.Id.ToString(),
+                        DedupeKey = $"inv_created_{invoice.Id}"
+                    }, cancellationToken);
+                }
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -338,17 +344,20 @@ public class BillingService : IBillingService
                 });
 
                 var methodLabel = payment.Method == PaymentMethod.Cash ? "Tiền mặt" : "Chuyển khoản";
-                await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
+                if (currentInvoice.Patient.UserId.HasValue)
                 {
-                    UserId = currentInvoice.Patient.UserId,
-                    Type = NotificationType.Payment,
-                    Title = "Thanh toán thành công",
-                    Message = $"Hóa đơn #{currentInvoice.InvoiceCode} đã được thanh toán thành công ({payment.Amount:N0}đ qua {methodLabel}).",
-                    Route = "/patient/invoices",
-                    RelatedEntityType = "Invoice",
-                    RelatedEntityId = currentInvoice.Id.ToString(),
-                    DedupeKey = $"pay_success_{paymentCode}"
-                }, cancellationToken);
+                    await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
+                    {
+                        UserId = currentInvoice.Patient.UserId.Value,
+                        Type = NotificationType.Payment,
+                        Title = "Thanh toán thành công",
+                        Message = $"Hóa đơn #{currentInvoice.InvoiceCode} đã được thanh toán thành công ({payment.Amount:N0}đ qua {methodLabel}).",
+                        Route = "/patient/invoices",
+                        RelatedEntityType = "Invoice",
+                        RelatedEntityId = currentInvoice.Id.ToString(),
+                        DedupeKey = $"pay_success_{paymentCode}"
+                    }, cancellationToken);
+                }
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -417,17 +426,20 @@ public class BillingService : IBillingService
             CreatedAt = _dateTimeProvider.VietnamNow
         });
 
-        await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
+        if (invoice.Patient.UserId.HasValue)
         {
-            UserId = invoice.Patient.UserId,
-            Type = NotificationType.Invoice,
-            Title = "Hóa đơn đã bị hủy",
-            Message = $"Hóa đơn #{invoice.InvoiceCode} đã bị hủy. Lý do: {invoice.CancellationReason}.",
-            Route = "/patient/invoices",
-            RelatedEntityType = "Invoice",
-            RelatedEntityId = invoice.Id.ToString(),
-            DedupeKey = $"inv_cancelled_{invoice.Id}"
-        }, cancellationToken);
+            await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
+            {
+                UserId = invoice.Patient.UserId.Value,
+                Type = NotificationType.Invoice,
+                Title = "Hóa đơn đã bị hủy",
+                Message = $"Hóa đơn #{invoice.InvoiceCode} đã bị hủy. Lý do: {invoice.CancellationReason}.",
+                Route = "/patient/invoices",
+                RelatedEntityType = "Invoice",
+                RelatedEntityId = invoice.Id.ToString(),
+                DedupeKey = $"inv_cancelled_{invoice.Id}"
+            }, cancellationToken);
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -472,7 +484,11 @@ public class BillingService : IBillingService
                 (i.Appointment != null && i.Appointment.AppointmentCode.Contains(search)) ||
                 (i.HealthPackageRegistration != null && i.HealthPackageRegistration.RegistrationCode.Contains(search)) ||
                 (i.HealthPackageRegistration != null && i.HealthPackageRegistration.ContactPhone.Contains(search)) ||
+                (i.Patient.FullName != null && i.Patient.FullName.Contains(search)) ||
+                (i.Patient.PhoneNumber != null && i.Patient.PhoneNumber.Contains(search)) ||
+                (i.Patient.MedicalRecordNumber != null && i.Patient.MedicalRecordNumber.Contains(search)) ||
                 _dbContext.Users.Any(u =>
+                    i.Patient.UserId != null &&
                     u.Id == i.Patient.UserId &&
                     (u.FullName.Contains(search) ||
                      (u.PhoneNumber != null && u.PhoneNumber.Contains(search)))));
@@ -489,7 +505,7 @@ public class BillingService : IBillingService
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 
-        var patientUserIds = items.Select(i => i.Patient.UserId).Distinct().ToList();
+        var patientUserIds = items.Where(i => i.Patient.UserId.HasValue).Select(i => i.Patient.UserId!.Value).Distinct().ToList();
         var staffUserIds = items.Select(i => i.CreatedByUserId)
             .Concat(items.Where(i => i.PaidByUserId.HasValue).Select(i => i.PaidByUserId!.Value))
             .Distinct().ToList();
@@ -518,7 +534,8 @@ public class BillingService : IBillingService
         if (invoice == null)
             throw new NotFoundException("Hóa đơn không tồn tại.");
 
-        var userIds = new List<Guid> { invoice.Patient.UserId, invoice.CreatedByUserId };
+        var userIds = new List<Guid> { invoice.CreatedByUserId };
+        if (invoice.Patient.UserId.HasValue) userIds.Add(invoice.Patient.UserId.Value);
         if (invoice.PaidByUserId.HasValue) userIds.Add(invoice.PaidByUserId.Value);
         userIds.AddRange(invoice.Payments.Select(p => p.ReceivedByUserId));
 
@@ -554,7 +571,7 @@ public class BillingService : IBillingService
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 
-        var userIds = items.Select(i => i.Patient.UserId)
+        var userIds = items.Where(i => i.Patient.UserId.HasValue).Select(i => i.Patient.UserId!.Value)
             .Concat(items.Select(i => i.CreatedByUserId))
             .Concat(items.Where(i => i.PaidByUserId.HasValue).Select(i => i.PaidByUserId!.Value))
             .Distinct().ToList();
@@ -582,7 +599,8 @@ public class BillingService : IBillingService
         if (invoice == null || invoice.PatientId != patientId)
             throw new NotFoundException("Hóa đơn không tồn tại.");
 
-        var userIds = new List<Guid> { invoice.Patient.UserId, invoice.CreatedByUserId };
+        var userIds = new List<Guid> { invoice.CreatedByUserId };
+        if (invoice.Patient.UserId.HasValue) userIds.Add(invoice.Patient.UserId.Value);
         if (invoice.PaidByUserId.HasValue) userIds.Add(invoice.PaidByUserId.Value);
         userIds.AddRange(invoice.Payments.Select(p => p.ReceivedByUserId));
 
@@ -772,7 +790,11 @@ public class BillingService : IBillingService
 
     private static InvoiceDto MapToDto(Invoice i, Dictionary<Guid, UserInfo> userMap)
     {
-        userMap.TryGetValue(i.Patient.UserId, out var patUser);
+        UserInfo? patUser = null;
+        if (i.Patient.UserId.HasValue)
+        {
+            userMap.TryGetValue(i.Patient.UserId.Value, out patUser);
+        }
         userMap.TryGetValue(i.CreatedByUserId, out var creatorUser);
         UserInfo? payerUser = null;
         if (i.PaidByUserId.HasValue) userMap.TryGetValue(i.PaidByUserId.Value, out payerUser);
@@ -782,8 +804,8 @@ public class BillingService : IBillingService
             Id = i.Id,
             InvoiceCode = i.InvoiceCode,
             PatientId = i.PatientId,
-            PatientName = patUser?.FullName ?? string.Empty,
-            PatientPhone = patUser?.PhoneNumber ?? (i.HealthPackageRegistration?.ContactPhone ?? string.Empty),
+            PatientName = patUser?.FullName ?? i.Patient.FullName ?? string.Empty,
+            PatientPhone = patUser?.PhoneNumber ?? i.Patient.PhoneNumber ?? (i.HealthPackageRegistration?.ContactPhone ?? string.Empty),
             SourceType = i.SourceType,
             SourceTypeName = i.SourceType == InvoiceSourceType.Appointment ? "Khám bệnh" : "Gói khám sức khỏe",
             AppointmentId = i.AppointmentId,

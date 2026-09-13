@@ -116,8 +116,8 @@ public class PharmacyService : IPharmacyService
 
         if (prescription == null) throw new NotFoundException("Đơn thuốc không tồn tại.");
 
-        var patientUser = prescription.Patient != null 
-            ? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == prescription.Patient.UserId) 
+        var patientUser = prescription.Patient != null && prescription.Patient.UserId.HasValue
+            ? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == prescription.Patient.UserId.Value) 
             : null;
         var doctorUser = prescription.Doctor != null 
             ? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == prescription.Doctor.UserId) 
@@ -129,8 +129,8 @@ public class PharmacyService : IPharmacyService
             AppointmentId = prescription.AppointmentId,
             AppointmentCode = prescription.Appointment?.AppointmentCode ?? $"APT-{prescription.AppointmentId}",
             PatientId = prescription.PatientId,
-            PatientName = patientUser?.FullName ?? "Bệnh nhân",
-            PatientPhone = patientUser?.PhoneNumber ?? "",
+            PatientName = patientUser?.FullName ?? prescription.Patient?.FullName ?? "Bệnh nhân",
+            PatientPhone = patientUser?.PhoneNumber ?? prescription.Patient?.PhoneNumber ?? "",
             DoctorId = prescription.DoctorId,
             DoctorName = doctorUser?.FullName ?? "Bác sĩ",
             Status = prescription.Status.ToString(),
@@ -237,12 +237,12 @@ public class PharmacyService : IPharmacyService
                     .Select(p => p.UserId)
                     .FirstOrDefaultAsync();
 
-                if (patientUserId != Guid.Empty)
+                if (patientUserId.HasValue && patientUserId.Value != Guid.Empty)
                 {
                     var appointmentCode = prescription.Appointment?.AppointmentCode ?? $"#{prescription.AppointmentId}";
                     _dbContext.Notifications.Add(new Notification
                     {
-                        UserId = patientUserId,
+                        UserId = patientUserId.Value,
                         Type = NotificationType.Prescription,
                         Title = "Đơn thuốc đã được phát",
                         Message = $"Đơn thuốc #{prescription.Id} cho lịch khám {appointmentCode} đã được nhà thuốc cấp phát thành công.",

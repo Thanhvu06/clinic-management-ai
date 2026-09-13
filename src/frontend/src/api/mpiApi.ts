@@ -1,14 +1,17 @@
 import axiosClient from './axiosClient';
 import type { ApiResponse } from '../types';
 
+export type GenderType = 'Male' | 'Female' | 'Other';
+
 export interface MpiPatientDto {
     id: number;
-    userId?: string;
+    userId?: string | null;
     medicalRecordNumber: string;
     fullName: string;
     phoneNumber?: string;
     email?: string;
-    gender?: string;
+    gender?: GenderType | string | null;
+    genderName?: string;
     dateOfBirth?: string;
     age?: number;
     address?: string;
@@ -48,7 +51,7 @@ export interface RegisterWalkInPatientPayload {
     fullName: string;
     phoneNumber?: string;
     email?: string;
-    gender?: number | string;
+    gender?: GenderType | null;
     dateOfBirth?: string;
     address?: string;
     nationalId?: string;
