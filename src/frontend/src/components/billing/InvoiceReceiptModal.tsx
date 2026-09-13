@@ -122,7 +122,7 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
                                 <div className={styles.infoRow}>
                                     <span className={styles.infoLabel}>Nguồn phát sinh:</span>
                                     <span className={styles.infoValue}>
-                                        {invoice.sourceTypeName} ({invoice.appointmentCode || invoice.registrationCode || 'N/A'})
+                                        {invoice.sourceTypeName} ({invoice.visitCode || invoice.appointmentCode || invoice.registrationCode || (invoice.patientVisitId ? `#${invoice.patientVisitId}` : 'N/A')})
                                     </span>
                                 </div>
                                 <div className={styles.infoRow}>

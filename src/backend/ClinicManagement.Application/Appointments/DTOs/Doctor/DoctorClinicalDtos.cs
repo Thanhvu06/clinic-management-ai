@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using ClinicManagement.Application.Appointments.DTOs;
+using ClinicManagement.Application.Diagnostics.DTOs;
 
 namespace ClinicManagement.Application.Appointments.DTOs.Doctor;
 
@@ -21,8 +22,11 @@ public class DoctorDashboardDto
 
 public class DoctorQueueItemDto
 {
-    public long AppointmentId { get; set; }
+    public long? AppointmentId { get; set; }
     public string AppointmentCode { get; set; } = string.Empty;
+    public long? PatientVisitId { get; set; }
+    public string? VisitCode { get; set; }
+    public int? QueueNumber { get; set; }
     public int QueueOrder { get; set; }
     public DateOnly AppointmentDate { get; set; }
     public TimeOnly StartTime { get; set; }
@@ -77,7 +81,9 @@ public class DoctorSlotDetailDto
 public class ClinicalEncounterDto
 {
     public long Id { get; set; }
-    public long AppointmentId { get; set; }
+    public long? AppointmentId { get; set; }
+    public long? PatientVisitId { get; set; }
+    public string? VisitCode { get; set; }
     public long DoctorId { get; set; }
     public string DoctorName { get; set; } = string.Empty;
     public string? ChiefComplaint { get; set; }
@@ -108,7 +114,9 @@ public class SaveEncounterRequest
 public class VitalSignsDto
 {
     public long Id { get; set; }
-    public long AppointmentId { get; set; }
+    public long? AppointmentId { get; set; }
+    public long? PatientVisitId { get; set; }
+    public string? VisitCode { get; set; }
     public decimal? Temperature { get; set; }
     public int? BloodPressureSystolic { get; set; }
     public int? BloodPressureDiastolic { get; set; }
@@ -139,7 +147,9 @@ public class SaveVitalSignsRequest
 public class PrescriptionDraftDto
 {
     public long Id { get; set; }
-    public long AppointmentId { get; set; }
+    public long? AppointmentId { get; set; }
+    public long? PatientVisitId { get; set; }
+    public string? VisitCode { get; set; }
     public long DoctorId { get; set; }
     public string DoctorName { get; set; } = string.Empty;
     public long PatientId { get; set; }
@@ -227,6 +237,12 @@ public class PatientClinicalContextDto
     public PrescriptionDraftDto? Prescription { get; set; }
     public List<PatientVitalHistoryItemDto> VitalHistory { get; set; } = new();
     public AnthropometricComparisonDto? AnthropometricComparison { get; set; }
+    public long? PatientVisitId { get; set; }
+    public string? VisitCode { get; set; }
+    public int? QueueNumber { get; set; }
+    public string? Mrn { get; set; }
+    public string? VisitStatus { get; set; }
+    public List<DiagnosticOrderDto> DiagnosticOrders { get; set; } = new();
 }
 
 public class PatientVitalHistoryItemDto

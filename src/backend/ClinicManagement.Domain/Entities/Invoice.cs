@@ -11,6 +11,7 @@ public class Invoice
     public long PatientId { get; set; }
     public InvoiceSourceType SourceType { get; set; }
     public long? AppointmentId { get; set; }
+    public long? PatientVisitId { get; set; }
     public long? HealthPackageRegistrationId { get; set; }
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Unpaid;
     public decimal Subtotal { get; set; }
@@ -26,6 +27,7 @@ public class Invoice
     // Navigation properties
     public Patient Patient { get; set; } = null!;
     public Appointment? Appointment { get; set; }
+    public PatientVisit? PatientVisit { get; set; }
     public HealthPackageRegistration? HealthPackageRegistration { get; set; }
     public ICollection<InvoiceItem> Items { get; set; } = new List<InvoiceItem>();
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();

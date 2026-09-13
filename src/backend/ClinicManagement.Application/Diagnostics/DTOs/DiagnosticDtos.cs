@@ -46,8 +46,10 @@ public class DiagnosticOrderDto
 {
     public long Id { get; set; }
     public string OrderCode { get; set; } = string.Empty;
-    public long AppointmentId { get; set; }
+    public long? AppointmentId { get; set; }
     public string AppointmentCode { get; set; } = string.Empty;
+    public long? PatientVisitId { get; set; }
+    public string? VisitCode { get; set; }
     public DateOnly AppointmentDate { get; set; }
 
     public long PatientId { get; set; }

@@ -28,6 +28,7 @@ import { ReceptionAppointments } from './pages/reception/ReceptionAppointments';
 import { ReceptionPackageRegistrations } from './pages/reception/ReceptionPackageRegistrations';
 import { ReceptionChangeRequests } from './pages/reception/ReceptionChangeRequests';
 import { ReceptionBilling } from './pages/reception/ReceptionBilling';
+import { WalkInPatientRegistration } from './pages/reception/WalkInPatientRegistration';
 import { DoctorDashboard } from './pages/doctor/DoctorDashboard';
 import { DoctorQueue } from './pages/doctor/DoctorQueue';
 import { DoctorSchedule } from './pages/doctor/DoctorSchedule';
@@ -44,6 +45,7 @@ import { AdminHealthPackages } from './pages/admin/AdminHealthPackages';
 import { AdminMedicines } from './pages/admin/AdminMedicines';
 import { AdminAuditLogs } from './pages/admin/AdminAuditLogs';
 import { AdminBilling } from './pages/admin/AdminBilling';
+import { AdminFacilities } from './pages/admin/AdminFacilities';
 import { PharmacyDashboard } from './pages/pharmacy/PharmacyDashboard';
 import { PharmacyPrescriptions } from './pages/pharmacy/PharmacyPrescriptions';
 import { PharmacyInventory } from './pages/pharmacy/PharmacyInventory';
@@ -111,6 +113,7 @@ function App() {
                                     {/* Receptionist Routes */}
                                     <Route element={<RoleRoute roles={['Receptionist']} />}>
                                         <Route path="/reception" element={<ReceptionistDashboard />} />
+                                        <Route path="/reception/walk-in" element={<WalkInPatientRegistration />} />
                                         <Route path="/reception/appointments" element={<ReceptionAppointments />} />
                                         <Route path="/reception/package-registrations" element={<ReceptionPackageRegistrations />} />
                                         <Route path="/reception/billing" element={<ReceptionBilling />} />
@@ -125,6 +128,7 @@ function App() {
                                         <Route path="/doctor/appointments" element={<DoctorAppointments />} />
                                         <Route path="/doctor/appointments/:id" element={<DoctorAppointmentDetail />} />
                                         <Route path="/doctor/appointments/:id/examination" element={<DoctorExaminationWorkspace />} />
+                                        <Route path="/doctor/visits/:visitId/examination" element={<DoctorExaminationWorkspace />} />
                                         <Route path="/doctor/diagnostic-orders/:id/print" element={<DiagnosticOrderPrint />} />
                                         <Route path="/doctor/leave-requests" element={<DoctorLeaveRequests />} />
                                     </Route>
@@ -132,6 +136,7 @@ function App() {
                                     {/* Admin Routes */}
                                     <Route element={<RoleRoute roles={['Admin']} />}>
                                         <Route path="/admin" element={<AdminDashboard />} />
+                                        <Route path="/admin/facilities" element={<AdminFacilities />} />
                                         <Route path="/admin/billing" element={<AdminBilling />} />
                                         <Route path="/admin/accounts" element={<AdminUsers />} />
                                         <Route path="/admin/specialties" element={<AdminSpecialties />} />

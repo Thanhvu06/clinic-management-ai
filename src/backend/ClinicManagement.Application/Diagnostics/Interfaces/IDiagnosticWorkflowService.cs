@@ -14,7 +14,9 @@ public interface IDiagnosticWorkflowService
 
     // Doctor operations
     Task<DiagnosticOrderDto> CreateOrderForDoctorAsync(long appointmentId, CreateDiagnosticOrderRequest request);
+    Task<DiagnosticOrderDto> CreateOrderForVisitDoctorAsync(long visitId, CreateDiagnosticOrderRequest request);
     Task<List<DiagnosticOrderDto>> GetOrdersByAppointmentForDoctorAsync(long appointmentId);
+    Task<List<DiagnosticOrderDto>> GetOrdersByVisitForDoctorAsync(long visitId);
     Task<DiagnosticOrderDto> GetOrderByIdForDoctorAsync(long orderId);
     Task<DiagnosticOrderDto> ReviewOrderAsync(long orderId, TransitionDiagnosticOrderRequest? request);
     Task<DiagnosticOrderDto> CancelOrderAsync(long orderId, CancelDiagnosticOrderRequest? request);

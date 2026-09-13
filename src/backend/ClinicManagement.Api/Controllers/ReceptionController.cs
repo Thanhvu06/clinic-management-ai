@@ -18,11 +18,16 @@ public class ReceptionController : ControllerBase
 {
     private readonly IReceptionService _receptionService;
     private readonly IChangeRequestService _changeRequestService;
+    private readonly ClinicManagement.Application.Visits.Interfaces.IPatientVisitService _patientVisitService;
 
-    public ReceptionController(IReceptionService receptionService, IChangeRequestService changeRequestService)
+    public ReceptionController(
+        IReceptionService receptionService,
+        IChangeRequestService changeRequestService,
+        ClinicManagement.Application.Visits.Interfaces.IPatientVisitService patientVisitService)
     {
         _receptionService = receptionService;
         _changeRequestService = changeRequestService;
+        _patientVisitService = patientVisitService;
     }
 
     [HttpGet("stats")]
@@ -61,10 +66,17 @@ public class ReceptionController : ControllerBase
     }
 
     [HttpPost("appointments/{id}/check-in")]
-    public async Task<IActionResult> CheckInAppointment(long id)
+    public async Task<IActionResult> CheckInAppointment(long id, System.Threading.CancellationToken cancellationToken)
     {
-        await _receptionService.CheckInAppointmentAsync(id);
-        return Ok(ApiResponse.Ok("Tiếp nhận và check-in bệnh nhân thành công."));
+        var ticket = await _patientVisitService.CheckInAppointmentAsync(new ClinicManagement.Application.Visits.DTOs.AppointmentCheckInRequest { AppointmentId = id }, cancellationToken);
+        return Ok(ApiResponse<ClinicManagement.Application.Visits.DTOs.CheckInTicketDto>.Ok(ticket, "Tiếp nhận và check-in bệnh nhân thành công."));
+    }
+
+    [HttpPost("walk-in")]
+    public async Task<IActionResult> RegisterWalkIn([FromBody] ClinicManagement.Application.Visits.DTOs.WalkInRegistrationRequest request, System.Threading.CancellationToken cancellationToken)
+    {
+        var ticket = await _patientVisitService.CreateWalkInVisitAsync(request, cancellationToken);
+        return Ok(ApiResponse<ClinicManagement.Application.Visits.DTOs.CheckInTicketDto>.Ok(ticket, "Tiếp nhận bệnh nhân vãng lai thành công."));
     }
 
     [HttpGet("change-requests")]

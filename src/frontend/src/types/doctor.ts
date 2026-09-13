@@ -17,8 +17,11 @@ export interface DoctorDashboardKpisDto {
 }
 
 export interface DoctorQueueItemDto {
-    appointmentId: number;
+    appointmentId?: number | null;
     appointmentCode: string;
+    patientVisitId?: number | null;
+    visitCode?: string | null;
+    queueNumber?: number | null;
     patientId: number;
     patientName: string;
     patientPhone: string;

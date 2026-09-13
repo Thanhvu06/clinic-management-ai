@@ -236,14 +236,23 @@ public static class DevelopmentDataSeeder
         await db.SaveChangesAsync();
 
         // 4. Patients
+        var mrnGenerator = serviceProvider.GetService<ClinicManagement.Application.Mpi.Interfaces.IMrnGenerator>();
         for (int i = 0; i < patUsers.Count; i++)
         {
             var pdef = patientDefs[i];
             if (!await db.Patients.AnyAsync(p => p.UserId == patUsers[i].Id))
             {
+                var mrn = mrnGenerator != null
+                    ? await mrnGenerator.GenerateNextMrnAsync()
+                    : $"BN-{DateTime.UtcNow.Year}-{(1000 + i + 1):D6}";
+
                 db.Patients.Add(new Patient
                 {
                     UserId = patUsers[i].Id,
+                    FullName = pdef.Name,
+                    PhoneNumber = pdef.Phone,
+                    Email = pdef.Email,
+                    MedicalRecordNumber = mrn,
                     DateOfBirth = pdef.Dob,
                     Gender = pdef.Gender
                 });
@@ -474,7 +483,7 @@ public static class DevelopmentDataSeeder
                     Action = AppointmentHistoryAction.Created,
                     NewStatus = AppointmentStatus.Pending,
                     Note = "Bệnh nhân tự đặt lịch hẹn qua ứng dụng",
-                    PerformedByUserId = p.UserId,
+                    PerformedByUserId = p.UserId ?? Guid.Empty,
                     CreatedAt = DateTime.UtcNow.AddDays(-10)
                 });
 
@@ -534,7 +543,7 @@ public static class DevelopmentDataSeeder
                         OldStatus = AppointmentStatus.Pending,
                         NewStatus = AppointmentStatus.Cancelled,
                         Note = "Bệnh nhân thông báo bận việc đột xuất xin hủy lịch",
-                        PerformedByUserId = p.UserId,
+                        PerformedByUserId = p.UserId ?? Guid.Empty,
                         CreatedAt = DateTime.UtcNow.AddDays(-2)
                     });
                 }
@@ -688,7 +697,7 @@ public static class DevelopmentDataSeeder
                         RequestType = AppointmentChangeRequestType.Cancellation,
                         Reason = "Bận chuyến công tác đột xuất tại Hà Nội",
                         Status = AppointmentChangeRequestStatus.Pending,
-                        RequestedByUserId = pendingAppt.Patient.UserId,
+                        RequestedByUserId = pendingAppt.Patient.UserId ?? Guid.Empty,
                         CreatedAt = DateTime.UtcNow
                     });
                 }
@@ -704,7 +713,7 @@ public static class DevelopmentDataSeeder
                         RequestedSlotId = rescheduleSlot?.Id ?? confAppt.AppointmentSlotId,
                         Reason = "Xin dời ngày khám sang tuần sau vì việc gia đình",
                         Status = AppointmentChangeRequestStatus.Pending,
-                        RequestedByUserId = confAppt.Patient.UserId,
+                        RequestedByUserId = confAppt.Patient.UserId ?? Guid.Empty,
                         CreatedAt = DateTime.UtcNow
                     });
                 }

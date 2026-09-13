@@ -62,13 +62,23 @@ export const DoctorQueue: React.FC = () => {
         }
     };
 
-    const handleStartConsultation = async (appointmentId: number) => {
-        setActionLoadingId(appointmentId);
+    const handleStartConsultation = async (item: DoctorQueueItemDto) => {
+        const targetId = item.appointmentId || item.patientVisitId;
+        if (!targetId) return;
+        setActionLoadingId(targetId);
         try {
-            const res = await doctorApi.startConsultation(appointmentId);
-            if (res.success) {
-                showToast('Bắt đầu phiên khám lâm sàng.', 'success');
-                navigate(`/doctor/appointments/${appointmentId}/examination`);
+            if (item.appointmentId) {
+                const res = await doctorApi.startConsultation(item.appointmentId);
+                if (res.success) {
+                    showToast('Bắt đầu phiên khám lâm sàng.', 'success');
+                    navigate(`/doctor/appointments/${item.appointmentId}/examination`);
+                }
+            } else if (item.patientVisitId) {
+                const res = await doctorApi.startVisitConsultation(item.patientVisitId);
+                if (res.success) {
+                    showToast('Bắt đầu phiên khám lâm sàng.', 'success');
+                    navigate(`/doctor/visits/${item.patientVisitId}/examination`);
+                }
             }
         } catch (err: any) {
             showToast(err?.message || 'Không thể bắt đầu phiên khám.', 'error');
@@ -77,13 +87,27 @@ export const DoctorQueue: React.FC = () => {
         }
     };
 
+    const getExaminationUrl = (item: DoctorQueueItemDto) => {
+        if (item.appointmentId) {
+            return `/doctor/appointments/${item.appointmentId}/examination`;
+        }
+        if (item.patientVisitId) {
+            return `/doctor/visits/${item.patientVisitId}/examination`;
+        }
+        return '/doctor/queue';
+    };
+
     const handleMarkNoShow = (item: DoctorQueueItemDto) => {
+        if (!item.appointmentId) {
+            showToast('Chỉ áp dụng vắng mặt cho lịch hẹn có đặt trước.', 'warning');
+            return;
+        }
         showConfirm(
             `Xác nhận đánh dấu bệnh nhân "${item.patientName}" vắng mặt cho ca khám lúc ${item.startTime.substring(0, 5)}?`,
             async () => {
-                setActionLoadingId(item.appointmentId);
+                setActionLoadingId(item.appointmentId!);
                 try {
-                    const res = await doctorApi.markNoShow(item.appointmentId, 'Bệnh nhân vắng mặt tại phòng khám.');
+                    const res = await doctorApi.markNoShow(item.appointmentId!, 'Bệnh nhân vắng mặt tại phòng khám.');
                     if (res.success) {
                         showToast('Đã đánh dấu bệnh nhân vắng mặt.', 'info');
                         await loadQueue();
@@ -112,6 +136,8 @@ export const DoctorQueue: React.FC = () => {
         Confirmed: queue.filter(i => i.status === 'Confirmed').length,
         CheckedIn: queue.filter(i => i.status === 'CheckedIn').length,
         InConsultation: queue.filter(i => i.status === 'InConsultation').length,
+        ResultsReady: queue.filter(i => i.status === 'ResultsReady').length,
+        InDiagnostics: queue.filter(i => i.status === 'InDiagnostics').length,
         Completed: queue.filter(i => i.status === 'Completed').length,
         NoShow: queue.filter(i => i.status === 'NoShow').length,
     };
@@ -188,6 +214,8 @@ export const DoctorQueue: React.FC = () => {
                         { key: 'Confirmed', label: `Chờ tiếp nhận (${statusCounts.Confirmed})` },
                         { key: 'CheckedIn', label: `Đã tiếp nhận (${statusCounts.CheckedIn})` },
                         { key: 'InConsultation', label: `Đang khám (${statusCounts.InConsultation})` },
+                        { key: 'InDiagnostics', label: `Chờ CLS (${statusCounts.InDiagnostics})` },
+                        { key: 'ResultsReady', label: `Có kết quả CLS (${statusCounts.ResultsReady})` },
                         { key: 'Completed', label: `Đã xong (${statusCounts.Completed})` },
                         { key: 'NoShow', label: `Vắng mặt (${statusCounts.NoShow})` },
                     ].map(tab => (
@@ -244,10 +272,11 @@ export const DoctorQueue: React.FC = () => {
                             <tbody>
                                 {filteredQueue.map((item, idx) => {
                                     const isCurrent = item.status === 'InConsultation';
-                                    const isWaiting = item.status === 'CheckedIn';
+                                    const isWaiting = item.status === 'CheckedIn' || item.status === 'WaitingDoctor';
+                                    const rowKey = item.appointmentId ? `apt-${item.appointmentId}` : `visit-${item.patientVisitId || idx}`;
                                     return (
                                         <tr 
-                                            key={item.appointmentId}
+                                            key={rowKey}
                                             style={{
                                                 backgroundColor: isCurrent 
                                                     ? 'rgba(15, 76, 129, 0.05)' 
@@ -337,7 +366,7 @@ export const DoctorQueue: React.FC = () => {
                                                             <button 
                                                                 type="button"
                                                                 className="btn-secondary"
-                                                                onClick={() => handleCheckIn(item.appointmentId)}
+                                                                onClick={() => item.appointmentId && handleCheckIn(item.appointmentId)}
                                                                 disabled={actionLoadingId === item.appointmentId}
                                                                 style={{ padding: '6px 12px', fontSize: '0.8rem', height: '32px' }}
                                                             >
@@ -363,12 +392,12 @@ export const DoctorQueue: React.FC = () => {
                                                         </>
                                                     )}
 
-                                                    {item.status === 'CheckedIn' && (
+                                                    {(item.status === 'CheckedIn' || item.status === 'WaitingDoctor') && (
                                                         <button 
                                                             type="button"
                                                             className="btn-primary"
-                                                            onClick={() => handleStartConsultation(item.appointmentId)}
-                                                            disabled={actionLoadingId === item.appointmentId}
+                                                            onClick={() => handleStartConsultation(item)}
+                                                            disabled={actionLoadingId === (item.appointmentId || item.patientVisitId)}
                                                             style={{
                                                                 padding: '6px 14px',
                                                                 fontSize: '0.82rem',
@@ -385,7 +414,7 @@ export const DoctorQueue: React.FC = () => {
                                                         <button 
                                                             type="button"
                                                             className="btn-primary"
-                                                            onClick={() => navigate(`/doctor/appointments/${item.appointmentId}/examination`)}
+                                                            onClick={() => navigate(getExaminationUrl(item))}
                                                             style={{
                                                                 padding: '6px 14px',
                                                                 fontSize: '0.82rem',
@@ -397,11 +426,51 @@ export const DoctorQueue: React.FC = () => {
                                                         </button>
                                                     )}
 
+                                                    {item.status === 'InDiagnostics' && (
+                                                        <button 
+                                                            type="button"
+                                                            className="btn-secondary"
+                                                            onClick={() => navigate(getExaminationUrl(item))}
+                                                            style={{
+                                                                padding: '6px 12px',
+                                                                fontSize: '0.8rem',
+                                                                height: '32px'
+                                                            }}
+                                                        >
+                                                            <Eye size={14} />
+                                                            <span>Chờ CLS</span>
+                                                        </button>
+                                                    )}
+
+                                                    {item.status === 'ResultsReady' && (
+                                                        <button 
+                                                            type="button"
+                                                            className="btn-primary"
+                                                            onClick={() => navigate(getExaminationUrl(item))}
+                                                            style={{
+                                                                padding: '6px 14px',
+                                                                fontSize: '0.82rem',
+                                                                height: '32px',
+                                                                backgroundColor: '#059669',
+                                                                borderColor: '#059669'
+                                                            }}
+                                                        >
+                                                            <CheckCircle2 size={14} />
+                                                            <span>Có kết quả CLS</span>
+                                                        </button>
+                                                    )}
+
                                                     {item.status === 'Completed' && (
                                                         <button 
                                                             type="button"
                                                             className="btn-secondary"
-                                                            onClick={() => navigate(`/doctor/appointments/${item.appointmentId}`)}
+                                                            onClick={() => {
+                                                                if (item.appointmentId) {
+                                                                    navigate(`/doctor/appointments/${item.appointmentId}`);
+                                                                } else {
+                                                                    navigate(getExaminationUrl(item));
+                                                                }
+                                                            }}
                                                             style={{ padding: '6px 12px', fontSize: '0.8rem', height: '32px' }}
                                                         >
                                                             <Eye size={14} />

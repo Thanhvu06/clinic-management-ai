@@ -32,6 +32,14 @@ export const diagnosticApi = {
         return axiosClient.get<any, ApiResponse<DiagnosticOrderDto[]>>(`/doctor/appointments/${appointmentId}/diagnostic-orders`);
     },
 
+    createDoctorOrderForVisit: async (visitId: number, data: CreateDiagnosticOrderRequest): Promise<ApiResponse<DiagnosticOrderDto>> => {
+        return axiosClient.post<any, ApiResponse<DiagnosticOrderDto>>(`/doctor/visits/${visitId}/diagnostic-orders`, data);
+    },
+
+    getDoctorOrdersByVisit: async (visitId: number): Promise<ApiResponse<DiagnosticOrderDto[]>> => {
+        return axiosClient.get<any, ApiResponse<DiagnosticOrderDto[]>>(`/doctor/visits/${visitId}/diagnostic-orders`);
+    },
+
     getDoctorOrderById: async (orderId: number): Promise<ApiResponse<DiagnosticOrderDto>> => {
         return axiosClient.get<any, ApiResponse<DiagnosticOrderDto>>(`/doctor/diagnostic-orders/${orderId}`);
     },

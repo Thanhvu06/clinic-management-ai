@@ -10,6 +10,19 @@ jobs:
   backend:
     name: Backend Build & Test (.NET 10)
     runs-on: ubuntu-latest
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Your_password123!"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Your_password123!' -C -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -19,13 +32,21 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Install dotnet-ef
+        run: dotnet tool install --global dotnet-ef
+
       - name: Restore dependencies
         run: dotnet restore src/backend/ClinicManagement.sln
 
       - name: Build backend
         run: dotnet build src/backend/ClinicManagement.sln --no-restore --configuration Release
 
+      - name: Check for pending EF Core model changes
+        run: dotnet ef migrations has-pending-model-changes --project src/backend/ClinicManagement.Infrastructure --startup-project src/backend/ClinicManagement.Api
+
       - name: Run backend tests
+        env:
+          TEST_SQLSERVER_CONNECTION_STRING: "Server=localhost,1433;Database=ClinicManagement_CiTest;User Id=sa;Password=Your_password123!;TrustServerCertificate=True;Connect Timeout=30;"
         run: dotnet test src/backend/ClinicManagement.sln --no-build --configuration Release --verbosity normal
 
   frontend:

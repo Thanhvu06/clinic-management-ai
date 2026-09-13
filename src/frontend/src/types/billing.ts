@@ -33,6 +33,8 @@ export interface InvoiceDto {
     sourceTypeName: string;
     appointmentId?: number | null;
     appointmentCode?: string | null;
+    patientVisitId?: number | null;
+    visitCode?: string | null;
     healthPackageRegistrationId?: number | null;
     registrationCode?: string | null;
     status: InvoiceStatus;
@@ -123,6 +125,10 @@ export interface SpecialtyFeeDto {
 
 export interface CreateAppointmentInvoiceRequest {
     appointmentId: number;
+}
+
+export interface CreateVisitInvoiceRequest {
+    patientVisitId: number;
 }
 
 export interface CreatePackageInvoiceRequest {

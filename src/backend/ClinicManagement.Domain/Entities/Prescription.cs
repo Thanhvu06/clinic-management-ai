@@ -6,7 +6,8 @@ namespace ClinicManagement.Domain.Entities;
 public class Prescription
 {
     public long Id { get; set; }
-    public long AppointmentId { get; set; }
+    public long? AppointmentId { get; set; }
+    public long? PatientVisitId { get; set; }
     public long PatientId { get; set; }
     public long DoctorId { get; set; }
     
@@ -21,6 +22,9 @@ public class Prescription
 
     [ForeignKey("AppointmentId")]
     public Appointment? Appointment { get; set; }
+
+    [ForeignKey("PatientVisitId")]
+    public PatientVisit? PatientVisit { get; set; }
     
     [ForeignKey("PatientId")]
     public Patient? Patient { get; set; }

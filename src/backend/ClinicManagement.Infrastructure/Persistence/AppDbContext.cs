@@ -42,6 +42,23 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     // Clinic Locations
     public DbSet<ClinicLocation> ClinicLocations { get; set; } = null!;
 
+    // Organization & Facilities
+    public DbSet<Facility> Facilities { get; set; } = null!;
+    public DbSet<Building> Buildings { get; set; } = null!;
+    public DbSet<Department> Departments { get; set; } = null!;
+    public DbSet<Room> Rooms { get; set; } = null!;
+    public DbSet<Bed> Beds { get; set; } = null!;
+    public DbSet<StaffFacilityAssignment> StaffFacilityAssignments { get; set; } = null!;
+
+    // Outpatient Care Visits & Queues
+    public DbSet<PatientVisit> PatientVisits { get; set; } = null!;
+    public DbSet<DailyQueueSequence> DailyQueueSequences { get; set; } = null!;
+
+    // MPI (Master Patient Index)
+    public DbSet<PatientAllergy> PatientAllergies { get; set; } = null!;
+    public DbSet<EmergencyContact> EmergencyContacts { get; set; } = null!;
+    public DbSet<MrnSequence> MrnSequences { get; set; } = null!;
+
     // Notifications
     public DbSet<Notification> Notifications { get; set; } = null!;
 
@@ -67,6 +84,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         {
             b.Property(p => p.RowVersion)
                 .IsRowVersion();
+
+            b.HasOne(p => p.PatientVisit)
+                .WithMany(pv => pv.Prescriptions)
+                .HasForeignKey(p => p.PatientVisitId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<ClinicLocation>(b =>

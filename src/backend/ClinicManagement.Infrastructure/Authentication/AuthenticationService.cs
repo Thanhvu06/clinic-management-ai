@@ -23,19 +23,22 @@ public class AuthenticationService : IAuthenticationService
     private readonly AppDbContext _dbContext;
     private readonly IConfiguration _configuration;
     private readonly IHostEnvironment _environment;
+    private readonly ClinicManagement.Application.Mpi.Interfaces.IMrnGenerator _mrnGenerator;
 
     public AuthenticationService(
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
         AppDbContext dbContext,
         IConfiguration configuration,
-        IHostEnvironment environment)
+        IHostEnvironment environment,
+        ClinicManagement.Application.Mpi.Interfaces.IMrnGenerator mrnGenerator)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _dbContext = dbContext;
         _configuration = configuration;
         _environment = environment;
+        _mrnGenerator = mrnGenerator;
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
@@ -125,9 +128,15 @@ public class AuthenticationService : IAuthenticationService
             if (!roleResult.Succeeded)
                 throw new Exception("Lỗi cấp quyền Patient.");
 
+            var mrn = await _mrnGenerator.GenerateNextMrnAsync();
+
             var patient = new Patient
             {
                 UserId = user.Id,
+                MedicalRecordNumber = mrn,
+                FullName = user.FullName,
+                PhoneNumber = user.PhoneNumber,
+                Email = user.Email,
                 DateOfBirth = request.DateOfBirth,
                 Gender = request.Gender,
                 Address = request.Address

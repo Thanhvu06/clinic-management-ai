@@ -46,18 +46,25 @@ public class PharmacyService : IPharmacyService
     public async Task<PagedResult<PharmacyPrescriptionListDto>> GetPrescriptionsAsync(string? status, string? search, int page, int pageSize)
     {
         var query = from p in _dbContext.Prescriptions.AsNoTracking()
-                    join a in _dbContext.Appointments.AsNoTracking() on p.AppointmentId equals a.Id
+                    join a in _dbContext.Appointments.AsNoTracking() on p.AppointmentId equals a.Id into apts
+                    from a in apts.DefaultIfEmpty()
+                    join v in _dbContext.PatientVisits.AsNoTracking() on p.PatientVisitId equals v.Id into visits
+                    from v in visits.DefaultIfEmpty()
                     join pt in _dbContext.Patients.AsNoTracking() on p.PatientId equals pt.Id
-                    join ptu in _dbContext.Users.AsNoTracking() on pt.UserId equals ptu.Id
+                    join ptu in _dbContext.Users.AsNoTracking() on pt.UserId equals ptu.Id into pusers
+                    from ptu in pusers.DefaultIfEmpty()
                     join doc in _dbContext.Doctors.AsNoTracking() on p.DoctorId equals doc.Id
-                    join docu in _dbContext.Users.AsNoTracking() on doc.UserId equals docu.Id
+                    join docu in _dbContext.Users.AsNoTracking() on doc.UserId equals docu.Id into docusers
+                    from docu in docusers.DefaultIfEmpty()
                     select new
                     {
                         Prescription = p,
                         Appointment = a,
-                        PatientName = ptu.FullName,
-                        PatientPhone = ptu.PhoneNumber,
-                        DoctorName = docu.FullName
+                        PatientVisit = v,
+                        Patient = pt,
+                        PatientName = ptu != null ? ptu.FullName : (pt.FullName ?? "Bệnh nhân"),
+                        PatientPhone = ptu != null ? (ptu.PhoneNumber ?? "") : (pt.PhoneNumber ?? ""),
+                        DoctorName = docu != null ? docu.FullName : "Bác sĩ"
                     };
 
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<PrescriptionStatus>(status, true, out var parsedStatus))
@@ -73,7 +80,9 @@ public class PharmacyService : IPharmacyService
 
             query = query.Where(x => x.PatientName.ToLower().Contains(s)
                                   || x.PatientPhone.Contains(s)
-                                  || x.Appointment.AppointmentCode.ToLower().Contains(s)
+                                  || (x.Appointment != null && x.Appointment.AppointmentCode.ToLower().Contains(s))
+                                  || (x.PatientVisit != null && x.PatientVisit.VisitCode.ToLower().Contains(s))
+                                  || (x.Patient.MedicalRecordNumber != null && x.Patient.MedicalRecordNumber.ToLower().Contains(s))
                                   || (isNumeric && x.Prescription.Id == searchId));
         }
 
@@ -87,8 +96,10 @@ public class PharmacyService : IPharmacyService
             {
                 Id = x.Prescription.Id,
                 AppointmentId = x.Prescription.AppointmentId,
-                AppointmentCode = x.Appointment.AppointmentCode,
-                AppointmentDate = x.Appointment.AppointmentDate,
+                AppointmentCode = x.Appointment != null ? x.Appointment.AppointmentCode : (x.PatientVisit != null ? x.PatientVisit.VisitCode : string.Empty),
+                AppointmentDate = x.Appointment != null ? x.Appointment.AppointmentDate : (x.PatientVisit != null ? x.PatientVisit.VisitDate : DateOnly.FromDateTime(x.Prescription.CreatedAt)),
+                PatientVisitId = x.Prescription.PatientVisitId,
+                VisitCode = x.PatientVisit != null ? x.PatientVisit.VisitCode : null,
                 PatientName = x.PatientName,
                 PatientPhone = x.PatientPhone,
                 DoctorName = x.DoctorName,
@@ -110,14 +121,15 @@ public class PharmacyService : IPharmacyService
             .Include(p => p.Items)
                 .ThenInclude(i => i.Medicine)
             .Include(p => p.Appointment)
+            .Include(p => p.PatientVisit)
             .Include(p => p.Patient)
             .Include(p => p.Doctor)
             .FirstOrDefaultAsync(p => p.Id == id);
 
         if (prescription == null) throw new NotFoundException("Đơn thuốc không tồn tại.");
 
-        var patientUser = prescription.Patient != null 
-            ? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == prescription.Patient.UserId) 
+        var patientUser = prescription.Patient != null && prescription.Patient.UserId.HasValue
+            ? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == prescription.Patient.UserId.Value) 
             : null;
         var doctorUser = prescription.Doctor != null 
             ? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == prescription.Doctor.UserId) 
@@ -127,10 +139,12 @@ public class PharmacyService : IPharmacyService
         {
             Id = prescription.Id,
             AppointmentId = prescription.AppointmentId,
-            AppointmentCode = prescription.Appointment?.AppointmentCode ?? $"APT-{prescription.AppointmentId}",
+            AppointmentCode = prescription.Appointment?.AppointmentCode ?? (prescription.PatientVisit != null ? prescription.PatientVisit.VisitCode : (prescription.AppointmentId.HasValue ? $"APT-{prescription.AppointmentId}" : string.Empty)),
+            PatientVisitId = prescription.PatientVisitId,
+            VisitCode = prescription.PatientVisit?.VisitCode,
             PatientId = prescription.PatientId,
-            PatientName = patientUser?.FullName ?? "Bệnh nhân",
-            PatientPhone = patientUser?.PhoneNumber ?? "",
+            PatientName = patientUser?.FullName ?? prescription.Patient?.FullName ?? "Bệnh nhân",
+            PatientPhone = patientUser?.PhoneNumber ?? prescription.Patient?.PhoneNumber ?? "",
             DoctorId = prescription.DoctorId,
             DoctorName = doctorUser?.FullName ?? "Bác sĩ",
             Status = prescription.Status.ToString(),
@@ -232,17 +246,29 @@ public class PharmacyService : IPharmacyService
                 prescription.DispensedAt = DateTime.UtcNow;
                 prescription.DispensedByUserId = actorUserId;
 
+                // Update PatientVisit status to InBilling if linked
+                var visit = prescription.PatientVisitId.HasValue
+                    ? await _dbContext.PatientVisits.FirstOrDefaultAsync(v => v.Id == prescription.PatientVisitId.Value)
+                    : (prescription.AppointmentId.HasValue
+                        ? await _dbContext.PatientVisits.FirstOrDefaultAsync(v => v.AppointmentId == prescription.AppointmentId.Value)
+                        : null);
+
+                if (visit != null && (visit.Status == VisitStatus.InPharmacy || visit.Status == VisitStatus.ConsultationCompleted))
+                {
+                    visit.Status = VisitStatus.InBilling;
+                }
+
                 var patientUserId = await _dbContext.Patients
                     .Where(p => p.Id == prescription.PatientId)
                     .Select(p => p.UserId)
                     .FirstOrDefaultAsync();
 
-                if (patientUserId != Guid.Empty)
+                if (patientUserId.HasValue && patientUserId.Value != Guid.Empty)
                 {
-                    var appointmentCode = prescription.Appointment?.AppointmentCode ?? $"#{prescription.AppointmentId}";
+                    var appointmentCode = prescription.Appointment?.AppointmentCode ?? visit?.VisitCode ?? $"#{prescription.AppointmentId}";
                     _dbContext.Notifications.Add(new Notification
                     {
-                        UserId = patientUserId,
+                        UserId = patientUserId.Value,
                         Type = NotificationType.Prescription,
                         Title = "Đơn thuốc đã được phát",
                         Message = $"Đơn thuốc #{prescription.Id} cho lịch khám {appointmentCode} đã được nhà thuốc cấp phát thành công.",

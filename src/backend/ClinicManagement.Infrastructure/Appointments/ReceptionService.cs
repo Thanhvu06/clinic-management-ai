@@ -44,15 +44,16 @@ public class ReceptionService : IReceptionService
     {
         var query = from a in _dbContext.Appointments
                     join p in _dbContext.Patients on a.PatientId equals p.Id
-                    join pu in _dbContext.Users on p.UserId equals pu.Id
+                    join pu in _dbContext.Users on p.UserId equals (Guid?)pu.Id into puGroup
+                    from pu in puGroup.DefaultIfEmpty()
                     join d in _dbContext.Doctors on a.DoctorId equals d.Id
                     join du in _dbContext.Users on d.UserId equals du.Id
                     join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
                     select new
                     {
                         Appointment = a,
-                        PatientName = pu.FullName,
-                        PatientPhone = pu.PhoneNumber,
+                        PatientName = pu != null ? pu.FullName : (p.FullName ?? string.Empty),
+                        PatientPhone = pu != null ? pu.PhoneNumber : (p.PhoneNumber ?? string.Empty),
                         DoctorName = du.FullName,
                         SpecialtyName = s.Name
                     };
@@ -83,7 +84,8 @@ public class ReceptionService : IReceptionService
     {
         var query = from a in _dbContext.Appointments
                     join p in _dbContext.Patients on a.PatientId equals p.Id
-                    join pu in _dbContext.Users on p.UserId equals pu.Id
+                    join pu in _dbContext.Users on p.UserId equals (Guid?)pu.Id into puGroup
+                    from pu in puGroup.DefaultIfEmpty()
                     join d in _dbContext.Doctors on a.DoctorId equals d.Id
                     join du in _dbContext.Users on d.UserId equals du.Id
                     join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
@@ -91,8 +93,8 @@ public class ReceptionService : IReceptionService
                     select new
                     {
                         Appointment = a,
-                        PatientName = pu.FullName,
-                        PatientPhone = pu.PhoneNumber,
+                        PatientName = pu != null ? pu.FullName : (p.FullName ?? string.Empty),
+                        PatientPhone = pu != null ? pu.PhoneNumber : (p.PhoneNumber ?? string.Empty),
                         DoctorName = du.FullName,
                         SpecialtyName = s.Name
                     };
@@ -158,11 +160,11 @@ public class ReceptionService : IReceptionService
             .Select(p => p.UserId)
             .FirstOrDefaultAsync();
 
-        if (patientUserId != Guid.Empty)
+        if (patientUserId.HasValue && patientUserId.Value != Guid.Empty)
         {
             _dbContext.Notifications.Add(new Notification
             {
-                UserId = patientUserId,
+                UserId = patientUserId.Value,
                 Type = NotificationType.Appointment,
                 Title = "Lịch khám đã được xác nhận",
                 Message = $"Lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm} đã được tiếp nhận và xác nhận.",

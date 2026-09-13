@@ -1,4 +1,4 @@
-﻿using ClinicManagement.Domain.Entities;
+using ClinicManagement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -16,9 +16,20 @@ public class AppointmentVitalSignsConfiguration : IEntityTypeConfiguration<Appoi
         builder.HasOne(vs => vs.Appointment)
             .WithOne(a => a.VitalSigns)
             .HasForeignKey<AppointmentVitalSigns>(vs => vs.AppointmentId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(vs => vs.AppointmentId).IsUnique();
+        builder.HasIndex(vs => vs.AppointmentId)
+            .IsUnique()
+            .HasFilter("[AppointmentId] IS NOT NULL");
+
+        builder.HasOne(vs => vs.PatientVisit)
+            .WithOne(pv => pv.VitalSigns)
+            .HasForeignKey<AppointmentVitalSigns>(vs => vs.PatientVisitId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(vs => vs.PatientVisitId)
+            .IsUnique()
+            .HasFilter("[PatientVisitId] IS NOT NULL");
 
         builder.Property(vs => vs.Temperature).HasPrecision(4, 1);
         builder.Property(vs => vs.Weight).HasPrecision(5, 2);

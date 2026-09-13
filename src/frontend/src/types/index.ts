@@ -115,3 +115,4 @@ export * from './billing';
 
 
 export * from './diagnostic';
+export * from './visit';

@@ -53,7 +53,7 @@ export const ReceptionBilling: React.FC = () => {
 
     // Create Invoice Modal
     const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
-    const [createSourceType, setCreateSourceType] = useState<'appointment' | 'package'>('appointment');
+    const [createSourceType, setCreateSourceType] = useState<'visit' | 'appointment' | 'package'>('visit');
     const [referenceId, setReferenceId] = useState<string>('');
     const [creatingInvoice, setCreatingInvoice] = useState<boolean>(false);
 
@@ -168,7 +168,7 @@ export const ReceptionBilling: React.FC = () => {
 
     // Handle Create Invoice
     const handleOpenCreateModal = () => {
-        setCreateSourceType('appointment');
+        setCreateSourceType('visit');
         setReferenceId('');
         setCreateModalOpen(true);
     };
@@ -184,7 +184,9 @@ export const ReceptionBilling: React.FC = () => {
         setCreatingInvoice(true);
         try {
             let res;
-            if (createSourceType === 'appointment') {
+            if (createSourceType === 'visit') {
+                res = await billingApi.reception.createInvoiceFromVisit({ patientVisitId: refIdNum });
+            } else if (createSourceType === 'appointment') {
                 res = await billingApi.reception.createInvoiceFromAppointment({ appointmentId: refIdNum });
             } else {
                 res = await billingApi.reception.createInvoiceFromHealthPackage({ healthPackageRegistrationId: refIdNum });
@@ -491,7 +493,7 @@ export const ReceptionBilling: React.FC = () => {
                                                     {inv.sourceTypeName}
                                                 </div>
                                                 <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)' }}>
-                                                    Mã: {inv.appointmentCode || inv.registrationCode || 'N/A'}
+                                                    Mã: {inv.visitCode || inv.appointmentCode || inv.registrationCode || (inv.patientVisitId ? `#${inv.patientVisitId}` : 'N/A')}
                                                 </div>
                                             </td>
                                             <td>
@@ -601,42 +603,63 @@ export const ReceptionBilling: React.FC = () => {
                                 <div className="form-group">
                                     <label className="form-label">Chọn nguồn tạo hóa đơn</label>
                                     <div className={styles.radioGroup}>
-                                        <label className={styles.radioLabel}>
-                                            <input
-                                                type="radio"
-                                                name="sourceType"
-                                                checked={createSourceType === 'appointment'}
-                                                onChange={() => setCreateSourceType('appointment')}
-                                            />
-                                            Lịch khám bệnh (Đã hoàn thành)
-                                        </label>
-                                        <label className={styles.radioLabel}>
-                                            <input
-                                                type="radio"
-                                                name="sourceType"
-                                                checked={createSourceType === 'package'}
-                                                onChange={() => setCreateSourceType('package')}
-                                            />
-                                            Gói khám sức khỏe (Đã xác nhận)
-                                        </label>
-                                    </div>
+                                         <label className={styles.radioLabel}>
+                                             <input
+                                                 type="radio"
+                                                 name="sourceType"
+                                                 checked={createSourceType === 'visit'}
+                                                 onChange={() => setCreateSourceType('visit')}
+                                             />
+                                             Lượt khám ngoại trú (Visit)
+                                         </label>
+                                         <label className={styles.radioLabel}>
+                                             <input
+                                                 type="radio"
+                                                 name="sourceType"
+                                                 checked={createSourceType === 'appointment'}
+                                                 onChange={() => setCreateSourceType('appointment')}
+                                             />
+                                             Lịch khám bệnh (Appointment)
+                                         </label>
+                                         <label className={styles.radioLabel}>
+                                             <input
+                                                 type="radio"
+                                                 name="sourceType"
+                                                 checked={createSourceType === 'package'}
+                                                 onChange={() => setCreateSourceType('package')}
+                                             />
+                                             Gói khám sức khỏe (Đã xác nhận)
+                                         </label>
+                                     </div>
                                 </div>
 
                                 <div className="form-group">
                                     <label className="form-label">
-                                        {createSourceType === 'appointment' ? 'Appointment ID' : 'Health Package Registration ID'} *
+                                        {createSourceType === 'visit'
+                                            ? 'Patient Visit ID (Mã ID lượt khám) *'
+                                            : createSourceType === 'appointment'
+                                            ? 'Appointment ID (Mã lịch hẹn) *'
+                                            : 'Health Package Registration ID *'}
                                     </label>
                                     <input
                                         type="number"
                                         className="form-input"
-                                        placeholder={createSourceType === 'appointment' ? 'Ví dụ: 10' : 'Ví dụ: 5'}
+                                        placeholder={
+                                            createSourceType === 'visit'
+                                                ? 'Ví dụ: 1'
+                                                : createSourceType === 'appointment'
+                                                ? 'Ví dụ: 10'
+                                                : 'Ví dụ: 5'
+                                        }
                                         value={referenceId}
                                         onChange={(e) => setReferenceId(e.target.value)}
                                         required
                                         min="1"
                                     />
                                     <span style={{ fontSize: '0.8rem', color: 'var(--c-muted)', display: 'block', marginTop: '4px' }}>
-                                        {createSourceType === 'appointment'
+                                        {createSourceType === 'visit'
+                                            ? 'Lượt khám ngoại trú đã hoàn tất khám, chỉ định cận lâm sàng và cấp thuốc (In-Billing hoặc sẵn sàng thanh toán).'
+                                            : createSourceType === 'appointment'
                                             ? 'Lịch hẹn phải ở trạng thái "Completed" và chưa có hóa đơn còn hiệu lực.'
                                             : 'Đăng ký gói khám phải ở trạng thái "Confirmed" và chưa có hóa đơn còn hiệu lực.'}
                                     </span>

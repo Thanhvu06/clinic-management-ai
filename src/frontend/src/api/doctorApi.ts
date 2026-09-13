@@ -100,6 +100,43 @@ export const doctorApi = {
         return axiosClient.post<any, ApiResponse<any>>(`/doctor/appointments/${id}/complete`, request);
     },
 
+    // Visit-based doctor examination
+    getVisitPatientClinicalContext: async (visitId: number): Promise<ApiResponse<PatientClinicalContextDto>> => {
+        return axiosClient.get<any, ApiResponse<PatientClinicalContextDto>>(`/doctor/visits/${visitId}/patient-context`);
+    },
+
+    startVisitConsultation: async (visitId: number): Promise<ApiResponse<any>> => {
+        return axiosClient.post<any, ApiResponse<any>>(`/doctor/visits/${visitId}/start-consultation`);
+    },
+
+    getVisitEncounter: async (visitId: number): Promise<ApiResponse<ClinicalEncounterDto | null>> => {
+        return axiosClient.get<any, ApiResponse<ClinicalEncounterDto | null>>(`/doctor/visits/${visitId}/encounter`);
+    },
+
+    saveVisitEncounter: async (visitId: number, request: SaveEncounterRequest): Promise<ApiResponse<ClinicalEncounterDto>> => {
+        return axiosClient.put<any, ApiResponse<ClinicalEncounterDto>>(`/doctor/visits/${visitId}/encounter`, request);
+    },
+
+    getVisitVitalSigns: async (visitId: number): Promise<ApiResponse<VitalSignsDto | null>> => {
+        return axiosClient.get<any, ApiResponse<VitalSignsDto | null>>(`/doctor/visits/${visitId}/vitals`);
+    },
+
+    saveVisitVitalSigns: async (visitId: number, request: SaveVitalSignsRequest): Promise<ApiResponse<VitalSignsDto>> => {
+        return axiosClient.put<any, ApiResponse<VitalSignsDto>>(`/doctor/visits/${visitId}/vitals`, request);
+    },
+
+    getVisitPrescriptionDraft: async (visitId: number): Promise<ApiResponse<PrescriptionDraftDto | null>> => {
+        return axiosClient.get<any, ApiResponse<PrescriptionDraftDto | null>>(`/doctor/visits/${visitId}/prescription-draft`);
+    },
+
+    saveVisitPrescriptionDraft: async (visitId: number, request: SavePrescriptionDraftRequest): Promise<ApiResponse<PrescriptionDraftDto>> => {
+        return axiosClient.put<any, ApiResponse<PrescriptionDraftDto>>(`/doctor/visits/${visitId}/prescription-draft`, request);
+    },
+
+    completeVisitConsultation: async (visitId: number, request: CompleteConsultationRequest): Promise<ApiResponse<any>> => {
+        return axiosClient.post<any, ApiResponse<any>>(`/doctor/visits/${visitId}/complete`, request);
+    },
+
     markNoShow: async (id: number, reason?: string): Promise<ApiResponse<any>> => {
         return axiosClient.post<any, ApiResponse<any>>(`/doctor/appointments/${id}/noshow`, { reason });
     },

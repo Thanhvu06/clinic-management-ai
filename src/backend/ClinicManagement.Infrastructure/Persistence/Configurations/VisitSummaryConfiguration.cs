@@ -16,7 +16,20 @@ public class VisitSummaryConfiguration : IEntityTypeConfiguration<VisitSummary>
         builder.HasOne(vs => vs.Appointment)
             .WithOne(a => a.VisitSummary)
             .HasForeignKey<VisitSummary>(vs => vs.AppointmentId)
-            .OnDelete(DeleteBehavior.NoAction);
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(vs => vs.AppointmentId)
+            .IsUnique()
+            .HasFilter("[AppointmentId] IS NOT NULL");
+
+        builder.HasOne(vs => vs.PatientVisit)
+            .WithOne(pv => pv.VisitSummary)
+            .HasForeignKey<VisitSummary>(vs => vs.PatientVisitId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(vs => vs.PatientVisitId)
+            .IsUnique()
+            .HasFilter("[PatientVisitId] IS NOT NULL");
 
         builder.HasOne(vs => vs.Doctor)
             .WithMany(d => d.VisitSummaries)

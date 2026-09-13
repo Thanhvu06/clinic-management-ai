@@ -37,6 +37,17 @@ public interface IDoctorAppointmentService
     // Prescription draft & issuance
     Task<PrescriptionDraftDto?> GetPrescriptionDraftAsync(long appointmentId);
     Task<PrescriptionDraftDto> SavePrescriptionDraftAsync(long appointmentId, SavePrescriptionDraftRequest request);
+
+    // Visit-level Clinical Operations
+    Task<PatientClinicalContextDto> GetVisitClinicalContextAsync(long visitId);
+    Task StartVisitConsultationAsync(long visitId);
+    Task CompleteVisitConsultationAsync(long visitId, CompleteConsultationRequest request);
+    Task<ClinicalEncounterDto?> GetVisitEncounterAsync(long visitId);
+    Task<ClinicalEncounterDto> SaveVisitEncounterAsync(long visitId, SaveEncounterRequest request);
+    Task<VitalSignsDto?> GetVisitVitalSignsAsync(long visitId);
+    Task<VitalSignsDto> SaveVisitVitalSignsAsync(long visitId, SaveVitalSignsRequest request);
+    Task<PrescriptionDraftDto?> GetVisitPrescriptionDraftAsync(long visitId);
+    Task<PrescriptionDraftDto> SaveVisitPrescriptionDraftAsync(long visitId, SavePrescriptionDraftRequest request);
 }
 
 public interface IRevisitService

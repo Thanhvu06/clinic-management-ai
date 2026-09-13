@@ -30,7 +30,7 @@ public class PatientService : IPatientService
                              select new PatientProfileDto
                              {
                                  Id = p.Id,
-                                 UserId = p.UserId,
+                                 UserId = userId,
                                  FullName = u.FullName,
                                  Email = u.Email ?? string.Empty,
                                  PhoneNumber = u.PhoneNumber ?? string.Empty,
@@ -86,6 +86,10 @@ public class PatientService : IPatientService
                 .ThenInclude(a => a!.Specialty)
             .Include(p => p.Appointment)
                 .ThenInclude(a => a!.VisitSummary)
+            .Include(p => p.PatientVisit)
+                .ThenInclude(v => v!.Department)
+            .Include(p => p.PatientVisit)
+                .ThenInclude(v => v!.VisitSummary)
             .Include(p => p.Doctor)
             .Include(p => p.Items)
                 .ThenInclude(i => i.Medicine)
@@ -114,10 +118,12 @@ public class PatientService : IPatientService
                 Code = $"RX-{p.CreatedAt:yyyyMMdd}-{p.Id:D4}",
                 AppointmentId = p.AppointmentId,
                 AppointmentCode = p.Appointment?.AppointmentCode ?? string.Empty,
-                AppointmentDate = p.Appointment?.AppointmentDate ?? DateOnly.FromDateTime(p.CreatedAt),
+                PatientVisitId = p.PatientVisitId,
+                VisitCode = p.PatientVisit?.VisitCode,
+                AppointmentDate = p.Appointment?.AppointmentDate ?? (p.PatientVisit != null ? p.PatientVisit.VisitDate : DateOnly.FromDateTime(p.CreatedAt)),
                 DoctorName = doctorTitle + doctorFullName,
-                SpecialtyName = p.Appointment?.Specialty?.Name ?? "Đa khoa",
-                Diagnosis = p.Appointment?.VisitSummary?.Summary ?? "Khám chuyên khoa",
+                SpecialtyName = p.Appointment?.Specialty?.Name ?? (p.PatientVisit?.Department != null ? p.PatientVisit.Department.Name : "Đa khoa"),
+                Diagnosis = p.Appointment?.VisitSummary?.Summary ?? p.PatientVisit?.VisitSummary?.Summary ?? "Khám chuyên khoa",
                 Status = p.Status.ToString(),
                 Notes = p.Notes,
                 CreatedAt = p.CreatedAt,
