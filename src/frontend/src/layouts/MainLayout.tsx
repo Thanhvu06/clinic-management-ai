@@ -6,7 +6,7 @@ import {
     LayoutDashboard, CalendarDays, CalendarCheck, 
     History, Users, Stethoscope, 
     ShieldPlus, LogOut, Menu, X, ShieldAlert, Pill, Package, Calendar,
-    Receipt, TrendingUp, FlaskConical
+    Receipt, TrendingUp, FlaskConical, Building2, UserPlus
 } from 'lucide-react';
 import { NotificationBell } from '../components/common/NotificationBell';
 
@@ -48,12 +48,14 @@ export const MainLayout: React.FC = () => {
         if (pathname.startsWith('/doctor/leave-requests')) return 'Quản lý nghỉ phép';
         if (pathname.startsWith('/doctor')) return 'Bàn làm việc Bác sĩ';
 
+        if (pathname.startsWith('/reception/walk-in')) return 'Tiếp nhận bệnh nhân vãng lai';
         if (pathname.startsWith('/reception/billing')) return 'Quản lý Hóa đơn & Thu ngân';
         if (pathname.startsWith('/reception/appointments')) return 'Quản lý lịch hẹn';
         if (pathname.startsWith('/reception/package-registrations')) return 'Đăng ký gói khám';
         if (pathname.startsWith('/reception/change-requests')) return 'Yêu cầu đổi/hủy lịch';
         if (pathname.startsWith('/reception')) return 'Bàn tiếp tân phòng khám';
 
+        if (pathname.startsWith('/admin/facilities')) return 'Mạng lưới cơ sở & Phòng bệnh';
         if (pathname.startsWith('/admin/billing')) return 'Doanh thu & Biểu phí phòng khám';
         if (pathname.startsWith('/admin/accounts')) return 'Quản trị tài khoản';
         if (pathname.startsWith('/admin/specialties')) return 'Quản lý chuyên khoa';
@@ -116,6 +118,7 @@ export const MainLayout: React.FC = () => {
                 return (
                     <>
                         <NavItem to="/reception" icon={LayoutDashboard} label="Bàn làm việc" />
+                        <NavItem to="/reception/walk-in" icon={UserPlus} label="Tiếp nhận bệnh nhân" />
                         <NavItem to="/reception/appointments" icon={CalendarCheck} label="Quản lý lịch hẹn" />
                         <NavItem to="/reception/package-registrations" icon={Package} label="Đăng ký gói khám" />
                         <NavItem to="/reception/billing" icon={Receipt} label="Thu ngân & Hóa đơn" />
@@ -126,6 +129,7 @@ export const MainLayout: React.FC = () => {
                 return (
                     <>
                         <NavItem to="/admin" icon={LayoutDashboard} label="Tổng quan" />
+                        <NavItem to="/admin/facilities" icon={Building2} label="Mạng lưới cơ sở" />
                         <NavItem to="/admin/billing" icon={TrendingUp} label="Doanh thu & Biểu phí" />
                         <NavItem to="/admin/accounts" icon={ShieldAlert} label="Quản lý tài khoản" />
                         <NavItem to="/admin/specialties" icon={Stethoscope} label="Quản lý chuyên khoa" />

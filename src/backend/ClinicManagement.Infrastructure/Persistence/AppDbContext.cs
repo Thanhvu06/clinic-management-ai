@@ -42,6 +42,18 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     // Clinic Locations
     public DbSet<ClinicLocation> ClinicLocations { get; set; } = null!;
 
+    // Organization & Facilities
+    public DbSet<Facility> Facilities { get; set; } = null!;
+    public DbSet<Building> Buildings { get; set; } = null!;
+    public DbSet<Department> Departments { get; set; } = null!;
+    public DbSet<Room> Rooms { get; set; } = null!;
+    public DbSet<Bed> Beds { get; set; } = null!;
+
+    // MPI (Master Patient Index)
+    public DbSet<PatientAllergy> PatientAllergies { get; set; } = null!;
+    public DbSet<EmergencyContact> EmergencyContacts { get; set; } = null!;
+    public DbSet<MrnSequence> MrnSequences { get; set; } = null!;
+
     // Notifications
     public DbSet<Notification> Notifications { get; set; } = null!;
 
@@ -118,6 +130,14 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
 
     public override System.Threading.Tasks.Task<int> SaveChangesAsync(System.Threading.CancellationToken cancellationToken = default)
     {
+        foreach (var entry in ChangeTracker.Entries<Patient>())
+        {
+            if (entry.State == EntityState.Added && string.IsNullOrWhiteSpace(entry.Entity.MedicalRecordNumber))
+            {
+                entry.Entity.MedicalRecordNumber = $"MRN-{DateTime.UtcNow.Year}-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+            }
+        }
+
         if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
         {
             foreach (var entry in ChangeTracker.Entries())
