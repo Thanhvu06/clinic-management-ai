@@ -228,6 +228,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
                 Code = "PARA500",
                 Name = "Paracetamol 500mg",
                 Unit = "Viên",
+                UnitPrice = 2000m,
                 StockQuantity = 50,
                 ReorderLevel = 10,
                 IsActive = true
@@ -246,8 +247,8 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
             };
             db.HealthPackages.Add(package);
 
-            var diagService1 = new DiagnosticService { Code = "LAB-TEST-01", Name = "Xét nghiệm máu test", Category = DiagnosticCategory.Laboratory, IsActive = true };
-            var diagService2 = new DiagnosticService { Code = "US-TEST-01", Name = "Siêu âm bụng test", Category = DiagnosticCategory.Ultrasound, IsActive = true };
+            var diagService1 = new DiagnosticService { Code = "LAB-TEST-01", Name = "Xét nghiệm máu test", Category = DiagnosticCategory.Laboratory, Price = 120000m, IsActive = true };
+            var diagService2 = new DiagnosticService { Code = "US-TEST-01", Name = "Siêu âm bụng test", Category = DiagnosticCategory.Ultrasound, Price = 150000m, IsActive = true };
             db.DiagnosticServices.AddRange(diagService1, diagService2);
 
             await db.SaveChangesAsync();

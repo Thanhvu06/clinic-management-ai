@@ -16,6 +16,8 @@ public class InvoiceDto
     public string SourceTypeName { get; set; } = string.Empty;
     public long? AppointmentId { get; set; }
     public string? AppointmentCode { get; set; }
+    public long? PatientVisitId { get; set; }
+    public string? VisitCode { get; set; }
     public long? HealthPackageRegistrationId { get; set; }
     public string? RegistrationCode { get; set; }
     public InvoiceStatus Status { get; set; }
@@ -77,4 +79,10 @@ public class InvoiceFilterParams
     public DateOnly? ToDate { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 10;
+}
+
+public class CreateVisitInvoiceRequest
+{
+    [Required(ErrorMessage = "Vui lòng cung cấp PatientVisitId.")]
+    public long PatientVisitId { get; set; }
 }

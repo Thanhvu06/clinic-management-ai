@@ -10,7 +10,7 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
     {
         builder.ToTable("Invoices", t =>
         {
-            t.HasCheckConstraint("CK_Invoices_SingleSource", "([AppointmentId] IS NOT NULL AND [HealthPackageRegistrationId] IS NULL) OR ([AppointmentId] IS NULL AND [HealthPackageRegistrationId] IS NOT NULL)");
+            t.HasCheckConstraint("CK_Invoices_SingleSource", "(([AppointmentId] IS NOT NULL OR [PatientVisitId] IS NOT NULL) AND [HealthPackageRegistrationId] IS NULL) OR ([AppointmentId] IS NULL AND [PatientVisitId] IS NULL AND [HealthPackageRegistrationId] IS NOT NULL)");
             t.HasCheckConstraint("CK_Invoices_Subtotal_NonNegative", "[Subtotal] >= 0");
             t.HasCheckConstraint("CK_Invoices_TotalAmount_NonNegative", "[TotalAmount] >= 0");
         });
@@ -50,6 +50,8 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
             .IsUnique()
             .HasFilter("[HealthPackageRegistrationId] IS NOT NULL AND [Status] <> 3");
 
+        builder.HasIndex(i => i.PatientVisitId);
+
         builder.HasOne(i => i.Patient)
             .WithMany()
             .HasForeignKey(i => i.PatientId)
@@ -58,6 +60,11 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.HasOne(i => i.Appointment)
             .WithMany()
             .HasForeignKey(i => i.AppointmentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(i => i.PatientVisit)
+            .WithMany(pv => pv.Invoices)
+            .HasForeignKey(i => i.PatientVisitId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(i => i.HealthPackageRegistration)

@@ -416,7 +416,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
             PatientName = patientUser?.FullName ?? reg.Patient.FullName ?? "Bệnh nhân",
             PatientPhone = patientUser?.PhoneNumber ?? reg.Patient.PhoneNumber ?? reg.ContactPhone ?? "",
             PreferredDate = reg.PreferredDate,
-            ContactPhone = reg.ContactPhone,
+            ContactPhone = reg.ContactPhone ?? string.Empty,
             Note = reg.Note,
             AdminNotes = reg.AdminNotes,
             CancellationReason = reg.CancellationReason,

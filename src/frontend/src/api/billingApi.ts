@@ -9,6 +9,7 @@ import type {
     SpecialtyFeeDto,
     InvoiceFilterParams,
     CreateAppointmentInvoiceRequest,
+    CreateVisitInvoiceRequest,
     CreatePackageInvoiceRequest,
     ProcessPaymentRequest,
     CancelInvoiceRequest,
@@ -41,6 +42,11 @@ export const billingApi = {
 
         createInvoiceFromAppointment: async (data: CreateAppointmentInvoiceRequest): Promise<ApiResponse<InvoiceDetailDto>> => {
             const res = await axiosClient.post('/reception/billing/invoices/appointment', data);
+            return res as unknown as ApiResponse<InvoiceDetailDto>;
+        },
+
+        createInvoiceFromVisit: async (data: CreateVisitInvoiceRequest): Promise<ApiResponse<InvoiceDetailDto>> => {
+            const res = await axiosClient.post('/reception/billing/invoices/visit', data);
             return res as unknown as ApiResponse<InvoiceDetailDto>;
         },
 

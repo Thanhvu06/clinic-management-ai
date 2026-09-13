@@ -25,6 +25,7 @@ public class Patient
     public ICollection<PatientAllergy> Allergies { get; set; } = new List<PatientAllergy>();
     public ICollection<EmergencyContact> EmergencyContacts { get; set; } = new List<EmergencyContact>();
     public ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
+    public ICollection<PatientVisit> PatientVisits { get; set; } = new List<PatientVisit>();
     public ICollection<RevisitRequest> RevisitRequests { get; set; } = new List<RevisitRequest>();
     public ICollection<AiSuggestionLog> AiSuggestionLogs { get; set; } = new List<AiSuggestionLog>();
 }

@@ -308,6 +308,187 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         throw new ConflictException("ORDER_CREATION_FAILED", "Không thể tạo phiếu chỉ định cận lâm sàng. Vui lòng thử lại.");
     }
 
+    public async Task<DiagnosticOrderDto> CreateOrderForVisitDoctorAsync(long visitId, CreateDiagnosticOrderRequest request)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+        var userId = GetUserId();
+
+        var visit = await _dbContext.PatientVisits
+            .Include(v => v.Patient)
+            .FirstOrDefaultAsync(v => v.Id == visitId && v.AssignedDoctorId == doctor.Id);
+
+        if (visit == null)
+            throw new NotFoundException("Lượt khám không tồn tại hoặc không thuộc quyền quản lý.");
+
+        if (visit.Status != VisitStatus.InConsultation && visit.Status != VisitStatus.WaitingForDoctor && visit.Status != VisitStatus.WaitingForDiagnostics)
+            throw new BusinessException("INVALID_STATE", "Chỉ có thể tạo phiếu chỉ định cận lâm sàng khi lượt khám đang trong phiên khám.");
+
+        if (string.IsNullOrWhiteSpace(request.ClinicalIndication))
+            throw new BusinessException("VALIDATION_ERROR", "Chỉ định lâm sàng không được để trống.");
+
+        var cleanServiceIds = request.ServiceIds?.Distinct().ToList() ?? new List<long>();
+        if (cleanServiceIds.Count == 0)
+            throw new BusinessException("VALIDATION_ERROR", "Cần chọn ít nhất một dịch vụ cận lâm sàng.");
+
+        var services = await _dbContext.DiagnosticServices
+            .Where(s => cleanServiceIds.Contains(s.Id) && s.IsActive)
+            .ToListAsync();
+
+        if (services.Count != cleanServiceIds.Count)
+            throw new BusinessException("INVALID_SERVICE", "Một hoặc nhiều dịch vụ chỉ định không tồn tại hoặc đã ngừng hoạt động.");
+
+        const int maxRetries = 3;
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            try
+            {
+                var orderCode = await GenerateOrderCodeAsync();
+
+                var order = new DiagnosticOrder
+                {
+                    OrderCode = orderCode,
+                    PatientVisitId = visit.Id,
+                    AppointmentId = visit.AppointmentId,
+                    FacilityId = visit.FacilityId,
+                    PatientId = visit.PatientId,
+                    OrderingDoctorId = doctor.Id,
+                    ClinicalIndication = request.ClinicalIndication.Trim(),
+                    Note = request.Note?.Trim(),
+                    Status = DiagnosticOrderStatus.Ordered,
+                    OrderedAtUtc = DateTime.UtcNow,
+                    RowVersion = Guid.NewGuid().ToByteArray()
+                };
+
+                foreach (var svc in services)
+                {
+                    order.Items.Add(new DiagnosticOrderItem
+                    {
+                        DiagnosticServiceId = svc.Id,
+                        Status = DiagnosticItemStatus.Ordered,
+                        RowVersion = Guid.NewGuid().ToByteArray()
+                    });
+                }
+
+                _dbContext.DiagnosticOrders.Add(order);
+
+                // Update visit status to WaitingForDiagnostics
+                visit.Status = VisitStatus.WaitingForDiagnostics;
+                visit.UpdatedAtUtc = _dateTimeProvider.UtcNow;
+
+                await _dbContext.SaveChangesAsync();
+
+                _dbContext.SystemAuditLogs.Add(new SystemAuditLog
+                {
+                    UserId = userId,
+                    Action = "DiagnosticOrderCreated",
+                    EntityName = "DiagnosticOrder",
+                    EntityId = order.Id.ToString(),
+                    Description = $"Bác sĩ tạo phiếu chỉ định #{order.OrderCode} cho lượt khám #{visit.VisitCode} gồm {services.Count} dịch vụ.",
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                // Notifications
+                var techRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Name == RoleNames.DiagnosticTechnician);
+                if (techRole != null)
+                {
+                    var techUserIds = await _dbContext.UserRoles
+                        .Where(ur => ur.RoleId == techRole.Id)
+                        .Select(ur => ur.UserId)
+                        .ToListAsync();
+
+                    var activeTechUsers = await _dbContext.Users
+                        .Where(u => techUserIds.Contains(u.Id) && u.IsActive)
+                        .Select(u => u.Id)
+                        .ToListAsync();
+
+                    foreach (var techUserId in activeTechUsers)
+                    {
+                        _dbContext.Notifications.Add(new Notification
+                        {
+                            UserId = techUserId,
+                            Type = NotificationType.Diagnostic,
+                            Title = "Chỉ định cận lâm sàng mới",
+                            Message = $"Phiếu chỉ định #{order.OrderCode} vừa được chỉ định. Vui lòng tiếp nhận và thực hiện.",
+                            Route = $"/diagnostics/orders/{order.Id}",
+                            RelatedEntityType = "DiagnosticOrder",
+                            RelatedEntityId = order.Id.ToString(),
+                            DedupeKey = $"diag_created_tech_{order.Id}_{techUserId}",
+                            IsRead = false,
+                            CreatedAtUtc = DateTime.UtcNow
+                        });
+                    }
+                }
+
+                if (visit.Patient.UserId.HasValue)
+                {
+                    _dbContext.Notifications.Add(new Notification
+                    {
+                        UserId = visit.Patient.UserId.Value,
+                        Type = NotificationType.Diagnostic,
+                        Title = "Có chỉ định cận lâm sàng mới",
+                        Message = $"Bác sĩ đã tạo phiếu chỉ định #{order.OrderCode} gồm {services.Count} dịch vụ cận lâm sàng.",
+                        Route = "/patient/diagnostics",
+                        RelatedEntityType = "DiagnosticOrder",
+                        RelatedEntityId = order.Id.ToString(),
+                        DedupeKey = $"diag_created_pat_{order.Id}_{visit.Patient.UserId.Value}",
+                        IsRead = false,
+                        CreatedAtUtc = DateTime.UtcNow
+                    });
+                }
+
+                await _dbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return (await GetOrderDtoByIdAsync(order.Id))!;
+            }
+            catch (DbUpdateException ex)
+            {
+                await transaction.RollbackAsync();
+                _dbContext.ChangeTracker.Clear();
+
+                if (!IsOrderCodeUniqueViolation(ex)) throw;
+
+                if (attempt < maxRetries) continue;
+
+                throw new ConflictException("ORDER_CODE_COLLISION", "Không thể tạo mã phiếu chỉ định duy nhất. Vui lòng thử lại.");
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                _dbContext.ChangeTracker.Clear();
+                throw;
+            }
+        }
+
+        throw new ConflictException("ORDER_CREATION_FAILED", "Không thể tạo phiếu chỉ định cận lâm sàng. Vui lòng thử lại.");
+    }
+
+    public async Task<List<DiagnosticOrderDto>> GetOrdersByVisitForDoctorAsync(long visitId)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+
+        var visitExists = await _dbContext.PatientVisits
+            .AnyAsync(v => v.Id == visitId && v.AssignedDoctorId == doctor.Id);
+
+        if (!visitExists)
+            throw new NotFoundException("Lượt khám không tồn tại hoặc không thuộc quyền quản lý.");
+
+        var orderIds = await _dbContext.DiagnosticOrders
+            .Where(o => o.PatientVisitId == visitId)
+            .OrderByDescending(o => o.OrderedAtUtc)
+            .Select(o => o.Id)
+            .ToListAsync();
+
+        var result = new List<DiagnosticOrderDto>();
+        foreach (var id in orderIds)
+        {
+            var dto = await GetOrderDtoByIdAsync(id);
+            if (dto != null) result.Add(dto);
+        }
+        return result;
+    }
+
     public async Task<List<DiagnosticOrderDto>> GetOrdersByAppointmentForDoctorAsync(long appointmentId)
     {
         var doctor = await GetCurrentDoctorAsync();
@@ -458,6 +639,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         var query = _dbContext.DiagnosticOrders
             .AsNoTracking()
             .Include(o => o.Appointment)
+            .Include(o => o.PatientVisit)
             .Include(o => o.Patient)
             .AsQueryable();
 
@@ -468,14 +650,16 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         if (date.HasValue)
         {
-            query = query.Where(o => o.Appointment.AppointmentDate == date.Value);
+            query = query.Where(o => (o.Appointment != null && o.Appointment.AppointmentDate == date.Value) ||
+                                     (o.PatientVisit != null && o.PatientVisit.VisitDate == date.Value));
         }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var clean = search.Trim().ToLower();
             query = query.Where(o => o.OrderCode.ToLower().Contains(clean) ||
-                                     o.Appointment.AppointmentCode.ToLower().Contains(clean) ||
+                                     (o.Appointment != null && o.Appointment.AppointmentCode.ToLower().Contains(clean)) ||
+                                     (o.PatientVisit != null && o.PatientVisit.VisitCode.ToLower().Contains(clean)) ||
                                      (o.Patient.FullName != null && o.Patient.FullName.ToLower().Contains(clean)) ||
                                      (o.Patient.PhoneNumber != null && o.Patient.PhoneNumber.Contains(clean)) ||
                                      (o.Patient.MedicalRecordNumber != null && o.Patient.MedicalRecordNumber.ToLower().Contains(clean)) ||
@@ -750,6 +934,34 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             });
         }
 
+        // Update visit status to ResultsReady if connected to a PatientVisit
+        PatientVisit? visit = null;
+        if (order.PatientVisitId.HasValue)
+        {
+            visit = await _dbContext.PatientVisits
+                .Include(v => v.DiagnosticOrders)
+                .FirstOrDefaultAsync(v => v.Id == order.PatientVisitId.Value);
+        }
+        else if (order.AppointmentId.HasValue)
+        {
+            visit = await _dbContext.PatientVisits
+                .Include(v => v.DiagnosticOrders)
+                .FirstOrDefaultAsync(v => v.AppointmentId == order.AppointmentId.Value);
+        }
+
+        if (visit != null)
+        {
+            var otherPending = visit.DiagnosticOrders
+                .Where(o => o.Id != order.Id && o.Status != DiagnosticOrderStatus.Cancelled)
+                .Any(o => o.Status != DiagnosticOrderStatus.Completed);
+
+            if (!otherPending)
+            {
+                visit.Status = VisitStatus.ResultsReady;
+                visit.UpdatedAtUtc = DateTime.UtcNow;
+            }
+        }
+
         try
         {
             await _dbContext.SaveChangesAsync();
@@ -816,6 +1028,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         var order = await _dbContext.DiagnosticOrders
             .AsNoTracking()
             .Include(o => o.Appointment)
+            .Include(o => o.PatientVisit)
             .Include(o => o.Patient)
             .Include(o => o.OrderingDoctor)
                 .ThenInclude(d => d.DoctorSpecialties)
@@ -911,8 +1124,10 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             Id = order.Id,
             OrderCode = order.OrderCode,
             AppointmentId = order.AppointmentId,
-            AppointmentCode = order.Appointment?.AppointmentCode ?? string.Empty,
-            AppointmentDate = order.Appointment?.AppointmentDate ?? DateOnly.FromDateTime(order.OrderedAtUtc),
+            AppointmentCode = order.Appointment?.AppointmentCode ?? (order.PatientVisit != null ? order.PatientVisit.VisitCode : string.Empty),
+            PatientVisitId = order.PatientVisitId,
+            VisitCode = order.PatientVisit?.VisitCode,
+            AppointmentDate = order.Appointment?.AppointmentDate ?? (order.PatientVisit != null ? order.PatientVisit.VisitDate : DateOnly.FromDateTime(order.OrderedAtUtc)),
             PatientId = order.PatientId,
             PatientName = patientUser?.FullName ?? order.Patient.FullName ?? "Bệnh nhân",
             PatientPhone = patientUser?.PhoneNumber ?? order.Patient.PhoneNumber ?? string.Empty,

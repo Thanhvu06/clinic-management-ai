@@ -37,5 +37,12 @@ public class DepartmentConfiguration : IEntityTypeConfiguration<Department>
             .WithMany()
             .HasForeignKey(d => d.HeadOfDepartmentDoctorId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(d => d.Specialty)
+            .WithMany()
+            .HasForeignKey(d => d.SpecialtyId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(d => d.SpecialtyId);
     }
 }

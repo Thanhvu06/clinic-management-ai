@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
     UserPlus, Search, ShieldAlert, HeartPulse, User, Phone, 
-    Plus, Trash2, CheckCircle2, Printer, RotateCcw
+    Plus, Trash2, CheckCircle2, Printer, RotateCcw, Ticket
 } from 'lucide-react';
 import { mpiApi, type RegisterWalkInPatientPayload, type MpiPatientDto, type GenderType } from '../../api/mpiApi';
-import { organizationApi, type FacilityDto } from '../../api/organizationApi';
+import { organizationApi, type FacilityDto, type DepartmentDto, type RoomDto } from '../../api/organizationApi';
+import { patientVisitApi } from '../../api/patientVisitApi';
+import type { CheckInTicketDto, VisitPriority } from '../../types';
+import { CheckInTicketModal } from '../../components/CheckInTicketModal';
 import { useDialog } from '../../contexts/DialogContext';
 import { MpiPatientSearchModal } from './MpiPatientSearchModal';
 
@@ -47,13 +50,54 @@ export const WalkInPatientRegistration: React.FC = () => {
     // Allergies list
     const [allergies, setAllergies] = useState<AllergyItem[]>([]);
 
+    // Outpatient Department & Queueing (Phase 1.2 Connected Journey)
+    const [issueQueueTicket, setIssueQueueTicket] = useState(false);
+    const [departments, setDepartments] = useState<DepartmentDto[]>([]);
+    const [rooms, setRooms] = useState<RoomDto[]>([]);
+    const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | undefined>(undefined);
+    const [selectedRoomId, setSelectedRoomId] = useState<number | undefined>(undefined);
+    const [selectedDoctorId, setSelectedDoctorId] = useState<number | undefined>(undefined);
+    const [chiefComplaint, setChiefComplaint] = useState('');
+    const [priority, setPriority] = useState<VisitPriority>('Normal');
+
     // Submission & Success
     const [submitting, setSubmitting] = useState(false);
     const [registeredPatient, setRegisteredPatient] = useState<MpiPatientDto | null>(null);
+    const [currentTicket, setCurrentTicket] = useState<CheckInTicketDto | null>(null);
+    const [ticketModalOpen, setTicketModalOpen] = useState(false);
 
     useEffect(() => {
         loadFacilities();
     }, []);
+
+    useEffect(() => {
+        if (primaryFacilityId) {
+            organizationApi.getDepartments(primaryFacilityId).then(res => {
+                if (res.success && res.data) {
+                    setDepartments(res.data);
+                    if (res.data.length > 0) {
+                        setSelectedDepartmentId(res.data[0].id);
+                    } else {
+                        setSelectedDepartmentId(undefined);
+                    }
+                }
+            }).catch(err => console.error('Lỗi tải danh sách khoa:', err));
+        }
+    }, [primaryFacilityId]);
+
+    useEffect(() => {
+        if (selectedDepartmentId) {
+            organizationApi.getRooms({ facilityId: primaryFacilityId, departmentId: selectedDepartmentId }).then(res => {
+                if (res.success && res.data) {
+                    setRooms(res.data);
+                    setSelectedRoomId(res.data.length > 0 ? res.data[0].id : undefined);
+                }
+            }).catch(err => console.error('Lỗi tải danh sách phòng:', err));
+        } else {
+            setRooms([]);
+            setSelectedRoomId(undefined);
+        }
+    }, [selectedDepartmentId, primaryFacilityId]);
 
     const loadFacilities = async () => {
         setLoadingFacilities(true);
@@ -113,7 +157,11 @@ export const WalkInPatientRegistration: React.FC = () => {
         setContactPhone('');
         setContactAddress('');
         setAllergies([]);
+        setChiefComplaint('');
+        setPriority('Normal');
+        setSelectedDoctorId(undefined);
         setRegisteredPatient(null);
+        setCurrentTicket(null);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -132,44 +180,89 @@ export const WalkInPatientRegistration: React.FC = () => {
             }
         }
 
+        if (issueQueueTicket) {
+            if (!phoneNumber.trim()) {
+                showAlert('Thiếu số điện thoại', 'Vui lòng nhập số điện thoại bệnh nhân để liên hệ và cấp số thứ tự.', 'warning');
+                return;
+            }
+            if (!selectedDepartmentId) {
+                showAlert('Thiếu khoa khám', 'Vui lòng chọn Khoa / Chuyên khoa tiếp nhận bệnh nhân.', 'warning');
+                return;
+            }
+            if (!chiefComplaint.trim()) {
+                showAlert('Thiếu lý do khám', 'Vui lòng nhập Lý do khám / Triệu chứng ban đầu của bệnh nhân.', 'warning');
+                return;
+            }
+        }
+
         setSubmitting(true);
         try {
-            const payload: RegisterWalkInPatientPayload = {
-                fullName: fullName.trim(),
-                phoneNumber: phoneNumber.trim() || undefined,
-                email: email.trim() || undefined,
-                gender: gender,
-                dateOfBirth: dateOfBirth || undefined,
-                address: address.trim() || undefined,
-                nationalId: nationalId.trim() || undefined,
-                bhytNumber: bhytNumber.trim() || undefined,
-                bloodType: bloodType || undefined,
-                rhFactor: rhFactor || undefined,
-                primaryFacilityId: primaryFacilityId,
-                allergies: allergies.map(a => ({
-                    allergenType: a.allergenType,
-                    allergenName: a.allergenName.trim(),
-                    severity: a.severity,
-                    reactionDescription: a.reactionDescription.trim() || undefined
-                })),
-                emergencyContact: contactName.trim() ? {
-                    fullName: contactName.trim(),
-                    relationship: contactRelationship,
-                    phoneNumber: contactPhone.trim(),
-                    address: contactAddress.trim() || undefined
-                } : undefined
-            };
+            if (issueQueueTicket && selectedDepartmentId) {
+                // Phase 1.2 Connected Outpatient Journey: Direct Walk-in into Clinic Queue with STT
+                const res = await patientVisitApi.createWalkInVisit({
+                    facilityId: primaryFacilityId || 1,
+                    departmentId: selectedDepartmentId,
+                    roomId: selectedRoomId,
+                    assignedDoctorId: selectedDoctorId,
+                    fullName: fullName.trim(),
+                    phoneNumber: phoneNumber.trim(),
+                    dateOfBirth: dateOfBirth || undefined,
+                    gender: gender,
+                    address: address.trim() || undefined,
+                    chiefComplaint: chiefComplaint.trim(),
+                    priority: priority
+                });
 
-            const res = await mpiApi.registerWalkIn(payload);
-            if (res.success && res.data) {
-                setRegisteredPatient(res.data);
-                showAlert(
-                    'Đăng ký thành công!',
-                    `Đã cấp Mã bệnh án (MRN): ${res.data.medicalRecordNumber} cho bệnh nhân ${res.data.fullName}.`,
-                    'success'
-                );
+                if (res.success && res.data) {
+                    setCurrentTicket(res.data);
+                    setTicketModalOpen(true);
+                    showAlert(
+                        'Tiếp nhận & Cấp STT thành công!',
+                        `Đã cấp STT ${res.data.queueNumber} tại ${res.data.departmentName || 'phòng khám'} cho bệnh nhân ${res.data.patientName}. Mã bệnh án: ${res.data.medicalRecordNumber}.`,
+                        'success'
+                    );
+                } else {
+                    showAlert('Lỗi', res.message || 'Không thể tiếp nhận bệnh nhân.', 'error');
+                }
             } else {
-                showAlert('Lỗi', res.message || 'Không thể đăng ký bệnh nhân.', 'error');
+                // Fallback: MPI-only registration
+                const payload: RegisterWalkInPatientPayload = {
+                    fullName: fullName.trim(),
+                    phoneNumber: phoneNumber.trim() || undefined,
+                    email: email.trim() || undefined,
+                    gender: gender,
+                    dateOfBirth: dateOfBirth || undefined,
+                    address: address.trim() || undefined,
+                    nationalId: nationalId.trim() || undefined,
+                    bhytNumber: bhytNumber.trim() || undefined,
+                    bloodType: bloodType || undefined,
+                    rhFactor: rhFactor || undefined,
+                    primaryFacilityId: primaryFacilityId,
+                    allergies: allergies.map(a => ({
+                        allergenType: a.allergenType,
+                        allergenName: a.allergenName.trim(),
+                        severity: a.severity,
+                        reactionDescription: a.reactionDescription.trim() || undefined
+                    })),
+                    emergencyContact: contactName.trim() ? {
+                        fullName: contactName.trim(),
+                        relationship: contactRelationship,
+                        phoneNumber: contactPhone.trim(),
+                        address: contactAddress.trim() || undefined
+                    } : undefined
+                };
+
+                const res = await mpiApi.registerWalkIn(payload);
+                if (res.success && res.data) {
+                    setRegisteredPatient(res.data);
+                    showAlert(
+                        'Đăng ký thành công!',
+                        `Đã cấp Mã bệnh án (MRN): ${res.data.medicalRecordNumber} cho bệnh nhân ${res.data.fullName}.`,
+                        'success'
+                    );
+                } else {
+                    showAlert('Lỗi', res.message || 'Không thể đăng ký bệnh nhân.', 'error');
+                }
             }
         } catch (err: any) {
             const message = err.response?.data?.message || err.message || 'Lỗi hệ thống khi đăng ký bệnh nhân.';
@@ -218,7 +311,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                         <Search size={18} />
                         Tra cứu MPI (Tránh trùng mã)
                     </button>
-                    {registeredPatient && (
+                    {(registeredPatient || currentTicket) && (
                         <button
                             type="button"
                             onClick={resetForm}
@@ -242,8 +335,94 @@ export const WalkInPatientRegistration: React.FC = () => {
                 </div>
             </div>
 
-            {/* Success Card if patient registered */}
-            {registeredPatient && (
+            {/* Success Card if patient registered or ticket issued */}
+            {currentTicket && (
+                <div style={{
+                    backgroundColor: '#ecfdf5',
+                    border: '1px solid #10b981',
+                    borderRadius: '12px',
+                    padding: '24px',
+                    marginBottom: '24px'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                        <CheckCircle2 size={32} color="#059669" />
+                        <div>
+                            <h3 style={{ margin: 0, color: '#065f46', fontSize: '1.25rem', fontWeight: 700 }}>
+                                Tiếp nhận & Phát số thứ tự (STT) thành công!
+                            </h3>
+                            <p style={{ margin: 0, color: '#047857', fontSize: '0.9rem' }}>
+                                Bệnh nhân đã được đưa vào hàng đợi phòng khám của bác sĩ.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                        gap: '16px',
+                        backgroundColor: '#fff',
+                        padding: '16px',
+                        borderRadius: '8px',
+                        border: '1px solid #a7f3d0'
+                    }}>
+                        <div style={{ backgroundColor: '#f0fdf4', padding: '10px 14px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                            <span style={{ fontSize: '0.8rem', color: '#15803d', fontWeight: 600 }}>SỐ THỨ TỰ (STT)</span>
+                            <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#15803d' }}>
+                                {currentTicket.queueNumber}
+                            </div>
+                        </div>
+                        <div>
+                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>MÃ BỆNH ÁN (MRN)</span>
+                            <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0284c7' }}>
+                                {currentTicket.medicalRecordNumber}
+                            </div>
+                        </div>
+                        <div>
+                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>HỌ VÀ TÊN</span>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 600, color: '#0f172a' }}>
+                                {currentTicket.patientName}
+                            </div>
+                        </div>
+                        <div>
+                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>KHOA / CHUYÊN KHOA</span>
+                            <div style={{ fontSize: '1rem', fontWeight: 600, color: '#0f172a' }}>
+                                {currentTicket.departmentName}
+                            </div>
+                        </div>
+                        <div>
+                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>PHÒNG KHÁM & BÁC SĨ</span>
+                            <div style={{ fontSize: '0.95rem', fontWeight: 500, color: '#0f172a' }}>
+                                {currentTicket.roomNumber ? `Phòng ${currentTicket.roomNumber}` : 'Phòng khám chung'} 
+                                {currentTicket.doctorName ? ` • ${currentTicket.doctorName}` : ''}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setTicketModalOpen(true)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '10px 20px',
+                                backgroundColor: '#059669',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '6px',
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <Printer size={18} />
+                            In phiếu tiếp nhận khám (STT)
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {!currentTicket && registeredPatient && (
                 <div style={{
                     backgroundColor: '#ecfdf5',
                     border: '1px solid #10b981',
@@ -526,6 +705,107 @@ export const WalkInPatientRegistration: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* Outpatient Clinic Department & Queue Check-in (Phase 1.2 Connected Outpatient Journey) */}
+                    <div className="card" style={{ padding: '24px', borderRadius: '12px', border: '2px solid #0284c7', backgroundColor: '#f8fafc' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <Ticket size={22} color="#0284c7" />
+                                <div>
+                                    <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, color: '#0369a1' }}>
+                                        Tiếp nhận khám ngay & Cấp số thứ tự (STT)
+                                    </h2>
+                                    <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                                        Phát số thứ tự tự động và đưa bệnh nhân vào hàng đợi phòng khám bác sĩ
+                                    </span>
+                                </div>
+                            </div>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600, color: '#0f172a' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={issueQueueTicket}
+                                    onChange={(e) => setIssueQueueTicket(e.target.checked)}
+                                    style={{ width: '18px', height: '18px', accentColor: '#0284c7' }}
+                                />
+                                Cấp STT & Khám ngay
+                            </label>
+                        </div>
+
+                        {issueQueueTicket && (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '6px', color: '#334155' }}>
+                                        Khoa / Chuyên khoa khám <span style={{ color: '#ef4444' }}>*</span>
+                                    </label>
+                                    <select
+                                        className="form-select"
+                                        value={selectedDepartmentId || ''}
+                                        onChange={(e) => setSelectedDepartmentId(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                                        required
+                                    >
+                                        <option value="">-- Chọn chuyên khoa tiếp nhận --</option>
+                                        {departments.map(d => (
+                                            <option key={d.id} value={d.id}>
+                                                [{d.code}] {d.name} {d.buildingName ? `(${d.buildingName})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '6px', color: '#334155' }}>
+                                        Phòng khám (Tùy chọn)
+                                    </label>
+                                    <select
+                                        className="form-select"
+                                        value={selectedRoomId || ''}
+                                        onChange={(e) => setSelectedRoomId(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                                    >
+                                        <option value="">Phòng khám tự động / chung</option>
+                                        {rooms.map(r => (
+                                            <option key={r.id} value={r.id}>
+                                                Phòng {r.roomNumber} - {r.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '6px', color: '#334155' }}>
+                                        Mức độ ưu tiên khám
+                                    </label>
+                                    <select
+                                        className="form-select"
+                                        value={priority}
+                                        onChange={(e) => setPriority(e.target.value as VisitPriority)}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                                    >
+                                        <option value="Normal">Bình thường (Normal)</option>
+                                        <option value="Priority">Ưu tiên (Người già / Trẻ em / Phụ nữ mang thai)</option>
+                                        <option value="Urgent">Khẩn cấp (Cần xử lý sớm)</option>
+                                        <option value="Emergency">Cấp cứu (Emergency)</option>
+                                    </select>
+                                </div>
+
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '6px', color: '#334155' }}>
+                                        Lý do khám / Triệu chứng ban đầu <span style={{ color: '#ef4444' }}>*</span>
+                                    </label>
+                                    <textarea
+                                        className="form-control"
+                                        rows={2}
+                                        placeholder="Ví dụ: Đau đầu, sốt nhẹ 2 ngày, ho có đờm..."
+                                        value={chiefComplaint}
+                                        onChange={(e) => setChiefComplaint(e.target.value)}
+                                        required={issueQueueTicket}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     {/* Allergies Section */}
                     <div className="card" style={{ padding: '24px', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#fff' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
@@ -754,7 +1034,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                                 alignItems: 'center',
                                 gap: '8px',
                                 padding: '12px 28px',
-                                backgroundColor: '#2563eb',
+                                backgroundColor: issueQueueTicket ? '#059669' : '#2563eb',
                                 color: '#fff',
                                 border: 'none',
                                 borderRadius: '8px',
@@ -763,12 +1043,21 @@ export const WalkInPatientRegistration: React.FC = () => {
                                 opacity: submitting ? 0.7 : 1
                             }}
                         >
-                            <UserPlus size={18} />
-                            {submitting ? 'Đang cấp mã & ghi danh...' : 'Xác nhận tiếp nhận & Cấp MRN'}
+                            {issueQueueTicket ? <Ticket size={18} /> : <UserPlus size={18} />}
+                            {submitting 
+                                ? 'Đang tiếp nhận & cấp mã...' 
+                                : (issueQueueTicket ? 'Tiếp nhận phòng khám & Cấp STT' : 'Xác nhận tiếp nhận & Cấp MRN')}
                         </button>
                     </div>
                 </div>
             </form>
+
+            {/* Check-In Ticket Printable Modal */}
+            <CheckInTicketModal
+                isOpen={ticketModalOpen}
+                ticket={currentTicket}
+                onClose={() => setTicketModalOpen(false)}
+            />
 
             {/* MPI Lookup Modal */}
             <MpiPatientSearchModal

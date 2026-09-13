@@ -128,6 +128,7 @@ function App() {
                                         <Route path="/doctor/appointments" element={<DoctorAppointments />} />
                                         <Route path="/doctor/appointments/:id" element={<DoctorAppointmentDetail />} />
                                         <Route path="/doctor/appointments/:id/examination" element={<DoctorExaminationWorkspace />} />
+                                        <Route path="/doctor/visits/:visitId/examination" element={<DoctorExaminationWorkspace />} />
                                         <Route path="/doctor/diagnostic-orders/:id/print" element={<DiagnosticOrderPrint />} />
                                         <Route path="/doctor/leave-requests" element={<DoctorLeaveRequests />} />
                                     </Route>

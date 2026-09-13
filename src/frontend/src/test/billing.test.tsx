@@ -26,6 +26,7 @@ vi.mock('../api/billingApi', () => ({
             getInvoiceById: vi.fn(),
             createInvoiceFromAppointment: vi.fn(),
             createInvoiceFromHealthPackage: vi.fn(),
+            createInvoiceFromVisit: vi.fn(),
             processPayment: vi.fn(),
             cancelInvoice: vi.fn(),
             getTodayKpi: vi.fn(),

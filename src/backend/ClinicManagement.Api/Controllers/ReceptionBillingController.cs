@@ -50,6 +50,17 @@ public class ReceptionBillingController : ControllerBase
         return StatusCode(201, ApiResponse<InvoiceDetailDto>.Ok(result, "Lập hóa đơn khám bệnh thành công."));
     }
 
+    [HttpPost("invoices/visit")]
+    public async Task<ActionResult<ApiResponse<InvoiceDetailDto>>> CreateInvoiceFromVisit([FromBody] CreateVisitInvoiceRequest request, CancellationToken cancellationToken)
+    {
+        var userId = _currentUserService.UserId;
+        if (userId == null)
+            throw new UnauthorizedException("Chưa đăng nhập.");
+
+        var result = await _billingService.CreateInvoiceFromVisitAsync(request.PatientVisitId, userId.Value, cancellationToken);
+        return StatusCode(201, ApiResponse<InvoiceDetailDto>.Ok(result, "Lập hóa đơn viện phí cho lượt khám thành công."));
+    }
+
     [HttpPost("invoices/health-package")]
     public async Task<ActionResult<ApiResponse<InvoiceDetailDto>>> CreateInvoiceFromHealthPackage([FromBody] CreatePackageInvoiceRequest request, CancellationToken cancellationToken)
     {

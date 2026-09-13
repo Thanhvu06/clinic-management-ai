@@ -14,6 +14,7 @@ public interface IBillingService
     Task<PagedResult<InvoiceDto>> GetReceptionInvoicesAsync(InvoiceFilterParams filters, CancellationToken cancellationToken = default);
     Task<InvoiceDetailDto> GetInvoiceDetailAsync(long invoiceId, CancellationToken cancellationToken = default);
     Task<InvoiceDetailDto> CreateInvoiceFromAppointmentAsync(long appointmentId, Guid createdByUserId, CancellationToken cancellationToken = default);
+    Task<InvoiceDetailDto> CreateInvoiceFromVisitAsync(long visitId, Guid createdByUserId, CancellationToken cancellationToken = default);
     Task<InvoiceDetailDto> CreateInvoiceFromHealthPackageAsync(long registrationId, Guid createdByUserId, CancellationToken cancellationToken = default);
     Task<PaymentDto> ProcessPaymentAsync(long invoiceId, ProcessPaymentRequest request, Guid receivedByUserId, CancellationToken cancellationToken = default);
     Task<InvoiceDetailDto> CancelInvoiceAsync(long invoiceId, string reason, Guid cancelledByUserId, CancellationToken cancellationToken = default);

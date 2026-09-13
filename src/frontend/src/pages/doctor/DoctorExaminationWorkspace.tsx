@@ -28,8 +28,10 @@ interface ActiveMedicine {
 }
 
 export const DoctorExaminationWorkspace: React.FC = () => {
-    const { id } = useParams<{ id: string }>();
-    const appointmentId = Number(id);
+    const { id, visitId } = useParams<{ id?: string; visitId?: string }>();
+    const isVisit = Boolean(visitId);
+    const currentId = Number(visitId || id);
+    const appointmentId = isVisit ? 0 : Number(id);
     const navigate = useNavigate();
     const { showAlert, showToast } = useDialog();
 
@@ -105,9 +107,11 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
     // Load diagnostic orders
     const loadDiagnosticOrders = useCallback(async () => {
-        if (!appointmentId) return;
+        if (!currentId) return;
         try {
-            const res = await diagnosticApi.getDoctorOrdersByAppointment(appointmentId);
+            const res = isVisit
+                ? await diagnosticApi.getDoctorOrdersByVisit(currentId)
+                : await diagnosticApi.getDoctorOrdersByAppointment(appointmentId);
             if (res.success && res.data) {
                 setDiagnosticOrders(res.data);
             }
@@ -116,7 +120,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         } finally {
             setLoadingOrders(false);
         }
-    }, [appointmentId]);
+    }, [currentId, isVisit, appointmentId]);
 
     // Load diagnostic catalog
     const loadDiagnosticCatalog = useCallback(async () => {
@@ -132,10 +136,14 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
     // Load initial context
     const loadContext = useCallback(async () => {
-        if (!appointmentId) return;
+        if (!currentId) return;
         try {
+            const ctxPromise = isVisit
+                ? doctorApi.getVisitPatientClinicalContext(currentId)
+                : doctorApi.getPatientClinicalContext(appointmentId);
+
             const [ctxRes, medRes] = await Promise.all([
-                doctorApi.getPatientClinicalContext(appointmentId),
+                ctxPromise,
                 doctorApi.getActiveMedicines(),
                 loadDiagnosticOrders(),
                 loadDiagnosticCatalog()
@@ -147,7 +155,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
                 // Populate Encounter
                 if (data.encounter) {
-                    setChiefComplaint(data.encounter.chiefComplaint || data.currentAppointment.reason || '');
+                    setChiefComplaint(data.encounter.chiefComplaint || data.currentAppointment?.reason || '');
                     setClinicalFindings(data.encounter.clinicalFindings || '');
                     setDiagnosis(data.encounter.diagnosis || '');
                     setDiagnosisCode(data.encounter.diagnosisCode || '');
@@ -156,7 +164,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     setFollowUpInstruction(data.encounter.followUpInstruction || '');
                     setEncounterRowVersion(data.encounter.rowVersion || null);
                 } else {
-                    setChiefComplaint(data.currentAppointment.reason || '');
+                    setChiefComplaint(data.currentAppointment?.reason || '');
                 }
 
                 // Populate Vitals
@@ -199,7 +207,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [appointmentId, showAlert, loadDiagnosticOrders, loadDiagnosticCatalog]);
+    }, [currentId, isVisit, appointmentId, showAlert, loadDiagnosticOrders, loadDiagnosticCatalog]);
 
     useEffect(() => {
         let isMounted = true;
@@ -265,7 +273,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 followUpInstruction,
                 rowVersion: encounterRowVersion
             };
-            const res = await doctorApi.saveEncounter(appointmentId, req);
+            const res = isVisit
+                ? await doctorApi.saveVisitEncounter(currentId, req)
+                : await doctorApi.saveEncounter(appointmentId, req);
             if (res.success && res.data) {
                 setEncounterRowVersion(res.data.rowVersion || null);
                 showToast('Đã lưu diễn tiến khám lâm sàng.', 'success');
@@ -297,12 +307,16 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 spO2: spO2 ? parseInt(spO2, 10) : null,
                 rowVersion: vitalsRowVersion
             };
-            const res = await doctorApi.saveVitalSigns(appointmentId, req);
+            const res = isVisit
+                ? await doctorApi.saveVisitVitalSigns(currentId, req)
+                : await doctorApi.saveVitalSigns(appointmentId, req);
             if (res.success && res.data) {
                 setVitalsRowVersion(res.data.rowVersion || null);
                 showToast('Đã lưu dấu hiệu sinh tồn thành công.', 'success');
                 // Refresh context to reload updated longitudinal comparison deltas
-                const ctxRes = await doctorApi.getPatientClinicalContext(appointmentId);
+                const ctxRes = isVisit
+                    ? await doctorApi.getVisitPatientClinicalContext(currentId)
+                    : await doctorApi.getPatientClinicalContext(appointmentId);
                 if (ctxRes.success && ctxRes.data) {
                     setContext(ctxRes.data);
                 }
@@ -335,11 +349,17 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
         setCreatingOrder(true);
         try {
-            const res = await diagnosticApi.createDoctorOrder(appointmentId, {
-                serviceIds: selectedServiceIds,
-                clinicalIndication: clinicalIndication.trim() || 'Chỉ định cận lâm sàng',
-                note: orderNotes.trim() || undefined
-            });
+            const res = isVisit
+                ? await diagnosticApi.createDoctorOrderForVisit(currentId, {
+                    serviceIds: selectedServiceIds,
+                    clinicalIndication: clinicalIndication.trim() || 'Chỉ định cận lâm sàng',
+                    note: orderNotes.trim() || undefined
+                })
+                : await diagnosticApi.createDoctorOrder(appointmentId, {
+                    serviceIds: selectedServiceIds,
+                    clinicalIndication: clinicalIndication.trim() || 'Chỉ định cận lâm sàng',
+                    note: orderNotes.trim() || undefined
+                });
 
             if (res.success) {
                 showToast('Đã tạo phiếu chỉ định cận lâm sàng thành công!', 'success');
@@ -401,7 +421,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     instructions: item.instructions
                 }))
             };
-            const res = await doctorApi.savePrescriptionDraft(appointmentId, req);
+            const res = isVisit
+                ? await doctorApi.saveVisitPrescriptionDraft(currentId, req)
+                : await doctorApi.savePrescriptionDraft(appointmentId, req);
             if (res.success && res.data) {
                 setPrescriptionRowVersion(res.data.rowVersion || null);
                 showToast('Đã lưu nháp đơn thuốc thành công.', 'success');
@@ -552,11 +574,17 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 })) : undefined
             };
 
-            const res = await doctorApi.completeConsultation(appointmentId, req);
+            const res = isVisit
+                ? await doctorApi.completeVisitConsultation(currentId, req)
+                : await doctorApi.completeConsultation(appointmentId, req);
             if (res.success) {
                 showToast('Đã hoàn tất ca khám lâm sàng và cấp hồ sơ bệnh án thành công!', 'success');
                 setIsCompleteModalOpen(false);
-                navigate(`/doctor/appointments/${appointmentId}`);
+                if (isVisit) {
+                    navigate('/doctor/queue');
+                } else {
+                    navigate(`/doctor/appointments/${appointmentId}`);
+                }
             }
         } catch (err: any) {
             if (err.response?.status === 409) {
@@ -578,6 +606,12 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         e.preventDefault();
         if (!revisitDate) {
             showAlert('Vui lòng chọn ngày hẹn tái khám.', 'Thiếu ngày', 'warning');
+            return;
+        }
+
+        if (isVisit && !appointmentId) {
+            showAlert('Đề xuất tái khám trực tuyến hiện áp dụng cho bệnh nhân có lịch hẹn trước. Bác sĩ vui lòng dặn dò ngày tái khám tại mục Lời dặn / Diễn tiến khám.', 'Thông báo', 'info');
+            setIsRevisitModalOpen(false);
             return;
         }
 

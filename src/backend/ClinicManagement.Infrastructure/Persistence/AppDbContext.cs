@@ -48,6 +48,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Department> Departments { get; set; } = null!;
     public DbSet<Room> Rooms { get; set; } = null!;
     public DbSet<Bed> Beds { get; set; } = null!;
+    public DbSet<StaffFacilityAssignment> StaffFacilityAssignments { get; set; } = null!;
+
+    // Outpatient Care Visits & Queues
+    public DbSet<PatientVisit> PatientVisits { get; set; } = null!;
+    public DbSet<DailyQueueSequence> DailyQueueSequences { get; set; } = null!;
 
     // MPI (Master Patient Index)
     public DbSet<PatientAllergy> PatientAllergies { get; set; } = null!;
@@ -79,6 +84,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         {
             b.Property(p => p.RowVersion)
                 .IsRowVersion();
+
+            b.HasOne(p => p.PatientVisit)
+                .WithMany(pv => pv.Prescriptions)
+                .HasForeignKey(p => p.PatientVisitId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<ClinicLocation>(b =>

@@ -12,11 +12,13 @@ public class Department
     public string Name { get; set; } = string.Empty;
     public DepartmentType DepartmentType { get; set; } = DepartmentType.Clinical;
     public long? HeadOfDepartmentDoctorId { get; set; }
+    public long? SpecialtyId { get; set; }
     public string? Description { get; set; }
     public bool IsActive { get; set; } = true;
 
     public Facility Facility { get; set; } = null!;
     public Building? Building { get; set; }
     public Doctor? HeadOfDepartmentDoctor { get; set; }
+    public Specialty? Specialty { get; set; }
     public ICollection<Room> Rooms { get; set; } = new List<Room>();
 }

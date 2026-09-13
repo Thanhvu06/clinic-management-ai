@@ -5,7 +5,8 @@ namespace ClinicManagement.Domain.Entities;
 public class AppointmentVitalSigns
 {
     public long Id { get; set; }
-    public long AppointmentId { get; set; }
+    public long? AppointmentId { get; set; }
+    public long? PatientVisitId { get; set; }
 
     public decimal? Temperature { get; set; }
     public int? BloodPressureSystolic { get; set; }
@@ -22,7 +23,8 @@ public class AppointmentVitalSigns
 
     public byte[]? RowVersion { get; set; } = Guid.NewGuid().ToByteArray();
 
-    public Appointment Appointment { get; set; } = null!;
+    public Appointment? Appointment { get; set; }
+    public PatientVisit? PatientVisit { get; set; }
 
     public static decimal? CalculateBmi(decimal? weightKg, decimal? heightCm)
     {

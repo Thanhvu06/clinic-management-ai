@@ -54,7 +54,8 @@ export const DoctorDashboard: React.FC = () => {
         };
     }, [loadDashboard]);
 
-    const handleCheckIn = async (appointmentId: number) => {
+    const handleCheckIn = async (appointmentId?: number | null) => {
+        if (!appointmentId) return;
         setActionLoadingId(appointmentId);
         try {
             const res = await doctorApi.checkInAppointment(appointmentId);
@@ -69,13 +70,23 @@ export const DoctorDashboard: React.FC = () => {
         }
     };
 
-    const handleStartConsultation = async (appointmentId: number) => {
-        setActionLoadingId(appointmentId);
+    const handleStartConsultation = async (item: DoctorQueueItemDto) => {
+        const targetId = item.patientVisitId || item.appointmentId;
+        if (!targetId) return;
+        setActionLoadingId(targetId);
         try {
-            const res = await doctorApi.startConsultation(appointmentId);
-            if (res.success) {
-                showToast('Bắt đầu phiên khám lâm sàng.', 'success');
-                navigate(`/doctor/appointments/${appointmentId}/examination`);
+            if (item.patientVisitId) {
+                const res = await doctorApi.startVisitConsultation(item.patientVisitId);
+                if (res.success) {
+                    showToast('Bắt đầu phiên khám lâm sàng.', 'success');
+                    navigate(`/doctor/visits/${item.patientVisitId}/examination`);
+                }
+            } else if (item.appointmentId) {
+                const res = await doctorApi.startConsultation(item.appointmentId);
+                if (res.success) {
+                    showToast('Bắt đầu phiên khám lâm sàng.', 'success');
+                    navigate(`/doctor/appointments/${item.appointmentId}/examination`);
+                }
             }
         } catch (err: any) {
             showAlert(err.response?.data?.message || 'Không thể bắt đầu phiên khám.', 'Lỗi', 'error');
@@ -85,12 +96,13 @@ export const DoctorDashboard: React.FC = () => {
     };
 
     const handleMarkNoShow = (item: DoctorQueueItemDto) => {
+        if (!item.appointmentId) return;
         showConfirm(
             `Xác nhận đánh dấu bệnh nhân "${item.patientName}" vắng mặt cho ca khám lúc ${item.startTime.substring(0, 5)}?`,
             async () => {
-                setActionLoadingId(item.appointmentId);
+                setActionLoadingId(item.appointmentId!);
                 try {
-                    const res = await doctorApi.markNoShow(item.appointmentId, 'Bệnh nhân không có mặt tại phòng khám.');
+                    const res = await doctorApi.markNoShow(item.appointmentId!, 'Bệnh nhân không có mặt tại phòng khám.');
                     if (res.success) {
                         showToast('Đã đánh dấu bệnh nhân vắng mặt.', 'info');
                         await loadDashboard();
@@ -294,7 +306,7 @@ export const DoctorDashboard: React.FC = () => {
 
                     {nextPatient && (
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            {nextPatient.status === 'Confirmed' && (
+                            {nextPatient.status === 'Confirmed' && nextPatient.appointmentId && (
                                 <button
                                     className="btn-secondary"
                                     onClick={() => handleCheckIn(nextPatient.appointmentId)}
@@ -309,8 +321,8 @@ export const DoctorDashboard: React.FC = () => {
                             {nextPatient.status === 'CheckedIn' && (
                                 <button
                                     className="btn-primary"
-                                    onClick={() => handleStartConsultation(nextPatient.appointmentId)}
-                                    disabled={actionLoadingId === nextPatient.appointmentId}
+                                    onClick={() => handleStartConsultation(nextPatient)}
+                                    disabled={actionLoadingId === (nextPatient.patientVisitId || nextPatient.appointmentId)}
                                     style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 20px', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
                                 >
                                     <Stethoscope size={16} />
@@ -321,7 +333,7 @@ export const DoctorDashboard: React.FC = () => {
                             {nextPatient.status === 'InConsultation' && (
                                 <button
                                     className="btn-primary"
-                                    onClick={() => navigate(`/doctor/appointments/${nextPatient.appointmentId}/examination`)}
+                                    onClick={() => navigate(nextPatient.patientVisitId ? `/doctor/visits/${nextPatient.patientVisitId}/examination` : `/doctor/appointments/${nextPatient.appointmentId}/examination`)}
                                     style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 20px', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
                                 >
                                     <ArrowRight size={16} />
@@ -414,7 +426,7 @@ export const DoctorDashboard: React.FC = () => {
                                         </td>
                                         <td style={{ padding: '14px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                             <div style={{ display: 'inline-flex', gap: '6px' }}>
-                                                {item.status === 'Confirmed' && (
+                                                {item.status === 'Confirmed' && item.appointmentId && (
                                                     <>
                                                         <button 
                                                             className="btn-secondary"
@@ -447,8 +459,8 @@ export const DoctorDashboard: React.FC = () => {
                                                 {item.status === 'CheckedIn' && (
                                                     <button 
                                                         className="btn-primary"
-                                                        onClick={() => handleStartConsultation(item.appointmentId)}
-                                                        disabled={actionLoadingId === item.appointmentId}
+                                                        onClick={() => handleStartConsultation(item)}
+                                                        disabled={actionLoadingId === (item.patientVisitId || item.appointmentId)}
                                                         style={{ padding: '5px 12px', fontSize: '0.78rem', fontWeight: 600 }}
                                                     >
                                                         Vào khám
@@ -458,7 +470,7 @@ export const DoctorDashboard: React.FC = () => {
                                                 {item.status === 'InConsultation' && (
                                                     <button 
                                                         className="btn-primary"
-                                                        onClick={() => navigate(`/doctor/appointments/${item.appointmentId}/examination`)}
+                                                        onClick={() => navigate(item.patientVisitId ? `/doctor/visits/${item.patientVisitId}/examination` : `/doctor/appointments/${item.appointmentId}/examination`)}
                                                         style={{ padding: '5px 12px', fontSize: '0.78rem', fontWeight: 600 }}
                                                     >
                                                         Tiếp tục khám →
@@ -468,7 +480,7 @@ export const DoctorDashboard: React.FC = () => {
                                                 {item.status === 'Completed' && (
                                                     <button 
                                                         className="btn-secondary"
-                                                        onClick={() => navigate(`/doctor/appointments/${item.appointmentId}`)}
+                                                        onClick={() => item.appointmentId ? navigate(`/doctor/appointments/${item.appointmentId}`) : navigate('/doctor/queue')}
                                                         style={{ padding: '5px 10px', fontSize: '0.78rem' }}
                                                     >
                                                         Xem hồ sơ

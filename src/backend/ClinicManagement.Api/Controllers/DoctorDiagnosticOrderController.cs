@@ -35,6 +35,20 @@ public class DoctorDiagnosticOrderController : ControllerBase
         return Ok(ApiResponse<List<DiagnosticOrderDto>>.Ok(orders));
     }
 
+    [HttpPost("visits/{visitId}/diagnostic-orders")]
+    public async Task<IActionResult> CreateOrderForVisit(long visitId, [FromBody] CreateDiagnosticOrderRequest request)
+    {
+        var order = await _workflowService.CreateOrderForVisitDoctorAsync(visitId, request);
+        return Created($"/api/v1/doctor/diagnostic-orders/{order.Id}", ApiResponse<DiagnosticOrderDto>.Ok(order, "Tạo phiếu chỉ định cận lâm sàng thành công."));
+    }
+
+    [HttpGet("visits/{visitId}/diagnostic-orders")]
+    public async Task<IActionResult> GetOrdersByVisit(long visitId)
+    {
+        var orders = await _workflowService.GetOrdersByVisitForDoctorAsync(visitId);
+        return Ok(ApiResponse<List<DiagnosticOrderDto>>.Ok(orders));
+    }
+
     [HttpGet("diagnostic-orders/{orderId}")]
     public async Task<IActionResult> GetOrderById(long orderId)
     {

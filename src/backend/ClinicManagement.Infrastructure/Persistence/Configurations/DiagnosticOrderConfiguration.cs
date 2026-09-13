@@ -30,6 +30,11 @@ public class DiagnosticOrderConfiguration : IEntityTypeConfiguration<DiagnosticO
             .HasForeignKey(o => o.AppointmentId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(o => o.PatientVisit)
+            .WithMany(pv => pv.DiagnosticOrders)
+            .HasForeignKey(o => o.PatientVisitId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasOne(o => o.Patient)
             .WithMany()
             .HasForeignKey(o => o.PatientId)
@@ -45,9 +50,21 @@ public class DiagnosticOrderConfiguration : IEntityTypeConfiguration<DiagnosticO
             .HasForeignKey(o => o.ReviewedByDoctorId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(o => o.Facility)
+            .WithMany()
+            .HasForeignKey(o => o.FacilityId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(o => o.PerformingDepartment)
+            .WithMany()
+            .HasForeignKey(o => o.PerformingDepartmentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(o => o.PatientVisitId);
         builder.HasIndex(o => new { o.PatientId, o.OrderedAtUtc });
         builder.HasIndex(o => new { o.OrderingDoctorId, o.Status });
         builder.HasIndex(o => new { o.Status, o.OrderedAtUtc });
+        builder.HasIndex(o => new { o.FacilityId, o.PerformingDepartmentId, o.Status });
 
         builder.Property(o => o.RowVersion).IsRowVersion();
     }

@@ -153,6 +153,192 @@ public class BillingService : IBillingService
         return await GetInvoiceDetailAsync(invoiceId, cancellationToken);
     }
 
+    public async Task<InvoiceDetailDto> CreateInvoiceFromVisitAsync(long visitId, Guid createdByUserId, CancellationToken cancellationToken = default)
+    {
+        var visit = await _dbContext.PatientVisits
+            .Include(v => v.Patient)
+            .Include(v => v.Department)
+                .ThenInclude(d => d!.Specialty)
+            .Include(v => v.Appointment)
+                .ThenInclude(a => a!.Specialty)
+            .Include(v => v.DiagnosticOrders)
+                .ThenInclude(o => o.Items)
+                    .ThenInclude(i => i.DiagnosticService)
+            .Include(v => v.Prescriptions)
+                .ThenInclude(p => p.Items)
+                    .ThenInclude(i => i.Medicine)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(v => v.Id == visitId, cancellationToken);
+
+        if (visit == null)
+            throw new NotFoundException("Lượt khám không tồn tại.");
+
+        var existingActiveInvoice = await _dbContext.Invoices
+            .AnyAsync(i => i.PatientVisitId == visitId && i.Status != InvoiceStatus.Cancelled, cancellationToken);
+
+        if (existingActiveInvoice)
+            throw new BusinessException("INVOICE_ALREADY_EXISTS", "Lượt khám này đã có hóa đơn đang hoạt động (chưa hủy).");
+
+        // 1. Consultation fee
+        var consultationFee = visit.Department?.Specialty?.ConsultationFee ?? visit.Appointment?.Specialty?.ConsultationFee ?? 150000m;
+        if (consultationFee <= 0)
+            throw new BusinessException("FEE_NOT_CONFIGURED", "Chuyên khoa/khoa khám chưa được cấu hình mức phí hợp lệ.");
+
+        var itemsToCreate = new List<InvoiceItem>();
+
+        itemsToCreate.Add(new InvoiceItem
+        {
+            ItemCode = visit.Department?.Specialty?.SpecialtyCode ?? "KHAM",
+            Description = $"Khám bệnh: {visit.Department?.Name ?? "Khám chuyên khoa"}",
+            Quantity = 1,
+            UnitPrice = consultationFee,
+            LineTotal = consultationFee,
+            ReferenceType = "Consultation",
+            ReferenceId = visit.Department?.SpecialtyId ?? (visit.Appointment?.SpecialtyId ?? 0)
+        });
+
+        // 2. Diagnostic services
+        var activeDiagnosticOrders = visit.DiagnosticOrders
+            .Where(o => o.Status != DiagnosticOrderStatus.Cancelled)
+            .ToList();
+
+        foreach (var order in activeDiagnosticOrders)
+        {
+            foreach (var item in order.Items.Where(i => i.Status != DiagnosticItemStatus.Cancelled))
+            {
+                if (item.DiagnosticService == null || !item.DiagnosticService.Price.HasValue || item.DiagnosticService.Price.Value <= 0)
+                {
+                    throw new BusinessException("FEE_NOT_CONFIGURED", $"Dịch vụ cận lâm sàng '{item.DiagnosticService?.Name ?? item.DiagnosticServiceId.ToString()}' chưa được cấu hình giá hợp lệ.");
+                }
+
+                itemsToCreate.Add(new InvoiceItem
+                {
+                    ItemCode = item.DiagnosticService.Code,
+                    Description = $"Chỉ định CLS: {item.DiagnosticService.Name}",
+                    Quantity = 1,
+                    UnitPrice = item.DiagnosticService.Price.Value,
+                    LineTotal = item.DiagnosticService.Price.Value,
+                    ReferenceType = "DiagnosticService",
+                    ReferenceId = item.DiagnosticServiceId
+                });
+            }
+        }
+
+        // 3. Prescriptions
+        var activePrescriptions = visit.Prescriptions
+            .Where(p => p.Status != PrescriptionStatus.Cancelled)
+            .ToList();
+
+        foreach (var p in activePrescriptions)
+        {
+            foreach (var item in p.Items)
+            {
+                if (item.Medicine == null || !item.Medicine.UnitPrice.HasValue || item.Medicine.UnitPrice.Value <= 0)
+                {
+                    throw new BusinessException("FEE_NOT_CONFIGURED", $"Thuốc '{item.Medicine?.Name ?? item.MedicineId.ToString()}' chưa được cấu hình đơn giá hợp lệ.");
+                }
+
+                var lineTotal = item.Medicine.UnitPrice.Value * item.Quantity;
+                itemsToCreate.Add(new InvoiceItem
+                {
+                    ItemCode = item.Medicine.Code,
+                    Description = $"Thuốc: {item.Medicine.Name}",
+                    Quantity = item.Quantity,
+                    UnitPrice = item.Medicine.UnitPrice.Value,
+                    LineTotal = lineTotal,
+                    ReferenceType = "Medicine",
+                    ReferenceId = item.MedicineId
+                });
+            }
+        }
+
+        var subtotal = itemsToCreate.Sum(i => i.LineTotal);
+
+        var executionStrategy = _dbContext.Database.CreateExecutionStrategy();
+        var invoiceId = await executionStrategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            try
+            {
+                var invoice = new Invoice
+                {
+                    InvoiceCode = GenerateInvoiceCode(),
+                    PatientId = visit.PatientId,
+                    SourceType = InvoiceSourceType.Appointment,
+                    AppointmentId = visit.AppointmentId,
+                    PatientVisitId = visit.Id,
+                    Status = InvoiceStatus.Unpaid,
+                    Subtotal = subtotal,
+                    TotalAmount = subtotal,
+                    CreatedByUserId = createdByUserId,
+                    CreatedAtUtc = DateTime.UtcNow
+                };
+
+                foreach (var itm in itemsToCreate)
+                {
+                    invoice.Items.Add(itm);
+                }
+
+                _dbContext.Invoices.Add(invoice);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                _dbContext.SystemAuditLogs.Add(new SystemAuditLog
+                {
+                    UserId = createdByUserId,
+                    Action = "CREATE_INVOICE",
+                    EntityName = "Invoice",
+                    EntityId = invoice.Id.ToString(),
+                    Description = $"Lập hóa đơn tổng hợp #{invoice.InvoiceCode} cho lượt khám #{visit.VisitCode} ({invoice.TotalAmount:N0}đ)",
+                    CreatedAt = _dateTimeProvider.VietnamNow
+                });
+
+                if (visit.Patient.UserId.HasValue)
+                {
+                    await _notificationService.CreateNotificationAsync(new CreateNotificationRequest
+                    {
+                        UserId = visit.Patient.UserId.Value,
+                        Type = NotificationType.Invoice,
+                        Title = "Hóa đơn viện phí mới",
+                        Message = $"Hóa đơn #{invoice.InvoiceCode} cho lượt khám #{visit.VisitCode} đã được lập với số tiền {invoice.TotalAmount:N0}đ.",
+                        Route = "/patient/invoices",
+                        RelatedEntityType = "Invoice",
+                        RelatedEntityId = invoice.Id.ToString(),
+                        DedupeKey = $"inv_created_{invoice.Id}"
+                    }, cancellationToken);
+                }
+
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return invoice.Id;
+            }
+            catch (DbUpdateException exception)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                _dbContext.ChangeTracker.Clear();
+
+                var duplicateExists = await _dbContext.Invoices.AsNoTracking()
+                    .AnyAsync(i => i.PatientVisitId == visitId && i.Status != InvoiceStatus.Cancelled, cancellationToken);
+
+                if (duplicateExists)
+                {
+                    _logger.LogWarning(exception, "Concurrent invoice creation was blocked for visit {VisitId}.", visitId);
+                    throw new ConflictException("INVOICE_ALREADY_EXISTS", "Lượt khám này vừa được lập hóa đơn bởi một yêu cầu khác.");
+                }
+
+                throw;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                _dbContext.ChangeTracker.Clear();
+                throw;
+            }
+        });
+
+        return await GetInvoiceDetailAsync(invoiceId, cancellationToken);
+    }
+
     public async Task<InvoiceDetailDto> CreateInvoiceFromHealthPackageAsync(long registrationId, Guid createdByUserId, CancellationToken cancellationToken = default)
     {
         var registration = await _dbContext.HealthPackageRegistrations
@@ -318,6 +504,17 @@ public class BillingService : IBillingService
                 if (updatedRows != 1)
                     throw new ConflictException("PAYMENT_CONFLICT", "Hóa đơn vừa được xử lý bởi một yêu cầu khác. Vui lòng tải lại dữ liệu.");
 
+                if (currentInvoice.PatientVisitId.HasValue)
+                {
+                    await _dbContext.PatientVisits
+                        .Where(v => v.Id == currentInvoice.PatientVisitId.Value && v.Status != VisitStatus.Completed)
+                        .ExecuteUpdateAsync(setters => setters
+                            .SetProperty(v => v.Status, VisitStatus.Completed)
+                            .SetProperty(v => v.CompletedAtUtc, (DateTime?)paidAtUtc)
+                            .SetProperty(v => v.UpdatedAtUtc, (DateTime?)paidAtUtc),
+                            cancellationToken);
+                }
+
                 var paymentCode = GeneratePaymentCode();
                 var payment = new Payment
                 {
@@ -451,6 +648,7 @@ public class BillingService : IBillingService
         var query = _dbContext.Invoices
             .Include(i => i.Patient)
             .Include(i => i.Appointment)
+            .Include(i => i.PatientVisit)
             .Include(i => i.HealthPackageRegistration)
             .AsNoTracking();
 
@@ -482,15 +680,14 @@ public class BillingService : IBillingService
             query = query.Where(i =>
                 i.InvoiceCode.Contains(search) ||
                 (i.Appointment != null && i.Appointment.AppointmentCode.Contains(search)) ||
+                (i.PatientVisit != null && i.PatientVisit.VisitCode.Contains(search)) ||
                 (i.HealthPackageRegistration != null && i.HealthPackageRegistration.RegistrationCode.Contains(search)) ||
                 (i.HealthPackageRegistration != null && i.HealthPackageRegistration.ContactPhone.Contains(search)) ||
                 (i.Patient.FullName != null && i.Patient.FullName.Contains(search)) ||
                 (i.Patient.PhoneNumber != null && i.Patient.PhoneNumber.Contains(search)) ||
                 (i.Patient.MedicalRecordNumber != null && i.Patient.MedicalRecordNumber.Contains(search)) ||
-                _dbContext.Users.Any(u =>
-                    i.Patient.UserId != null &&
-                    u.Id == i.Patient.UserId &&
-                    (u.FullName.Contains(search) ||
+                _dbContext.Users.Any(u => i.Patient.UserId != null && u.Id == i.Patient.UserId &&
+                    ((u.FullName != null && u.FullName.Contains(search)) ||
                      (u.PhoneNumber != null && u.PhoneNumber.Contains(search)))));
         }
 
@@ -525,6 +722,7 @@ public class BillingService : IBillingService
         var invoice = await _dbContext.Invoices
             .Include(i => i.Patient)
             .Include(i => i.Appointment)
+            .Include(i => i.PatientVisit)
             .Include(i => i.HealthPackageRegistration)
             .Include(i => i.Items)
             .Include(i => i.Payments)
@@ -551,6 +749,7 @@ public class BillingService : IBillingService
         var query = _dbContext.Invoices
             .Include(i => i.Patient)
             .Include(i => i.Appointment)
+            .Include(i => i.PatientVisit)
             .Include(i => i.HealthPackageRegistration)
             .Where(i => i.PatientId == patientId)
             .AsNoTracking();
@@ -590,6 +789,7 @@ public class BillingService : IBillingService
         var invoice = await _dbContext.Invoices
             .Include(i => i.Patient)
             .Include(i => i.Appointment)
+            .Include(i => i.PatientVisit)
             .Include(i => i.HealthPackageRegistration)
             .Include(i => i.Items)
             .Include(i => i.Payments)
@@ -809,7 +1009,9 @@ public class BillingService : IBillingService
             SourceType = i.SourceType,
             SourceTypeName = i.SourceType == InvoiceSourceType.Appointment ? "Khám bệnh" : "Gói khám sức khỏe",
             AppointmentId = i.AppointmentId,
-            AppointmentCode = i.Appointment?.AppointmentCode,
+            AppointmentCode = i.Appointment?.AppointmentCode ?? (i.PatientVisit != null ? i.PatientVisit.VisitCode : null),
+            PatientVisitId = i.PatientVisitId,
+            VisitCode = i.PatientVisit?.VisitCode,
             HealthPackageRegistrationId = i.HealthPackageRegistrationId,
             RegistrationCode = i.HealthPackageRegistration?.RegistrationCode,
             Status = i.Status,
