@@ -85,9 +85,38 @@ public class ClinicAiContextService : IClinicAiContextService
                 .ToList()
         }).ToList();
 
+        var primaryFacility = await _dbContext.Facilities
+            .AsNoTracking()
+            .Where(f => f.IsActive)
+            .OrderBy(f => f.Id)
+            .Select(f => new
+            {
+                f.Name,
+                f.Address,
+                f.City,
+                f.Phone,
+                f.Email,
+                f.Description
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var facilityInfo = primaryFacility != null
+            ? new
+            {
+                TenPhongKham = primaryFacility.Name,
+                DiaChi = string.IsNullOrWhiteSpace(primaryFacility.City) ? primaryFacility.Address : $"{primaryFacility.Address}, {primaryFacility.City}",
+                HotlineTiepDon = string.IsNullOrWhiteSpace(primaryFacility.Phone) ? "Chưa cấu hình" : primaryFacility.Phone,
+                Email = primaryFacility.Email ?? "Chưa cấu hình",
+                GioLamViec = "Thứ Hai đến Thứ Bảy: 07:30 - 17:00 (Nghỉ Chủ Nhật)."
+            }
+            : null;
+
         var payload = new
         {
-            Notice = "Hệ thống hiện chưa lưu địa chỉ, hotline và giờ mở cửa chung. Nếu người dùng hỏi, hãy trả lời rằng hệ thống chưa có thông tin đó.",
+            ThongTinCoSo = facilityInfo,
+            HuongDanCoSo = facilityInfo != null
+                ? $"Phòng khám: {facilityInfo.TenPhongKham}. Địa chỉ: {facilityInfo.DiaChi}. Hotline tiếp đón: {facilityInfo.HotlineTiepDon}. Giờ làm việc: {facilityInfo.GioLamViec}."
+                : "Thông tin liên hệ cơ sở và hotline lễ tân hiện chưa được cấu hình trong hệ thống. Nếu người dùng hỏi, trả lời trung thực là hệ thống chưa có cấu hình liên hệ.",
             Specialties = clinicData
         };
 

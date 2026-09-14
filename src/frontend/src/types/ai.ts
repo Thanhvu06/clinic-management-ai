@@ -30,6 +30,7 @@ export interface BaseAiAction {
     style: AiActionStyle;
     requiresAuthentication: boolean;
     requiresConfirmation: boolean;
+    draftVersion?: number;
 }
 
 export interface ViewSpecialtyAction extends BaseAiAction {
@@ -197,6 +198,8 @@ export interface ContactReceptionAction extends BaseAiAction {
     type: "ContactReception";
     payload: {
         phoneNumber?: string;
+        address?: string;
+        facilityName?: string;
         reason?: string;
         targetUrl?: string;
     };
@@ -254,6 +257,9 @@ export type AiActionPayload = Partial<{
     reason: string;
     targetUrl: string;
     phoneNumber: string;
+    address: string;
+    facilityName: string;
+    draftVersion: number;
 }>;
 
 export interface AiSpecialtySuggestion {
@@ -276,6 +282,7 @@ export interface AiBookingDraft {
     reason?: string;
     roomNumber?: string;
     isComplete: boolean;
+    version?: number;
 }
 
 export interface AiChatResponse {
@@ -290,6 +297,8 @@ export interface AiChatResponse {
     bookingDraft?: AiBookingDraft;
     promptVersion: string;
     manualSelectionRequired: boolean;
+    assistantStatus?: "Online" | "Degraded" | "Offline";
+    providerStatus?: string;
 }
 
 export interface ChatMessage {
@@ -303,4 +312,5 @@ export interface ChatMessage {
     actions?: AiAction[];
     bookingDraft?: AiBookingDraft;
     missingFields?: string[];
+    assistantStatus?: "Online" | "Degraded" | "Offline";
 }

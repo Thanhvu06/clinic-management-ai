@@ -4,6 +4,8 @@ import type { ChatMessage, AiBookingDraft, AiAction } from "../types/ai";
 
 export type { ChatMessage } from "../types/ai";
 
+export type AssistantStatus = "Online" | "Degraded" | "Offline";
+
 interface ChatContextType {
     pendingSpecialtyId: number | null;
     setPendingSpecialtyId: (id: number | null) => void;
@@ -14,6 +16,8 @@ interface ChatContextType {
     setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
     addMessage: (message: ChatMessage) => void;
     clearChat: () => void;
+    aiAssistantStatus: AssistantStatus;
+    setAiAssistantStatus: (status: AssistantStatus) => void;
 }
 
 const ChatContext = createContext<ChatContextType>({
@@ -25,7 +29,9 @@ const ChatContext = createContext<ChatContextType>({
     messages: [],
     setMessages: () => {},
     addMessage: () => {},
-    clearChat: () => {}
+    clearChat: () => {},
+    aiAssistantStatus: "Online",
+    setAiAssistantStatus: () => {}
 });
 
 export function validateActionSchema(action: unknown): action is AiAction {
@@ -34,6 +40,7 @@ export function validateActionSchema(action: unknown): action is AiAction {
     if (typeof a.id !== "string" || typeof a.label !== "string" || typeof a.type !== "string") return false;
     if (a.style !== "primary" && a.style !== "secondary" && a.style !== "danger") return false;
     if (typeof a.requiresAuthentication !== "boolean" || typeof a.requiresConfirmation !== "boolean") return false;
+    if (a.draftVersion !== undefined && a.draftVersion !== null && typeof a.draftVersion !== "number") return false;
     if (!a.payload || typeof a.payload !== "object") return false;
 
     const payload = a.payload as Record<string, unknown>;
@@ -50,6 +57,10 @@ export function validateActionSchema(action: unknown): action is AiAction {
         if (typeof payload.targetUrl !== "string") return false;
         if (payload.targetUrl !== "tel:115" && (!payload.targetUrl.startsWith("/") || payload.targetUrl.startsWith("//"))) return false;
     }
+    if (payload.phoneNumber !== undefined && payload.phoneNumber !== null && typeof payload.phoneNumber !== "string") return false;
+    if (payload.address !== undefined && payload.address !== null && typeof payload.address !== "string") return false;
+    if (payload.facilityName !== undefined && payload.facilityName !== null && typeof payload.facilityName !== "string") return false;
+    if (payload.draftVersion !== undefined && payload.draftVersion !== null && typeof payload.draftVersion !== "number") return false;
     return true;
 }
 
@@ -72,6 +83,7 @@ export function validateBookingDraftSchema(item: unknown): item is AiBookingDraf
     if (draft.reason !== undefined && draft.reason !== null) {
         if (typeof draft.reason !== "string" || draft.reason.length > 500) return false;
     }
+    if (draft.version !== undefined && draft.version !== null && typeof draft.version !== "number") return false;
     return true;
 }
 
@@ -89,6 +101,9 @@ export function validateChatMessageSchema(item: unknown): item is ChatMessage {
     }
     if (msg.urgency !== undefined && msg.urgency !== null) {
         if (msg.urgency !== "ROUTINE" && msg.urgency !== "SOON" && msg.urgency !== "EMERGENCY") return false;
+    }
+    if (msg.assistantStatus !== undefined && msg.assistantStatus !== null) {
+        if (msg.assistantStatus !== "Online" && msg.assistantStatus !== "Degraded" && msg.assistantStatus !== "Offline") return false;
     }
     return true;
 }
@@ -136,6 +151,7 @@ const AccountBoundChatProvider: React.FC<{
     const [pendingSpecialtyId, setPendingSpecialtyIdState] = useState<number | null>(null);
     const [activeDraft, setActiveDraftState] = useState<AiBookingDraft | null>(() => loadStoredDraft(accountKey));
     const [messages, setMessagesState] = useState<ChatMessage[]>(() => loadStoredMessages(accountKey));
+    const [aiAssistantStatus, setAiAssistantStatus] = useState<AssistantStatus>("Online");
     const bookingContextVersionRef = useRef(0);
 
     const setActiveDraft = useCallback<React.Dispatch<React.SetStateAction<AiBookingDraft | null>>>((update) => {
@@ -190,6 +206,7 @@ const AccountBoundChatProvider: React.FC<{
         setMessagesState([DEFAULT_AI_MESSAGE]);
         setActiveDraftState(null);
         setPendingSpecialtyIdState(null);
+        setAiAssistantStatus("Online");
         sessionStorage.removeItem(`cliniccare_chat_history_${accountKey}`);
         sessionStorage.removeItem(`cliniccare_booking_draft_${accountKey}`);
     };
@@ -204,7 +221,9 @@ const AccountBoundChatProvider: React.FC<{
             messages,
             setMessages,
             addMessage,
-            clearChat
+            clearChat,
+            aiAssistantStatus,
+            setAiAssistantStatus
         }}>
             {children}
         </ChatContext.Provider>

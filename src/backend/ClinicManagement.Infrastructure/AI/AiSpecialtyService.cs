@@ -248,12 +248,13 @@ public class AiSpecialtyService : IAiSpecialtyService
         catch (Exception ex)
         {
             _logger.LogError(ex, "AI Provider chat failed.");
-            return BuildFallbackResponse("Hệ thống AI đang quá tải hoặc gặp gián đoạn kết nối. Bạn có thể chọn chuyên khoa và bác sĩ trực tiếp bên dưới.", whitelistData);
+            return await BuildDegradedResponseAsync(request, cleanMessage, "NetworkError", cancellationToken);
         }
 
-        if (aiResult == null || string.IsNullOrWhiteSpace(aiResult.Reply))
+        if (aiResult == null || !aiResult.IsSuccess || string.IsNullOrWhiteSpace(aiResult.Reply))
         {
-            return BuildFallbackResponse("Không nhận được phản hồi từ trợ lý AI. Bạn vui lòng thử lại hoặc chọn khoa khám trực tiếp.", whitelistData);
+            var providerStatus = !string.IsNullOrWhiteSpace(aiResult?.Status) ? aiResult.Status : "NetworkError";
+            return await BuildDegradedResponseAsync(request, cleanMessage, providerStatus, cancellationToken);
         }
 
         // 7. DB GROUNDING & ACTION SYNTHESIS
@@ -325,6 +326,27 @@ public class AiSpecialtyService : IAiSpecialtyService
 
         // 7.3 Ground Booking Flow: Resolve Specialty, Doctor, Date, Slots
         await GroundBookingFlowAsync(request, cleanMessage, lowerMsg, aiResult, whitelistData, responseDto, cancellationToken);
+
+        var clinicalReason = RecoverInitialReason(cleanMessage, request.Context, request.Reason, aiResult.ExtractedReason);
+        if (responseDto.BookingDraft == null)
+        {
+            if (!string.IsNullOrWhiteSpace(clinicalReason))
+            {
+                responseDto.BookingDraft = new AiBookingDraftDto
+                {
+                    Reason = clinicalReason,
+                    IsComplete = false,
+                    Version = request.DraftVersion.GetValueOrDefault(1)
+                };
+            }
+        }
+        else if (string.IsNullOrWhiteSpace(responseDto.BookingDraft.Reason))
+        {
+            if (!string.IsNullOrWhiteSpace(clinicalReason))
+            {
+                responseDto.BookingDraft.Reason = clinicalReason;
+            }
+        }
 
         if (!responseDto.SpecialtySuggestions.Any() && !responseDto.Actions.Any())
         {
@@ -733,7 +755,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             {
                 var unresolvedReason = !string.IsNullOrWhiteSpace(request.Reason)
                     ? request.Reason.Trim()
-                    : RecoverInitialReason(cleanMessage, request.Context, aiResult.ExtractedReason);
+                    : RecoverInitialReason(cleanMessage, request.Context, request.Reason, aiResult.ExtractedReason);
                 responseDto.Message = $"Hiện không có bác sĩ đang hoạt động thuộc chuyên khoa {targetSpecialty.Name}.";
                 responseDto.BookingDraft = new AiBookingDraftDto
                 {
@@ -795,7 +817,7 @@ public class AiSpecialtyService : IAiSpecialtyService
 
                 var sundayReason = !string.IsNullOrWhiteSpace(request.Reason)
                     ? request.Reason.Trim()
-                    : RecoverInitialReason(cleanMessage, request.Context, aiResult.ExtractedReason);
+                    : RecoverInitialReason(cleanMessage, request.Context, request.Reason, aiResult.ExtractedReason);
 
                 responseDto.BookingDraft = new AiBookingDraftDto
                 {
@@ -912,7 +934,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             // F. Build Booking Draft
             var reason = !string.IsNullOrWhiteSpace(request.Reason)
                 ? request.Reason.Trim()
-                : RecoverInitialReason(cleanMessage, request.Context, aiResult.ExtractedReason);
+                : RecoverInitialReason(cleanMessage, request.Context, request.Reason, aiResult.ExtractedReason);
             var hasValidReason = AiActionValidator.IsValidBookingReason(reason);
 
             var draft = new AiBookingDraftDto
@@ -1196,24 +1218,12 @@ public class AiSpecialtyService : IAiSpecialtyService
             });
         }
 
-        // 5. Contact Reception (No fake /contact route; strictly honest contact info)
+        // 5. Contact Reception (No fake /contact route; strictly honest contact info from DB)
         if (string.Equals(requestedActionType, AiActionTypes.ContactReception, StringComparison.OrdinalIgnoreCase)
             || lowerMsg.Contains("lễ tân") || lowerMsg.Contains("tiếp đón") || lowerMsg.Contains("liên hệ phòng khám"))
         {
-            responseDto.Actions.Add(new AiActionDto
-            {
-                Id = "act-contact-reception",
-                Type = AiActionTypes.ContactReception,
-                Label = "Liên hệ bàn tiếp đón lễ tân",
-                Description = "Thông tin liên hệ quầy tiếp đón của phòng khám",
-                Style = "secondary",
-                RequiresAuthentication = false,
-                RequiresConfirmation = false,
-                Payload = new AiActionPayloadDto
-                {
-                    Reason = "Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống."
-                }
-            });
+            var contactAction = await CreateContactReceptionActionAsync(cancellationToken);
+            responseDto.Actions.Add(contactAction);
         }
 
         // 6. View Doctors
@@ -1391,45 +1401,133 @@ public class AiSpecialtyService : IAiSpecialtyService
         return null;
     }
 
-    private AiChatResponseDto BuildFallbackResponse(string message, List<WhitelistItemDto> whitelistData)
+    private async Task<AiChatResponseDto> BuildDegradedResponseAsync(
+        AiChatRequestDto request,
+        string cleanMessage,
+        string providerStatus,
+        CancellationToken cancellationToken)
     {
-        var response = new AiChatResponseDto
+        string userMessage = providerStatus switch
         {
-            Message = message,
-            Urgency = "ROUTINE",
-            PromptVersion = GeminiAiProvider.CurrentPromptVersion,
-            ManualSelectionRequired = true
+            "Disabled" => "Tính năng trợ lý AI hiện đang tạm bảo trì hoặc chưa được cấu hình. Hệ thống đã chuyển sang chế độ hỗ trợ cơ bản để bạn có thể tra cứu và đặt lịch trực tiếp.",
+            "RateLimited" => "Dịch vụ AI đang nhận quá nhiều yêu cầu vào thời điểm này. Hệ thống đã chuyển sang chế độ hỗ trợ cơ bản để bạn có thể tiếp tục tra cứu và đặt lịch.",
+            "AuthFailure" or "InvalidModelOrEndpoint" => "Dịch vụ AI đang gặp sự cố cấu hình xác thực. Hệ thống chuyển sang chế độ hỗ trợ cơ bản để bạn tra cứu và đặt lịch trực tiếp.",
+            _ => "Kết nối đến dịch vụ AI tạm thời bị gián đoạn. Hệ thống đã chuyển sang chế độ hỗ trợ cơ bản để bạn có thể tiếp tục tra cứu và đặt lịch trực tiếp."
         };
 
-        foreach (var spec in whitelistData.Take(3))
+        var response = new AiChatResponseDto
         {
-            response.SpecialtySuggestions.Add(new AiSpecialtySuggestionDto
-            {
-                SpecialtyId = spec.Id,
-                SpecialtyCode = spec.Code,
-                SpecialtyName = spec.Name,
-                Rank = response.SpecialtySuggestions.Count + 1,
-                Reason = "Chuyên khoa đang mở tiếp nhận lịch khám."
-            });
+            Message = userMessage,
+            Urgency = "ROUTINE",
+            PromptVersion = GeminiAiProvider.CurrentPromptVersion,
+            ManualSelectionRequired = true,
+            AssistantStatus = "Degraded",
+            ProviderStatus = providerStatus,
+            SpecialtySuggestions = new List<AiSpecialtySuggestionDto>()
+        };
 
-            response.Actions.Add(new AiActionDto
+        // Preserve validated user booking draft if present in request
+        var recoveredReason = RecoverInitialReason(cleanMessage, request.Context, request.Reason, null);
+        if (request.PendingSpecialtyId.HasValue)
+        {
+            var spec = await _dbContext.Specialties.FindAsync(new object[] { request.PendingSpecialtyId.Value }, cancellationToken);
+            if (spec != null)
             {
-                Id = $"act-view-spec-{spec.Id}",
-                Type = AiActionTypes.ViewSpecialty,
-                Label = $"Xem khoa {spec.Name}",
-                Style = "secondary",
-                RequiresAuthentication = false,
-                RequiresConfirmation = false,
-                Payload = new AiActionPayloadDto
+                response.BookingDraft = new AiBookingDraftDto
                 {
                     SpecialtyId = spec.Id,
-                    SpecialtyCode = spec.Code,
-                    SpecialtyName = spec.Name
-                }
-            });
+                    SpecialtyName = spec.Name,
+                    DoctorId = request.PendingDoctorId,
+                    SlotId = request.PendingSlotId,
+                    SlotDate = request.PendingSlotDate,
+                    Reason = recoveredReason,
+                    IsComplete = false,
+                    Version = request.DraftVersion.GetValueOrDefault(1)
+                };
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(recoveredReason))
+        {
+            response.BookingDraft = new AiBookingDraftDto
+            {
+                Reason = recoveredReason,
+                IsComplete = false,
+                Version = request.DraftVersion.GetValueOrDefault(1)
+            };
         }
 
+        // Add safe independent actions
+        response.Actions.Add(new AiActionDto
+        {
+            Id = "act-manual-spec",
+            Type = AiActionTypes.ManualSpecialtySelection,
+            Label = "Chọn chuyên khoa thủ công",
+            Style = "primary",
+            RequiresAuthentication = false,
+            RequiresConfirmation = false,
+            Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.BookAppointment }
+        });
+
+        response.Actions.Add(new AiActionDto
+        {
+            Id = "act-view-doctors",
+            Type = AiActionTypes.ViewDoctors,
+            Label = "Xem danh sách bác sĩ",
+            Style = "secondary",
+            RequiresAuthentication = false,
+            RequiresConfirmation = false,
+            Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Doctors }
+        });
+
+        var contactAction = await CreateContactReceptionActionAsync(cancellationToken);
+        response.Actions.Add(contactAction);
+
+        response.Actions.Add(new AiActionDto
+        {
+            Id = "act-my-appointments",
+            Type = AiActionTypes.ViewMyAppointments,
+            Label = "Xem lịch hẹn của tôi",
+            Style = "secondary",
+            RequiresAuthentication = true,
+            RequiresConfirmation = false,
+            Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Appointments }
+        });
+
         return response;
+    }
+
+    private async Task<AiActionDto> CreateContactReceptionActionAsync(CancellationToken cancellationToken)
+    {
+        var facility = await _dbContext.Facilities
+            .AsNoTracking()
+            .Where(f => f.IsActive)
+            .OrderBy(f => f.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        string? phone = !string.IsNullOrWhiteSpace(facility?.Phone) ? facility.Phone.Trim() : null;
+        string? address = !string.IsNullOrWhiteSpace(facility?.Address)
+            ? (!string.IsNullOrWhiteSpace(facility.City) ? $"{facility.Address.Trim()}, {facility.City.Trim()}" : facility.Address.Trim())
+            : null;
+
+        return new AiActionDto
+        {
+            Id = "act-contact-reception",
+            Type = AiActionTypes.ContactReception,
+            Label = "Liên hệ bàn tiếp đón lễ tân",
+            Description = "Thông tin liên hệ quầy tiếp đón của phòng khám",
+            Style = "secondary",
+            RequiresAuthentication = false,
+            RequiresConfirmation = false,
+            Payload = new AiActionPayloadDto
+            {
+                PhoneNumber = phone,
+                Address = address,
+                FacilityName = facility?.Name,
+                Reason = phone != null
+                    ? $"Bàn tiếp đón tại: {address ?? "Phòng khám"}. Giờ làm việc: Thứ Hai - Thứ Bảy (07:30 - 17:00)."
+                    : "Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống."
+            }
+        };
     }
 
     private async Task<List<WhitelistItemDto>> GetActiveWhitelistAsync(CancellationToken cancellationToken)
@@ -1501,43 +1599,157 @@ public class AiSpecialtyService : IAiSpecialtyService
         return false;
     }
 
-    private static string? RecoverInitialReason(string cleanMessage, List<ChatMessageDto>? context, string? extractedReason)
+    public enum MessageIntentCategory
     {
-        var isActionPhrase = IsBookingActionPhrase(cleanMessage);
+        GreetingOrPleasantry,
+        FacilityOrReceptionInquiry,
+        NavigationInquiry,
+        BookingActionOrSelection,
+        ClinicalSymptomOrReason
+    }
 
-        if (isActionPhrase && context != null && context.Any())
+    public static MessageIntentCategory ClassifyIntent(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return MessageIntentCategory.BookingActionOrSelection;
+
+        var lower = message.Trim().ToLowerInvariant();
+
+        // 1. Greetings / Pleasantries
+        if (lower is "chào" or "xin chào" or "chào bạn" or "chào bác sĩ" or "chào bs" or "alo" or "hello" or "hi" or "hey" or
+            "cảm ơn" or "cảm ơn bạn" or "cảm ơn bác sĩ" or "thanks" or "thank you" or "tạm biệt" or "bye" or "hẹn gặp lại" or
+            "ok" or "dạ" or "vâng" or "được rồi" or "tuyệt vời")
         {
-            var initialUserMsg = context
-                .Where(c => c.Role == "user" &&
-                            !IsBookingActionPhrase(c.Content))
-                .Select(c => c.Content.Trim())
-                .LastOrDefault();
+            return MessageIntentCategory.GreetingOrPleasantry;
+        }
 
-            if (!string.IsNullOrWhiteSpace(initialUserMsg))
+        if (lower.StartsWith("chào ") || lower.StartsWith("xin chào") || lower.StartsWith("cảm ơn") || lower.StartsWith("cám ơn"))
+        {
+            if (ContainsSymptomKeywords(lower))
             {
-                return initialUserMsg;
+                return MessageIntentCategory.ClinicalSymptomOrReason;
             }
+            return MessageIntentCategory.GreetingOrPleasantry;
         }
 
-        if (isActionPhrase)
+        // 2. Facility / Reception Inquiry
+        if (lower.Contains("lễ tân") || lower.Contains("tiếp đón") || lower.Contains("bàn tiếp đón") ||
+            lower.Contains("hotline") || lower.Contains("số điện thoại") || lower.Contains("sđt") ||
+            lower.Contains("địa chỉ") || lower.Contains("ở đâu") || lower.Contains("giờ mở cửa") ||
+            lower.Contains("giờ làm việc") || lower.Contains("mấy giờ làm việc") || lower.Contains("liên hệ phòng khám") ||
+            lower.Contains("chủ nhật có khám") || lower.Contains("có khám chủ nhật"))
         {
-            return !string.IsNullOrWhiteSpace(extractedReason) &&
-                   !string.Equals(extractedReason.Trim(), cleanMessage, StringComparison.OrdinalIgnoreCase)
-                ? extractedReason.Trim()
-                : null;
+            return MessageIntentCategory.FacilityOrReceptionInquiry;
         }
 
-        return !string.IsNullOrWhiteSpace(extractedReason) ? extractedReason.Trim() : cleanMessage;
+        // 3. Navigation Inquiry
+        if (lower.Contains("danh sách bác sĩ") || lower.Contains("đội ngũ bác sĩ") || lower.Contains("xem bác sĩ") ||
+            lower.Contains("các chuyên khoa") || lower.Contains("danh sách chuyên khoa") || lower.Contains("xem chuyên khoa") ||
+            lower.Contains("lịch hẹn của tôi") || lower.Contains("lịch đã đặt") || lower.Contains("kết quả xét nghiệm") ||
+            lower.Contains("xem đơn thuốc") || lower.Contains("xem hóa đơn") || lower.Contains("bảng giá") || lower.Contains("chi phí khám"))
+        {
+            return MessageIntentCategory.NavigationInquiry;
+        }
+
+        // 4. Booking Selection / Action
+        if (IsBookingActionPhrase(lower))
+        {
+            return MessageIntentCategory.BookingActionOrSelection;
+        }
+
+        // Regex for time or date selections like "09:30", "14:00", "2026-09-15", etc.
+        if (Regex.IsMatch(lower, @"^\d{1,2}:\d{2}$") || Regex.IsMatch(lower, @"^\d{4}-\d{2}-\d{2}$"))
+        {
+            return MessageIntentCategory.BookingActionOrSelection;
+        }
+
+        // 5. Clinical symptoms / reasons
+        return MessageIntentCategory.ClinicalSymptomOrReason;
+    }
+
+    private static bool ContainsSymptomKeywords(string lower)
+    {
+        var keywords = new[]
+        {
+            "đau", "sốt", "ho", "mệt", "khó thở", "chóng mặt", "buồn nôn", "nôn", "ngứa",
+            "dị ứng", "viêm", "nhức", "tức ngực", "phù", "co giật", "rát", "chảy máu",
+            "tiêu chảy", "táo bón", "mất ngủ", "sụt cân", "nổi mẩn", "khám định kỳ", "khám tổng quát",
+            "triệu chứng", "bệnh", "sức khỏe", "họng", "tai", "mũi", "mắt", "tim", "phổi", "dạ dày", "khớp"
+        };
+        return keywords.Any(k => lower.Contains(k));
     }
 
     private static bool IsBookingActionPhrase(string message)
     {
-        return message.StartsWith("Tôi chọn", StringComparison.OrdinalIgnoreCase) ||
-               message.StartsWith("Chọn ", StringComparison.OrdinalIgnoreCase) ||
-               message.StartsWith("Xem các lịch", StringComparison.OrdinalIgnoreCase) ||
-               message.StartsWith("Tôi muốn đặt khám với", StringComparison.OrdinalIgnoreCase) ||
-               message.StartsWith("Tôi muốn xem lịch khám vào ngày", StringComparison.OrdinalIgnoreCase) ||
-               message.StartsWith("Tìm lịch khám sớm nhất", StringComparison.OrdinalIgnoreCase);
+        var lower = message.Trim().ToLowerInvariant();
+        return lower.StartsWith("tôi chọn") ||
+               lower.StartsWith("chọn ") ||
+               lower.StartsWith("chọn bác sĩ") ||
+               lower.StartsWith("chọn khung giờ") ||
+               lower.StartsWith("chọn ngày") ||
+               lower.StartsWith("xem các lịch") ||
+               lower.StartsWith("xem lịch trống") ||
+               lower.StartsWith("tôi muốn đặt khám với") ||
+               lower.StartsWith("tôi muốn xem lịch khám vào ngày") ||
+               lower.StartsWith("tìm lịch khám sớm nhất") ||
+               lower.StartsWith("tìm lịch sớm nhất") ||
+               lower.StartsWith("xác nhận đặt lịch") ||
+               lower.StartsWith("xác nhận") ||
+               lower.StartsWith("xem lại thông tin") ||
+               lower.StartsWith("xem tóm tắt") ||
+               lower.StartsWith("hủy đặt lịch") ||
+               lower.StartsWith("hủy lịch") ||
+               lower.StartsWith("đổi ngày khám") ||
+               lower.StartsWith("đổi bác sĩ") ||
+               lower.StartsWith("đổi giờ khám") ||
+               lower.StartsWith("quay lại") ||
+               lower.StartsWith("tiếp tục");
+    }
+
+    private static string? RecoverInitialReason(string cleanMessage, List<ChatMessageDto>? context, string? existingReason, string? extractedReason)
+    {
+        // 1. If an existing reason is already preserved, keep it
+        if (!string.IsNullOrWhiteSpace(existingReason))
+        {
+            return existingReason.Trim();
+        }
+
+        var intent = ClassifyIntent(cleanMessage);
+
+        // 2. If current message is an action, greeting, facility query, or navigation, NEVER use cleanMessage
+        if (intent != MessageIntentCategory.ClinicalSymptomOrReason)
+        {
+            if (context != null && context.Any())
+            {
+                var priorComplaint = context
+                    .Where(c => c.Role == "user" && ClassifyIntent(c.Content) == MessageIntentCategory.ClinicalSymptomOrReason)
+                    .Select(c => c.Content.Trim())
+                    .LastOrDefault();
+
+                if (!string.IsNullOrWhiteSpace(priorComplaint))
+                {
+                    return priorComplaint;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(extractedReason) &&
+                ClassifyIntent(extractedReason) == MessageIntentCategory.ClinicalSymptomOrReason &&
+                !string.Equals(extractedReason.Trim(), cleanMessage, StringComparison.OrdinalIgnoreCase))
+            {
+                return extractedReason.Trim();
+            }
+
+            return null;
+        }
+
+        // 3. Current message is indeed a clinical complaint
+        if (!string.IsNullOrWhiteSpace(extractedReason) &&
+            ClassifyIntent(extractedReason) == MessageIntentCategory.ClinicalSymptomOrReason)
+        {
+            return extractedReason.Trim();
+        }
+
+        return cleanMessage;
     }
 
     private async Task<string> ComposeGroundedReplyAsync(

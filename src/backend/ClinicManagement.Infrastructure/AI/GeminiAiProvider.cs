@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
@@ -68,8 +69,7 @@ PATIENT SYMPTOM DESCRIPTION:
             }
         };
 
-        var requestContent = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-        var url = $"{_options.ProviderUrl}/v1beta/models/{_options.ModelName}:generateContent?key={_options.ApiKey}";
+        var url = $"{_options.ProviderUrl}/v1beta/models/{_options.ModelName}:generateContent";
 
         int maxRetries = 1;
         int delayMs = 500;
@@ -81,7 +81,13 @@ PATIENT SYMPTOM DESCRIPTION:
             
             try
             {
-                var response = await _httpClient.PostAsync(url, requestContent, cts.Token);
+                using var requestMessage = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+                };
+                requestMessage.Headers.Add("x-goog-api-key", _options.ApiKey);
+
+                var response = await _httpClient.SendAsync(requestMessage, cts.Token);
                 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -92,7 +98,12 @@ PATIENT SYMPTOM DESCRIPTION:
                 var responseString = await response.Content.ReadAsStringAsync(cts.Token);
                 return ParseGeminiResponse(responseString);
             }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("AI Provider suggestion call was cancelled by client.");
+                return new List<AiProviderSuggestionResult>();
+            }
+            catch (OperationCanceledException)
             {
                 _logger.LogWarning("AI Provider call timed out on attempt {Attempt}.", i + 1);
                 if (i == maxRetries) throw;
@@ -114,8 +125,16 @@ PATIENT SYMPTOM DESCRIPTION:
         if (!_options.IsEnabled || string.IsNullOrWhiteSpace(_options.ApiKey))
         {
             _logger.LogWarning("AI Provider is disabled or API Key is missing.");
-            return new AiChatProviderResult { Reply = "Tính năng AI đang tạm bảo trì.", Urgency = "ROUTINE" };
+            return new AiChatProviderResult
+            {
+                IsSuccess = false,
+                Status = "Disabled",
+                ErrorMessage = "Tính năng AI đang tạm bảo trì hoặc chưa được cấu hình API key."
+            };
         }
+
+        var correlationId = Guid.NewGuid().ToString("N")[..8];
+        var sw = Stopwatch.StartNew();
 
         var whitelistJson = JsonSerializer.Serialize(whitelist.Select(w => new { w.Code, w.Name }));
 
@@ -195,32 +214,115 @@ FORMAT ĐẦU RA (BẮT BUỘC JSON object thuần túy):
             }
         };
 
-        var requestContent = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-        var url = $"{_options.ProviderUrl}/v1beta/models/{_options.ModelName}:generateContent?key={_options.ApiKey}";
+        var url = $"{_options.ProviderUrl}/v1beta/models/{_options.ModelName}:generateContent";
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
 
         try
         {
-            var response = await _httpClient.PostAsync(url, requestContent, cts.Token);
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+            };
+            requestMessage.Headers.Add("x-goog-api-key", _options.ApiKey);
+
+            var response = await _httpClient.SendAsync(requestMessage, cts.Token);
+            sw.Stop();
+
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogError("AI Chat Provider returned status code {StatusCode}.", response.StatusCode);
-                return new AiChatProviderResult { Reply = "Lỗi kết nối đến AI. Vui lòng thử lại sau.", Urgency = "ROUTINE" };
+                var statusCode = (int)response.StatusCode;
+                string statusType = statusCode switch
+                {
+                    401 or 403 => "AuthFailure",
+                    429 => "RateLimited",
+                    400 or 404 => "InvalidModelOrEndpoint",
+                    >= 500 => "ProviderServerError",
+                    _ => "NetworkError"
+                };
+
+                _logger.LogError("[{CorrelationId}] AI Chat Provider failed with status {StatusCode} ({StatusType}) in {ElapsedMs}ms.",
+                    correlationId, response.StatusCode, statusType, sw.ElapsedMilliseconds);
+
+                return new AiChatProviderResult
+                {
+                    IsSuccess = false,
+                    Status = statusType,
+                    ErrorMessage = $"Provider returned HTTP {response.StatusCode}"
+                };
             }
 
             var responseString = await response.Content.ReadAsStringAsync(cts.Token);
-            return ParseChatGeminiResponse(responseString);
+            var parsed = ParseChatGeminiResponse(responseString);
+            if (parsed == null || string.IsNullOrWhiteSpace(parsed.Reply))
+            {
+                _logger.LogError("[{CorrelationId}] Failed to parse valid chat JSON from AI provider in {ElapsedMs}ms.",
+                    correlationId, sw.ElapsedMilliseconds);
+
+                return new AiChatProviderResult
+                {
+                    IsSuccess = false,
+                    Status = "InvalidResponse",
+                    ErrorMessage = "Malformed or empty response from AI provider."
+                };
+            }
+
+            parsed.IsSuccess = true;
+            parsed.Status = "Success";
+            return parsed;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            sw.Stop();
+            _logger.LogInformation("[{CorrelationId}] AI Chat Provider request cancelled by client after {ElapsedMs}ms.",
+                correlationId, sw.ElapsedMilliseconds);
+            return new AiChatProviderResult
+            {
+                IsSuccess = false,
+                Status = "Cancelled",
+                ErrorMessage = "Request was cancelled."
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            sw.Stop();
+            _logger.LogWarning("[{CorrelationId}] AI Chat Provider timed out after {ElapsedMs}ms (timeout: {Timeout}s).",
+                correlationId, sw.ElapsedMilliseconds, _options.TimeoutSeconds);
+            return new AiChatProviderResult
+            {
+                IsSuccess = false,
+                Status = "Timeout",
+                ErrorMessage = "AI Provider request timed out."
+            };
+        }
+        catch (HttpRequestException ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "[{CorrelationId}] Network error calling AI Chat Provider after {ElapsedMs}ms.",
+                correlationId, sw.ElapsedMilliseconds);
+            return new AiChatProviderResult
+            {
+                IsSuccess = false,
+                Status = "NetworkError",
+                ErrorMessage = "Network error connecting to AI provider."
+            };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to call AI chat.");
-            return new AiChatProviderResult { Reply = "Lỗi kết nối mạng đến AI.", Urgency = "ROUTINE" };
+            sw.Stop();
+            _logger.LogError(ex, "[{CorrelationId}] Unexpected error calling AI Chat Provider after {ElapsedMs}ms.",
+                correlationId, sw.ElapsedMilliseconds);
+            return new AiChatProviderResult
+            {
+                IsSuccess = false,
+                Status = "NetworkError",
+                ErrorMessage = "Unexpected error calling AI provider."
+            };
         }
     }
 
-    private AiChatProviderResult ParseChatGeminiResponse(string json)
+    private AiChatProviderResult? ParseChatGeminiResponse(string json)
     {
         try
         {
@@ -236,7 +338,7 @@ FORMAT ĐẦU RA (BẮT BUỘC JSON object thuần túy):
                     {
                         text = text.Replace("```json", "").Replace("```", "").Trim();
                         var result = JsonSerializer.Deserialize<AiChatProviderResult>(text, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                        return result ?? new AiChatProviderResult();
+                        return result;
                     }
                 }
             }
@@ -245,7 +347,7 @@ FORMAT ĐẦU RA (BẮT BUỘC JSON object thuần túy):
         {
             _logger.LogError(ex, "Failed to parse JSON chat response from AI provider.");
         }
-        return new AiChatProviderResult();
+        return null;
     }
 
     private List<AiProviderSuggestionResult> ParseGeminiResponse(string json)

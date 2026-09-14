@@ -257,7 +257,7 @@ describe('P0-1 earliest-slot booking context', () => {
         fireEvent.click(screen.getByText(/Tiếp tục: Chọn bác sĩ/i));
         fireEvent.click(await screen.findByText('BS. Nguyễn An'));
         fireEvent.click(screen.getByText(/Tiếp tục: Chọn giờ khám/i));
-        fireEvent.change(await screen.findByLabelText('Triệu chứng hoặc lý do thăm khám (Không bắt buộc)'), {
+        fireEvent.change(await screen.findByLabelText(/Triệu chứng hoặc lý do thăm khám/i), {
             target: { value: 'Đau ngực khi vận động kéo dài' }
         });
         fireEvent.click(await screen.findByText('08:00'));

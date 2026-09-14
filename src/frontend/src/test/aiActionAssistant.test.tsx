@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { MedicalChatWidget } from '../components/MedicalChatWidget';
-import { ChatProvider } from '../contexts/ChatContext';
+import { ChatProvider, useChatContext } from '../contexts/ChatContext';
+import { DialogProvider } from '../contexts/DialogContext';
+import { BookAppointment } from '../pages/patient/BookAppointment';
+import { SafeMarkdown } from '../components/SafeMarkdown';
 import { formatVietnameseDate, isSafeClientRoute } from '../hooks/useAiBookingFlow';
 import axiosClient from '../api/axiosClient';
 
@@ -256,12 +259,20 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(screen.getByText('Xác nhận đặt lịch ngay'));
 
         await waitFor(() => {
-            expect(axiosClient.post).toHaveBeenCalledWith('/appointments', {
-                doctorId: 10,
-                specialtyId: 1,
-                appointmentSlotId: 101,
-                reason: 'Khám định kỳ tim mạch'
-            });
+            expect(axiosClient.post).toHaveBeenCalledWith(
+                '/appointments',
+                {
+                    doctorId: 10,
+                    specialtyId: 1,
+                    appointmentSlotId: 101,
+                    reason: 'Khám định kỳ tim mạch'
+                },
+                expect.objectContaining({
+                    headers: expect.objectContaining({
+                        'Idempotency-Key': expect.any(String)
+                    })
+                })
+            );
             expect(screen.getByText(/Đặt lịch khám thành công!/i)).toBeInTheDocument();
             expect(screen.getByText(/APPT-20260915-001/i)).toBeInTheDocument();
         });
@@ -702,6 +713,291 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
             '/appointments',
             expect.anything()
         );
+    });
+
+    it('TC13: SafeMarkdown renders markdown tokens and neutralizes dangerous html / javascript links', () => {
+        const markdown = `
+**Chữ đậm** và *chữ nghiêng*
+Đoạn mã: \`const x = 10;\`
+- Mục danh sách 1
+- Mục danh sách 2
+[Liên kết an toàn](/patient/book)
+[Liên kết nguy hiểm](javascript:alert('xss'))
+<script>alert('hack')</script>
+<img src="x" onerror="alert('xss')" />
+        `.trim();
+
+        const { container } = render(<SafeMarkdown content={markdown} />);
+
+        // 1. Bold
+        const bold = container.querySelector('strong');
+        expect(bold).toBeInTheDocument();
+        expect(bold?.textContent).toBe('Chữ đậm');
+
+        // 2. Italic
+        const italic = container.querySelector('em');
+        expect(italic).toBeInTheDocument();
+        expect(italic?.textContent).toBe('chữ nghiêng');
+
+        // 3. Code
+        const code = container.querySelector('code');
+        expect(code).toBeInTheDocument();
+        expect(code?.textContent).toBe('const x = 10;');
+
+        // 4. List
+        const listItems = container.querySelectorAll('li');
+        expect(listItems.length).toBe(2);
+        expect(listItems[0].textContent).toBe('Mục danh sách 1');
+        expect(listItems[1].textContent).toBe('Mục danh sách 2');
+
+        // 5. Safe Link
+        const safeLink = container.querySelector('a[href="/patient/book"]');
+        expect(safeLink).toBeInTheDocument();
+        expect(safeLink?.textContent).toBe('Liên kết an toàn');
+
+        // 6. XSS Link neutralization
+        const dangerousLink = container.querySelector('a[href*="javascript"]');
+        expect(dangerousLink).not.toBeInTheDocument();
+        expect(container.textContent).toContain('Liên kết nguy hiểm');
+
+        // 7. Script / Img tag neutralization (never executed or injected as live DOM element)
+        expect(container.querySelector('script')).not.toBeInTheDocument();
+        expect(container.querySelector('img')).not.toBeInTheDocument();
+    });
+
+    it('TC14: MedicalChatWidget displays dynamic status pill matching AI assistant status', async () => {
+        const StatusController = () => {
+            const { setAiAssistantStatus } = useChatContext();
+            return (
+                <div>
+                    <button onClick={() => setAiAssistantStatus("Online")}>Set Online</button>
+                    <button onClick={() => setAiAssistantStatus("Degraded")}>Set Degraded</button>
+                    <button onClick={() => setAiAssistantStatus("Offline")}>Set Offline</button>
+                </div>
+            );
+        };
+
+        render(
+            <MemoryRouter initialEntries={['/patient']}>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                    <StatusController />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+
+        // Default status is Online ("Trực tuyến")
+        expect(screen.getByText('Trực tuyến')).toBeInTheDocument();
+
+        // Switch to Degraded ("Chế độ rút gọn")
+        fireEvent.click(screen.getByText('Set Degraded'));
+        expect(screen.getByText('Chế độ rút gọn')).toBeInTheDocument();
+
+        // Switch to Offline ("Ngoại tuyến")
+        fireEvent.click(screen.getByText('Set Offline'));
+        expect(screen.getByText('Ngoại tuyến')).toBeInTheDocument();
+    });
+
+    it('TC16: Clearing conversation clears messages and active draft from state and storage', async () => {
+        const DraftSetter = () => {
+            const { setActiveDraft, activeDraft } = useChatContext();
+            return (
+                <div>
+                    <button onClick={() => setActiveDraft({ specialtyId: 1, specialtyName: 'Tim Mạch', version: 1, isComplete: false })}>
+                        Set Draft
+                    </button>
+                    <div data-testid="draft-info">{activeDraft?.specialtyName ?? 'NoDraft'}</div>
+                </div>
+            );
+        };
+
+        render(
+            <MemoryRouter initialEntries={['/patient']}>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                    <DraftSetter />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        fireEvent.click(screen.getByText('Set Draft'));
+
+        expect(screen.getByTestId('draft-info')).toHaveTextContent('Tim Mạch');
+
+        // Click Clear Chat button in header
+        fireEvent.click(screen.getByLabelText('Làm mới cuộc trò chuyện'));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('draft-info')).toHaveTextContent('NoDraft');
+        });
+    });
+
+    it('TC10: Stale button version check warns user when action draftVersion is older than active draft version', async () => {
+        const DraftVersionController = () => {
+            const { setActiveDraft } = useChatContext();
+            return (
+                <button onClick={() => setActiveDraft({ specialtyId: 1, specialtyName: 'Nội tiết', version: 2, isComplete: false })}>
+                    Update to v2
+                </button>
+            );
+        };
+
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: '',
+            data: {
+                message: 'Chọn bác sĩ:',
+                urgency: 'ROUTINE',
+                bookingDraft: { specialtyId: 1, version: 1 },
+                actions: [
+                    {
+                        id: 'act-doc-1',
+                        type: 'SelectDoctor',
+                        label: 'Chọn BS Nguyễn Văn A',
+                        style: 'secondary',
+                        requiresAuthentication: false,
+                        requiresConfirmation: false,
+                        draftVersion: 1,
+                        payload: { specialtyId: 1, doctorId: 10, doctorName: 'Nguyễn Văn A', draftVersion: 1 }
+                    }
+                ]
+            }
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/patient']}>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                    <DraftVersionController />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(input, { target: { value: 'Khám nội tiết' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Chọn BS Nguyễn Văn A')).toBeInTheDocument();
+        });
+
+        // Now active draft updates to v2
+        fireEvent.click(screen.getByText('Update to v2'));
+
+        // Click the v1 button
+        fireEvent.click(screen.getByText('Chọn BS Nguyễn Văn A'));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Thao tác này thuộc phiên bản thảo lịch cũ \(v1\)/i)).toBeInTheDocument();
+        });
+    });
+
+    it('TC8_TC9: BookAppointment validates required reason with character limit and sends Idempotency-Key', async () => {
+        const specialties = [
+            { id: 1, specialtyCode: 'TM', specialtyName: 'Tim mạch', description: 'Tim', aiEnabled: true }
+        ];
+        const doctors = [
+            { id: 101, fullName: 'Nguyễn Văn An', academicTitle: 'BS', specialtyId: 1, specialtyName: 'Tim mạch' }
+        ];
+        const slots = [
+            { id: 1001, slotId: 1001, doctorId: 101, slotDate: '2026-09-23', startTime: '09:00:00', endTime: '09:30:00', isAvailable: true }
+        ];
+
+        vi.mocked(axiosClient.get).mockImplementation((url: string) => {
+            if (url === '/specialties') return Promise.resolve({ success: true, message: '', data: specialties });
+            if (url === '/specialties/1/doctors') return Promise.resolve({ success: true, message: '', data: doctors });
+            if (url.includes('/doctors/101/available-slots')) return Promise.resolve({ success: true, message: '', data: slots });
+            return Promise.resolve({ success: true, message: '', data: [] });
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/patient/book?specialtyId=1&doctorId=101&date=2026-09-23']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        // Step 1 is pre-selected with specialtyId=1, wait for enabled and click Next to Doctor selection
+        const toStep2Btn = await screen.findByText(/Tiếp tục: Chọn bác sĩ/i);
+        await waitFor(() => expect(toStep2Btn).not.toBeDisabled());
+        fireEvent.click(toStep2Btn);
+
+        // Step 2: Doctor "Nguyễn Văn An" is loaded
+        await waitFor(() => {
+            expect(screen.getAllByText(/Nguyễn Văn An/i).length).toBeGreaterThan(0);
+        });
+        const toStep3Btn = screen.getByText(/Tiếp tục: Chọn giờ khám/i);
+        fireEvent.click(toStep3Btn);
+
+        // Step 3: Slot selection & Reason input
+        await waitFor(() => {
+            expect(screen.getByText(/09:00/i)).toBeInTheDocument();
+        });
+
+        // Select slot
+        const slotBtn = await screen.findByRole('button', { name: /09:00/i });
+        fireEvent.click(slotBtn);
+
+        // Check reason field & character counter
+        expect(screen.getByText(/0\/500 ký tự/i)).toBeInTheDocument();
+
+        // Reason input too short (< 10 chars)
+        const reasonTextarea = screen.getByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
+        fireEvent.change(reasonTextarea, { target: { value: 'Đau tức' } });
+
+        // Next to Step 4 button must be disabled
+        const nextToStep4Btn = screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i });
+        expect(nextToStep4Btn).toBeDisabled();
+        expect(screen.getByText('Lý do khám phải có tối thiểu 10 ký tự.')).toBeInTheDocument();
+
+        // Enter valid reason >= 10 chars
+        fireEvent.change(reasonTextarea, { target: { value: 'Đau tức ngực trái khi gắng sức' } });
+        await waitFor(() => expect(nextToStep4Btn).not.toBeDisabled());
+
+        // Click next to Step 4
+        fireEvent.click(nextToStep4Btn);
+
+        // In Step 4: Click "Xác nhận & Đặt lịch"
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: 'Đặt lịch thành công',
+            data: {
+                id: 555,
+                appointmentCode: 'APT-20260923-555',
+                doctorName: 'BS Nguyễn Văn An',
+                specialtyName: 'Tim mạch',
+                appointmentDate: '2026-09-23',
+                startTime: '09:00',
+                endTime: '09:30'
+            }
+        });
+
+        const confirmBtn = await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i });
+        fireEvent.click(confirmBtn);
+
+        await waitFor(() => {
+            expect(axiosClient.post).toHaveBeenCalledWith(
+                '/appointments',
+                expect.objectContaining({
+                    doctorId: 101,
+                    specialtyId: 1,
+                    appointmentSlotId: 1001,
+                    reason: 'Đau tức ngực trái khi gắng sức'
+                }),
+                expect.objectContaining({
+                    headers: expect.objectContaining({
+                        'Idempotency-Key': expect.any(String)
+                    })
+                })
+            );
+        });
     });
 });
 

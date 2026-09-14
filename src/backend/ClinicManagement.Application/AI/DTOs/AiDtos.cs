@@ -389,6 +389,10 @@ public class AiActionPayloadDto
     public string? AppointmentCode { get; set; }
     public string? Reason { get; set; }
     public string? TargetUrl { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? Address { get; set; }
+    public string? FacilityName { get; set; }
+    public int? DraftVersion { get; set; }
 }
 
 public class AiActionDto
@@ -416,6 +420,7 @@ public class AiBookingDraftDto
     public string? Reason { get; set; }
     public string? RoomNumber { get; set; }
     public bool IsComplete { get; set; }
+    public int Version { get; set; } = 1;
 }
 
 public class AiChatRequestDto
@@ -444,6 +449,8 @@ public class AiChatRequestDto
 
     [MaxLength(500)]
     public string? Reason { get; set; }
+
+    public int? DraftVersion { get; set; }
 }
 
 public class AiChatResponseDto
@@ -478,10 +485,23 @@ public class AiChatResponseDto
     public AiBookingDraftDto? BookingDraft { get; set; }
     public string PromptVersion { get; set; } = "1.0.0";
     public bool ManualSelectionRequired { get; set; } = false;
+
+    /// <summary>
+    /// Operating mode: "Normal", "Degraded" (Basic support mode), "Unavailable".
+    /// </summary>
+    public string AssistantStatus { get; set; } = "Normal";
+
+    /// <summary>
+    /// Technical provider status: "Healthy", "Disabled", "AuthFailure", "RateLimited", "Timeout", "NetworkError", "InvalidResponse", "Cancelled".
+    /// </summary>
+    public string ProviderStatus { get; set; } = "Healthy";
 }
 
 public class AiChatProviderResult
 {
+    public bool IsSuccess { get; set; } = true;
+    public string Status { get; set; } = "Success"; // Success, Disabled, AuthFailure, RateLimited, Timeout, NetworkError, InvalidResponse, Cancelled
+    public string? ErrorMessage { get; set; }
     public string Reply { get; set; } = string.Empty;
     public List<string> SuggestedSpecialtyCodes { get; set; } = new();
     public string Urgency { get; set; } = "ROUTINE";

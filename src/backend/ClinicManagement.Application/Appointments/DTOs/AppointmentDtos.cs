@@ -17,6 +17,9 @@ public class CreateAppointmentRequest
     [MinLength(10, ErrorMessage = "Lý do khám phải từ 10 đến 500 ký tự.")]
     [MaxLength(500, ErrorMessage = "Lý do khám phải từ 10 đến 500 ký tự.")]
     public string Reason { get; set; } = string.Empty;
+
+    [MaxLength(128)]
+    public string? IdempotencyKey { get; set; }
 }
 
 public class AppointmentDto

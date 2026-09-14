@@ -373,25 +373,47 @@ export const BookAppointment: React.FC = () => {
     // Confirm booking submit
     const handleConfirm = async () => {
         if (submitting || !specialtyId || !doctorId || !slotId) return;
+        const normalizedReason = reason.trim();
+        if (normalizedReason.length < 10 || normalizedReason.length > 500) {
+            showAlert("Lý do khám phải từ 10 đến 500 ký tự.", "Thông báo", "error");
+            return;
+        }
+
         setSubmitting(true);
         setBookingError(null);
 
         try {
-            const normalizedReason = reason.trim() ? reason.trim() : null;
+            const idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID
+                ? crypto.randomUUID()
+                : `form_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
             const res = revisitRequestId
                 ? await axiosClient.post<any, ApiResponse<any>>(
                     `/revisit-requests/${revisitRequestId}/accept`,
                     {
                         targetSlotId: slotId,
                         reason: normalizedReason
+                    },
+                    {
+                        headers: {
+                            "Idempotency-Key": idempotencyKey
+                        }
                     }
                 )
-                : await axiosClient.post<any, ApiResponse<any>>("/appointments", {
-                    doctorId,
-                    specialtyId,
-                    appointmentSlotId: slotId,
-                    reason: normalizedReason
-                });
+                : await axiosClient.post<any, ApiResponse<any>>(
+                    "/appointments",
+                    {
+                        doctorId,
+                        specialtyId,
+                        appointmentSlotId: slotId,
+                        reason: normalizedReason
+                    },
+                    {
+                        headers: {
+                            "Idempotency-Key": idempotencyKey
+                        }
+                    }
+                );
 
             if (res.success && res.data) {
                 setSuccessBooking({
@@ -402,8 +424,14 @@ export const BookAppointment: React.FC = () => {
                     slotDate,
                     startTime: (res.data.startTime || selectedSlot?.startTime || "").substring(0, 5),
                     endTime: (res.data.endTime || selectedSlot?.endTime || "").substring(0, 5),
-                    reason: res.data.reason || (reason.trim() ? reason.trim() : undefined)
+                    reason: res.data.reason || normalizedReason
                 });
+
+                setActiveDraft(null);
+                setPageSpecialtyId("");
+                setPageDoctorId("");
+                setPageSlotId("");
+                setPageReason("");
 
                 if (revisitRequestId) {
                     navigate("/patient/book", { replace: true });
@@ -781,12 +809,14 @@ export const BookAppointment: React.FC = () => {
                             <div style={{ marginBottom: '20px' }}>
                                 <FormField 
                                     id="reason" 
-                                    label="Triệu chứng hoặc lý do thăm khám (Không bắt buộc)"
-                                    helpText="Giúp bác sĩ chuẩn bị hồ sơ và hiểu sơ bộ tình trạng sức khỏe trước khi bạn đến."
+                                    label="Triệu chứng hoặc lý do thăm khám (*)"
+                                    required
+                                    helpText={`Tối thiểu 10 ký tự, tối đa 500 ký tự. (${reason.trim().length}/500 ký tự)`}
+                                    error={reason.trim().length > 0 && reason.trim().length < 10 ? "Lý do khám phải có tối thiểu 10 ký tự." : reason.trim().length > 500 ? "Lý do khám vượt quá 500 ký tự." : undefined}
                                 >
                                     <Textarea
                                         id="reason"
-                                        placeholder="Ví dụ: Đau đầu kéo dài 3 ngày, ho sốt nhẹ, khám định kỳ..."
+                                        placeholder="Ví dụ: Đau đầu kéo dài 3 ngày, ho sốt nhẹ, cần tư vấn khám định kỳ..."
                                         value={reason}
                                         onChange={(e) => handleReasonChange(e.target.value)}
                                         rows={3}
@@ -816,7 +846,7 @@ export const BookAppointment: React.FC = () => {
                                     variant="primary" 
                                     size="lg" 
                                     onClick={() => setStep(4)} 
-                                    disabled={!slotDate || !slotId}
+                                    disabled={!slotDate || !slotId || reason.trim().length < 10 || reason.trim().length > 500}
                                 >
                                     Tiếp tục: Xác nhận <ArrowRight size={18} />
                                 </Button>

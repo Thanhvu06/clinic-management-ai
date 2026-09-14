@@ -106,7 +106,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         setPendingSpecialtyId,
         activeDraft,
         setActiveDraft,
-        getBookingContextVersion
+        getBookingContextVersion,
+        aiAssistantStatus,
+        setAiAssistantStatus
     } = useChatContext();
     const { user } = useAuth();
 
@@ -188,6 +190,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 
             if (res.success && res.data) {
                 const data = res.data;
+                const status = data.assistantStatus || "Online";
+                setAiAssistantStatus(status);
+
                 const aiMsg: ChatMessage = {
                     role: "model",
                     content: data.message || data.reply || "",
@@ -196,7 +201,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     suggestions: data.specialtySuggestions || data.suggestedSpecialties || [],
                     actions: data.actions || [],
                     bookingDraft: data.bookingDraft,
-                    missingFields: data.missingFields || []
+                    missingFields: data.missingFields || [],
+                    assistantStatus: status
                 };
 
                 if (data.bookingDraft) {
@@ -214,6 +220,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }
         } catch (err: unknown) {
             if (requestController.signal.aborted || !isCurrentRequest()) return;
+            setAiAssistantStatus("Offline");
             const apiErr = err as { errorCode?: string; message?: string; response?: { data?: { errorCode?: string; message?: string } } };
             const errorCode = apiErr?.response?.data?.errorCode || apiErr?.errorCode;
             const message = apiErr?.response?.data?.message || apiErr?.message || "";
@@ -222,13 +229,15 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 setMessages(prev => [...prev, {
                     role: "model",
                     content: "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.",
-                    urgency: "ROUTINE"
+                    urgency: "ROUTINE",
+                    assistantStatus: "Offline"
                 }]);
             } else {
                 setMessages(prev => [...prev, {
                     role: "model",
                     content: "Xin lỗi, hệ thống AI đang bận hoặc gặp sự cố kết nối. Bạn có thể chọn chuyên khoa và đặt lịch trực tiếp qua trang Đặt lịch khám.",
                     urgency: "ROUTINE",
+                    assistantStatus: "Offline",
                     actions: [
                         {
                             id: "act-fallback-book",
@@ -251,6 +260,21 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     };
 
     const handleActionClick = async (action: AiAction): Promise<void> => {
+        const actionVersion = action.draftVersion ?? (action.payload as Record<string, unknown>)?.draftVersion as number | undefined;
+        if (
+            actionVersion !== undefined &&
+            activeDraft?.version !== undefined &&
+            actionVersion < activeDraft.version &&
+            ["SelectDoctor", "SelectSlot", "ConfirmBooking", "ReviewBooking"].includes(action.type)
+        ) {
+            setMessages(prev => [...prev, {
+                role: "model",
+                content: `Thao tác này thuộc phiên bản thảo lịch cũ (v${actionVersion}). Thông tin lịch khám hiện tại đã được cập nhật sang phiên bản mới hơn (v${activeDraft.version}). Vui lòng thao tác trên các nút mới nhất.`,
+                urgency: "ROUTINE"
+            }]);
+            return;
+        }
+
         switch (action.type) {
             case "ViewSpecialty": {
                 if (action.payload.specialtyId) {
@@ -420,6 +444,17 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     }]);
                     return;
                 }
+
+                // If activeDraft has a specific slot or doctor selected, verify action matches current draft
+                if (activeDraft?.slotId && action.payload.slotId && activeDraft.slotId !== action.payload.slotId) {
+                    setMessages(prev => [...prev, {
+                        role: "model",
+                        content: "Thông tin khung giờ bạn chọn đã thay đổi so với xác nhận trước đó. Vui lòng kiểm tra lại khung giờ mới nhất.",
+                        urgency: "ROUTINE"
+                    }]);
+                    return;
+                }
+
                 const slotId = action.payload.slotId || activeDraft?.slotId;
                 const docId = action.payload.doctorId || activeDraft?.doctorId;
                 const specId = action.payload.specialtyId || activeDraft?.specialtyId;
@@ -455,7 +490,19 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         reason
                     };
 
-                    const bookRes = await axiosClient.post<CreateAppointmentPayload, ApiResponse<AppointmentEntityDto>>("/appointments", bookPayload);
+                    const idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID
+                        ? crypto.randomUUID()
+                        : `chat_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+                    const bookRes = await axiosClient.post<CreateAppointmentPayload, ApiResponse<AppointmentEntityDto>>(
+                        "/appointments",
+                        bookPayload,
+                        {
+                            headers: {
+                                "Idempotency-Key": idempotencyKey
+                            }
+                        }
+                    );
 
                     if (bookRes.success && bookRes.data) {
                         const apt = bookRes.data;
@@ -584,13 +631,15 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 
             case "ContactReception": {
                 const phone = action.payload.phoneNumber?.trim();
+                const address = action.payload.address?.trim();
+                const facilityName = action.payload.facilityName?.trim();
                 const reason = action.payload.reason?.trim();
                 
                 let content: string;
-                if (phone) {
-                    content = `📞 **Thông tin Quầy Tiếp Đón & Lễ Tân:**\n- **Hotline hỗ trợ:** ${phone}${reason ? `\n- **Ghi chú:** ${reason}` : ""}\n\nNếu cần hỗ trợ thêm, bạn có thể liên hệ số điện thoại trên.`;
+                if (phone && phone !== "Chưa cấu hình") {
+                    content = `📞 **Thông tin Quầy Tiếp Đón & Lễ Tân${facilityName ? ` - ${facilityName}` : ""}:**\n- **Hotline hỗ trợ:** [${phone}](tel:${phone.replace(/\s+/g, "")})${address ? `\n- **Địa chỉ:** ${address}` : ""}${reason ? `\n- **Ghi chú:** ${reason}` : ""}\n\nNếu cần hỗ trợ thêm, bạn có thể liên hệ số điện thoại trên.`;
                 } else {
-                    content = `📞 **Thông tin Quầy Tiếp Đón & Lễ Tân:**\nThông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.`;
+                    content = `📞 **Thông tin Quầy Tiếp Đón & Lễ Tân${facilityName ? ` - ${facilityName}` : ""}:**\nThông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.${address ? `\n- **Địa chỉ cơ sở:** ${address}` : ""}`;
                 }
 
                 const receptionMsg: ChatMessage = {
@@ -639,7 +688,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         clearChat,
         handleSendMessage,
         handleActionClick,
-        formatVietnameseDate
+        formatVietnameseDate,
+        aiAssistantStatus
     };
 };
 

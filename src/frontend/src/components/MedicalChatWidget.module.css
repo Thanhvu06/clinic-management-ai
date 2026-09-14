@@ -83,18 +83,42 @@
     gap: 5px;
     font-size: 0.75rem;
     font-weight: 500;
-    color: #a7f3d0;
-    background: rgba(16, 185, 129, 0.15);
     padding: 2px 8px;
     border-radius: 9999px;
     margin-left: 4px;
+}
+
+.statusPillOnline {
+    color: #a7f3d0;
+    background: rgba(16, 185, 129, 0.15);
+}
+
+.statusDotOnline {
+    background-color: #10b981;
+}
+
+.statusPillDegraded {
+    color: #fde68a;
+    background: rgba(245, 158, 11, 0.15);
+}
+
+.statusDotDegraded {
+    background-color: #f59e0b;
+}
+
+.statusPillOffline {
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.15);
+}
+
+.statusDotOffline {
+    background-color: #ef4444;
 }
 
 .statusDot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background-color: #10b981;
     animation: pulseDot 2s infinite;
 }
 
@@ -544,4 +568,12 @@
     padding: 4px 8px;
     background-color: #fef2f2;
     border-top: 1px solid #fee2e2;
+}
+
+@media print {
+    .widgetContainer,
+    .chatWindow,
+    .launcher {
+        display: none !important;
+    }
 }

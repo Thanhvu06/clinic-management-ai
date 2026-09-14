@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import type { AiAction, AiChatIntent } from "../types/ai";
+import SafeMarkdown from "./SafeMarkdown";
 
 const QUICK_PROMPTS: Array<{ label: string; intent?: AiChatIntent }> = [
     { label: "Tôi nên khám chuyên khoa nào?" },
@@ -28,7 +29,7 @@ const PatientMedicalChatWidget: React.FC = () => {
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
-    const { setPendingSpecialtyId } = useChatContext();
+    const { setPendingSpecialtyId, aiAssistantStatus } = useChatContext();
 
     const {
         input,
@@ -140,9 +141,25 @@ const PatientMedicalChatWidget: React.FC = () => {
                         <div className={styles.headerTitle} id="cliniccare-chat-title">
                             <Stethoscope size={22} />
                             <span>ClinicCare AI</span>
-                            <span className={styles.statusPill}>
-                                <span className={styles.statusDot} />
-                                Trực tuyến
+                            <span className={`${styles.statusPill} ${
+                                aiAssistantStatus === "Degraded"
+                                    ? styles.statusPillDegraded
+                                    : aiAssistantStatus === "Offline"
+                                    ? styles.statusPillOffline
+                                    : styles.statusPillOnline
+                            }`}>
+                                <span className={`${styles.statusDot} ${
+                                    aiAssistantStatus === "Degraded"
+                                        ? styles.statusDotDegraded
+                                        : aiAssistantStatus === "Offline"
+                                        ? styles.statusDotOffline
+                                        : styles.statusDotOnline
+                                }`} />
+                                {aiAssistantStatus === "Degraded"
+                                    ? "Chế độ rút gọn"
+                                    : aiAssistantStatus === "Offline"
+                                    ? "Ngoại tuyến"
+                                    : "Trực tuyến"}
                             </span>
                         </div>
                         <div className={styles.headerActions}>
@@ -215,7 +232,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                                 className={`${styles.messageRow} ${msg.role === "user" ? styles.rowUser : styles.rowModel}`}
                             >
                                 <div className={`${styles.bubble} ${msg.role === "user" ? styles.bubbleUser : styles.bubbleModel}`}>
-                                    <div>{msg.content}</div>
+                                    <SafeMarkdown content={msg.content} />
 
                                     {/* Emergency Card */}
                                     {msg.urgency === "EMERGENCY" && (

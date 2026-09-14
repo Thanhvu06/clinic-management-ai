@@ -7,17 +7,22 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net.Http;
+using System.Text;
 using ClinicManagement.AI.Training;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.Common.Interfaces;
+using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.AI;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using Moq.Protected;
 using Xunit;
 
 namespace ClinicManagement.IntegrationTests;
@@ -1104,5 +1109,433 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.True(AiActionValidator.Validate(act19, out _));
         var act19Bad = new AiActionDto { Id = "19", Type = AiActionTypes.CallEmergency, Label = "L", Style = "danger", Payload = new AiActionPayloadDto { TargetUrl = "tel:911" } };
         Assert.False(AiActionValidator.Validate(act19Bad, out _));
+    }
+
+    [Fact]
+    public async Task TC1_WhenProviderReturnsAuthFailure_ThenResponseIsDegraded_WithFacilityInfo_AndNoFakeCards()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = false,
+                Status = "AuthFailure",
+                ErrorMessage = "Gemini API key is invalid or unauthorized (401/403)."
+            });
+
+        var request = new AiChatRequestDto { Message = "Tôi bị đau đầu 3 ngày nay" };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+        Assert.Equal("Degraded", res.Data.AssistantStatus);
+        Assert.Equal("AuthFailure", res.Data.ProviderStatus);
+
+        // Degraded mode must return safe manual actions (ManualSpecialtySelection / StartBooking & ContactReception)
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ManualSpecialtySelection || a.Type == AiActionTypes.StartBooking);
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ContactReception);
+
+        // Must NOT return doctor or slot cards
+        Assert.DoesNotContain(res.Data.Actions, a => a.Type == AiActionTypes.SelectDoctor || a.Type == AiActionTypes.SelectSlot);
+        Assert.DoesNotContain("**", res.Data.Message);
+    }
+
+    [Fact]
+    public async Task TC2_WhenProviderReturnsRateLimited_ThenResponseIsDegraded()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = false,
+                Status = "RateLimited",
+                ErrorMessage = "Gemini API rate limit exceeded (429)."
+            });
+
+        var request = new AiChatRequestDto { Message = "Tư vấn giúp tôi" };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+        Assert.Equal("Degraded", res.Data.AssistantStatus);
+        Assert.Equal("RateLimited", res.Data.ProviderStatus);
+    }
+
+    [Fact]
+    public async Task TC3_WhenProviderReturnsNetworkError_ThenResponseIsDegraded()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = false,
+                Status = "NetworkError",
+                ErrorMessage = "Network connection failed."
+            });
+
+        var request = new AiChatRequestDto { Message = "Chào bác sĩ" };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+        Assert.Equal("Degraded", res.Data.AssistantStatus);
+        Assert.Equal("NetworkError", res.Data.ProviderStatus);
+    }
+
+    [Fact]
+    public async Task TC4_WhenProviderReturnsMalformedJson_ThenResponseIsDegraded()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = false,
+                Status = "InvalidResponse",
+                ErrorMessage = "JSON payload was malformed or could not be parsed."
+            });
+
+        var request = new AiChatRequestDto { Message = "Đau lưng dữ dội" };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+        Assert.Equal("Degraded", res.Data.AssistantStatus);
+        Assert.Equal("InvalidResponse", res.Data.ProviderStatus);
+    }
+
+    [Fact]
+    public async Task TC5_WhenUserSendsGreetingOrContactReception_ThenReasonIsNotSaved()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Xin chào bạn, tôi là trợ lý y tế.",
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto { Message = "Liên hệ lễ tân." };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+        // Reason must NOT be "Liên hệ lễ tân."
+        var reason = res.Data.BookingDraft?.Reason;
+        Assert.True(string.IsNullOrEmpty(reason), $"Reason was incorrectly set to: '{reason}'");
+    }
+
+    [Fact]
+    public async Task TC6_WhenContactReceptionActionCreated_ThenPullsRealFacilityContactFromDatabase()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        // Seed or verify facility in database
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var fac = db.Facilities.FirstOrDefault(f => f.IsActive);
+            if (fac != null)
+            {
+                fac.Phone = "028 3844 5678";
+                fac.Address = "123 Đường Nam Kỳ Khởi Nghĩa, Quận 3, TP.HCM";
+                await db.SaveChangesAsync();
+            }
+        }
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = false,
+                Status = "AuthFailure"
+            });
+
+        var request = new AiChatRequestDto { Message = "Liên hệ quầy lễ tân" };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        var receptionAction = res.Data.Actions.FirstOrDefault(a => a.Type == AiActionTypes.ContactReception);
+        Assert.NotNull(receptionAction);
+        Assert.Equal("028 3844 5678", receptionAction.Payload?.PhoneNumber);
+        Assert.Contains("Nam Kỳ Khởi Nghĩa", receptionAction.Payload?.Address ?? "");
+    }
+
+    [Fact]
+    public async Task TC7_WhenUserClicksActionOrNavigates_ThenPreservedReasonIsRetainedInDraft()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Dưới đây là các khung giờ của bác sĩ:",
+                Urgency = "ROUTINE",
+                ExtractedReason = "Bệnh nhân bị tức ngực khó thở khi leo cầu thang"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Xem lịch khám",
+            Reason = "Bệnh nhân bị tức ngực khó thở khi leo cầu thang"
+        };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+        Assert.Equal("Bệnh nhân bị tức ngực khó thở khi leo cầu thang", res.Data.BookingDraft?.Reason);
+    }
+
+    [Fact]
+    public async Task TC11_AppointmentReasonValidation_Enforces10To500Characters()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        var testDate = GetFutureWorkingDate(25);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(14, 0, 0), new TimeOnly(14, 30, 0));
+
+        // Test 1: Reason too short (< 10 chars)
+        var shortReq = new
+        {
+            DoctorId = DoctorEntityId,
+            SpecialtyId = SpecialtyEntityId,
+            AppointmentSlotId = slot.Id,
+            Reason = "Đau đầu" // 7 chars
+        };
+        var shortRes = await Client.PostAsJsonAsync("/api/v1/appointments", shortReq);
+        Assert.Equal(HttpStatusCode.BadRequest, shortRes.StatusCode);
+        var shortJson = await shortRes.Content.ReadAsStringAsync();
+        Assert.Contains("Lý do khám phải từ 10 đến 500 ký tự", shortJson);
+
+        // Test 2: Reason too long (> 500 chars)
+        var longReq = new
+        {
+            DoctorId = DoctorEntityId,
+            SpecialtyId = SpecialtyEntityId,
+            AppointmentSlotId = slot.Id,
+            Reason = new string('A', 501)
+        };
+        var longRes = await Client.PostAsJsonAsync("/api/v1/appointments", longReq);
+        Assert.Equal(HttpStatusCode.BadRequest, longRes.StatusCode);
+        var longJson = await longRes.Content.ReadAsStringAsync();
+        Assert.Contains("Lý do khám phải từ 10 đến 500 ký tự", longJson);
+
+        // Test 3: Valid reason (10-500 chars)
+        var validReq = new
+        {
+            DoctorId = DoctorEntityId,
+            SpecialtyId = SpecialtyEntityId,
+            AppointmentSlotId = slot.Id,
+            Reason = "Bệnh nhân bị đau nửa đầu kéo dài 3 ngày nay"
+        };
+        var validRes = await Client.PostAsJsonAsync("/api/v1/appointments", validReq);
+        Assert.Equal(HttpStatusCode.Created, validRes.StatusCode);
+    }
+
+    [Fact]
+    public async Task TC12_IdempotencyKeyDeduplication_ReturnsSameAppointment_AndRejectionOnChangedPayload()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        var testDate = GetFutureWorkingDate(26);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(15, 0, 0), new TimeOnly(15, 30, 0));
+        var key = $"idem-test-{Guid.NewGuid():N}";
+
+        var payload = new
+        {
+            DoctorId = DoctorEntityId,
+            SpecialtyId = SpecialtyEntityId,
+            AppointmentSlotId = slot.Id,
+            Reason = "Khám sức khỏe tổng quát định kỳ",
+            IdempotencyKey = key
+        };
+
+        // 1. Initial creation
+        var msg1 = new HttpRequestMessage(HttpMethod.Post, "/api/v1/appointments")
+        {
+            Content = JsonContent.Create(payload)
+        };
+        msg1.Headers.Add("Idempotency-Key", key);
+        var res1 = await Client.SendAsync(msg1);
+        Assert.Equal(HttpStatusCode.Created, res1.StatusCode);
+        var json1 = await res1.Content.ReadAsStringAsync();
+        var doc1 = JsonDocument.Parse(json1);
+        var apptId1 = doc1.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+
+        // 2. Retry with identical payload and same Idempotency-Key
+        var msg2 = new HttpRequestMessage(HttpMethod.Post, "/api/v1/appointments")
+        {
+            Content = JsonContent.Create(payload)
+        };
+        msg2.Headers.Add("Idempotency-Key", key);
+        var res2 = await Client.SendAsync(msg2);
+        Assert.True(res2.StatusCode == HttpStatusCode.Created || res2.StatusCode == HttpStatusCode.OK);
+        var json2 = await res2.Content.ReadAsStringAsync();
+        var doc2 = JsonDocument.Parse(json2);
+        var apptId2 = doc2.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+
+        // Must return the SAME appointment ID
+        Assert.Equal(apptId1, apptId2);
+
+        // 3. Reusing the same key with DIFFERENT payload throws 409 Conflict
+        var differentPayload = new
+        {
+            DoctorId = DoctorEntityId,
+            SpecialtyId = SpecialtyEntityId,
+            AppointmentSlotId = slot.Id,
+            Reason = "Thay đổi lý do khám sang ho khan nhiều",
+            IdempotencyKey = key
+        };
+        var msg3 = new HttpRequestMessage(HttpMethod.Post, "/api/v1/appointments")
+        {
+            Content = JsonContent.Create(differentPayload)
+        };
+        msg3.Headers.Add("Idempotency-Key", key);
+        var res3 = await Client.SendAsync(msg3);
+        Assert.Equal(HttpStatusCode.Conflict, res3.StatusCode);
+        var json3 = await res3.Content.ReadAsStringAsync();
+        Assert.Contains("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", json3);
+    }
+
+    [Fact]
+    public async Task TC15_GeminiAiProvider_UsesHeaderAuth_AndDoesNotLeakApiKeyInUrlOrLogs()
+    {
+        const string secretKey = "AIzaSySecretTestKey123456789";
+        HttpRequestMessage? capturedRequest = null;
+
+        var handlerMock = new Mock<HttpMessageHandler>();
+        handlerMock.Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>((req, _) => capturedRequest = req)
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.Unauthorized,
+                Content = new StringContent("{\"error\":{\"code\":401,\"message\":\"API key not valid.\"}}", Encoding.UTF8, "application/json")
+            });
+
+        var httpClient = new HttpClient(handlerMock.Object);
+        var loggerMock = new Mock<ILogger<GeminiAiProvider>>();
+        var loggedMessages = new List<string>();
+
+        loggerMock.Setup(x => x.Log(
+            It.IsAny<LogLevel>(),
+            It.IsAny<EventId>(),
+            It.Is<It.IsAnyType>((v, t) => true),
+            It.IsAny<Exception?>(),
+            It.IsAny<Func<It.IsAnyType, Exception?, string>>()))
+            .Callback(new InvocationAction(invocation =>
+            {
+                var state = invocation.Arguments[2];
+                if (state != null)
+                {
+                    loggedMessages.Add(state.ToString() ?? string.Empty);
+                }
+            }));
+
+        var options = Options.Create(new AiProviderOptions
+        {
+            IsEnabled = true,
+            ApiKey = secretKey,
+            ProviderUrl = "https://generativelanguage.googleapis.com",
+            ModelName = "gemini-2.0-flash",
+            TimeoutSeconds = 5
+        });
+
+        var provider = new GeminiAiProvider(httpClient, options, loggerMock.Object);
+
+        var result = await provider.ChatWithAiAsync(
+            "Tôi muốn đặt lịch khám",
+            new List<ChatMessageDto>(),
+            new List<WhitelistItemDto>(),
+            "{}",
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("AuthFailure", result.Status);
+
+        // 1. Verify x-goog-api-key header was used
+        Assert.NotNull(capturedRequest);
+        Assert.True(capturedRequest.Headers.Contains("x-goog-api-key"));
+        Assert.Equal(secretKey, capturedRequest.Headers.GetValues("x-goog-api-key").FirstOrDefault());
+
+        // 2. Verify URL does NOT contain the secret API key or key parameter
+        var uri = capturedRequest.RequestUri?.ToString() ?? string.Empty;
+        Assert.DoesNotContain("key=", uri, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(secretKey, uri, StringComparison.OrdinalIgnoreCase);
+
+        // 3. Verify logs do NOT contain the secret API key
+        Assert.NotEmpty(loggedMessages);
+        foreach (var log in loggedMessages)
+        {
+            Assert.DoesNotContain(secretKey, log, StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

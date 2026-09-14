@@ -15,6 +15,9 @@ using Microsoft.EntityFrameworkCore.Storage;
 using System.Data;
 
 using ClinicManagement.Application.Common.Interfaces;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace ClinicManagement.Infrastructure.Appointments;
 
@@ -46,6 +49,33 @@ public class AppointmentService : IAppointmentService
         var normalizedReason = request.Reason?.Trim();
         if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length < 10 || normalizedReason.Length > 500)
             throw new BusinessException("VALIDATION_ERROR", "Lý do khám phải từ 10 đến 500 ký tự.");
+
+        // Idempotency Key check: Return existing appointment if retry with identical payload; Conflict if payload changed
+        string? idempotencyKey = request.IdempotencyKey?.Trim();
+        if (!string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            var existingRecord = await _dbContext.IdempotencyRecords
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Key == idempotencyKey && r.Scope == "CreateAppointment" && r.ExpiresAtUtc > _dateTimeProvider.UtcNow);
+
+            if (existingRecord != null)
+            {
+                var payloadHash = ComputePayloadHash(request);
+                if (existingRecord.RequestHash != payloadHash)
+                {
+                    throw new ConflictException("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "Idempotency key này đã được sử dụng cho một yêu cầu đặt lịch khác.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(existingRecord.ResponseBody))
+                {
+                    var cachedDto = JsonSerializer.Deserialize<AppointmentDto>(existingRecord.ResponseBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (cachedDto != null)
+                    {
+                        return cachedDto;
+                    }
+                }
+            }
+        }
 
         // 1 & 2 & 3. Validate Patient
         var patient = await _dbContext.Patients
@@ -319,11 +349,7 @@ public class AppointmentService : IAppointmentService
                 });
             }
 
-            await _dbContext.SaveChangesAsync();
-
-            await transaction.CommitAsync();
-
-            return new AppointmentDto
+            var resultDto = new AppointmentDto
             {
                 Id = appointment.Id,
                 AppointmentCode = appointment.AppointmentCode,
@@ -339,6 +365,29 @@ public class AppointmentService : IAppointmentService
                 Reason = appointment.Reason,
                 Status = appointment.Status.ToString()
             };
+
+            if (!string.IsNullOrWhiteSpace(idempotencyKey))
+            {
+                var payloadHash = ComputePayloadHash(request);
+                var idemRecord = new IdempotencyRecord
+                {
+                    Key = idempotencyKey,
+                    Scope = "CreateAppointment",
+                    UserId = currentUserId.Value,
+                    RequestHash = payloadHash,
+                    StatusCode = 201,
+                    ResponseBody = JsonSerializer.Serialize(resultDto),
+                    CreatedAtUtc = _dateTimeProvider.UtcNow,
+                    ExpiresAtUtc = _dateTimeProvider.UtcNow.AddHours(24)
+                };
+                _dbContext.IdempotencyRecords.Add(idemRecord);
+            }
+
+            await _dbContext.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return resultDto;
         }
         catch (Exception ex) when (IsConcurrencyOrConflictException(ex))
         {
@@ -615,5 +664,20 @@ public class AppointmentService : IAppointmentService
         }
 
         return false;
+    }
+
+    private static string ComputePayloadHash(CreateAppointmentRequest request)
+    {
+        var normalized = new
+        {
+            request.DoctorId,
+            request.SpecialtyId,
+            request.AppointmentSlotId,
+            Reason = request.Reason?.Trim()
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(normalized);
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(json));
+        return Convert.ToHexString(bytes);
     }
 }
