@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +9,7 @@ namespace ClinicManagement.Application.Visits.Interfaces;
 
 public interface IPatientVisitService
 {
+    Task<CheckInTicketDto> ReceptionIntakeAsync(ReceptionIntakeRequest request, CancellationToken cancellationToken = default);
     Task<CheckInTicketDto> CreateWalkInVisitAsync(WalkInRegistrationRequest request, CancellationToken cancellationToken = default);
     Task<CheckInTicketDto> CheckInAppointmentAsync(AppointmentCheckInRequest request, CancellationToken cancellationToken = default);
     Task<PatientVisitDetailDto> GetVisitByIdAsync(long visitId, CancellationToken cancellationToken = default);

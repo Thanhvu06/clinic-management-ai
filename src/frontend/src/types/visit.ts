@@ -41,6 +41,44 @@ export interface CheckInTicketDto {
     arrivalType: string;
 }
 
+export interface PatientAllergyInputDto {
+    allergen: string;
+    severity?: string;
+    reaction?: string;
+}
+
+export interface EmergencyContactInputDto {
+    contactName: string;
+    relationship: string;
+    phoneNumber: string;
+    isGuardian?: boolean;
+}
+
+export interface NewPatientProfileDto {
+    fullName: string;
+    phoneNumber?: string;
+    dateOfBirth: string;
+    gender: number;
+    address?: string;
+    identityCardNumber?: string;
+    allergies?: PatientAllergyInputDto[];
+    emergencyContact?: EmergencyContactInputDto;
+}
+
+export interface ReceptionIntakeRequest {
+    existingPatientId?: number;
+    appointmentId?: number;
+    newPatient?: NewPatientProfileDto;
+    facilityId: number;
+    departmentId: number;
+    roomId?: number;
+    assignedDoctorId?: number;
+    healthPackageRegistrationId?: number;
+    chiefComplaint?: string;
+    priority?: VisitPriority;
+    idempotencyKey?: string;
+}
+
 export interface WalkInRegistrationRequest {
     fullName: string;
     phoneNumber: string;

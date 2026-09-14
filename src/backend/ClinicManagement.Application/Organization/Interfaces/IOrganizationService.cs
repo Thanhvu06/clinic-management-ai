@@ -33,4 +33,9 @@ public interface IOrganizationService
     Task<IReadOnlyList<BedDto>> GetBedsByDepartmentAsync(long departmentId, CancellationToken cancellationToken = default);
     Task<BedDto> CreateBedAsync(CreateBedRequest request, CancellationToken cancellationToken = default);
     Task<BedDto> UpdateBedStatusAsync(long id, UpdateBedStatusRequest request, CancellationToken cancellationToken = default);
+
+    // Staff Assignments
+    Task<IReadOnlyList<StaffFacilityAssignmentDto>> GetStaffAssignmentsAsync(long? facilityId = null, CancellationToken cancellationToken = default);
+    Task<StaffFacilityAssignmentDto> CreateStaffAssignmentAsync(CreateStaffAssignmentRequest request, CancellationToken cancellationToken = default);
+    Task DeleteStaffAssignmentAsync(long id, CancellationToken cancellationToken = default);
 }

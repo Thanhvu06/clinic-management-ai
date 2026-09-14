@@ -10,6 +10,7 @@ public class PatientVisit
     public string VisitCode { get; set; } = string.Empty;
     public long PatientId { get; set; }
     public long? AppointmentId { get; set; }
+    public long? HealthPackageRegistrationId { get; set; }
     public long FacilityId { get; set; }
     public long DepartmentId { get; set; }
     public long? RoomId { get; set; }
@@ -36,6 +37,7 @@ public class PatientVisit
     // Navigation properties
     public Patient Patient { get; set; } = null!;
     public Appointment? Appointment { get; set; }
+    public HealthPackageRegistration? HealthPackageRegistration { get; set; }
     public Facility Facility { get; set; } = null!;
     public Department Department { get; set; } = null!;
     public Room? Room { get; set; }

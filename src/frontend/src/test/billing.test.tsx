@@ -24,6 +24,7 @@ vi.mock('../api/billingApi', () => ({
         reception: {
             getInvoices: vi.fn(),
             getInvoiceById: vi.fn(),
+            getUnbilledVisits: vi.fn().mockResolvedValue({ success: true, data: [] }),
             createInvoiceFromAppointment: vi.fn(),
             createInvoiceFromHealthPackage: vi.fn(),
             createInvoiceFromVisit: vi.fn(),
@@ -335,7 +336,7 @@ describe('Billing Module Frontend Tests', () => {
             });
 
             // Switch to specialty fees tab
-            fireEvent.click(screen.getByText('Quản lý biểu phí'));
+            fireEvent.click(screen.getByText('Phí khám chuyên khoa'));
 
             await waitFor(() => {
                 expect(screen.getByText('Nội tổng quát')).toBeInTheDocument();

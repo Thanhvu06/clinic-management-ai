@@ -61,6 +61,13 @@ public class ReceptionBillingController : ControllerBase
         return StatusCode(201, ApiResponse<InvoiceDetailDto>.Ok(result, "Lập hóa đơn viện phí cho lượt khám thành công."));
     }
 
+    [HttpGet("unbilled-visits")]
+    public async Task<ActionResult<ApiResponse<List<UnbilledVisitDto>>>> GetUnbilledVisits([FromQuery] long? facilityId, CancellationToken cancellationToken)
+    {
+        var result = await _billingService.GetUnbilledVisitsAsync(facilityId, cancellationToken);
+        return Ok(ApiResponse<List<UnbilledVisitDto>>.Ok(result));
+    }
+
     [HttpPost("invoices/health-package")]
     public async Task<ActionResult<ApiResponse<InvoiceDetailDto>>> CreateInvoiceFromHealthPackage([FromBody] CreatePackageInvoiceRequest request, CancellationToken cancellationToken)
     {

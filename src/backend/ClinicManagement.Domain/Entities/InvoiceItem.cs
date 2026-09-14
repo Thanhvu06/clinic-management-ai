@@ -11,6 +11,7 @@ public class InvoiceItem
     public decimal LineTotal { get; set; }
     public string ReferenceType { get; set; } = string.Empty;
     public long ReferenceId { get; set; }
+    public bool IsCancelled { get; set; }
 
     // Navigation property
     public Invoice Invoice { get; set; } = null!;

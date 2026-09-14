@@ -5,7 +5,7 @@ import { PublicLayout } from './layouts/PublicLayout';
 import { PublicRoute, ProtectedRoute, RoleRoute } from './routes/guards';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
-import { ReceptionistDashboard, AdminDashboard, ForbiddenPage, NotFoundPage } from './pages/Dashboards';
+import { AdminDashboard, ForbiddenPage, NotFoundPage } from './pages/Dashboards';
 import { PublicLanding } from './pages/public/PublicLanding';
 import { SpecialtiesList } from './pages/public/SpecialtiesList';
 import { SpecialtyDetail } from './pages/public/SpecialtyDetail';
@@ -29,6 +29,7 @@ import { ReceptionPackageRegistrations } from './pages/reception/ReceptionPackag
 import { ReceptionChangeRequests } from './pages/reception/ReceptionChangeRequests';
 import { ReceptionBilling } from './pages/reception/ReceptionBilling';
 import { WalkInPatientRegistration } from './pages/reception/WalkInPatientRegistration';
+import { ReceptionWorkspace } from './pages/reception/ReceptionWorkspace';
 import { DoctorDashboard } from './pages/doctor/DoctorDashboard';
 import { DoctorQueue } from './pages/doctor/DoctorQueue';
 import { DoctorSchedule } from './pages/doctor/DoctorSchedule';
@@ -112,7 +113,7 @@ function App() {
                                     <Route path="/notifications" element={<NotificationsPage />} />
                                     {/* Receptionist Routes */}
                                     <Route element={<RoleRoute roles={['Receptionist']} />}>
-                                        <Route path="/reception" element={<ReceptionistDashboard />} />
+                                        <Route path="/reception" element={<ReceptionWorkspace />} />
                                         <Route path="/reception/walk-in" element={<WalkInPatientRegistration />} />
                                         <Route path="/reception/appointments" element={<ReceptionAppointments />} />
                                         <Route path="/reception/package-registrations" element={<ReceptionPackageRegistrations />} />

@@ -11,7 +11,14 @@ public class DiagnosticServiceDto
     public string Name { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
     public string? PreparationInstructions { get; set; }
+    public decimal? Price { get; set; }
     public bool IsActive { get; set; }
+}
+
+public class UpdateDiagnosticPriceRequest
+{
+    [Range(0, 1000000000, ErrorMessage = "Giá dịch vụ phải lớn hơn hoặc bằng 0.")]
+    public decimal Price { get; set; }
 }
 
 public class DiagnosticResultDto
@@ -37,6 +44,9 @@ public class DiagnosticOrderItemDto
     public string ServiceName { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
     public string? PreparationInstructions { get; set; }
+    public decimal? Price { get; set; }
+    public bool IsPackageCovered { get; set; }
+    public long? PackageRegistrationId { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? RowVersion { get; set; }
     public DiagnosticResultDto? Result { get; set; }

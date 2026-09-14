@@ -29,6 +29,15 @@ public class DiagnosticOrderItemConfiguration : IEntityTypeConfiguration<Diagnos
             .IsRequired()
             .HasConversion<string>();
 
+        builder.Property(i => i.IsPackageCovered)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.HasOne(i => i.PackageRegistration)
+            .WithMany()
+            .HasForeignKey(i => i.PackageRegistrationId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.Property(i => i.RowVersion).IsRowVersion();
     }
 }

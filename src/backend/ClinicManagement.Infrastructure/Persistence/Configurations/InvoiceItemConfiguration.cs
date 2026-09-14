@@ -40,6 +40,14 @@ public class InvoiceItemConfiguration : IEntityTypeConfiguration<InvoiceItem>
             .IsRequired()
             .HasMaxLength(50);
 
+        builder.Property(ii => ii.IsCancelled)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         builder.HasIndex(ii => ii.InvoiceId);
+
+        builder.HasIndex(ii => new { ii.ReferenceType, ii.ReferenceId })
+            .IsUnique()
+            .HasFilter("[ReferenceType] <> '' AND [ReferenceId] > 0 AND [IsCancelled] = 0");
     }
 }

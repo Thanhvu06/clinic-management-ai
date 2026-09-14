@@ -139,8 +139,53 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             Name = s.Name,
             Category = s.Category.ToString(),
             PreparationInstructions = s.PreparationInstructions,
+            Price = s.Price,
             IsActive = s.IsActive
         }).ToList();
+    }
+
+    public async Task<List<DiagnosticServiceDto>> GetAllDiagnosticServicesPricingAsync(System.Threading.CancellationToken cancellationToken = default)
+    {
+        var services = await _dbContext.DiagnosticServices
+            .AsNoTracking()
+            .OrderBy(s => s.Category)
+            .ThenBy(s => s.Code)
+            .ToListAsync(cancellationToken);
+
+        return services.Select(s => new DiagnosticServiceDto
+        {
+            Id = s.Id,
+            Code = s.Code,
+            Name = s.Name,
+            Category = s.Category.ToString(),
+            PreparationInstructions = s.PreparationInstructions,
+            Price = s.Price,
+            IsActive = s.IsActive
+        }).ToList();
+    }
+
+    public async Task<DiagnosticServiceDto> UpdateServicePriceAsync(long serviceId, decimal price, System.Threading.CancellationToken cancellationToken = default)
+    {
+        var service = await _dbContext.DiagnosticServices.FirstOrDefaultAsync(s => s.Id == serviceId, cancellationToken);
+        if (service == null)
+            throw new NotFoundException("Dịch vụ cận lâm sàng không tồn tại.");
+
+        if (price < 0)
+            throw new BusinessException("INVALID_PRICE", "Đơn giá dịch vụ không được âm.");
+
+        service.Price = price;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return new DiagnosticServiceDto
+        {
+            Id = service.Id,
+            Code = service.Code,
+            Name = service.Name,
+            Category = service.Category.ToString(),
+            PreparationInstructions = service.PreparationInstructions,
+            Price = service.Price,
+            IsActive = service.IsActive
+        };
     }
 
     public async Task<DiagnosticOrderDto> CreateOrderForDoctorAsync(long appointmentId, CreateDiagnosticOrderRequest request)
@@ -1113,6 +1158,9 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 ServiceName = i.DiagnosticService?.Name ?? string.Empty,
                 Category = i.DiagnosticService?.Category.ToString() ?? string.Empty,
                 PreparationInstructions = i.DiagnosticService?.PreparationInstructions,
+                Price = i.DiagnosticService?.Price,
+                IsPackageCovered = i.IsPackageCovered,
+                PackageRegistrationId = i.PackageRegistrationId,
                 Status = i.Status.ToString(),
                 RowVersion = i.RowVersion != null ? Convert.ToBase64String(i.RowVersion) : null,
                 Result = resDto

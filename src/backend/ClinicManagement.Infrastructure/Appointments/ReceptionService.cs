@@ -42,40 +42,82 @@ public class ReceptionService : IReceptionService
 
     public async Task<PagedResult<ReceptionAppointmentDto>> GetAppointmentsAsync(string? status, string? search, int page, int pageSize)
     {
-        var query = from a in _dbContext.Appointments
-                    join p in _dbContext.Patients on a.PatientId equals p.Id
-                    join pu in _dbContext.Users on p.UserId equals (Guid?)pu.Id into puGroup
+        var today = _dateTimeProvider.VietnamToday;
+
+        var query = from a in _dbContext.Appointments.AsNoTracking()
+                    join p in _dbContext.Patients.AsNoTracking() on a.PatientId equals p.Id
+                    join pu in _dbContext.Users.AsNoTracking() on p.UserId equals (Guid?)pu.Id into puGroup
                     from pu in puGroup.DefaultIfEmpty()
-                    join d in _dbContext.Doctors on a.DoctorId equals d.Id
-                    join du in _dbContext.Users on d.UserId equals du.Id
-                    join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
+                    join d in _dbContext.Doctors.AsNoTracking() on a.DoctorId equals d.Id
+                    join du in _dbContext.Users.AsNoTracking() on d.UserId equals du.Id into duGroup
+                    from du in duGroup.DefaultIfEmpty()
+                    join s in _dbContext.Specialties.AsNoTracking() on a.SpecialtyId equals s.Id
                     select new
                     {
                         Appointment = a,
                         PatientName = pu != null ? pu.FullName : (p.FullName ?? string.Empty),
                         PatientPhone = pu != null ? pu.PhoneNumber : (p.PhoneNumber ?? string.Empty),
-                        DoctorName = du.FullName,
+                        MedicalRecordNumber = p.MedicalRecordNumber ?? string.Empty,
+                        NationalId = p.NationalId ?? string.Empty,
+                        DoctorName = du != null ? du.FullName : "Bác sĩ",
                         SpecialtyName = s.Name
                     };
 
-        if (!string.IsNullOrEmpty(status) && Enum.TryParse<AppointmentStatus>(status, true, out var parsedStatus))
+        var normalizedStatus = status?.Trim().ToLower();
+        if (normalizedStatus == "today")
+        {
+            query = query.Where(x => x.Appointment.AppointmentDate == today && x.Appointment.Status != AppointmentStatus.Cancelled);
+        }
+        else if (normalizedStatus == "pending")
+        {
+            query = query.Where(x => x.Appointment.Status == AppointmentStatus.Pending);
+        }
+        else if (normalizedStatus == "upcoming")
+        {
+            query = query.Where(x => x.Appointment.AppointmentDate > today && x.Appointment.Status != AppointmentStatus.Cancelled);
+        }
+        else if (normalizedStatus == "recent")
+        {
+            var recentDate = today.AddDays(-3);
+            query = query.Where(x => x.Appointment.AppointmentDate >= recentDate && x.Appointment.AppointmentDate <= today);
+        }
+        else if (normalizedStatus == "history")
+        {
+            query = query.Where(x => x.Appointment.AppointmentDate < today || x.Appointment.Status == AppointmentStatus.Completed || x.Appointment.Status == AppointmentStatus.Cancelled);
+        }
+        else if (!string.IsNullOrEmpty(status) && Enum.TryParse<AppointmentStatus>(status, true, out var parsedStatus))
         {
             query = query.Where(x => x.Appointment.Status == parsedStatus);
         }
 
-        if (!string.IsNullOrEmpty(search))
+        if (!string.IsNullOrWhiteSpace(search))
         {
-            query = query.Where(x => x.Appointment.AppointmentCode.Contains(search) 
-                                  || x.PatientName.Contains(search) 
-                                  || x.PatientPhone.Contains(search));
+            var clean = search.Trim().ToLower();
+            query = query.Where(x => x.Appointment.AppointmentCode.ToLower().Contains(clean) 
+                                  || x.PatientName.ToLower().Contains(clean) 
+                                  || x.PatientPhone.Contains(clean)
+                                  || x.MedicalRecordNumber.ToLower().Contains(clean)
+                                  || x.NationalId.ToLower().Contains(clean));
         }
 
-        query = query.OrderBy(x => x.Appointment.AppointmentDate).ThenBy(x => x.Appointment.StartTime);
+        if (normalizedStatus == "history")
+        {
+            query = query.OrderByDescending(x => x.Appointment.AppointmentDate)
+                         .ThenByDescending(x => x.Appointment.StartTime);
+        }
+        else
+        {
+            // Actionable today appointments appear FIRST on page 1
+            query = query.OrderByDescending(x => x.Appointment.AppointmentDate == today && (x.Appointment.Status == AppointmentStatus.Confirmed || x.Appointment.Status == AppointmentStatus.Pending))
+                         .ThenBy(x => x.Appointment.AppointmentDate >= today ? 0 : 1)
+                         .ThenBy(x => x.Appointment.AppointmentDate)
+                         .ThenBy(x => x.Appointment.StartTime);
+        }
 
         var totalItems = await query.CountAsync();
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
 
-        var resultItems = items.Select(x => MapToDto(x.Appointment, x.PatientName, x.PatientPhone, x.DoctorName, x.SpecialtyName)).ToList();
+        var resultItems = items.Select(x => MapToDto(x.Appointment, x.PatientName, x.PatientPhone, x.MedicalRecordNumber, x.NationalId, x.DoctorName, x.SpecialtyName)).ToList();
 
         return new PagedResult<ReceptionAppointmentDto>(resultItems, totalItems, page, pageSize);
     }
@@ -95,6 +137,8 @@ public class ReceptionService : IReceptionService
                         Appointment = a,
                         PatientName = pu != null ? pu.FullName : (p.FullName ?? string.Empty),
                         PatientPhone = pu != null ? pu.PhoneNumber : (p.PhoneNumber ?? string.Empty),
+                        MedicalRecordNumber = p.MedicalRecordNumber ?? string.Empty,
+                        NationalId = p.NationalId ?? string.Empty,
                         DoctorName = du.FullName,
                         SpecialtyName = s.Name
                     };
@@ -103,7 +147,7 @@ public class ReceptionService : IReceptionService
 
         if (item == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
 
-        return MapToDto(item.Appointment, item.PatientName, item.PatientPhone, item.DoctorName, item.SpecialtyName);
+        return MapToDto(item.Appointment, item.PatientName, item.PatientPhone, item.MedicalRecordNumber, item.NationalId, item.DoctorName, item.SpecialtyName);
     }
 
     public async Task<List<AppointmentHistoryDto>> GetAppointmentHistoryAsync(long appointmentId)
@@ -273,7 +317,7 @@ public class ReceptionService : IReceptionService
         };
     }
 
-    private static ReceptionAppointmentDto MapToDto(Appointment a, string patientName, string patientPhone, string doctorName, string specialtyName) => new()
+    private static ReceptionAppointmentDto MapToDto(Appointment a, string patientName, string patientPhone, string mrn, string nationalId, string doctorName, string specialtyName) => new()
     {
         Id = a.Id,
         AppointmentCode = a.AppointmentCode,
@@ -288,6 +332,8 @@ public class ReceptionService : IReceptionService
         Status = a.Status.ToString(),
         PatientName = patientName ?? string.Empty,
         PatientPhone = patientPhone ?? string.Empty,
+        MedicalRecordNumber = mrn ?? string.Empty,
+        NationalId = nationalId ?? string.Empty,
         DoctorName = doctorName ?? string.Empty,
         SpecialtyName = specialtyName ?? string.Empty
     };

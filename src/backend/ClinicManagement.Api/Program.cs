@@ -134,6 +134,7 @@ builder.Services.AddScoped<ClinicManagement.Application.Diagnostics.Interfaces.I
 builder.Services.AddScoped<ClinicManagement.Application.Organization.Interfaces.IOrganizationService, ClinicManagement.Infrastructure.Organization.OrganizationService>();
 builder.Services.AddScoped<ClinicManagement.Application.Mpi.Interfaces.IMpiPatientService, ClinicManagement.Infrastructure.Mpi.MpiPatientService>();
 builder.Services.AddScoped<ClinicManagement.Application.Mpi.Interfaces.IMrnGenerator, ClinicManagement.Infrastructure.Mpi.MrnGenerator>();
+builder.Services.AddScoped<ClinicManagement.Application.Common.Interfaces.IFacilityAuthorizationService, ClinicManagement.Infrastructure.Common.FacilityAuthorizationService>();
 builder.Services.AddScoped<ClinicManagement.Application.Visits.Interfaces.IPatientVisitService, ClinicManagement.Infrastructure.Visits.PatientVisitService>();
 
 builder.Services.AddRateLimiter(options =>

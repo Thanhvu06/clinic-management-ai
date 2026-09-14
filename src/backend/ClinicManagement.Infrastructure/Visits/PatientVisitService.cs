@@ -23,20 +23,346 @@ public class PatientVisitService : IPatientVisitService
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IMrnGenerator _mrnGenerator;
+    private readonly IFacilityAuthorizationService _facilityAuthService;
 
     public PatientVisitService(
         AppDbContext dbContext,
         ICurrentUserService currentUserService,
         IDateTimeProvider dateTimeProvider,
-        IMrnGenerator mrnGenerator)
+        IMrnGenerator mrnGenerator,
+        IFacilityAuthorizationService facilityAuthService)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _dateTimeProvider = dateTimeProvider;
         _mrnGenerator = mrnGenerator;
+        _facilityAuthService = facilityAuthService;
     }
 
     private Guid GetUserId() => _currentUserService.UserId ?? Guid.Empty;
+
+    private static string ComputePayloadHash(ReceptionIntakeRequest request)
+    {
+        var normalized = new
+        {
+            request.ExistingPatientId,
+            request.AppointmentId,
+            request.HealthPackageRegistrationId,
+            request.FacilityId,
+            request.DepartmentId,
+            request.RoomId,
+            request.AssignedDoctorId,
+            ChiefComplaint = request.ChiefComplaint?.Trim(),
+            request.Priority,
+            NewPatient = request.NewPatient == null ? null : new
+            {
+                FullName = request.NewPatient.FullName?.Trim(),
+                PhoneNumber = request.NewPatient.PhoneNumber?.Trim(),
+                request.NewPatient.DateOfBirth,
+                request.NewPatient.Gender,
+                Address = request.NewPatient.Address?.Trim(),
+                NationalId = request.NewPatient.NationalId?.Trim(),
+                BhytNumber = request.NewPatient.BhytNumber?.Trim(),
+                Email = request.NewPatient.Email?.Trim()
+            }
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(normalized);
+        using var sha256 = SHA256.Create();
+        var bytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(json));
+        return Convert.ToHexString(bytes);
+    }
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException ex)
+    {
+        if (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx)
+        {
+            return sqlEx.Number == 2601 || sqlEx.Number == 2627;
+        }
+        var msg = ex.InnerException?.Message ?? string.Empty;
+        return msg.Contains("UNIQUE") || msg.Contains("constraint");
+    }
+
+    public async Task<CheckInTicketDto> ReceptionIntakeAsync(ReceptionIntakeRequest request, CancellationToken cancellationToken = default)
+    {
+        var currentUserId = GetUserId();
+        var visitDate = _dateTimeProvider.VietnamToday;
+
+        // 1. Validate Single Source of Patient
+        var sourceCount = (request.ExistingPatientId.HasValue ? 1 : 0)
+                        + (request.AppointmentId.HasValue ? 1 : 0)
+                        + (request.NewPatient != null ? 1 : 0);
+
+        if (sourceCount == 0)
+        {
+            throw new BusinessException("MISSING_PATIENT_SOURCE", "Vui lòng chọn hồ sơ bệnh nhân cũ, lịch hẹn hoặc nhập thông tin bệnh nhân mới.");
+        }
+
+        if (request.NewPatient != null && (request.ExistingPatientId.HasValue || request.AppointmentId.HasValue))
+        {
+            throw new BusinessException("INVALID_PATIENT_SOURCE", "Không thể vừa khai báo thông tin bệnh nhân mới vừa chọn hồ sơ cũ hoặc lịch hẹn.");
+        }
+
+        Appointment? appointment = null;
+        if (request.AppointmentId.HasValue)
+        {
+            appointment = await _dbContext.Appointments
+                .Include(a => a.Patient)
+                .Include(a => a.Specialty)
+                .FirstOrDefaultAsync(a => a.Id == request.AppointmentId.Value, cancellationToken);
+
+            if (appointment == null)
+                throw new NotFoundException("Lịch hẹn không tồn tại.");
+
+            if (request.ExistingPatientId.HasValue && appointment.PatientId != request.ExistingPatientId.Value)
+            {
+                throw new BusinessException("PATIENT_APPOINTMENT_MISMATCH", "Lịch hẹn không thuộc về bệnh nhân đã chọn.");
+            }
+
+            if (appointment.Status == AppointmentStatus.Cancelled)
+            {
+                throw new BusinessException("APPOINTMENT_ALREADY_CANCELLED", "Không thể tiếp nhận lịch hẹn đã bị hủy.");
+            }
+
+            if (appointment.Status == AppointmentStatus.Completed)
+            {
+                throw new BusinessException("APPOINTMENT_ALREADY_COMPLETED", "Lịch hẹn đã hoàn thành khám.");
+            }
+        }
+
+        // 2. Validate Contact Phone for New Patient
+        if (request.NewPatient != null)
+        {
+            var hasPersonalPhone = !string.IsNullOrWhiteSpace(request.NewPatient.PhoneNumber);
+            var hasEmergencyPhone = !string.IsNullOrWhiteSpace(request.NewPatient.EmergencyContact?.PhoneNumber);
+            if (!hasPersonalPhone && !hasEmergencyPhone)
+            {
+                throw new BusinessException("CONTACT_PHONE_REQUIRED", "Vui lòng cung cấp số điện thoại của bệnh nhân hoặc số điện thoại của người giám hộ/người thân liên hệ.");
+            }
+        }
+
+        // 3. Database-backed Idempotency check
+        var payloadHash = ComputePayloadHash(request);
+        var existingRecord = await _dbContext.IdempotencyRecords
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Key == request.IdempotencyKey && r.Scope == "ReceptionIntake" && r.ExpiresAtUtc > _dateTimeProvider.UtcNow, cancellationToken);
+
+        if (existingRecord != null)
+        {
+            if (existingRecord.RequestHash != payloadHash)
+            {
+                throw new ConflictException("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "Idempotency key này đã được sử dụng cho một yêu cầu có dữ liệu khác.");
+            }
+            return System.Text.Json.JsonSerializer.Deserialize<CheckInTicketDto>(existingRecord.ResponseBody)!;
+        }
+
+        // 4. Validate Facility & Resource Authorization
+        var facility = await _dbContext.Facilities
+            .FirstOrDefaultAsync(f => f.Id == request.FacilityId && f.IsActive, cancellationToken);
+        if (facility == null)
+            throw new NotFoundException("Cơ sở y tế không tồn tại hoặc đã ngừng hoạt động.");
+
+        await _facilityAuthService.ValidateUserFacilityAccessAsync(currentUserId, request.FacilityId, cancellationToken);
+
+        var department = await _dbContext.Departments
+            .FirstOrDefaultAsync(d => d.Id == request.DepartmentId && d.FacilityId == request.FacilityId && d.IsActive, cancellationToken);
+        if (department == null)
+            throw new NotFoundException("Khoa tiếp nhận không tồn tại hoặc không thuộc cơ sở y tế đã chọn.");
+
+        // Verify Doctor
+        Doctor? doctor = null;
+        var doctorIdToAssign = request.AssignedDoctorId ?? (appointment?.DoctorId);
+        if (doctorIdToAssign.HasValue)
+        {
+            doctor = await _dbContext.Doctors
+                .FirstOrDefaultAsync(d => d.Id == doctorIdToAssign.Value && d.IsActive, cancellationToken);
+            if (doctor == null)
+                throw new NotFoundException("Bác sĩ được chỉ định không tồn tại hoặc không hoạt động.");
+        }
+
+        // Verify Room
+        Room? room = null;
+        if (request.RoomId.HasValue)
+        {
+            room = await _dbContext.Rooms
+                .FirstOrDefaultAsync(r => r.Id == request.RoomId.Value && r.DepartmentId == department.Id && r.IsActive, cancellationToken);
+            if (room == null)
+                throw new NotFoundException("Phòng khám không tồn tại trong khoa đã chọn.");
+        }
+
+        // 5. Transaction: Resolve/Create Patient, Package link, Issue Visit, Save Idempotency
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            Patient patient;
+            if (request.ExistingPatientId.HasValue)
+            {
+                var existingPatient = await _dbContext.Patients
+                    .FirstOrDefaultAsync(p => p.Id == request.ExistingPatientId.Value, cancellationToken);
+                if (existingPatient == null)
+                    throw new NotFoundException("Hồ sơ bệnh nhân không tồn tại.");
+                patient = existingPatient;
+            }
+            else if (appointment != null)
+            {
+                patient = appointment.Patient;
+            }
+            else
+            {
+                // New Patient
+                var newProfile = request.NewPatient!;
+                var cleanCccd = string.IsNullOrWhiteSpace(newProfile.NationalId)
+                    ? null
+                    : newProfile.NationalId.Trim().Replace(" ", "").Replace("-", "");
+
+                if (!string.IsNullOrEmpty(cleanCccd))
+                {
+                    var cccdExists = await _dbContext.Patients.AnyAsync(p => p.NationalId == cleanCccd, cancellationToken);
+                    if (cccdExists)
+                    {
+                        throw new ConflictException("DUPLICATE_NATIONAL_ID", "Số CCCD/Định danh cá nhân này đã tồn tại trong hệ thống.");
+                    }
+                }
+
+                var mrn = await _mrnGenerator.GenerateNextMrnAsync(cancellationToken);
+                patient = new Patient
+                {
+                    UserId = null,
+                    FullName = newProfile.FullName.Trim(),
+                    PhoneNumber = string.IsNullOrWhiteSpace(newProfile.PhoneNumber) ? (newProfile.EmergencyContact?.PhoneNumber.Trim() ?? string.Empty) : newProfile.PhoneNumber.Trim(),
+                    DateOfBirth = newProfile.DateOfBirth,
+                    Gender = newProfile.Gender,
+                    Address = newProfile.Address?.Trim(),
+                    NationalId = cleanCccd,
+                    MedicalRecordNumber = mrn,
+                    PrimaryFacilityId = request.FacilityId
+                };
+                _dbContext.Patients.Add(patient);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                if (newProfile.Allergies.Count > 0)
+                {
+                    foreach (var al in newProfile.Allergies)
+                    {
+                        var severity = Enum.TryParse<AllergySeverity>(al.Severity, true, out var parsedSev) ? parsedSev : AllergySeverity.Moderate;
+                        _dbContext.PatientAllergies.Add(new PatientAllergy
+                        {
+                            PatientId = patient.Id,
+                            AllergenName = al.Allergen.Trim(),
+                            Severity = severity,
+                            ReactionDescription = al.Reaction?.Trim(),
+                            AllergenType = AllergenType.Drug
+                        });
+                    }
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+
+                if (newProfile.EmergencyContact != null)
+                {
+                    _dbContext.EmergencyContacts.Add(new EmergencyContact
+                    {
+                        PatientId = patient.Id,
+                        FullName = newProfile.EmergencyContact.ContactName.Trim(),
+                        Relationship = newProfile.EmergencyContact.Relationship.Trim(),
+                        PhoneNumber = newProfile.EmergencyContact.PhoneNumber.Trim(),
+                        IsPrimary = true
+                    });
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+            }
+
+            // Check health package registration
+            if (request.HealthPackageRegistrationId.HasValue)
+            {
+                var pkgReg = await _dbContext.HealthPackageRegistrations
+                    .FirstOrDefaultAsync(r => r.Id == request.HealthPackageRegistrationId.Value, cancellationToken);
+                if (pkgReg == null)
+                    throw new NotFoundException("Thông tin đăng ký gói khám không tồn tại.");
+                if (pkgReg.PatientId != patient.Id)
+                    throw new BusinessException("PACKAGE_PATIENT_MISMATCH", "Đăng ký gói khám không thuộc về bệnh nhân này.");
+            }
+
+            var queueNumber = await GetNextQueueNumberAsync(request.FacilityId, department.Id, visitDate, cancellationToken);
+            var visitCode = await GenerateVisitCodeAsync(visitDate, queueNumber, cancellationToken);
+
+            var arrivalType = request.HealthPackageRegistrationId.HasValue
+                ? VisitArrivalType.HealthPackage
+                : (appointment != null ? VisitArrivalType.Scheduled : VisitArrivalType.WalkIn);
+
+            var visit = new PatientVisit
+            {
+                VisitCode = visitCode,
+                PatientId = patient.Id,
+                AppointmentId = appointment?.Id,
+                HealthPackageRegistrationId = request.HealthPackageRegistrationId,
+                FacilityId = request.FacilityId,
+                DepartmentId = department.Id,
+                RoomId = room?.Id,
+                AssignedDoctorId = doctor?.Id,
+                VisitDate = visitDate,
+                ArrivalType = arrivalType,
+                Priority = request.Priority,
+                ChiefComplaint = request.ChiefComplaint.Trim(),
+                QueueNumber = queueNumber,
+                Status = VisitStatus.WaitingForDoctor,
+                CheckedInAtUtc = _dateTimeProvider.UtcNow,
+                CreatedByUserId = currentUserId,
+                CreatedAtUtc = _dateTimeProvider.UtcNow
+            };
+
+            _dbContext.PatientVisits.Add(visit);
+
+            if (appointment != null)
+            {
+                if (appointment.Status == AppointmentStatus.Pending)
+                {
+                    appointment.Status = AppointmentStatus.Confirmed;
+                }
+                appointment.PatientVisit = visit;
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            var rName = await GetUserNameAsync(currentUserId, cancellationToken);
+            var docName = doctor != null ? await GetUserNameAsync(doctor.UserId, cancellationToken) : null;
+            visit.Facility = facility;
+            visit.Department = department;
+            visit.Patient = patient;
+            visit.Room = room;
+
+            var ticketDto = MapToTicket(visit, rName, docName);
+
+            // Record idempotency
+            var idempotencyRecord = new IdempotencyRecord
+            {
+                Key = request.IdempotencyKey,
+                Scope = "ReceptionIntake",
+                UserId = currentUserId,
+                RequestHash = payloadHash,
+                StatusCode = 201,
+                ResponseBody = System.Text.Json.JsonSerializer.Serialize(ticketDto),
+                CreatedAtUtc = _dateTimeProvider.UtcNow,
+                ExpiresAtUtc = _dateTimeProvider.UtcNow.AddHours(24)
+            };
+            _dbContext.IdempotencyRecords.Add(idempotencyRecord);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+            return ticketDto;
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            var committedRecord = await _dbContext.IdempotencyRecords
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Key == request.IdempotencyKey && r.Scope == "ReceptionIntake", cancellationToken);
+
+            if (committedRecord != null)
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<CheckInTicketDto>(committedRecord.ResponseBody)!;
+            }
+            throw;
+        }
+    }
 
     public async Task<CheckInTicketDto> CreateWalkInVisitAsync(WalkInRegistrationRequest request, CancellationToken cancellationToken = default)
     {
@@ -51,6 +377,7 @@ public class PatientVisitService : IPatientVisitService
             throw new NotFoundException("Khoa tiếp nhận không tồn tại hoặc đã ngừng hoạt động.");
 
         var facilityId = request.FacilityId ?? department.FacilityId;
+        await _facilityAuthService.ValidateUserFacilityAccessAsync(currentUserId, facilityId, cancellationToken);
 
         // Resolve or create patient
         var patient = await ResolveOrCreatePatientAsync(request, facilityId, cancellationToken);
@@ -194,35 +521,11 @@ public class PatientVisitService : IPatientVisitService
 
         if (department == null)
         {
-            var defaultFacility = await _dbContext.Facilities.FirstOrDefaultAsync(cancellationToken);
-            if (defaultFacility == null)
-            {
-                defaultFacility = new Facility
-                {
-                    Code = "FAC-DEFAULT",
-                    Name = "Bệnh viện ClinicCare",
-                    Address = "123 Đường Y Tế",
-                    IsActive = true,
-                    CreatedAtUtc = _dateTimeProvider.UtcNow
-                };
-                _dbContext.Facilities.Add(defaultFacility);
-                await _dbContext.SaveChangesAsync(cancellationToken);
-            }
-
-            department = new Department
-            {
-                FacilityId = defaultFacility.Id,
-                Code = "KKB",
-                Name = "Khoa Khám Bệnh",
-                SpecialtyId = appointment.SpecialtyId,
-                IsActive = true
-            };
-            _dbContext.Departments.Add(department);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            department.Facility = defaultFacility;
+            throw new NotFoundException("Khoa tiếp nhận không tồn tại hoặc đã ngừng hoạt động.");
         }
 
         var facilityId = request.FacilityId ?? department.FacilityId;
+        await _facilityAuthService.ValidateUserFacilityAccessAsync(currentUserId, facilityId, cancellationToken);
 
         // Verify room if specified
         Room? room = null;
@@ -672,7 +975,7 @@ public class PatientVisitService : IPatientVisitService
 
     private async Task<int> GetNextQueueNumberAsync(long facilityId, long departmentId, DateOnly date, CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < 5; attempt++)
+        for (var attempt = 0; attempt < 20; attempt++)
         {
             var sequence = await _dbContext.DailyQueueSequences
                 .FirstOrDefaultAsync(s => s.FacilityId == facilityId && s.DepartmentId == departmentId && s.Date == date, cancellationToken);
@@ -695,6 +998,7 @@ public class PatientVisitService : IPatientVisitService
                 catch (DbUpdateException)
                 {
                     _dbContext.Entry(sequence).State = EntityState.Detached;
+                    await Task.Delay(RandomNumberGenerator.GetInt32(10, 50), cancellationToken);
                     continue;
                 }
             }
@@ -708,18 +1012,20 @@ public class PatientVisitService : IPatientVisitService
                 }
                 catch (DbUpdateConcurrencyException)
                 {
+                    try { await _dbContext.Entry(sequence).ReloadAsync(cancellationToken); } catch { _dbContext.Entry(sequence).State = EntityState.Detached; }
+                    await Task.Delay(RandomNumberGenerator.GetInt32(10, 50), cancellationToken);
+                    continue;
+                }
+                catch (DbUpdateException)
+                {
+                    try { await _dbContext.Entry(sequence).ReloadAsync(cancellationToken); } catch { _dbContext.Entry(sequence).State = EntityState.Detached; }
+                    await Task.Delay(RandomNumberGenerator.GetInt32(10, 50), cancellationToken);
                     continue;
                 }
             }
         }
 
-        // Fallback to max + 1
-        var maxNumber = await _dbContext.PatientVisits
-            .Where(v => v.FacilityId == facilityId && v.DepartmentId == departmentId && v.VisitDate == date)
-            .Select(v => (int?)v.QueueNumber)
-            .MaxAsync(cancellationToken) ?? 0;
-
-        return maxNumber + 1;
+        throw new InvalidOperationException("Failed to allocate queue number after multiple attempts due to high concurrency (QUEUE_NUMBER_COLLISION).");
     }
 
     private async Task<string> GenerateVisitCodeAsync(DateOnly date, int queueNumber, CancellationToken cancellationToken)

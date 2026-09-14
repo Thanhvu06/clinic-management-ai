@@ -888,18 +888,18 @@ public static class DevelopmentDataSeeder
         // 10. Medicines & Pharmacy Seed
         if (!await db.Medicines.AnyAsync())
         {
-            var med1 = new Medicine { Code = "MED01", Name = "Paracetamol 500mg", Unit = "Viên", StockQuantity = 500, ReorderLevel = 100, IsActive = true };
-            var med2 = new Medicine { Code = "MED02", Name = "Amoxicillin 500mg", Unit = "Viên", StockQuantity = 300, ReorderLevel = 50, IsActive = true };
-            var med3 = new Medicine { Code = "MED03", Name = "Ibuprofen 400mg", Unit = "Viên", StockQuantity = 250, ReorderLevel = 50, IsActive = true };
-            var med4 = new Medicine { Code = "MED04", Name = "Omeprazole 20mg", Unit = "Viên", StockQuantity = 400, ReorderLevel = 80, IsActive = true };
-            var med5 = new Medicine { Code = "MED05", Name = "Cefixime 200mg", Unit = "Viên", StockQuantity = 150, ReorderLevel = 40, IsActive = true };
-            var med6 = new Medicine { Code = "MED06", Name = "Loratadine 10mg", Unit = "Viên", StockQuantity = 200, ReorderLevel = 50, IsActive = true };
-            var med7 = new Medicine { Code = "MED07", Name = "Metformin 500mg", Unit = "Viên", StockQuantity = 350, ReorderLevel = 60, IsActive = true };
-            var med8 = new Medicine { Code = "MED08", Name = "Amlodipine 5mg", Unit = "Viên", StockQuantity = 300, ReorderLevel = 50, IsActive = true };
-            var med9 = new Medicine { Code = "MED09", Name = "Vitamin C 500mg", Unit = "Viên", StockQuantity = 600, ReorderLevel = 100, IsActive = true };
-            var med10 = new Medicine { Code = "MED10", Name = "Salbutamol 2mg", Unit = "Viên", StockQuantity = 25, ReorderLevel = 50, IsActive = true }; // Low stock alert!
-            var med11 = new Medicine { Code = "MED11", Name = "Berberin 100mg", Unit = "Viên", StockQuantity = 400, ReorderLevel = 80, IsActive = true };
-            var med12 = new Medicine { Code = "MED12", Name = "Phosphalugel 20g", Unit = "Gói", StockQuantity = 180, ReorderLevel = 40, IsActive = true };
+            var med1 = new Medicine { Code = "MED01", Name = "Paracetamol 500mg", Unit = "Viên", StockQuantity = 500, ReorderLevel = 100, UnitPrice = 2000m, IsActive = true };
+            var med2 = new Medicine { Code = "MED02", Name = "Amoxicillin 500mg", Unit = "Viên", StockQuantity = 300, ReorderLevel = 50, UnitPrice = 5000m, IsActive = true };
+            var med3 = new Medicine { Code = "MED03", Name = "Ibuprofen 400mg", Unit = "Viên", StockQuantity = 250, ReorderLevel = 50, UnitPrice = 3500m, IsActive = true };
+            var med4 = new Medicine { Code = "MED04", Name = "Omeprazole 20mg", Unit = "Viên", StockQuantity = 400, ReorderLevel = 80, UnitPrice = 4500m, IsActive = true };
+            var med5 = new Medicine { Code = "MED05", Name = "Cefixime 200mg", Unit = "Viên", StockQuantity = 150, ReorderLevel = 40, UnitPrice = 12000m, IsActive = true };
+            var med6 = new Medicine { Code = "MED06", Name = "Loratadine 10mg", Unit = "Viên", StockQuantity = 200, ReorderLevel = 50, UnitPrice = 3000m, IsActive = true };
+            var med7 = new Medicine { Code = "MED07", Name = "Metformin 500mg", Unit = "Viên", StockQuantity = 350, ReorderLevel = 60, UnitPrice = 2500m, IsActive = true };
+            var med8 = new Medicine { Code = "MED08", Name = "Amlodipine 5mg", Unit = "Viên", StockQuantity = 300, ReorderLevel = 50, UnitPrice = 4000m, IsActive = true };
+            var med9 = new Medicine { Code = "MED09", Name = "Vitamin C 500mg", Unit = "Viên", StockQuantity = 600, ReorderLevel = 100, UnitPrice = 1500m, IsActive = true };
+            var med10 = new Medicine { Code = "MED10", Name = "Salbutamol 2mg", Unit = "Viên", StockQuantity = 25, ReorderLevel = 50, UnitPrice = 2000m, IsActive = true }; // Low stock alert!
+            var med11 = new Medicine { Code = "MED11", Name = "Berberin 100mg", Unit = "Viên", StockQuantity = 400, ReorderLevel = 80, UnitPrice = 1000m, IsActive = true };
+            var med12 = new Medicine { Code = "MED12", Name = "Phosphalugel 20g", Unit = "Gói", StockQuantity = 180, ReorderLevel = 40, UnitPrice = 8000m, IsActive = true };
 
             db.Medicines.AddRange(med1, med2, med3, med4, med5, med6, med7, med8, med9, med10, med11, med12);
             await db.SaveChangesAsync();
@@ -973,20 +973,47 @@ public static class DevelopmentDataSeeder
                 logger.LogInformation("Sample Prescriptions seeded.");
             }
         }
+        else
+        {
+            var existingMedsWithoutPrice = await db.Medicines.Where(m => m.UnitPrice == null || m.UnitPrice <= 0).ToListAsync();
+            foreach (var m in existingMedsWithoutPrice)
+            {
+                m.UnitPrice = m.Code switch
+                {
+                    "MED01" => 2000m,
+                    "MED02" => 5000m,
+                    "MED03" => 3500m,
+                    "MED04" => 4500m,
+                    "MED05" => 12000m,
+                    "MED06" => 3000m,
+                    "MED07" => 2500m,
+                    "MED08" => 4000m,
+                    "MED09" => 1500m,
+                    "MED10" => 2000m,
+                    "MED11" => 1000m,
+                    "MED12" => 8000m,
+                    _ => 10000m
+                };
+            }
+            if (existingMedsWithoutPrice.Count > 0)
+            {
+                await db.SaveChangesAsync();
+            }
+        }
         
         // Diagnostic Services Catalog (Idempotent)
         var diagnosticServiceDefs = new[]
         {
-            new DiagnosticService { Code = "LAB-CBC", Name = "Tổng phân tích tế bào máu ngoại vi", Category = DiagnosticCategory.Laboratory, PreparationInstructions = "Không cần nhịn ăn đặc biệt.", IsActive = true },
-            new DiagnosticService { Code = "LAB-GLU", Name = "Định lượng Glucose máu", Category = DiagnosticCategory.Laboratory, PreparationInstructions = "Nhịn đói ít nhất 8 tiếng trước khi lấy mẫu.", IsActive = true },
-            new DiagnosticService { Code = "LAB-LIPID", Name = "Bộ mỡ máu toàn phần (Lipid panel)", Category = DiagnosticCategory.Laboratory, PreparationInstructions = "Nhịn ăn 10-12 tiếng trước khi lấy máu.", IsActive = true },
-            new DiagnosticService { Code = "LAB-LFT", Name = "Đánh giá chức năng gan (AST, ALT)", Category = DiagnosticCategory.Laboratory, PreparationInstructions = "Tránh uống rượu bia 24 giờ trước khi xét nghiệm.", IsActive = true },
-            new DiagnosticService { Code = "LAB-RFT", Name = "Đánh giá chức năng thận (Ure, Creatinin)", Category = DiagnosticCategory.Laboratory, PreparationInstructions = "Uống đủ nước, sinh hoạt bình thường.", IsActive = true },
-            new DiagnosticService { Code = "US-ABD", Name = "Siêu âm ổ bụng tổng quát", Category = DiagnosticCategory.Ultrasound, PreparationInstructions = "Nhịn ăn ít nhất 6 tiếng, uống nhiều nước và nhịn tiểu.", IsActive = true },
-            new DiagnosticService { Code = "US-THY", Name = "Siêu âm tuyến giáp", Category = DiagnosticCategory.Ultrasound, PreparationInstructions = "Không cần chuẩn bị trước.", IsActive = true },
-            new DiagnosticService { Code = "US-ECHO", Name = "Siêu âm Doppler tim màu", Category = DiagnosticCategory.Ultrasound, PreparationInstructions = "Nghỉ ngơi 15 phút trước khi thực hiện.", IsActive = true },
-            new DiagnosticService { Code = "IMG-CXR", Name = "Chụp X-quang ngực thẳng", Category = DiagnosticCategory.Imaging, PreparationInstructions = "Tháo bỏ trang sức kim loại vùng ngực và cổ.", IsActive = true },
-            new DiagnosticService { Code = "IMG-ECG", Name = "Điện tâm đồ (ECG 12 chuyển đạo)", Category = DiagnosticCategory.Other, PreparationInstructions = "Nghỉ ngơi yên tĩnh 10 phút trước khi đo.", IsActive = true }
+            new DiagnosticService { Code = "LAB-CBC", Name = "Tổng phân tích tế bào máu ngoại vi", Category = DiagnosticCategory.Laboratory, Price = 120000m, PreparationInstructions = "Không cần nhịn ăn đặc biệt.", IsActive = true },
+            new DiagnosticService { Code = "LAB-GLU", Name = "Định lượng Glucose máu", Category = DiagnosticCategory.Laboratory, Price = 80000m, PreparationInstructions = "Nhịn đói ít nhất 8 tiếng trước khi lấy mẫu.", IsActive = true },
+            new DiagnosticService { Code = "LAB-LIPID", Name = "Bộ mỡ máu toàn phần (Lipid panel)", Category = DiagnosticCategory.Laboratory, Price = 150000m, PreparationInstructions = "Nhịn ăn 10-12 tiếng trước khi lấy máu.", IsActive = true },
+            new DiagnosticService { Code = "LAB-LFT", Name = "Đánh giá chức năng gan (AST, ALT)", Category = DiagnosticCategory.Laboratory, Price = 140000m, PreparationInstructions = "Tránh uống rượu bia 24 giờ trước khi xét nghiệm.", IsActive = true },
+            new DiagnosticService { Code = "LAB-RFT", Name = "Đánh giá chức năng thận (Ure, Creatinin)", Category = DiagnosticCategory.Laboratory, Price = 130000m, PreparationInstructions = "Uống đủ nước, sinh hoạt bình thường.", IsActive = true },
+            new DiagnosticService { Code = "US-ABD", Name = "Siêu âm ổ bụng tổng quát", Category = DiagnosticCategory.Ultrasound, Price = 250000m, PreparationInstructions = "Nhịn ăn ít nhất 6 tiếng, uống nhiều nước và nhịn tiểu.", IsActive = true },
+            new DiagnosticService { Code = "US-THY", Name = "Siêu âm tuyến giáp", Category = DiagnosticCategory.Ultrasound, Price = 200000m, PreparationInstructions = "Không cần chuẩn bị trước.", IsActive = true },
+            new DiagnosticService { Code = "US-ECHO", Name = "Siêu âm Doppler tim màu", Category = DiagnosticCategory.Ultrasound, Price = 450000m, PreparationInstructions = "Nghỉ ngơi 15 phút trước khi thực hiện.", IsActive = true },
+            new DiagnosticService { Code = "IMG-CXR", Name = "Chụp X-quang ngực thẳng", Category = DiagnosticCategory.Imaging, Price = 180000m, PreparationInstructions = "Tháo bỏ trang sức kim loại vùng ngực và cổ.", IsActive = true },
+            new DiagnosticService { Code = "IMG-ECG", Name = "Điện tâm đồ (ECG 12 chuyển đạo)", Category = DiagnosticCategory.Other, Price = 100000m, PreparationInstructions = "Nghỉ ngơi yên tĩnh 10 phút trước khi đo.", IsActive = true }
         };
 
         foreach (var ds in diagnosticServiceDefs)
@@ -1002,10 +1029,159 @@ public static class DevelopmentDataSeeder
                 existing.Category = ds.Category;
                 existing.PreparationInstructions = ds.PreparationInstructions;
                 existing.IsActive = true;
+                if (!existing.Price.HasValue || existing.Price.Value <= 0)
+                {
+                    existing.Price = ds.Price;
+                }
             }
         }
         await db.SaveChangesAsync();
         logger.LogInformation("Diagnostic Services catalog seeded.");
+
+        // 11. Facility BV-TW-01, Departments, Rooms & Staff Facility Assignments
+        var fac = await db.Facilities.FirstOrDefaultAsync(f => f.Code == "BV-TW-01");
+        if (fac == null)
+        {
+            fac = new Facility
+            {
+                Code = "BV-TW-01",
+                Name = "Bệnh viện Đa khoa Trung Ương",
+                Address = "789 Đường Giải Phóng, Phường Phương Mai, Quận Đống Đa",
+                City = "Hà Nội",
+                Phone = "02438693731",
+                Email = "contact@bvtw.vn",
+                HospitalLevel = "Hạng Đặc biệt",
+                Description = "Bệnh viện Đa khoa Trung Ương - Cơ sở chính tiếp nhận",
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            db.Facilities.Add(fac);
+            await db.SaveChangesAsync();
+        }
+
+        var building = await db.Buildings.FirstOrDefaultAsync(b => b.FacilityId == fac.Id && b.Code == "TN-A");
+        if (building == null)
+        {
+            building = new Building
+            {
+                FacilityId = fac.Id,
+                Code = "TN-A",
+                Name = "Tòa nhà A - Khám bệnh Đa khoa",
+                NumberOfFloors = 5,
+                IsActive = true
+            };
+            db.Buildings.Add(building);
+            await db.SaveChangesAsync();
+        }
+
+        var deptDefs = new[]
+        {
+            new { Code = "KKB", Name = "Khoa Khám bệnh Ngoại trú", SpecialtyCode = "SP01", Type = DepartmentType.Clinical },
+            new { Code = "KNHI", Name = "Khoa Nhi", SpecialtyCode = "SP02", Type = DepartmentType.Clinical },
+            new { Code = "KPS", Name = "Khoa Sản phụ khoa", SpecialtyCode = "SP03", Type = DepartmentType.Clinical },
+            new { Code = "KTMH", Name = "Khoa Tai Mũi Họng", SpecialtyCode = "SP05", Type = DepartmentType.Clinical },
+            new { Code = "KTM", Name = "Khoa Tim mạch", SpecialtyCode = "SP06", Type = DepartmentType.Clinical }
+        };
+
+        var deptEntities = new List<Department>();
+        foreach (var dd in deptDefs)
+        {
+            var d = await db.Departments.FirstOrDefaultAsync(x => x.FacilityId == fac.Id && x.Code == dd.Code);
+            var spec = await db.Specialties.FirstOrDefaultAsync(s => s.SpecialtyCode == dd.SpecialtyCode);
+            if (d == null)
+            {
+                d = new Department
+                {
+                    FacilityId = fac.Id,
+                    BuildingId = building.Id,
+                    Code = dd.Code,
+                    Name = dd.Name,
+                    DepartmentType = dd.Type,
+                    SpecialtyId = spec?.Id,
+                    IsActive = true
+                };
+                db.Departments.Add(d);
+                await db.SaveChangesAsync();
+            }
+            else if (d.SpecialtyId == null && spec != null)
+            {
+                d.SpecialtyId = spec.Id;
+                await db.SaveChangesAsync();
+            }
+            deptEntities.Add(d);
+        }
+
+        var roomDefs = new[]
+        {
+            new { DeptCode = "KKB", RoomNumber = "P101", Name = "Phòng khám Nội 101", Floor = 1 },
+            new { DeptCode = "KKB", RoomNumber = "P102", Name = "Phòng khám Nội 102", Floor = 1 },
+            new { DeptCode = "KNHI", RoomNumber = "P201", Name = "Phòng khám Nhi 201", Floor = 2 },
+            new { DeptCode = "KPS", RoomNumber = "P202", Name = "Phòng khám Sản 202", Floor = 2 },
+            new { DeptCode = "KTMH", RoomNumber = "P301", Name = "Phòng khám TMH 301", Floor = 3 },
+            new { DeptCode = "KTM", RoomNumber = "P302", Name = "Phòng khám Tim mạch 302", Floor = 3 }
+        };
+
+        foreach (var rd in roomDefs)
+        {
+            var dept = deptEntities.FirstOrDefault(d => d.Code == rd.DeptCode);
+            if (dept != null)
+            {
+                var r = await db.Rooms.FirstOrDefaultAsync(x => x.DepartmentId == dept.Id && x.RoomNumber == rd.RoomNumber);
+                if (r == null)
+                {
+                    r = new Room
+                    {
+                        DepartmentId = dept.Id,
+                        BuildingId = building.Id,
+                        RoomNumber = rd.RoomNumber,
+                        Name = rd.Name,
+                        FloorNumber = rd.Floor,
+                        RoomType = RoomType.Consultation,
+                        IsActive = true
+                    };
+                    db.Rooms.Add(r);
+                    await db.SaveChangesAsync();
+                }
+            }
+        }
+
+        var staffUsers = new List<(ApplicationUser User, string Role)>
+        {
+            (adminId1, "Admin"),
+            (adminId2, "Admin"),
+            (rec1, "Receptionist"),
+            (rec2, "Receptionist"),
+            (rec3, "Receptionist"),
+            (pharmacist, "Pharmacist"),
+            (technician, ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician)
+        };
+
+        foreach (var du in docUsers)
+        {
+            staffUsers.Add((du, "Doctor"));
+        }
+
+        foreach (var (stUser, role) in staffUsers)
+        {
+            var existingAssignment = await db.StaffFacilityAssignments
+                .FirstOrDefaultAsync(a => a.UserId == stUser.Id && a.FacilityId == fac.Id);
+            if (existingAssignment == null)
+            {
+                var assignedDept = deptEntities.FirstOrDefault();
+                db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+                {
+                    UserId = stUser.Id,
+                    FacilityId = fac.Id,
+                    DepartmentId = assignedDept?.Id,
+                    Role = role,
+                    IsPrimary = true,
+                    IsActive = true,
+                    AssignedAtUtc = DateTime.UtcNow
+                });
+            }
+        }
+        await db.SaveChangesAsync();
+        logger.LogInformation("Facility BV-TW-01, departments, rooms, and staff assignments seeded.");
 
         logger.LogInformation("Development Data Seeding completed.");
     }

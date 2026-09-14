@@ -215,3 +215,38 @@ public class UpdateBedStatusRequest
     public string? Notes { get; set; }
     public bool? IsActive { get; set; }
 }
+
+public class StaffFacilityAssignmentDto
+{
+    public long Id { get; set; }
+    public Guid UserId { get; set; }
+    public string UserName { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string PhoneNumber { get; set; } = string.Empty;
+    public long FacilityId { get; set; }
+    public string FacilityName { get; set; } = string.Empty;
+    public long? DepartmentId { get; set; }
+    public string? DepartmentName { get; set; }
+    public string Role { get; set; } = string.Empty;
+    public bool IsPrimary { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime AssignedAtUtc { get; set; }
+}
+
+public class CreateStaffAssignmentRequest
+{
+    [Required]
+    public Guid UserId { get; set; }
+
+    [Required]
+    public long FacilityId { get; set; }
+
+    public long? DepartmentId { get; set; }
+
+    [Required]
+    [MaxLength(50)]
+    public string Role { get; set; } = string.Empty;
+
+    public bool IsPrimary { get; set; } = true;
+}

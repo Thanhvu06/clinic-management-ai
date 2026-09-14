@@ -38,4 +38,5 @@ public class HealthPackageRegistration
     // Navigation properties
     public HealthPackage HealthPackage { get; set; } = null!;
     public Patient Patient { get; set; } = null!;
+    public ICollection<PatientVisit> PatientVisits { get; set; } = new List<PatientVisit>();
 }

@@ -167,3 +167,18 @@ export interface PagedBillingResult<T> {
     totalItems: number;
     totalPages: number;
 }
+
+export interface UnbilledVisitDto {
+    visitId: number;
+    visitCode: string;
+    patientId: number;
+    patientName: string;
+    medicalRecordNumber?: string | null;
+    phoneNumber?: string | null;
+    departmentName: string;
+    doctorName: string;
+    visitDate: string;
+    status: string;
+    unbilledItemCount: number;
+    estimatedTotal: number;
+}

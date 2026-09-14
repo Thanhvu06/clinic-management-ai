@@ -13,9 +13,11 @@ import {
     Layers,
 } from 'lucide-react';
 import { billingApi } from '../../api/billingApi';
+import { diagnosticApi } from '../../api/diagnosticApi';
 import type {
     RevenueReportDto,
     SpecialtyFeeDto,
+    DiagnosticServiceDto,
 } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import styles from './AdminBilling.module.css';
@@ -23,8 +25,8 @@ import styles from './AdminBilling.module.css';
 export const AdminBilling: React.FC = () => {
     const { showAlert } = useDialog();
 
-    // Active View Tab: 'revenue' or 'fees'
-    const [activeTab, setActiveTab] = useState<'revenue' | 'fees'>('revenue');
+    // Active View Tab: 'revenue', 'fees', or 'diagnostics'
+    const [activeTab, setActiveTab] = useState<'revenue' | 'fees' | 'diagnostics'>('revenue');
 
     // Revenue state
     const [revenueReport, setRevenueReport] = useState<RevenueReportDto | null>(null);
@@ -45,6 +47,14 @@ export const AdminBilling: React.FC = () => {
     const [selectedSpecialty, setSelectedSpecialty] = useState<SpecialtyFeeDto | null>(null);
     const [feeInput, setFeeInput] = useState<string>('');
     const [submittingFee, setSubmittingFee] = useState<boolean>(false);
+
+    // Diagnostic services state
+    const [diagnosticServices, setDiagnosticServices] = useState<DiagnosticServiceDto[]>([]);
+    const [diagLoading, setDiagLoading] = useState<boolean>(true);
+    const [editDiagModalOpen, setEditDiagModalOpen] = useState<boolean>(false);
+    const [selectedDiag, setSelectedDiag] = useState<DiagnosticServiceDto | null>(null);
+    const [diagPriceInput, setDiagPriceInput] = useState<string>('');
+    const [submittingDiagPrice, setSubmittingDiagPrice] = useState<boolean>(false);
 
     const formatCurrency = (val: number) => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
@@ -92,11 +102,28 @@ export const AdminBilling: React.FC = () => {
         }
     };
 
+    const fetchDiagnosticServices = async () => {
+        setDiagLoading(true);
+        try {
+            const res = await diagnosticApi.getDiagnosticPricing();
+            if (res.success && res.data) {
+                setDiagnosticServices(res.data);
+            }
+        } catch (err: any) {
+            console.error('Lỗi khi tải biểu phí cận lâm sàng:', err);
+            showAlert(err?.message || 'Không thể tải bảng giá cận lâm sàng.', 'Lỗi', 'error');
+        } finally {
+            setDiagLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (activeTab === 'revenue') {
             fetchRevenueReport();
-        } else {
+        } else if (activeTab === 'fees') {
             fetchSpecialtyFees();
+        } else if (activeTab === 'diagnostics') {
+            fetchDiagnosticServices();
         }
     }, [activeTab]);
 
@@ -109,6 +136,37 @@ export const AdminBilling: React.FC = () => {
         setSelectedSpecialty(spec);
         setFeeInput(spec.consultationFee.toString());
         setEditModalOpen(true);
+    };
+
+    const handleOpenEditDiag = (svc: DiagnosticServiceDto) => {
+        setSelectedDiag(svc);
+        setDiagPriceInput((svc.price ?? 0).toString());
+        setEditDiagModalOpen(true);
+    };
+
+    const handleSaveDiagPrice = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedDiag) return;
+
+        const newPrice = parseFloat(diagPriceInput);
+        if (isNaN(newPrice) || newPrice < 0) {
+            showAlert('Đơn giá dịch vụ phải là số lớn hơn hoặc bằng 0.', 'Dữ liệu không hợp lệ', 'warning');
+            return;
+        }
+
+        setSubmittingDiagPrice(true);
+        try {
+            const res = await diagnosticApi.updateDiagnosticPrice(selectedDiag.id, newPrice);
+            if (res.success) {
+                showAlert(`Cập nhật giá dịch vụ "${selectedDiag.name}" thành ${formatCurrency(newPrice)} thành công!`, 'Thành công', 'success');
+                setEditDiagModalOpen(false);
+                fetchDiagnosticServices();
+            }
+        } catch (err: any) {
+            showAlert(err?.message || 'Không thể cập nhật đơn giá.', 'Lỗi cập nhật', 'error');
+        } finally {
+            setSubmittingDiagPrice(false);
+        }
     };
 
     const handleSaveFee = async (e: React.FormEvent) => {
@@ -148,7 +206,7 @@ export const AdminBilling: React.FC = () => {
                     <div>
                         <h2>Doanh thu & Biểu phí phòng khám</h2>
                         <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', marginTop: '2px' }}>
-                            Theo dõi thực thu tài chính và cấu hình mức phí khám theo chuyên khoa (Dữ liệu demo)
+                            Theo dõi thực thu tài chính, cấu hình phí khám chuyên khoa và bảng giá cận lâm sàng
                         </div>
                     </div>
                 </div>
@@ -166,7 +224,14 @@ export const AdminBilling: React.FC = () => {
                         className={activeTab === 'fees' ? 'btn-primary' : 'btn-secondary'}
                         onClick={() => setActiveTab('fees')}
                     >
-                        <Stethoscope size={15} /> Quản lý biểu phí
+                        <Stethoscope size={15} /> Phí khám chuyên khoa
+                    </button>
+                    <button
+                        type="button"
+                        className={activeTab === 'diagnostics' ? 'btn-primary' : 'btn-secondary'}
+                        onClick={() => setActiveTab('diagnostics')}
+                    >
+                        <Layers size={15} /> Bảng giá Cận lâm sàng
                     </button>
                 </div>
             </div>
@@ -401,6 +466,92 @@ export const AdminBilling: React.FC = () => {
                 </div>
             )}
 
+            {/* TAB 3: DIAGNOSTIC PRICING */}
+            {activeTab === 'diagnostics' && (
+                <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <div>
+                            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--c-text)' }}>
+                                Bảng giá Dịch vụ Cận lâm sàng ({diagnosticServices.length} dịch vụ)
+                            </h3>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', marginTop: '2px' }}>
+                                Bảng giá áp dụng khi bác sĩ chỉ định và tính hóa đơn viện phí thực tế
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={fetchDiagnosticServices}
+                            disabled={diagLoading}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                        >
+                            <RefreshCw size={14} className={diagLoading ? 'spin' : ''} /> Làm mới
+                        </button>
+                    </div>
+
+                    {diagLoading ? (
+                        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>
+                            Đang tải bảng giá cận lâm sàng...
+                        </div>
+                    ) : (
+                        <div className={styles.tableCard}>
+                            <table className={styles.table}>
+                                <thead>
+                                    <tr>
+                                        <th>Mã dịch vụ</th>
+                                        <th>Tên kỹ thuật / dịch vụ</th>
+                                        <th>Loại dịch vụ</th>
+                                        <th>Mô tả quy trình</th>
+                                        <th style={{ textAlign: 'right' }}>Đơn giá (VNĐ)</th>
+                                        <th style={{ textAlign: 'right' }}>Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {diagnosticServices.map((svc) => (
+                                        <tr key={svc.id}>
+                                            <td>
+                                                <span className={styles.codeBadge}>{svc.code}</span>
+                                            </td>
+                                            <td style={{ fontWeight: 600, color: 'var(--c-text)' }}>
+                                                {svc.name}
+                                            </td>
+                                            <td>
+                                                <span style={{ fontSize: '0.8rem', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '4px' }}>
+                                                    {svc.category === 'Laboratory' ? 'Xét nghiệm' : svc.category === 'Ultrasound' ? 'Siêu âm' : svc.category === 'Imaging' ? 'Chẩn đoán hình ảnh' : 'Khác'}
+                                                </span>
+                                            </td>
+                                            <td style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>
+                                                {svc.preparationInstructions || '-'}
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--c-primary)' }}>
+                                                {formatCurrency(svc.price ?? 0)}
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <button
+                                                    type="button"
+                                                    className="btn-secondary"
+                                                    style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                                                    onClick={() => handleOpenEditDiag(svc)}
+                                                >
+                                                    <Edit size={13} /> Sửa giá
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {diagnosticServices.length === 0 && (
+                                        <tr>
+                                            <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--c-muted)' }}>
+                                                Chưa có dịch vụ cận lâm sàng nào trong hệ thống.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Edit Specialty Fee Modal */}
             {editModalOpen && selectedSpecialty && (
                 <div className={styles.modalOverlay} onClick={() => !submittingFee && setEditModalOpen(false)}>
@@ -460,6 +611,72 @@ export const AdminBilling: React.FC = () => {
                                     disabled={submittingFee}
                                 >
                                     {submittingFee ? 'Đang lưu...' : 'Lưu mức phí'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Diagnostic Price Modal */}
+            {editDiagModalOpen && selectedDiag && (
+                <div className={styles.modalOverlay} onClick={() => !submittingDiagPrice && setEditDiagModalOpen(false)}>
+                    <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+                        <div className={styles.modalHeader}>
+                            <h3>Cập nhật giá dịch vụ: {selectedDiag.name}</h3>
+                            <button
+                                type="button"
+                                className="btn-secondary"
+                                style={{ padding: '4px 8px' }}
+                                disabled={submittingDiagPrice}
+                                onClick={() => setEditDiagModalOpen(false)}
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleSaveDiagPrice}>
+                            <div className={styles.modalBody}>
+                                <div style={{ marginBottom: '14px', fontSize: '0.875rem' }}>
+                                    <div><strong>Mã dịch vụ:</strong> {selectedDiag.code}</div>
+                                    <div style={{ marginTop: '4px' }}>
+                                        <strong>Đơn giá hiện tại:</strong>{' '}
+                                        <span style={{ color: 'var(--c-primary)', fontWeight: 700 }}>
+                                            {formatCurrency(selectedDiag.price ?? 0)}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Đơn giá mới (VNĐ) *</label>
+                                    <input
+                                        type="number"
+                                        className="form-input"
+                                        value={diagPriceInput}
+                                        onChange={(e) => setDiagPriceInput(e.target.value)}
+                                        required
+                                        min="0"
+                                        step="1000"
+                                    />
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--c-muted)', display: 'block', marginTop: '4px' }}>
+                                        Mức giá áp dụng cho tất cả chỉ định cận lâm sàng mới và tính hóa đơn viện phí.
+                                    </span>
+                                </div>
+                            </div>
+                            <div className={styles.modalFooter}>
+                                <button
+                                    type="button"
+                                    className="btn-secondary"
+                                    disabled={submittingDiagPrice}
+                                    onClick={() => setEditDiagModalOpen(false)}
+                                >
+                                    Hủy bỏ
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn-primary"
+                                    disabled={submittingDiagPrice}
+                                >
+                                    {submittingDiagPrice ? 'Đang lưu...' : 'Lưu đơn giá'}
                                 </button>
                             </div>
                         </form>

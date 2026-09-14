@@ -7,4 +7,6 @@ public class ReceptionAppointmentDto : AppointmentDto
 {
     public string PatientName { get; set; } = string.Empty;
     public string PatientPhone { get; set; } = string.Empty;
+    public string MedicalRecordNumber { get; set; } = string.Empty;
+    public string NationalId { get; set; } = string.Empty;
 }

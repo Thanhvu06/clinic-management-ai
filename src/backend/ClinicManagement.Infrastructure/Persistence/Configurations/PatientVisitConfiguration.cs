@@ -77,6 +77,14 @@ public class PatientVisitConfiguration : IEntityTypeConfiguration<PatientVisit>
             .HasForeignKey(v => v.AssignedDoctorId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(v => v.HealthPackageRegistration)
+            .WithMany(r => r.PatientVisits)
+            .HasForeignKey(v => v.HealthPackageRegistrationId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(v => v.HealthPackageRegistrationId)
+            .HasFilter("[HealthPackageRegistrationId] IS NOT NULL");
+
         builder.HasIndex(v => new { v.FacilityId, v.DepartmentId, v.VisitDate, v.Status });
         builder.HasIndex(v => new { v.AssignedDoctorId, v.VisitDate, v.Status });
     }

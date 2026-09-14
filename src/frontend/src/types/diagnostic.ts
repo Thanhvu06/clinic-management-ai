@@ -8,6 +8,7 @@ export interface DiagnosticServiceDto {
     name: string;
     category: DiagnosticCategory;
     preparationInstructions?: string | null;
+    price?: number | null;
     isActive: boolean;
 }
 
@@ -32,6 +33,8 @@ export interface DiagnosticOrderItemDto {
     serviceName: string;
     category: DiagnosticCategory;
     preparationInstructions?: string | null;
+    price?: number | null;
+    isPackageCovered?: boolean;
     status: DiagnosticItemStatus;
     result?: DiagnosticResultDto | null;
     rowVersion?: string | null;

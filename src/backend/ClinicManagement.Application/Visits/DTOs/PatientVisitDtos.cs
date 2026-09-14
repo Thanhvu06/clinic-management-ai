@@ -1,9 +1,93 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using ClinicManagement.Domain.Enums;
 
 namespace ClinicManagement.Application.Visits.DTOs;
+
+public class ReceptionIntakeRequest
+{
+    [Required]
+    public string IdempotencyKey { get; set; } = string.Empty;
+
+    public long? ExistingPatientId { get; set; }
+    public long? AppointmentId { get; set; }
+    public long? HealthPackageRegistrationId { get; set; }
+    public NewPatientProfileDto? NewPatient { get; set; }
+
+    [Required(ErrorMessage = "Cơ sở y tế không được để trống.")]
+    public long FacilityId { get; set; }
+
+    [Required(ErrorMessage = "Khoa tiếp nhận không được để trống.")]
+    public long DepartmentId { get; set; }
+
+    public long? RoomId { get; set; }
+    public long? AssignedDoctorId { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng nhập lý do khám / triệu chứng.")]
+    [MaxLength(1000)]
+    public string ChiefComplaint { get; set; } = string.Empty;
+
+    public VisitPriority Priority { get; set; } = VisitPriority.Normal;
+}
+
+public class NewPatientProfileDto
+{
+    [Required(ErrorMessage = "Họ và tên không được để trống.")]
+    [MaxLength(150)]
+    public string FullName { get; set; } = string.Empty;
+
+    [MaxLength(20)]
+    public string? PhoneNumber { get; set; }
+
+    public DateOnly? DateOfBirth { get; set; }
+    public Gender? Gender { get; set; }
+
+    [MaxLength(250)]
+    public string? Address { get; set; }
+
+    [MaxLength(20)]
+    public string? NationalId { get; set; }
+
+    [MaxLength(50)]
+    public string? BhytNumber { get; set; }
+
+    [MaxLength(100)]
+    public string? Email { get; set; }
+
+    public List<PatientAllergyInputDto> Allergies { get; set; } = new();
+    public EmergencyContactInputDto? EmergencyContact { get; set; }
+}
+
+public class PatientAllergyInputDto
+{
+    [Required]
+    [MaxLength(100)]
+    public string Allergen { get; set; } = string.Empty;
+
+    [MaxLength(20)]
+    public string? Severity { get; set; }
+
+    [MaxLength(200)]
+    public string? Reaction { get; set; }
+}
+
+public class EmergencyContactInputDto
+{
+    [Required]
+    [MaxLength(150)]
+    public string ContactName { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(50)]
+    public string Relationship { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(20)]
+    public string PhoneNumber { get; set; } = string.Empty;
+
+    public bool IsGuardian { get; set; }
+}
 
 public class WalkInRegistrationRequest
 {
@@ -11,10 +95,8 @@ public class WalkInRegistrationRequest
     [MaxLength(150)]
     public string FullName { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Số điện thoại không được để trống.")]
-    [Phone(ErrorMessage = "Số điện thoại không hợp lệ.")]
     [MaxLength(20)]
-    public string PhoneNumber { get; set; } = string.Empty;
+    public string? PhoneNumber { get; set; }
 
     public DateOnly? DateOfBirth { get; set; }
 
@@ -39,6 +121,9 @@ public class WalkInRegistrationRequest
     public string? ChiefComplaint { get; set; }
 
     public VisitPriority Priority { get; set; } = VisitPriority.Normal;
+
+    public List<PatientAllergyInputDto> Allergies { get; set; } = new();
+    public EmergencyContactInputDto? EmergencyContact { get; set; }
 }
 
 public class AppointmentCheckInRequest

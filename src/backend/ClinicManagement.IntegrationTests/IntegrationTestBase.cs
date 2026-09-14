@@ -87,6 +87,34 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
                 TechnicianId = (await db.Users.FirstOrDefaultAsync(u => u.UserName == "tech@test.com"))?.Id ?? Guid.Empty;
                 Patient1Id = (await db.Users.FirstAsync(u => u.UserName == "pat1@test.com")).Id;
                 Patient2Id = (await db.Users.FirstAsync(u => u.UserName == "pat2@test.com")).Id;
+
+                if (!await db.Facilities.AnyAsync())
+                {
+                    var existFacility = new Facility
+                    {
+                        Code = "FAC-BASE-01",
+                        Name = "Cơ sở Đa khoa Trung tâm Test",
+                        Address = "123 Nguyễn Huệ, Q1, TP.HCM",
+                        City = "Hồ Chí Minh",
+                        Phone = "02838220001",
+                        IsActive = true
+                    };
+                    db.Facilities.Add(existFacility);
+                    await db.SaveChangesAsync();
+
+                    var existDept = new Department
+                    {
+                        FacilityId = existFacility.Id,
+                        SpecialtyId = specExisting.Id,
+                        Code = "DEP-BASE-01",
+                        Name = "Khoa Khám Bệnh Đa Khoa",
+                        DepartmentType = DepartmentType.Clinical,
+                        IsActive = true
+                    };
+                    db.Departments.Add(existDept);
+                    await db.SaveChangesAsync();
+                }
+
                 return;
             }
 
@@ -251,6 +279,28 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
             var diagService2 = new DiagnosticService { Code = "US-TEST-01", Name = "Siêu âm bụng test", Category = DiagnosticCategory.Ultrasound, Price = 150000m, IsActive = true };
             db.DiagnosticServices.AddRange(diagService1, diagService2);
 
+            var baseFacility = new Facility
+            {
+                Code = "FAC-BASE-01",
+                Name = "Cơ sở Đa khoa Trung tâm Test",
+                Address = "123 Nguyễn Huệ, Q1, TP.HCM",
+                City = "Hồ Chí Minh",
+                Phone = "02838220001",
+                IsActive = true
+            };
+            db.Facilities.Add(baseFacility);
+            await db.SaveChangesAsync();
+
+            var baseDept = new Department
+            {
+                FacilityId = baseFacility.Id,
+                SpecialtyId = spec01.Id,
+                Code = "DEP-BASE-01",
+                Name = "Khoa Khám Bệnh Đa Khoa",
+                DepartmentType = DepartmentType.Clinical,
+                IsActive = true
+            };
+            db.Departments.Add(baseDept);
             await db.SaveChangesAsync();
 
             DoctorEntityId = doctor.Id;

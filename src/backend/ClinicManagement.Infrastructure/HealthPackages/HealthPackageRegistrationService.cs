@@ -294,13 +294,16 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
         var query = from r in _dbContext.HealthPackageRegistrations.AsNoTracking()
                     join hp in _dbContext.HealthPackages.AsNoTracking() on r.HealthPackageId equals hp.Id
                     join p in _dbContext.Patients.AsNoTracking() on r.PatientId equals p.Id
-                    join u in _dbContext.Users.AsNoTracking() on p.UserId equals u.Id
+                    join u in _dbContext.Users.AsNoTracking() on p.UserId equals u.Id into userGroup
+                    from u in userGroup.DefaultIfEmpty()
                     select new
                     {
                         Registration = r,
                         Package = hp,
                         Patient = p,
-                        User = u
+                        User = u,
+                        PatientName = u != null ? u.FullName : (p.FullName ?? "Bệnh nhân"),
+                        PatientPhone = u != null ? (u.PhoneNumber ?? "") : (p.PhoneNumber ?? "")
                     };
 
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<HealthPackageRegistrationStatus>(status, true, out var parsedStatus))
@@ -314,7 +317,8 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
             query = query.Where(x => x.Registration.RegistrationCode.ToLower().Contains(s)
                                   || x.Package.Name.ToLower().Contains(s)
                                   || x.Package.Code.ToLower().Contains(s)
-                                  || x.User.FullName.ToLower().Contains(s)
+                                  || x.PatientName.ToLower().Contains(s)
+                                  || x.PatientPhone.Contains(s)
                                   || x.Registration.ContactPhone.Contains(s));
         }
 
@@ -333,8 +337,8 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
                 HealthPackageName = x.Package.Name,
                 HealthPackagePrice = x.Package.Price,
                 PatientId = x.Patient.Id,
-                PatientName = x.User.FullName,
-                PatientPhone = x.User.PhoneNumber ?? "",
+                PatientName = x.PatientName,
+                PatientPhone = !string.IsNullOrWhiteSpace(x.PatientPhone) ? x.PatientPhone : x.Registration.ContactPhone,
                 PreferredDate = x.Registration.PreferredDate,
                 ContactPhone = x.Registration.ContactPhone,
                 Note = x.Registration.Note,
@@ -343,7 +347,8 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
                 Status = x.Registration.Status.ToString(),
                 CreatedAt = x.Registration.CreatedAt,
                 UpdatedAt = x.Registration.UpdatedAt
-            }).ToListAsync(cancellationToken);
+            })
+            .ToListAsync(cancellationToken);
 
         return new PagedResult<HealthPackageRegistrationDto>(items, totalItems, page, pageSize);
     }

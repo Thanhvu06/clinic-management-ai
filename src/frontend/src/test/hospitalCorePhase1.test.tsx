@@ -7,6 +7,13 @@ import { WalkInPatientRegistration } from '../pages/reception/WalkInPatientRegis
 import { MpiPatientSearchModal } from '../pages/reception/MpiPatientSearchModal';
 import { organizationApi, type FacilityDto, type DepartmentDto, type RoomDto, type BedDto } from '../api/organizationApi';
 import { mpiApi, type MpiPatientDto } from '../api/mpiApi';
+import { patientVisitApi } from '../api/patientVisitApi';
+
+vi.mock('../api/patientVisitApi', () => ({
+    patientVisitApi: {
+        receptionIntake: vi.fn(),
+    },
+}));
 
 vi.mock('../api/organizationApi', () => ({
     organizationApi: {
@@ -270,20 +277,42 @@ describe('Hospital Core Phase 1 Frontend Components', () => {
     });
 
     describe('WalkInPatientRegistration Component', () => {
-        it('registers walk-in patient and displays assigned MRN', async () => {
+        it('registers walk-in patient through 3-step intake workflow', async () => {
             vi.mocked(organizationApi.getFacilities).mockResolvedValue({
                 success: true,
                 message: 'OK',
                 data: mockFacilities
             });
 
-            vi.mocked(mpiApi.registerWalkIn).mockResolvedValue({
+            vi.mocked(organizationApi.getDepartments).mockResolvedValue({
                 success: true,
-                message: 'Đăng ký thành công',
-                data: mockMpiPatient
+                message: 'OK',
+                data: [{ id: 1, name: 'Khoa Khám Bệnh', facilityId: 1, isActive: true }] as any
             });
 
-            render(
+            vi.mocked(patientVisitApi.receptionIntake).mockResolvedValue({
+                success: true,
+                message: 'Đăng ký thành công',
+                data: {
+                    visitId: 101,
+                    visitCode: 'VIS-001',
+                    queueNumber: 1,
+                    queueDisplay: '01',
+                    patientId: 1,
+                    patientName: 'NGUYỄN VĂN AN',
+                    medicalRecordNumber: 'BN-2026-000001',
+                    facilityId: 1,
+                    facilityName: 'Cơ sở Quận 1',
+                    departmentId: 1,
+                    departmentName: 'Khoa Khám Bệnh',
+                    checkedInAtUtc: new Date().toISOString(),
+                    status: 'WaitingForDoctor',
+                    priority: 'Normal',
+                    arrivalType: 'WalkIn',
+                }
+            } as any);
+
+            const { container } = render(
                 <DialogProvider>
                     <BrowserRouter>
                         <WalkInPatientRegistration />
@@ -292,24 +321,54 @@ describe('Hospital Core Phase 1 Frontend Components', () => {
             );
 
             await waitFor(() => {
-                expect(screen.getByText(/Tiếp nhận bệnh nhân vãng lai/i)).toBeInTheDocument();
+                expect(screen.getByText(/Tiếp nhận người bệnh/i)).toBeInTheDocument();
             });
+
+            // Switch to new patient
+            fireEvent.click(screen.getByText(/Đăng ký hồ sơ người bệnh mới/i));
 
             // Fill full name
             const nameInput = screen.getByPlaceholderText(/NGUYỄN VĂN A/i);
             fireEvent.change(nameInput, { target: { value: 'NGUYỄN VĂN AN' } });
 
-            // Submit form
-            const submitBtn = screen.getByRole('button', { name: /Xác nhận tiếp nhận & Cấp MRN/i });
+            const dobInput = container.querySelector('input[type="date"]')!;
+            fireEvent.change(dobInput, { target: { value: '1990-01-01' } });
+
+            const phoneInputs = screen.getAllByPlaceholderText('09xx xxx xxx');
+            fireEvent.change(phoneInputs[0], { target: { value: '0901234567' } });
+
+            // Step 1 -> 2
+            fireEvent.click(screen.getByText(/Tiếp tục: Chuẩn bị lượt khám/i));
+
+            await waitFor(() => {
+                expect(screen.getByText('Chuẩn Bị Lượt Khám')).toBeInTheDocument();
+            });
+
+            // Fill chief complaint in Step 2
+            const reasonInput = screen.getByPlaceholderText(/Mô tả lý do đến khám/i);
+            fireEvent.change(reasonInput, { target: { value: 'Khám sức khỏe' } });
+
+            // Step 2 -> 3
+            fireEvent.click(screen.getByText(/Tiếp tục: Xác nhận thông tin/i));
+
+            await waitFor(() => {
+                expect(screen.getByText('Xác Nhận & Cấp STT')).toBeInTheDocument();
+            });
+
+            // Submit
+            const submitBtn = screen.getByText(/Xác nhận tiếp nhận & Cấp STT/i);
             fireEvent.click(submitBtn);
 
             await waitFor(() => {
-                expect(mpiApi.registerWalkIn).toHaveBeenCalledWith(expect.objectContaining({
-                    fullName: 'NGUYỄN VĂN AN',
-                    gender: 'Male'
-                }));
-                expect(screen.getByText('Tiếp nhận bệnh nhân thành công!')).toBeInTheDocument();
-                expect(screen.getByText('BN-2026-000001')).toBeInTheDocument();
+                expect(patientVisitApi.receptionIntake).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        newPatient: expect.objectContaining({
+                            fullName: 'NGUYỄN VĂN AN',
+                            gender: 0
+                        })
+                    }),
+                    expect.any(String)
+                );
             });
         });
 
@@ -320,13 +379,35 @@ describe('Hospital Core Phase 1 Frontend Components', () => {
                 data: mockFacilities
             });
 
-            vi.mocked(mpiApi.registerWalkIn).mockResolvedValue({
+            vi.mocked(organizationApi.getDepartments).mockResolvedValue({
                 success: true,
-                message: 'Đăng ký thành công',
-                data: { ...mockMpiPatient, gender: 'Other', fullName: 'LÊ VĂN KHÁC' }
+                message: 'OK',
+                data: [{ id: 1, name: 'Khoa Khám Bệnh', facilityId: 1, isActive: true }] as any
             });
 
-            render(
+            vi.mocked(patientVisitApi.receptionIntake).mockResolvedValue({
+                success: true,
+                message: 'Đăng ký thành công',
+                data: {
+                    visitId: 102,
+                    visitCode: 'VIS-002',
+                    queueNumber: 2,
+                    queueDisplay: '02',
+                    patientId: 2,
+                    patientName: 'LÊ VĂN KHÁC',
+                    medicalRecordNumber: 'BN-2026-000002',
+                    facilityId: 1,
+                    facilityName: 'Cơ sở Quận 1',
+                    departmentId: 1,
+                    departmentName: 'Khoa Khám Bệnh',
+                    checkedInAtUtc: new Date().toISOString(),
+                    status: 'WaitingForDoctor',
+                    priority: 'Normal',
+                    arrivalType: 'WalkIn',
+                }
+            } as any);
+
+            const { container } = render(
                 <DialogProvider>
                     <BrowserRouter>
                         <WalkInPatientRegistration />
@@ -335,23 +416,56 @@ describe('Hospital Core Phase 1 Frontend Components', () => {
             );
 
             await waitFor(() => {
-                expect(screen.getByText(/Tiếp nhận bệnh nhân vãng lai/i)).toBeInTheDocument();
+                expect(screen.getByText(/Tiếp nhận người bệnh/i)).toBeInTheDocument();
             });
+
+            // Switch to new patient
+            fireEvent.click(screen.getByText(/Đăng ký hồ sơ người bệnh mới/i));
 
             const nameInput = screen.getByPlaceholderText(/NGUYỄN VĂN A/i);
             fireEvent.change(nameInput, { target: { value: 'LÊ VĂN KHÁC' } });
 
-            const genderSelect = screen.getByDisplayValue('Nam');
-            fireEvent.change(genderSelect, { target: { value: 'Other' } });
+            const dobInput = container.querySelector('input[type="date"]')!;
+            fireEvent.change(dobInput, { target: { value: '1995-05-20' } });
 
-            const submitBtn = screen.getByRole('button', { name: /Xác nhận tiếp nhận & Cấp MRN/i });
+            const phoneInputs = screen.getAllByPlaceholderText('09xx xxx xxx');
+            fireEvent.change(phoneInputs[0], { target: { value: '0909888777' } });
+
+            const genderSelect = screen.getByDisplayValue('Nam');
+            fireEvent.change(genderSelect, { target: { value: '2' } });
+
+            // Step 1 -> 2
+            fireEvent.click(screen.getByText(/Tiếp tục: Chuẩn bị lượt khám/i));
+
+            await waitFor(() => {
+                expect(screen.getByText('Chuẩn Bị Lượt Khám')).toBeInTheDocument();
+            });
+
+            // Fill chief complaint in Step 2
+            const reasonInput = screen.getByPlaceholderText(/Mô tả lý do đến khám/i);
+            fireEvent.change(reasonInput, { target: { value: 'Khám định kỳ' } });
+
+            // Step 2 -> 3
+            fireEvent.click(screen.getByText(/Tiếp tục: Xác nhận thông tin/i));
+
+            await waitFor(() => {
+                expect(screen.getByText('Xác Nhận & Cấp STT')).toBeInTheDocument();
+            });
+
+            // Submit
+            const submitBtn = screen.getByText(/Xác nhận tiếp nhận & Cấp STT/i);
             fireEvent.click(submitBtn);
 
             await waitFor(() => {
-                expect(mpiApi.registerWalkIn).toHaveBeenCalledWith(expect.objectContaining({
-                    fullName: 'LÊ VĂN KHÁC',
-                    gender: 'Other'
-                }));
+                expect(patientVisitApi.receptionIntake).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        newPatient: expect.objectContaining({
+                            fullName: 'LÊ VĂN KHÁC',
+                            gender: 2
+                        })
+                    }),
+                    expect.any(String)
+                );
             });
         });
     });

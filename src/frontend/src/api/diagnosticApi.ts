@@ -88,5 +88,14 @@ export const diagnosticApi = {
 
     getPatientVitals: async (limit = 20): Promise<ApiResponse<any[]>> => {
         return axiosClient.get<any, ApiResponse<any[]>>('/patients/me/vitals', { params: { limit } });
+    },
+
+    // Admin pricing endpoints
+    getDiagnosticPricing: async (): Promise<ApiResponse<DiagnosticServiceDto[]>> => {
+        return axiosClient.get<any, ApiResponse<DiagnosticServiceDto[]>>('/admin/diagnostic-services/pricing');
+    },
+
+    updateDiagnosticPrice: async (id: number, price: number): Promise<ApiResponse<DiagnosticServiceDto>> => {
+        return axiosClient.put<any, ApiResponse<DiagnosticServiceDto>>(`/admin/diagnostic-services/pricing/${id}`, { price });
     }
 };

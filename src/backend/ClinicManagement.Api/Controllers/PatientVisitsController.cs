@@ -24,6 +24,22 @@ public class PatientVisitsController : ControllerBase
         _patientVisitService = patientVisitService;
     }
 
+    [HttpPost("intake")]
+    [Authorize(Roles = RoleNames.Receptionist + "," + RoleNames.Admin)]
+    public async Task<IActionResult> ReceptionIntake(
+        [FromBody] ReceptionIntakeRequest request,
+        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            request.IdempotencyKey ??= idempotencyKey;
+        }
+
+        var ticket = await _patientVisitService.ReceptionIntakeAsync(request, cancellationToken);
+        return Ok(ApiResponse<CheckInTicketDto>.Ok(ticket, "Tiếp nhận lượt khám thành công."));
+    }
+
     [HttpPost("walk-in")]
     [Authorize(Roles = RoleNames.Receptionist + "," + RoleNames.Admin)]
     public async Task<IActionResult> CreateWalkInVisit([FromBody] WalkInRegistrationRequest request, CancellationToken cancellationToken)

@@ -62,8 +62,8 @@ public class BillingTests : IntegrationTestBase
             Quantity = 1,
             UnitPrice = amount,
             LineTotal = amount,
-            ReferenceType = "Specialty",
-            ReferenceId = SpecialtyEntityId
+            ReferenceType = "Appointment",
+            ReferenceId = appointmentId
         };
         inv.Items.Add(item);
         db.Invoices.Add(inv);

@@ -168,6 +168,112 @@ public class PharmacyService : IPharmacyService
         };
     }
 
+    public async Task<PrescriptionDetailDto> ConfirmPurchaseAsync(long prescriptionId)
+    {
+        var actorUserId = _currentUserService.UserId ?? Guid.Empty;
+
+        using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        try
+        {
+            var prescription = await _dbContext.Prescriptions
+                .Include(p => p.Items)
+                    .ThenInclude(i => i.Medicine)
+                .FirstOrDefaultAsync(p => p.Id == prescriptionId);
+
+            if (prescription == null)
+                throw new NotFoundException("Đơn thuốc không tồn tại.");
+
+            if (prescription.Status == PrescriptionStatus.ReservedForPurchase)
+            {
+                return await GetPrescriptionByIdAsync(prescriptionId);
+            }
+
+            if (prescription.Status != PrescriptionStatus.Issued)
+            {
+                throw new BusinessException("INVALID_STATUS", $"Không thể xác nhận mua đơn thuốc ở trạng thái '{prescription.Status}'. Chỉ đơn thuốc 'Issued' mới có thể xác nhận mua.");
+            }
+
+            if (prescription.Items == null || prescription.Items.Count == 0)
+                throw new BusinessException("EMPTY_PRESCRIPTION", "Đơn thuốc không có danh mục thuốc để mua.");
+
+            // 1. Validate stock
+            foreach (var item in prescription.Items)
+            {
+                var med = item.Medicine ?? await _dbContext.Medicines.FirstOrDefaultAsync(m => m.Id == item.MedicineId);
+                if (med == null)
+                    throw new NotFoundException($"Thuốc ID #{item.MedicineId} không tồn tại trong hệ thống.");
+
+                if (!med.IsActive)
+                    throw new BusinessException("MEDICINE_INACTIVE", $"Thuốc '{med.Name}' đã ngừng hoạt động hoặc ngừng cung cấp, không thể giữ chỗ.");
+
+                if (item.Quantity <= 0)
+                    throw new BusinessException("INVALID_QUANTITY", $"Số lượng thuốc '{med.Name}' trong đơn phải lớn hơn 0.");
+
+                if (med.StockQuantity < item.Quantity)
+                {
+                    throw new BusinessException(
+                        "INSUFFICIENT_MEDICINE_STOCK",
+                        $"Thuốc '{med.Name}' không đủ tồn kho để giữ hàng! Yêu cầu: {item.Quantity} {med.Unit}, Hiện còn: {med.StockQuantity} {med.Unit}."
+                    );
+                }
+            }
+
+            // 2. Reserve stock
+            foreach (var item in prescription.Items)
+            {
+                var med = item.Medicine ?? await _dbContext.Medicines.FirstAsync(m => m.Id == item.MedicineId);
+                med.StockQuantity -= item.Quantity;
+                if (med.StockQuantity < 0)
+                {
+                    throw new BusinessException("INSUFFICIENT_MEDICINE_STOCK", $"Thuốc '{med.Name}' không đủ tồn kho để giữ hàng.");
+                }
+                med.UpdatedAt = DateTime.UtcNow;
+
+                _dbContext.MedicineStockTransactions.Add(new MedicineStockTransaction
+                {
+                    MedicineId = med.Id,
+                    Type = MedicineStockTransactionType.Reservation,
+                    QuantityChange = -item.Quantity,
+                    BalanceAfter = med.StockQuantity,
+                    PrescriptionId = prescription.Id,
+                    ActorUserId = actorUserId,
+                    Reason = $"Giữ chỗ thuốc chờ thanh toán cho đơn #{prescription.Id}",
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            // 3. Update prescription status
+            prescription.Status = PrescriptionStatus.ReservedForPurchase;
+
+            // Transition visit to InBilling if currently in ConsultationCompleted or InPharmacy
+            var visit = prescription.PatientVisitId.HasValue
+                ? await _dbContext.PatientVisits.FirstOrDefaultAsync(v => v.Id == prescription.PatientVisitId.Value)
+                : (prescription.AppointmentId.HasValue
+                    ? await _dbContext.PatientVisits.FirstOrDefaultAsync(v => v.AppointmentId == prescription.AppointmentId.Value)
+                    : null);
+
+            if (visit != null && (visit.Status == VisitStatus.ConsultationCompleted || visit.Status == VisitStatus.InPharmacy))
+            {
+                visit.Status = VisitStatus.InBilling;
+            }
+
+            await _dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return await GetPrescriptionByIdAsync(prescriptionId);
+        }
+        catch (Exception ex) when (IsConcurrencyOrLockException(ex))
+        {
+            try { await transaction.RollbackAsync(); } catch { }
+            throw new ConflictException("PURCHASE_CONFLICT", "Đơn thuốc hoặc dữ liệu tồn kho đang được xử lý bởi phiên làm việc khác. Vui lòng thử lại.");
+        }
+        catch
+        {
+            try { await transaction.RollbackAsync(); } catch { }
+            throw;
+        }
+    }
+
     public async Task<DispensePrescriptionResultDto> DispensePrescriptionAsync(long prescriptionId)
     {
         var actorUserId = _currentUserService.UserId ?? Guid.Empty;
@@ -189,56 +295,99 @@ public class PharmacyService : IPharmacyService
                 if (prescription.Status == PrescriptionStatus.Dispensed)
                     throw new ConflictException("PRESCRIPTION_ALREADY_DISPENSED", "Đơn thuốc này đã được cấp phát trước đó.");
 
-                if (prescription.Status != PrescriptionStatus.Issued)
-                    throw new BusinessException("PRESCRIPTION_NOT_DISPENSABLE", $"Không thể cấp phát đơn thuốc ở trạng thái '{prescription.Status}'. Chỉ đơn thuốc ở trạng thái 'Issued' mới được cấp phát.");
+                if (prescription.Status != PrescriptionStatus.Issued && prescription.Status != PrescriptionStatus.ReservedForPurchase)
+                    throw new BusinessException("PRESCRIPTION_NOT_DISPENSABLE", $"Không thể cấp phát đơn thuốc ở trạng thái '{prescription.Status}'.");
 
                 if (prescription.Items == null || prescription.Items.Count == 0)
                     throw new BusinessException("EMPTY_PRESCRIPTION", "Đơn thuốc không có danh mục thuốc để cấp.");
 
-                // 1. Validate stock availability and active status for all items
-                foreach (var item in prescription.Items)
+                // Guard: If prescription was reserved for purchase OR has an existing invoice, it MUST be paid before dispensing
+                var wasReserved = prescription.Status == PrescriptionStatus.ReservedForPurchase ||
+                    await _dbContext.MedicineStockTransactions.AnyAsync(t => t.PrescriptionId == prescription.Id && t.Type == MedicineStockTransactionType.Reservation);
+
+                var activeInvoices = await _dbContext.Invoices
+                    .Where(inv => (prescription.PatientVisitId.HasValue && inv.PatientVisitId == prescription.PatientVisitId.Value)
+                               || (prescription.AppointmentId.HasValue && inv.AppointmentId == prescription.AppointmentId.Value)
+                               || inv.Items.Any(item => item.ReferenceType == "PrescriptionItem" && (item.ReferenceId == prescription.Id || (item.ReferenceId >= prescription.Id * 100000L && item.ReferenceId < (prescription.Id + 1) * 100000L))))
+                    .ToListAsync();
+
+                var hasInvoices = activeInvoices.Any();
+                var hasPaidInvoice = activeInvoices.Any(inv => inv.Status == InvoiceStatus.Paid);
+
+                if (wasReserved || hasInvoices)
                 {
-                    var med = item.Medicine ?? await _dbContext.Medicines.FirstOrDefaultAsync(m => m.Id == item.MedicineId);
-                    if (med == null)
-                        throw new NotFoundException($"Thuốc ID #{item.MedicineId} không tồn tại trong hệ thống.");
-
-                    if (!med.IsActive)
-                        throw new BusinessException("MEDICINE_INACTIVE", $"Thuốc '{med.Name}' đã ngừng hoạt động hoặc ngừng cung cấp, không thể cấp phát.");
-
-                    if (item.Quantity <= 0)
-                        throw new BusinessException("INVALID_QUANTITY", $"Số lượng thuốc '{med.Name}' trong đơn phải lớn hơn 0.");
-
-                    if (med.StockQuantity < item.Quantity)
+                    if (!hasPaidInvoice)
                     {
-                        throw new BusinessException(
-                            "INSUFFICIENT_MEDICINE_STOCK",
-                            $"Thuốc '{med.Name}' không đủ tồn kho để cấp phát! Yêu cầu: {item.Quantity} {med.Unit}, Hiện còn: {med.StockQuantity} {med.Unit}."
-                        );
+                        throw new BusinessException("PRESCRIPTION_NOT_PAID", "Đơn thuốc chưa được thanh toán tại quầy thu ngân.");
                     }
                 }
 
-                // 2. Deduct stock and log transactions
-                foreach (var item in prescription.Items)
+                if (!wasReserved)
                 {
-                    var med = item.Medicine ?? await _dbContext.Medicines.FirstAsync(m => m.Id == item.MedicineId);
-                    med.StockQuantity -= item.Quantity;
-                    if (med.StockQuantity < 0)
+                    // 1. Validate stock availability and active status for all items
+                    foreach (var item in prescription.Items)
                     {
-                        throw new BusinessException("INSUFFICIENT_MEDICINE_STOCK", $"Thuốc '{med.Name}' không đủ tồn kho để cấp phát.");
-                    }
-                    med.UpdatedAt = DateTime.UtcNow;
+                        var med = item.Medicine ?? await _dbContext.Medicines.FirstOrDefaultAsync(m => m.Id == item.MedicineId);
+                        if (med == null)
+                            throw new NotFoundException($"Thuốc ID #{item.MedicineId} không tồn tại trong hệ thống.");
 
-                    _dbContext.MedicineStockTransactions.Add(new MedicineStockTransaction
+                        if (!med.IsActive)
+                            throw new BusinessException("MEDICINE_INACTIVE", $"Thuốc '{med.Name}' đã ngừng hoạt động hoặc ngừng cung cấp, không thể cấp phát.");
+
+                        if (item.Quantity <= 0)
+                            throw new BusinessException("INVALID_QUANTITY", $"Số lượng thuốc '{med.Name}' trong đơn phải lớn hơn 0.");
+
+                        if (med.StockQuantity < item.Quantity)
+                        {
+                            throw new BusinessException(
+                                "INSUFFICIENT_MEDICINE_STOCK",
+                                $"Thuốc '{med.Name}' không đủ tồn kho để cấp phát! Yêu cầu: {item.Quantity} {med.Unit}, Hiện còn: {med.StockQuantity} {med.Unit}."
+                            );
+                        }
+                    }
+
+                    // 2. Deduct stock and log transactions
+                    foreach (var item in prescription.Items)
                     {
-                        MedicineId = med.Id,
-                        Type = MedicineStockTransactionType.Dispense,
-                        QuantityChange = -item.Quantity,
-                        BalanceAfter = med.StockQuantity,
-                        PrescriptionId = prescription.Id,
-                        ActorUserId = actorUserId,
-                        Reason = $"Cấp phát thuốc cho đơn #{prescription.Id}",
-                        CreatedAt = DateTime.UtcNow
-                    });
+                        var med = item.Medicine ?? await _dbContext.Medicines.FirstAsync(m => m.Id == item.MedicineId);
+                        med.StockQuantity -= item.Quantity;
+                        if (med.StockQuantity < 0)
+                        {
+                            throw new BusinessException("INSUFFICIENT_MEDICINE_STOCK", $"Thuốc '{med.Name}' không đủ tồn kho để cấp phát.");
+                        }
+                        med.UpdatedAt = DateTime.UtcNow;
+
+                        _dbContext.MedicineStockTransactions.Add(new MedicineStockTransaction
+                        {
+                            MedicineId = med.Id,
+                            Type = MedicineStockTransactionType.Dispense,
+                            QuantityChange = -item.Quantity,
+                            BalanceAfter = med.StockQuantity,
+                            PrescriptionId = prescription.Id,
+                            ActorUserId = actorUserId,
+                            Reason = $"Cấp phát thuốc cho đơn #{prescription.Id}",
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+                else
+                {
+                    // Already reserved and deducted, record dispense confirmation
+                    foreach (var item in prescription.Items)
+                    {
+                        var med = item.Medicine ?? await _dbContext.Medicines.FirstAsync(m => m.Id == item.MedicineId);
+                        _dbContext.MedicineStockTransactions.Add(new MedicineStockTransaction
+                        {
+                            MedicineId = med.Id,
+                            Type = MedicineStockTransactionType.Dispense,
+                            QuantityChange = 0,
+                            BalanceAfter = med.StockQuantity,
+                            PrescriptionId = prescription.Id,
+                            ActorUserId = actorUserId,
+                            Reason = $"Hoàn tất cấp phát thuốc đã giữ chỗ cho đơn #{prescription.Id}",
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
                 }
 
                 // 3. Update prescription status
@@ -246,16 +395,24 @@ public class PharmacyService : IPharmacyService
                 prescription.DispensedAt = DateTime.UtcNow;
                 prescription.DispensedByUserId = actorUserId;
 
-                // Update PatientVisit status to InBilling if linked
+                // Update PatientVisit status
                 var visit = prescription.PatientVisitId.HasValue
                     ? await _dbContext.PatientVisits.FirstOrDefaultAsync(v => v.Id == prescription.PatientVisitId.Value)
                     : (prescription.AppointmentId.HasValue
                         ? await _dbContext.PatientVisits.FirstOrDefaultAsync(v => v.AppointmentId == prescription.AppointmentId.Value)
                         : null);
 
-                if (visit != null && (visit.Status == VisitStatus.InPharmacy || visit.Status == VisitStatus.ConsultationCompleted))
+                if (visit != null)
                 {
-                    visit.Status = VisitStatus.InBilling;
+                    if (hasPaidInvoice)
+                    {
+                        visit.Status = VisitStatus.Completed;
+                        visit.CompletedAtUtc = DateTime.UtcNow;
+                    }
+                    else if (visit.Status == VisitStatus.InPharmacy || visit.Status == VisitStatus.ConsultationCompleted)
+                    {
+                        visit.Status = VisitStatus.InBilling;
+                    }
                 }
 
                 var patientUserId = await _dbContext.Patients

@@ -80,6 +80,20 @@ export interface BedDto {
     isActive: boolean;
 }
 
+export interface StaffFacilityAssignmentDto {
+    id: number;
+    userId: string;
+    userName: string;
+    userEmail: string;
+    roleName: string;
+    facilityId: number;
+    facilityName: string;
+    isPrimary: boolean;
+    isActive: boolean;
+    assignedAtUtc: string;
+    notes?: string;
+}
+
 export const organizationApi = {
     getFacilities: async (includeInactive = false): Promise<ApiResponse<FacilityDto[]>> => {
         return axiosClient.get<any, ApiResponse<FacilityDto[]>>(`/facilities?includeInactive=${includeInactive}`);
@@ -144,5 +158,18 @@ export const organizationApi = {
 
     updateBedStatus: async (id: number, data: { status: number; notes?: string }): Promise<ApiResponse<BedDto>> => {
         return axiosClient.patch<any, ApiResponse<BedDto>>(`/beds/${id}/status`, data);
+    },
+
+    getStaffAssignments: async (facilityId?: number): Promise<ApiResponse<StaffFacilityAssignmentDto[]>> => {
+        const query = facilityId ? `?facilityId=${facilityId}` : '';
+        return axiosClient.get<any, ApiResponse<StaffFacilityAssignmentDto[]>>(`/admin/staff-assignments${query}`);
+    },
+
+    createStaffAssignment: async (data: { userId: string; facilityId: number; role: string; departmentId?: number; isPrimary?: boolean; notes?: string }): Promise<ApiResponse<StaffFacilityAssignmentDto>> => {
+        return axiosClient.post<any, ApiResponse<StaffFacilityAssignmentDto>>('/admin/staff-assignments', data);
+    },
+
+    deleteStaffAssignment: async (id: number): Promise<ApiResponse<void>> => {
+        return axiosClient.delete<any, ApiResponse<void>>(`/admin/staff-assignments/${id}`);
     }
 };

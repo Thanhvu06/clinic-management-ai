@@ -9,8 +9,10 @@ namespace ClinicManagement.Application.Diagnostics.Interfaces;
 
 public interface IDiagnosticWorkflowService
 {
-    // Catalog
+    // Catalog & Pricing
     Task<List<DiagnosticServiceDto>> GetDiagnosticServicesAsync(DiagnosticCategory? category, string? search);
+    Task<List<DiagnosticServiceDto>> GetAllDiagnosticServicesPricingAsync(System.Threading.CancellationToken cancellationToken = default);
+    Task<DiagnosticServiceDto> UpdateServicePriceAsync(long serviceId, decimal price, System.Threading.CancellationToken cancellationToken = default);
 
     // Doctor operations
     Task<DiagnosticOrderDto> CreateOrderForDoctorAsync(long appointmentId, CreateDiagnosticOrderRequest request);

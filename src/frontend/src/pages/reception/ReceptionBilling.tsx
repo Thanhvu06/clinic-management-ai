@@ -19,6 +19,7 @@ import type {
     InvoiceDetailDto,
     BillingKpiDto,
     InvoiceSourceType,
+    UnbilledVisitDto,
 } from '../../types';
 import {
     InvoiceStatus,
@@ -45,6 +46,11 @@ export const ReceptionBilling: React.FC = () => {
     const [sourceFilter, setSourceFilter] = useState<string>('');
     const [fromDate, setFromDate] = useState<string>('');
     const [toDate, setToDate] = useState<string>('');
+
+    // Tab state: 'invoices' or 'unbilled'
+    const [billingTab, setBillingTab] = useState<'invoices' | 'unbilled'>('invoices');
+    const [unbilledVisits, setUnbilledVisits] = useState<UnbilledVisitDto[]>([]);
+    const [unbilledLoading, setUnbilledLoading] = useState<boolean>(false);
 
     // Detail / Receipt Modal
     const [detailModalOpen, setDetailModalOpen] = useState<boolean>(false);
@@ -130,8 +136,23 @@ export const ReceptionBilling: React.FC = () => {
         }
     };
 
+    const fetchUnbilledVisits = async () => {
+        setUnbilledLoading(true);
+        try {
+            const res = await billingApi.reception.getUnbilledVisits();
+            if (res.success && res.data) {
+                setUnbilledVisits(res.data);
+            }
+        } catch (err) {
+            console.error('Lỗi khi tải danh sách lượt khám chưa thu:', err);
+        } finally {
+            setUnbilledLoading(false);
+        }
+    };
+
     useEffect(() => {
         fetchKpi();
+        fetchUnbilledVisits();
     }, []);
 
     useEffect(() => {
@@ -147,6 +168,26 @@ export const ReceptionBilling: React.FC = () => {
     const handleRefresh = () => {
         fetchKpi();
         fetchInvoices();
+        fetchUnbilledVisits();
+    };
+
+    const handleCreateInvoiceFromUnbilled = async (visitId: number) => {
+        setCreatingInvoice(true);
+        try {
+            const res = await billingApi.reception.createInvoiceFromVisit({ patientVisitId: visitId });
+            if (res.success && res.data) {
+                showAlert('Lập hóa đơn viện phí cho lượt khám thành công!', 'Thành công', 'success');
+                fetchKpi();
+                fetchInvoices();
+                fetchUnbilledVisits();
+                setBillingTab('invoices');
+                handleViewDetail(res.data.id);
+            }
+        } catch (err: any) {
+            showAlert(err?.message || 'Không thể lập hóa đơn cho lượt khám này.', 'Lỗi lập hóa đơn', 'error');
+        } finally {
+            setCreatingInvoice(false);
+        }
     };
 
     // Open detail
@@ -382,211 +423,335 @@ export const ReceptionBilling: React.FC = () => {
                 </div>
             </div>
 
-            {/* Filter Bar */}
-            <div className={styles.filterCard}>
-                <form onSubmit={handleSearch} className={styles.filterForm}>
-                    <div className={styles.searchBox}>
-                        <Search size={18} className={styles.searchIcon} />
-                        <input
-                            type="text"
-                            className={`form-input ${styles.searchInput}`}
-                            placeholder="Mã HĐ, mã khám, tên hoặc SĐT bệnh nhân..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                    </div>
-
-                    <div style={{ width: '160px' }}>
-                        <select
-                            className="form-select"
-                            value={statusFilter}
-                            onChange={(e) => {
-                                setStatusFilter(e.target.value);
-                                setPage(1);
-                            }}
-                        >
-                            <option value="">Tất cả trạng thái</option>
-                            <option value="1">Chờ thanh toán</option>
-                            <option value="2">Đã thanh toán</option>
-                            <option value="3">Đã hủy</option>
-                        </select>
-                    </div>
-
-                    <div style={{ width: '170px' }}>
-                        <select
-                            className="form-select"
-                            value={sourceFilter}
-                            onChange={(e) => {
-                                setSourceFilter(e.target.value);
-                                setPage(1);
-                            }}
-                        >
-                            <option value="">Tất cả nguồn dịch vụ</option>
-                            <option value="1">Khám chuyên khoa</option>
-                            <option value="2">Gói khám sức khỏe</option>
-                        </select>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <input
-                            type="date"
-                            className="form-input"
-                            style={{ width: '140px' }}
-                            value={fromDate}
-                            onChange={(e) => setFromDate(e.target.value)}
-                            title="Từ ngày"
-                        />
-                        <span>-</span>
-                        <input
-                            type="date"
-                            className="form-input"
-                            style={{ width: '140px' }}
-                            value={toDate}
-                            onChange={(e) => setToDate(e.target.value)}
-                            title="Đến ngày"
-                        />
-                    </div>
-
-                    <button type="submit" className="btn-secondary">
-                        Lọc
-                    </button>
-                </form>
+            {/* Main Tabs */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <button
+                    type="button"
+                    className={billingTab === 'invoices' ? 'btn-primary' : 'btn-secondary'}
+                    onClick={() => setBillingTab('invoices')}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                    <Receipt size={16} /> Danh sách Hóa đơn ({totalItems})
+                </button>
+                <button
+                    type="button"
+                    className={billingTab === 'unbilled' ? 'btn-primary' : 'btn-secondary'}
+                    onClick={() => setBillingTab('unbilled')}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                    <Clock size={16} /> Hàng đợi chờ lập hóa đơn ({unbilledVisits.length})
+                </button>
             </div>
 
-            {/* Invoices Table */}
-            <div className="card" style={{ padding: 0 }}>
-                {loading ? (
-                    <div style={{ padding: '48px', textAlign: 'center', color: 'var(--c-muted)' }}>
-                        Đang tải danh sách hóa đơn...
+            {billingTab === 'invoices' ? (
+                <>
+                    {/* Filter Bar */}
+                    <div className={styles.filterCard}>
+                        <form onSubmit={handleSearch} className={styles.filterForm}>
+                            <div className={styles.searchBox}>
+                                <Search size={18} className={styles.searchIcon} />
+                                <input
+                                    type="text"
+                                    className={`form-input ${styles.searchInput}`}
+                                    placeholder="Mã HĐ, mã khám, tên hoặc SĐT bệnh nhân..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                />
+                            </div>
+
+                            <div style={{ width: '160px' }}>
+                                <select
+                                    className="form-select"
+                                    value={statusFilter}
+                                    onChange={(e) => {
+                                        setStatusFilter(e.target.value);
+                                        setPage(1);
+                                    }}
+                                >
+                                    <option value="">Tất cả trạng thái</option>
+                                    <option value="1">Chờ thanh toán</option>
+                                    <option value="2">Đã thanh toán</option>
+                                    <option value="3">Đã hủy</option>
+                                </select>
+                            </div>
+
+                            <div style={{ width: '160px' }}>
+                                <select
+                                    className="form-select"
+                                    value={sourceFilter}
+                                    onChange={(e) => {
+                                        setSourceFilter(e.target.value);
+                                        setPage(1);
+                                    }}
+                                >
+                                    <option value="">Tất cả nguồn thu</option>
+                                    <option value="1">Lịch khám chuyên khoa</option>
+                                    <option value="2">Gói khám sức khỏe</option>
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                <input
+                                    type="date"
+                                    className="form-input"
+                                    style={{ width: '135px' }}
+                                    value={fromDate}
+                                    onChange={(e) => {
+                                        setFromDate(e.target.value);
+                                        setPage(1);
+                                    }}
+                                    title="Từ ngày"
+                                />
+                                <span>-</span>
+                                <input
+                                    type="date"
+                                    className="form-input"
+                                    style={{ width: '135px' }}
+                                    value={toDate}
+                                    onChange={(e) => {
+                                        setToDate(e.target.value);
+                                        setPage(1);
+                                    }}
+                                    title="Đến ngày"
+                                />
+                            </div>
+
+                            <button type="submit" className="btn-secondary">
+                                <Search size={14} /> Tìm
+                            </button>
+                        </form>
                     </div>
-                ) : (
-                    <div className="table-responsive">
-                        <table className="table">
-                            <thead>
-                                <tr>
-                                    <th>Mã hóa đơn</th>
-                                    <th>Nguồn phát sinh</th>
-                                    <th>Bệnh nhân</th>
-                                    <th>Tổng tiền</th>
-                                    <th>Trạng thái</th>
-                                    <th>Thời gian tạo</th>
-                                    <th style={{ textAlign: 'right' }}>Thao tác</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {invoices.length === 0 ? (
+
+                    {/* Table Card */}
+                    <div className={styles.tableCard}>
+                        {loading ? (
+                            <div className={styles.loadingWrapper}>
+                                <RefreshCw className={styles.spin} size={28} />
+                                <span style={{ marginTop: '10px', color: 'var(--c-muted)' }}>Đang tải danh sách hóa đơn...</span>
+                            </div>
+                        ) : (
+                            <div className={styles.tableResponsive}>
+                                <table className={styles.table}>
+                                    <thead>
+                                        <tr>
+                                            <th>Mã HĐ</th>
+                                            <th>Bệnh nhân</th>
+                                            <th>Nguồn thu</th>
+                                            <th>Mã liên kết</th>
+                                            <th style={{ textAlign: 'right' }}>Tổng tiền</th>
+                                            <th>Trạng thái</th>
+                                            <th>Ngày lập</th>
+                                            <th style={{ textAlign: 'right' }}>Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {invoices.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={8} className={styles.emptyState}>
+                                                    Không tìm thấy hóa đơn nào phù hợp với bộ lọc.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            invoices.map((inv) => (
+                                                <tr key={inv.id}>
+                                                    <td>
+                                                        <span className={styles.codeBadge}>{inv.invoiceCode}</span>
+                                                    </td>
+                                                    <td>
+                                                        <div style={{ fontWeight: 600, color: 'var(--c-text)' }}>
+                                                            {inv.patientName}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)' }}>
+                                                            {inv.patientPhone || 'Không có SĐT'}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span style={{ fontSize: '0.85rem' }}>{inv.sourceTypeName}</span>
+                                                    </td>
+                                                    <td>
+                                                        <span style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>
+                                                            {inv.visitCode || inv.appointmentCode || inv.registrationCode || '---'}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--c-primary)' }}>
+                                                        {formatCurrency(inv.totalAmount)}
+                                                    </td>
+                                                    <td>
+                                                        {renderStatusBadge(inv.status)}
+                                                    </td>
+                                                    <td>
+                                                        <div style={{ fontSize: '0.85rem', color: 'var(--c-text)' }}>
+                                                            {formatDateTime(inv.createdAtUtc)}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ textAlign: 'right' }}>
+                                                        <div className={styles.actionBtnGroup}>
+                                                            <button
+                                                                type="button"
+                                                                className="btn-secondary"
+                                                                style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                                                                onClick={() => handleViewDetail(inv.id)}
+                                                                title="Xem chi tiết & In phiếu thu"
+                                                            >
+                                                                <Eye size={13} /> Xem
+                                                            </button>
+
+                                                            {inv.status === InvoiceStatus.Unpaid && (
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn-primary"
+                                                                        style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                                                                        onClick={() => handleOpenPaymentModal(inv)}
+                                                                        title="Thu tiền hóa đơn"
+                                                                    >
+                                                                        <CreditCard size={13} /> Thu tiền
+                                                                    </button>
+
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn-danger"
+                                                                        style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                                                                        onClick={() => handleOpenCancelModal(inv)}
+                                                                        title="Hủy hóa đơn"
+                                                                    >
+                                                                        <Ban size={13} /> Hủy
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {/* Pagination */}
+                        {totalItems > pageSize && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderTop: '1px solid var(--c-border)' }}>
+                                <span style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>
+                                    Hiển thị trang {page} / {totalPages} (Tổng {totalItems} hóa đơn)
+                                </span>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                        type="button"
+                                        className="btn-secondary"
+                                        style={{ padding: '4px 12px', fontSize: '0.85rem' }}
+                                        disabled={page <= 1}
+                                        onClick={() => setPage(p => p - 1)}
+                                    >
+                                        Trang trước
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn-secondary"
+                                        style={{ padding: '4px 12px', fontSize: '0.85rem' }}
+                                        disabled={page >= totalPages}
+                                        onClick={() => setPage(p => p + 1)}
+                                    >
+                                        Trang sau
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </>
+            ) : (
+                <div className={styles.tableCard}>
+                    <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--c-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--c-text)', margin: 0 }}>
+                                Hàng đợi ca khám có chi phí chờ lập hóa đơn ({unbilledVisits.length})
+                            </h3>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)', marginTop: '2px' }}>
+                                Bao gồm công khám, cận lâm sàng chỉ định và đơn thuốc đã xác nhận mua
+                            </div>
+                        </div>
+                        <button type="button" className="btn-secondary" onClick={fetchUnbilledVisits} disabled={unbilledLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <RefreshCw size={14} className={unbilledLoading ? styles.spin : ''} /> Làm mới hàng đợi
+                        </button>
+                    </div>
+                    {unbilledLoading ? (
+                        <div className={styles.loadingWrapper}>
+                            <RefreshCw className={styles.spin} size={28} />
+                            <span style={{ marginTop: '10px', color: 'var(--c-muted)' }}>Đang tải hàng đợi ca khám...</span>
+                        </div>
+                    ) : (
+                        <div className={styles.tableResponsive}>
+                            <table className={styles.table}>
+                                <thead>
                                     <tr>
-                                        <td colSpan={7} style={{ padding: '48px', textAlign: 'center', color: 'var(--c-muted)' }}>
-                                            Không tìm thấy hóa đơn nào phù hợp với điều kiện lọc.
-                                        </td>
+                                        <th>Mã lượt khám</th>
+                                        <th>Bệnh nhân</th>
+                                        <th>Khoa / Bác sĩ</th>
+                                        <th>Ngày khám</th>
+                                        <th>Trạng thái</th>
+                                        <th style={{ textAlign: 'center' }}>Mục chờ thu</th>
+                                        <th style={{ textAlign: 'right' }}>Tạm tính</th>
+                                        <th style={{ textAlign: 'right' }}>Thao tác</th>
                                     </tr>
-                                ) : (
-                                    invoices.map((inv) => (
-                                        <tr key={inv.id}>
-                                            <td>
-                                                <div style={{ fontWeight: 700, color: 'var(--c-navy-dark)' }}>
-                                                    {inv.invoiceCode}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div style={{ fontWeight: 500 }}>
-                                                    {inv.sourceTypeName}
-                                                </div>
-                                                <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)' }}>
-                                                    Mã: {inv.visitCode || inv.appointmentCode || inv.registrationCode || (inv.patientVisitId ? `#${inv.patientVisitId}` : 'N/A')}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div style={{ fontWeight: 600 }}>{inv.patientName}</div>
-                                                <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)' }}>{inv.patientPhone}</div>
-                                            </td>
-                                            <td>
-                                                <div style={{ fontWeight: 700, color: 'var(--c-primary)' }}>
-                                                    {formatCurrency(inv.totalAmount)}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                {renderStatusBadge(inv.status)}
-                                            </td>
-                                            <td>
-                                                <div style={{ fontSize: '0.85rem', color: 'var(--c-text)' }}>
-                                                    {formatDateTime(inv.createdAtUtc)}
-                                                </div>
-                                            </td>
-                                            <td style={{ textAlign: 'right' }}>
-                                                <div className={styles.actionBtnGroup}>
-                                                    <button
-                                                        type="button"
-                                                        className="btn-secondary"
-                                                        style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                                                        onClick={() => handleViewDetail(inv.id)}
-                                                        title="Xem chi tiết & In phiếu thu"
-                                                    >
-                                                        <Eye size={13} /> Xem
-                                                    </button>
-
-                                                    {inv.status === InvoiceStatus.Unpaid && (
-                                                        <>
-                                                            <button
-                                                                type="button"
-                                                                className="btn-primary"
-                                                                style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                                                                onClick={() => handleOpenPaymentModal(inv)}
-                                                                title="Thu tiền hóa đơn"
-                                                            >
-                                                                <CreditCard size={13} /> Thu tiền
-                                                            </button>
-
-                                                            <button
-                                                                type="button"
-                                                                className="btn-danger"
-                                                                style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                                                                onClick={() => handleOpenCancelModal(inv)}
-                                                                title="Hủy hóa đơn"
-                                                            >
-                                                                <Ban size={13} /> Hủy
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
+                                </thead>
+                                <tbody>
+                                    {unbilledVisits.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={8} className={styles.emptyState}>
+                                                Hiện không có lượt khám nào chờ lập hóa đơn.
                                             </td>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                {/* Pagination */}
-                {totalItems > pageSize && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderTop: '1px solid var(--c-border)' }}>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>
-                            Hiển thị trang {page} / {totalPages} (Tổng {totalItems} hóa đơn)
-                        </span>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{ padding: '4px 12px', fontSize: '0.85rem' }}
-                                disabled={page <= 1}
-                                onClick={() => setPage(p => p - 1)}
-                            >
-                                Trang trước
-                            </button>
-                            <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{ padding: '4px 12px', fontSize: '0.85rem' }}
-                                disabled={page >= totalPages}
-                                onClick={() => setPage(p => p + 1)}
-                            >
-                                Trang sau
-                            </button>
+                                    ) : (
+                                        unbilledVisits.map((v) => (
+                                            <tr key={v.visitId}>
+                                                <td>
+                                                    <span className={styles.codeBadge}>{v.visitCode}</span>
+                                                </td>
+                                                <td>
+                                                    <div style={{ fontWeight: 600, color: 'var(--c-text)' }}>{v.patientName}</div>
+                                                    <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)' }}>
+                                                        {v.medicalRecordNumber ? `MRN: ${v.medicalRecordNumber}` : ''}
+                                                        {v.phoneNumber ? ` • ${v.phoneNumber}` : ''}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div style={{ fontSize: '0.85rem', color: 'var(--c-text)' }}>{v.departmentName}</div>
+                                                    <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)' }}>BS: {v.doctorName || 'Chưa gán'}</div>
+                                                </td>
+                                                <td>
+                                                    <div style={{ fontSize: '0.85rem', color: 'var(--c-text)' }}>{v.visitDate}</div>
+                                                </td>
+                                                <td>
+                                                    <span className="badge badge-info">{v.status}</span>
+                                                </td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    <span style={{ background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 600 }}>
+                                                        {v.unbilledItemCount} mục
+                                                    </span>
+                                                </td>
+                                                <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--c-primary)' }}>
+                                                    {formatCurrency(v.estimatedTotal)}
+                                                </td>
+                                                <td style={{ textAlign: 'right' }}>
+                                                    <button
+                                                        type="button"
+                                                        className="btn-primary"
+                                                        style={{ padding: '6px 14px', fontSize: '0.85rem' }}
+                                                        onClick={() => handleCreateInvoiceFromUnbilled(v.visitId)}
+                                                        disabled={creatingInvoice}
+                                                    >
+                                                        <Plus size={14} /> Lập hóa đơn
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
-                    </div>
-                )}
-            </div>
+                    )}
+                </div>
+            )}
 
             {/* Create Invoice Modal */}
             {createModalOpen && (

@@ -605,4 +605,102 @@ public class OrganizationService : IOrganizationService
             IsActive = bed.IsActive
         };
     }
+
+    public async Task<IReadOnlyList<StaffFacilityAssignmentDto>> GetStaffAssignmentsAsync(long? facilityId = null, CancellationToken cancellationToken = default)
+    {
+        var query = from a in _dbContext.StaffFacilityAssignments.AsNoTracking()
+                    join u in _dbContext.Users.AsNoTracking() on a.UserId equals u.Id
+                    join f in _dbContext.Facilities.AsNoTracking() on a.FacilityId equals f.Id
+                    join d in _dbContext.Departments.AsNoTracking() on a.DepartmentId equals d.Id into depts
+                    from d in depts.DefaultIfEmpty()
+                    select new { Assignment = a, User = u, Facility = f, Department = d };
+
+        if (facilityId.HasValue && facilityId.Value > 0)
+        {
+            query = query.Where(x => x.Assignment.FacilityId == facilityId.Value);
+        }
+
+        var list = await query
+            .OrderBy(x => x.Facility.Name)
+            .ThenBy(x => x.User.FullName)
+            .ToListAsync(cancellationToken);
+
+        return list.Select(x => new StaffFacilityAssignmentDto
+        {
+            Id = x.Assignment.Id,
+            UserId = x.Assignment.UserId,
+            UserName = x.User.UserName ?? string.Empty,
+            FullName = x.User.FullName ?? string.Empty,
+            Email = x.User.Email ?? string.Empty,
+            PhoneNumber = x.User.PhoneNumber ?? string.Empty,
+            FacilityId = x.Assignment.FacilityId,
+            FacilityName = x.Facility.Name,
+            DepartmentId = x.Assignment.DepartmentId,
+            DepartmentName = x.Department != null ? x.Department.Name : null,
+            Role = x.Assignment.Role,
+            IsPrimary = x.Assignment.IsPrimary,
+            IsActive = x.Assignment.IsActive,
+            AssignedAtUtc = x.Assignment.AssignedAtUtc
+        }).ToList();
+    }
+
+    public async Task<StaffFacilityAssignmentDto> CreateStaffAssignmentAsync(CreateStaffAssignmentRequest request, CancellationToken cancellationToken = default)
+    {
+        var user = await _dbContext.Users.FindAsync(new object[] { request.UserId }, cancellationToken);
+        if (user == null)
+            throw new NotFoundException("Tài khoản người dùng không tồn tại.");
+
+        var facility = await _dbContext.Facilities.FindAsync(new object[] { request.FacilityId }, cancellationToken);
+        if (facility == null)
+            throw new NotFoundException("Cơ sở y tế không tồn tại.");
+
+        if (request.DepartmentId.HasValue)
+        {
+            var dept = await _dbContext.Departments.FindAsync(new object[] { request.DepartmentId.Value }, cancellationToken);
+            if (dept == null || dept.FacilityId != request.FacilityId)
+                throw new BusinessException("INVALID_DEPARTMENT", "Khoa không tồn tại hoặc không thuộc cơ sở y tế này.");
+        }
+
+        var existing = await _dbContext.StaffFacilityAssignments
+            .FirstOrDefaultAsync(a => a.UserId == request.UserId && a.FacilityId == request.FacilityId, cancellationToken);
+
+        if (existing != null)
+        {
+            existing.DepartmentId = request.DepartmentId;
+            existing.Role = request.Role.Trim();
+            existing.IsPrimary = request.IsPrimary;
+            existing.IsActive = true;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            var listUpdated = await GetStaffAssignmentsAsync(request.FacilityId, cancellationToken);
+            return listUpdated.First(a => a.Id == existing.Id);
+        }
+
+        var assignment = new StaffFacilityAssignment
+        {
+            UserId = request.UserId,
+            FacilityId = request.FacilityId,
+            DepartmentId = request.DepartmentId,
+            Role = request.Role.Trim(),
+            IsPrimary = request.IsPrimary,
+            IsActive = true,
+            AssignedAtUtc = DateTime.UtcNow
+        };
+
+        _dbContext.StaffFacilityAssignments.Add(assignment);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var listCreated = await GetStaffAssignmentsAsync(request.FacilityId, cancellationToken);
+        return listCreated.First(a => a.Id == assignment.Id);
+    }
+
+    public async Task DeleteStaffAssignmentAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var assignment = await _dbContext.StaffFacilityAssignments.FindAsync(new object[] { id }, cancellationToken);
+        if (assignment == null)
+            throw new NotFoundException("Bản ghi phân công không tồn tại.");
+
+        _dbContext.StaffFacilityAssignments.Remove(assignment);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

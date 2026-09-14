@@ -2,6 +2,7 @@ import axiosClient from './axiosClient';
 import type {
     ApiResponse,
     CheckInTicketDto,
+    ReceptionIntakeRequest,
     WalkInRegistrationRequest,
     AppointmentCheckInRequest,
     DepartmentQueueItemDto,
@@ -10,6 +11,11 @@ import type {
 } from '../types';
 
 export const patientVisitApi = {
+    receptionIntake: async (request: ReceptionIntakeRequest, idempotencyKey?: string): Promise<ApiResponse<CheckInTicketDto>> => {
+        const headers = idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined;
+        return axiosClient.post<any, ApiResponse<CheckInTicketDto>>('/patient-visits/intake', request, { headers });
+    },
+
     createWalkInVisit: async (request: WalkInRegistrationRequest): Promise<ApiResponse<CheckInTicketDto>> => {
         return axiosClient.post<any, ApiResponse<CheckInTicketDto>>('/patient-visits/walk-in', request);
     },

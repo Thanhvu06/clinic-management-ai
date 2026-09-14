@@ -86,3 +86,19 @@ public class CreateVisitInvoiceRequest
     [Required(ErrorMessage = "Vui lòng cung cấp PatientVisitId.")]
     public long PatientVisitId { get; set; }
 }
+
+public class UnbilledVisitDto
+{
+    public long VisitId { get; set; }
+    public string VisitCode { get; set; } = string.Empty;
+    public long PatientId { get; set; }
+    public string PatientName { get; set; } = string.Empty;
+    public string? MedicalRecordNumber { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string DepartmentName { get; set; } = string.Empty;
+    public string DoctorName { get; set; } = string.Empty;
+    public DateOnly VisitDate { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public int UnbilledItemCount { get; set; }
+    public decimal EstimatedTotal { get; set; }
+}

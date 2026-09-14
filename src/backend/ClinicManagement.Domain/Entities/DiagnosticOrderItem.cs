@@ -10,10 +10,13 @@ public class DiagnosticOrderItem
     public long DiagnosticServiceId { get; set; }
 
     public DiagnosticItemStatus Status { get; set; } = DiagnosticItemStatus.Ordered;
+    public bool IsPackageCovered { get; set; }
+    public long? PackageRegistrationId { get; set; }
 
     public byte[]? RowVersion { get; set; } = Guid.NewGuid().ToByteArray();
 
     public DiagnosticOrder DiagnosticOrder { get; set; } = null!;
     public DiagnosticService DiagnosticService { get; set; } = null!;
+    public HealthPackageRegistration? PackageRegistration { get; set; }
     public DiagnosticResult? Result { get; set; }
 }

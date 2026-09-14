@@ -16,6 +16,7 @@ import type {
     UpdateSpecialtyFeeRequest,
     PagedBillingResult,
     InvoiceStatus,
+    UnbilledVisitDto,
 } from '../types';
 
 export const billingApi = {
@@ -68,6 +69,12 @@ export const billingApi = {
         getTodayKpi: async (): Promise<ApiResponse<BillingKpiDto>> => {
             const res = await axiosClient.get('/reception/billing/kpi');
             return res as unknown as ApiResponse<BillingKpiDto>;
+        },
+
+        getUnbilledVisits: async (facilityId?: number): Promise<ApiResponse<UnbilledVisitDto[]>> => {
+            const query = facilityId ? `?facilityId=${facilityId}` : '';
+            const res = await axiosClient.get(`/reception/billing/unbilled-visits${query}`);
+            return res as unknown as ApiResponse<UnbilledVisitDto[]>;
         },
     },
 
