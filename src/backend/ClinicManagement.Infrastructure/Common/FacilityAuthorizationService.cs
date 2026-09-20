@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Common.Exceptions;
@@ -31,23 +33,16 @@ public class FacilityAuthorizationService : IFacilityAuthorizationService
             throw new UnauthorizedException("Tài khoản người dùng không tồn tại.");
 
         // Admin or SuperAdmin have cross-facility access
-        var roles = await _userManager.GetRolesAsync(user);
-        if (roles.Contains("Admin") || roles.Contains("SuperAdmin"))
+        if (await HasFullFacilityAccessAsync(userId, cancellationToken))
             return;
 
-        // Verify that the user has an active StaffFacilityAssignment for this facility if assigned
-        var userHasAnyAssignments = await _dbContext.StaffFacilityAssignments
-            .AnyAsync(a => a.UserId == userId && a.IsActive, cancellationToken);
+        // Verify that the user has an active StaffFacilityAssignment for this facility
+        var hasAccess = await _dbContext.StaffFacilityAssignments
+            .AnyAsync(a => a.UserId == userId && a.FacilityId == facilityId && a.IsActive, cancellationToken);
 
-        if (userHasAnyAssignments)
+        if (!hasAccess)
         {
-            var hasAccess = await _dbContext.StaffFacilityAssignments
-                .AnyAsync(a => a.UserId == userId && a.FacilityId == facilityId && a.IsActive, cancellationToken);
-
-            if (!hasAccess)
-            {
-                throw new ForbiddenException("ACCESS_DENIED_TO_FACILITY_RESOURCE", "Bạn không có quyền thao tác trên hồ sơ thuộc cơ sở y tế này.");
-            }
+            throw new ForbiddenException("ACCESS_DENIED_TO_FACILITY_RESOURCE", "Bạn không có quyền thao tác trên hồ sơ thuộc cơ sở y tế này.");
         }
     }
 
@@ -79,6 +74,9 @@ public class FacilityAuthorizationService : IFacilityAuthorizationService
         if (appt == null)
             throw new NotFoundException("Lịch hẹn không tồn tại.");
 
+        if (await HasFullFacilityAccessAsync(userId, cancellationToken))
+            return;
+
         if (appt.VisitFacilityId.HasValue && appt.VisitFacilityId.Value > 0)
         {
             await ValidateUserFacilityAccessAsync(userId, appt.VisitFacilityId.Value, cancellationToken);
@@ -90,17 +88,19 @@ public class FacilityAuthorizationService : IFacilityAuthorizationService
             .Select(a => a.FacilityId)
             .ToListAsync(cancellationToken);
 
-        if (userFacilityIds.Count > 0)
+        if (userFacilityIds.Count == 0)
         {
-            var doctorFacilityIds = await _dbContext.StaffFacilityAssignments
-                .Where(a => a.UserId == appt.DoctorUserId && a.IsActive)
-                .Select(a => a.FacilityId)
-                .ToListAsync(cancellationToken);
+            throw new ForbiddenException("ACCESS_DENIED_TO_FACILITY_RESOURCE", "Bạn không có quyền truy cập lịch hẹn thuộc cơ sở này.");
+        }
 
-            if (doctorFacilityIds.Count > 0 && !userFacilityIds.Intersect(doctorFacilityIds).Any())
-            {
-                throw new ForbiddenException("Bạn không có quyền truy cập lịch hẹn thuộc cơ sở này.");
-            }
+        var doctorFacilityIds = await _dbContext.StaffFacilityAssignments
+            .Where(a => a.UserId == appt.DoctorUserId && a.IsActive)
+            .Select(a => a.FacilityId)
+            .ToListAsync(cancellationToken);
+
+        if (doctorFacilityIds.Count > 0 && !userFacilityIds.Intersect(doctorFacilityIds).Any())
+        {
+            throw new ForbiddenException("ACCESS_DENIED_TO_FACILITY_RESOURCE", "Bạn không có quyền truy cập lịch hẹn thuộc cơ sở này.");
         }
     }
 
@@ -122,5 +122,28 @@ public class FacilityAuthorizationService : IFacilityAuthorizationService
         {
             await ValidateUserFacilityAccessAsync(userId, invoice.VisitFacilityId.Value, cancellationToken);
         }
+    }
+
+    public async Task<bool> HasFullFacilityAccessAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        if (userId == Guid.Empty) return false;
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user == null) return false;
+        var roles = await _userManager.GetRolesAsync(user);
+        return roles.Contains("Admin") || roles.Contains("SuperAdmin");
+    }
+
+    public async Task<List<long>> GetUserAccessibleFacilityIdsAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        if (userId == Guid.Empty) return new List<long>();
+        if (await HasFullFacilityAccessAsync(userId, cancellationToken))
+        {
+            return await _dbContext.Facilities.Where(f => f.IsActive).Select(f => f.Id).ToListAsync(cancellationToken);
+        }
+        return await _dbContext.StaffFacilityAssignments
+            .Where(a => a.UserId == userId && a.IsActive)
+            .Select(a => a.FacilityId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
     }
 }

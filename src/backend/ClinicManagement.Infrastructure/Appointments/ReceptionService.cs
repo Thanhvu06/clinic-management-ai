@@ -48,6 +48,14 @@ public class ReceptionService : IReceptionService
         var userId = GetUserId();
         var today = _dateTimeProvider.VietnamToday;
 
+        var isGlobalAdmin = await _facilityAuthService.HasFullFacilityAccessAsync(userId);
+        var allowedFacilityIds = await _facilityAuthService.GetUserAccessibleFacilityIdsAsync(userId);
+
+        if (!isGlobalAdmin && allowedFacilityIds.Count == 0)
+        {
+            return new PagedResult<ReceptionAppointmentDto>(new List<ReceptionAppointmentDto>(), 0, page, pageSize);
+        }
+
         if (facilityId.HasValue && facilityId.Value > 0)
         {
             await _facilityAuthService.ValidateUserFacilityAccessAsync(userId, facilityId.Value);
@@ -77,15 +85,21 @@ public class ReceptionService : IReceptionService
                         DoctorName = du != null ? du.FullName : "Bác sĩ",
                         SpecialtyName = s.Name,
                         PatientVisitId = pv != null ? (long?)pv.Id : null,
-                        FacilityId = pv != null ? (long?)pv.FacilityId : p.PrimaryFacilityId,
-                        FacilityName = f != null ? f.Name : null
+                        VisitFacilityId = pv != null ? (long?)pv.FacilityId : null,
+                        FacilityId = pv != null ? (long?)pv.FacilityId : _dbContext.StaffFacilityAssignments.Where(sa => sa.UserId == d.UserId && sa.IsActive).Select(sa => (long?)sa.FacilityId).FirstOrDefault(),
+                        FacilityName = f != null ? f.Name : _dbContext.StaffFacilityAssignments.Where(sa => sa.UserId == d.UserId && sa.IsActive).Select(sa => sa.Facility.Name).FirstOrDefault()
                     };
 
         if (facilityId.HasValue && facilityId.Value > 0)
         {
             var facId = facilityId.Value;
-            query = query.Where(x => (x.FacilityId.HasValue && x.FacilityId.Value == facId)
-                                  || (!x.FacilityId.HasValue && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == x.DoctorUserId && s.IsActive && s.FacilityId == facId)));
+            query = query.Where(x => (x.VisitFacilityId.HasValue && x.VisitFacilityId.Value == facId)
+                                  || (!x.VisitFacilityId.HasValue && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == x.DoctorUserId && s.IsActive && s.FacilityId == facId)));
+        }
+        else if (!isGlobalAdmin)
+        {
+            query = query.Where(x => (x.VisitFacilityId.HasValue && allowedFacilityIds.Contains(x.VisitFacilityId.Value))
+                                  || (!x.VisitFacilityId.HasValue && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == x.DoctorUserId && s.IsActive && allowedFacilityIds.Contains(s.FacilityId))));
         }
 
         var effectiveFilter = (!string.IsNullOrWhiteSpace(tab) ? tab : status)?.Trim().ToLower();
@@ -149,6 +163,9 @@ public class ReceptionService : IReceptionService
 
     public async Task<ReceptionAppointmentDto> GetAppointmentByIdAsync(long appointmentId)
     {
+        var userId = GetUserId();
+        await _facilityAuthService.ValidateAppointmentAccessAsync(userId, appointmentId);
+
         var query = from a in _dbContext.Appointments
                     join p in _dbContext.Patients on a.PatientId equals p.Id
                     join pu in _dbContext.Users on p.UserId equals (Guid?)pu.Id into puGroup
@@ -172,8 +189,8 @@ public class ReceptionService : IReceptionService
                         DoctorName = du != null ? du.FullName : "Bác sĩ",
                         SpecialtyName = s.Name,
                         PatientVisitId = pv != null ? (long?)pv.Id : null,
-                        FacilityId = pv != null ? (long?)pv.FacilityId : p.PrimaryFacilityId,
-                        FacilityName = f != null ? f.Name : null
+                        FacilityId = pv != null ? (long?)pv.FacilityId : _dbContext.StaffFacilityAssignments.Where(sa => sa.UserId == d.UserId && sa.IsActive).Select(sa => (long?)sa.FacilityId).FirstOrDefault(),
+                        FacilityName = f != null ? f.Name : _dbContext.StaffFacilityAssignments.Where(sa => sa.UserId == d.UserId && sa.IsActive).Select(sa => sa.Facility.Name).FirstOrDefault()
                     };
 
         var item = await query.FirstOrDefaultAsync();
@@ -338,6 +355,14 @@ public class ReceptionService : IReceptionService
         var userId = GetUserId();
         var today = _dateTimeProvider.VietnamToday;
 
+        var isGlobalAdmin = await _facilityAuthService.HasFullFacilityAccessAsync(userId);
+        var allowedFacilityIds = await _facilityAuthService.GetUserAccessibleFacilityIdsAsync(userId);
+
+        if (!isGlobalAdmin && allowedFacilityIds.Count == 0)
+        {
+            return new ReceptionStatsDto();
+        }
+
         if (facilityId.HasValue && facilityId.Value > 0)
         {
             await _facilityAuthService.ValidateUserFacilityAccessAsync(userId, facilityId.Value);
@@ -348,8 +373,12 @@ public class ReceptionService : IReceptionService
         {
             var facId = facilityId.Value;
             apptQuery = apptQuery.Where(a => (a.PatientVisit != null && a.PatientVisit.FacilityId == facId)
-                                          || (a.PatientVisit == null && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == a.Doctor.UserId && s.IsActive && s.FacilityId == facId))
-                                          || (a.PatientVisit == null && a.Patient.PrimaryFacilityId == facId));
+                                          || (a.PatientVisit == null && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == a.Doctor.UserId && s.IsActive && s.FacilityId == facId)));
+        }
+        else if (!isGlobalAdmin)
+        {
+            apptQuery = apptQuery.Where(a => (a.PatientVisit != null && allowedFacilityIds.Contains(a.PatientVisit.FacilityId))
+                                          || (a.PatientVisit == null && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == a.Doctor.UserId && s.IsActive && allowedFacilityIds.Contains(s.FacilityId))));
         }
 
         var appointmentsToday = await apptQuery
@@ -361,11 +390,23 @@ public class ReceptionService : IReceptionService
 
         var unbilledVisitsQuery = _dbContext.PatientVisits
             .AsNoTracking()
-            .Where(v => v.Status == VisitStatus.InBilling || (v.Invoices.Any() && v.Invoices.All(i => i.Status == InvoiceStatus.Unpaid)));
+            .Where(v => v.Status != VisitStatus.Cancelled)
+            .Where(v =>
+                v.Status == VisitStatus.InBilling
+                || _dbContext.Invoices.Any(i => i.PatientVisitId == v.Id && i.Status == InvoiceStatus.Unpaid)
+                || ((v.Department != null && v.Department.Specialty != null && v.Department.Specialty.ConsultationFee > 0)
+                    && !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "Consultation" && ii.ReferenceId == v.Id))
+                || v.DiagnosticOrders.Any(o => o.Status != DiagnosticOrderStatus.Cancelled && o.Items.Any(i => i.Status != DiagnosticItemStatus.Cancelled && !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "DiagnosticItem" && ii.ReferenceId == i.Id)))
+                || v.Prescriptions.Any(p => (p.Status == PrescriptionStatus.ReservedForPurchase || p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.Dispensed) && p.Items.Any(pi => !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "PrescriptionItem" && (ii.ReferenceId == p.Id * 100000L + pi.MedicineId || ii.ReferenceId == p.Id))))
+            );
 
         if (facilityId.HasValue && facilityId.Value > 0)
         {
             unbilledVisitsQuery = unbilledVisitsQuery.Where(v => v.FacilityId == facilityId.Value);
+        }
+        else if (!isGlobalAdmin)
+        {
+            unbilledVisitsQuery = unbilledVisitsQuery.Where(v => allowedFacilityIds.Contains(v.FacilityId));
         }
         var unbilledCount = await unbilledVisitsQuery.CountAsync();
 

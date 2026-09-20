@@ -28,7 +28,7 @@ public class ReceptionWorkspaceRebuildTests : IntegrationTestBase
 {
     public ReceptionWorkspaceRebuildTests(CustomWebApplicationFactory factory) : base(factory) { }
 
-    private async Task<(Facility Facility, Department Department, Room Room)> EnsureFacilityStructureAsync(string suffix = "MAIN")
+    private async Task<(Facility Facility, Department Department, Room Room)> EnsureFacilityStructureAsync(string suffix = "MAIN", bool assignStaff = true)
     {
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -79,6 +79,11 @@ public class ReceptionWorkspaceRebuildTests : IntegrationTestBase
             };
             db.Rooms.Add(room);
             await db.SaveChangesAsync();
+        }
+
+        if (assignStaff)
+        {
+            await EnsureStaffAssignmentsAsync(db);
         }
 
         return (facility, department, room);
@@ -302,8 +307,22 @@ public class ReceptionWorkspaceRebuildTests : IntegrationTestBase
     public async Task FacilityAuthorization_RestrictsCrossFacilityAccess_ForScopedUser()
     {
         var adminClient = await CreateAuthenticatedClientAsync("admin@test.com");
-        var (fac1, _, _) = await EnsureFacilityStructureAsync("FAC-AUTH-1");
-        var (fac2, dept2, room2) = await EnsureFacilityStructureAsync("FAC-AUTH-2");
+        var (fac1, _, _) = await EnsureFacilityStructureAsync("FAC-AUTH-1", assignStaff: false);
+        var (fac2, dept2, room2) = await EnsureFacilityStructureAsync("FAC-AUTH-2", assignStaff: false);
+
+        // Remove any existing assignment for receptionist at fac2
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var recFac2 = await db.StaffFacilityAssignments
+                .Where(a => a.UserId == ReceptionistId && a.FacilityId == fac2.Id)
+                .ToListAsync();
+            if (recFac2.Any())
+            {
+                db.StaffFacilityAssignments.RemoveRange(recFac2);
+                await db.SaveChangesAsync();
+            }
+        }
 
         // Admin assigns receptionist ONLY to fac1
         var assignReq = new CreateStaffAssignmentRequest
