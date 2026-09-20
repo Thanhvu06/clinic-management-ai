@@ -27,8 +27,8 @@ public class SeedDataIntegrityTests : IntegrationTestBase
         // Ensure roles exist first
         await RoleSeeder.SeedRolesAsync(sp);
 
-        // Run the development data seeder
-        await DevelopmentDataSeeder.SeedAsync(sp);
+        // Run the development data seeder with explicit schedule/slot generation
+        await DevelopmentDataSeeder.SeedDoctorSchedulesAndSlotsAsync(sp, days: 30, seedDemoAppointments: true);
 
         // 1. Verify 11 Standard Specialties (SP01 to SP11)
         var specialties = await db.Specialties.ToListAsync();
@@ -191,7 +191,7 @@ public class SeedDataIntegrityTests : IntegrationTestBase
         var docCountBefore = await db.Doctors.CountAsync();
         var slotCountBefore = await db.AppointmentSlots.CountAsync();
 
-        await DevelopmentDataSeeder.SeedAsync(sp);
+        await DevelopmentDataSeeder.SeedDoctorSchedulesAndSlotsAsync(sp, days: 30, seedDemoAppointments: true);
 
         var specCountAfter = await db.Specialties.CountAsync();
         var docCountAfter = await db.Doctors.CountAsync();
@@ -200,5 +200,34 @@ public class SeedDataIntegrityTests : IntegrationTestBase
         Assert.Equal(specCountBefore, specCountAfter);
         Assert.Equal(docCountBefore, docCountAfter);
         Assert.Equal(slotCountBefore, slotCountAfter);
+    }
+
+    [Fact]
+    public async Task SeedMasterDataAsync_DoesNotGenerateSlots_WhenNotConfigured()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var sp = scope.ServiceProvider;
+        var db = sp.GetRequiredService<AppDbContext>();
+
+        await RoleSeeder.SeedRolesAsync(sp);
+
+        var slotsBefore = await db.AppointmentSlots.CountAsync();
+        var schedulesBefore = await db.DoctorWorkSchedules.CountAsync();
+
+        await DevelopmentDataSeeder.SeedMasterDataAsync(sp);
+
+        // 1. Master data should be present
+        Assert.NotEmpty(await db.Specialties.ToListAsync());
+        Assert.NotEmpty(await db.Doctors.ToListAsync());
+        Assert.NotEmpty(await db.Medicines.ToListAsync());
+        Assert.NotEmpty(await db.Facilities.ToListAsync());
+        Assert.NotEmpty(await db.HealthPackages.ToListAsync());
+
+        // 2. But no automatic 30-day synthetic slot or schedule generation occurred
+        var slotsAfter = await db.AppointmentSlots.CountAsync();
+        var schedulesAfter = await db.DoctorWorkSchedules.CountAsync();
+
+        Assert.Equal(slotsBefore, slotsAfter);
+        Assert.Equal(schedulesBefore, schedulesAfter);
     }
 }
