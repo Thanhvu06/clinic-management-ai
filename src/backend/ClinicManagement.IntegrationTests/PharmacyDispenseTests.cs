@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using ClinicManagement.Application.Billing.DTOs;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -29,6 +30,7 @@ public class PharmacyDispenseTests : IntegrationTestBase
             Name = $"Thuốc Test {prefix}",
             Unit = "Viên",
             StockQuantity = initialStock,
+            UnitPrice = 10000m,
             ReorderLevel = 5,
             IsActive = isActive,
             CreatedAt = DateTime.UtcNow
@@ -36,6 +38,52 @@ public class PharmacyDispenseTests : IntegrationTestBase
         db.Medicines.Add(med);
         await db.SaveChangesAsync();
         return med;
+    }
+
+    private async Task<Invoice> CreatePaidInvoiceForPrescriptionAsync(
+        Prescription rx,
+        List<(long medicineId, int quantity)> items)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var total = 0m;
+        var invoiceItems = new List<InvoiceItem>();
+        foreach (var (medId, qty) in items)
+        {
+            var med = await db.Medicines.FindAsync(medId);
+            var unitPrice = med?.UnitPrice ?? 10000m;
+            var lineTotal = unitPrice * qty;
+            total += lineTotal;
+            invoiceItems.Add(new InvoiceItem
+            {
+                ItemCode = med?.Code ?? "MED",
+                Description = med?.Name ?? "Thuốc test",
+                Quantity = qty,
+                UnitPrice = unitPrice,
+                LineTotal = lineTotal,
+                ReferenceType = "PrescriptionItem",
+                ReferenceId = rx.Id * 100000L + medId,
+                IsCancelled = false
+            });
+        }
+
+        var invoice = new Invoice
+        {
+            InvoiceCode = $"INV-RX-{Guid.NewGuid():N}"[..18].ToUpper(),
+            PatientId = rx.PatientId,
+            AppointmentId = rx.AppointmentId,
+            Status = InvoiceStatus.Paid,
+            Subtotal = total,
+            TotalAmount = total,
+            PaidAtUtc = DateTime.UtcNow,
+            CreatedAtUtc = DateTime.UtcNow,
+            Items = invoiceItems
+        };
+
+        db.Invoices.Add(invoice);
+        await db.SaveChangesAsync();
+        return invoice;
     }
 
     private async Task<(Appointment Appointment, Prescription Prescription)> CreateTestPrescriptionAsync(
@@ -106,8 +154,9 @@ public class PharmacyDispenseTests : IntegrationTestBase
     public async Task Given_IssuedPrescription_When_DispensedWithSufficientStock_Then_StockDeductedStatusDispensedAndAuditLogged()
     {
         var med = await CreateTestMedicineAsync("VALID", 30);
-        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued,
-            new List<(long, int)> { (med.Id, 10) });
+        var items = new List<(long, int)> { (med.Id, 10) };
+        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, items);
+        await CreatePaidInvoiceForPrescriptionAsync(rx, items);
 
         await AuthenticateAsync("pharm@test.com");
         var response = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx.Id}/dispense", null);
@@ -142,9 +191,10 @@ public class PharmacyDispenseTests : IntegrationTestBase
     {
         var medA = await CreateTestMedicineAsync("MULTIA", 50);
         var medB = await CreateTestMedicineAsync("MULTIB", 30);
+        var items = new List<(long, int)> { (medA.Id, 15), (medB.Id, 10) };
 
-        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued,
-            new List<(long, int)> { (medA.Id, 15), (medB.Id, 10) });
+        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, items);
+        await CreatePaidInvoiceForPrescriptionAsync(rx, items);
 
         await AuthenticateAsync("pharm@test.com");
         var response = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx.Id}/dispense", null);
@@ -171,9 +221,10 @@ public class PharmacyDispenseTests : IntegrationTestBase
     {
         var medA = await CreateTestMedicineAsync("ROLA", 50);
         var medB = await CreateTestMedicineAsync("ROLB", 3);
+        var items = new List<(long, int)> { (medA.Id, 10), (medB.Id, 10) }; // medB only has 3
 
-        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued,
-            new List<(long, int)> { (medA.Id, 10), (medB.Id, 10) }); // medB only has 3
+        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, items);
+        await CreatePaidInvoiceForPrescriptionAsync(rx, items);
 
         await AuthenticateAsync("pharm@test.com");
         var response = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx.Id}/dispense", null);
@@ -206,9 +257,10 @@ public class PharmacyDispenseTests : IntegrationTestBase
     public async Task Given_PrescriptionWithInactiveMedicine_When_Dispensed_Then_DispenseRejectedWithMedicineInactiveAndStockUnchanged()
     {
         var medInactive = await CreateTestMedicineAsync("INACT", 20, isActive: false);
+        var items = new List<(long, int)> { (medInactive.Id, 5) };
 
-        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued,
-            new List<(long, int)> { (medInactive.Id, 5) });
+        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, items);
+        await CreatePaidInvoiceForPrescriptionAsync(rx, items);
 
         await AuthenticateAsync("pharm@test.com");
         var response = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx.Id}/dispense", null);
@@ -267,8 +319,9 @@ public class PharmacyDispenseTests : IntegrationTestBase
     public async Task Given_PrescriptionAlreadyDispensed_When_DispensedAgain_Then_ReturnsConflict()
     {
         var med = await CreateTestMedicineAsync("DUPDISP", 20);
-        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued,
-            new List<(long, int)> { (med.Id, 5) });
+        var items = new List<(long, int)> { (med.Id, 5) };
+        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, items);
+        await CreatePaidInvoiceForPrescriptionAsync(rx, items);
 
         await AuthenticateAsync("pharm@test.com");
 
@@ -297,8 +350,9 @@ public class PharmacyDispenseTests : IntegrationTestBase
     public async Task Given_ConcurrentDispenseRequestsOnSamePrescription_When_ExecutedInParallel_Then_ExactlyOneSucceedsAndStockDeductedOnce()
     {
         var med = await CreateTestMedicineAsync("RACE1", 50);
-        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued,
-            new List<(long, int)> { (med.Id, 10) });
+        var items = new List<(long, int)> { (med.Id, 10) };
+        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, items);
+        await CreatePaidInvoiceForPrescriptionAsync(rx, items);
 
         var token = await GetTokenAsync("pharm@test.com");
 
@@ -333,11 +387,14 @@ public class PharmacyDispenseTests : IntegrationTestBase
     public async Task Given_TwoPrescriptionsCompetingForLastStock_When_DispensedConcurrently_Then_StockNeverNegativeAndSecondIsRejected()
     {
         var med = await CreateTestMedicineAsync("COMPETESTOCK", 5);
+        var items1 = new List<(long, int)> { (med.Id, 5) };
+        var items2 = new List<(long, int)> { (med.Id, 5) };
 
-        var (_, rx1) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued,
-            new List<(long, int)> { (med.Id, 5) });
-        var (_, rx2) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient2EntityId, PrescriptionStatus.Issued,
-            new List<(long, int)> { (med.Id, 5) });
+        var (_, rx1) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, items1);
+        var (_, rx2) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient2EntityId, PrescriptionStatus.Issued, items2);
+
+        await CreatePaidInvoiceForPrescriptionAsync(rx1, items1);
+        await CreatePaidInvoiceForPrescriptionAsync(rx2, items2);
 
         var token = await GetTokenAsync("pharm@test.com");
 
@@ -374,15 +431,19 @@ public class PharmacyDispenseTests : IntegrationTestBase
         var med = await CreateTestMedicineAsync("RBAC", 100);
 
         // Pharmacist -> 200 OK
-        var (_, rxPharm) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued,
-            new List<(long, int)> { (med.Id, 1) });
+        var itemsPharm = new List<(long, int)> { (med.Id, 1) };
+        var (_, rxPharm) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, itemsPharm);
+        await CreatePaidInvoiceForPrescriptionAsync(rxPharm, itemsPharm);
+
         await AuthenticateAsync("pharm@test.com");
         var resPharm = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rxPharm.Id}/dispense", null);
         Assert.Equal(HttpStatusCode.OK, resPharm.StatusCode);
 
         // Admin -> 200 OK
-        var (_, rxAdmin) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued,
-            new List<(long, int)> { (med.Id, 1) });
+        var itemsAdmin = new List<(long, int)> { (med.Id, 1) };
+        var (_, rxAdmin) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, itemsAdmin);
+        await CreatePaidInvoiceForPrescriptionAsync(rxAdmin, itemsAdmin);
+
         await AuthenticateAsync("admin@test.com");
         var resAdmin = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rxAdmin.Id}/dispense", null);
         Assert.Equal(HttpStatusCode.OK, resAdmin.StatusCode);
@@ -419,8 +480,9 @@ public class PharmacyDispenseTests : IntegrationTestBase
     public async Task Given_SuccessfulDispense_When_Completed_Then_PatientReceivesRealNotificationWithRouteAndEntityId()
     {
         var med = await CreateTestMedicineAsync("NOTIF", 20);
-        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued,
-            new List<(long, int)> { (med.Id, 2) });
+        var items = new List<(long, int)> { (med.Id, 2) };
+        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, items);
+        await CreatePaidInvoiceForPrescriptionAsync(rx, items);
 
         await AuthenticateAsync("pharm@test.com");
         var response = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx.Id}/dispense", null);
@@ -496,5 +558,276 @@ public class PharmacyDispenseTests : IntegrationTestBase
             PrescriptionItems = new List<object>()
         });
         Assert.Equal(HttpStatusCode.NotFound, doc2EditRes.StatusCode);
+    }
+
+    // 12. Chặn cấp phát nếu đơn thuốc chưa có hóa đơn (422 PRESCRIPTION_NOT_PAID)
+    [Fact]
+    public async Task Given_PrescriptionWithoutInvoice_When_Dispensed_Then_RejectedWithPrescriptionNotPaid()
+    {
+        var med = await CreateTestMedicineAsync("NOINV", 20);
+        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued,
+            new List<(long, int)> { (med.Id, 5) });
+
+        await AuthenticateAsync("pharm@test.com");
+        var response = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx.Id}/dispense", null);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("PRESCRIPTION_NOT_PAID", body, StringComparison.OrdinalIgnoreCase);
+
+        // Verify stock untouched
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var updatedMed = await db.Medicines.FindAsync(med.Id);
+        Assert.Equal(20, updatedMed!.StockQuantity);
+    }
+
+    // 13. Chặn cấp phát nếu hóa đơn đơn thuốc chưa thanh toán (Unpaid -> 422 PRESCRIPTION_NOT_PAID)
+    [Fact]
+    public async Task Given_PrescriptionWithUnpaidInvoice_When_Dispensed_Then_RejectedWithPrescriptionNotPaid()
+    {
+        var med = await CreateTestMedicineAsync("UNPAIDINV", 20);
+        var items = new List<(long, int)> { (med.Id, 5) };
+        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, items);
+
+        // Create Unpaid invoice
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Invoices.Add(new Invoice
+            {
+                InvoiceCode = $"INV-UNPAID-{Guid.NewGuid():N}"[..18].ToUpper(),
+                PatientId = rx.PatientId,
+                AppointmentId = rx.AppointmentId,
+                Status = InvoiceStatus.Unpaid,
+                Subtotal = 50000m,
+                TotalAmount = 50000m,
+                CreatedAtUtc = DateTime.UtcNow,
+                Items = new List<InvoiceItem>
+                {
+                    new()
+                    {
+                        ItemCode = med.Code,
+                        Description = med.Name,
+                        Quantity = 5,
+                        UnitPrice = 10000m,
+                        LineTotal = 50000m,
+                        ReferenceType = "PrescriptionItem",
+                        ReferenceId = rx.Id * 100000L + med.Id,
+                        IsCancelled = false
+                    }
+                }
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await AuthenticateAsync("pharm@test.com");
+        var response = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx.Id}/dispense", null);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("PRESCRIPTION_NOT_PAID", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // 14. Chặn cấp phát nếu lượt khám chỉ mới thanh toán tiền khám hoặc CLS, chưa thanh toán tiền thuốc
+    [Fact]
+    public async Task Given_PrescriptionWhereOnlyConsultationIsPaid_When_Dispensed_Then_RejectedWithPrescriptionNotPaid()
+    {
+        var med = await CreateTestMedicineAsync("ONLYCONSULT", 20);
+        var items = new List<(long, int)> { (med.Id, 5) };
+        var (apt, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, items);
+
+        // Create Paid invoice with ONLY Consultation item, no prescription items
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Invoices.Add(new Invoice
+            {
+                InvoiceCode = $"INV-CONSULT-{Guid.NewGuid():N}"[..18].ToUpper(),
+                PatientId = rx.PatientId,
+                AppointmentId = apt.Id,
+                Status = InvoiceStatus.Paid,
+                Subtotal = 150000m,
+                TotalAmount = 150000m,
+                PaidAtUtc = DateTime.UtcNow,
+                CreatedAtUtc = DateTime.UtcNow,
+                Items = new List<InvoiceItem>
+                {
+                    new()
+                    {
+                        ItemCode = "KHAM",
+                        Description = "Khám chuyên khoa",
+                        Quantity = 1,
+                        UnitPrice = 150000m,
+                        LineTotal = 150000m,
+                        ReferenceType = "Consultation",
+                        ReferenceId = apt.Id,
+                        IsCancelled = false
+                    }
+                }
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await AuthenticateAsync("pharm@test.com");
+        var response = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx.Id}/dispense", null);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("PRESCRIPTION_NOT_PAID", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // 15. Đơn thuốc đã ReservedForPurchase: cấp phát sau khi thanh toán không bị trừ tồn kho lần hai, ghi log xác nhận
+    [Fact]
+    public async Task Given_ReservedPrescription_When_PaidAndDispensed_Then_DispenseConfirmationLoggedWithoutDoubleStockDeduction()
+    {
+        var med = await CreateTestMedicineAsync("RESERVE", 50);
+        var items = new List<(long, int)> { (med.Id, 10) };
+        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, items);
+
+        await AuthenticateAsync("pharm@test.com");
+
+        // 1. Confirm purchase -> status ReservedForPurchase, stock 50 -> 40
+        var confirmRes = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx.Id}/confirm-purchase", null);
+        Assert.Equal(HttpStatusCode.OK, confirmRes.StatusCode);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var m = await db.Medicines.FindAsync(med.Id);
+            Assert.Equal(40, m!.StockQuantity); // Deducted during reservation
+        }
+
+        // 2. Cannot dispense before payment
+        var earlyDispense = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx.Id}/dispense", null);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, earlyDispense.StatusCode);
+
+        // 3. Invoice is paid
+        await CreatePaidInvoiceForPrescriptionAsync(rx, items);
+
+        // 4. Dispense succeeds without second deduction
+        var dispenseRes = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx.Id}/dispense", null);
+        Assert.Equal(HttpStatusCode.OK, dispenseRes.StatusCode);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var m = await db.Medicines.FindAsync(med.Id);
+            Assert.Equal(40, m!.StockQuantity); // Still 40! Never 30!
+
+            var updatedRx = await db.Prescriptions.FindAsync(rx.Id);
+            Assert.Equal(PrescriptionStatus.Dispensed, updatedRx!.Status);
+
+            var txs = await db.MedicineStockTransactions
+                .Where(t => t.PrescriptionId == rx.Id)
+                .OrderBy(t => t.CreatedAt)
+                .ToListAsync();
+
+            Assert.Equal(2, txs.Count);
+            Assert.Equal(MedicineStockTransactionType.Reservation, txs[0].Type);
+            Assert.Equal(-10, txs[0].QuantityChange);
+
+            Assert.Equal(MedicineStockTransactionType.Dispense, txs[1].Type);
+            Assert.Equal(0, txs[1].QuantityChange);
+        }
+    }
+
+    // 16. Đơn thuốc Dispensed trong quá khứ nhưng chưa lập hóa đơn: không bị bỏ sót khi truy vấn unbilled-visits và lập được hóa đơn
+    [Fact]
+    public async Task Given_DispensedPrescription_When_Unbilled_Then_IncludedInUnbilledVisits()
+    {
+        var med = await CreateTestMedicineAsync("UNBILLEDDISP", 50);
+
+        long visitId;
+        long rxId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var patient = await db.Patients.FirstAsync();
+            var doc = await db.Doctors.FirstAsync();
+            var dept = await db.Departments.FirstAsync();
+
+            var visit = new PatientVisit
+            {
+                VisitCode = $"VIS-TEST-{Guid.NewGuid():N}"[..18].ToUpper(),
+                PatientId = patient.Id,
+                FacilityId = dept.FacilityId,
+                DepartmentId = dept.Id,
+                AssignedDoctorId = doc.Id,
+                Status = VisitStatus.Completed,
+                VisitDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Priority = VisitPriority.Normal,
+                QueueNumber = 999,
+                CheckedInAtUtc = DateTime.UtcNow
+            };
+            db.PatientVisits.Add(visit);
+            await db.SaveChangesAsync();
+            visitId = visit.Id;
+
+            var rx = new Prescription
+            {
+                PatientVisitId = visit.Id,
+                PatientId = patient.Id,
+                DoctorId = doc.Id,
+                Status = PrescriptionStatus.Dispensed,
+                Notes = "Đã phát thuốc nhưng chưa lập hóa đơn",
+                CreatedAt = DateTime.UtcNow
+            };
+            db.Prescriptions.Add(rx);
+            await db.SaveChangesAsync();
+            rxId = rx.Id;
+
+            db.PrescriptionItems.Add(new PrescriptionItem
+            {
+                PrescriptionId = rx.Id,
+                MedicineId = med.Id,
+                Quantity = 5,
+                Dosage = "1 viên",
+                Frequency = "1 lần/ngày",
+                DurationDays = 5
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await AuthenticateAsync("rec@test.com");
+
+        // Query unbilled visits
+        var unbilledRes = await Client.GetAsync("/api/v1/reception/billing/unbilled-visits");
+        Assert.Equal(HttpStatusCode.OK, unbilledRes.StatusCode);
+        var unbilledDoc = JsonDocument.Parse(await unbilledRes.Content.ReadAsStringAsync());
+        var unbilledList = unbilledDoc.RootElement.GetProperty("data");
+
+        bool found = false;
+        foreach (var item in unbilledList.EnumerateArray())
+        {
+            if (item.GetProperty("visitId").GetInt64() == visitId)
+            {
+                found = true;
+                Assert.True(item.GetProperty("unbilledItemCount").GetInt32() > 0);
+                break;
+            }
+        }
+        Assert.True(found, "Dispensed unbilled prescription must be included in unbilled visits");
+
+        // Bill the visit
+        var createInvRes = await Client.PostAsJsonAsync("/api/v1/reception/billing/invoices/visit", new CreateVisitInvoiceRequest
+        {
+            PatientVisitId = visitId
+        });
+        Assert.Equal(HttpStatusCode.Created, createInvRes.StatusCode);
+        var invDoc = JsonDocument.Parse(await createInvRes.Content.ReadAsStringAsync());
+        var invItems = invDoc.RootElement.GetProperty("data").GetProperty("items");
+
+        bool rxItemBilled = false;
+        foreach (var i in invItems.EnumerateArray())
+        {
+            if (i.GetProperty("referenceType").GetString() == "PrescriptionItem")
+            {
+                rxItemBilled = true;
+                Assert.Equal(50000m, i.GetProperty("lineTotal").GetDecimal());
+                break;
+            }
+        }
+        Assert.True(rxItemBilled, "Unbilled items of dispensed prescription must be included in generated invoice");
     }
 }

@@ -258,7 +258,7 @@ public class BillingService : IBillingService
 
         // 3. Prescriptions
         var activePrescriptions = visit.Prescriptions
-            .Where(p => p.Status == PrescriptionStatus.ReservedForPurchase || p.Status == PrescriptionStatus.Issued)
+            .Where(p => p.Status == PrescriptionStatus.ReservedForPurchase || p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.Dispensed)
             .ToList();
 
         foreach (var p in activePrescriptions)
@@ -394,6 +394,16 @@ public class BillingService : IBillingService
             query = query.Where(v => v.FacilityId == facilityId.Value);
         }
 
+        // Database-level filtering: Only select visits that have unbilled charges, pending unpaid invoices, or are in billing status
+        query = query.Where(v =>
+            v.Status == VisitStatus.InBilling
+            || _dbContext.Invoices.Any(i => i.PatientVisitId == v.Id && i.Status == InvoiceStatus.Unpaid)
+            || ((v.Department != null && v.Department.Specialty != null && v.Department.Specialty.ConsultationFee > 0)
+                && !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "Consultation" && ii.ReferenceId == v.Id))
+            || v.DiagnosticOrders.Any(o => o.Status != DiagnosticOrderStatus.Cancelled && o.Items.Any(i => i.Status != DiagnosticItemStatus.Cancelled && !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "DiagnosticItem" && ii.ReferenceId == i.Id)))
+            || v.Prescriptions.Any(p => (p.Status == PrescriptionStatus.ReservedForPurchase || p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.Dispensed) && p.Items.Any(pi => !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "PrescriptionItem" && (ii.ReferenceId == p.Id * 100000L + pi.MedicineId || ii.ReferenceId == p.Id))))
+        );
+
         var visits = await query
             .OrderByDescending(v => v.VisitDate)
             .ThenByDescending(v => v.QueueNumber)
@@ -459,7 +469,7 @@ public class BillingService : IBillingService
             }
 
             // Check prescriptions
-            foreach (var p in v.Prescriptions.Where(p => p.Status == PrescriptionStatus.ReservedForPurchase || p.Status == PrescriptionStatus.Issued))
+            foreach (var p in v.Prescriptions.Where(p => p.Status == PrescriptionStatus.ReservedForPurchase || p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.Dispensed))
             {
                 foreach (var item in p.Items)
                 {
@@ -1240,6 +1250,8 @@ public class BillingService : IBillingService
             SourceTypeName = baseDto.SourceTypeName,
             AppointmentId = baseDto.AppointmentId,
             AppointmentCode = baseDto.AppointmentCode,
+            PatientVisitId = baseDto.PatientVisitId,
+            VisitCode = baseDto.VisitCode,
             HealthPackageRegistrationId = baseDto.HealthPackageRegistrationId,
             RegistrationCode = baseDto.RegistrationCode,
             Status = baseDto.Status,

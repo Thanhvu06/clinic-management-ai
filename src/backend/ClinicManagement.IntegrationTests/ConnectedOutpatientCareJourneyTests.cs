@@ -43,6 +43,7 @@ public class ConnectedOutpatientCareJourneyTests : IntegrationTestBase
         var dept = await db.Departments.Include(d => d.Facility).FirstOrDefaultAsync(d => d.IsActive);
         if (dept != null)
         {
+            await EnsureStaffAssignmentsAsync(db);
             return (dept.Id, dept.FacilityId);
         }
 
@@ -68,6 +69,7 @@ public class ConnectedOutpatientCareJourneyTests : IntegrationTestBase
         db.Departments.Add(department);
         await db.SaveChangesAsync();
 
+        await EnsureStaffAssignmentsAsync(db);
         return (department.Id, facility.Id);
     }
 
@@ -254,7 +256,41 @@ public class ConnectedOutpatientCareJourneyTests : IntegrationTestBase
         var visitAfterConsult = JsonDocument.Parse(await visitAfterConsultRes.Content.ReadAsStringAsync()).RootElement.GetProperty("data");
         Assert.Equal("InPharmacy", visitAfterConsult.GetProperty("status").GetString());
 
-        // 10. Pharmacy dispenses medication
+        // 10. Receptionist generates consolidated visit invoice
+        await AuthenticateAsync("rec@test.com");
+        var invoiceRes = await Client.PostAsJsonAsync("/api/v1/reception/billing/invoices/visit", new CreateVisitInvoiceRequest
+        {
+            PatientVisitId = visitId
+        });
+        Assert.Equal(HttpStatusCode.Created, invoiceRes.StatusCode);
+        var invoiceDoc = JsonDocument.Parse(await invoiceRes.Content.ReadAsStringAsync());
+        var invoiceData = invoiceDoc.RootElement.GetProperty("data");
+        var invoiceId = invoiceData.GetProperty("id").GetInt64();
+        var totalAmount = invoiceData.GetProperty("totalAmount").GetDecimal();
+        Assert.Equal(visitId, invoiceData.GetProperty("patientVisitId").GetInt64());
+        Assert.True(totalAmount > 0, "Consolidated visit invoice total must include consultation, diagnostic and pharmacy fees");
+
+        // Detailed item assertions: check line items, unit prices, line totals
+        var invItems = invoiceData.GetProperty("items").EnumerateArray().ToList();
+        Assert.True(invItems.Count >= 3, "Invoice must contain consultation, diagnostic, and prescription line items");
+
+        var consultItem = invItems.FirstOrDefault(i => i.GetProperty("referenceType").GetString() == "Consultation");
+        Assert.True(consultItem.ValueKind != JsonValueKind.Undefined, "Consultation line item must exist");
+        Assert.True(consultItem.GetProperty("unitPrice").GetDecimal() > 0);
+        Assert.Equal(1, consultItem.GetProperty("quantity").GetInt32());
+
+        var diagItem = invItems.FirstOrDefault(i => i.GetProperty("referenceType").GetString() == "DiagnosticItem");
+        Assert.True(diagItem.ValueKind != JsonValueKind.Undefined, "Diagnostic line item must exist");
+        Assert.Equal(120000m, diagItem.GetProperty("unitPrice").GetDecimal());
+        Assert.Equal(120000m, diagItem.GetProperty("lineTotal").GetDecimal());
+
+        var rxItem = invItems.FirstOrDefault(i => i.GetProperty("referenceType").GetString() == "PrescriptionItem");
+        Assert.True(rxItem.ValueKind != JsonValueKind.Undefined, "Prescription line item must exist");
+        Assert.Equal(2000m, rxItem.GetProperty("unitPrice").GetDecimal());
+        Assert.Equal(10, rxItem.GetProperty("quantity").GetInt32());
+        Assert.Equal(20000m, rxItem.GetProperty("lineTotal").GetDecimal());
+
+        // 11. Locate prescription ID & test dispensing before payment is blocked
         await AuthenticateAsync("pharm@test.com");
         var rxListRes = await Client.GetAsync("/api/v1/pharmacy/prescriptions?status=Pending");
         Assert.Equal(HttpStatusCode.OK, rxListRes.StatusCode);
@@ -271,28 +307,14 @@ public class ConnectedOutpatientCareJourneyTests : IntegrationTestBase
         }
         Assert.True(prescriptionId > 0, "Prescription must exist for the visit");
 
-        var dispenseRes = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{prescriptionId}/dispense", null);
-        Assert.Equal(HttpStatusCode.OK, dispenseRes.StatusCode);
+        // Pharmacist attempts to dispense BEFORE invoice payment -> BLOCKED with PRESCRIPTION_NOT_PAID
+        var earlyDispenseRes = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{prescriptionId}/dispense", null);
+        Assert.True(earlyDispenseRes.StatusCode == HttpStatusCode.UnprocessableEntity || earlyDispenseRes.StatusCode == HttpStatusCode.BadRequest);
+        var earlyDispenseError = await earlyDispenseRes.Content.ReadAsStringAsync();
+        Assert.Contains("PRESCRIPTION_NOT_PAID", earlyDispenseError);
 
-        // Verify visit status is InBilling
-        var visitAfterDispenseRes = await Client.GetAsync($"/api/v1/patient-visits/{visitId}");
-        var visitAfterDispense = JsonDocument.Parse(await visitAfterDispenseRes.Content.ReadAsStringAsync()).RootElement.GetProperty("data");
-        Assert.Equal("InBilling", visitAfterDispense.GetProperty("status").GetString());
-
-        // 11. Receptionist generates consolidated visit invoice and collects payment
+        // 12. Receptionist collects payment
         await AuthenticateAsync("rec@test.com");
-        var invoiceRes = await Client.PostAsJsonAsync("/api/v1/reception/billing/invoices/visit", new CreateVisitInvoiceRequest
-        {
-            PatientVisitId = visitId
-        });
-        Assert.Equal(HttpStatusCode.Created, invoiceRes.StatusCode);
-        var invoiceDoc = JsonDocument.Parse(await invoiceRes.Content.ReadAsStringAsync());
-        var invoiceData = invoiceDoc.RootElement.GetProperty("data");
-        var invoiceId = invoiceData.GetProperty("id").GetInt64();
-        var totalAmount = invoiceData.GetProperty("totalAmount").GetDecimal();
-        Assert.True(totalAmount > 0, "Consolidated visit invoice total must include consultation, diagnostic and pharmacy fees");
-
-        // Pay invoice
         var payRes = await Client.PostAsJsonAsync($"/api/v1/reception/billing/invoices/{invoiceId}/pay", new ProcessPaymentRequest
         {
             Amount = totalAmount,
@@ -301,7 +323,38 @@ public class ConnectedOutpatientCareJourneyTests : IntegrationTestBase
         });
         Assert.Equal(HttpStatusCode.OK, payRes.StatusCode);
 
-        // Final check: Visit status is Completed!
+        // 13. Pharmacist dispenses medication after payment
+        int stockBefore = 0;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicManagement.Infrastructure.Persistence.AppDbContext>();
+            var medEntity = await db.Medicines.FindAsync(MedicineEntityId);
+            stockBefore = medEntity!.StockQuantity;
+        }
+
+        await AuthenticateAsync("pharm@test.com");
+        var dispenseRes = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{prescriptionId}/dispense", null);
+        Assert.Equal(HttpStatusCode.OK, dispenseRes.StatusCode);
+
+        // Verify inventory delta and audit log
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicManagement.Infrastructure.Persistence.AppDbContext>();
+            var medEntity = await db.Medicines.FindAsync(MedicineEntityId);
+            Assert.Equal(stockBefore - 10, medEntity!.StockQuantity);
+
+            var stockTx = await db.MedicineStockTransactions
+                .FirstOrDefaultAsync(t => t.PrescriptionId == prescriptionId && t.Type == MedicineStockTransactionType.Dispense);
+            Assert.NotNull(stockTx);
+            Assert.Equal(-10, stockTx.QuantityChange);
+            Assert.Equal(stockBefore - 10, stockTx.BalanceAfter);
+
+            var rxEntity = await db.Prescriptions.FindAsync(prescriptionId);
+            Assert.NotNull(rxEntity);
+            Assert.Equal(PrescriptionStatus.Dispensed, rxEntity.Status);
+        }
+
+        // 14. Final check: Visit status is Completed!
         var finalVisitRes = await Client.GetAsync($"/api/v1/patient-visits/{visitId}");
         var finalVisit = JsonDocument.Parse(await finalVisitRes.Content.ReadAsStringAsync()).RootElement.GetProperty("data");
         Assert.Equal("Completed", finalVisit.GetProperty("status").GetString());

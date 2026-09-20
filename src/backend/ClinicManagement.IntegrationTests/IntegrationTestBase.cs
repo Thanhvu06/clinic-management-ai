@@ -27,6 +27,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
     public static Guid ReceptionistId { get; private set; }
     public static Guid PharmacistId { get; private set; }
     public static Guid TechnicianId { get; private set; }
+    public static Guid Doctor2UserId { get; private set; }
     
     public static long DoctorEntityId { get; private set; }
     public static long Doctor2EntityId { get; private set; }
@@ -82,6 +83,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
 
                 AdminId = (await db.Users.FirstAsync(u => u.UserName == "admin@test.com")).Id;
                 DoctorId = (await db.Users.FirstAsync(u => u.UserName == "doc@test.com")).Id;
+                Doctor2UserId = (await db.Users.FirstOrDefaultAsync(u => u.UserName == "doc2@test.com"))?.Id ?? Guid.Empty;
                 ReceptionistId = (await db.Users.FirstAsync(u => u.UserName == "rec@test.com")).Id;
                 PharmacistId = (await db.Users.FirstAsync(u => u.UserName == "pharm@test.com")).Id;
                 TechnicianId = (await db.Users.FirstOrDefaultAsync(u => u.UserName == "tech@test.com"))?.Id ?? Guid.Empty;
@@ -115,6 +117,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
                     await db.SaveChangesAsync();
                 }
 
+                await EnsureStaffAssignmentsAsync(db);
                 return;
             }
 
@@ -138,6 +141,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
             AdminId = Guid.Parse("11111111-1111-1111-1111-111111111111");
             DoctorId = Guid.Parse("22222222-2222-2222-2222-222222222222");
             var doc2UserId = Guid.Parse("22222222-2222-2222-2222-222222222223");
+            Doctor2UserId = doc2UserId;
             ReceptionistId = Guid.Parse("33333333-3333-3333-3333-333333333333");
             PharmacistId = Guid.Parse("55555555-5555-5555-5555-555555555555");
             TechnicianId = Guid.Parse("66666666-6666-6666-6666-666666666666");
@@ -312,11 +316,50 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
             SlotEntityId = slot.Id;
             MedicineEntityId = medicine.Id;
             PackageEntityId = package.Id;
+            await EnsureStaffAssignmentsAsync(db);
         }
         finally
         {
             _seedLock.Release();
         }
+    }
+
+    public static async Task EnsureStaffAssignmentsAsync(AppDbContext db)
+    {
+        var facilities = await db.Facilities.Where(f => f.IsActive).ToListAsync();
+        var defaultDept = await db.Departments.FirstOrDefaultAsync(d => d.IsActive);
+        var staffUsers = new (Guid UserId, string Role)[]
+        {
+            (ReceptionistId, "Receptionist"),
+            (DoctorId, "Doctor"),
+            (Doctor2UserId, "Doctor"),
+            (PharmacistId, "Pharmacist"),
+            (TechnicianId, "DiagnosticTechnician")
+        };
+
+        foreach (var facility in facilities)
+        {
+            var dept = await db.Departments.FirstOrDefaultAsync(d => d.FacilityId == facility.Id && d.IsActive) ?? defaultDept;
+            foreach (var (uId, role) in staffUsers)
+            {
+                if (uId == Guid.Empty) continue;
+                var exists = await db.StaffFacilityAssignments.AnyAsync(a => a.UserId == uId && a.FacilityId == facility.Id && a.IsActive);
+                if (!exists)
+                {
+                    db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+                    {
+                        UserId = uId,
+                        FacilityId = facility.Id,
+                        DepartmentId = dept?.Id,
+                        Role = role,
+                        IsPrimary = true,
+                        IsActive = true,
+                        AssignedAtUtc = DateTime.UtcNow
+                    });
+                }
+            }
+        }
+        await db.SaveChangesAsync();
     }
 
     protected static DateOnly GetFutureWorkingDate(int daysFromNow)

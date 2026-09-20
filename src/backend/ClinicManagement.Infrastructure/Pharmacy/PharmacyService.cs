@@ -301,26 +301,34 @@ public class PharmacyService : IPharmacyService
                 if (prescription.Items == null || prescription.Items.Count == 0)
                     throw new BusinessException("EMPTY_PRESCRIPTION", "Đơn thuốc không có danh mục thuốc để cấp.");
 
-                // Guard: If prescription was reserved for purchase OR has an existing invoice, it MUST be paid before dispensing
-                var wasReserved = prescription.Status == PrescriptionStatus.ReservedForPurchase ||
-                    await _dbContext.MedicineStockTransactions.AnyAsync(t => t.PrescriptionId == prescription.Id && t.Type == MedicineStockTransactionType.Reservation);
-
-                var activeInvoices = await _dbContext.Invoices
-                    .Where(inv => (prescription.PatientVisitId.HasValue && inv.PatientVisitId == prescription.PatientVisitId.Value)
-                               || (prescription.AppointmentId.HasValue && inv.AppointmentId == prescription.AppointmentId.Value)
-                               || inv.Items.Any(item => item.ReferenceType == "PrescriptionItem" && (item.ReferenceId == prescription.Id || (item.ReferenceId >= prescription.Id * 100000L && item.ReferenceId < (prescription.Id + 1) * 100000L))))
+                // Guard: Prescription must be paid before dispensing
+                // Item-level check: Every medicine in prescription.Items must be billed in an active invoice item with Status == InvoiceStatus.Paid
+                var paidInvoiceItems = await _dbContext.InvoiceItems
+                    .Where(ii => !ii.IsCancelled && ii.Invoice.Status == InvoiceStatus.Paid)
+                    .Where(ii => ii.ReferenceType == "PrescriptionItem" &&
+                                 (ii.ReferenceId == prescription.Id ||
+                                  (ii.ReferenceId >= prescription.Id * 100000L && ii.ReferenceId < (prescription.Id + 1) * 100000L)))
+                    .Select(ii => ii.ReferenceId)
                     .ToListAsync();
 
-                var hasInvoices = activeInvoices.Any();
-                var hasPaidInvoice = activeInvoices.Any(inv => inv.Status == InvoiceStatus.Paid);
-
-                if (wasReserved || hasInvoices)
+                bool isFullyPaid = false;
+                if (paidInvoiceItems.Contains(prescription.Id))
                 {
-                    if (!hasPaidInvoice)
-                    {
-                        throw new BusinessException("PRESCRIPTION_NOT_PAID", "Đơn thuốc chưa được thanh toán tại quầy thu ngân.");
-                    }
+                    isFullyPaid = true;
                 }
+                else
+                {
+                    var paidMedRefIds = paidInvoiceItems.ToHashSet();
+                    isFullyPaid = prescription.Items.All(item => paidMedRefIds.Contains(prescription.Id * 100000L + item.MedicineId));
+                }
+
+                if (!isFullyPaid)
+                {
+                    throw new BusinessException("PRESCRIPTION_NOT_PAID", "Đơn thuốc chưa được thanh toán tại quầy thu ngân.");
+                }
+
+                var wasReserved = prescription.Status == PrescriptionStatus.ReservedForPurchase ||
+                    await _dbContext.MedicineStockTransactions.AnyAsync(t => t.PrescriptionId == prescription.Id && t.Type == MedicineStockTransactionType.Reservation);
 
                 if (!wasReserved)
                 {
@@ -404,12 +412,16 @@ public class PharmacyService : IPharmacyService
 
                 if (visit != null)
                 {
-                    if (hasPaidInvoice)
+                    var hasUnpaidInvoices = await _dbContext.Invoices
+                        .AnyAsync(inv => (inv.PatientVisitId == visit.Id || (visit.AppointmentId.HasValue && inv.AppointmentId == visit.AppointmentId.Value))
+                                      && inv.Status == InvoiceStatus.Unpaid);
+
+                    if (!hasUnpaidInvoices)
                     {
                         visit.Status = VisitStatus.Completed;
                         visit.CompletedAtUtc = DateTime.UtcNow;
                     }
-                    else if (visit.Status == VisitStatus.InPharmacy || visit.Status == VisitStatus.ConsultationCompleted)
+                    else
                     {
                         visit.Status = VisitStatus.InBilling;
                     }
