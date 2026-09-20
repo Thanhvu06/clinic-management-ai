@@ -188,7 +188,7 @@ export const DoctorQueue: React.FC = () => {
                         <button 
                             type="button"
                             className="btn-secondary" 
-                            onClick={loadQueue}
+                            onClick={() => loadQueue(false)}
                             disabled={loading}
                             title="Tải lại danh sách"
                         >

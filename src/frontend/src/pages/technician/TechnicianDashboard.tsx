@@ -98,7 +98,7 @@ export const TechnicianDashboard: React.FC = () => {
                     </p>
                 </div>
                 <button
-                    onClick={loadData}
+                    onClick={() => loadData(false)}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 500, color: '#334155' }}
                 >
                     <RefreshCw size={15} /> Làm mới

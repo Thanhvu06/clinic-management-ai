@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
     Users, UserPlus, Search, Clock, Calendar, CheckCircle2,
     Printer, RefreshCw, CreditCard, Package,
-    Building2, Eye, AlertCircle
+    Building2, Eye
 } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import { organizationApi, type FacilityDto } from '../../api/organizationApi';
@@ -97,9 +97,10 @@ export const ReceptionWorkspace: React.FC = () => {
         setFacilityError(null);
         try {
             const res = await organizationApi.getFacilities(false);
-            if (res.success && res.data && res.data.length > 0) {
-                setFacilities(res.data);
-                setSelectedFacilityId(prev => prev ?? res.data[0].id);
+            const data = res.data;
+            if (res.success && data && data.length > 0) {
+                setFacilities(data);
+                setSelectedFacilityId(prev => prev ?? data[0].id);
             } else {
                 setFacilities([]);
             }
