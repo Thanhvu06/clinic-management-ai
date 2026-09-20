@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
     Users, UserPlus, Search, Clock, Calendar, CheckCircle2,
     Printer, RefreshCw, CreditCard, Package,
-    Building2, Eye
+    Building2, Eye, AlertTriangle
 } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import { organizationApi, type FacilityDto } from '../../api/organizationApi';
@@ -63,6 +63,8 @@ export const ReceptionWorkspace: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'today' | 'pending' | 'upcoming' | 'recent' | 'history'>('today');
     const [worklistItems, setWorklistItems] = useState<AppointmentItem[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
+    const [worklistError, setWorklistError] = useState<string | null>(null);
+    const [isStale, setIsStale] = useState<boolean>(false);
     const [page, setPage] = useState<number>(1);
     const [totalItems, setTotalItems] = useState<number>(0);
     const pageSize = 10;
@@ -103,6 +105,7 @@ export const ReceptionWorkspace: React.FC = () => {
                 setSelectedFacilityId(prev => prev ?? data[0].id);
             } else {
                 setFacilities([]);
+                setSelectedFacilityId(undefined);
             }
         } catch (err) {
             console.error('Lỗi khi tải danh sách cơ sở:', err);
@@ -130,7 +133,10 @@ export const ReceptionWorkspace: React.FC = () => {
 
     const fetchWorklist = useCallback(async (silent = false) => {
         const currentFetchId = ++fetchIdRef.current;
-        if (!silent) setLoading(true);
+        if (!silent) {
+            setLoading(true);
+            setWorklistError(null);
+        }
         try {
             const params = new URLSearchParams({
                 tab: activeTab,
@@ -146,12 +152,20 @@ export const ReceptionWorkspace: React.FC = () => {
             if (res.success && res.data) {
                 setWorklistItems(res.data.items || []);
                 setTotalItems(res.data.totalItems || res.data.totalCount || 0);
+                setWorklistError(null);
+                setIsStale(false);
             }
         } catch (err) {
             if (currentFetchId !== fetchIdRef.current) return;
             console.error('Lỗi khi tải danh sách lịch tiếp nhận:', err);
-            setWorklistItems([]);
-            setTotalItems(0);
+            if (silent) {
+                // Background polling error: preserve existing worklist and show stale banner
+                setIsStale(true);
+            } else {
+                setWorklistError('Không thể tải danh sách lịch tiếp nhận. Vui lòng thử lại.');
+                setWorklistItems([]);
+                setTotalItems(0);
+            }
         } finally {
             if (currentFetchId === fetchIdRef.current) {
                 setLoading(false);
@@ -159,12 +173,15 @@ export const ReceptionWorkspace: React.FC = () => {
         }
     }, [activeTab, page, pageSize, selectedFacilityId, searchTerm]);
 
+    // Refresh worklist and stats when selected facility or active tab changes
     useEffect(() => {
+        setWorklistError(null);
+        setIsStale(false);
         if (selectedFacilityId) {
             fetchStats(selectedFacilityId);
         }
         fetchWorklist();
-    }, [selectedFacilityId, fetchStats, fetchWorklist]);
+    }, [selectedFacilityId, activeTab, fetchStats, fetchWorklist]);
 
     // Background polling (every 25s)
     useEffect(() => {
@@ -180,12 +197,16 @@ export const ReceptionWorkspace: React.FC = () => {
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setPage(1);
+        setWorklistError(null);
+        setIsStale(false);
         fetchWorklist();
     };
 
     const handleRefreshAll = () => {
+        setWorklistError(null);
+        setIsStale(false);
         if (selectedFacilityId) fetchStats(selectedFacilityId);
-        fetchWorklist();
+        fetchWorklist(false);
     };
 
     // Fast check-in action from appointment
@@ -271,11 +292,23 @@ export const ReceptionWorkspace: React.FC = () => {
                                     Thử lại
                                 </button>
                             </div>
+                        ) : facilities.length === 0 ? (
+                            <span style={{ fontSize: '0.85rem', color: '#b45309', background: '#fef3c7', padding: '3px 10px', borderRadius: '6px', fontWeight: 500 }}>
+                                Chưa được phân công cơ sở trực
+                            </span>
+                        ) : facilities.length === 1 ? (
+                            <span style={{ fontWeight: 600, color: 'var(--c-primary, #0284c7)', padding: '3px 10px', background: '#e0f2fe', borderRadius: '6px', fontSize: '0.85rem' }}>
+                                {facilities[0].name} ({facilities[0].code})
+                            </span>
                         ) : (
                             <select
                                 className={styles.facilitySelect}
                                 value={selectedFacilityId || ''}
-                                onChange={(e) => setSelectedFacilityId(Number(e.target.value))}
+                                onChange={(e) => {
+                                    setWorklistError(null);
+                                    setIsStale(false);
+                                    setSelectedFacilityId(Number(e.target.value));
+                                }}
                             >
                                 {facilities.map((f) => (
                                     <option key={f.id} value={f.id}>
@@ -303,6 +336,16 @@ export const ReceptionWorkspace: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Unassigned Facility Banner */}
+            {!facilityLoading && !facilityError && facilities.length === 0 && (
+                <div style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#92400e', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <AlertTriangle size={20} color="#d97706" style={{ flexShrink: 0 }} />
+                    <div style={{ fontSize: '0.9rem' }}>
+                        <strong>Tài khoản chưa được phân công cơ sở trực:</strong> Bạn chưa có phân công làm việc tại cơ sở y tế nào. Vui lòng liên hệ quản trị viên hệ thống để được gán cơ sở trước khi thực hiện tiếp nhận và quản lý hàng đợi.
+                    </div>
+                </div>
+            )}
 
             {/* 2. Key Operational Metrics Cards */}
             <div className={styles.metricGrid}>
@@ -392,7 +435,7 @@ export const ReceptionWorkspace: React.FC = () => {
                         <button
                             type="button"
                             className={`${styles.tabButton} ${activeTab === 'today' ? styles.tabButtonActive : ''}`}
-                            onClick={() => { setActiveTab('today'); setPage(1); }}
+                            onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('today'); setPage(1); }}
                         >
                             <span>Hôm nay (Ưu tiên tiếp nhận)</span>
                             <span className={`${styles.tabBadge} ${activeTab === 'today' ? styles.tabBadgeActive : ''}`}>
@@ -402,7 +445,7 @@ export const ReceptionWorkspace: React.FC = () => {
                         <button
                             type="button"
                             className={`${styles.tabButton} ${activeTab === 'pending' ? styles.tabButtonActive : ''}`}
-                            onClick={() => { setActiveTab('pending'); setPage(1); }}
+                            onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('pending'); setPage(1); }}
                         >
                             <span>Chờ xác nhận</span>
                             <span className={`${styles.tabBadge} ${activeTab === 'pending' ? styles.tabBadgeActive : ''}`}>
@@ -412,25 +455,43 @@ export const ReceptionWorkspace: React.FC = () => {
                         <button
                             type="button"
                             className={`${styles.tabButton} ${activeTab === 'upcoming' ? styles.tabButtonActive : ''}`}
-                            onClick={() => { setActiveTab('upcoming'); setPage(1); }}
+                            onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('upcoming'); setPage(1); }}
                         >
                             <span>Sắp tới</span>
                         </button>
                         <button
                             type="button"
                             className={`${styles.tabButton} ${activeTab === 'recent' ? styles.tabButtonActive : ''}`}
-                            onClick={() => { setActiveTab('recent'); setPage(1); }}
+                            onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('recent'); setPage(1); }}
                         >
                             <span>Gần đây</span>
                         </button>
                         <button
                             type="button"
                             className={`${styles.tabButton} ${activeTab === 'history' ? styles.tabButtonActive : ''}`}
-                            onClick={() => { setActiveTab('history'); setPage(1); }}
+                            onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('history'); setPage(1); }}
                         >
                             <span>Toàn bộ lịch sử</span>
                         </button>
                     </div>
+
+                    {/* Stale Warning Banner */}
+                    {isStale && (
+                        <div style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#92400e', padding: '8px 16px', borderRadius: '6px', margin: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <AlertTriangle size={16} color="#d97706" />
+                                <span>Dữ liệu có thể chưa mới nhất do kết nối mạng trong lần đồng bộ gần nhất. Đang tự động thử lại...</span>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn-secondary"
+                                style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+                                onClick={() => fetchWorklist(false)}
+                            >
+                                Thử lại ngay
+                            </button>
+                        </div>
+                    )}
 
                     <div className={styles.tableResponsive}>
                         <table className={styles.table}>
@@ -450,6 +511,20 @@ export const ReceptionWorkspace: React.FC = () => {
                                         <td colSpan={6} className={styles.emptyState}>
                                             <RefreshCw className="spin" size={24} style={{ margin: '0 auto 8px' }} />
                                             <div>Đang tải danh sách hàng đợi tiếp nhận...</div>
+                                        </td>
+                                    </tr>
+                                ) : worklistError ? (
+                                    <tr>
+                                        <td colSpan={6} className={styles.emptyState}>
+                                            <div style={{ color: 'var(--c-danger, #ef4444)', marginBottom: '10px', fontSize: '0.9rem' }}>{worklistError}</div>
+                                            <button
+                                                type="button"
+                                                className="btn-primary"
+                                                style={{ padding: '6px 14px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                                onClick={() => fetchWorklist(false)}
+                                            >
+                                                <RefreshCw size={14} /> Thử lại
+                                            </button>
                                         </td>
                                     </tr>
                                 ) : worklistItems.length === 0 ? (

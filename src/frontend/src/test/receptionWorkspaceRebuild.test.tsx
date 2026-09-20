@@ -301,4 +301,67 @@ describe('Reception Workspace Rebuild', () => {
             );
         });
     });
+
+    it('handles 0 facilities by displaying unassigned banner and notice', async () => {
+        vi.mocked(organizationApi.getFacilities).mockResolvedValue({
+            success: true,
+            data: [],
+        } as any);
+
+        render(
+            <MemoryRouter>
+                <DialogProvider>
+                    <ReceptionWorkspace />
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Chưa được phân công cơ sở trực')).toBeInTheDocument();
+            expect(screen.getByText(/Tài khoản chưa được phân công cơ sở trực/)).toBeInTheDocument();
+        });
+    });
+
+    it('handles 1 facility by rendering static badge without select dropdown', async () => {
+        vi.mocked(organizationApi.getFacilities).mockResolvedValue({
+            success: true,
+            data: [mockFacilities[0]],
+        } as any);
+
+        render(
+            <MemoryRouter>
+                <DialogProvider>
+                    <ReceptionWorkspace />
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Cơ sở Quận 1 - Trung tâm (FAC-01)')).toBeInTheDocument();
+        });
+        expect(screen.queryByRole('combobox')).toBeNull();
+    });
+
+    it('displays error message and retry button on initial load failure', async () => {
+        vi.mocked(axiosClient.get).mockImplementation((url: string) => {
+            if (url.includes('/reception/appointments')) {
+                return Promise.reject(new Error('Network error'));
+            }
+            return Promise.resolve({ success: true, data: {} } as any);
+        });
+
+        render(
+            <MemoryRouter>
+                <DialogProvider>
+                    <ReceptionWorkspace />
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByText('Không thể tải danh sách lịch tiếp nhận. Vui lòng thử lại.')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /Thử lại/i })).toBeInTheDocument();
+        });
+    });
 });
+
