@@ -25,8 +25,8 @@ export const DoctorQueue: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
-    const loadQueue = useCallback(async () => {
-        setLoading(true);
+    const loadQueue = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true);
         setError(null);
         try {
             const res = await doctorApi.getQueue(selectedDate);
@@ -36,15 +36,25 @@ export const DoctorQueue: React.FC = () => {
                 setQueue([]);
             }
         } catch (err: any) {
-            const msg = err?.message || (typeof err === 'string' ? err : 'Không thể tải danh sách hàng đợi.');
-            setError(msg);
+            if (!silent) {
+                const msg = err?.message || (typeof err === 'string' ? err : 'Không thể tải danh sách hàng đợi.');
+                setError(msg);
+            }
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, [selectedDate]);
 
     useEffect(() => {
         loadQueue();
+    }, [loadQueue]);
+
+    // Background polling (every 25s)
+    useEffect(() => {
+        const timer = setInterval(() => {
+            loadQueue(true);
+        }, 25000);
+        return () => clearInterval(timer);
     }, [loadQueue]);
 
     const handleCheckIn = async (appointmentId: number) => {

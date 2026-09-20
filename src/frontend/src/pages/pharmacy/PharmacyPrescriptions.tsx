@@ -66,8 +66,11 @@ export const PharmacyPrescriptions: React.FC = () => {
     const [detailLoading, setDetailLoading] = useState(false);
     const [dispenseLoading, setDispenseLoading] = useState(false);
 
-    const fetchPrescriptions = async () => {
-        setLoading(true);
+    const fetchIdRef = React.useRef(0);
+
+    const fetchPrescriptions = React.useCallback(async (silent = false) => {
+        const currentFetchId = ++fetchIdRef.current;
+        if (!silent) setLoading(true);
         try {
             const params = new URLSearchParams({
                 page: page.toString(),
@@ -77,6 +80,7 @@ export const PharmacyPrescriptions: React.FC = () => {
             if (statusFilter) params.append('status', statusFilter);
 
             const res = await axiosClient.get<any, ApiResponse<any>>(`/pharmacy/prescriptions?${params.toString()}`);
+            if (currentFetchId !== fetchIdRef.current) return;
             if (res.success && res.data) {
                 setPrescriptions(res.data.items);
                 setTotalItems(res.data.totalItems);
@@ -84,13 +88,23 @@ export const PharmacyPrescriptions: React.FC = () => {
         } catch {
             // Handled
         } finally {
-            setLoading(false);
+            if (currentFetchId === fetchIdRef.current && !silent) {
+                setLoading(false);
+            }
         }
-    };
+    }, [page, search, statusFilter]);
 
     useEffect(() => {
         fetchPrescriptions();
-    }, [page, statusFilter]);
+    }, [fetchPrescriptions]);
+
+    // Background polling (every 25s)
+    useEffect(() => {
+        const timer = setInterval(() => {
+            fetchPrescriptions(true);
+        }, 25000);
+        return () => clearInterval(timer);
+    }, [fetchPrescriptions]);
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();

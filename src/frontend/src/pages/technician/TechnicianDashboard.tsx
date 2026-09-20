@@ -21,8 +21,8 @@ export const TechnicianDashboard: React.FC = () => {
     const [page, setPage] = useState<number>(1);
     const [, setTotalItems] = useState<number>(0);
 
-    const loadData = useCallback(async () => {
-        setLoading(true);
+    const loadData = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const [ordersRes, statsRes] = await Promise.all([
                 diagnosticApi.getTechnicianOrders({
@@ -44,43 +44,25 @@ export const TechnicianDashboard: React.FC = () => {
                 setStats(statsRes.data);
             }
         } catch (err: any) {
-            showAlert(err.message || 'Không thể tải danh sách chỉ định cận lâm sàng.', 'Lỗi', 'error');
+            if (!silent) {
+                showAlert(err.message || 'Không thể tải danh sách chỉ định cận lâm sàng.', 'Lỗi', 'error');
+            }
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, [statusFilter, dateFilter, searchTerm, page, showAlert]);
 
     useEffect(() => {
-        let isMounted = true;
-        Promise.all([
-            diagnosticApi.getTechnicianOrders({
-                status: statusFilter || undefined,
-                date: dateFilter || undefined,
-                search: searchTerm || undefined,
-                page,
-                pageSize: 15
-            }),
-            diagnosticApi.getTechnicianStats()
-        ])
-        .then(([ordersRes, statsRes]) => {
-            if (!isMounted) return;
-            if (ordersRes.success && ordersRes.data) {
-                setOrders(ordersRes.data.items);
-                setTotalItems(ordersRes.data.totalItems);
-            }
-            if (statsRes.success && statsRes.data) {
-                setStats(statsRes.data);
-            }
-        })
-        .catch(err => {
-            if (!isMounted) return;
-            showAlert(err.message || 'Không thể tải danh sách chỉ định cận lâm sàng.', 'Lỗi', 'error');
-        })
-        .finally(() => {
-            if (isMounted) setLoading(false);
-        });
-        return () => { isMounted = false; };
-    }, [statusFilter, dateFilter, searchTerm, page, showAlert]);
+        loadData();
+    }, [loadData]);
+
+    // Background polling (every 25s)
+    useEffect(() => {
+        const timer = setInterval(() => {
+            loadData(true);
+        }, 25000);
+        return () => clearInterval(timer);
+    }, [loadData]);
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();

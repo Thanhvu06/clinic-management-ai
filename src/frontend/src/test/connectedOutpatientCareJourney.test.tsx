@@ -19,6 +19,7 @@ vi.mock('../api/billingApi', () => ({
             processPayment: vi.fn(),
             cancelInvoice: vi.fn(),
             getTodayKpi: vi.fn(),
+            getUnbilledVisits: vi.fn(),
         },
     },
 }));
@@ -172,6 +173,12 @@ describe('Connected Outpatient Care Journey - Frontend Tests', () => {
                     totalItems: 0,
                     totalPages: 1,
                 },
+            });
+
+            vi.mocked(billingApi.reception.getUnbilledVisits).mockResolvedValue({
+                success: true,
+                message: 'OK',
+                data: [],
             });
 
             vi.mocked(billingApi.reception.createInvoiceFromVisit).mockResolvedValue({

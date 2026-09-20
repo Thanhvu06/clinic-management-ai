@@ -934,12 +934,15 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             var oldStatus = appointment.Status;
             appointment.Status = AppointmentStatus.Completed;
 
+            var relatedVisit = await _dbContext.PatientVisits.FirstOrDefaultAsync(v => v.AppointmentId == appointment.Id);
+
             var summary = appointment.VisitSummary;
             if (summary == null)
             {
                 summary = new VisitSummary
                 {
                     AppointmentId = appointment.Id,
+                    PatientVisitId = relatedVisit?.Id,
                     DoctorId = doctor.Id,
                     ChiefComplaint = request.ChiefComplaint,
                     ClinicalFindings = request.ClinicalFindings,
@@ -956,6 +959,11 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             else
             {
                 ValidateRowVersion(summary.RowVersion, request.EncounterRowVersion);
+
+                if (!summary.PatientVisitId.HasValue && relatedVisit != null)
+                {
+                    summary.PatientVisitId = relatedVisit.Id;
+                }
 
                 summary.ChiefComplaint = request.ChiefComplaint;
                 summary.ClinicalFindings = request.ClinicalFindings;
@@ -976,6 +984,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                     prescription = new Prescription
                     {
                         AppointmentId = appointment.Id,
+                        PatientVisitId = relatedVisit?.Id,
                         PatientId = appointment.PatientId,
                         DoctorId = doctor.Id,
                         Status = PrescriptionStatus.Issued,
@@ -988,6 +997,10 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 else
                 {
                     ValidateRowVersion(prescription.RowVersion, request.PrescriptionRowVersion);
+                    if (!prescription.PatientVisitId.HasValue && relatedVisit != null)
+                    {
+                        prescription.PatientVisitId = relatedVisit.Id;
+                    }
                     prescription.Status = PrescriptionStatus.Issued;
                     prescription.Notes = request.PrescriptionNotes;
                     prescription.CreatedAt = DateTime.UtcNow;
@@ -1032,7 +1045,6 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 CreatedAt = DateTime.UtcNow
             });
 
-            var relatedVisit = await _dbContext.PatientVisits.FirstOrDefaultAsync(v => v.AppointmentId == appointment.Id);
             if (relatedVisit != null)
             {
                 relatedVisit.Status = (request.IssuePrescription && request.PrescriptionItems != null && request.PrescriptionItems.Count > 0) || (appointment.Prescription != null && appointment.Prescription.Items.Count > 0)
