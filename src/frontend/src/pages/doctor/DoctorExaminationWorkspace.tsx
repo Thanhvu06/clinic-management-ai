@@ -221,6 +221,31 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         };
     }, [loadContext]);
 
+    // Background polling for diagnostic orders (every 20s) to reflect lab/imaging results in real-time
+    useEffect(() => {
+        if (!currentId) return;
+        let isMounted = true;
+
+        const pollOrders = async () => {
+            try {
+                const res = isVisit
+                    ? await diagnosticApi.getDoctorOrdersByVisit(currentId)
+                    : await diagnosticApi.getDoctorOrdersByAppointment(appointmentId);
+                if (isMounted && res.success && res.data) {
+                    setDiagnosticOrders(res.data);
+                }
+            } catch {
+                // Ignore polling errors to not disrupt doctor workflow
+            }
+        };
+
+        const timer = setInterval(pollOrders, 20000);
+        return () => {
+            isMounted = false;
+            clearInterval(timer);
+        };
+    }, [currentId, isVisit, appointmentId]);
+
     // Computed BMI
     const computedBmi = useMemo(() => {
         const w = parseFloat(weight);
