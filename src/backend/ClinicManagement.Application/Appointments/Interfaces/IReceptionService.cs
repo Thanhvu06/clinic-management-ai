@@ -8,10 +8,12 @@ namespace ClinicManagement.Application.Appointments.Interfaces;
 
 public interface IReceptionService
 {
-    Task<PagedResult<ReceptionAppointmentDto>> GetAppointmentsAsync(string? status, string? search, int page, int pageSize);
+    Task<PagedResult<ReceptionAppointmentDto>> GetAppointmentsAsync(string? status, string? tab, long? facilityId, string? search, int page, int pageSize);
+    Task<PagedResult<ReceptionAppointmentDto>> GetAppointmentsAsync(string? status, string? search, int page, int pageSize)
+        => GetAppointmentsAsync(status, null, null, search, page, pageSize);
     Task<ReceptionAppointmentDto> GetAppointmentByIdAsync(long appointmentId);
     Task<List<AppointmentHistoryDto>> GetAppointmentHistoryAsync(long appointmentId);
     Task ConfirmAppointmentAsync(long appointmentId);
     Task CheckInAppointmentAsync(long appointmentId);
-    Task<ReceptionStatsDto> GetStatsAsync();
+    Task<ReceptionStatsDto> GetStatsAsync(long? facilityId = null);
 }

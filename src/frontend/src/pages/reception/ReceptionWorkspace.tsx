@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
     Users, UserPlus, Search, Clock, Calendar, CheckCircle2,
     Printer, RefreshCw, CreditCard, Package,
-    Building2, Eye
+    Building2, Eye, AlertCircle
 } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import { organizationApi, type FacilityDto } from '../../api/organizationApi';
@@ -41,6 +41,8 @@ export const ReceptionWorkspace: React.FC = () => {
     // Facilities
     const [facilities, setFacilities] = useState<FacilityDto[]>([]);
     const [selectedFacilityId, setSelectedFacilityId] = useState<number | undefined>(undefined);
+    const [facilityLoading, setFacilityLoading] = useState<boolean>(true);
+    const [facilityError, setFacilityError] = useState<string | null>(null);
 
     // Live clock
     const [currentTime, setCurrentTime] = useState<string>('');
@@ -73,6 +75,9 @@ export const ReceptionWorkspace: React.FC = () => {
     const [currentTicket, setCurrentTicket] = useState<CheckInTicketDto | null>(null);
     const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
+    // Stale request tracking
+    const fetchIdRef = useRef(0);
+
     // Update live clock
     useEffect(() => {
         const updateClock = () => {
@@ -87,18 +92,30 @@ export const ReceptionWorkspace: React.FC = () => {
     }, []);
 
     // Fetch facilities on mount
-    useEffect(() => {
-        organizationApi.getFacilities(false)
-            .then(res => {
-                if (res.success && res.data && res.data.length > 0) {
-                    setFacilities(res.data);
-                    setSelectedFacilityId(res.data[0].id);
-                }
-            })
-            .catch(err => console.error('Lỗi khi tải danh sách cơ sở:', err));
+    const loadFacilities = useCallback(async () => {
+        setFacilityLoading(true);
+        setFacilityError(null);
+        try {
+            const res = await organizationApi.getFacilities(false);
+            if (res.success && res.data && res.data.length > 0) {
+                setFacilities(res.data);
+                setSelectedFacilityId(prev => prev ?? res.data[0].id);
+            } else {
+                setFacilities([]);
+            }
+        } catch (err) {
+            console.error('Lỗi khi tải danh sách cơ sở:', err);
+            setFacilityError('Không thể tải danh sách cơ sở làm việc.');
+        } finally {
+            setFacilityLoading(false);
+        }
     }, []);
 
-    const fetchStats = async (facId?: number) => {
+    useEffect(() => {
+        loadFacilities();
+    }, [loadFacilities]);
+
+    const fetchStats = useCallback(async (facId?: number) => {
         try {
             const query = facId ? `?facilityId=${facId}` : '';
             const res = await axiosClient.get<any, ApiResponse<any>>(`/reception/stats${query}`);
@@ -108,13 +125,15 @@ export const ReceptionWorkspace: React.FC = () => {
         } catch (err) {
             console.error('Lỗi tải thống kê tiếp nhận:', err);
         }
-    };
+    }, []);
 
-    const fetchWorklist = async () => {
-        setLoading(true);
+    const fetchWorklist = useCallback(async (silent = false) => {
+        const currentFetchId = ++fetchIdRef.current;
+        if (!silent) setLoading(true);
         try {
             const params = new URLSearchParams({
                 tab: activeTab,
+                status: activeTab,
                 page: page.toString(),
                 pageSize: pageSize.toString()
             });
@@ -122,25 +141,40 @@ export const ReceptionWorkspace: React.FC = () => {
             if (searchTerm.trim()) params.append('search', searchTerm.trim());
 
             const res = await axiosClient.get<any, ApiResponse<any>>(`/reception/appointments?${params.toString()}`);
+            if (currentFetchId !== fetchIdRef.current) return;
             if (res.success && res.data) {
                 setWorklistItems(res.data.items || []);
-                setTotalItems(res.data.totalItems || 0);
+                setTotalItems(res.data.totalItems || res.data.totalCount || 0);
             }
         } catch (err) {
+            if (currentFetchId !== fetchIdRef.current) return;
             console.error('Lỗi khi tải danh sách lịch tiếp nhận:', err);
             setWorklistItems([]);
             setTotalItems(0);
         } finally {
-            setLoading(false);
+            if (currentFetchId === fetchIdRef.current) {
+                setLoading(false);
+            }
         }
-    };
+    }, [activeTab, page, pageSize, selectedFacilityId, searchTerm]);
 
     useEffect(() => {
         if (selectedFacilityId) {
             fetchStats(selectedFacilityId);
         }
         fetchWorklist();
-    }, [selectedFacilityId, activeTab, page]);
+    }, [selectedFacilityId, fetchStats, fetchWorklist]);
+
+    // Background polling (every 25s)
+    useEffect(() => {
+        const timer = setInterval(() => {
+            if (selectedFacilityId) {
+                fetchStats(selectedFacilityId);
+            }
+            fetchWorklist(true);
+        }, 25000);
+        return () => clearInterval(timer);
+    }, [selectedFacilityId, fetchStats, fetchWorklist]);
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -222,17 +256,33 @@ export const ReceptionWorkspace: React.FC = () => {
 
                     <div className={styles.facilitySelectWrapper}>
                         <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Cơ sở trực:</span>
-                        <select
-                            className={styles.facilitySelect}
-                            value={selectedFacilityId || ''}
-                            onChange={(e) => setSelectedFacilityId(Number(e.target.value))}
-                        >
-                            {facilities.map((f) => (
-                                <option key={f.id} value={f.id}>
-                                    {f.name} ({f.code})
-                                </option>
-                            ))}
-                        </select>
+                        {facilityLoading ? (
+                            <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Đang tải cơ sở...</span>
+                        ) : facilityError ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontSize: '0.82rem', color: 'var(--c-danger, #ef4444)' }}>{facilityError}</span>
+                                <button
+                                    type="button"
+                                    className="btn-secondary"
+                                    style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+                                    onClick={loadFacilities}
+                                >
+                                    Thử lại
+                                </button>
+                            </div>
+                        ) : (
+                            <select
+                                className={styles.facilitySelect}
+                                value={selectedFacilityId || ''}
+                                onChange={(e) => setSelectedFacilityId(Number(e.target.value))}
+                            >
+                                {facilities.map((f) => (
+                                    <option key={f.id} value={f.id}>
+                                        {f.name} ({f.code})
+                                    </option>
+                                ))}
+                            </select>
+                        )}
                     </div>
                 </div>
 
@@ -557,6 +607,11 @@ export const ReceptionWorkspace: React.FC = () => {
                         <div className={styles.actionCardHeader}>
                             <CreditCard size={20} color="#16a34a" />
                             <h3 className={styles.actionCardTitle}>Hàng đợi viện phí & Thu ngân</h3>
+                            {stats?.unbilledCount !== undefined && stats.unbilledCount > 0 && (
+                                <span className="badge badge-warning" style={{ marginLeft: 'auto', fontSize: '0.75rem' }}>
+                                    {stats.unbilledCount} chờ thu
+                                </span>
+                            )}
                         </div>
                         <p className={styles.actionCardDesc}>
                             Thu tiền công khám, dịch vụ cận lâm sàng và đơn thuốc đã xác nhận mua theo cơ chế khóa chống thu trùng.

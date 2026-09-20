@@ -31,16 +31,22 @@ public class ReceptionController : ControllerBase
     }
 
     [HttpGet("stats")]
-    public async Task<IActionResult> GetStats()
+    public async Task<IActionResult> GetStats([FromQuery] long? facilityId = null)
     {
-        var result = await _receptionService.GetStatsAsync();
+        var result = await _receptionService.GetStatsAsync(facilityId);
         return Ok(ApiResponse<ReceptionStatsDto>.Ok(result));
     }
 
     [HttpGet("appointments")]
-    public async Task<IActionResult> GetAppointments([FromQuery] string? status, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    public async Task<IActionResult> GetAppointments(
+        [FromQuery] string? status,
+        [FromQuery] string? tab,
+        [FromQuery] long? facilityId,
+        [FromQuery] string? search,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var result = await _receptionService.GetAppointmentsAsync(status, search, page, pageSize);
+        var result = await _receptionService.GetAppointmentsAsync(status, tab, facilityId, search, page, pageSize);
         return Ok(ApiResponse<PagedResult<ReceptionAppointmentDto>>.Ok(result));
     }
 

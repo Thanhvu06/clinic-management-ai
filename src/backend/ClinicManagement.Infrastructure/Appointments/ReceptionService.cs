@@ -21,15 +21,18 @@ public class ReceptionService : IReceptionService
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IFacilityAuthorizationService _facilityAuthService;
 
     public ReceptionService(
         AppDbContext dbContext,
         ICurrentUserService currentUserService,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IFacilityAuthorizationService facilityAuthService)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _dateTimeProvider = dateTimeProvider;
+        _facilityAuthService = facilityAuthService;
     }
 
     private Guid GetUserId()
@@ -40,9 +43,15 @@ public class ReceptionService : IReceptionService
         return currentUserId.Value;
     }
 
-    public async Task<PagedResult<ReceptionAppointmentDto>> GetAppointmentsAsync(string? status, string? search, int page, int pageSize)
+    public async Task<PagedResult<ReceptionAppointmentDto>> GetAppointmentsAsync(string? status, string? tab, long? facilityId, string? search, int page, int pageSize)
     {
+        var userId = GetUserId();
         var today = _dateTimeProvider.VietnamToday;
+
+        if (facilityId.HasValue && facilityId.Value > 0)
+        {
+            await _facilityAuthService.ValidateUserFacilityAccessAsync(userId, facilityId.Value);
+        }
 
         var query = from a in _dbContext.Appointments.AsNoTracking()
                     join p in _dbContext.Patients.AsNoTracking() on a.PatientId equals p.Id
@@ -52,6 +61,10 @@ public class ReceptionService : IReceptionService
                     join du in _dbContext.Users.AsNoTracking() on d.UserId equals du.Id into duGroup
                     from du in duGroup.DefaultIfEmpty()
                     join s in _dbContext.Specialties.AsNoTracking() on a.SpecialtyId equals s.Id
+                    join pv in _dbContext.PatientVisits.AsNoTracking() on a.Id equals pv.AppointmentId into pvGroup
+                    from pv in pvGroup.DefaultIfEmpty()
+                    join f in _dbContext.Facilities.AsNoTracking() on pv.FacilityId equals f.Id into fGroup
+                    from f in fGroup.DefaultIfEmpty()
                     select new
                     {
                         Appointment = a,
@@ -59,29 +72,41 @@ public class ReceptionService : IReceptionService
                         PatientPhone = pu != null ? pu.PhoneNumber : (p.PhoneNumber ?? string.Empty),
                         MedicalRecordNumber = p.MedicalRecordNumber ?? string.Empty,
                         NationalId = p.NationalId ?? string.Empty,
+                        DoctorId = d.Id,
+                        DoctorUserId = d.UserId,
                         DoctorName = du != null ? du.FullName : "Bác sĩ",
-                        SpecialtyName = s.Name
+                        SpecialtyName = s.Name,
+                        PatientVisitId = pv != null ? (long?)pv.Id : null,
+                        FacilityId = pv != null ? (long?)pv.FacilityId : p.PrimaryFacilityId,
+                        FacilityName = f != null ? f.Name : null
                     };
 
-        var normalizedStatus = status?.Trim().ToLower();
-        if (normalizedStatus == "today")
+        if (facilityId.HasValue && facilityId.Value > 0)
+        {
+            var facId = facilityId.Value;
+            query = query.Where(x => (x.FacilityId.HasValue && x.FacilityId.Value == facId)
+                                  || (!x.FacilityId.HasValue && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == x.DoctorUserId && s.IsActive && s.FacilityId == facId)));
+        }
+
+        var effectiveFilter = (!string.IsNullOrWhiteSpace(tab) ? tab : status)?.Trim().ToLower();
+        if (effectiveFilter == "today")
         {
             query = query.Where(x => x.Appointment.AppointmentDate == today && x.Appointment.Status != AppointmentStatus.Cancelled);
         }
-        else if (normalizedStatus == "pending")
+        else if (effectiveFilter == "pending")
         {
             query = query.Where(x => x.Appointment.Status == AppointmentStatus.Pending);
         }
-        else if (normalizedStatus == "upcoming")
+        else if (effectiveFilter == "upcoming")
         {
             query = query.Where(x => x.Appointment.AppointmentDate > today && x.Appointment.Status != AppointmentStatus.Cancelled);
         }
-        else if (normalizedStatus == "recent")
+        else if (effectiveFilter == "recent")
         {
             var recentDate = today.AddDays(-3);
             query = query.Where(x => x.Appointment.AppointmentDate >= recentDate && x.Appointment.AppointmentDate <= today);
         }
-        else if (normalizedStatus == "history")
+        else if (effectiveFilter == "history")
         {
             query = query.Where(x => x.Appointment.AppointmentDate < today || x.Appointment.Status == AppointmentStatus.Completed || x.Appointment.Status == AppointmentStatus.Cancelled);
         }
@@ -100,7 +125,7 @@ public class ReceptionService : IReceptionService
                                   || x.NationalId.ToLower().Contains(clean));
         }
 
-        if (normalizedStatus == "history")
+        if (effectiveFilter == "history")
         {
             query = query.OrderByDescending(x => x.Appointment.AppointmentDate)
                          .ThenByDescending(x => x.Appointment.StartTime);
@@ -117,7 +142,7 @@ public class ReceptionService : IReceptionService
         var totalItems = await query.CountAsync();
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
 
-        var resultItems = items.Select(x => MapToDto(x.Appointment, x.PatientName, x.PatientPhone, x.MedicalRecordNumber, x.NationalId, x.DoctorName, x.SpecialtyName)).ToList();
+        var resultItems = items.Select(x => MapToDto(x.Appointment, x.PatientName, x.PatientPhone, x.MedicalRecordNumber, x.NationalId, x.DoctorName, x.SpecialtyName, x.PatientVisitId, x.FacilityId, x.FacilityName)).ToList();
 
         return new PagedResult<ReceptionAppointmentDto>(resultItems, totalItems, page, pageSize);
     }
@@ -129,8 +154,13 @@ public class ReceptionService : IReceptionService
                     join pu in _dbContext.Users on p.UserId equals (Guid?)pu.Id into puGroup
                     from pu in puGroup.DefaultIfEmpty()
                     join d in _dbContext.Doctors on a.DoctorId equals d.Id
-                    join du in _dbContext.Users on d.UserId equals du.Id
+                    join du in _dbContext.Users on d.UserId equals du.Id into duGroup
+                    from du in duGroup.DefaultIfEmpty()
                     join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
+                    join pv in _dbContext.PatientVisits on a.Id equals pv.AppointmentId into pvGroup
+                    from pv in pvGroup.DefaultIfEmpty()
+                    join f in _dbContext.Facilities on pv.FacilityId equals f.Id into fGroup
+                    from f in fGroup.DefaultIfEmpty()
                     where a.Id == appointmentId
                     select new
                     {
@@ -139,15 +169,18 @@ public class ReceptionService : IReceptionService
                         PatientPhone = pu != null ? pu.PhoneNumber : (p.PhoneNumber ?? string.Empty),
                         MedicalRecordNumber = p.MedicalRecordNumber ?? string.Empty,
                         NationalId = p.NationalId ?? string.Empty,
-                        DoctorName = du.FullName,
-                        SpecialtyName = s.Name
+                        DoctorName = du != null ? du.FullName : "Bác sĩ",
+                        SpecialtyName = s.Name,
+                        PatientVisitId = pv != null ? (long?)pv.Id : null,
+                        FacilityId = pv != null ? (long?)pv.FacilityId : p.PrimaryFacilityId,
+                        FacilityName = f != null ? f.Name : null
                     };
 
         var item = await query.FirstOrDefaultAsync();
 
         if (item == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
 
-        return MapToDto(item.Appointment, item.PatientName, item.PatientPhone, item.MedicalRecordNumber, item.NationalId, item.DoctorName, item.SpecialtyName);
+        return MapToDto(item.Appointment, item.PatientName, item.PatientPhone, item.MedicalRecordNumber, item.NationalId, item.DoctorName, item.SpecialtyName, item.PatientVisitId, item.FacilityId, item.FacilityName);
     }
 
     public async Task<List<AppointmentHistoryDto>> GetAppointmentHistoryAsync(long appointmentId)
@@ -297,15 +330,41 @@ public class ReceptionService : IReceptionService
         await _dbContext.SaveChangesAsync();
     }
 
-    public async Task<ReceptionStatsDto> GetStatsAsync()
+    public async Task<ReceptionStatsDto> GetStatsAsync(long? facilityId = null)
     {
+        var userId = GetUserId();
         var today = _dateTimeProvider.VietnamToday;
-        var appointmentsToday = await _dbContext.Appointments
+
+        if (facilityId.HasValue && facilityId.Value > 0)
+        {
+            await _facilityAuthService.ValidateUserFacilityAccessAsync(userId, facilityId.Value);
+        }
+
+        var apptQuery = _dbContext.Appointments.AsNoTracking();
+        if (facilityId.HasValue && facilityId.Value > 0)
+        {
+            var facId = facilityId.Value;
+            apptQuery = apptQuery.Where(a => (a.PatientVisit != null && a.PatientVisit.FacilityId == facId)
+                                          || (a.PatientVisit == null && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == a.Doctor.UserId && s.IsActive && s.FacilityId == facId))
+                                          || (a.PatientVisit == null && a.Patient.PrimaryFacilityId == facId));
+        }
+
+        var appointmentsToday = await apptQuery
             .Where(a => a.AppointmentDate == today)
             .ToListAsync();
 
         var pendingChangeRequests = await _dbContext.AppointmentChangeRequests
             .CountAsync(c => c.Status == AppointmentChangeRequestStatus.Pending);
+
+        var unbilledVisitsQuery = _dbContext.PatientVisits
+            .AsNoTracking()
+            .Where(v => v.Status == VisitStatus.InBilling || (v.Invoices.Any() && v.Invoices.All(i => i.Status == InvoiceStatus.Unpaid)));
+
+        if (facilityId.HasValue && facilityId.Value > 0)
+        {
+            unbilledVisitsQuery = unbilledVisitsQuery.Where(v => v.FacilityId == facilityId.Value);
+        }
+        var unbilledCount = await unbilledVisitsQuery.CountAsync();
 
         return new ReceptionStatsDto
         {
@@ -313,11 +372,22 @@ public class ReceptionService : IReceptionService
             PendingAppointmentsToday = appointmentsToday.Count(a => a.Status == AppointmentStatus.Pending),
             ConfirmedAppointmentsToday = appointmentsToday.Count(a => a.Status == AppointmentStatus.Confirmed),
             CompletedAppointmentsToday = appointmentsToday.Count(a => a.Status == AppointmentStatus.Completed),
-            PendingChangeRequests = pendingChangeRequests
+            PendingChangeRequests = pendingChangeRequests,
+            UnbilledCount = unbilledCount
         };
     }
 
-    private static ReceptionAppointmentDto MapToDto(Appointment a, string patientName, string patientPhone, string mrn, string nationalId, string doctorName, string specialtyName) => new()
+    private static ReceptionAppointmentDto MapToDto(
+        Appointment a, 
+        string patientName, 
+        string patientPhone, 
+        string mrn, 
+        string nationalId, 
+        string doctorName, 
+        string specialtyName,
+        long? patientVisitId = null,
+        long? facilityId = null,
+        string? facilityName = null) => new()
     {
         Id = a.Id,
         AppointmentCode = a.AppointmentCode,
@@ -335,6 +405,9 @@ public class ReceptionService : IReceptionService
         MedicalRecordNumber = mrn ?? string.Empty,
         NationalId = nationalId ?? string.Empty,
         DoctorName = doctorName ?? string.Empty,
-        SpecialtyName = specialtyName ?? string.Empty
+        SpecialtyName = specialtyName ?? string.Empty,
+        PatientVisitId = patientVisitId,
+        FacilityId = facilityId,
+        FacilityName = facilityName
     };
 }

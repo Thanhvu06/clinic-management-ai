@@ -9,4 +9,7 @@ public class ReceptionAppointmentDto : AppointmentDto
     public string PatientPhone { get; set; } = string.Empty;
     public string MedicalRecordNumber { get; set; } = string.Empty;
     public string NationalId { get; set; } = string.Empty;
+    public long? PatientVisitId { get; set; }
+    public long? FacilityId { get; set; }
+    public string? FacilityName { get; set; }
 }
