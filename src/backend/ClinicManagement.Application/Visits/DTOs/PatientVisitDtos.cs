@@ -91,7 +91,8 @@ public class EmergencyContactInputDto
 
 public class WalkInRegistrationRequest
 {
-    [Required(ErrorMessage = "Họ và tên không được để trống.")]
+    public long? ExistingPatientId { get; set; }
+
     [MaxLength(150)]
     public string FullName { get; set; } = string.Empty;
 

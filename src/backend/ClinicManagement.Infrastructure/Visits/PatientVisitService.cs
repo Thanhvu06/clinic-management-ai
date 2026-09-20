@@ -907,23 +907,30 @@ public class PatientVisitService : IPatientVisitService
 
     private async Task<Patient> ResolveOrCreatePatientAsync(WalkInRegistrationRequest request, long facilityId, CancellationToken cancellationToken)
     {
-        var cleanPhone = request.PhoneNumber.Trim();
-        var cleanName = request.FullName.Trim();
+        Patient? patient = null;
+
+        // 0. Try finding by ExistingPatientId if provided
+        if (request.ExistingPatientId.HasValue && request.ExistingPatientId.Value > 0)
+        {
+            patient = await _dbContext.Patients
+                .FirstOrDefaultAsync(p => p.Id == request.ExistingPatientId.Value, cancellationToken);
+        }
+
+        var cleanPhone = request.PhoneNumber?.Trim();
+        var cleanName = request.FullName?.Trim() ?? string.Empty;
         var cleanCccd = string.IsNullOrWhiteSpace(request.IdentityCardNumber)
             ? null
             : request.IdentityCardNumber.Trim().Replace(" ", "").Replace("-", "");
 
-        Patient? patient = null;
-
         // 1. Try finding by CCCD/NationalId
-        if (!string.IsNullOrEmpty(cleanCccd))
+        if (patient == null && !string.IsNullOrEmpty(cleanCccd))
         {
             patient = await _dbContext.Patients
                 .FirstOrDefaultAsync(p => p.NationalId == cleanCccd, cancellationToken);
         }
 
         // 2. Try finding by Phone and Name
-        if (patient == null)
+        if (patient == null && !string.IsNullOrEmpty(cleanPhone) && !string.IsNullOrEmpty(cleanName))
         {
             patient = await _dbContext.Patients
                 .FirstOrDefaultAsync(p => p.PhoneNumber == cleanPhone && p.FullName == cleanName, cancellationToken);

@@ -287,6 +287,9 @@ public class ReceptionService : IReceptionService
         var appointment = await _dbContext.Appointments.FirstOrDefaultAsync(a => a.Id == appointmentId);
         if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
 
+        if (appointment.Status == AppointmentStatus.CheckedIn)
+            return;
+
         if (appointment.Status != AppointmentStatus.Confirmed)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể check-in lịch hẹn ở trạng thái Confirmed.");
 

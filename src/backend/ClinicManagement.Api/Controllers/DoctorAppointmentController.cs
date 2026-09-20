@@ -52,6 +52,7 @@ public class DoctorAppointmentController : ControllerBase
     }
 
     [HttpGet("{id}/patient-context")]
+    [HttpGet("{id}/clinical-context")]
     public async Task<IActionResult> GetPatientClinicalContext(long id)
     {
         var result = await _doctorAppointmentService.GetPatientClinicalContextAsync(id);

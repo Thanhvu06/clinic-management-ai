@@ -562,6 +562,8 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             : null;
         var doctorUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == doctor.UserId);
 
+        var patientId = appointment.PatientId;
+
         var pastAppointments = await _dbContext.Appointments
             .AsNoTracking()
             .Include(a => a.Doctor)
@@ -570,21 +572,48 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             .Include(a => a.Prescription)
                 .ThenInclude(p => p!.Items)
                     .ThenInclude(i => i.Medicine)
-            .Where(a => a.PatientId == appointment.PatientId && a.Id != appointment.Id && a.Status == AppointmentStatus.Completed)
+            .Where(a => a.PatientId == patientId && a.Id != appointment.Id && a.Status == AppointmentStatus.Completed)
             .OrderByDescending(a => a.AppointmentDate)
             .ThenByDescending(a => a.StartTime)
             .Take(20)
             .ToListAsync();
 
         var pastDoctorUserIds = pastAppointments.Select(a => a.Doctor.UserId).Distinct().ToList();
+
+        var pastWalkInVisits = await _dbContext.PatientVisits
+            .AsNoTracking()
+            .Include(v => v.AssignedDoctor)
+            .Include(v => v.Department)
+                .ThenInclude(d => d.Specialty)
+            .Include(v => v.VisitSummary)
+            .Include(v => v.Prescriptions)
+                .ThenInclude(p => p.Items)
+                    .ThenInclude(i => i.Medicine)
+            .Where(v => v.PatientId == patientId && v.AppointmentId == null &&
+                        (v.Status == VisitStatus.Completed || v.Status == VisitStatus.ConsultationCompleted ||
+                         v.Status == VisitStatus.InPharmacy || v.Status == VisitStatus.InBilling))
+            .OrderByDescending(v => v.VisitDate)
+            .ThenByDescending(v => v.CheckedInAtUtc)
+            .Take(20)
+            .ToListAsync();
+
+        var pastWalkInDoctorUserIds = pastWalkInVisits
+            .Where(v => v.AssignedDoctor != null)
+            .Select(v => v.AssignedDoctor!.UserId)
+            .Distinct()
+            .ToList();
+
+        var allDoctorUserIds = pastDoctorUserIds.Concat(pastWalkInDoctorUserIds).Distinct().ToList();
         var pastDoctorUsers = await _dbContext.Users
-            .Where(u => pastDoctorUserIds.Contains(u.Id))
+            .Where(u => allDoctorUserIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.FullName);
 
-        var pastVisitDtos = pastAppointments.Select(a =>
+        var pastVisitDtos = new List<PastVisitSummaryDto>();
+
+        foreach (var a in pastAppointments)
         {
             pastDoctorUsers.TryGetValue(a.Doctor.UserId, out var docName);
-            return new PastVisitSummaryDto
+            pastVisitDtos.Add(new PastVisitSummaryDto
             {
                 AppointmentId = a.Id,
                 AppointmentCode = a.AppointmentCode,
@@ -594,8 +623,31 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 Diagnosis = a.VisitSummary?.Diagnosis,
                 Summary = a.VisitSummary?.Summary,
                 PrescriptionItemNames = a.Prescription?.Items.Select(i => i.Medicine?.Name ?? "Thuốc").ToList() ?? new List<string>()
-            };
-        }).ToList();
+            });
+        }
+
+        foreach (var v in pastWalkInVisits)
+        {
+            string? docName = null;
+            if (v.AssignedDoctor != null) pastDoctorUsers.TryGetValue(v.AssignedDoctor.UserId, out docName);
+            pastVisitDtos.Add(new PastVisitSummaryDto
+            {
+                AppointmentId = 0,
+                PatientVisitId = v.Id,
+                AppointmentCode = v.VisitCode,
+                Date = v.VisitDate,
+                DoctorName = docName ?? "Bác sĩ",
+                SpecialtyName = v.Department?.Specialty?.Name ?? v.Department?.Name ?? string.Empty,
+                Diagnosis = v.VisitSummary?.Diagnosis,
+                Summary = v.VisitSummary?.Summary,
+                PrescriptionItemNames = v.Prescriptions.SelectMany(p => p.Items).Select(i => i.Medicine?.Name ?? "Thuốc").ToList()
+            });
+        }
+
+        pastVisitDtos = pastVisitDtos
+            .OrderByDescending(p => p.Date)
+            .Take(20)
+            .ToList();
 
         VitalSignsDto? vitalsDto = null;
         if (appointment.VitalSigns != null)
@@ -604,21 +656,23 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             vitalsDto = MapVitalsToDto(appointment.VitalSigns, recorder?.FullName ?? "Nhân viên y tế");
         }
 
-        // 1. Vital history query across appointments for this patient (exclude Cancelled and NoShow)
-        var vitalsAppointments = await _dbContext.Appointments
+        // 1. Vital history query across appointments & walk-ins for this patient (exclude Cancelled and NoShow)
+        var allVitalSigns = await _dbContext.AppointmentVitalSigns
             .AsNoTracking()
-            .Include(a => a.VitalSigns)
-            .Where(a => a.PatientId == appointment.PatientId &&
-                        a.Status != AppointmentStatus.Cancelled &&
-                        a.Status != AppointmentStatus.NoShow &&
-                        a.VitalSigns != null)
-            .OrderByDescending(a => a.AppointmentDate)
-            .ThenByDescending(a => a.StartTime)
+            .Include(vs => vs.Appointment)
+            .Include(vs => vs.PatientVisit)
+            .Where(vs =>
+                (vs.Appointment != null && vs.Appointment.PatientId == patientId &&
+                 vs.Appointment.Status != AppointmentStatus.Cancelled &&
+                 vs.Appointment.Status != AppointmentStatus.NoShow) ||
+                (vs.PatientVisit != null && vs.PatientVisit.PatientId == patientId &&
+                 vs.PatientVisit.Status != VisitStatus.Cancelled))
+            .OrderByDescending(vs => vs.RecordedAtUtc)
             .Take(20)
             .ToListAsync();
 
-        var vitalRecorderUserIds = vitalsAppointments
-            .Select(a => a.VitalSigns!.RecordedByUserId)
+        var vitalRecorderUserIds = allVitalSigns
+            .Select(vs => vs.RecordedByUserId)
             .Distinct()
             .ToList();
 
@@ -626,15 +680,15 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             .Where(u => vitalRecorderUserIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.FullName);
 
-        var vitalHistoryDtos = vitalsAppointments.Select(a =>
+        var vitalHistoryDtos = allVitalSigns.Select(vs =>
         {
-            var vs = a.VitalSigns!;
             vitalRecorderUsers.TryGetValue(vs.RecordedByUserId, out var recName);
             return new PatientVitalHistoryItemDto
             {
-                AppointmentId = a.Id,
-                AppointmentCode = a.AppointmentCode,
-                AppointmentDate = a.AppointmentDate,
+                AppointmentId = vs.AppointmentId ?? 0,
+                PatientVisitId = vs.PatientVisitId,
+                AppointmentCode = vs.Appointment?.AppointmentCode ?? vs.PatientVisit?.VisitCode ?? "VISIT",
+                AppointmentDate = vs.Appointment?.AppointmentDate ?? (vs.PatientVisit != null ? vs.PatientVisit.VisitDate : DateOnly.FromDateTime(vs.RecordedAtUtc)),
                 RecordedAtUtc = vs.RecordedAtUtc,
                 Height = vs.Height,
                 Weight = vs.Weight,
@@ -1282,9 +1336,11 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
         if (vitals == null)
         {
+            var linkedVisit = await _dbContext.PatientVisits.FirstOrDefaultAsync(v => v.AppointmentId == appointment.Id);
             vitals = new AppointmentVitalSigns
             {
                 AppointmentId = appointment.Id,
+                PatientVisitId = linkedVisit?.Id,
                 Temperature = request.Temperature,
                 BloodPressureSystolic = request.BloodPressureSystolic,
                 BloodPressureDiastolic = request.BloodPressureDiastolic,
@@ -1302,6 +1358,12 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         else
         {
             ValidateRowVersion(vitals.RowVersion, request.RowVersion);
+
+            if (!vitals.PatientVisitId.HasValue)
+            {
+                var linkedVisit = await _dbContext.PatientVisits.FirstOrDefaultAsync(v => v.AppointmentId == appointment.Id);
+                if (linkedVisit != null) vitals.PatientVisitId = linkedVisit.Id;
+            }
 
             vitals.Temperature = request.Temperature;
             vitals.BloodPressureSystolic = request.BloodPressureSystolic;
@@ -1591,6 +1653,8 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             };
         }
 
+        var patientId = visit.PatientId;
+
         var pastAppointments = await _dbContext.Appointments
             .AsNoTracking()
             .Include(a => a.Doctor)
@@ -1599,21 +1663,48 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             .Include(a => a.Prescription)
                 .ThenInclude(p => p!.Items)
                     .ThenInclude(i => i.Medicine)
-            .Where(a => a.PatientId == visit.PatientId && a.Id != (visit.AppointmentId ?? 0) && a.Status == AppointmentStatus.Completed)
+            .Where(a => a.PatientId == patientId && a.Id != (visit.AppointmentId ?? 0) && a.Status == AppointmentStatus.Completed)
             .OrderByDescending(a => a.AppointmentDate)
             .ThenByDescending(a => a.StartTime)
             .Take(20)
             .ToListAsync();
 
         var pastDoctorUserIds = pastAppointments.Select(a => a.Doctor.UserId).Distinct().ToList();
+
+        var pastWalkInVisits = await _dbContext.PatientVisits
+            .AsNoTracking()
+            .Include(v => v.AssignedDoctor)
+            .Include(v => v.Department)
+                .ThenInclude(d => d.Specialty)
+            .Include(v => v.VisitSummary)
+            .Include(v => v.Prescriptions)
+                .ThenInclude(p => p.Items)
+                    .ThenInclude(i => i.Medicine)
+            .Where(v => v.PatientId == patientId && v.Id != visit.Id && v.AppointmentId == null &&
+                        (v.Status == VisitStatus.Completed || v.Status == VisitStatus.ConsultationCompleted ||
+                         v.Status == VisitStatus.InPharmacy || v.Status == VisitStatus.InBilling))
+            .OrderByDescending(v => v.VisitDate)
+            .ThenByDescending(v => v.CheckedInAtUtc)
+            .Take(20)
+            .ToListAsync();
+
+        var pastWalkInDoctorUserIds = pastWalkInVisits
+            .Where(v => v.AssignedDoctor != null)
+            .Select(v => v.AssignedDoctor!.UserId)
+            .Distinct()
+            .ToList();
+
+        var allDoctorUserIds = pastDoctorUserIds.Concat(pastWalkInDoctorUserIds).Distinct().ToList();
         var pastDoctorUsers = await _dbContext.Users
-            .Where(u => pastDoctorUserIds.Contains(u.Id))
+            .Where(u => allDoctorUserIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.FullName);
 
-        var pastVisitDtos = pastAppointments.Select(a =>
+        var pastVisitDtos = new List<PastVisitSummaryDto>();
+
+        foreach (var a in pastAppointments)
         {
             pastDoctorUsers.TryGetValue(a.Doctor.UserId, out var docName);
-            return new PastVisitSummaryDto
+            pastVisitDtos.Add(new PastVisitSummaryDto
             {
                 AppointmentId = a.Id,
                 AppointmentCode = a.AppointmentCode,
@@ -1623,8 +1714,31 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 Diagnosis = a.VisitSummary?.Diagnosis,
                 Summary = a.VisitSummary?.Summary,
                 PrescriptionItemNames = a.Prescription?.Items.Select(i => i.Medicine?.Name ?? "Thuốc").ToList() ?? new List<string>()
-            };
-        }).ToList();
+            });
+        }
+
+        foreach (var v in pastWalkInVisits)
+        {
+            string? docName = null;
+            if (v.AssignedDoctor != null) pastDoctorUsers.TryGetValue(v.AssignedDoctor.UserId, out docName);
+            pastVisitDtos.Add(new PastVisitSummaryDto
+            {
+                AppointmentId = 0,
+                PatientVisitId = v.Id,
+                AppointmentCode = v.VisitCode,
+                Date = v.VisitDate,
+                DoctorName = docName ?? "Bác sĩ",
+                SpecialtyName = v.Department?.Specialty?.Name ?? v.Department?.Name ?? string.Empty,
+                Diagnosis = v.VisitSummary?.Diagnosis,
+                Summary = v.VisitSummary?.Summary,
+                PrescriptionItemNames = v.Prescriptions.SelectMany(p => p.Items).Select(i => i.Medicine?.Name ?? "Thuốc").ToList()
+            });
+        }
+
+        pastVisitDtos = pastVisitDtos
+            .OrderByDescending(p => p.Date)
+            .Take(20)
+            .ToList();
 
         VitalSignsDto? vitalsDto = null;
         var currentVitals = visit.VitalSigns ?? (visit.AppointmentId.HasValue
@@ -1637,20 +1751,22 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             vitalsDto = MapVitalsToDto(currentVitals, recorder?.FullName ?? "Nhân viên y tế");
         }
 
-        var vitalsAppointments = await _dbContext.Appointments
+        var allVitalSigns = await _dbContext.AppointmentVitalSigns
             .AsNoTracking()
-            .Include(a => a.VitalSigns)
-            .Where(a => a.PatientId == visit.PatientId &&
-                        a.Status != AppointmentStatus.Cancelled &&
-                        a.Status != AppointmentStatus.NoShow &&
-                        a.VitalSigns != null)
-            .OrderByDescending(a => a.AppointmentDate)
-            .ThenByDescending(a => a.StartTime)
+            .Include(vs => vs.Appointment)
+            .Include(vs => vs.PatientVisit)
+            .Where(vs =>
+                (vs.Appointment != null && vs.Appointment.PatientId == patientId &&
+                 vs.Appointment.Status != AppointmentStatus.Cancelled &&
+                 vs.Appointment.Status != AppointmentStatus.NoShow) ||
+                (vs.PatientVisit != null && vs.PatientVisit.PatientId == patientId &&
+                 vs.PatientVisit.Status != VisitStatus.Cancelled))
+            .OrderByDescending(vs => vs.RecordedAtUtc)
             .Take(20)
             .ToListAsync();
 
-        var vitalRecorderUserIds = vitalsAppointments
-            .Select(a => a.VitalSigns!.RecordedByUserId)
+        var vitalRecorderUserIds = allVitalSigns
+            .Select(vs => vs.RecordedByUserId)
             .Distinct()
             .ToList();
 
@@ -1658,15 +1774,15 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             .Where(u => vitalRecorderUserIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.FullName);
 
-        var vitalHistoryDtos = vitalsAppointments.Select(a =>
+        var vitalHistoryDtos = allVitalSigns.Select(vs =>
         {
-            var vs = a.VitalSigns!;
             vitalRecorderUsers.TryGetValue(vs.RecordedByUserId, out var recName);
             return new PatientVitalHistoryItemDto
             {
-                AppointmentId = a.Id,
-                AppointmentCode = a.AppointmentCode,
-                AppointmentDate = a.AppointmentDate,
+                AppointmentId = vs.AppointmentId ?? 0,
+                PatientVisitId = vs.PatientVisitId,
+                AppointmentCode = vs.Appointment?.AppointmentCode ?? vs.PatientVisit?.VisitCode ?? "VISIT",
+                AppointmentDate = vs.Appointment?.AppointmentDate ?? (vs.PatientVisit != null ? vs.PatientVisit.VisitDate : DateOnly.FromDateTime(vs.RecordedAtUtc)),
                 RecordedAtUtc = vs.RecordedAtUtc,
                 Height = vs.Height,
                 Weight = vs.Weight,
@@ -1685,7 +1801,8 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             ? new PatientVitalHistoryItemDto
             {
                 AppointmentId = currentVitals?.AppointmentId ?? 0,
-                AppointmentCode = visit.VisitCode,
+                PatientVisitId = currentVitals?.PatientVisitId ?? visit.Id,
+                AppointmentCode = visit.Appointment != null ? visit.Appointment.AppointmentCode : visit.VisitCode,
                 AppointmentDate = visit.VisitDate,
                 RecordedAtUtc = currentVitals?.RecordedAtUtc ?? DateTime.UtcNow,
                 Height = currentVitals?.Height,
@@ -1701,7 +1818,9 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             }
             : null;
 
-        var previousMeasurement = vitalHistoryDtos.FirstOrDefault(vh => currentVitals?.AppointmentId == null || vh.AppointmentId != currentVitals.AppointmentId);
+        var previousMeasurement = vitalHistoryDtos.FirstOrDefault(vh =>
+            (vh.PatientVisitId == null || vh.PatientVisitId != visit.Id) &&
+            (!visit.AppointmentId.HasValue || vh.AppointmentId != visit.AppointmentId.Value));
 
         AnthropometricComparisonDto? anthropometricComparison = null;
         if (currentMeasurement != null || previousMeasurement != null)

@@ -248,6 +248,7 @@ public class PatientClinicalContextDto
 public class PatientVitalHistoryItemDto
 {
     public long AppointmentId { get; set; }
+    public long? PatientVisitId { get; set; }
     public string AppointmentCode { get; set; } = string.Empty;
     public DateOnly AppointmentDate { get; set; }
     public DateTime RecordedAtUtc { get; set; }
@@ -276,6 +277,7 @@ public class AnthropometricComparisonDto
 public class PastVisitSummaryDto
 {
     public long AppointmentId { get; set; }
+    public long? PatientVisitId { get; set; }
     public string AppointmentCode { get; set; } = string.Empty;
     public DateOnly Date { get; set; }
     public string DoctorName { get; set; } = string.Empty;

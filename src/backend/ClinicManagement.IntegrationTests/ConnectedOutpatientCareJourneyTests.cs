@@ -428,4 +428,120 @@ public class ConnectedOutpatientCareJourneyTests : IntegrationTestBase
         Assert.True(normalIndex >= 0, "Normal visit must be in queue");
         Assert.True(emergencyIndex < normalIndex, "Emergency visit must be prioritized ahead of Normal visit in queue");
     }
+
+    [Fact]
+    public async Task WalkInPatient_ReturnsForSecondVisit_RetainsClinicalHistoryAndAnthropometricComparison()
+    {
+        var (deptId, facId) = await EnsureFacilityAndDepartmentAsync();
+
+        // 1. Reception registers walk-in patient visit 1
+        await AuthenticateAsync("rec@test.com");
+        var walkInReq1 = new WalkInRegistrationRequest
+        {
+            FullName = "Đặng Thị Tái Khám",
+            PhoneNumber = "0933444555",
+            DateOfBirth = new DateOnly(1992, 8, 15),
+            Gender = Gender.Female,
+            Address = "789 Điện Biên Phủ, Q.3, TP.HCM",
+            IdentityCardNumber = "079199999888",
+            FacilityId = facId,
+            DepartmentId = deptId,
+            AssignedDoctorId = DoctorEntityId,
+            ChiefComplaint = "Đau họng, sốt nhẹ ngày 1",
+            Priority = VisitPriority.Normal
+        };
+
+        var res1 = await Client.PostAsJsonAsync("/api/v1/patient-visits/walk-in", walkInReq1);
+        Assert.Equal(HttpStatusCode.OK, res1.StatusCode);
+        var doc1 = JsonDocument.Parse(await res1.Content.ReadAsStringAsync()).RootElement.GetProperty("data");
+        var visitId1 = doc1.GetProperty("visitId").GetInt64();
+        var patientId = doc1.GetProperty("patientId").GetInt64();
+
+        // 2. Doctor starts consultation 1, records vitals (65kg, 165cm), diagnoses and completes
+        await AuthenticateAsync("doc@test.com");
+        var startRes1 = await Client.PostAsync($"/api/v1/doctor/visits/{visitId1}/start-consultation", null);
+        Assert.Equal(HttpStatusCode.OK, startRes1.StatusCode);
+
+        var vitalsRes1 = await Client.PutAsJsonAsync($"/api/v1/doctor/visits/{visitId1}/vitals", new SaveVitalSignsRequest
+        {
+            Weight = 65.0m,
+            Height = 165.0m,
+            HeartRate = 78,
+            BloodPressureSystolic = 120,
+            BloodPressureDiastolic = 80,
+            Temperature = 37.2m,
+            SpO2 = 99
+        });
+        Assert.Equal(HttpStatusCode.OK, vitalsRes1.StatusCode);
+
+        var compRes1 = await Client.PostAsJsonAsync($"/api/v1/doctor/visits/{visitId1}/complete", new CompleteConsultationRequest
+        {
+            Diagnosis = "Viêm họng cấp",
+            Summary = "Hoàn thành khám lần 1, cho đơn thuốc uống 5 ngày"
+        });
+        Assert.Equal(HttpStatusCode.OK, compRes1.StatusCode);
+
+        // 3. Same patient returns for visit 2 (Walk-in using existingPatientId)
+        await AuthenticateAsync("rec@test.com");
+        var walkInReq2 = new WalkInRegistrationRequest
+        {
+            ExistingPatientId = patientId,
+            FacilityId = facId,
+            DepartmentId = deptId,
+            AssignedDoctorId = DoctorEntityId,
+            ChiefComplaint = "Tái khám kiểm tra họng",
+            Priority = VisitPriority.Normal
+        };
+
+        var res2 = await Client.PostAsJsonAsync("/api/v1/patient-visits/walk-in", walkInReq2);
+        Assert.Equal(HttpStatusCode.OK, res2.StatusCode);
+        var doc2 = JsonDocument.Parse(await res2.Content.ReadAsStringAsync()).RootElement.GetProperty("data");
+        var visitId2 = doc2.GetProperty("visitId").GetInt64();
+
+        // 4. Doctor starts consultation 2, records vitals (63.5kg, 165cm: lost 1.5kg)
+        await AuthenticateAsync("doc@test.com");
+        var startRes2 = await Client.PostAsync($"/api/v1/doctor/visits/{visitId2}/start-consultation", null);
+        Assert.Equal(HttpStatusCode.OK, startRes2.StatusCode);
+
+        var vitalsRes2 = await Client.PutAsJsonAsync($"/api/v1/doctor/visits/{visitId2}/vitals", new SaveVitalSignsRequest
+        {
+            Weight = 63.5m,
+            Height = 165.0m,
+            HeartRate = 74,
+            BloodPressureSystolic = 115,
+            BloodPressureDiastolic = 75,
+            Temperature = 36.6m,
+            SpO2 = 99
+        });
+        Assert.Equal(HttpStatusCode.OK, vitalsRes2.StatusCode);
+
+        // 5. Doctor retrieves clinical context for visit 2
+        var ctxRes = await Client.GetAsync($"/api/v1/doctor/visits/{visitId2}/clinical-context");
+        Assert.Equal(HttpStatusCode.OK, ctxRes.StatusCode);
+
+        var ctx = await ctxRes.Content.ReadFromJsonAsync<ApiResponse<PatientClinicalContextDto>>();
+        Assert.NotNull(ctx);
+        Assert.True(ctx.Success);
+        var data = ctx.Data!;
+
+        // Verify patient identity continuity
+        Assert.Equal(patientId, data.PatientId);
+
+        // Verify past visits continuity across walk-ins
+        Assert.NotEmpty(data.PastVisits);
+        var pastVisit = data.PastVisits.FirstOrDefault(p => p.PatientVisitId == visitId1);
+        Assert.NotNull(pastVisit);
+        Assert.Equal("Viêm họng cấp", pastVisit.Diagnosis);
+
+        // Verify vitals history includes both measurements
+        Assert.True(data.VitalHistory.Count >= 2);
+
+        // Verify anthropometric comparison deltas calculated between visit 2 and visit 1
+        Assert.NotNull(data.AnthropometricComparison);
+        Assert.True(data.AnthropometricComparison.HasComparableData);
+        Assert.Equal(63.5m, data.AnthropometricComparison.CurrentMeasurement?.Weight);
+        Assert.Equal(65.0m, data.AnthropometricComparison.PreviousMeasurement?.Weight);
+        Assert.Equal(-1.5m, data.AnthropometricComparison.WeightDeltaKg);
+        Assert.Equal(0.0m, data.AnthropometricComparison.HeightDeltaCm);
+    }
 }
