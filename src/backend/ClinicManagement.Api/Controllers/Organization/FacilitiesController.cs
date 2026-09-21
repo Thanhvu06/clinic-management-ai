@@ -8,6 +8,9 @@ using ClinicManagement.Application.Organization.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using ClinicManagement.Application.Authentication.Interfaces;
+using ClinicManagement.Application.Common.Exceptions;
+
 namespace ClinicManagement.Api.Controllers.Organization;
 
 [ApiController]
@@ -15,10 +18,24 @@ namespace ClinicManagement.Api.Controllers.Organization;
 public class FacilitiesController : ControllerBase
 {
     private readonly IOrganizationService _organizationService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public FacilitiesController(IOrganizationService organizationService)
+    public FacilitiesController(IOrganizationService organizationService, ICurrentUserService currentUserService)
     {
         _organizationService = organizationService;
+        _currentUserService = currentUserService;
+    }
+
+    [HttpGet("my")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<FacilityDto>>>> GetMyFacilities(CancellationToken cancellationToken = default)
+    {
+        var userId = _currentUserService.UserId;
+        if (userId == null || userId == System.Guid.Empty)
+            throw new UnauthorizedException("Chưa đăng nhập.");
+
+        var facilities = await _organizationService.GetUserFacilitiesAsync(userId.Value, cancellationToken);
+        return Ok(ApiResponse<IReadOnlyList<FacilityDto>>.Ok(facilities));
     }
 
     [HttpGet]

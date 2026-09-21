@@ -79,6 +79,7 @@ export const ReceptionWorkspace: React.FC = () => {
 
     // Stale request tracking
     const fetchIdRef = useRef(0);
+    const statsFetchIdRef = useRef(0);
 
     // Update live clock
     useEffect(() => {
@@ -93,16 +94,16 @@ export const ReceptionWorkspace: React.FC = () => {
         return () => clearInterval(timer);
     }, []);
 
-    // Fetch facilities on mount
+    // Fetch user-assigned facilities on mount
     const loadFacilities = useCallback(async () => {
         setFacilityLoading(true);
         setFacilityError(null);
         try {
-            const res = await organizationApi.getFacilities(false);
+            const res = await organizationApi.getMyFacilities();
             const data = res.data;
             if (res.success && data && data.length > 0) {
                 setFacilities(data);
-                setSelectedFacilityId(prev => prev ?? data[0].id);
+                setSelectedFacilityId(prev => prev && data.some(f => f.id === prev) ? prev : data[0].id);
             } else {
                 setFacilities([]);
                 setSelectedFacilityId(undefined);
@@ -120,13 +121,16 @@ export const ReceptionWorkspace: React.FC = () => {
     }, [loadFacilities]);
 
     const fetchStats = useCallback(async (facId?: number) => {
+        const currentFetchId = ++statsFetchIdRef.current;
         try {
             const query = facId ? `?facilityId=${facId}` : '';
             const res = await axiosClient.get<any, ApiResponse<any>>(`/reception/stats${query}`);
+            if (currentFetchId !== statsFetchIdRef.current) return;
             if (res.success && res.data) {
                 setStats(res.data);
             }
         } catch (err) {
+            if (currentFetchId !== statsFetchIdRef.current) return;
             console.error('Lỗi tải thống kê tiếp nhận:', err);
         }
     }, []);
@@ -307,6 +311,8 @@ export const ReceptionWorkspace: React.FC = () => {
                                 onChange={(e) => {
                                     setWorklistError(null);
                                     setIsStale(false);
+                                    setWorklistItems([]);
+                                    setPage(1);
                                     setSelectedFacilityId(Number(e.target.value));
                                 }}
                             >

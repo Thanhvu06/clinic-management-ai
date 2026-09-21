@@ -11,6 +11,7 @@ import { DialogProvider } from '../contexts/DialogContext';
 vi.mock('../api/organizationApi', () => ({
     organizationApi: {
         getFacilities: vi.fn(),
+        getMyFacilities: vi.fn(),
         getDepartments: vi.fn(),
         getRooms: vi.fn(),
         getStaffAssignments: vi.fn(),
@@ -93,6 +94,11 @@ describe('Reception Workspace Rebuild', () => {
             data: mockFacilities,
         } as any);
 
+        vi.mocked(organizationApi.getMyFacilities).mockResolvedValue({
+            success: true,
+            data: mockFacilities,
+        } as any);
+
         vi.mocked(organizationApi.getDepartments).mockResolvedValue({
             success: true,
             data: [
@@ -157,7 +163,7 @@ describe('Reception Workspace Rebuild', () => {
 
         // Facilities loaded
         await waitFor(() => {
-            expect(organizationApi.getFacilities).toHaveBeenCalled();
+            expect(organizationApi.getMyFacilities).toHaveBeenCalled();
         });
 
         // Metric cards rendered
@@ -303,7 +309,7 @@ describe('Reception Workspace Rebuild', () => {
     });
 
     it('handles 0 facilities by displaying unassigned banner and notice', async () => {
-        vi.mocked(organizationApi.getFacilities).mockResolvedValue({
+        vi.mocked(organizationApi.getMyFacilities).mockResolvedValue({
             success: true,
             data: [],
         } as any);
@@ -323,7 +329,7 @@ describe('Reception Workspace Rebuild', () => {
     });
 
     it('handles 1 facility by rendering static badge without select dropdown', async () => {
-        vi.mocked(organizationApi.getFacilities).mockResolvedValue({
+        vi.mocked(organizationApi.getMyFacilities).mockResolvedValue({
             success: true,
             data: [mockFacilities[0]],
         } as any);

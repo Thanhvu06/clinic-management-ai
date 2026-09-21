@@ -228,6 +228,8 @@ public class ReceptionService : IReceptionService
     {
         var userId = GetUserId();
 
+        await _facilityAuthService.ValidateAppointmentAccessAsync(userId, appointmentId);
+
         var appointment = await _dbContext.Appointments.FirstOrDefaultAsync(a => a.Id == appointmentId);
         if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");
 
@@ -300,6 +302,8 @@ public class ReceptionService : IReceptionService
     public async Task CheckInAppointmentAsync(long appointmentId)
     {
         var userId = GetUserId();
+
+        await _facilityAuthService.ValidateAppointmentAccessAsync(userId, appointmentId);
 
         var appointment = await _dbContext.Appointments.FirstOrDefaultAsync(a => a.Id == appointmentId);
         if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại.");

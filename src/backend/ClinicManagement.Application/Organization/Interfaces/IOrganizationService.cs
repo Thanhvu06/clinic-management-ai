@@ -9,6 +9,7 @@ public interface IOrganizationService
 {
     // Facilities
     Task<IReadOnlyList<FacilityDto>> GetFacilitiesAsync(bool includeInactive = false, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<FacilityDto>> GetUserFacilitiesAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<FacilityDto> GetFacilityByIdAsync(long id, CancellationToken cancellationToken = default);
     Task<FacilityDto> CreateFacilityAsync(CreateFacilityRequest request, CancellationToken cancellationToken = default);
     Task<FacilityDto> UpdateFacilityAsync(long id, UpdateFacilityRequest request, CancellationToken cancellationToken = default);

@@ -95,6 +95,10 @@ export interface StaffFacilityAssignmentDto {
 }
 
 export const organizationApi = {
+    getMyFacilities: async (): Promise<ApiResponse<FacilityDto[]>> => {
+        return axiosClient.get<any, ApiResponse<FacilityDto[]>>('/facilities/my');
+    },
+
     getFacilities: async (includeInactive = false): Promise<ApiResponse<FacilityDto[]>> => {
         return axiosClient.get<any, ApiResponse<FacilityDto[]>>(`/facilities?includeInactive=${includeInactive}`);
     },

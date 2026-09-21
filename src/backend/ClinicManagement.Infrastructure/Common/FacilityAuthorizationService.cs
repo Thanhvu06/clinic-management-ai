@@ -67,7 +67,8 @@ public class FacilityAuthorizationService : IFacilityAuthorizationService
             .Select(a => new { 
                 a.Id, 
                 VisitFacilityId = (long?)(a.PatientVisit != null ? a.PatientVisit.FacilityId : null),
-                DoctorUserId = a.Doctor.UserId
+                DoctorUserId = a.Doctor.UserId,
+                a.SpecialtyId
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -86,6 +87,7 @@ public class FacilityAuthorizationService : IFacilityAuthorizationService
         var userFacilityIds = await _dbContext.StaffFacilityAssignments
             .Where(a => a.UserId == userId && a.IsActive)
             .Select(a => a.FacilityId)
+            .Distinct()
             .ToListAsync(cancellationToken);
 
         if (userFacilityIds.Count == 0)
@@ -93,14 +95,53 @@ public class FacilityAuthorizationService : IFacilityAuthorizationService
             throw new ForbiddenException("ACCESS_DENIED_TO_FACILITY_RESOURCE", "Bạn không có quyền truy cập lịch hẹn thuộc cơ sở này.");
         }
 
-        var doctorFacilityIds = await _dbContext.StaffFacilityAssignments
+        var doctorAssignments = await _dbContext.StaffFacilityAssignments
             .Where(a => a.UserId == appt.DoctorUserId && a.IsActive)
-            .Select(a => a.FacilityId)
+            .Include(a => a.Department)
             .ToListAsync(cancellationToken);
 
-        if (doctorFacilityIds.Count > 0 && !userFacilityIds.Intersect(doctorFacilityIds).Any())
+        if (doctorAssignments.Count == 0)
         {
-            throw new ForbiddenException("ACCESS_DENIED_TO_FACILITY_RESOURCE", "Bạn không có quyền truy cập lịch hẹn thuộc cơ sở này.");
+            throw new ForbiddenException("ACCESS_DENIED_TO_FACILITY_RESOURCE", "Bác sĩ của lịch hẹn chưa được phân công cơ sở y tế nào.");
+        }
+
+        // Try to resolve facility based on appointment's specialty matching doctor's department assignment
+        var specialtyMatchingFacilities = doctorAssignments
+            .Where(a => a.Department != null && a.Department.SpecialtyId == appt.SpecialtyId)
+            .Select(a => a.FacilityId)
+            .Distinct()
+            .ToList();
+
+        if (specialtyMatchingFacilities.Count == 1)
+        {
+            var resolvedFacilityId = specialtyMatchingFacilities[0];
+            if (!userFacilityIds.Contains(resolvedFacilityId))
+            {
+                throw new ForbiddenException("ACCESS_DENIED_TO_FACILITY_RESOURCE", "Bạn không có quyền truy cập lịch hẹn thuộc cơ sở này.");
+            }
+            return;
+        }
+
+        // If not uniquely resolved by specialty department, examine candidate doctor facilities
+        var candidateFacilityIds = specialtyMatchingFacilities.Count > 1
+            ? specialtyMatchingFacilities
+            : doctorAssignments.Select(a => a.FacilityId).Distinct().ToList();
+
+        if (candidateFacilityIds.Count == 1)
+        {
+            if (!userFacilityIds.Contains(candidateFacilityIds[0]))
+            {
+                throw new ForbiddenException("ACCESS_DENIED_TO_FACILITY_RESOURCE", "Bạn không có quyền truy cập lịch hẹn thuộc cơ sở này.");
+            }
+            return;
+        }
+
+        // Multi-facility doctor: if the appointment's facility cannot be uniquely determined,
+        // do NOT guess facility or grant global access.
+        // User must have access to all candidate facilities, otherwise access is indeterminate and denied.
+        if (!candidateFacilityIds.All(cf => userFacilityIds.Contains(cf)))
+        {
+            throw new ForbiddenException("ACCESS_DENIED_TO_FACILITY_RESOURCE", "Không thể xác định chính xác cơ sở y tế của lịch hẹn giữa các cơ sở của bác sĩ.");
         }
     }
 

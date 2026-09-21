@@ -11,15 +11,58 @@ using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
+using ClinicManagement.Application.Common.Interfaces;
+
 namespace ClinicManagement.Infrastructure.Organization;
 
 public class OrganizationService : IOrganizationService
 {
     private readonly AppDbContext _dbContext;
+    private readonly IFacilityAuthorizationService _facilityAuthService;
 
-    public OrganizationService(AppDbContext dbContext)
+    public OrganizationService(AppDbContext dbContext, IFacilityAuthorizationService facilityAuthService)
     {
         _dbContext = dbContext;
+        _facilityAuthService = facilityAuthService;
+    }
+
+    public async Task<IReadOnlyList<FacilityDto>> GetUserFacilitiesAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        if (userId == Guid.Empty) return new List<FacilityDto>();
+
+        var isGlobalAdmin = await _facilityAuthService.HasFullFacilityAccessAsync(userId, cancellationToken);
+        if (isGlobalAdmin)
+        {
+            return await GetFacilitiesAsync(includeInactive: false, cancellationToken);
+        }
+
+        var userFacilityIds = await _facilityAuthService.GetUserAccessibleFacilityIdsAsync(userId, cancellationToken);
+        if (userFacilityIds.Count == 0)
+        {
+            return new List<FacilityDto>();
+        }
+
+        return await _dbContext.Facilities
+            .AsNoTracking()
+            .Where(f => f.IsActive && userFacilityIds.Contains(f.Id))
+            .OrderBy(f => f.Code)
+            .Select(f => new FacilityDto
+            {
+                Id = f.Id,
+                Code = f.Code,
+                Name = f.Name,
+                Address = f.Address,
+                City = f.City,
+                Phone = f.Phone,
+                Email = f.Email,
+                TaxCode = f.TaxCode,
+                HospitalLevel = f.HospitalLevel,
+                Description = f.Description,
+                IsActive = f.IsActive,
+                BuildingCount = f.Buildings.Count,
+                DepartmentCount = f.Departments.Count
+            })
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<FacilityDto>> GetFacilitiesAsync(bool includeInactive = false, CancellationToken cancellationToken = default)
