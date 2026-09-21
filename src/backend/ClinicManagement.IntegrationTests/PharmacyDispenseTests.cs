@@ -73,6 +73,7 @@ public class PharmacyDispenseTests : IntegrationTestBase
             InvoiceCode = $"INV-RX-{Guid.NewGuid():N}"[..18].ToUpper(),
             PatientId = rx.PatientId,
             AppointmentId = rx.AppointmentId,
+            PatientVisitId = rx.PatientVisitId,
             Status = InvoiceStatus.Paid,
             Subtotal = total,
             TotalAmount = total,
@@ -795,7 +796,8 @@ public class PharmacyDispenseTests : IntegrationTestBase
         var unbilledRes = await Client.GetAsync("/api/v1/reception/billing/unbilled-visits");
         Assert.Equal(HttpStatusCode.OK, unbilledRes.StatusCode);
         var unbilledDoc = JsonDocument.Parse(await unbilledRes.Content.ReadAsStringAsync());
-        var unbilledList = unbilledDoc.RootElement.GetProperty("data");
+        var dataElement = unbilledDoc.RootElement.GetProperty("data");
+        var unbilledList = dataElement.ValueKind == JsonValueKind.Array ? dataElement : dataElement.GetProperty("items");
 
         bool found = false;
         foreach (var item in unbilledList.EnumerateArray())
@@ -829,5 +831,197 @@ public class PharmacyDispenseTests : IntegrationTestBase
             }
         }
         Assert.True(rxItemBilled, "Unbilled items of dispensed prescription must be included in generated invoice");
+    }
+
+    // 17. Medication dispensing quantity check: Cannot dispense if paid invoice item quantity < prescription item quantity
+    [Fact]
+    public async Task Given_PrescriptionItemUnderpaid_When_DispenseAttempted_Then_FailsWithPrescriptionNotPaid()
+    {
+        var med = await CreateTestMedicineAsync("QTYCHECK", 50);
+        var items = new List<(long, int)> { (med.Id, 10) };
+        var (_, rx) = await CreateTestPrescriptionAsync(DoctorEntityId, Patient1EntityId, PrescriptionStatus.Issued, items);
+
+        // Pay for only 4 units instead of 10
+        var underpaidItems = new List<(long, int)> { (med.Id, 4) };
+        await CreatePaidInvoiceForPrescriptionAsync(rx, underpaidItems);
+
+        await AuthenticateAsync("pharm@test.com");
+        var resFail = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx.Id}/dispense", null);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, resFail.StatusCode);
+        var failBody = await resFail.Content.ReadAsStringAsync();
+        using var failDoc = JsonDocument.Parse(failBody);
+        var failMsg = failDoc.RootElement.GetProperty("message").GetString();
+        Assert.Contains("chưa được thanh toán đủ số lượng", failMsg);
+
+        // Now pay the remaining units (update invoice to cover full quantity 10)
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var item = await db.InvoiceItems.FirstAsync(ii => ii.ReferenceId == rx.Id * 100000L + med.Id);
+            item.Quantity = 10;
+            item.LineTotal = item.UnitPrice * 10;
+            var inv = await db.Invoices.FindAsync(item.InvoiceId);
+            inv!.Subtotal = item.LineTotal;
+            inv.TotalAmount = item.LineTotal;
+            await db.SaveChangesAsync();
+        }
+
+        // Dispense attempt should now succeed
+        var resSuccess = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx.Id}/dispense", null);
+        Assert.Equal(HttpStatusCode.OK, resSuccess.StatusCode);
+    }
+
+    // 18. Safe visit completion: Visit is only Completed when no unpaid invoices AND no pending prescriptions AND no pending diagnostics
+    [Fact]
+    public async Task Given_VisitWithMultiplePrescriptionsOrDiagnostics_When_Dispensed_Then_VisitNotCompletedUntilAllDone()
+    {
+        long visitId;
+        long rx1Id;
+        long rx2Id;
+        long diagId;
+
+        var med1 = await CreateTestMedicineAsync("SAFE1", 20);
+        var med2 = await CreateTestMedicineAsync("SAFE2", 20);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var patient = await db.Patients.FirstAsync();
+            var doc = await db.Doctors.FirstAsync();
+            var dept = await db.Departments.FirstAsync();
+
+            var visit = new PatientVisit
+            {
+                VisitCode = $"VIS-SAFE-{Guid.NewGuid():N}"[..18].ToUpper(),
+                PatientId = patient.Id,
+                FacilityId = dept.FacilityId,
+                DepartmentId = dept.Id,
+                AssignedDoctorId = doc.Id,
+                Status = VisitStatus.InConsultation,
+                VisitDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Priority = VisitPriority.Normal,
+                QueueNumber = 888,
+                CheckedInAtUtc = DateTime.UtcNow
+            };
+            db.PatientVisits.Add(visit);
+            await db.SaveChangesAsync();
+            visitId = visit.Id;
+
+            // Prescription 1
+            var rx1 = new Prescription
+            {
+                PatientVisitId = visit.Id,
+                PatientId = patient.Id,
+                DoctorId = doc.Id,
+                Status = PrescriptionStatus.Issued,
+                CreatedAt = DateTime.UtcNow
+            };
+            db.Prescriptions.Add(rx1);
+            await db.SaveChangesAsync();
+            rx1Id = rx1.Id;
+
+            db.PrescriptionItems.Add(new PrescriptionItem
+            {
+                PrescriptionId = rx1.Id,
+                MedicineId = med1.Id,
+                Quantity = 2,
+                Dosage = "1 viên",
+                Frequency = "1 lần/ngày",
+                DurationDays = 2
+            });
+
+            // Prescription 2
+            var rx2 = new Prescription
+            {
+                PatientVisitId = visit.Id,
+                PatientId = patient.Id,
+                DoctorId = doc.Id,
+                Status = PrescriptionStatus.Issued,
+                CreatedAt = DateTime.UtcNow
+            };
+            db.Prescriptions.Add(rx2);
+            await db.SaveChangesAsync();
+            rx2Id = rx2.Id;
+
+            db.PrescriptionItems.Add(new PrescriptionItem
+            {
+                PrescriptionId = rx2.Id,
+                MedicineId = med2.Id,
+                Quantity = 3,
+                Dosage = "1 viên",
+                Frequency = "1 lần/ngày",
+                DurationDays = 3
+            });
+
+            // Diagnostic order (Ordered)
+            var diagOrder = new DiagnosticOrder
+            {
+                PatientVisitId = visit.Id,
+                PatientId = patient.Id,
+                OrderingDoctorId = doc.Id,
+                OrderCode = $"ORD-SAFE-{Guid.NewGuid():N}"[..18].ToUpper(),
+                FacilityId = dept.FacilityId,
+                Status = DiagnosticOrderStatus.Ordered,
+                ClinicalIndication = "Kiểm tra cận lâm sàng song song",
+                OrderedAtUtc = DateTime.UtcNow
+            };
+            db.DiagnosticOrders.Add(diagOrder);
+            await db.SaveChangesAsync();
+            diagId = diagOrder.Id;
+        }
+
+        // Pay for both prescriptions
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var rx1 = await db.Prescriptions.FindAsync(rx1Id);
+            var rx2 = await db.Prescriptions.FindAsync(rx2Id);
+            await CreatePaidInvoiceForPrescriptionAsync(rx1!, new List<(long, int)> { (med1.Id, 2) });
+            await CreatePaidInvoiceForPrescriptionAsync(rx2!, new List<(long, int)> { (med2.Id, 3) });
+        }
+
+        await AuthenticateAsync("pharm@test.com");
+
+        // Dispense Prescription 1
+        var res1 = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx1Id}/dispense", null);
+        Assert.Equal(HttpStatusCode.OK, res1.StatusCode);
+
+        // Verify Visit is still InProgress because rx2 is still Issued and diag is still Ordered
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var visit = await db.PatientVisits.FindAsync(visitId);
+            Assert.Equal(VisitStatus.InConsultation, visit!.Status);
+        }
+
+        // Complete Diagnostic Order
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var diag = await db.DiagnosticOrders.FindAsync(diagId);
+            diag!.Status = DiagnosticOrderStatus.Completed;
+            diag.CompletedAtUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        // Visit is still InProgress because rx2 is still Issued
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var visit = await db.PatientVisits.FindAsync(visitId);
+            Assert.Equal(VisitStatus.InConsultation, visit!.Status);
+        }
+
+        // Dispense Prescription 2
+        var res2 = await Client.PostAsync($"/api/v1/pharmacy/prescriptions/{rx2Id}/dispense", null);
+        Assert.Equal(HttpStatusCode.OK, res2.StatusCode);
+
+        // All prescriptions dispensed, diagnostic completed, no unpaid invoice -> Visit MUST be Completed!
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var visit = await db.PatientVisits.FindAsync(visitId);
+            Assert.Equal(VisitStatus.Completed, visit!.Status);
+        }
     }
 }

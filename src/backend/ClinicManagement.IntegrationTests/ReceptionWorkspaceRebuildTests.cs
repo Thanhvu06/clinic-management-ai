@@ -17,7 +17,11 @@ using ClinicManagement.Application.Prescriptions.DTOs;
 using ClinicManagement.Application.Visits.DTOs;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
+using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
+using ClinicManagement.Infrastructure.Identity;
 using ClinicManagement.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -761,5 +765,434 @@ public class ReceptionWorkspaceRebuildTests : IntegrationTestBase
         var found = body.Data.Items.FirstOrDefault(r => r.PatientId == walkInPatient.Id);
         Assert.NotNull(found);
         Assert.Equal("Trần Thị Vãng Lai", found.PatientName);
+    }
+
+    [Fact]
+    public async Task Facilities_GetMy_ReturnsOnlyAssignedFacilitiesForStaff_AndAllForAdmin()
+    {
+        var adminClient = await CreateAuthenticatedClientAsync("admin@test.com");
+        var (fac1, _, _) = await EnsureFacilityStructureAsync("FAC-MY-1", assignStaff: false);
+        var (fac2, _, _) = await EnsureFacilityStructureAsync("FAC-MY-2", assignStaff: false);
+
+        // Ensure receptionist is assigned ONLY to fac1
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var recFacs = await db.StaffFacilityAssignments
+                .Where(a => a.UserId == ReceptionistId)
+                .ToListAsync();
+            db.StaffFacilityAssignments.RemoveRange(recFacs);
+            db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+            {
+                UserId = ReceptionistId,
+                FacilityId = fac1.Id,
+                Role = "Receptionist",
+                IsPrimary = true,
+                IsActive = true,
+                AssignedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var recClient = await CreateAuthenticatedClientAsync("rec@test.com");
+        var myRes = await recClient.GetAsync("/api/v1/facilities/my");
+        Assert.Equal(HttpStatusCode.OK, myRes.StatusCode);
+        var myData = (await myRes.Content.ReadFromJsonAsync<ApiResponse<List<FacilityDto>>>())!.Data;
+        Assert.Contains(myData, f => f.Id == fac1.Id);
+        Assert.DoesNotContain(myData, f => f.Id == fac2.Id);
+
+        // Admin gets all active facilities
+        var adminRes = await adminClient.GetAsync("/api/v1/facilities/my");
+        Assert.Equal(HttpStatusCode.OK, adminRes.StatusCode);
+        var adminData = (await adminRes.Content.ReadFromJsonAsync<ApiResponse<List<FacilityDto>>>())!.Data;
+        Assert.Contains(adminData, f => f.Id == fac1.Id);
+        Assert.Contains(adminData, f => f.Id == fac2.Id);
+    }
+
+    [Fact]
+    public async Task Billing_GetUnbilledVisits_FacilityScoping_EnforcesAccess_RejectsCrossFacilityWith403()
+    {
+        var (fac1, _, _) = await EnsureFacilityStructureAsync("FAC-BILL-1", assignStaff: false);
+        var (fac2, _, _) = await EnsureFacilityStructureAsync("FAC-BILL-2", assignStaff: false);
+
+        // Assign receptionist ONLY to fac1
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var recFacs = await db.StaffFacilityAssignments
+                .Where(a => a.UserId == ReceptionistId)
+                .ToListAsync();
+            db.StaffFacilityAssignments.RemoveRange(recFacs);
+            db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+            {
+                UserId = ReceptionistId,
+                FacilityId = fac1.Id,
+                Role = "Receptionist",
+                IsPrimary = true,
+                IsActive = true,
+                AssignedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var recClient = await CreateAuthenticatedClientAsync("rec@test.com");
+
+        // Requesting unbilled visits for fac2 (which receptionist is NOT assigned to) -> 403 Forbidden
+        var forbiddenRes = await recClient.GetAsync($"/api/v1/reception/billing/unbilled-visits?facilityId={fac2.Id}");
+        Assert.Equal(HttpStatusCode.Forbidden, forbiddenRes.StatusCode);
+
+        // Requesting for assigned fac1 -> 200 OK
+        var okRes = await recClient.GetAsync($"/api/v1/reception/billing/unbilled-visits?facilityId={fac1.Id}");
+        Assert.Equal(HttpStatusCode.OK, okRes.StatusCode);
+
+        // Requesting without facilityId -> defaults to allowed facilities (200 OK)
+        var defaultRes = await recClient.GetAsync("/api/v1/reception/billing/unbilled-visits");
+        Assert.Equal(HttpStatusCode.OK, defaultRes.StatusCode);
+
+        // Admin requesting fac2 -> 200 OK
+        var adminClient = await CreateAuthenticatedClientAsync("admin@test.com");
+        var adminRes = await adminClient.GetAsync($"/api/v1/reception/billing/unbilled-visits?facilityId={fac2.Id}");
+        Assert.Equal(HttpStatusCode.OK, adminRes.StatusCode);
+    }
+
+    [Fact]
+    public async Task Appointment_Confirm_FacilityScoping_EnforcesAccess_RejectsCrossFacilityWith403()
+    {
+        var (fac1, _, _) = await EnsureFacilityStructureAsync("FAC-CONF-1", assignStaff: false);
+        var (fac2, dept2, _) = await EnsureFacilityStructureAsync("FAC-CONF-2", assignStaff: false);
+
+        long apptId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            // Create patient & visit at fac2
+            var patient = await db.Patients.FirstAsync();
+            var appt = new Appointment
+            {
+                AppointmentCode = $"APT-CONF-{Guid.NewGuid():N}"[..18],
+                DoctorId = DoctorEntityId,
+                PatientId = patient.Id,
+                SpecialtyId = SpecialtyEntityId,
+                AppointmentSlotId = SlotEntityId,
+                Status = AppointmentStatus.Pending,
+                AppointmentDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                StartTime = new TimeOnly(15, 0),
+                EndTime = new TimeOnly(15, 30)
+            };
+            db.Appointments.Add(appt);
+            await db.SaveChangesAsync();
+            apptId = appt.Id;
+
+            var visit = new PatientVisit
+            {
+                VisitCode = $"VIS-CONF-{Guid.NewGuid():N}"[..18].ToUpper(),
+                PatientId = patient.Id,
+                AppointmentId = appt.Id,
+                FacilityId = fac2.Id,
+                DepartmentId = dept2.Id,
+                AssignedDoctorId = DoctorEntityId,
+                Status = VisitStatus.WaitingDoctor,
+                VisitDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Priority = VisitPriority.Normal,
+                QueueNumber = 777,
+                CheckedInAtUtc = DateTime.UtcNow
+            };
+            db.PatientVisits.Add(visit);
+            await db.SaveChangesAsync();
+
+            // Assign receptionist ONLY to fac1
+            var recFacs = await db.StaffFacilityAssignments
+                .Where(a => a.UserId == ReceptionistId)
+                .ToListAsync();
+            db.StaffFacilityAssignments.RemoveRange(recFacs);
+            db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+            {
+                UserId = ReceptionistId,
+                FacilityId = fac1.Id,
+                Role = "Receptionist",
+                IsPrimary = true,
+                IsActive = true,
+                AssignedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Receptionist assigned to fac1 tries to confirm appointment at fac2 -> 403 Forbidden
+        var recClient = await CreateAuthenticatedClientAsync("rec@test.com");
+        var resForbidden = await recClient.PostAsync($"/api/v1/reception/appointments/{apptId}/confirm", null);
+        Assert.Equal(HttpStatusCode.Forbidden, resForbidden.StatusCode);
+
+        // Admin confirms -> 200 OK
+        var adminClient = await CreateAuthenticatedClientAsync("admin@test.com");
+        var resAdmin = await adminClient.PostAsync($"/api/v1/reception/appointments/{apptId}/confirm", null);
+        Assert.Equal(HttpStatusCode.OK, resAdmin.StatusCode);
+    }
+
+    [Fact]
+    public async Task ValidateAppointmentAccess_RejectsDoctorWithoutFacility_AndRejectsAmbiguousDoctor()
+    {
+        var (fac1, _, _) = await EnsureFacilityStructureAsync("FAC-VAL-1", assignStaff: false);
+        var (fac2, _, _) = await EnsureFacilityStructureAsync("FAC-VAL-2", assignStaff: false);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var facilityAuth = scope.ServiceProvider.GetRequiredService<IFacilityAuthorizationService>();
+
+        // Create a new doctor user with NO facility assignments
+        var noFacDoctorUser = new ApplicationUser
+        {
+            UserName = $"doc-nofac-{Guid.NewGuid():N}"[..15] + "@test.com",
+            Email = $"doc-nofac-{Guid.NewGuid():N}"[..15] + "@test.com",
+            PhoneNumber = "0987654321",
+            FullName = "Bác sĩ Không Cơ Sở",
+            IsActive = true
+        };
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        await userManager.CreateAsync(noFacDoctorUser, "Pass@123");
+        await userManager.AddToRoleAsync(noFacDoctorUser, "Doctor");
+
+        var noFacDoctor = new Doctor
+        {
+            UserId = noFacDoctorUser.Id,
+            ExperienceYears = 5,
+            IsActive = true
+        };
+        db.Doctors.Add(noFacDoctor);
+        await db.SaveChangesAsync();
+        db.DoctorSpecialties.Add(new DoctorSpecialty
+        {
+            DoctorId = noFacDoctor.Id,
+            SpecialtyId = CardiologySpecialtyId
+        });
+        await db.SaveChangesAsync();
+
+        var patient = await db.Patients.FirstAsync();
+        var apptNoFac = new Appointment
+        {
+            AppointmentCode = $"APT-NF-{Guid.NewGuid():N}"[..18],
+            DoctorId = noFacDoctor.Id,
+            PatientId = patient.Id,
+            SpecialtyId = CardiologySpecialtyId,
+            AppointmentSlotId = SlotEntityId,
+            Status = AppointmentStatus.Pending,
+            AppointmentDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            StartTime = new TimeOnly(16, 0),
+            EndTime = new TimeOnly(16, 30)
+        };
+        db.Appointments.Add(apptNoFac);
+        await db.SaveChangesAsync();
+
+        // Assign receptionist ONLY to fac1
+        var recFacs = await db.StaffFacilityAssignments
+            .Where(a => a.UserId == ReceptionistId)
+            .ToListAsync();
+        db.StaffFacilityAssignments.RemoveRange(recFacs);
+        db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+        {
+            UserId = ReceptionistId,
+            FacilityId = fac1.Id,
+            Role = "Receptionist",
+            IsPrimary = true,
+            IsActive = true,
+            AssignedAtUtc = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        // Doctor with 0 assignments -> ForbiddenException
+        var exNoFac = await Assert.ThrowsAsync<ForbiddenException>(() =>
+            facilityAuth.ValidateAppointmentAccessAsync(ReceptionistId, apptNoFac.Id));
+        Assert.Contains("chưa được phân công cơ sở", exNoFac.Message);
+
+        // Now assign doctor to BOTH fac1 and fac2 with no department specialty match
+        db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+        {
+            UserId = noFacDoctorUser.Id,
+            FacilityId = fac1.Id,
+            Role = "Doctor",
+            IsActive = true,
+            AssignedAtUtc = DateTime.UtcNow
+        });
+        db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+        {
+            UserId = noFacDoctorUser.Id,
+            FacilityId = fac2.Id,
+            Role = "Doctor",
+            IsActive = true,
+            AssignedAtUtc = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        // Doctor assigned to 2 facilities, receptionist only assigned to fac1, indeterminate -> ForbiddenException (no guessing)
+        var exAmbiguous = await Assert.ThrowsAsync<ForbiddenException>(() =>
+            facilityAuth.ValidateAppointmentAccessAsync(ReceptionistId, apptNoFac.Id));
+        Assert.Contains("Không thể xác định chính xác", exAmbiguous.Message);
+    }
+
+    [Fact]
+    public async Task Billing_GetUnbilledVisits_RealPagination_And_TieBreakerSorting()
+    {
+        var (fac, dept, _) = await EnsureFacilityStructureAsync("FAC-PAGE-1", assignStaff: false);
+
+        // Assign receptionist to fac
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var recFacs = await db.StaffFacilityAssignments
+                .Where(a => a.UserId == ReceptionistId)
+                .ToListAsync();
+            db.StaffFacilityAssignments.RemoveRange(recFacs);
+            db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+            {
+                UserId = ReceptionistId,
+                FacilityId = fac.Id,
+                Role = "Receptionist",
+                IsPrimary = true,
+                IsActive = true,
+                AssignedAtUtc = DateTime.UtcNow
+            });
+
+            var patient = await db.Patients.FirstAsync();
+            var doc = await db.Doctors.FirstAsync();
+
+            // Create 3 unbilled visits with distinct queue numbers and dates
+            for (int i = 1; i <= 3; i++)
+            {
+                var visit = new PatientVisit
+                {
+                    VisitCode = $"VIS-PG-{i}-{Guid.NewGuid():N}"[..18].ToUpper(),
+                    PatientId = patient.Id,
+                    FacilityId = fac.Id,
+                    DepartmentId = dept.Id,
+                    AssignedDoctorId = doc.Id,
+                    Status = VisitStatus.ConsultationCompleted,
+                    VisitDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-i)),
+                    Priority = VisitPriority.Normal,
+                    QueueNumber = 100 + i,
+                    CheckedInAtUtc = DateTime.UtcNow.AddDays(-i)
+                };
+                db.PatientVisits.Add(visit);
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var recClient = await CreateAuthenticatedClientAsync("rec@test.com");
+
+        // Page 1 with pageSize = 2
+        var resPage1 = await recClient.GetAsync($"/api/v1/reception/billing/unbilled-visits?facilityId={fac.Id}&page=1&pageSize=2");
+        Assert.Equal(HttpStatusCode.OK, resPage1.StatusCode);
+        var page1Data = (await resPage1.Content.ReadFromJsonAsync<ApiResponse<PagedResult<UnbilledVisitDto>>>())!.Data;
+
+        Assert.Equal(1, page1Data.Page);
+        Assert.Equal(2, page1Data.PageSize);
+        Assert.True(page1Data.TotalItems >= 3);
+        Assert.True(page1Data.TotalPages >= 2);
+        Assert.Equal(2, page1Data.Items.Count);
+
+        // Page 2 with pageSize = 2
+        var resPage2 = await recClient.GetAsync($"/api/v1/reception/billing/unbilled-visits?facilityId={fac.Id}&page=2&pageSize=2");
+        Assert.Equal(HttpStatusCode.OK, resPage2.StatusCode);
+        var page2Data = (await resPage2.Content.ReadFromJsonAsync<ApiResponse<PagedResult<UnbilledVisitDto>>>())!.Data;
+
+        Assert.Equal(2, page2Data.Page);
+        Assert.NotEmpty(page2Data.Items);
+
+        // Items on page 1 and page 2 must be disjoint
+        var page1Ids = page1Data.Items.Select(x => x.VisitId).ToHashSet();
+        foreach (var item in page2Data.Items)
+        {
+            Assert.DoesNotContain(item.VisitId, page1Ids);
+        }
+
+        // Verify sorting order: VisitDate desc, QueueNumber desc, Id desc
+        for (int i = 0; i < page1Data.Items.Count - 1; i++)
+        {
+            var curr = page1Data.Items[i];
+            var next = page1Data.Items[i + 1];
+            Assert.True(curr.VisitDate >= next.VisitDate);
+        }
+    }
+
+    [Fact]
+    public async Task Billing_GetUnbilledVisits_UnifiedCashierDefinition_IncludesVisitsWithUnpaidInvoices()
+    {
+        var (fac, dept, _) = await EnsureFacilityStructureAsync("FAC-UNPAID-1", assignStaff: false);
+        long visitId;
+        decimal unpaidAmount = 150000m;
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var recFacs = await db.StaffFacilityAssignments
+                .Where(a => a.UserId == ReceptionistId)
+                .ToListAsync();
+            db.StaffFacilityAssignments.RemoveRange(recFacs);
+            db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+            {
+                UserId = ReceptionistId,
+                FacilityId = fac.Id,
+                Role = "Receptionist",
+                IsPrimary = true,
+                IsActive = true,
+                AssignedAtUtc = DateTime.UtcNow
+            });
+
+            var patient = await db.Patients.FirstAsync();
+            var doc = await db.Doctors.FirstAsync();
+
+            var visit = new PatientVisit
+            {
+                VisitCode = $"VIS-UNP-{Guid.NewGuid():N}"[..18].ToUpper(),
+                PatientId = patient.Id,
+                FacilityId = fac.Id,
+                DepartmentId = dept.Id,
+                AssignedDoctorId = doc.Id,
+                Status = VisitStatus.InBilling,
+                VisitDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Priority = VisitPriority.Normal,
+                QueueNumber = 555,
+                CheckedInAtUtc = DateTime.UtcNow
+            };
+            db.PatientVisits.Add(visit);
+            await db.SaveChangesAsync();
+            visitId = visit.Id;
+
+            // Add an unpaid (Unpaid) invoice linked to this visit
+            var invoice = new Invoice
+            {
+                InvoiceCode = $"INV-UNP-{Guid.NewGuid():N}"[..18].ToUpper(),
+                PatientId = patient.Id,
+                PatientVisitId = visit.Id,
+                Status = InvoiceStatus.Unpaid,
+                Subtotal = unpaidAmount,
+                TotalAmount = unpaidAmount,
+                CreatedAtUtc = DateTime.UtcNow,
+                Items = new List<InvoiceItem>
+                {
+                    new()
+                    {
+                        ItemCode = "SRV-TEST",
+                        Description = "Khám lâm sàng",
+                        Quantity = 1,
+                        UnitPrice = unpaidAmount,
+                        LineTotal = unpaidAmount,
+                        ReferenceType = "Consultation",
+                        ReferenceId = 1
+                    }
+                }
+            };
+            db.Invoices.Add(invoice);
+            await db.SaveChangesAsync();
+        }
+
+        var recClient = await CreateAuthenticatedClientAsync("rec@test.com");
+        var res = await recClient.GetAsync($"/api/v1/reception/billing/unbilled-visits?facilityId={fac.Id}&page=1&pageSize=50");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var page = (await res.Content.ReadFromJsonAsync<ApiResponse<PagedResult<UnbilledVisitDto>>>())!.Data;
+
+        var targetVisit = page.Items.FirstOrDefault(v => v.VisitId == visitId);
+        Assert.NotNull(targetVisit);
+        Assert.True(targetVisit.UnbilledItemCount > 0, "Visit must report unpaid items / invoices");
+        Assert.True(targetVisit.EstimatedTotal >= unpaidAmount, "Visit EstimatedTotal must include the unpaid invoice amount");
     }
 }

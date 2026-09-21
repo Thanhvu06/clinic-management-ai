@@ -768,6 +768,48 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
         db.DiagnosticServices.Add(svc);
         await db.SaveChangesAsync();
         db.DoctorSpecialties.Add(new ClinicManagement.Domain.Entities.DoctorSpecialty { DoctorId = doctor.Id, SpecialtyId = spec.Id, IsPrimary = true });
+
+        var fac = new ClinicManagement.Domain.Entities.Facility
+        {
+            Code = "FAC-ATOMIC",
+            Name = "Cơ sở Atomic Test",
+            Address = "123 Atomic",
+            IsActive = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        db.Facilities.Add(fac);
+
+        var dept = new ClinicManagement.Domain.Entities.Department
+        {
+            Facility = fac,
+            Code = "DEPT-ATOMIC",
+            Name = "Khoa Atomic",
+            SpecialtyId = spec.Id,
+            IsActive = true
+        };
+        db.Departments.Add(dept);
+
+        db.StaffFacilityAssignments.Add(new ClinicManagement.Domain.Entities.StaffFacilityAssignment
+        {
+            UserId = recId,
+            Facility = fac,
+            Department = dept,
+            Role = "Receptionist",
+            IsPrimary = true,
+            IsActive = true,
+            AssignedAtUtc = DateTime.UtcNow
+        });
+
+        db.StaffFacilityAssignments.Add(new ClinicManagement.Domain.Entities.StaffFacilityAssignment
+        {
+            UserId = docId,
+            Facility = fac,
+            Department = dept,
+            Role = "Doctor",
+            IsPrimary = true,
+            IsActive = true,
+            AssignedAtUtc = DateTime.UtcNow
+        });
         await db.SaveChangesAsync();
     }
 }
