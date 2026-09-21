@@ -841,7 +841,20 @@ public class PatientVisitService : IPatientVisitService
         }
         else if (newStatus == VisitStatus.Completed)
         {
+            var (canComplete, incompleteReason) = await VisitCompletionCoordinator.CanCompleteVisitAsync(visit.Id, _dbContext, cancellationToken);
+            if (!canComplete)
+            {
+                throw new BusinessException("VISIT_CANNOT_COMPLETE", $"Lượt khám chưa đủ điều kiện hoàn tất: {incompleteReason}");
+            }
             visit.CompletedAtUtc = _dateTimeProvider.UtcNow;
+            if (visit.AppointmentId.HasValue)
+            {
+                var apt = await _dbContext.Appointments.FirstOrDefaultAsync(a => a.Id == visit.AppointmentId.Value, cancellationToken);
+                if (apt != null && apt.Status != AppointmentStatus.Completed)
+                {
+                    apt.Status = AppointmentStatus.Completed;
+                }
+            }
         }
         else if (newStatus == VisitStatus.Cancelled)
         {

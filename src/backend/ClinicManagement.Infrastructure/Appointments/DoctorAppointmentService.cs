@@ -15,7 +15,9 @@ using ClinicManagement.Application.Diagnostics.DTOs;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Application.Prescriptions.DTOs;
+using ClinicManagement.Infrastructure.Common;
 using ClinicManagement.Infrastructure.Persistence;
+using ClinicManagement.Infrastructure.Visits;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClinicManagement.Infrastructure.Appointments;
@@ -976,8 +978,10 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 summary.CompletedAtUtc = DateTime.UtcNow;
             }
 
+            bool hasPrescription = false;
             if (request.IssuePrescription && request.PrescriptionItems != null && request.PrescriptionItems.Count > 0)
             {
+                hasPrescription = true;
                 var prescription = appointment.Prescription;
                 if (prescription == null)
                 {
@@ -996,6 +1000,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 }
                 else
                 {
+                    await ValidatePrescriptionNotBilledOrLockedAsync(prescription);
                     ValidateRowVersion(prescription.RowVersion, request.PrescriptionRowVersion);
                     if (!prescription.PatientVisitId.HasValue && relatedVisit != null)
                     {
@@ -1031,6 +1036,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 if (appointment.Prescription.Items.Count > 0)
                 {
                     appointment.Prescription.Status = PrescriptionStatus.Issued;
+                    hasPrescription = true;
                 }
             }
 
@@ -1047,9 +1053,14 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
             if (relatedVisit != null)
             {
-                relatedVisit.Status = (request.IssuePrescription && request.PrescriptionItems != null && request.PrescriptionItems.Count > 0) || (appointment.Prescription != null && appointment.Prescription.Items.Count > 0)
-                    ? VisitStatus.InPharmacy
-                    : VisitStatus.InBilling;
+                if (hasPrescription)
+                {
+                    relatedVisit.Status = VisitStatus.InPharmacy;
+                }
+                else
+                {
+                    await VisitCompletionCoordinator.TryUpdateVisitProgressAsync(relatedVisit.Id, _dbContext, DateTime.UtcNow);
+                }
             }
 
             var patientUserId = await _dbContext.Patients
@@ -1424,6 +1435,30 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         return MapPrescriptionToDto(prescription, doctorUser?.FullName ?? "Bác sĩ", patientUser?.FullName ?? prescription.Patient?.FullName ?? "Bệnh nhân");
     }
 
+    private async Task ValidatePrescriptionNotBilledOrLockedAsync(Prescription prescription)
+    {
+        if (prescription.Status == PrescriptionStatus.Dispensed)
+            throw new BusinessException("ALREADY_DISPENSED", "Đơn thuốc đã cấp phát không thể chỉnh sửa.");
+
+        if (prescription.Status == PrescriptionStatus.ReservedForPurchase)
+            throw new BusinessException("PRESCRIPTION_ALREADY_BILLED", "Đơn thuốc đã được lập hóa đơn hoặc thanh toán. Không thể chỉnh sửa trực tiếp.");
+
+        var minModern = prescription.Id * 4294967296L;
+        var maxModern = (prescription.Id + 1) * 4294967296L - 1;
+        var minLegacy = prescription.Id * 100000L;
+        var maxLegacy = (prescription.Id + 1) * 100000L - 1;
+
+        var isBilled = await _dbContext.InvoiceItems.AnyAsync(ii =>
+            !ii.IsCancelled &&
+            ii.ReferenceType == "PrescriptionItem" &&
+            (ii.ReferenceId == prescription.Id ||
+             (ii.ReferenceId >= minModern && ii.ReferenceId <= maxModern) ||
+             (ii.ReferenceId >= minLegacy && ii.ReferenceId <= maxLegacy)));
+
+        if (isBilled)
+            throw new BusinessException("PRESCRIPTION_ALREADY_BILLED", "Đơn thuốc đã được lập hóa đơn hoặc thanh toán. Không thể chỉnh sửa trực tiếp.");
+    }
+
     public async Task<PrescriptionDraftDto> SavePrescriptionDraftAsync(long appointmentId, SavePrescriptionDraftRequest request)
     {
         var doctor = await GetCurrentDoctorAsync();
@@ -1456,9 +1491,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         }
         else
         {
-            if (prescription.Status == PrescriptionStatus.Dispensed)
-                throw new BusinessException("ALREADY_DISPENSED", "Đơn thuốc đã cấp phát không thể chỉnh sửa.");
-
+            await ValidatePrescriptionNotBilledOrLockedAsync(prescription);
             ValidateRowVersion(prescription.RowVersion, request.RowVersion);
 
             prescription.Notes = request.Notes;
@@ -2132,10 +2165,8 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 summary.CompletedAtUtc = DateTime.UtcNow;
             }
 
-            bool hasPrescription = false;
             if (request.IssuePrescription && request.PrescriptionItems != null && request.PrescriptionItems.Count > 0)
             {
-                hasPrescription = true;
                 var prescription = visit.Prescriptions.FirstOrDefault() ?? (visit.AppointmentId.HasValue
                     ? await _dbContext.Prescriptions.Include(p => p.Items).FirstOrDefaultAsync(p => p.AppointmentId == visit.AppointmentId.Value)
                     : null);
@@ -2157,6 +2188,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 }
                 else
                 {
+                    await ValidatePrescriptionNotBilledOrLockedAsync(prescription);
                     ValidateRowVersion(prescription.RowVersion, request.PrescriptionRowVersion);
                     prescription.PatientVisitId = visit.Id;
                     prescription.Status = PrescriptionStatus.Issued;
@@ -2194,11 +2226,10 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 {
                     existingPres.Status = PrescriptionStatus.Issued;
                     existingPres.PatientVisitId = visit.Id;
-                    hasPrescription = true;
                 }
             }
 
-            visit.Status = hasPrescription ? VisitStatus.InPharmacy : VisitStatus.InBilling;
+            await VisitCompletionCoordinator.TryUpdateVisitProgressAsync(visit.Id, _dbContext, DateTime.UtcNow);
 
             var patientUserId = visit.Patient?.UserId;
             if (patientUserId.HasValue && patientUserId.Value != Guid.Empty)
@@ -2506,9 +2537,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         }
         else
         {
-            if (prescription.Status == PrescriptionStatus.Dispensed)
-                throw new BusinessException("ALREADY_DISPENSED", "Đơn thuốc đã cấp phát không thể chỉnh sửa.");
-
+            await ValidatePrescriptionNotBilledOrLockedAsync(prescription);
             ValidateRowVersion(prescription.RowVersion, request.RowVersion);
 
             prescription.PatientVisitId = visit.Id;

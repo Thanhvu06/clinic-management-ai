@@ -108,18 +108,29 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const [issuePrescriptionCheck, setIssuePrescriptionCheck] = useState(true);
     const [completing, setCompleting] = useState(false);
 
-    // Load diagnostic orders
-    const loadDiagnosticOrders = useCallback(async () => {
+    // Unified load and polling for diagnostic orders
+    const loadDiagnosticOrders = useCallback(async (isBackground: boolean = false) => {
         if (!currentId) return;
+        if (isBackground && inFlightPollRef.current) return;
+
+        inFlightPollRef.current = true;
         const currentSeq = ++pollSeqRef.current;
-        setLoadingOrders(true);
+        if (!isBackground) {
+            setLoadingOrders(true);
+        }
+
         try {
             const res = isVisit
                 ? await diagnosticApi.getDoctorOrdersByVisit(currentId)
                 : await diagnosticApi.getDoctorOrdersByAppointment(appointmentId);
-            if (currentSeq === pollSeqRef.current && res.success && res.data) {
-                setDiagnosticOrders(res.data);
-                setPollError(false);
+
+            if (currentSeq === pollSeqRef.current) {
+                if (res.success && res.data) {
+                    setDiagnosticOrders(res.data);
+                    setPollError(false);
+                } else {
+                    setPollError(true);
+                }
             }
         } catch {
             if (currentSeq === pollSeqRef.current) {
@@ -127,7 +138,10 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             }
         } finally {
             if (currentSeq === pollSeqRef.current) {
-                setLoadingOrders(false);
+                inFlightPollRef.current = false;
+                if (!isBackground) {
+                    setLoadingOrders(false);
+                }
             }
         }
     }, [currentId, isVisit, appointmentId]);
@@ -234,38 +248,17 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     // Background polling for diagnostic orders (every 20s) to reflect lab/imaging results in real-time
     useEffect(() => {
         if (!currentId) return;
-        let isMounted = true;
 
-        const pollOrders = async () => {
-            if (inFlightPollRef.current) return;
-            inFlightPollRef.current = true;
-            const currentSeq = ++pollSeqRef.current;
+        const timer = setInterval(() => {
+            void loadDiagnosticOrders(true);
+        }, 20000);
 
-            try {
-                const res = isVisit
-                    ? await diagnosticApi.getDoctorOrdersByVisit(currentId)
-                    : await diagnosticApi.getDoctorOrdersByAppointment(appointmentId);
-                if (isMounted && currentSeq === pollSeqRef.current && res.success && res.data) {
-                    setDiagnosticOrders(res.data);
-                    setPollError(false);
-                }
-            } catch {
-                if (isMounted && currentSeq === pollSeqRef.current) {
-                    setPollError(true);
-                }
-            } finally {
-                inFlightPollRef.current = false;
-            }
-        };
-
-        const timer = setInterval(pollOrders, 20000);
         return () => {
-            isMounted = false;
-            inFlightPollRef.current = false;
             pollSeqRef.current++;
+            inFlightPollRef.current = false;
             clearInterval(timer);
         };
-    }, [currentId, isVisit, appointmentId]);
+    }, [currentId, loadDiagnosticOrders]);
 
     // Computed BMI
     const computedBmi = useMemo(() => {
@@ -1618,7 +1611,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </h3>
                             <button
                                 type="button"
-                                onClick={loadDiagnosticOrders}
+                                onClick={() => void loadDiagnosticOrders()}
                                 className="btn-secondary"
                                 style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}
                             >

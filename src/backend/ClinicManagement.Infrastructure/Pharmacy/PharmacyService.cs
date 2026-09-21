@@ -10,7 +10,9 @@ using ClinicManagement.Application.Pharmacy.Interfaces;
 using ClinicManagement.Application.Prescriptions.DTOs;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
+using ClinicManagement.Infrastructure.Common;
 using ClinicManagement.Infrastructure.Persistence;
+using ClinicManagement.Infrastructure.Visits;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClinicManagement.Infrastructure.Pharmacy;
@@ -304,25 +306,32 @@ public class PharmacyService : IPharmacyService
                 // Guard: Prescription must be paid before dispensing
                 // Item-level check: Every medicine in prescription.Items must be billed in an active invoice item with Status == InvoiceStatus.Paid
                 // and paid quantity must be greater than or equal to prescription item quantity.
+                var minModern = prescription.Id * 4294967296L;
+                var maxModern = (prescription.Id + 1) * 4294967296L - 1;
+                var minLegacy = prescription.Id * 100000L;
+                var maxLegacy = (prescription.Id + 1) * 100000L - 1;
+
                 var paidInvoiceItems = await _dbContext.InvoiceItems
                     .Where(ii => !ii.IsCancelled && ii.Invoice.Status == InvoiceStatus.Paid)
                     .Where(ii => ii.ReferenceType == "PrescriptionItem" &&
-                                 (ii.ReferenceId == prescription.Id ||
-                                  (ii.ReferenceId >= prescription.Id * 100000L && ii.ReferenceId < (prescription.Id + 1) * 100000L)))
+                                 ((ii.ReferenceId >= minModern && ii.ReferenceId <= maxModern) ||
+                                  (ii.ReferenceId >= minLegacy && ii.ReferenceId <= maxLegacy)))
                     .Select(ii => new { ii.ReferenceId, ii.Quantity })
                     .ToListAsync();
 
-                var hasLegacyWholeRxPaid = paidInvoiceItems.Any(ii => ii.ReferenceId == prescription.Id);
-
-                var paidQtyByMedId = paidInvoiceItems
-                    .Where(ii => ii.ReferenceId >= prescription.Id * 100000L && ii.ReferenceId < (prescription.Id + 1) * 100000L)
-                    .GroupBy(ii => ii.ReferenceId - (prescription.Id * 100000L))
-                    .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+                var paidQtyByMedId = new Dictionary<long, int>();
+                foreach (var ii in paidInvoiceItems)
+                {
+                    if (PrescriptionItemBillingReference.TryDecodeMedicineId(ii.ReferenceId, prescription.Id, out var medId))
+                    {
+                        paidQtyByMedId[medId] = paidQtyByMedId.GetValueOrDefault(medId) + ii.Quantity;
+                    }
+                }
 
                 foreach (var item in prescription.Items)
                 {
                     paidQtyByMedId.TryGetValue(item.MedicineId, out var paidQty);
-                    if (paidQty < item.Quantity && !hasLegacyWholeRxPaid)
+                    if (paidQty < item.Quantity)
                     {
                         var medName = item.Medicine?.Name ?? $"ID #{item.MedicineId}";
                         if (paidQty == 0)
@@ -418,32 +427,10 @@ public class PharmacyService : IPharmacyService
 
                 if (visit != null)
                 {
-                    var hasUnpaidInvoices = await _dbContext.Invoices
-                        .AnyAsync(inv => (inv.PatientVisitId == visit.Id || (visit.AppointmentId.HasValue && inv.AppointmentId == visit.AppointmentId.Value))
-                                      && inv.Status == InvoiceStatus.Unpaid);
-
-                    // Check for other undispensed prescriptions in the visit
-                    var hasOtherPendingPrescriptions = await _dbContext.Prescriptions
-                        .AnyAsync(p => (p.PatientVisitId == visit.Id || (visit.AppointmentId.HasValue && p.AppointmentId == visit.AppointmentId.Value))
-                                    && p.Id != prescription.Id
-                                    && (p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.ReservedForPurchase));
-
-                    // Check for pending/unperformed diagnostic orders
-                    var hasPendingDiagnostics = await _dbContext.DiagnosticOrders
-                        .AnyAsync(o => (o.PatientVisitId == visit.Id || (visit.AppointmentId.HasValue && o.AppointmentId == visit.AppointmentId.Value))
-                                    && o.Status != DiagnosticOrderStatus.Completed
-                                    && o.Status != DiagnosticOrderStatus.Cancelled);
-
-                    // Visit can only be completed when there are NO unpaid invoices AND all prescriptions dispensed AND all diagnostics completed
-                    if (!hasUnpaidInvoices && !hasOtherPendingPrescriptions && !hasPendingDiagnostics)
-                    {
-                        visit.Status = VisitStatus.Completed;
-                        visit.CompletedAtUtc = DateTime.UtcNow;
-                    }
-                    else if (hasUnpaidInvoices)
-                    {
-                        visit.Status = VisitStatus.InBilling;
-                    }
+                    await VisitCompletionCoordinator.TryUpdateVisitProgressAsync(
+                        visit.Id,
+                        _dbContext,
+                        DateTime.UtcNow);
                 }
 
                 var patientUserId = await _dbContext.Patients

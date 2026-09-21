@@ -13,7 +13,9 @@ using ClinicManagement.Application.Notifications.DTOs;
 using ClinicManagement.Application.Notifications.Interfaces;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
+using ClinicManagement.Infrastructure.Common;
 using ClinicManagement.Infrastructure.Persistence;
+using ClinicManagement.Infrastructure.Visits;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -268,8 +270,11 @@ public class BillingService : IBillingService
         {
             foreach (var item in p.Items)
             {
-                var refId = p.Id * 100000L + item.MedicineId;
-                if (alreadyBilledSet.Contains($"PrescriptionItem:{refId}"))
+                var refId = PrescriptionItemBillingReference.Encode(p.Id, item.MedicineId);
+                var legacyRefId = p.Id * 100000L + item.MedicineId;
+                if (alreadyBilledSet.Contains($"PrescriptionItem:{refId}") ||
+                    alreadyBilledSet.Contains($"PrescriptionItem:{legacyRefId}") ||
+                    alreadyBilledSet.Contains($"PrescriptionItem:{p.Id}"))
                     continue;
 
                 if (item.Medicine == null || !item.Medicine.UnitPrice.HasValue || item.Medicine.UnitPrice.Value <= 0)
@@ -415,7 +420,7 @@ public class BillingService : IBillingService
             || ((v.Department != null && v.Department.Specialty != null && v.Department.Specialty.ConsultationFee > 0)
                 && !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "Consultation" && ii.ReferenceId == v.Id))
             || v.DiagnosticOrders.Any(o => o.Status != DiagnosticOrderStatus.Cancelled && o.Items.Any(i => i.Status != DiagnosticItemStatus.Cancelled && !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "DiagnosticItem" && ii.ReferenceId == i.Id)))
-            || v.Prescriptions.Any(p => (p.Status == PrescriptionStatus.ReservedForPurchase || p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.Dispensed) && p.Items.Any(pi => !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "PrescriptionItem" && (ii.ReferenceId == p.Id * 100000L + pi.MedicineId || ii.ReferenceId == p.Id))))
+            || v.Prescriptions.Any(p => (p.Status == PrescriptionStatus.ReservedForPurchase || p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.Dispensed) && p.Items.Any(pi => !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "PrescriptionItem" && (ii.ReferenceId == p.Id * 4294967296L + pi.MedicineId || ii.ReferenceId == p.Id * 100000L + pi.MedicineId || ii.ReferenceId == p.Id))))
         );
 
         var totalCount = await baseQuery.CountAsync(cancellationToken);
@@ -510,8 +515,11 @@ public class BillingService : IBillingService
             {
                 foreach (var item in p.Items)
                 {
-                    var refId = p.Id * 100000L + item.MedicineId;
-                    if (!billedSet.Contains($"PrescriptionItem:{refId}"))
+                    var refId = PrescriptionItemBillingReference.Encode(p.Id, item.MedicineId);
+                    var legacyRefId = p.Id * 100000L + item.MedicineId;
+                    if (!billedSet.Contains($"PrescriptionItem:{refId}") &&
+                        !billedSet.Contains($"PrescriptionItem:{legacyRefId}") &&
+                        !billedSet.Contains($"PrescriptionItem:{p.Id}"))
                     {
                         unbilledCount++;
                         if (item.Medicine?.UnitPrice.HasValue == true)
@@ -725,14 +733,24 @@ public class BillingService : IBillingService
 
                 if (currentInvoice.PatientVisitId.HasValue)
                 {
-                    await _dbContext.PatientVisits
-                        .Where(v => v.Id == currentInvoice.PatientVisitId.Value &&
-                                   (v.Status == VisitStatus.InBilling || v.Status == VisitStatus.ConsultationCompleted))
-                        .ExecuteUpdateAsync(setters => setters
-                            .SetProperty(v => v.Status, VisitStatus.Completed)
-                            .SetProperty(v => v.CompletedAtUtc, (DateTime?)paidAtUtc)
-                            .SetProperty(v => v.UpdatedAtUtc, (DateTime?)paidAtUtc),
+                    await VisitCompletionCoordinator.TryUpdateVisitProgressAsync(
+                        currentInvoice.PatientVisitId.Value,
+                        _dbContext,
+                        paidAtUtc,
+                        cancellationToken);
+                }
+                else if (currentInvoice.AppointmentId.HasValue)
+                {
+                    var linkedVisit = await _dbContext.PatientVisits
+                        .FirstOrDefaultAsync(v => v.AppointmentId == currentInvoice.AppointmentId.Value, cancellationToken);
+                    if (linkedVisit != null)
+                    {
+                        await VisitCompletionCoordinator.TryUpdateVisitProgressAsync(
+                            linkedVisit.Id,
+                            _dbContext,
+                            paidAtUtc,
                             cancellationToken);
+                    }
                 }
 
                 var paymentCode = GeneratePaymentCode();
