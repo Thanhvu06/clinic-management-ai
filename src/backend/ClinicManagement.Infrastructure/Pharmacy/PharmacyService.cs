@@ -313,16 +313,20 @@ public class PharmacyService : IPharmacyService
 
                 var paidInvoiceItems = await _dbContext.InvoiceItems
                     .Where(ii => !ii.IsCancelled && ii.Invoice.Status == InvoiceStatus.Paid)
-                    .Where(ii => ii.ReferenceType == "PrescriptionItem" &&
-                                 ((ii.ReferenceId >= minModern && ii.ReferenceId <= maxModern) ||
-                                  (ii.ReferenceId >= minLegacy && ii.ReferenceId <= maxLegacy)))
-                    .Select(ii => new { ii.ReferenceId, ii.Quantity })
+                    .Where(ii => ii.Invoice.PatientId == prescription.PatientId &&
+                                 (ii.Invoice.PatientVisitId == prescription.PatientVisitId ||
+                                  (prescription.AppointmentId.HasValue && ii.Invoice.AppointmentId == prescription.AppointmentId.Value)))
+                    .Where(ii => (ii.ReferenceType == PrescriptionItemBillingReference.ModernReferenceType &&
+                                  ii.ReferenceId >= minModern && ii.ReferenceId <= maxModern) ||
+                                 (ii.ReferenceType == PrescriptionItemBillingReference.LegacyReferenceType &&
+                                  ii.ReferenceId >= minLegacy && ii.ReferenceId <= maxLegacy))
+                    .Select(ii => new { ii.ReferenceType, ii.ReferenceId, ii.Quantity })
                     .ToListAsync();
 
                 var paidQtyByMedId = new Dictionary<long, int>();
                 foreach (var ii in paidInvoiceItems)
                 {
-                    if (PrescriptionItemBillingReference.TryDecodeMedicineId(ii.ReferenceId, prescription.Id, out var medId))
+                    if (PrescriptionItemBillingReference.TryDecodeMedicineId(ii.ReferenceType, ii.ReferenceId, prescription.Id, out var medId))
                     {
                         paidQtyByMedId[medId] = paidQtyByMedId.GetValueOrDefault(medId) + ii.Quantity;
                     }

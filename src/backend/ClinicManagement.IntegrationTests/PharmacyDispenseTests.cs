@@ -966,6 +966,45 @@ public class PharmacyDispenseTests : IntegrationTestBase
                 OrderedAtUtc = DateTime.UtcNow
             };
             db.DiagnosticOrders.Add(diagOrder);
+
+            db.VisitSummaries.Add(new VisitSummary
+            {
+                PatientVisitId = visit.Id,
+                DoctorId = doc.Id,
+                ChiefComplaint = "Tái khám theo hẹn",
+                Diagnosis = "Viêm họng cấp",
+                CompletedAtUtc = DateTime.UtcNow,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+            var consultationFee = dept.Specialty?.ConsultationFee ?? 150000m;
+            var consultInv = new Invoice
+            {
+                InvoiceCode = $"INV-CONS-{Guid.NewGuid():N}"[..18].ToUpper(),
+                PatientId = patient.Id,
+                PatientVisitId = visit.Id,
+                Status = InvoiceStatus.Paid,
+                Subtotal = consultationFee,
+                TotalAmount = consultationFee,
+                PaidAtUtc = DateTime.UtcNow,
+                CreatedAtUtc = DateTime.UtcNow,
+                Items = new List<InvoiceItem>
+                {
+                    new InvoiceItem
+                    {
+                        ItemCode = "KHAM",
+                        Description = "Tiền khám chuyên khoa",
+                        Quantity = 1,
+                        UnitPrice = consultationFee,
+                        LineTotal = consultationFee,
+                        ReferenceType = "Consultation",
+                        ReferenceId = visit.Id,
+                        IsCancelled = false
+                    }
+                }
+            };
+            db.Invoices.Add(consultInv);
+
             await db.SaveChangesAsync();
             diagId = diagOrder.Id;
         }
@@ -994,13 +1033,15 @@ public class PharmacyDispenseTests : IntegrationTestBase
             Assert.Equal(VisitStatus.InConsultation, visit!.Status);
         }
 
-        // Complete Diagnostic Order
+        // Complete Diagnostic Order and Doctor Reviews it
         using (var scope = Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var diag = await db.DiagnosticOrders.FindAsync(diagId);
             diag!.Status = DiagnosticOrderStatus.Completed;
             diag.CompletedAtUtc = DateTime.UtcNow;
+            diag.ReviewedAtUtc = DateTime.UtcNow;
+            diag.ReviewedByDoctorId = diag.OrderingDoctorId;
             await db.SaveChangesAsync();
         }
 

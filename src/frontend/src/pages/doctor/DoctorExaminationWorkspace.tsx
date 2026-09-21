@@ -108,11 +108,35 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const [issuePrescriptionCheck, setIssuePrescriptionCheck] = useState(true);
     const [completing, setCompleting] = useState(false);
 
+    const isMountedRef = useRef(true);
+    const activeIdRef = useRef(currentId);
+    activeIdRef.current = currentId;
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
+    // Reset orders and in-flight states only when visit actually changes (not on mount)
+    const prevIdRef = useRef(currentId);
+    useEffect(() => {
+        if (prevIdRef.current !== currentId) {
+            prevIdRef.current = currentId;
+            setDiagnosticOrders([]);
+            setPollError(false);
+            pollSeqRef.current++;
+            inFlightPollRef.current = false;
+        }
+    }, [currentId]);
+
     // Unified load and polling for diagnostic orders
     const loadDiagnosticOrders = useCallback(async (isBackground: boolean = false) => {
         if (!currentId) return;
         if (isBackground && inFlightPollRef.current) return;
 
+        const targetId = currentId;
         inFlightPollRef.current = true;
         const currentSeq = ++pollSeqRef.current;
         if (!isBackground) {
@@ -121,10 +145,10 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
         try {
             const res = isVisit
-                ? await diagnosticApi.getDoctorOrdersByVisit(currentId)
+                ? await diagnosticApi.getDoctorOrdersByVisit(targetId)
                 : await diagnosticApi.getDoctorOrdersByAppointment(appointmentId);
 
-            if (currentSeq === pollSeqRef.current) {
+            if (currentSeq === pollSeqRef.current && activeIdRef.current === targetId && isMountedRef.current) {
                 if (res.success && res.data) {
                     setDiagnosticOrders(res.data);
                     setPollError(false);
@@ -133,13 +157,13 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 }
             }
         } catch {
-            if (currentSeq === pollSeqRef.current) {
+            if (currentSeq === pollSeqRef.current && activeIdRef.current === targetId && isMountedRef.current) {
                 setPollError(true);
             }
         } finally {
             if (currentSeq === pollSeqRef.current) {
                 inFlightPollRef.current = false;
-                if (!isBackground) {
+                if (!isBackground && isMountedRef.current) {
                     setLoadingOrders(false);
                 }
             }
@@ -161,9 +185,10 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     // Load initial context
     const loadContext = useCallback(async () => {
         if (!currentId) return;
+        const targetId = currentId;
         try {
             const ctxPromise = isVisit
-                ? doctorApi.getVisitPatientClinicalContext(currentId)
+                ? doctorApi.getVisitPatientClinicalContext(targetId)
                 : doctorApi.getPatientClinicalContext(appointmentId);
 
             const [ctxRes, medRes] = await Promise.all([
@@ -173,63 +198,69 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 loadDiagnosticCatalog()
             ]);
 
-            if (ctxRes.success && ctxRes.data) {
-                const data = ctxRes.data;
-                setContext(data);
+            if (activeIdRef.current === targetId && isMountedRef.current) {
+                if (ctxRes.success && ctxRes.data) {
+                    const data = ctxRes.data;
+                    setContext(data);
 
-                // Populate Encounter
-                if (data.encounter) {
-                    setChiefComplaint(data.encounter.chiefComplaint || data.currentAppointment?.reason || '');
-                    setClinicalFindings(data.encounter.clinicalFindings || '');
-                    setDiagnosis(data.encounter.diagnosis || '');
-                    setDiagnosisCode(data.encounter.diagnosisCode || '');
-                    setTreatmentPlan(data.encounter.treatmentPlan || '');
-                    setSummary(data.encounter.summary || '');
-                    setFollowUpInstruction(data.encounter.followUpInstruction || '');
-                    setEncounterRowVersion(data.encounter.rowVersion || null);
-                } else {
-                    setChiefComplaint(data.currentAppointment?.reason || '');
+                    // Populate Encounter
+                    if (data.encounter) {
+                        setChiefComplaint(data.encounter.chiefComplaint || data.currentAppointment?.reason || '');
+                        setClinicalFindings(data.encounter.clinicalFindings || '');
+                        setDiagnosis(data.encounter.diagnosis || '');
+                        setDiagnosisCode(data.encounter.diagnosisCode || '');
+                        setTreatmentPlan(data.encounter.treatmentPlan || '');
+                        setSummary(data.encounter.summary || '');
+                        setFollowUpInstruction(data.encounter.followUpInstruction || '');
+                        setEncounterRowVersion(data.encounter.rowVersion || null);
+                    } else {
+                        setChiefComplaint(data.currentAppointment?.reason || '');
+                    }
+
+                    // Populate Vitals
+                    if (data.vitalSigns) {
+                        setTemperature(data.vitalSigns.temperature?.toString() || '');
+                        setBpSystolic(data.vitalSigns.bloodPressureSystolic?.toString() || '');
+                        setBpDiastolic(data.vitalSigns.bloodPressureDiastolic?.toString() || '');
+                        setHeartRate(data.vitalSigns.heartRate?.toString() || '');
+                        setRespiratoryRate(data.vitalSigns.respiratoryRate?.toString() || '');
+                        setWeight(data.vitalSigns.weight?.toString() || '');
+                        setHeight(data.vitalSigns.height?.toString() || '');
+                        setSpO2(data.vitalSigns.spO2?.toString() || '');
+                        setVitalsRowVersion(data.vitalSigns.rowVersion || null);
+                    }
+
+                    // Populate Prescription Draft
+                    if (data.prescription) {
+                        setPrescriptionNotes(data.prescription.notes || '');
+                        setPrescriptionRowVersion(data.prescription.rowVersion || null);
+                        setPrescriptionItems(data.prescription.items.map(i => ({
+                            medicineId: i.medicineId,
+                            medicineCode: i.medicineCode,
+                            medicineName: i.medicineName,
+                            unit: i.unit,
+                            availableStock: 999,
+                            quantity: i.quantity,
+                            dosage: i.dosage || '',
+                            frequency: i.frequency || '',
+                            durationDays: i.durationDays || 5,
+                            instructions: i.instructions || ''
+                        })));
+                    }
                 }
 
-                // Populate Vitals
-                if (data.vitalSigns) {
-                    setTemperature(data.vitalSigns.temperature?.toString() || '');
-                    setBpSystolic(data.vitalSigns.bloodPressureSystolic?.toString() || '');
-                    setBpDiastolic(data.vitalSigns.bloodPressureDiastolic?.toString() || '');
-                    setHeartRate(data.vitalSigns.heartRate?.toString() || '');
-                    setRespiratoryRate(data.vitalSigns.respiratoryRate?.toString() || '');
-                    setWeight(data.vitalSigns.weight?.toString() || '');
-                    setHeight(data.vitalSigns.height?.toString() || '');
-                    setSpO2(data.vitalSigns.spO2?.toString() || '');
-                    setVitalsRowVersion(data.vitalSigns.rowVersion || null);
+                if (medRes.success && medRes.data) {
+                    setMedicines(medRes.data);
                 }
-
-                // Populate Prescription Draft
-                if (data.prescription) {
-                    setPrescriptionNotes(data.prescription.notes || '');
-                    setPrescriptionRowVersion(data.prescription.rowVersion || null);
-                    setPrescriptionItems(data.prescription.items.map(i => ({
-                        medicineId: i.medicineId,
-                        medicineCode: i.medicineCode,
-                        medicineName: i.medicineName,
-                        unit: i.unit,
-                        availableStock: 999,
-                        quantity: i.quantity,
-                        dosage: i.dosage || '',
-                        frequency: i.frequency || '',
-                        durationDays: i.durationDays || 5,
-                        instructions: i.instructions || ''
-                    })));
-                }
-            }
-
-            if (medRes.success && medRes.data) {
-                setMedicines(medRes.data);
             }
         } catch (err: any) {
-            showAlert(err.response?.data?.message || 'Không thể tải hồ sơ khám lâm sàng của bệnh nhân.', 'Lỗi', 'error');
+            if (activeIdRef.current === targetId && isMountedRef.current) {
+                showAlert(err.response?.data?.message || 'Không thể tải hồ sơ khám lâm sàng của bệnh nhân.', 'Lỗi', 'error');
+            }
         } finally {
-            setLoading(false);
+            if (activeIdRef.current === targetId && isMountedRef.current) {
+                setLoading(false);
+            }
         }
     }, [currentId, isVisit, appointmentId, showAlert, loadDiagnosticOrders, loadDiagnosticCatalog]);
 
@@ -852,10 +883,12 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                     <span>{patient.address}</span>
                                 </div>
                             )}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Clock size={16} style={{ color: '#64748b' }} />
-                                <span>Giờ hẹn: {apt.startTime.substring(0, 5)} - {apt.endTime.substring(0, 5)}</span>
-                            </div>
+                            {apt.startTime && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Clock size={16} style={{ color: '#64748b' }} />
+                                    <span>Giờ hẹn: {apt.startTime.substring(0, 5)} - {apt.endTime ? apt.endTime.substring(0, 5) : ''}</span>
+                                </div>
+                            )}
                         </div>
 
                         <div style={{ marginTop: '10px', fontSize: '0.9rem', color: '#334155' }}>

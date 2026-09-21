@@ -828,9 +828,30 @@ public class PatientVisitService : IPatientVisitService
 
     public async Task<PatientVisitDetailDto> UpdateVisitStatusAsync(long visitId, VisitStatus newStatus, string? reason = null, CancellationToken cancellationToken = default)
     {
+        var currentUserId = GetUserId();
+        if (currentUserId != Guid.Empty)
+        {
+            await _facilityAuthService.ValidateVisitAccessAsync(currentUserId, visitId, cancellationToken);
+        }
+
         var visit = await _dbContext.PatientVisits.FirstOrDefaultAsync(v => v.Id == visitId, cancellationToken);
         if (visit == null)
             throw new NotFoundException("Lượt khám không tồn tại.");
+
+        if (visit.Status == VisitStatus.Cancelled)
+            throw new BusinessException("VISIT_ALREADY_CANCELLED", "Lượt khám đã bị hủy, không thể thay đổi trạng thái.");
+
+        if (newStatus == visit.Status)
+            return await GetVisitByIdAsync(visit.Id, cancellationToken);
+
+        if (newStatus == VisitStatus.Completed)
+        {
+            var (canComplete, incompleteReason) = await VisitCompletionCoordinator.CanCompleteVisitAsync(visit.Id, _dbContext, cancellationToken);
+            if (!canComplete)
+            {
+                throw new BusinessException("VISIT_CANNOT_COMPLETE", $"Lượt khám chưa đủ điều kiện hoàn tất: {incompleteReason}");
+            }
+        }
 
         visit.Status = newStatus;
         visit.UpdatedAtUtc = _dateTimeProvider.UtcNow;
@@ -841,11 +862,6 @@ public class PatientVisitService : IPatientVisitService
         }
         else if (newStatus == VisitStatus.Completed)
         {
-            var (canComplete, incompleteReason) = await VisitCompletionCoordinator.CanCompleteVisitAsync(visit.Id, _dbContext, cancellationToken);
-            if (!canComplete)
-            {
-                throw new BusinessException("VISIT_CANNOT_COMPLETE", $"Lượt khám chưa đủ điều kiện hoàn tất: {incompleteReason}");
-            }
             visit.CompletedAtUtc = _dateTimeProvider.UtcNow;
             if (visit.AppointmentId.HasValue)
             {

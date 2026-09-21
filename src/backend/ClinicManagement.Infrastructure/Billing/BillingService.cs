@@ -272,7 +272,8 @@ public class BillingService : IBillingService
             {
                 var refId = PrescriptionItemBillingReference.Encode(p.Id, item.MedicineId);
                 var legacyRefId = p.Id * 100000L + item.MedicineId;
-                if (alreadyBilledSet.Contains($"PrescriptionItem:{refId}") ||
+                if (alreadyBilledSet.Contains($"PrescriptionItem:v2:{refId}") ||
+                    alreadyBilledSet.Contains($"PrescriptionItem:{refId}") ||
                     alreadyBilledSet.Contains($"PrescriptionItem:{legacyRefId}") ||
                     alreadyBilledSet.Contains($"PrescriptionItem:{p.Id}"))
                     continue;
@@ -290,7 +291,7 @@ public class BillingService : IBillingService
                     Quantity = item.Quantity,
                     UnitPrice = item.Medicine.UnitPrice.Value,
                     LineTotal = lineTotal,
-                    ReferenceType = "PrescriptionItem",
+                    ReferenceType = PrescriptionItemBillingReference.ModernReferenceType,
                     ReferenceId = refId,
                     IsCancelled = false
                 });
@@ -420,7 +421,7 @@ public class BillingService : IBillingService
             || ((v.Department != null && v.Department.Specialty != null && v.Department.Specialty.ConsultationFee > 0)
                 && !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "Consultation" && ii.ReferenceId == v.Id))
             || v.DiagnosticOrders.Any(o => o.Status != DiagnosticOrderStatus.Cancelled && o.Items.Any(i => i.Status != DiagnosticItemStatus.Cancelled && !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "DiagnosticItem" && ii.ReferenceId == i.Id)))
-            || v.Prescriptions.Any(p => (p.Status == PrescriptionStatus.ReservedForPurchase || p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.Dispensed) && p.Items.Any(pi => !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "PrescriptionItem" && (ii.ReferenceId == p.Id * 4294967296L + pi.MedicineId || ii.ReferenceId == p.Id * 100000L + pi.MedicineId || ii.ReferenceId == p.Id))))
+            || v.Prescriptions.Any(p => (p.Status == PrescriptionStatus.ReservedForPurchase || p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.Dispensed) && p.Items.Any(pi => !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && (((ii.ReferenceType == "PrescriptionItem:v2" || ii.ReferenceType == "PrescriptionItem") && ii.ReferenceId == p.Id * 4294967296L + pi.MedicineId) || (ii.ReferenceType == "PrescriptionItem" && (ii.ReferenceId == p.Id * 100000L + pi.MedicineId || ii.ReferenceId == p.Id))))))
         );
 
         var totalCount = await baseQuery.CountAsync(cancellationToken);
@@ -517,7 +518,8 @@ public class BillingService : IBillingService
                 {
                     var refId = PrescriptionItemBillingReference.Encode(p.Id, item.MedicineId);
                     var legacyRefId = p.Id * 100000L + item.MedicineId;
-                    if (!billedSet.Contains($"PrescriptionItem:{refId}") &&
+                    if (!billedSet.Contains($"PrescriptionItem:v2:{refId}") &&
+                        !billedSet.Contains($"PrescriptionItem:{refId}") &&
                         !billedSet.Contains($"PrescriptionItem:{legacyRefId}") &&
                         !billedSet.Contains($"PrescriptionItem:{p.Id}"))
                     {
@@ -1278,7 +1280,7 @@ public class BillingService : IBillingService
             Quantity = item.Quantity,
             UnitPrice = item.UnitPrice,
             LineTotal = item.LineTotal,
-            ReferenceType = item.ReferenceType,
+            ReferenceType = item.ReferenceType.StartsWith("PrescriptionItem") ? "PrescriptionItem" : item.ReferenceType,
             ReferenceId = item.ReferenceId
         }).ToList();
 

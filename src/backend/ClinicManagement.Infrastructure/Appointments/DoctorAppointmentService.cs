@@ -1053,14 +1053,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
             if (relatedVisit != null)
             {
-                if (hasPrescription)
-                {
-                    relatedVisit.Status = VisitStatus.InPharmacy;
-                }
-                else
-                {
-                    await VisitCompletionCoordinator.TryUpdateVisitProgressAsync(relatedVisit.Id, _dbContext, DateTime.UtcNow);
-                }
+                await VisitCompletionCoordinator.TryUpdateVisitProgressAsync(relatedVisit.Id, _dbContext, DateTime.UtcNow);
             }
 
             var patientUserId = await _dbContext.Patients
@@ -1450,10 +1443,8 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
         var isBilled = await _dbContext.InvoiceItems.AnyAsync(ii =>
             !ii.IsCancelled &&
-            ii.ReferenceType == "PrescriptionItem" &&
-            (ii.ReferenceId == prescription.Id ||
-             (ii.ReferenceId >= minModern && ii.ReferenceId <= maxModern) ||
-             (ii.ReferenceId >= minLegacy && ii.ReferenceId <= maxLegacy)));
+            ((ii.ReferenceType == PrescriptionItemBillingReference.ModernReferenceType && ii.ReferenceId >= minModern && ii.ReferenceId <= maxModern) ||
+             (ii.ReferenceType == PrescriptionItemBillingReference.LegacyReferenceType && (ii.ReferenceId == prescription.Id || (ii.ReferenceId >= minLegacy && ii.ReferenceId <= maxLegacy)))));
 
         if (isBilled)
             throw new BusinessException("PRESCRIPTION_ALREADY_BILLED", "Đơn thuốc đã được lập hóa đơn hoặc thanh toán. Không thể chỉnh sửa trực tiếp.");
@@ -2229,6 +2220,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 }
             }
 
+            await _dbContext.SaveChangesAsync();
             await VisitCompletionCoordinator.TryUpdateVisitProgressAsync(visit.Id, _dbContext, DateTime.UtcNow);
 
             var patientUserId = visit.Patient?.UserId;

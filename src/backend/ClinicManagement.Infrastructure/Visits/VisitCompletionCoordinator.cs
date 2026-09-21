@@ -28,6 +28,8 @@ public static class VisitCompletionCoordinator
         CancellationToken cancellationToken = default)
     {
         var visit = await dbContext.PatientVisits
+            .Include(v => v.Appointment)
+                .ThenInclude(a => a!.Specialty)
             .Include(v => v.Department)
                 .ThenInclude(d => d!.Specialty)
             .FirstOrDefaultAsync(v => v.Id == visitId, cancellationToken);
@@ -40,9 +42,24 @@ public static class VisitCompletionCoordinator
 
         var appointmentId = visit.AppointmentId;
 
-        // Diagnostic orders check
+        // 1. Clinical consultation check: Doctor must have completed clinical encounter
+        var hasCompletedSummary = (visit.VisitSummary != null && visit.VisitSummary.CompletedAtUtc.HasValue) ||
+                                  dbContext.VisitSummaries.Local.Any(
+                                      s => (s.PatientVisitId == visit.Id || (appointmentId.HasValue && s.AppointmentId == appointmentId.Value)) &&
+                                           s.CompletedAtUtc.HasValue) ||
+                                  await dbContext.VisitSummaries.AnyAsync(
+                                      s => (s.PatientVisitId == visit.Id || (appointmentId.HasValue && s.AppointmentId == appointmentId.Value)) &&
+                                           s.CompletedAtUtc.HasValue,
+                                      cancellationToken);
+
+        if (!hasCompletedSummary)
+            return (false, "Bác sĩ chưa hoàn tất phiên khám lâm sàng.");
+
+        // 2. Diagnostic orders check
         var diagnosticOrders = await dbContext.DiagnosticOrders
-            .Where(o => o.PatientVisitId == visit.Id || (appointmentId.HasValue && o.AppointmentId == appointmentId.Value))
+            .Include(o => o.Items)
+            .Where(o => (o.PatientVisitId == visit.Id || (appointmentId.HasValue && o.AppointmentId == appointmentId.Value)) &&
+                        o.Status != DiagnosticOrderStatus.Cancelled)
             .ToListAsync(cancellationToken);
 
         var pendingOrders = diagnosticOrders
@@ -52,10 +69,28 @@ public static class VisitCompletionCoordinator
         if (pendingOrders.Count > 0)
             return (false, "Còn chỉ định cận lâm sàng đang chờ thực hiện hoặc chờ kết quả.");
 
-        // Prescription dispensing check
+        var unreviewedOrders = diagnosticOrders
+            .Where(o => o.Status == DiagnosticOrderStatus.Completed && !o.ReviewedAtUtc.HasValue)
+            .ToList();
+
+        if (unreviewedOrders.Count > 0)
+            return (false, "Kết quả cận lâm sàng chưa được bác sĩ xem và duyệt.");
+
+        // 3. Invoices check: No unpaid invoices
+        var invoices = await dbContext.Invoices
+            .Include(i => i.Items)
+            .Where(i => (i.PatientVisitId == visit.Id || (appointmentId.HasValue && i.AppointmentId == appointmentId.Value)) &&
+                        i.Status != InvoiceStatus.Cancelled)
+            .ToListAsync(cancellationToken);
+
+        if (invoices.Any(i => i.Status == InvoiceStatus.Unpaid))
+            return (false, "Còn hóa đơn viện phí chưa thanh toán.");
+
+        // 4. Prescription dispensing check
         var prescriptions = await dbContext.Prescriptions
             .Include(p => p.Items)
-            .Where(p => p.PatientVisitId == visit.Id || (appointmentId.HasValue && p.AppointmentId == appointmentId.Value))
+            .Where(p => (p.PatientVisitId == visit.Id || (appointmentId.HasValue && p.AppointmentId == appointmentId.Value)) &&
+                        p.Status != PrescriptionStatus.Cancelled)
             .ToListAsync(cancellationToken);
 
         var undispensedRx = prescriptions
@@ -65,27 +100,65 @@ public static class VisitCompletionCoordinator
         if (undispensedRx.Count > 0)
             return (false, "Đơn thuốc chưa được cấp phát tại quầy dược.");
 
-        // Clinical consultation check
-        var isConsultationDone = visit.Status == VisitStatus.ConsultationCompleted ||
-                                 visit.Status == VisitStatus.InPharmacy ||
-                                 visit.Status == VisitStatus.InBilling ||
-                                 visit.Status == VisitStatus.Completed ||
-                                 prescriptions.Any(p => p.Status == PrescriptionStatus.Dispensed) ||
-                                 await dbContext.VisitSummaries.AnyAsync(
-                                     s => (s.PatientVisitId == visit.Id || (appointmentId.HasValue && s.AppointmentId == appointmentId.Value)) &&
-                                          s.CompletedAtUtc.HasValue,
-                                     cancellationToken);
+        // 5. Unbilled obligations check
+        // A. Consultation fee check
+        var consultationFee = visit.Department?.Specialty?.ConsultationFee ??
+                              visit.Appointment?.Specialty?.ConsultationFee ?? 0m;
 
-        if (!isConsultationDone)
-            return (false, "Bác sĩ chưa hoàn tất phiên khám lâm sàng.");
+        if (consultationFee > 0)
+        {
+            var isConsultationPaid = invoices
+                .Where(i => i.Status == InvoiceStatus.Paid)
+                .SelectMany(i => i.Items)
+                .Any(ii => !ii.IsCancelled &&
+                           (ii.ReferenceType == "Consultation" || ii.ReferenceType == "Appointment") &&
+                           (ii.ReferenceId == visit.Id || (appointmentId.HasValue && ii.ReferenceId == appointmentId.Value)));
 
-        // Invoices check
-        var invoices = await dbContext.Invoices
-            .Where(i => i.PatientVisitId == visit.Id || (appointmentId.HasValue && i.AppointmentId == appointmentId.Value))
-            .ToListAsync(cancellationToken);
+            if (!isConsultationPaid)
+                return (false, "Tiền khám chưa được lập hóa đơn hoặc chưa thanh toán.");
+        }
 
-        if (invoices.Any(i => i.Status == InvoiceStatus.Unpaid))
-            return (false, "Còn hóa đơn viện phí chưa thanh toán.");
+        // B. Diagnostic items check (non-package covered items must be paid)
+        foreach (var order in diagnosticOrders)
+        {
+            foreach (var item in order.Items.Where(i => i.Status != DiagnosticItemStatus.Cancelled && !i.IsPackageCovered))
+            {
+                var isDiagPaid = invoices
+                    .Where(i => i.Status == InvoiceStatus.Paid)
+                    .SelectMany(i => i.Items)
+                    .Any(ii => !ii.IsCancelled && ii.ReferenceType == "DiagnosticItem" && ii.ReferenceId == item.Id);
+
+                if (!isDiagPaid)
+                    return (false, "Chỉ định cận lâm sàng chưa được lập hóa đơn hoặc chưa thanh toán.");
+            }
+        }
+
+        // C. Prescription items check (all medicines in active prescriptions must be paid)
+        var activePrescriptions = prescriptions
+            .Where(p => p.Status != PrescriptionStatus.Draft && p.Items.Count > 0)
+            .ToList();
+
+        if (activePrescriptions.Count > 0)
+        {
+            var paidItems = invoices
+                .Where(i => i.Status == InvoiceStatus.Paid)
+                .SelectMany(i => i.Items)
+                .Where(ii => !ii.IsCancelled)
+                .ToList();
+
+            foreach (var rx in activePrescriptions)
+            {
+                foreach (var item in rx.Items)
+                {
+                    var paidQty = paidItems
+                        .Where(ii => PrescriptionItemBillingReference.TryDecodeMedicineId(ii.ReferenceType, ii.ReferenceId, rx.Id, out var medId) && medId == item.MedicineId)
+                        .Sum(ii => ii.Quantity);
+
+                    if (paidQty < item.Quantity)
+                        return (false, "Thuốc trong đơn chưa được lập hóa đơn hoặc chưa thanh toán đủ số lượng.");
+                }
+            }
+        }
 
         return (true, null);
     }
@@ -102,6 +175,7 @@ public static class VisitCompletionCoordinator
     {
         var visit = await dbContext.PatientVisits
             .Include(v => v.Appointment)
+                .ThenInclude(a => a!.Specialty)
             .Include(v => v.Department)
                 .ThenInclude(d => d!.Specialty)
             .FirstOrDefaultAsync(v => v.Id == visitId, cancellationToken);
@@ -111,66 +185,166 @@ public static class VisitCompletionCoordinator
 
         var appointmentId = visit.AppointmentId;
 
-        // Prescriptions
-        var prescriptions = await dbContext.Prescriptions
-            .Include(p => p.Items)
-            .Where(p => p.PatientVisitId == visit.Id || (appointmentId.HasValue && p.AppointmentId == appointmentId.Value))
-            .ToListAsync(cancellationToken);
+        // Check clinical consultation completion evidence
+        var hasCompletedSummary = (visit.VisitSummary != null && visit.VisitSummary.CompletedAtUtc.HasValue) ||
+                                  dbContext.VisitSummaries.Local.Any(
+                                      s => (s.PatientVisitId == visit.Id || (appointmentId.HasValue && s.AppointmentId == appointmentId.Value)) &&
+                                           s.CompletedAtUtc.HasValue) ||
+                                  await dbContext.VisitSummaries.AnyAsync(
+                                      s => (s.PatientVisitId == visit.Id || (appointmentId.HasValue && s.AppointmentId == appointmentId.Value)) &&
+                                           s.CompletedAtUtc.HasValue,
+                                      cancellationToken);
 
-        var undispensedRx = prescriptions
-            .Where(p => (p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.ReservedForPurchase) && p.Items.Count > 0)
-            .ToList();
-
-        // Check if clinical consultation is completed
-        var isConsultationDone = visit.Status == VisitStatus.ConsultationCompleted ||
-                                 visit.Status == VisitStatus.InPharmacy ||
-                                 visit.Status == VisitStatus.InBilling ||
-                                 visit.Status == VisitStatus.Completed ||
-                                 prescriptions.Any(p => p.Status == PrescriptionStatus.Dispensed) ||
-                                 await dbContext.VisitSummaries.AnyAsync(
-                                     s => (s.PatientVisitId == visit.Id || (appointmentId.HasValue && s.AppointmentId == appointmentId.Value)) &&
-                                          s.CompletedAtUtc.HasValue,
-                                     cancellationToken);
-
-        if (!isConsultationDone)
+        if (!hasCompletedSummary)
         {
-            // Clinical consultation not yet finished, do not move to Billing/Pharmacy/Completed
+            // Clinical consultation not yet finished by doctor.
+            // Ensure CompletedAtUtc is not set.
+            if (visit.CompletedAtUtc.HasValue)
+            {
+                visit.CompletedAtUtc = null;
+                visit.UpdatedAtUtc = nowUtc;
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
             return visit.Status;
         }
 
         // Diagnostic orders
         var diagnosticOrders = await dbContext.DiagnosticOrders
-            .Where(o => o.PatientVisitId == visit.Id || (appointmentId.HasValue && o.AppointmentId == appointmentId.Value))
+            .Include(o => o.Items)
+            .Where(o => (o.PatientVisitId == visit.Id || (appointmentId.HasValue && o.AppointmentId == appointmentId.Value)) &&
+                        o.Status != DiagnosticOrderStatus.Cancelled)
             .ToListAsync(cancellationToken);
 
         var pendingOrders = diagnosticOrders
             .Where(o => o.Status == DiagnosticOrderStatus.Ordered || o.Status == DiagnosticOrderStatus.InProgress)
             .ToList();
 
+        var unreviewedOrders = diagnosticOrders
+            .Where(o => o.Status == DiagnosticOrderStatus.Completed && !o.ReviewedAtUtc.HasValue)
+            .ToList();
+
+        // Prescriptions
+        var prescriptions = await dbContext.Prescriptions
+            .Include(p => p.Items)
+            .Where(p => (p.PatientVisitId == visit.Id || (appointmentId.HasValue && p.AppointmentId == appointmentId.Value)) &&
+                        p.Status != PrescriptionStatus.Cancelled)
+            .ToListAsync(cancellationToken);
+
+        var undispensedRx = prescriptions
+            .Where(p => (p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.ReservedForPurchase) && p.Items.Count > 0)
+            .ToList();
+
         // Invoices
         var invoices = await dbContext.Invoices
-            .Where(i => i.PatientVisitId == visit.Id || (appointmentId.HasValue && i.AppointmentId == appointmentId.Value))
+            .Include(i => i.Items)
+            .Where(i => (i.PatientVisitId == visit.Id || (appointmentId.HasValue && i.AppointmentId == appointmentId.Value)) &&
+                        i.Status != InvoiceStatus.Cancelled)
             .ToListAsync(cancellationToken);
 
         var hasUnpaidInvoices = invoices.Any(i => i.Status == InvoiceStatus.Unpaid);
 
-        if (undispensedRx.Count > 0)
+        // Check unbilled obligations
+        bool hasUnbilledObligations = false;
+
+        // A. Consultation fee
+        var consultationFee = visit.Department?.Specialty?.ConsultationFee ??
+                              visit.Appointment?.Specialty?.ConsultationFee ?? 0m;
+
+        if (consultationFee > 0)
         {
-            if (visit.Status != VisitStatus.InConsultation)
+            var isConsultationPaid = invoices
+                .Where(i => i.Status == InvoiceStatus.Paid)
+                .SelectMany(i => i.Items)
+                .Any(ii => !ii.IsCancelled &&
+                           (ii.ReferenceType == "Consultation" || ii.ReferenceType == "Appointment") &&
+                           (ii.ReferenceId == visit.Id || (appointmentId.HasValue && ii.ReferenceId == appointmentId.Value)));
+
+            if (!isConsultationPaid)
+                hasUnbilledObligations = true;
+        }
+
+        // B. Diagnostic items
+        if (!hasUnbilledObligations)
+        {
+            foreach (var order in diagnosticOrders)
             {
-                visit.Status = VisitStatus.InPharmacy;
+                foreach (var item in order.Items.Where(i => i.Status != DiagnosticItemStatus.Cancelled && !i.IsPackageCovered))
+                {
+                    var isDiagPaid = invoices
+                        .Where(i => i.Status == InvoiceStatus.Paid)
+                        .SelectMany(i => i.Items)
+                        .Any(ii => !ii.IsCancelled && ii.ReferenceType == "DiagnosticItem" && ii.ReferenceId == item.Id);
+
+                    if (!isDiagPaid)
+                    {
+                        hasUnbilledObligations = true;
+                        break;
+                    }
+                }
+                if (hasUnbilledObligations) break;
             }
         }
-        else if (hasUnpaidInvoices)
+
+        // C. Prescription items
+        if (!hasUnbilledObligations)
         {
-            visit.Status = VisitStatus.InBilling;
+            var activePrescriptions = prescriptions
+                .Where(p => p.Status != PrescriptionStatus.Draft && p.Items.Count > 0)
+                .ToList();
+
+            if (activePrescriptions.Count > 0)
+            {
+                var paidItems = invoices
+                    .Where(i => i.Status == InvoiceStatus.Paid)
+                    .SelectMany(i => i.Items)
+                    .Where(ii => !ii.IsCancelled)
+                    .ToList();
+
+                foreach (var rx in activePrescriptions)
+                {
+                    foreach (var item in rx.Items)
+                    {
+                        var paidQty = paidItems
+                            .Where(ii => PrescriptionItemBillingReference.TryDecodeMedicineId(ii.ReferenceType, ii.ReferenceId, rx.Id, out var medId) && medId == item.MedicineId)
+                            .Sum(ii => ii.Quantity);
+
+                        if (paidQty < item.Quantity)
+                        {
+                            hasUnbilledObligations = true;
+                            break;
+                        }
+                    }
+                    if (hasUnbilledObligations) break;
+                }
+            }
         }
-        else if (pendingOrders.Count > 0)
+
+        // Determine progress state
+        if (pendingOrders.Count > 0)
         {
             if (visit.Status != VisitStatus.InConsultation)
             {
                 visit.Status = VisitStatus.WaitingForDiagnostics;
             }
+            visit.CompletedAtUtc = null;
+        }
+        else if (unreviewedOrders.Count > 0)
+        {
+            if (visit.Status != VisitStatus.InConsultation)
+            {
+                visit.Status = VisitStatus.ResultsReady;
+            }
+            visit.CompletedAtUtc = null;
+        }
+        else if (undispensedRx.Count > 0)
+        {
+            visit.Status = VisitStatus.InPharmacy;
+            visit.CompletedAtUtc = null;
+        }
+        else if (hasUnpaidInvoices || hasUnbilledObligations)
+        {
+            visit.Status = VisitStatus.InBilling;
+            visit.CompletedAtUtc = null;
         }
         else
         {
