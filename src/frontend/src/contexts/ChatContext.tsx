@@ -40,7 +40,9 @@ export function validateActionSchema(action: unknown): action is AiAction {
     if (typeof a.id !== "string" || typeof a.label !== "string" || typeof a.type !== "string") return false;
     if (a.style !== "primary" && a.style !== "secondary" && a.style !== "danger") return false;
     if (typeof a.requiresAuthentication !== "boolean" || typeof a.requiresConfirmation !== "boolean") return false;
-    if (a.draftVersion !== undefined && a.draftVersion !== null && typeof a.draftVersion !== "number") return false;
+    if (a.draftVersion !== undefined) {
+        if (typeof a.draftVersion !== "number" || !Number.isInteger(a.draftVersion) || a.draftVersion < 1) return false;
+    }
     if (!a.payload || typeof a.payload !== "object") return false;
 
     const payload = a.payload as Record<string, unknown>;
@@ -60,7 +62,9 @@ export function validateActionSchema(action: unknown): action is AiAction {
     if (payload.phoneNumber !== undefined && payload.phoneNumber !== null && typeof payload.phoneNumber !== "string") return false;
     if (payload.address !== undefined && payload.address !== null && typeof payload.address !== "string") return false;
     if (payload.facilityName !== undefined && payload.facilityName !== null && typeof payload.facilityName !== "string") return false;
-    if (payload.draftVersion !== undefined && payload.draftVersion !== null && typeof payload.draftVersion !== "number") return false;
+    if (payload.draftVersion !== undefined) {
+        if (typeof payload.draftVersion !== "number" || !Number.isInteger(payload.draftVersion) || payload.draftVersion < 1) return false;
+    }
     return true;
 }
 
@@ -83,7 +87,9 @@ export function validateBookingDraftSchema(item: unknown): item is AiBookingDraf
     if (draft.reason !== undefined && draft.reason !== null) {
         if (typeof draft.reason !== "string" || draft.reason.length > 500) return false;
     }
-    if (draft.version !== undefined && draft.version !== null && typeof draft.version !== "number") return false;
+    if (draft.version !== undefined) {
+        if (typeof draft.version !== "number" || !Number.isInteger(draft.version) || draft.version < 1) return false;
+    }
     return true;
 }
 
@@ -120,7 +126,32 @@ const loadStoredMessages = (accountKey: string | null): ChatMessage[] => {
         if (saved) {
             const parsed: unknown = JSON.parse(saved);
             if (Array.isArray(parsed)) {
-                const validMessages = parsed.filter(validateChatMessageSchema);
+                const sanitized = parsed.map(msg => {
+                    if (msg && typeof msg === "object") {
+                        const m = msg as Record<string, unknown>;
+                        if (Array.isArray(m.actions)) {
+                            m.actions = m.actions.map(act => {
+                                if (act && typeof act === "object") {
+                                    const a = act as Record<string, unknown>;
+                                    if (a.draftVersion === null) delete a.draftVersion;
+                                    if (a.payload && typeof a.payload === "object") {
+                                        const p = a.payload as Record<string, unknown>;
+                                        if (p.draftVersion === null) delete p.draftVersion;
+                                    }
+                                }
+                                return act;
+                            });
+                        }
+                        if (m.bookingDraft && typeof m.bookingDraft === "object") {
+                            const bd = m.bookingDraft as Record<string, unknown>;
+                            if (bd.version === null || bd.version === undefined || typeof bd.version !== "number" || !Number.isInteger(bd.version) || bd.version < 1) {
+                                bd.version = 1;
+                            }
+                        }
+                    }
+                    return msg;
+                });
+                const validMessages = sanitized.filter(validateChatMessageSchema);
                 if (validMessages.length > 0) return validMessages;
             }
         }
@@ -136,7 +167,13 @@ const loadStoredDraft = (accountKey: string | null): AiBookingDraft | null => {
         const saved = sessionStorage.getItem(`cliniccare_booking_draft_${accountKey}`);
         if (saved) {
             const parsed: unknown = JSON.parse(saved);
-            if (validateBookingDraftSchema(parsed)) return parsed;
+            if (parsed && typeof parsed === "object") {
+                const raw = parsed as Record<string, unknown>;
+                if (raw.version === null || raw.version === undefined || typeof raw.version !== "number" || !Number.isInteger(raw.version) || raw.version < 1) {
+                    raw.version = 1;
+                }
+                if (validateBookingDraftSchema(raw)) return raw;
+            }
         }
     } catch (error) {
         console.error("Failed to parse booking draft", error);

@@ -327,6 +327,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         // 7.3 Ground Booking Flow: Resolve Specialty, Doctor, Date, Slots
         await GroundBookingFlowAsync(request, cleanMessage, lowerMsg, aiResult, whitelistData, responseDto, cancellationToken);
 
+        var nextDraftVersion = ResolveDraftVersion(request.DraftVersion);
         var clinicalReason = RecoverInitialReason(cleanMessage, request.Context, request.Reason, aiResult.ExtractedReason);
         if (responseDto.BookingDraft == null)
         {
@@ -336,7 +337,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 {
                     Reason = clinicalReason,
                     IsComplete = false,
-                    Version = request.DraftVersion.GetValueOrDefault(1)
+                    Version = nextDraftVersion
                 };
             }
         }
@@ -363,6 +364,8 @@ public class AiSpecialtyService : IAiSpecialtyService
             });
         }
 
+        WithDraftVersionSync(responseDto, nextDraftVersion);
+
         // Ensure all returned actions conform to security allowlist and safety rules, capped at max 6 actions
         responseDto.Actions = responseDto.Actions
             .Where(a => AiActionValidator.Validate(a, out _))
@@ -380,6 +383,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         AiChatRequestDto request,
         CancellationToken cancellationToken)
     {
+        var nextDraftVersion = ResolveDraftVersion(request.DraftVersion);
         var response = new AiChatResponseDto
         {
             Urgency = "ROUTINE",
@@ -397,7 +401,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 response.MissingFields.Add("Reason");
             }
             response.Actions.Add(BuildManualSpecialtySelectionAction());
-            return response;
+            return WithDraftVersionSync(response, nextDraftVersion);
         }
 
         var specialty = await _dbContext.Specialties
@@ -410,7 +414,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             response.ManualSelectionRequired = true;
             response.MissingFields = new List<string> { "Specialty", "Doctor", "TimeSlot" };
             response.Actions.Add(BuildManualSpecialtySelectionAction());
-            return response;
+            return WithDraftVersionSync(response, nextDraftVersion);
         }
 
         if (!specialty.AiEnabled)
@@ -422,10 +426,11 @@ public class AiSpecialtyService : IAiSpecialtyService
                 SpecialtyId = specialty.Id,
                 SpecialtyName = specialty.Name,
                 Reason = reason,
-                IsComplete = false
+                IsComplete = false,
+                Version = nextDraftVersion
             };
             response.MissingFields = new List<string> { "Doctor", "TimeSlot" };
-            return response;
+            return WithDraftVersionSync(response, nextDraftVersion);
         }
 
         var searchFrom = _dateTimeProvider.VietnamToday;
@@ -439,18 +444,18 @@ public class AiSpecialtyService : IAiSpecialtyService
                     out searchFrom))
             {
                 response.Message = "Ngày bắt đầu tìm lịch không hợp lệ. Vui lòng chọn lại ngày theo định dạng ngày/tháng/năm.";
-                response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, request.PendingDoctorId, null, null, reason);
+                response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, request.PendingDoctorId, null, null, reason, nextDraftVersion);
                 response.MissingFields = new List<string> { "DesiredDate", "TimeSlot" };
-                return response;
+                return WithDraftVersionSync(response, nextDraftVersion);
             }
         }
 
         if (searchFrom < _dateTimeProvider.VietnamToday)
         {
             response.Message = "Ngày bắt đầu tìm lịch đã qua. Vui lòng chọn hôm nay hoặc một ngày trong tương lai.";
-            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, request.PendingDoctorId, null, null, reason);
+            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, request.PendingDoctorId, null, null, reason, nextDraftVersion);
             response.MissingFields = new List<string> { "DesiredDate", "TimeSlot" };
-            return response;
+            return WithDraftVersionSync(response, nextDraftVersion);
         }
 
         var activeDoctors = await (from ds in _dbContext.DoctorSpecialties
@@ -470,9 +475,9 @@ public class AiSpecialtyService : IAiSpecialtyService
         if (activeDoctors.Count == 0)
         {
             response.Message = $"Hiện không có bác sĩ đang hoạt động thuộc chuyên khoa {specialty.Name}.";
-            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, null, null, searchFrom, reason);
+            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, null, null, searchFrom, reason, nextDraftVersion);
             response.MissingFields = new List<string> { "Doctor", "TimeSlot" };
-            return response;
+            return WithDraftVersionSync(response, nextDraftVersion);
         }
 
         var selectedDoctor = request.PendingDoctorId.HasValue
@@ -488,17 +493,17 @@ public class AiSpecialtyService : IAiSpecialtyService
             response.Message = doctorIsActive
                 ? $"Bác sĩ đã chọn không thuộc chuyên khoa {specialty.Name}. Vui lòng chọn lại bác sĩ."
                 : "Bác sĩ đã chọn không tồn tại hoặc đã ngừng hoạt động. Vui lòng chọn lại bác sĩ.";
-            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, null, null, searchFrom, reason);
+            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, null, null, searchFrom, reason, nextDraftVersion);
             response.MissingFields = new List<string> { "Doctor", "TimeSlot" };
-            return response;
+            return WithDraftVersionSync(response, nextDraftVersion);
         }
 
         if (!_currentUserService.UserId.HasValue)
         {
             response.Message = "Không thể xác định tài khoản bệnh nhân để kiểm tra lịch trùng. Vui lòng đăng nhập lại.";
-            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, selectedDoctor?.Id, FormatDoctorName(selectedDoctor?.AcademicTitle, selectedDoctor?.FullName), searchFrom, reason);
+            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, selectedDoctor?.Id, FormatDoctorName(selectedDoctor?.AcademicTitle, selectedDoctor?.FullName), searchFrom, reason, nextDraftVersion);
             response.MissingFields = new List<string> { "TimeSlot" };
-            return response;
+            return WithDraftVersionSync(response, nextDraftVersion);
         }
 
         var patientId = await _dbContext.Patients
@@ -510,9 +515,9 @@ public class AiSpecialtyService : IAiSpecialtyService
         if (!patientId.HasValue)
         {
             response.Message = "Không thể xác định hồ sơ bệnh nhân để kiểm tra lịch trùng. Vui lòng liên hệ quản trị hệ thống.";
-            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, selectedDoctor?.Id, FormatDoctorName(selectedDoctor?.AcademicTitle, selectedDoctor?.FullName), searchFrom, reason);
+            response.BookingDraft = BuildSearchDraft(specialty.Id, specialty.Name, selectedDoctor?.Id, FormatDoctorName(selectedDoctor?.AcademicTitle, selectedDoctor?.FullName), searchFrom, reason, nextDraftVersion);
             response.MissingFields = new List<string> { "TimeSlot" };
-            return response;
+            return WithDraftVersionSync(response, nextDraftVersion);
         }
 
         var searchTo = searchFrom.AddDays(EarliestSlotSearchHorizonDays);
@@ -538,7 +543,8 @@ public class AiSpecialtyService : IAiSpecialtyService
             selectedDoctor?.Id,
             FormatDoctorName(selectedDoctor?.AcademicTitle, selectedDoctor?.FullName),
             searchFrom,
-            reason);
+            reason,
+            nextDraftVersion);
         response.MissingFields = new List<string>();
         if (selectedDoctor == null)
         {
@@ -556,7 +562,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 ? $"các bác sĩ đang hoạt động của chuyên khoa {specialty.Name}"
                 : FormatDoctorName(selectedDoctor.AcademicTitle, selectedDoctor.FullName);
             response.Message = $"Không có lịch trống phù hợp của {doctorScope} trong khoảng {searchFrom:dd/MM/yyyy} đến {searchTo:dd/MM/yyyy}. Bạn có thể chọn ngày bắt đầu khác để tìm tiếp.";
-            return response;
+            return WithDraftVersionSync(response, nextDraftVersion);
         }
 
         var selectedScope = selectedDoctor == null
@@ -581,6 +587,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 Style = "primary",
                 RequiresAuthentication = false,
                 RequiresConfirmation = false,
+                DraftVersion = nextDraftVersion,
                 Payload = new AiActionPayloadDto
                 {
                     SpecialtyId = specialty.Id,
@@ -593,15 +600,49 @@ public class AiSpecialtyService : IAiSpecialtyService
                     SlotDate = slot.SlotDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     StartTime = slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture),
                     EndTime = slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture),
-                    Reason = reason
+                    Reason = reason,
+                    DraftVersion = nextDraftVersion
                 }
             });
         }
+
+        WithDraftVersionSync(response, nextDraftVersion);
 
         response.Actions = response.Actions
             .Where(a => AiActionValidator.Validate(a, out _))
             .Take(6)
             .ToList();
+        return response;
+    }
+
+    public static int ResolveDraftVersion(int? requestDraftVersion)
+    {
+        if (requestDraftVersion.HasValue && requestDraftVersion.Value >= 1)
+        {
+            return requestDraftVersion.Value + 1;
+        }
+        return 1;
+    }
+
+    private static AiChatResponseDto WithDraftVersionSync(AiChatResponseDto response, int nextVersion)
+    {
+        if (response.BookingDraft != null)
+        {
+            response.BookingDraft.Version = nextVersion;
+        }
+
+        foreach (var action in response.Actions)
+        {
+            if (AiActionTypes.IsBookingAction(action.Type))
+            {
+                action.DraftVersion = nextVersion;
+                if (action.Payload != null)
+                {
+                    action.Payload.DraftVersion = nextVersion;
+                }
+            }
+        }
+
         return response;
     }
 
@@ -611,7 +652,8 @@ public class AiSpecialtyService : IAiSpecialtyService
         long? doctorId,
         string? doctorName,
         DateOnly? searchFrom,
-        string? reason)
+        string? reason,
+        int version = 1)
     {
         return new AiBookingDraftDto
         {
@@ -621,7 +663,8 @@ public class AiSpecialtyService : IAiSpecialtyService
             DoctorName = doctorName,
             SlotDate = searchFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             Reason = reason,
-            IsComplete = false
+            IsComplete = false,
+            Version = version
         };
     }
 
@@ -1407,6 +1450,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         string providerStatus,
         CancellationToken cancellationToken)
     {
+        var nextDraftVersion = ResolveDraftVersion(request.DraftVersion);
         string userMessage = providerStatus switch
         {
             "Disabled" => "Tính năng trợ lý AI hiện đang tạm bảo trì hoặc chưa được cấu hình. Hệ thống đã chuyển sang chế độ hỗ trợ cơ bản để bạn có thể tra cứu và đặt lịch trực tiếp.",
@@ -1442,7 +1486,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                     SlotDate = request.PendingSlotDate,
                     Reason = recoveredReason,
                     IsComplete = false,
-                    Version = request.DraftVersion.GetValueOrDefault(1)
+                    Version = nextDraftVersion
                 };
             }
         }
@@ -1452,7 +1496,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             {
                 Reason = recoveredReason,
                 IsComplete = false,
-                Version = request.DraftVersion.GetValueOrDefault(1)
+                Version = nextDraftVersion
             };
         }
 
@@ -1493,7 +1537,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Appointments }
         });
 
-        return response;
+        return WithDraftVersionSync(response, nextDraftVersion);
     }
 
     private async Task<AiActionDto> CreateContactReceptionActionAsync(CancellationToken cancellationToken)

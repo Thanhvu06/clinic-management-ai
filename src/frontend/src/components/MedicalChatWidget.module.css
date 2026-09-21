@@ -508,6 +508,18 @@
     cursor: not-allowed;
 }
 
+.btnStale {
+    opacity: 0.75;
+    border-style: dashed;
+}
+
+.staleTag {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-style: italic;
+    margin-left: 4px;
+}
+
 .inputArea {
     padding: 12px 14px;
     background-color: #ffffff;

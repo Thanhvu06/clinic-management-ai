@@ -83,11 +83,21 @@ public static class AiActionTypes
         ManualSpecialtySelection, CallEmergency
     };
 
+    private static readonly HashSet<string> BookingActions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        SelectDoctor, SelectSlot, ReviewBooking, ConfirmBooking, ChangePreferredDate
+    };
+
     public static IReadOnlyCollection<string> All => AllAllowed;
 
     public static bool IsAllowed(string? actionType)
     {
         return !string.IsNullOrWhiteSpace(actionType) && AllAllowed.Contains(actionType);
+    }
+
+    public static bool IsBookingAction(string? actionType)
+    {
+        return !string.IsNullOrWhiteSpace(actionType) && BookingActions.Contains(actionType);
     }
 }
 
@@ -201,6 +211,18 @@ public static class AiActionValidator
         if (AuthRequiredActions.Contains(action.Type) && !action.RequiresAuthentication)
         {
             error = $"Action type '{action.Type}' requires authentication.";
+            return false;
+        }
+
+        if (action.DraftVersion.HasValue && action.DraftVersion.Value < 1)
+        {
+            error = "Action DraftVersion must be a positive integer >= 1.";
+            return false;
+        }
+
+        if (action.Payload.DraftVersion.HasValue && action.Payload.DraftVersion.Value < 1)
+        {
+            error = "Payload DraftVersion must be a positive integer >= 1.";
             return false;
         }
 
@@ -404,6 +426,7 @@ public class AiActionDto
     public string Style { get; set; } = "primary"; // primary, secondary, danger
     public bool RequiresAuthentication { get; set; }
     public bool RequiresConfirmation { get; set; }
+    public int? DraftVersion { get; set; }
     public AiActionPayloadDto Payload { get; set; } = new();
 }
 
@@ -450,6 +473,7 @@ public class AiChatRequestDto
     [MaxLength(500)]
     public string? Reason { get; set; }
 
+    [Range(1, int.MaxValue, ErrorMessage = "Phiên bản thảo lịch không hợp lệ.")]
     public int? DraftVersion { get; set; }
 }
 

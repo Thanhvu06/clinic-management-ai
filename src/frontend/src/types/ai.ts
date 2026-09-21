@@ -79,6 +79,7 @@ export interface SelectDoctorAction extends BaseAiAction {
         doctorName?: string;
         academicTitle?: string;
         slotDate?: string;
+        draftVersion?: number;
     };
 }
 
@@ -94,6 +95,7 @@ export interface SelectSlotAction extends BaseAiAction {
         startTime: string;
         endTime: string;
         reason?: string;
+        draftVersion?: number;
     };
 }
 
@@ -109,6 +111,7 @@ export interface ReviewBookingAction extends BaseAiAction {
         startTime?: string;
         endTime?: string;
         reason?: string;
+        draftVersion?: number;
     };
 }
 
@@ -124,6 +127,7 @@ export interface ConfirmBookingAction extends BaseAiAction {
         startTime: string;
         endTime: string;
         reason: string;
+        draftVersion?: number;
     };
 }
 
@@ -136,6 +140,7 @@ export interface ChangePreferredDateAction extends BaseAiAction {
         doctorId?: number;
         doctorName?: string;
         reason?: string;
+        draftVersion?: number;
     };
 }
 

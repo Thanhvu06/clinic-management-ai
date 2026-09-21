@@ -21,6 +21,7 @@ export interface AiChatRequestPayload {
     pendingSlotId?: number;
     pendingSlotDate?: string;
     reason?: string;
+    draftVersion?: number;
 }
 
 export interface CreateAppointmentPayload {
@@ -96,6 +97,7 @@ interface SendMessageOptions {
     slotDate?: string;
     pendingSlotDate?: string;
     reason?: string;
+    draftVersion?: number;
 }
 
 export const useAiBookingFlow = (onNavigate?: () => void) => {
@@ -177,7 +179,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 pendingDoctorId: pendingPayload?.pendingDoctorId ?? pendingPayload?.doctorId ?? activeDraft?.doctorId,
                 pendingSlotId: pendingPayload?.pendingSlotId ?? pendingPayload?.slotId ?? activeDraft?.slotId,
                 pendingSlotDate: pendingPayload?.pendingSlotDate ?? pendingPayload?.slotDate ?? activeDraft?.slotDate,
-                reason: preservedReason
+                reason: preservedReason,
+                draftVersion: pendingPayload?.draftVersion ?? activeDraft?.version
             };
 
             const res = await axiosClient.post<AiChatRequestPayload, ApiResponse<AiChatResponse>>(
@@ -206,12 +209,23 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 };
 
                 if (data.bookingDraft) {
-                    const mergedDraft: AiBookingDraft = {
-                        ...data.bookingDraft,
-                        reason: data.bookingDraft.reason || preservedReason || activeDraft?.reason
-                    };
-                    setActiveDraft(mergedDraft);
-                    aiMsg.bookingDraft = mergedDraft;
+                    const currentVersion = (typeof activeDraft?.version === "number" && Number.isInteger(activeDraft.version) && activeDraft.version >= 1)
+                        ? activeDraft.version
+                        : undefined;
+                    const hasIncomingVersion = typeof data.bookingDraft.version === "number" && Number.isInteger(data.bookingDraft.version) && data.bookingDraft.version >= 1;
+                    const incomingVersion = hasIncomingVersion ? data.bookingDraft.version : undefined;
+
+                    if (currentVersion !== undefined && incomingVersion !== undefined && incomingVersion < currentVersion) {
+                        // Stale response received out-of-order, do not overwrite newer draft
+                    } else {
+                        const mergedDraft: AiBookingDraft = {
+                            ...data.bookingDraft,
+                            reason: data.bookingDraft.reason || preservedReason || activeDraft?.reason,
+                            version: incomingVersion ?? currentVersion
+                        };
+                        setActiveDraft(mergedDraft);
+                        aiMsg.bookingDraft = mergedDraft;
+                    }
                 }
 
                 setMessages(prev => [...prev, aiMsg]);
@@ -260,19 +274,103 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     };
 
     const handleActionClick = async (action: AiAction): Promise<void> => {
-        const actionVersion = action.draftVersion ?? (action.payload as Record<string, unknown>)?.draftVersion as number | undefined;
-        if (
-            actionVersion !== undefined &&
-            activeDraft?.version !== undefined &&
-            actionVersion < activeDraft.version &&
-            ["SelectDoctor", "SelectSlot", "ConfirmBooking", "ReviewBooking"].includes(action.type)
-        ) {
-            setMessages(prev => [...prev, {
-                role: "model",
-                content: `Thao tác này thuộc phiên bản thảo lịch cũ (v${actionVersion}). Thông tin lịch khám hiện tại đã được cập nhật sang phiên bản mới hơn (v${activeDraft.version}). Vui lòng thao tác trên các nút mới nhất.`,
-                urgency: "ROUTINE"
-            }]);
-            return;
+        const BOOKING_ACTION_TYPES = [
+            "SelectDoctor",
+            "SelectSlot",
+            "ConfirmBooking",
+            "ReviewBooking",
+            "ChangePreferredDate"
+        ];
+
+        const isBookingAction = BOOKING_ACTION_TYPES.includes(action.type);
+
+        const rawActionVersion =
+            action.draftVersion ??
+            (action.payload as Record<string, unknown>)?.draftVersion;
+
+        const hasValidActionVersion =
+            typeof rawActionVersion === "number" &&
+            Number.isInteger(rawActionVersion) &&
+            rawActionVersion >= 1;
+
+        const actionVersion = hasValidActionVersion ? rawActionVersion : undefined;
+
+        const hasValidDraftVersion =
+            typeof activeDraft?.version === "number" &&
+            Number.isInteger(activeDraft.version) &&
+            activeDraft.version >= 1;
+
+        if (isBookingAction) {
+            if (hasValidActionVersion && hasValidDraftVersion && actionVersion! < activeDraft!.version!) {
+                const warningContent = `Thao tác này thuộc phiên bản thảo lịch cũ (v${actionVersion}). Thông tin lịch khám hiện tại đã được cập nhật sang phiên bản mới hơn (v${activeDraft!.version}). Vui lòng thao tác trên các nút mới nhất.`;
+
+                setMessages(prev => {
+                    const lastMsg = prev[prev.length - 1];
+                    if (lastMsg?.role === "model" && lastMsg.content === warningContent) {
+                        return prev;
+                    }
+                    return [...prev, {
+                        role: "model",
+                        content: warningContent,
+                        urgency: "ROUTINE",
+                        actions: activeDraft?.specialtyId ? [
+                            {
+                                id: `act-reload-draft-${Date.now()}`,
+                                type: "ViewAvailableSlots",
+                                label: "Tải lại lựa chọn hiện tại",
+                                style: "secondary",
+                                requiresAuthentication: false,
+                                requiresConfirmation: false,
+                                draftVersion: activeDraft.version,
+                                payload: {
+                                    specialtyId: activeDraft.specialtyId,
+                                    doctorId: activeDraft.doctorId,
+                                    slotDate: activeDraft.slotDate,
+                                    draftVersion: activeDraft.version
+                                }
+                            }
+                        ] : []
+                    }];
+                });
+                return;
+            }
+
+            if (hasValidActionVersion && hasValidDraftVersion && actionVersion! > activeDraft!.version!) {
+                setActiveDraft(prev => prev ? { ...prev, version: actionVersion } : prev);
+            }
+
+            if (!hasValidActionVersion && hasValidDraftVersion) {
+                const legacyWarning = "Lựa chọn này được tạo từ phiên trò chuyện cũ hoặc chưa được đồng bộ phiên bản. Tôi đã tạo lựa chọn mới nhất để bạn tiếp tục.";
+                setMessages(prev => {
+                    const lastMsg = prev[prev.length - 1];
+                    if (lastMsg?.role === "model" && lastMsg.content === legacyWarning) {
+                        return prev;
+                    }
+                    return [...prev, {
+                        role: "model",
+                        content: legacyWarning,
+                        urgency: "ROUTINE",
+                        actions: activeDraft?.specialtyId ? [
+                            {
+                                id: `act-reload-draft-${Date.now()}`,
+                                type: "ViewAvailableSlots",
+                                label: "Tải lại lựa chọn hiện tại",
+                                style: "secondary",
+                                requiresAuthentication: false,
+                                requiresConfirmation: false,
+                                draftVersion: activeDraft.version,
+                                payload: {
+                                    specialtyId: activeDraft.specialtyId,
+                                    doctorId: activeDraft.doctorId,
+                                    slotDate: activeDraft.slotDate,
+                                    draftVersion: activeDraft.version
+                                }
+                            }
+                        ] : []
+                    }];
+                });
+                return;
+            }
         }
 
         switch (action.type) {
@@ -310,7 +408,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         pendingSpecialtyId: specId,
                         pendingDoctorId: docId,
                         pendingSlotDate: slotDate,
-                        reason: activeDraft?.reason
+                        reason: activeDraft?.reason,
+                        draftVersion: actionVersion ?? activeDraft?.version
                     }
                 );
                 break;
@@ -338,7 +437,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     startTime: undefined,
                     endTime: undefined,
                     isComplete: false,
-                    reason: activeDraft?.reason
+                    reason: activeDraft?.reason,
+                    version: actionVersion ?? activeDraft?.version
                 };
                 setActiveDraft(nextDraft);
 
@@ -348,7 +448,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         pendingSpecialtyId: action.payload.specialtyId,
                         pendingDoctorId: action.payload.doctorId,
                         pendingSlotDate: action.payload.slotDate || activeDraft?.slotDate,
-                        reason: activeDraft?.reason
+                        reason: activeDraft?.reason,
+                        draftVersion: actionVersion ?? activeDraft?.version
                     }
                 );
                 break;
@@ -366,7 +467,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     startTime: action.payload.startTime,
                     endTime: action.payload.endTime,
                     reason: action.payload.reason || activeDraft?.reason,
-                    isComplete: isValidBookingReason(action.payload.reason || activeDraft?.reason)
+                    isComplete: isValidBookingReason(action.payload.reason || activeDraft?.reason),
+                    version: actionVersion ?? activeDraft?.version
                 };
                 setActiveDraft(nextDraft);
 
@@ -377,7 +479,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         pendingDoctorId: nextDraft.doctorId,
                         pendingSlotId: action.payload.slotId,
                         pendingSlotDate: action.payload.slotDate,
-                        reason: nextDraft.reason
+                        reason: nextDraft.reason,
+                        draftVersion: actionVersion ?? activeDraft?.version
                     }
                 );
                 break;
@@ -393,6 +496,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 const specName = action.payload.specialtyName || activeDraft?.specialtyName;
                 const docName = action.payload.doctorName || activeDraft?.doctorName;
                 const reason = action.payload.reason?.trim() || activeDraft?.reason?.trim() || "";
+                const currentVersion = actionVersion ?? activeDraft?.version ?? 1;
 
                 if (!specId || !docId || !slotId || !slotDate || !startTime || !endTime || !isValidBookingReason(reason)) {
                     setMessages(prev => [...prev, {
@@ -416,6 +520,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                             style: "primary",
                             requiresAuthentication: true,
                             requiresConfirmation: true,
+                            draftVersion: currentVersion,
                             payload: {
                                 specialtyId: specId,
                                 specialtyName: specName,
@@ -425,7 +530,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                                 slotDate: slotDate,
                                 startTime: startTime,
                                 endTime: endTime || "",
-                                reason: reason
+                                reason: reason,
+                                draftVersion: currentVersion
                             }
                         }
                     ]
@@ -445,14 +551,31 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     return;
                 }
 
-                // If activeDraft has a specific slot or doctor selected, verify action matches current draft
-                if (activeDraft?.slotId && action.payload.slotId && activeDraft.slotId !== action.payload.slotId) {
+                if (hasValidActionVersion && hasValidDraftVersion && actionVersion !== activeDraft!.version) {
                     setMessages(prev => [...prev, {
                         role: "model",
-                        content: "Thông tin khung giờ bạn chọn đã thay đổi so với xác nhận trước đó. Vui lòng kiểm tra lại khung giờ mới nhất.",
+                        content: `Thông tin xác nhận lịch khám thuộc phiên bản cũ (v${actionVersion}). Phiên bản hiện tại là v${activeDraft!.version}. Vui lòng kiểm tra lại thông tin mới nhất trước khi xác nhận.`,
                         urgency: "ROUTINE"
                     }]);
                     return;
+                }
+
+                // If activeDraft has a specific slot or doctor selected, verify action matches current draft
+                if (activeDraft) {
+                    if (
+                        (activeDraft.specialtyId && action.payload.specialtyId && activeDraft.specialtyId !== action.payload.specialtyId) ||
+                        (activeDraft.doctorId && action.payload.doctorId && activeDraft.doctorId !== action.payload.doctorId) ||
+                        (activeDraft.slotId && action.payload.slotId && activeDraft.slotId !== action.payload.slotId) ||
+                        (activeDraft.slotDate && action.payload.slotDate && activeDraft.slotDate !== action.payload.slotDate) ||
+                        (activeDraft.startTime && action.payload.startTime && activeDraft.startTime !== action.payload.startTime)
+                    ) {
+                        setMessages(prev => [...prev, {
+                            role: "model",
+                            content: "Thông tin khung giờ bạn chọn đã thay đổi so với xác nhận trước đó. Vui lòng kiểm tra lại khung giờ mới nhất.",
+                            urgency: "ROUTINE"
+                        }]);
+                        return;
+                    }
                 }
 
                 const slotId = action.payload.slotId || activeDraft?.slotId;
@@ -543,7 +666,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                                 pendingSpecialtyId: specId,
                                 pendingDoctorId: docId,
                                 pendingSlotDate: slotDate,
-                                reason
+                                reason,
+                                draftVersion: activeDraft?.version
                             },
                             conflictNotice
                         );
@@ -574,7 +698,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         startTime: undefined,
                         endTime: undefined,
                         isComplete: false,
-                        reason: preservedReason
+                        reason: preservedReason,
+                        version: actionVersion ?? activeDraft.version
                     });
                 }
 
@@ -584,7 +709,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         pendingSpecialtyId: action.payload.specialtyId ?? activeDraft?.specialtyId,
                         pendingDoctorId: action.payload.doctorId ?? activeDraft?.doctorId,
                         pendingSlotDate: nextDate,
-                        reason: preservedReason
+                        reason: preservedReason,
+                        draftVersion: actionVersion ?? activeDraft?.version
                     }
                 );
                 break;
