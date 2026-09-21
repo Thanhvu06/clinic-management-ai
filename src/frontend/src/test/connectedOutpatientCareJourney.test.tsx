@@ -178,7 +178,13 @@ describe('Connected Outpatient Care Journey - Frontend Tests', () => {
             vi.mocked(billingApi.reception.getUnbilledVisits).mockResolvedValue({
                 success: true,
                 message: 'OK',
-                data: [],
+                data: {
+                    items: [],
+                    page: 1,
+                    pageSize: 10,
+                    totalItems: 0,
+                    totalPages: 1,
+                },
             });
 
             vi.mocked(billingApi.reception.createInvoiceFromVisit).mockResolvedValue({

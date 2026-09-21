@@ -13,7 +13,7 @@ namespace ClinicManagement.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/reception/billing")]
-[Authorize(Roles = RoleNames.Receptionist)]
+[Authorize(Roles = RoleNames.Receptionist + "," + RoleNames.Admin)]
 public class ReceptionBillingController : ControllerBase
 {
     private readonly IBillingService _billingService;
@@ -62,10 +62,18 @@ public class ReceptionBillingController : ControllerBase
     }
 
     [HttpGet("unbilled-visits")]
-    public async Task<ActionResult<ApiResponse<List<UnbilledVisitDto>>>> GetUnbilledVisits([FromQuery] long? facilityId, CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<PagedResult<UnbilledVisitDto>>>> GetUnbilledVisits(
+        [FromQuery] long? facilityId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _billingService.GetUnbilledVisitsAsync(facilityId, cancellationToken);
-        return Ok(ApiResponse<List<UnbilledVisitDto>>.Ok(result));
+        var userId = _currentUserService.UserId;
+        if (userId == null || userId == System.Guid.Empty)
+            throw new UnauthorizedException("Chưa đăng nhập.");
+
+        var result = await _billingService.GetUnbilledVisitsAsync(facilityId, userId.Value, page, pageSize, cancellationToken);
+        return Ok(ApiResponse<PagedResult<UnbilledVisitDto>>.Ok(result));
     }
 
     [HttpPost("invoices/health-package")]

@@ -20,6 +20,7 @@ import type {
     BillingKpiDto,
     InvoiceSourceType,
     UnbilledVisitDto,
+    PagedBillingResult,
 } from '../../types';
 import {
     InvoiceStatus,
@@ -51,6 +52,10 @@ export const ReceptionBilling: React.FC = () => {
     const [billingTab, setBillingTab] = useState<'invoices' | 'unbilled'>('invoices');
     const [unbilledVisits, setUnbilledVisits] = useState<UnbilledVisitDto[]>([]);
     const [unbilledLoading, setUnbilledLoading] = useState<boolean>(false);
+    const [unbilledPage, setUnbilledPage] = useState<number>(1);
+    const [unbilledTotalPages, setUnbilledTotalPages] = useState<number>(1);
+    const [unbilledTotalCount, setUnbilledTotalCount] = useState<number>(0);
+    const unbilledPageSize = 10;
 
     // Detail / Receipt Modal
     const [detailModalOpen, setDetailModalOpen] = useState<boolean>(false);
@@ -136,12 +141,23 @@ export const ReceptionBilling: React.FC = () => {
         }
     };
 
-    const fetchUnbilledVisits = async () => {
+    const fetchUnbilledVisits = async (targetPage = unbilledPage) => {
         setUnbilledLoading(true);
         try {
-            const res = await billingApi.reception.getUnbilledVisits();
+            const res = await billingApi.reception.getUnbilledVisits(undefined, targetPage, unbilledPageSize);
             if (res.success && res.data) {
-                setUnbilledVisits(res.data);
+                if (Array.isArray(res.data)) {
+                    setUnbilledVisits(res.data);
+                    setUnbilledTotalCount(res.data.length);
+                    setUnbilledTotalPages(1);
+                    setUnbilledPage(1);
+                } else {
+                    const paged = res.data as PagedBillingResult<UnbilledVisitDto>;
+                    setUnbilledVisits(paged.items || []);
+                    setUnbilledTotalCount(paged.totalItems ?? paged.items?.length ?? 0);
+                    setUnbilledTotalPages(paged.totalPages ?? 1);
+                    setUnbilledPage(paged.page ?? targetPage);
+                }
             }
         } catch (err) {
             console.error('Lỗi khi tải danh sách lượt khám chưa thu:', err);
@@ -439,7 +455,7 @@ export const ReceptionBilling: React.FC = () => {
                     onClick={() => setBillingTab('unbilled')}
                     style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
-                    <Clock size={16} /> Hàng đợi chờ lập hóa đơn ({unbilledVisits.length})
+                    <Clock size={16} /> Hàng đợi chờ lập hóa đơn ({unbilledTotalCount})
                 </button>
             </div>
 
@@ -664,13 +680,13 @@ export const ReceptionBilling: React.FC = () => {
                     <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--c-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                             <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--c-text)', margin: 0 }}>
-                                Hàng đợi ca khám có chi phí chờ lập hóa đơn ({unbilledVisits.length})
+                                Hàng đợi ca khám có chi phí chờ lập hóa đơn ({unbilledTotalCount})
                             </h3>
                             <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)', marginTop: '2px' }}>
                                 Bao gồm công khám, cận lâm sàng chỉ định và đơn thuốc đã xác nhận mua
                             </div>
                         </div>
-                        <button type="button" className="btn-secondary" onClick={fetchUnbilledVisits} disabled={unbilledLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button type="button" className="btn-secondary" onClick={() => fetchUnbilledVisits(unbilledPage)} disabled={unbilledLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <RefreshCw size={14} className={unbilledLoading ? styles.spin : ''} /> Làm mới hàng đợi
                         </button>
                     </div>
@@ -680,7 +696,8 @@ export const ReceptionBilling: React.FC = () => {
                             <span style={{ marginTop: '10px', color: 'var(--c-muted)' }}>Đang tải hàng đợi ca khám...</span>
                         </div>
                     ) : (
-                        <div className={styles.tableResponsive}>
+                        <>
+                            <div className={styles.tableResponsive}>
                             <table className={styles.table}>
                                 <thead>
                                     <tr>
@@ -749,6 +766,38 @@ export const ReceptionBilling: React.FC = () => {
                                 </tbody>
                             </table>
                         </div>
+                        {unbilledTotalPages > 1 && (
+                            <div className={styles.pagination}>
+                                <button
+                                    type="button"
+                                    className="btn-secondary"
+                                    disabled={unbilledPage <= 1 || unbilledLoading}
+                                    onClick={() => {
+                                        const prev = unbilledPage - 1;
+                                        setUnbilledPage(prev);
+                                        fetchUnbilledVisits(prev);
+                                    }}
+                                >
+                                    Trang trước
+                                </button>
+                                <span className={styles.pageInfo}>
+                                    Trang {unbilledPage} / {unbilledTotalPages} (Tổng {unbilledTotalCount} ca khám)
+                                </span>
+                                <button
+                                    type="button"
+                                    className="btn-secondary"
+                                    disabled={unbilledPage >= unbilledTotalPages || unbilledLoading}
+                                    onClick={() => {
+                                        const next = unbilledPage + 1;
+                                        setUnbilledPage(next);
+                                        fetchUnbilledVisits(next);
+                                    }}
+                                >
+                                    Trang sau
+                                </button>
+                            </div>
+                        )}
+                        </>
                     )}
                 </div>
             )}

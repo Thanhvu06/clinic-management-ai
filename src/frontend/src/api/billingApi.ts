@@ -71,10 +71,14 @@ export const billingApi = {
             return res as unknown as ApiResponse<BillingKpiDto>;
         },
 
-        getUnbilledVisits: async (facilityId?: number): Promise<ApiResponse<UnbilledVisitDto[]>> => {
-            const query = facilityId ? `?facilityId=${facilityId}` : '';
+        getUnbilledVisits: async (facilityId?: number, page = 1, pageSize = 10): Promise<ApiResponse<PagedBillingResult<UnbilledVisitDto>>> => {
+            const params = new URLSearchParams();
+            if (facilityId) params.append('facilityId', facilityId.toString());
+            if (page) params.append('page', page.toString());
+            if (pageSize) params.append('pageSize', pageSize.toString());
+            const query = params.toString() ? `?${params.toString()}` : '';
             const res = await axiosClient.get(`/reception/billing/unbilled-visits${query}`);
-            return res as unknown as ApiResponse<UnbilledVisitDto[]>;
+            return res as unknown as ApiResponse<PagedBillingResult<UnbilledVisitDto>>;
         },
     },
 
