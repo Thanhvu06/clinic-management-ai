@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
     Stethoscope, HeartPulse, Pill, History, Save, CheckCircle, 
@@ -76,6 +76,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const [creatingOrder, setCreatingOrder] = useState(false);
     const [actionOrderId, setActionOrderId] = useState<number | null>(null);
     const [catalogCategory, setCatalogCategory] = useState<string>('All');
+    const [pollError, setPollError] = useState(false);
+    const inFlightPollRef = useRef(false);
+    const pollSeqRef = useRef(0);
 
     // Tab 4: Prescription Form
     const [prescriptionNotes, setPrescriptionNotes] = useState('');
@@ -108,17 +111,24 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     // Load diagnostic orders
     const loadDiagnosticOrders = useCallback(async () => {
         if (!currentId) return;
+        const currentSeq = ++pollSeqRef.current;
+        setLoadingOrders(true);
         try {
             const res = isVisit
                 ? await diagnosticApi.getDoctorOrdersByVisit(currentId)
                 : await diagnosticApi.getDoctorOrdersByAppointment(appointmentId);
-            if (res.success && res.data) {
+            if (currentSeq === pollSeqRef.current && res.success && res.data) {
                 setDiagnosticOrders(res.data);
+                setPollError(false);
             }
         } catch {
-            // Ignored
+            if (currentSeq === pollSeqRef.current) {
+                setPollError(true);
+            }
         } finally {
-            setLoadingOrders(false);
+            if (currentSeq === pollSeqRef.current) {
+                setLoadingOrders(false);
+            }
         }
     }, [currentId, isVisit, appointmentId]);
 
@@ -227,21 +237,32 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         let isMounted = true;
 
         const pollOrders = async () => {
+            if (inFlightPollRef.current) return;
+            inFlightPollRef.current = true;
+            const currentSeq = ++pollSeqRef.current;
+
             try {
                 const res = isVisit
                     ? await diagnosticApi.getDoctorOrdersByVisit(currentId)
                     : await diagnosticApi.getDoctorOrdersByAppointment(appointmentId);
-                if (isMounted && res.success && res.data) {
+                if (isMounted && currentSeq === pollSeqRef.current && res.success && res.data) {
                     setDiagnosticOrders(res.data);
+                    setPollError(false);
                 }
             } catch {
-                // Ignore polling errors to not disrupt doctor workflow
+                if (isMounted && currentSeq === pollSeqRef.current) {
+                    setPollError(true);
+                }
+            } finally {
+                inFlightPollRef.current = false;
             }
         };
 
         const timer = setInterval(pollOrders, 20000);
         return () => {
             isMounted = false;
+            inFlightPollRef.current = false;
+            pollSeqRef.current++;
             clearInterval(timer);
         };
     }, [currentId, isVisit, appointmentId]);
@@ -1419,6 +1440,33 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             {/* Tab 3: Diagnostic Orders (Chỉ định Cận lâm sàng) */}
             {activeTab === 'diagnostics' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    {pollError && (
+                        <div style={{
+                            background: '#fffbeb',
+                            border: '1px solid #fde68a',
+                            color: '#92400e',
+                            padding: '10px 16px',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            fontSize: '0.875rem'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <AlertTriangle size={16} color="#d97706" />
+                                <span>Tự động cập nhật kết quả cận lâm sàng bị gián đoạn. Kết quả hiển thị có thể chưa mới nhất.</span>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn-secondary"
+                                style={{ padding: '4px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                onClick={() => loadDiagnosticOrders()}
+                                disabled={loadingOrders}
+                            >
+                                <RefreshCw size={12} className={loadingOrders ? 'spin' : ''} /> Thử lại
+                            </button>
+                        </div>
+                    )}
                     {/* Diagnostic Create Form */}
                     {!isCompleted && (
                         <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
