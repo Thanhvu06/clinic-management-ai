@@ -215,23 +215,51 @@ FORMAT ĐẦU RA (BẮT BUỘC JSON object thuần túy):
         };
 
         var url = $"{_options.ProviderUrl}/v1beta/models/{_options.ModelName}:generateContent";
+        var payloadJson = JsonSerializer.Serialize(payload);
 
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+        using var overallCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        overallCts.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
 
-        try
+        const int maxRetries = 2; // Total 3 attempts max
+        var random = new Random();
+
+        for (int attempt = 0; attempt <= maxRetries; attempt++)
         {
-            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, url)
+            var attemptSw = Stopwatch.StartNew();
+            try
             {
-                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
-            };
-            requestMessage.Headers.Add("x-goog-api-key", _options.ApiKey);
+                using var requestMessage = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = new StringContent(payloadJson, Encoding.UTF8, "application/json")
+                };
+                requestMessage.Headers.Add("x-goog-api-key", _options.ApiKey);
 
-            var response = await _httpClient.SendAsync(requestMessage, cts.Token);
-            sw.Stop();
+                var response = await _httpClient.SendAsync(requestMessage, overallCts.Token);
+                attemptSw.Stop();
 
-            if (!response.IsSuccessStatusCode)
-            {
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseString = await response.Content.ReadAsStringAsync(overallCts.Token);
+                    var parsed = ParseChatGeminiResponse(responseString);
+                    if (parsed == null || string.IsNullOrWhiteSpace(parsed.Reply))
+                    {
+                        _logger.LogError("[{CorrelationId}] Failed to parse valid chat JSON from AI provider on attempt {Attempt} in {ElapsedMs}ms.",
+                            correlationId, attempt + 1, attemptSw.ElapsedMilliseconds);
+
+                        return new AiChatProviderResult
+                        {
+                            IsSuccess = false,
+                            Status = "InvalidResponse",
+                            ErrorMessage = "Malformed or empty response from AI provider."
+                        };
+                    }
+
+                    sw.Stop();
+                    parsed.IsSuccess = true;
+                    parsed.Status = "Success";
+                    return parsed;
+                }
+
                 var statusCode = (int)response.StatusCode;
                 string statusType = statusCode switch
                 {
@@ -242,84 +270,112 @@ FORMAT ĐẦU RA (BẮT BUỘC JSON object thuần túy):
                     _ => "NetworkError"
                 };
 
-                _logger.LogError("[{CorrelationId}] AI Chat Provider failed with status {StatusCode} ({StatusType}) in {ElapsedMs}ms.",
-                    correlationId, response.StatusCode, statusType, sw.ElapsedMilliseconds);
-
-                return new AiChatProviderResult
+                // Do NOT retry client auth or configuration errors
+                bool isTransient = statusCode switch
                 {
-                    IsSuccess = false,
-                    Status = statusType,
-                    ErrorMessage = $"Provider returned HTTP {response.StatusCode}"
+                    503 or 500 or 502 or 504 => true,
+                    429 => true,
+                    _ => false
                 };
-            }
 
-            var responseString = await response.Content.ReadAsStringAsync(cts.Token);
-            var parsed = ParseChatGeminiResponse(responseString);
-            if (parsed == null || string.IsNullOrWhiteSpace(parsed.Reply))
+                if (!isTransient || attempt == maxRetries)
+                {
+                    sw.Stop();
+                    _logger.LogError("[{CorrelationId}] AI Chat Provider failed on attempt {Attempt}/{MaxAttempts} with status {StatusCode} ({StatusType}) in {ElapsedMs}ms.",
+                        correlationId, attempt + 1, maxRetries + 1, response.StatusCode, statusType, sw.ElapsedMilliseconds);
+
+                    return new AiChatProviderResult
+                    {
+                        IsSuccess = false,
+                        Status = statusType,
+                        ErrorMessage = $"Provider returned HTTP {response.StatusCode}"
+                    };
+                }
+
+                // Check for Retry-After header if 429 or 503
+                int delayMs = (attempt + 1) * 1000 + random.Next(100, 300); // 1.1-1.3s, 2.1-2.3s
+                if (response.Headers.RetryAfter != null)
+                {
+                    if (response.Headers.RetryAfter.Delta.HasValue)
+                    {
+                        var retryAfterMs = (int)response.Headers.RetryAfter.Delta.Value.TotalMilliseconds;
+                        if (retryAfterMs > 0 && retryAfterMs <= 5000)
+                        {
+                            delayMs = retryAfterMs;
+                        }
+                    }
+                }
+
+                _logger.LogWarning("[{CorrelationId}] AI Chat Provider transient failure on attempt {Attempt}/{MaxAttempts} with status {StatusCode} ({StatusType}) in {ElapsedMs}ms. Retrying in {DelayMs}ms.",
+                    correlationId, attempt + 1, maxRetries + 1, response.StatusCode, statusType, attemptSw.ElapsedMilliseconds, delayMs);
+
+                await Task.Delay(delayMs, overallCts.Token);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                _logger.LogError("[{CorrelationId}] Failed to parse valid chat JSON from AI provider in {ElapsedMs}ms.",
+                sw.Stop();
+                _logger.LogInformation("[{CorrelationId}] AI Chat Provider request cancelled by client after {ElapsedMs}ms.",
                     correlationId, sw.ElapsedMilliseconds);
-
                 return new AiChatProviderResult
                 {
                     IsSuccess = false,
-                    Status = "InvalidResponse",
-                    ErrorMessage = "Malformed or empty response from AI provider."
+                    Status = "Cancelled",
+                    ErrorMessage = "Request was cancelled."
                 };
             }
+            catch (OperationCanceledException)
+            {
+                sw.Stop();
+                _logger.LogWarning("[{CorrelationId}] AI Chat Provider timed out after {ElapsedMs}ms (timeout: {Timeout}s, attempt: {Attempt}).",
+                    correlationId, sw.ElapsedMilliseconds, _options.TimeoutSeconds, attempt + 1);
+                return new AiChatProviderResult
+                {
+                    IsSuccess = false,
+                    Status = "Timeout",
+                    ErrorMessage = "AI Provider request timed out."
+                };
+            }
+            catch (HttpRequestException ex)
+            {
+                attemptSw.Stop();
+                if (attempt == maxRetries)
+                {
+                    sw.Stop();
+                    _logger.LogError(ex, "[{CorrelationId}] Network error calling AI Chat Provider on final attempt {Attempt} after {ElapsedMs}ms.",
+                        correlationId, attempt + 1, sw.ElapsedMilliseconds);
+                    return new AiChatProviderResult
+                    {
+                        IsSuccess = false,
+                        Status = "NetworkError",
+                        ErrorMessage = "Network error connecting to AI provider."
+                    };
+                }
 
-            parsed.IsSuccess = true;
-            parsed.Status = "Success";
-            return parsed;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            sw.Stop();
-            _logger.LogInformation("[{CorrelationId}] AI Chat Provider request cancelled by client after {ElapsedMs}ms.",
-                correlationId, sw.ElapsedMilliseconds);
-            return new AiChatProviderResult
+                int delayMs = (attempt + 1) * 800 + random.Next(100, 300);
+                _logger.LogWarning(ex, "[{CorrelationId}] Network error calling AI Chat Provider on attempt {Attempt}. Retrying in {DelayMs}ms.",
+                    correlationId, attempt + 1, delayMs);
+                await Task.Delay(delayMs, overallCts.Token);
+            }
+            catch (Exception ex)
             {
-                IsSuccess = false,
-                Status = "Cancelled",
-                ErrorMessage = "Request was cancelled."
-            };
+                sw.Stop();
+                _logger.LogError(ex, "[{CorrelationId}] Unexpected error calling AI Chat Provider after {ElapsedMs}ms.",
+                    correlationId, sw.ElapsedMilliseconds);
+                return new AiChatProviderResult
+                {
+                    IsSuccess = false,
+                    Status = "NetworkError",
+                    ErrorMessage = "Unexpected error calling AI provider."
+                };
+            }
         }
-        catch (OperationCanceledException)
+
+        return new AiChatProviderResult
         {
-            sw.Stop();
-            _logger.LogWarning("[{CorrelationId}] AI Chat Provider timed out after {ElapsedMs}ms (timeout: {Timeout}s).",
-                correlationId, sw.ElapsedMilliseconds, _options.TimeoutSeconds);
-            return new AiChatProviderResult
-            {
-                IsSuccess = false,
-                Status = "Timeout",
-                ErrorMessage = "AI Provider request timed out."
-            };
-        }
-        catch (HttpRequestException ex)
-        {
-            sw.Stop();
-            _logger.LogError(ex, "[{CorrelationId}] Network error calling AI Chat Provider after {ElapsedMs}ms.",
-                correlationId, sw.ElapsedMilliseconds);
-            return new AiChatProviderResult
-            {
-                IsSuccess = false,
-                Status = "NetworkError",
-                ErrorMessage = "Network error connecting to AI provider."
-            };
-        }
-        catch (Exception ex)
-        {
-            sw.Stop();
-            _logger.LogError(ex, "[{CorrelationId}] Unexpected error calling AI Chat Provider after {ElapsedMs}ms.",
-                correlationId, sw.ElapsedMilliseconds);
-            return new AiChatProviderResult
-            {
-                IsSuccess = false,
-                Status = "NetworkError",
-                ErrorMessage = "Unexpected error calling AI provider."
-            };
-        }
+            IsSuccess = false,
+            Status = "NetworkError",
+            ErrorMessage = "Failed to obtain response from AI provider after retries."
+        };
     }
 
     private AiChatProviderResult? ParseChatGeminiResponse(string json)

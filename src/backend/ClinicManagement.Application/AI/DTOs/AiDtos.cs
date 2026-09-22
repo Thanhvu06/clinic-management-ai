@@ -511,9 +511,9 @@ public class AiChatResponseDto
     public bool ManualSelectionRequired { get; set; } = false;
 
     /// <summary>
-    /// Operating mode: "Normal", "Degraded" (Basic support mode), "Unavailable".
+    /// Operating mode: "Online" (Normal AI operating), "Degraded" (Basic support mode), "Offline".
     /// </summary>
-    public string AssistantStatus { get; set; } = "Normal";
+    public string AssistantStatus { get; set; } = "Online";
 
     /// <summary>
     /// Technical provider status: "Healthy", "Disabled", "AuthFailure", "RateLimited", "Timeout", "NetworkError", "InvalidResponse", "Cancelled".

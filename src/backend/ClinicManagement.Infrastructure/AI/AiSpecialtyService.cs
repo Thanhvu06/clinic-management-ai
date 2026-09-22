@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -780,19 +781,193 @@ public class AiSpecialtyService : IAiSpecialtyService
         string? targetDoctorName = null;
         string? targetDoctorAcademicTitle = null;
 
+        var allActiveDoctors = await QueryActiveDoctorsAsync(cancellationToken);
+
+        if (targetDoctorId.HasValue)
+        {
+            var docMatch = allActiveDoctors.FirstOrDefault(d => d.DoctorId == targetDoctorId.Value);
+            if (docMatch != null)
+            {
+                targetDoctorName = docMatch.FullName;
+                targetDoctorAcademicTitle = docMatch.AcademicTitle;
+
+                if (targetSpecialty == null && docMatch.Specialties.Any())
+                {
+                    targetSpecialty = docMatch.Specialties.First();
+                }
+                else if (targetSpecialty != null && !docMatch.Specialties.Any(s => s.Id == targetSpecialty.Id))
+                {
+                    responseDto.Message = $"Bác sĩ {docMatch.DisplayName} không thuộc chuyên khoa {targetSpecialty.Name}. Vui lòng chọn lại bác sĩ hoặc chuyên khoa phù hợp.";
+                    responseDto.BookingDraft = new AiBookingDraftDto
+                    {
+                        SpecialtyId = targetSpecialty.Id,
+                        SpecialtyName = targetSpecialty.Name,
+                        SlotDate = targetDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        Reason = request.Reason?.Trim(),
+                        IsComplete = false
+                    };
+                    responseDto.MissingFields = new List<string> { "Doctor", "TimeSlot" };
+                    return;
+                }
+            }
+            else
+            {
+                responseDto.Message = "Bác sĩ đã chọn không tồn tại hoặc đã ngừng hoạt động. Vui lòng chọn lại bác sĩ.";
+                responseDto.BookingDraft = new AiBookingDraftDto
+                {
+                    SpecialtyId = targetSpecialty?.Id,
+                    SpecialtyName = targetSpecialty?.Name,
+                    SlotDate = targetDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    Reason = request.Reason?.Trim(),
+                    IsComplete = false
+                };
+                responseDto.MissingFields = new List<string> { "Doctor", "TimeSlot" };
+                return;
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(aiResult.ExtractedDoctorName))
+        {
+            var matches = MatchDoctors(aiResult.ExtractedDoctorName, allActiveDoctors);
+
+            if (matches.Count == 0)
+            {
+                var unresolvedReason = !string.IsNullOrWhiteSpace(request.Reason)
+                    ? request.Reason.Trim()
+                    : RecoverInitialReason(cleanMessage, request.Context, request.Reason, aiResult.ExtractedReason);
+
+                responseDto.Message = $"Hệ thống không tìm thấy bác sĩ nào có tên \"{aiResult.ExtractedDoctorName.Trim()}\" tại phòng khám ClinicCare. Bạn có thể xem danh sách bác sĩ của phòng khám hoặc cho tôi biết chuyên khoa/triệu chứng để được hỗ trợ nhé.";
+                responseDto.BookingDraft = new AiBookingDraftDto
+                {
+                    SpecialtyId = targetSpecialty?.Id,
+                    SpecialtyName = targetSpecialty?.Name,
+                    SlotDate = targetDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    Reason = unresolvedReason,
+                    IsComplete = false
+                };
+                responseDto.Actions.Add(new AiActionDto
+                {
+                    Id = "act-view-doctors",
+                    Type = AiActionTypes.ViewDoctors,
+                    Label = "Xem danh sách bác sĩ",
+                    Style = "primary",
+                    RequiresAuthentication = false,
+                    RequiresConfirmation = false,
+                    Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Doctors }
+                });
+                responseDto.Actions.Add(new AiActionDto
+                {
+                    Id = "act-manual-spec",
+                    Type = AiActionTypes.ManualSpecialtySelection,
+                    Label = "Chọn chuyên khoa thủ công",
+                    Style = "secondary",
+                    RequiresAuthentication = false,
+                    RequiresConfirmation = false,
+                    Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.BookAppointment }
+                });
+                responseDto.Actions.Add(await CreateContactReceptionActionAsync(cancellationToken));
+                responseDto.MissingFields = new List<string> { "Doctor", "TimeSlot" };
+                return;
+            }
+            else if (matches.Count > 1)
+            {
+                var unresolvedReason = !string.IsNullOrWhiteSpace(request.Reason)
+                    ? request.Reason.Trim()
+                    : RecoverInitialReason(cleanMessage, request.Context, request.Reason, aiResult.ExtractedReason);
+
+                var namesList = string.Join(", ", matches.Select(d => $"{d.DisplayName} ({string.Join(", ", d.Specialties.Select(s => s.Name))})"));
+                responseDto.Message = $"Hệ thống tìm thấy {matches.Count} bác sĩ phù hợp: {namesList}. Bạn vui lòng chọn bác sĩ mong muốn khám nhé:";
+                responseDto.BookingDraft = new AiBookingDraftDto
+                {
+                    SpecialtyId = targetSpecialty?.Id,
+                    SpecialtyName = targetSpecialty?.Name,
+                    SlotDate = targetDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    Reason = unresolvedReason,
+                    IsComplete = false
+                };
+
+                foreach (var doc in matches.Take(4))
+                {
+                    var primarySpec = doc.Specialties.FirstOrDefault();
+                    responseDto.Actions.Add(new AiActionDto
+                    {
+                        Id = $"act-select-doc-{doc.DoctorId}",
+                        Type = AiActionTypes.SelectDoctor,
+                        Label = $"Chọn {doc.DisplayName}",
+                        Description = primarySpec != null ? $"Khoa {primarySpec.Name}" : null,
+                        Style = "secondary",
+                        RequiresAuthentication = false,
+                        RequiresConfirmation = false,
+                        Payload = new AiActionPayloadDto
+                        {
+                            SpecialtyId = primarySpec?.Id,
+                            SpecialtyName = primarySpec?.Name,
+                            DoctorId = doc.DoctorId,
+                            DoctorName = doc.DisplayName,
+                            AcademicTitle = doc.AcademicTitle,
+                            SlotDate = targetDate?.ToString("yyyy-MM-dd")
+                        }
+                    });
+                }
+
+                responseDto.MissingFields = new List<string> { "Doctor", "TimeSlot" };
+                return;
+            }
+            else
+            {
+                // Exactly 1 match
+                var singleDoc = matches[0];
+                targetDoctorId = singleDoc.DoctorId;
+                targetDoctorName = singleDoc.FullName;
+                targetDoctorAcademicTitle = singleDoc.AcademicTitle;
+
+                if (targetSpecialty == null)
+                {
+                    if (singleDoc.Specialties.Any())
+                    {
+                        targetSpecialty = singleDoc.Specialties.First();
+                    }
+                }
+                else
+                {
+                    if (!singleDoc.Specialties.Any(s => s.Id == targetSpecialty.Id))
+                    {
+                        var docSpecNames = string.Join(", ", singleDoc.Specialties.Select(s => s.Name));
+                        var primaryDocSpec = singleDoc.Specialties.FirstOrDefault();
+                        responseDto.Message = $"Bác sĩ {singleDoc.DisplayName} thuộc chuyên khoa {docSpecNames}, không thuộc chuyên khoa {targetSpecialty.Name} bạn đã chọn trước đó. Bạn có muốn đổi sang chuyên khoa {primaryDocSpec?.Name} để khám với bác sĩ không?";
+                        if (primaryDocSpec != null)
+                        {
+                            responseDto.Actions.Add(new AiActionDto
+                            {
+                                Id = $"act-switch-spec-doc-{singleDoc.DoctorId}",
+                                Type = AiActionTypes.SelectDoctor,
+                                Label = $"Đổi sang khoa {primaryDocSpec.Name} & chọn {singleDoc.DisplayName}",
+                                Style = "primary",
+                                RequiresAuthentication = false,
+                                RequiresConfirmation = false,
+                                Payload = new AiActionPayloadDto
+                                {
+                                    SpecialtyId = primaryDocSpec.Id,
+                                    SpecialtyName = primaryDocSpec.Name,
+                                    DoctorId = singleDoc.DoctorId,
+                                    DoctorName = singleDoc.DisplayName,
+                                    AcademicTitle = singleDoc.AcademicTitle,
+                                    SlotDate = targetDate?.ToString("yyyy-MM-dd")
+                                }
+                            });
+                        }
+                        responseDto.MissingFields = new List<string> { "Doctor", "TimeSlot" };
+                        return;
+                    }
+                }
+            }
+        }
+
         if (targetSpecialty != null)
         {
             var currentSpecialty = targetSpecialty;
-            var activeDoctorsInSpec = await (from ds in _dbContext.DoctorSpecialties
-                                             join d in _dbContext.Doctors on ds.DoctorId equals d.Id
-                                             join u in _dbContext.Users on d.UserId equals u.Id
-                                             where ds.SpecialtyId == targetSpecialty.Id && d.IsActive && u.IsActive
-                                             select new
-                                             {
-                                                 d.Id,
-                                                 u.FullName,
-                                                 d.AcademicTitle
-                                             }).AsNoTracking().OrderBy(d => d.Id).ToListAsync(cancellationToken);
+            var activeDoctorsInSpec = allActiveDoctors
+                .Where(d => d.Specialties.Any(s => s.Id == targetSpecialty.Id))
+                .ToList();
 
             if (activeDoctorsInSpec.Count == 0)
             {
@@ -810,46 +985,6 @@ public class AiSpecialtyService : IAiSpecialtyService
                 };
                 responseDto.MissingFields = new List<string> { "Doctor", "TimeSlot" };
                 return;
-            }
-
-            if (targetDoctorId.HasValue)
-            {
-                var docMatch = activeDoctorsInSpec.FirstOrDefault(d => d.Id == targetDoctorId.Value);
-                if (docMatch != null)
-                {
-                    targetDoctorName = docMatch.FullName;
-                    targetDoctorAcademicTitle = docMatch.AcademicTitle;
-                }
-                else
-                {
-                    var doctorIsActive = await _dbContext.Doctors
-                        .Join(_dbContext.Users, d => d.UserId, u => u.Id, (d, u) => new { d, u })
-                        .AnyAsync(x => x.d.Id == targetDoctorId.Value && x.d.IsActive && x.u.IsActive, cancellationToken);
-                    responseDto.Message = doctorIsActive
-                        ? $"Bác sĩ đã chọn không thuộc chuyên khoa {targetSpecialty.Name}. Vui lòng chọn lại bác sĩ."
-                        : "Bác sĩ đã chọn không tồn tại hoặc đã ngừng hoạt động. Vui lòng chọn lại bác sĩ.";
-                    responseDto.BookingDraft = new AiBookingDraftDto
-                    {
-                        SpecialtyId = targetSpecialty.Id,
-                        SpecialtyName = targetSpecialty.Name,
-                        SlotDate = targetDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                        Reason = request.Reason?.Trim(),
-                        IsComplete = false
-                    };
-                    responseDto.MissingFields = new List<string> { "Doctor", "TimeSlot" };
-                    return;
-                }
-            }
-            else if (!string.IsNullOrWhiteSpace(aiResult.ExtractedDoctorName))
-            {
-                var search = aiResult.ExtractedDoctorName.Trim().ToLowerInvariant();
-                var docMatch = activeDoctorsInSpec.FirstOrDefault(d => d.FullName.ToLowerInvariant().Contains(search));
-                if (docMatch != null)
-                {
-                    targetDoctorId = docMatch.Id;
-                    targetDoctorName = docMatch.FullName;
-                    targetDoctorAcademicTitle = docMatch.AcademicTitle;
-                }
             }
 
             // Sunday Rule: If user requested Sunday, do NOT query slots; inform user and suggest Monday
@@ -907,7 +1042,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             var batchRequest = new ClinicManagement.Application.Appointments.Interfaces.BatchSlotAvailabilityRequest
             {
                 DoctorId = targetDoctorId,
-                DoctorIds = targetDoctorId.HasValue ? null : activeDoctorsInSpec.Select(d => d.Id).ToList(),
+                DoctorIds = targetDoctorId.HasValue ? null : activeDoctorsInSpec.Select(d => d.DoctorId).ToList(),
                 SpecialtyId = targetSpecialty.Id,
                 FromDate = targetDate ?? vnToday,
                 ToDate = targetDate ?? vnToday.AddDays(7),
@@ -965,7 +1100,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             {
                 chosenSlot = availableSlots.First();
                 targetDoctorId = chosenSlot.DoctorId;
-                var doc = activeDoctorsInSpec.FirstOrDefault(d => d.Id == chosenSlot.DoctorId);
+                var doc = activeDoctorsInSpec.FirstOrDefault(d => d.DoctorId == chosenSlot.DoctorId);
                 if (doc != null)
                 {
                     targetDoctorName = doc.FullName;
@@ -1015,7 +1150,14 @@ public class AiSpecialtyService : IAiSpecialtyService
             {
                 var rangeFrom = batchRequest.FromDate;
                 var rangeTo = batchRequest.ToDate;
-                responseDto.Message = $"Không có lịch trống phù hợp trong khoảng {rangeFrom:dd/MM/yyyy} đến {rangeTo:dd/MM/yyyy}. Vui lòng chọn một khoảng ngày khác để tìm tiếp.";
+                if (targetDoctorId.HasValue)
+                {
+                    responseDto.Message = $"Bác sĩ {targetDoctorName ?? "đã chọn"} hiện chưa có khung giờ khám trống trong khoảng {rangeFrom:dd/MM/yyyy} đến {rangeTo:dd/MM/yyyy}. Bạn có thể xem lịch của bác sĩ khác trong khoa {targetSpecialty.Name} hoặc chọn ngày khác nhé.";
+                }
+                else
+                {
+                    responseDto.Message = $"Không có lịch trống phù hợp trong khoảng {rangeFrom:dd/MM/yyyy} đến {rangeTo:dd/MM/yyyy}. Vui lòng chọn một khoảng ngày khác để tìm tiếp.";
+                }
             }
 
             // G. Add Contextual Actions
@@ -1075,7 +1217,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                         var docDisplayName = string.IsNullOrWhiteSpace(doc.AcademicTitle) ? doc.FullName : $"{doc.AcademicTitle} {doc.FullName}";
                         responseDto.Actions.Add(new AiActionDto
                         {
-                            Id = $"act-select-doc-{doc.Id}",
+                            Id = $"act-select-doc-{doc.DoctorId}",
                             Type = AiActionTypes.SelectDoctor,
                             Label = $"Chọn {docDisplayName}",
                             Style = "secondary",
@@ -1085,7 +1227,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                             {
                                 SpecialtyId = currentSpecialty.Id,
                                 SpecialtyName = currentSpecialty.Name,
-                                DoctorId = doc.Id,
+                                DoctorId = doc.DoctorId,
                                 DoctorName = docDisplayName,
                                 AcademicTitle = doc.AcademicTitle,
                                 SlotDate = targetDate?.ToString("yyyy-MM-dd")
@@ -1141,6 +1283,45 @@ public class AiSpecialtyService : IAiSpecialtyService
                             }
                         });
                     }
+                }
+                else if (targetDoctorId.HasValue && !availableSlots.Any())
+                {
+                    var otherDocs = activeDoctorsInSpec.Where(d => d.DoctorId != targetDoctorId.Value).Take(2).ToList();
+                    foreach (var doc in otherDocs)
+                    {
+                        var docDisplayName = string.IsNullOrWhiteSpace(doc.AcademicTitle) ? doc.FullName : $"{doc.AcademicTitle} {doc.FullName}";
+                        responseDto.Actions.Add(new AiActionDto
+                        {
+                            Id = $"act-select-doc-{doc.DoctorId}",
+                            Type = AiActionTypes.SelectDoctor,
+                            Label = $"Khám với {docDisplayName}",
+                            Style = "secondary",
+                            RequiresAuthentication = false,
+                            RequiresConfirmation = false,
+                            Payload = new AiActionPayloadDto
+                            {
+                                SpecialtyId = currentSpecialty.Id,
+                                SpecialtyName = currentSpecialty.Name,
+                                DoctorId = doc.DoctorId,
+                                DoctorName = docDisplayName,
+                                AcademicTitle = doc.AcademicTitle,
+                                SlotDate = targetDate?.ToString("yyyy-MM-dd")
+                            }
+                        });
+                    }
+
+                    responseDto.Actions.Add(new AiActionDto
+                    {
+                        Id = "act-view-doctors",
+                        Type = AiActionTypes.ViewDoctors,
+                        Label = "Xem danh sách bác sĩ",
+                        Style = "secondary",
+                        RequiresAuthentication = false,
+                        RequiresConfirmation = false,
+                        Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Doctors }
+                    });
+
+                    responseDto.Actions.Add(await CreateContactReceptionActionAsync(cancellationToken));
                 }
 
                 // Action to view specialty details
@@ -1537,6 +1718,83 @@ public class AiSpecialtyService : IAiSpecialtyService
             Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Appointments }
         });
 
+        // Ground doctor check in degraded mode if user mentioned a doctor
+        var doctorNamePattern = new Regex(@"(?:bác sĩ|bac si|bs\.|bs|bác sỹ|bac sy)\s+([A-Za-z0-9À-ỹ\s]+)", RegexOptions.IgnoreCase);
+        var docMatch = doctorNamePattern.Match(cleanMessage);
+        if (docMatch.Success)
+        {
+            var rawName = docMatch.Groups[1].Value;
+            var delimiterMatch = Regex.Match(rawName, @"^(.*?)(?:\s+(?:vào|từ|lúc|ngày|khoa|chuyên khoa|sáng|chiều|tối)\b|[,\.\?!])", RegexOptions.IgnoreCase);
+            var candidateName = (delimiterMatch.Success ? delimiterMatch.Groups[1].Value : rawName).Trim();
+            var normCandidate = NormalizeVietnamese(candidateName);
+            var nonNames = new HashSet<string> { "", "oi", "a", "nhe", "cho", "hoi", "oi cho toi hoi", "giup", "tu van", "kham" };
+            if (!string.IsNullOrWhiteSpace(normCandidate) && normCandidate.Length >= 2 && !nonNames.Contains(normCandidate))
+            {
+                var allDoctors = await QueryActiveDoctorsAsync(cancellationToken);
+                var matches = MatchDoctors(candidateName, allDoctors);
+                if (matches.Count == 1)
+                {
+                    var doc = matches[0];
+                    var primarySpec = doc.Specialties.FirstOrDefault();
+                    userMessage = $"{userMessage}\n\nTuy nhiên, hệ thống đã tìm thấy bác sĩ {doc.DisplayName}{(primarySpec != null ? $" thuộc chuyên khoa {primarySpec.Name}" : "")}. Bạn có thể bấm chọn bác sĩ bên dưới để tiếp tục:";
+                    response.Message = userMessage;
+
+                    response.Actions.Insert(0, new AiActionDto
+                    {
+                        Id = $"act-select-doc-{doc.DoctorId}",
+                        Type = AiActionTypes.SelectDoctor,
+                        Label = $"Chọn {doc.DisplayName}",
+                        Description = primarySpec != null ? $"Khoa {primarySpec.Name}" : null,
+                        Style = "primary",
+                        RequiresAuthentication = false,
+                        RequiresConfirmation = false,
+                        Payload = new AiActionPayloadDto
+                        {
+                            SpecialtyId = primarySpec?.Id,
+                            SpecialtyName = primarySpec?.Name,
+                            DoctorId = doc.DoctorId,
+                            DoctorName = doc.DisplayName,
+                            AcademicTitle = doc.AcademicTitle
+                        }
+                    });
+                }
+                else if (matches.Count > 1)
+                {
+                    userMessage = $"{userMessage}\n\nHệ thống tìm thấy {matches.Count} bác sĩ phù hợp với tên \"{candidateName}\". Bạn có thể chọn bác sĩ bên dưới:";
+                    response.Message = userMessage;
+
+                    int insertIdx = 0;
+                    foreach (var doc in matches.Take(3))
+                    {
+                        var primarySpec = doc.Specialties.FirstOrDefault();
+                        response.Actions.Insert(insertIdx++, new AiActionDto
+                        {
+                            Id = $"act-select-doc-{doc.DoctorId}",
+                            Type = AiActionTypes.SelectDoctor,
+                            Label = $"Chọn {doc.DisplayName}",
+                            Description = primarySpec != null ? $"Khoa {primarySpec.Name}" : null,
+                            Style = "secondary",
+                            RequiresAuthentication = false,
+                            RequiresConfirmation = false,
+                            Payload = new AiActionPayloadDto
+                            {
+                                SpecialtyId = primarySpec?.Id,
+                                SpecialtyName = primarySpec?.Name,
+                                DoctorId = doc.DoctorId,
+                                DoctorName = doc.DisplayName,
+                                AcademicTitle = doc.AcademicTitle
+                            }
+                        });
+                    }
+                }
+                else if (normCandidate.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2 || normCandidate.Length >= 4)
+                {
+                    userMessage = $"{userMessage}\n\nNgoài ra, hệ thống không tìm thấy bác sĩ nào có tên \"{candidateName}\" tại phòng khám ClinicCare. Bạn có thể xem danh sách bác sĩ của phòng khám hoặc chọn chuyên khoa bên dưới.";
+                    response.Message = userMessage;
+                }
+            }
+        }
+
         return WithDraftVersionSync(response, nextDraftVersion);
     }
 
@@ -1726,6 +1984,11 @@ public class AiSpecialtyService : IAiSpecialtyService
     private static bool IsBookingActionPhrase(string message)
     {
         var lower = message.Trim().ToLowerInvariant();
+        if (ContainsSymptomKeywords(lower))
+        {
+            return false;
+        }
+
         return lower.StartsWith("tôi chọn") ||
                lower.StartsWith("chọn ") ||
                lower.StartsWith("chọn bác sĩ") ||
@@ -1733,7 +1996,13 @@ public class AiSpecialtyService : IAiSpecialtyService
                lower.StartsWith("chọn ngày") ||
                lower.StartsWith("xem các lịch") ||
                lower.StartsWith("xem lịch trống") ||
-               lower.StartsWith("tôi muốn đặt khám với") ||
+               lower.StartsWith("tôi muốn đặt") ||
+               lower.StartsWith("tôi muốn khám") ||
+               lower.StartsWith("tôi muốn đặt khám") ||
+               lower.StartsWith("tôi muốn đặt lịch") ||
+               lower.StartsWith("đặt lịch") ||
+               lower.StartsWith("đặt khám") ||
+               lower.StartsWith("khám bác sĩ") ||
                lower.StartsWith("tôi muốn xem lịch khám vào ngày") ||
                lower.StartsWith("tìm lịch khám sớm nhất") ||
                lower.StartsWith("tìm lịch sớm nhất") ||
@@ -1884,5 +2153,84 @@ public class AiSpecialtyService : IAiSpecialtyService
         }
 
         return trimmed.Length > 1000 ? trimmed[..1000] : trimmed;
+    }
+
+    private sealed class DoctorLookupItem
+    {
+        public long DoctorId { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string? AcademicTitle { get; set; }
+        public string DisplayName => string.IsNullOrWhiteSpace(AcademicTitle) ? FullName : $"{AcademicTitle} {FullName}";
+        public List<WhitelistItemDto> Specialties { get; set; } = new();
+    }
+
+    public static string NormalizeVietnamese(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        var trimmed = text.Trim();
+        var prefixRegex = new Regex(@"^(bác sĩ|bac si|bs\.cki|bs\.ckii|bs\.|ths\.bs|ts\.bs|pgs\.ts|gs\.ts)\s+", RegexOptions.IgnoreCase);
+        trimmed = prefixRegex.Replace(trimmed, "").Trim();
+
+        var normalized = trimmed.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(normalized.Length);
+        foreach (var c in normalized)
+        {
+            var cat = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (cat != UnicodeCategory.NonSpacingMark)
+            {
+                sb.Append(c);
+            }
+        }
+        return sb.ToString().Normalize(NormalizationForm.FormC).Replace("đ", "d").Replace("Đ", "D").ToLowerInvariant().Trim();
+    }
+
+    private async Task<List<DoctorLookupItem>> QueryActiveDoctorsAsync(CancellationToken cancellationToken)
+    {
+        return await (from d in _dbContext.Doctors
+                      join u in _dbContext.Users on d.UserId equals u.Id
+                      where d.IsActive && u.IsActive
+                      select new DoctorLookupItem
+                      {
+                          DoctorId = d.Id,
+                          FullName = u.FullName,
+                          AcademicTitle = d.AcademicTitle,
+                          Specialties = (from ds in _dbContext.DoctorSpecialties
+                                         join s in _dbContext.Specialties on ds.SpecialtyId equals s.Id
+                                         where ds.DoctorId == d.Id && s.IsActive && s.AiEnabled
+                                         select new WhitelistItemDto
+                                         {
+                                             Id = s.Id,
+                                             Code = s.SpecialtyCode,
+                                             Name = s.Name
+                                         }).ToList()
+                      }).AsNoTracking().OrderBy(d => d.DoctorId).ToListAsync(cancellationToken);
+    }
+
+    private static List<DoctorLookupItem> MatchDoctors(string searchName, List<DoctorLookupItem> doctors)
+    {
+        if (string.IsNullOrWhiteSpace(searchName)) return new List<DoctorLookupItem>();
+        var normSearch = NormalizeVietnamese(searchName);
+        if (string.IsNullOrWhiteSpace(normSearch) || normSearch.Length < 2) return new List<DoctorLookupItem>();
+
+        // 1. Exact match on normalized full name
+        var exactMatches = doctors.Where(d => NormalizeVietnamese(d.FullName) == normSearch).ToList();
+        if (exactMatches.Count > 0) return exactMatches;
+
+        // 2. Exact match on last token / given name (e.g. "Khải" matches "Nguyễn Minh Khải", "Hà" matches "Trần Thu Hà")
+        var tokenMatches = doctors.Where(d =>
+        {
+            var tokens = NormalizeVietnamese(d.FullName).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return tokens.Length > 0 && tokens.Last() == normSearch;
+        }).ToList();
+        if (tokenMatches.Count > 0) return tokenMatches;
+
+        // 3. Substring match
+        var substringMatches = doctors.Where(d =>
+        {
+            var normDoc = NormalizeVietnamese(d.FullName);
+            return normDoc.Contains(normSearch) || normSearch.Contains(normDoc);
+        }).ToList();
+
+        return substringMatches;
     }
 }

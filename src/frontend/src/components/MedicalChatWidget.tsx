@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useChatContext } from "../contexts/ChatContext";
 import { useAiBookingFlow } from "../hooks/useAiBookingFlow";
+import { getRoleDashboardPath } from "../utils/roleRoutes";
 import styles from "./MedicalChatWidget.module.css";
 import {
     MessageCircle, X, Trash2, Send, AlertTriangle, ArrowRight,
@@ -428,8 +429,167 @@ const PatientMedicalChatWidget: React.FC = () => {
     return createPortal(widgetContent, document.body);
 };
 
+const GuestMedicalChatNoticeWidget: React.FC = () => {
+    const [isOpen, setIsOpen] = useState(false);
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const widgetContent = (
+        <div className={styles.widgetContainer}>
+            {!isOpen && (
+                <button
+                    type="button"
+                    className={styles.launcher}
+                    onClick={() => setIsOpen(true)}
+                    aria-label="Mở Trợ lý ClinicCare AI"
+                >
+                    <MessageCircle size={28} />
+                </button>
+            )}
+
+            {isOpen && (
+                <div className={styles.chatWindow} role="dialog" aria-modal="true" aria-label="Trợ lý ClinicCare AI">
+                    <div className={styles.header}>
+                        <div className={styles.headerTitle}>
+                            <Stethoscope size={22} />
+                            <span>ClinicCare AI</span>
+                        </div>
+                        <div className={styles.headerActions}>
+                            <button
+                                type="button"
+                                className={styles.iconBtn}
+                                onClick={() => setIsOpen(false)}
+                                aria-label="Đóng cửa sổ chat"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className={styles.noticeCard}>
+                        <div style={{ width: 48, height: 48, borderRadius: "50%", backgroundColor: "#ccfbf1", display: "flex", alignItems: "center", justifyContent: "center", color: "#0d9488" }}>
+                            <Stethoscope size={28} />
+                        </div>
+                        <h3 className={styles.noticeTitle}>Chào mừng bạn đến với ClinicCare AI</h3>
+                        <p className={styles.noticeText}>
+                            Trợ lý y tế thông minh hỗ trợ giải đáp thắc mắc sức khỏe và đặt lịch khám tiện lợi cho Bệnh nhân.
+                        </p>
+                        <p className={styles.noticeText} style={{ fontSize: "0.85rem", color: "#94a3b8" }}>
+                            Vui lòng đăng nhập tài khoản Bệnh nhân để bắt đầu trò chuyện và đặt lịch khám bệnh trực tiếp.
+                        </p>
+                        <button
+                            type="button"
+                            className={styles.noticeBtnPrimary}
+                            onClick={() => navigate(`/login?returnUrl=${encodeURIComponent(location.pathname)}`)}
+                        >
+                            Đăng nhập tài khoản Bệnh nhân
+                        </button>
+                        <button
+                            type="button"
+                            className={styles.noticeBtnSecondary}
+                            onClick={() => navigate('/register')}
+                        >
+                            Đăng ký tài khoản mới
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+
+    return createPortal(widgetContent, document.body);
+};
+
+const StaffMedicalChatNoticeWidget: React.FC<{ user: { fullName?: string; role: string } }> = ({ user }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const navigate = useNavigate();
+
+    const widgetContent = (
+        <div className={styles.widgetContainer}>
+            {!isOpen && (
+                <button
+                    type="button"
+                    className={styles.launcher}
+                    onClick={() => setIsOpen(true)}
+                    aria-label="Mở thông tin Trợ lý ClinicCare AI"
+                >
+                    <MessageCircle size={28} />
+                </button>
+            )}
+
+            {isOpen && (
+                <div className={styles.chatWindow} role="dialog" aria-modal="true" aria-label="Thông tin Trợ lý ClinicCare AI">
+                    <div className={styles.header}>
+                        <div className={styles.headerTitle}>
+                            <Stethoscope size={22} />
+                            <span>ClinicCare AI</span>
+                        </div>
+                        <div className={styles.headerActions}>
+                            <button
+                                type="button"
+                                className={styles.iconBtn}
+                                onClick={() => setIsOpen(false)}
+                                aria-label="Đóng cửa sổ"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className={styles.noticeCard}>
+                        <div style={{ width: 48, height: 48, borderRadius: "50%", backgroundColor: "#e0f2fe", display: "flex", alignItems: "center", justifyContent: "center", color: "#0284c7" }}>
+                            <Stethoscope size={28} />
+                        </div>
+                        <h3 className={styles.noticeTitle}>Trợ lý AI dành riêng cho Bệnh nhân</h3>
+                        <p className={styles.noticeText}>
+                            Bạn đang đăng nhập bằng tài khoản nhân viên y tế: <strong>{user.fullName || user.role}</strong> (Vai trò: {user.role}).
+                        </p>
+                        <p className={styles.noticeText} style={{ fontSize: "0.85rem", color: "#94a3b8" }}>
+                            Khu vực tư vấn và đặt lịch khám AI trực tuyến phục vụ người bệnh. Nhân viên y tế vui lòng thao tác trên Không gian làm việc chuyên môn.
+                        </p>
+                        <button
+                            type="button"
+                            className={styles.noticeBtnPrimary}
+                            onClick={() => navigate(getRoleDashboardPath(user.role))}
+                        >
+                            Về Không gian làm việc ({user.role})
+                        </button>
+                        <button
+                            type="button"
+                            className={styles.noticeBtnSecondary}
+                            onClick={() => setIsOpen(false)}
+                        >
+                            Đóng thông báo
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+
+    return createPortal(widgetContent, document.body);
+};
+
 export const MedicalChatWidget: React.FC = () => {
-    const { user } = useAuth();
-    if (user?.role !== "Patient") return null;
-    return <PatientMedicalChatWidget />;
+    const { user, isAuthenticated } = useAuth();
+    const location = useLocation();
+
+    // Do not show floating widget on staff dashboard workspaces (doctor, reception, admin, pharmacy, diagnostics)
+    const isStaffWorkspace = location.pathname.startsWith('/doctor') ||
+                             location.pathname.startsWith('/reception') ||
+                             location.pathname.startsWith('/admin') ||
+                             location.pathname.startsWith('/pharmacy') ||
+                             location.pathname.startsWith('/diagnostics');
+
+    if (isStaffWorkspace) return null;
+
+    if (isAuthenticated && user?.role === 'Patient') {
+        return <PatientMedicalChatWidget />;
+    }
+
+    if (isAuthenticated && user && user.role !== 'Patient') {
+        return <StaffMedicalChatNoticeWidget user={user} />;
+    }
+
+    return <GuestMedicalChatNoticeWidget />;
 };

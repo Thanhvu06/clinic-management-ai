@@ -1538,4 +1538,213 @@ public class AiActionAssistantTests : IntegrationTestBase
             Assert.DoesNotContain(secretKey, log, StringComparison.OrdinalIgnoreCase);
         }
     }
+
+    [Fact]
+    public async Task TC_DoctorSearch_WhenUserRequestsNonDoctorNguyenDinhThanh_ThenReturnsNotFound_AndDoesNotLeakPii()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Tôi sẽ giúp bạn kiểm tra thông tin bác sĩ Nguyễn Đình Thành.",
+                ExtractedDoctorName = "Nguyễn Đình Thành",
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "tôi muốn đặt lịch khám bác sĩ Nguyễn Đình Thành"
+        };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+        Assert.Equal("Online", res.Data.AssistantStatus);
+        Assert.Equal("Healthy", res.Data.ProviderStatus);
+
+        // Grounded truth: Nguyễn Đình Thành is NOT a doctor
+        Assert.Contains("không tìm thấy bác sĩ nào có tên \"Nguyễn Đình Thành\"", res.Data.Message);
+
+        // Does NOT leak patient PII
+        Assert.DoesNotContain("patient@cliniccare.local", res.Data.Message);
+        Assert.DoesNotContain("0900000004", res.Data.Message);
+
+        // Returns navigation options instead of fake doctor cards
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ViewDoctors);
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ManualSpecialtySelection);
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ContactReception);
+        Assert.DoesNotContain(res.Data.Actions, a => a.Type == AiActionTypes.SelectDoctor || a.Type == AiActionTypes.SelectSlot);
+    }
+
+    [Fact]
+    public async Task TC_DoctorSearch_WhenUserRequestsDoctorByName_WithoutSpecialty_ThenResolvesSpecialtyAndReturnsSlots()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Tôi đã tìm thấy thông tin bác sĩ Doctor 1. Dưới đây là các khung giờ khám khả dụng:",
+                ExtractedDoctorName = "Doctor 1",
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "tôi muốn đặt lịch bác sĩ Doctor 1"
+        };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+        Assert.Equal("Online", res.Data.AssistantStatus);
+        Assert.Equal("Healthy", res.Data.ProviderStatus);
+
+        // Specialty was automatically inferred from Doctor 1's primary specialty
+        Assert.NotNull(res.Data.BookingDraft);
+        Assert.Equal("Nội tổng quát", res.Data.BookingDraft.SpecialtyName);
+        Assert.Contains("Doctor 1", res.Data.BookingDraft.DoctorName);
+
+        // Doctor slot actions or ViewAvailableSlots action is provided
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.SelectSlot || a.Type == AiActionTypes.ViewAvailableSlots);
+    }
+
+    [Fact]
+    public async Task TC_DoctorSearch_WhenDoctorNameIsAmbiguous_ThenReturnsDisambiguationOptions()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Tôi tìm thấy bác sĩ phù hợp với yêu cầu của bạn.",
+                ExtractedDoctorName = "Doctor",
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "tôi muốn đặt khám với bác sĩ Doctor"
+        };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        // Both Doctor 1 and Doctor 2 match "Doctor"
+        Assert.Contains("tìm thấy 2 bác sĩ phù hợp", res.Data.Message);
+        var selectDocActions = res.Data.Actions.Where(a => a.Type == AiActionTypes.SelectDoctor).ToList();
+        Assert.Equal(2, selectDocActions.Count);
+        Assert.Contains(selectDocActions, a => a.Label.Contains("Doctor 1"));
+        Assert.Contains(selectDocActions, a => a.Label.Contains("Doctor 2"));
+    }
+
+    [Fact]
+    public async Task TC_DoctorSearch_WhenProviderFails_DegradedModeProvidesGroundedDoctorFallback()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = false,
+                Status = "ProviderServerError",
+                ErrorMessage = "Provider returned HTTP 503"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "tôi muốn đặt lịch bác sĩ Doctor 1"
+        };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+        Assert.Equal("Degraded", res.Data.AssistantStatus);
+        Assert.Equal("ProviderServerError", res.Data.ProviderStatus);
+
+        // Degraded mode identified Doctor 1 from regex and active DB
+        Assert.Contains("Doctor 1", res.Data.Message);
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.SelectDoctor && a.Label.Contains("Doctor 1"));
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ManualSpecialtySelection);
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ContactReception);
+    }
+
+    [Fact]
+    public async Task TC_DoctorSearch_WhenProviderFails_DegradedModeReportsDoctorNotFound()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = false,
+                Status = "RateLimited",
+                ErrorMessage = "Gemini API rate limit exceeded (429)."
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "tôi muốn đặt lịch khám bác sĩ Nguyễn Đình Thành"
+        };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+        Assert.Equal("Degraded", res.Data.AssistantStatus);
+
+        // Informs user doctor is not found
+        Assert.Contains("không tìm thấy bác sĩ nào có tên \"Nguyễn Đình Thành\"", res.Data.Message);
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ViewDoctors);
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ManualSpecialtySelection);
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ContactReception);
+        Assert.DoesNotContain(res.Data.Actions, a => a.Type == AiActionTypes.SelectDoctor || a.Type == AiActionTypes.SelectSlot);
+    }
 }

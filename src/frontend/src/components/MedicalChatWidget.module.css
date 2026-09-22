@@ -582,6 +582,66 @@
     border-top: 1px solid #fee2e2;
 }
 
+.noticeCard {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+    background-color: #ffffff;
+    height: 100%;
+    justify-content: center;
+}
+
+.noticeTitle {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0;
+}
+
+.noticeText {
+    font-size: 0.9rem;
+    color: #64748b;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.noticeBtnPrimary {
+    background-color: #0d9488;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+    transition: background-color 0.15s;
+}
+
+.noticeBtnPrimary:hover {
+    background-color: #0f766e;
+}
+
+.noticeBtnSecondary {
+    background-color: transparent;
+    color: #0d9488;
+    border: 1px solid #0d9488;
+    border-radius: 8px;
+    padding: 9px 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+    transition: background-color 0.15s;
+}
+
+.noticeBtnSecondary:hover {
+    background-color: #f0fdfa;
+}
+
 @media print {
     .widgetContainer,
     .chatWindow,

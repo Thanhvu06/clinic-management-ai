@@ -18,6 +18,7 @@ export const PublicLayout: React.FC = () => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
+    const [isStaffAiModalOpen, setIsStaffAiModalOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const handleLogout = () => {
@@ -26,7 +27,14 @@ export const PublicLayout: React.FC = () => {
     };
 
     const isPatient = user?.role === 'Patient';
-    const isStaff = user && user.role !== 'Patient';
+    const isStaff = Boolean(user && user.role !== 'Patient');
+
+    const handleAiConsultationClick = (e: React.MouseEvent) => {
+        if (isStaff) {
+            e.preventDefault();
+            setIsStaffAiModalOpen(true);
+        }
+    };
 
     // Close menus when route changes
     useEffect(() => {
@@ -102,7 +110,7 @@ export const PublicLayout: React.FC = () => {
                         <NavLink to="/health-packages" className={navLinkClass}>Gói khám</NavLink>
                         <NavLink to="/doctors" className={navLinkClass}>Bác sĩ</NavLink>
                         <NavLink to="/locations" className={navLinkClass}>Điểm khám</NavLink>
-                        <NavLink to="/patient/ai-consultation" className={navLinkClass}>Tư vấn AI</NavLink>
+                        <NavLink to="/patient/ai-consultation" className={navLinkClass} onClick={handleAiConsultationClick}>Tư vấn AI</NavLink>
                     </nav>
 
                     <div className={styles.authArea}>
@@ -219,7 +227,10 @@ export const PublicLayout: React.FC = () => {
                     <NavLink to="/health-packages" className={navLinkClass} onClick={() => setIsMobileMenuOpen(false)}>Gói khám</NavLink>
                     <NavLink to="/doctors" className={navLinkClass} onClick={() => setIsMobileMenuOpen(false)}>Bác sĩ</NavLink>
                     <NavLink to="/locations" className={navLinkClass} onClick={() => setIsMobileMenuOpen(false)}>Điểm khám</NavLink>
-                    <NavLink to="/patient/ai-consultation" className={navLinkClass} onClick={() => setIsMobileMenuOpen(false)}>Tư vấn AI</NavLink>
+                    <NavLink to="/patient/ai-consultation" className={navLinkClass} onClick={(e) => {
+                        setIsMobileMenuOpen(false);
+                        handleAiConsultationClick(e);
+                    }}>Tư vấn AI</NavLink>
                     
                     <button 
                         type="button" 
@@ -290,7 +301,7 @@ export const PublicLayout: React.FC = () => {
                         <Link to="/health-packages" className={styles.footerLink}>Gói khám sức khỏe</Link>
                         <Link to="/specialties" className={styles.footerLink}>Danh mục Chuyên khoa</Link>
                         <Link to="/doctors" className={styles.footerLink}>Đội ngũ Bác sĩ</Link>
-                        <Link to="/patient/ai-consultation" className={styles.footerLink}>Tư vấn sơ bộ với AI</Link>
+                        <Link to="/patient/ai-consultation" className={styles.footerLink} onClick={handleAiConsultationClick}>Tư vấn sơ bộ với AI</Link>
                     </div>
                     <div className={styles.footerCol}>
                         <h3>Hệ thống cơ sở</h3>
@@ -313,6 +324,110 @@ export const PublicLayout: React.FC = () => {
                     &copy; {new Date().getFullYear()} ClinicCare AI. Tất cả quyền được bảo lưu.
                 </div>
             </footer>
+
+            {isStaffAiModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                    zIndex: 10000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '16px'
+                }}>
+                    <div style={{
+                        backgroundColor: '#ffffff',
+                        borderRadius: '16px',
+                        maxWidth: '480px',
+                        width: '100%',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        overflow: 'hidden'
+                    }}>
+                        <div style={{
+                            padding: '16px 20px',
+                            borderBottom: '1px solid #e2e8f0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: '#0f172a',
+                            color: '#ffffff'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                                <ShieldPlus size={20} color="#0d9488" />
+                                <span>ClinicCare AI (Dành cho Bệnh nhân)</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsStaffAiModalOpen(false)}
+                                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                                aria-label="Đóng"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div style={{ padding: '24px', textAlign: 'center' }}>
+                            <div style={{
+                                width: '56px',
+                                height: '56px',
+                                borderRadius: '50%',
+                                backgroundColor: '#f0fdfa',
+                                color: '#0d9488',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: '16px'
+                            }}>
+                                <ShieldPlus size={32} />
+                            </div>
+                            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', color: '#0f172a' }}>
+                                Tính năng dành cho Bệnh nhân
+                            </h3>
+                            <p style={{ margin: '0 0 12px 0', color: '#334155', fontSize: '0.95rem', lineHeight: 1.5 }}>
+                                Bạn đang đăng nhập bằng tài khoản nhân viên: <strong>{user?.fullName}</strong> (Vai trò: {user?.role}).
+                            </p>
+                            <p style={{ margin: '0 0 24px 0', color: '#64748b', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                                Tính năng Tư vấn & Đặt lịch AI trực tuyến phục vụ Bệnh nhân. Nhân viên y tế vui lòng làm việc tại Không gian làm việc chuyên môn hoặc đăng nhập tài khoản Bệnh nhân.
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsStaffAiModalOpen(false);
+                                        navigate(getRoleDashboardPath(user?.role));
+                                    }}
+                                    style={{
+                                        padding: '12px',
+                                        backgroundColor: '#0d9488',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Về Không gian làm việc ({user?.role})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsStaffAiModalOpen(false)}
+                                    style={{
+                                        padding: '10px',
+                                        backgroundColor: 'transparent',
+                                        color: '#64748b',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: '8px',
+                                        fontWeight: 500,
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Đóng
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
