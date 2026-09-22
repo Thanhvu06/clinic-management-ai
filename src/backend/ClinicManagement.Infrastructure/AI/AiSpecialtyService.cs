@@ -228,7 +228,10 @@ public class AiSpecialtyService : IAiSpecialtyService
             HasDoctor = request.PendingDoctorId.HasValue,
             HasSlot = request.PendingSlotId.HasValue,
             HasReason = !string.IsNullOrWhiteSpace(request.Reason),
-            LastModelQuestion = request.Context?.LastOrDefault(c => c.Role == "model")?.Content
+            LastModelQuestion = request.Context?.LastOrDefault(c => c.Role == "model")?.Content,
+            DisplayedDoctorIds = request.DisplayedDoctorIds ?? new List<long>(),
+            DisplayedSlotIds = request.DisplayedSlotIds ?? new List<long>(),
+            ContextSnapshotId = request.ContextSnapshotId
         };
 
         var localClassification = _intentClassifier.Classify(cleanMessage, intentContext);
@@ -248,7 +251,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 DialogueOutcome = "UnclearInput",
                 PrimaryIntent = AiChatIntentTypes.UnclearOrOutOfScope,
                 AssistantStatus = "Online",
-                ProviderStatus = "Healthy",
+                ProviderStatus = "NotCalled",
                 PromptVersion = GeminiAiProvider.CurrentPromptVersion
             };
 
@@ -265,7 +268,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 DialogueOutcome = "DraftCancelled",
                 PrimaryIntent = AiChatIntentTypes.CancelDraft,
                 AssistantStatus = "Online",
-                ProviderStatus = "Healthy",
+                ProviderStatus = "NotCalled",
                 PromptVersion = GeminiAiProvider.CurrentPromptVersion,
                 BookingDraft = null
             };
@@ -387,7 +390,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         // Special handling for Greeting: preserve draft without running slot override (Issue A Fix)
         if (string.Equals(effectivePrimaryIntent, AiChatIntentTypes.Greeting, StringComparison.OrdinalIgnoreCase))
         {
-            responseDto.DialogueOutcome = "Success";
+            responseDto.DialogueOutcome = "Greeting";
             await PreserveExistingDraftAsync(request, responseDto, cancellationToken);
             return WithDraftVersionSync(responseDto, nextDraftVersion);
         }
@@ -428,7 +431,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         await AddNavigationActionsIfRequestedAsync(cleanMessage, lowerMsg, aiResult.RequestedActionType, responseDto, cancellationToken);
 
         // 7.3 Ground Booking Flow: Resolve Specialty, Doctor, Date, Slots
-        await GroundBookingFlowAsync(request, cleanMessage, lowerMsg, aiResult, whitelistData, responseDto, cancellationToken);
+        await GroundBookingFlowAsync(request, cleanMessage, lowerMsg, aiResult, localClassification, whitelistData, responseDto, cancellationToken);
 
         var clinicalReason = RecoverInitialReason(cleanMessage, request.Context, request.Reason, aiResult.ExtractedReason);
         if (responseDto.BookingDraft == null)
@@ -443,12 +446,9 @@ public class AiSpecialtyService : IAiSpecialtyService
                 };
             }
         }
-        else if (string.IsNullOrWhiteSpace(responseDto.BookingDraft.Reason))
+        else if (!string.IsNullOrWhiteSpace(clinicalReason))
         {
-            if (!string.IsNullOrWhiteSpace(clinicalReason))
-            {
-                responseDto.BookingDraft.Reason = clinicalReason;
-            }
+            responseDto.BookingDraft.Reason = clinicalReason;
         }
 
         if (!responseDto.SpecialtySuggestions.Any() && !responseDto.Actions.Any())
@@ -489,7 +489,9 @@ public class AiSpecialtyService : IAiSpecialtyService
         var response = new AiChatResponseDto
         {
             Urgency = "ROUTINE",
-            PromptVersion = GeminiAiProvider.CurrentPromptVersion
+            PromptVersion = GeminiAiProvider.CurrentPromptVersion,
+            AssistantStatus = "Online",
+            ProviderStatus = "NotCalled"
         };
 
         var reason = request.Reason?.Trim();
@@ -801,6 +803,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         string cleanMessage,
         string lowerMsg,
         AiChatProviderResult aiResult,
+        IntentClassificationResult localClassification,
         List<WhitelistItemDto> whitelistData,
         AiChatResponseDto responseDto,
         CancellationToken cancellationToken)
@@ -835,7 +838,17 @@ public class AiSpecialtyService : IAiSpecialtyService
             targetSpecialty = whitelistData.FirstOrDefault(w => string.Equals(w.Code, topCode, StringComparison.OrdinalIgnoreCase));
         }
 
-        // B. Resolve Preferred Date
+        // B. Resolve Preferred Date & Date Modification
+        bool isDateModified = (localClassification.IsCorrection && localClassification.CorrectionTarget == "Date") ||
+                              (!string.IsNullOrWhiteSpace(localClassification.ExtractedDate) &&
+                               !string.IsNullOrWhiteSpace(request.PendingSlotDate) &&
+                               !string.Equals(request.PendingSlotDate, localClassification.ExtractedDate, StringComparison.OrdinalIgnoreCase));
+        if (isDateModified)
+        {
+            request.PendingSlotId = null;
+            responseDto.DialogueOutcome = "DraftModified";
+        }
+
         DateOnly? targetDate = null;
         if (!string.IsNullOrWhiteSpace(request.PendingSlotDate) &&
             DateOnly.TryParseExact(request.PendingSlotDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
@@ -847,6 +860,10 @@ public class AiSpecialtyService : IAiSpecialtyService
             responseDto.Message = "Ngày khám đã chọn không hợp lệ. Vui lòng chọn lại ngày theo định dạng ngày/tháng/năm.";
             responseDto.MissingFields = new List<string> { "DesiredDate", "TimeSlot" };
             return;
+        }
+        else if (!string.IsNullOrWhiteSpace(localClassification.ExtractedDate))
+        {
+            targetDate = ResolveRelativeDate(localClassification.ExtractedDate, vnToday);
         }
         else if (!string.IsNullOrWhiteSpace(aiResult.ExtractedDate))
         {
@@ -883,6 +900,73 @@ public class AiSpecialtyService : IAiSpecialtyService
         string? targetDoctorAcademicTitle = null;
 
         var allActiveDoctors = await QueryActiveDoctorsAsync(cancellationToken);
+
+        // Check Doctor Modification / Negation
+        bool isDoctorModified = (localClassification.IsCorrection && (localClassification.CorrectionTarget == "Doctor" || !string.IsNullOrWhiteSpace(localClassification.NegatedDoctorName))) ||
+                                (!string.IsNullOrWhiteSpace(localClassification.ExtractedDoctorName) && targetDoctorId.HasValue) ||
+                                (localClassification.ExtractedRelativeDoctorIndex.HasValue && targetDoctorId.HasValue) ||
+                                (aiResult.IsCorrection && (aiResult.CorrectionTarget == "Doctor" || !string.IsNullOrWhiteSpace(aiResult.NegatedDoctorName)));
+
+        if (isDoctorModified)
+        {
+            targetDoctorId = null;
+            request.PendingDoctorId = null;
+            request.PendingSlotId = null; // Evict slot on doctor change!
+            responseDto.DialogueOutcome = "DraftModified";
+        }
+
+        // Relative doctor selection from DisplayedDoctorIds
+        if (localClassification.ExtractedRelativeDoctorIndex.HasValue)
+        {
+            var relIdx = localClassification.ExtractedRelativeDoctorIndex.Value; // 0-based
+            if (request.DisplayedDoctorIds != null && relIdx >= 0 && relIdx < request.DisplayedDoctorIds.Count)
+            {
+                var resolvedDocId = request.DisplayedDoctorIds[relIdx];
+                var matchedDoc = allActiveDoctors.FirstOrDefault(d => d.DoctorId == resolvedDocId);
+                if (matchedDoc != null)
+                {
+                    targetDoctorId = matchedDoc.DoctorId;
+                    targetDoctorName = matchedDoc.FullName;
+                    targetDoctorAcademicTitle = matchedDoc.AcademicTitle;
+                    if (targetSpecialty == null && matchedDoc.Specialties.Any())
+                    {
+                        targetSpecialty = matchedDoc.Specialties.First();
+                    }
+                }
+                else
+                {
+                    responseDto.Message = "Bác sĩ được chọn theo danh sách hiển thị không còn hoạt động. Vui lòng chọn lại bác sĩ.";
+                    responseDto.MissingFields = new List<string> { "Doctor", "TimeSlot" };
+                    responseDto.DialogueOutcome = "ClarificationRequired";
+                    return;
+                }
+            }
+            else
+            {
+                // NO VALID DISPLAYED LIST! NEVER FALLBACK TO candidateDoctors.First()!
+                responseDto.Message = "ClinicCare chưa rõ bạn muốn chọn bác sĩ nào trong danh sách. Vui lòng chọn trực tiếp từ danh sách bác sĩ hoặc nêu rõ tên bác sĩ nhé.";
+                responseDto.MissingFields = new List<string> { "Doctor", "TimeSlot" };
+                responseDto.DialogueOutcome = "ClarificationRequired";
+                return;
+            }
+        }
+
+        // Relative slot selection from DisplayedSlotIds
+        if (localClassification.ExtractedRelativeSlotIndex.HasValue)
+        {
+            var relSlotIdx = localClassification.ExtractedRelativeSlotIndex.Value; // 0-based
+            if (request.DisplayedSlotIds != null && relSlotIdx >= 0 && relSlotIdx < request.DisplayedSlotIds.Count)
+            {
+                request.PendingSlotId = request.DisplayedSlotIds[relSlotIdx];
+            }
+            else
+            {
+                responseDto.Message = "ClinicCare chưa rõ bạn muốn chọn khung giờ nào. Vui lòng chọn trực tiếp từ các khung giờ hiển thị hoặc nêu rõ giờ khám nhé.";
+                responseDto.MissingFields = new List<string> { "TimeSlot" };
+                responseDto.DialogueOutcome = "ClarificationRequired";
+                return;
+            }
+        }
 
         if (targetDoctorId.HasValue)
         {
@@ -926,33 +1010,18 @@ public class AiSpecialtyService : IAiSpecialtyService
                 return;
             }
         }
-        else if (string.Equals(aiResult.ExtractedDoctorName, "@first", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(aiResult.ExtractedDoctorName, "người đầu", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(aiResult.ExtractedDoctorName, "bác sĩ đầu tiên", StringComparison.OrdinalIgnoreCase))
+        else if (!string.IsNullOrWhiteSpace(localClassification.ExtractedDoctorName) || !string.IsNullOrWhiteSpace(aiResult.ExtractedDoctorName))
         {
-            var candidateDoctors = targetSpecialty != null
-                ? allActiveDoctors.Where(d => d.Specialties.Any(s => s.Id == targetSpecialty.Id)).ToList()
-                : allActiveDoctors;
+            var doctorSearchName = !string.IsNullOrWhiteSpace(localClassification.ExtractedDoctorName)
+                ? localClassification.ExtractedDoctorName
+                : aiResult.ExtractedDoctorName!;
 
-            if (candidateDoctors.Any())
-            {
-                var firstDoc = candidateDoctors.First();
-                targetDoctorId = firstDoc.DoctorId;
-                targetDoctorName = firstDoc.FullName;
-                targetDoctorAcademicTitle = firstDoc.AcademicTitle;
-                if (targetSpecialty == null && firstDoc.Specialties.Any())
-                {
-                    targetSpecialty = firstDoc.Specialties.First();
-                }
-            }
-        }
-        else if (!string.IsNullOrWhiteSpace(aiResult.ExtractedDoctorName))
-        {
             // Negation filter: If user negated a doctor, exclude from search
+            var negatedName = localClassification.NegatedDoctorName ?? aiResult.NegatedDoctorName;
             var searchableDoctors = allActiveDoctors;
-            if (!string.IsNullOrWhiteSpace(aiResult.NegatedDoctorName))
+            if (!string.IsNullOrWhiteSpace(negatedName))
             {
-                var normNegated = NormalizeVietnamese(aiResult.NegatedDoctorName);
+                var normNegated = NormalizeVietnamese(negatedName);
                 searchableDoctors = searchableDoctors.Where(d =>
                 {
                     var normDoc = NormalizeVietnamese(d.FullName);
@@ -960,15 +1029,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 }).ToList();
             }
 
-            // If user is correcting doctor, reset previous pending doctor and slot
-            if (aiResult.IsCorrection && (aiResult.CorrectionTarget == "Doctor" || !string.IsNullOrWhiteSpace(aiResult.NegatedDoctorName)))
-            {
-                targetDoctorId = null;
-                request.PendingSlotId = null;
-                responseDto.DialogueOutcome = "DraftModified";
-            }
-
-            var matches = MatchDoctors(aiResult.ExtractedDoctorName, searchableDoctors);
+            var matches = MatchDoctors(doctorSearchName, searchableDoctors);
 
             if (matches.Count == 0)
             {
@@ -1323,6 +1384,11 @@ public class AiSpecialtyService : IAiSpecialtyService
             // G. Add Contextual Actions
             if (draft.IsComplete)
             {
+                var confirmationId = Guid.NewGuid().ToString("N");
+                draft.ConfirmationId = confirmationId;
+                responseDto.DialogueOutcome = "PendingConfirmation";
+                var currentDraftVersion = ResolveDraftVersion(request.DraftVersion);
+
                 // Confirmation Action (Requires Confirmation!)
                 responseDto.Actions.Add(new AiActionDto
                 {
@@ -1333,8 +1399,10 @@ public class AiSpecialtyService : IAiSpecialtyService
                     Style = "primary",
                     RequiresAuthentication = true,
                     RequiresConfirmation = true,
+                    DraftVersion = currentDraftVersion,
                     Payload = new AiActionPayloadDto
                     {
+                        ConfirmationId = confirmationId,
                         SpecialtyId = draft.SpecialtyId,
                         SpecialtyName = draft.SpecialtyName,
                         DoctorId = draft.DoctorId,
@@ -1343,7 +1411,8 @@ public class AiSpecialtyService : IAiSpecialtyService
                         SlotDate = draft.SlotDate,
                         StartTime = draft.StartTime,
                         EndTime = draft.EndTime,
-                        Reason = draft.Reason
+                        Reason = draft.Reason,
+                        DraftVersion = currentDraftVersion
                     }
                 });
 
@@ -1355,15 +1424,18 @@ public class AiSpecialtyService : IAiSpecialtyService
                     Style = "secondary",
                     RequiresAuthentication = true,
                     RequiresConfirmation = false,
+                    DraftVersion = currentDraftVersion,
                     Payload = new AiActionPayloadDto
                     {
+                        ConfirmationId = confirmationId,
                         SpecialtyId = draft.SpecialtyId,
                         DoctorId = draft.DoctorId,
                         SlotId = draft.SlotId,
                         SlotDate = draft.SlotDate,
                         StartTime = draft.StartTime,
                         EndTime = draft.EndTime,
-                        Reason = draft.Reason
+                        Reason = draft.Reason,
+                        DraftVersion = currentDraftVersion
                     }
                 });
             }
@@ -1879,18 +1951,19 @@ public class AiSpecialtyService : IAiSpecialtyService
             DialogueOutcome = "PricingInquiryResolved",
             PrimaryIntent = AiChatIntentTypes.PricingInquiry,
             AssistantStatus = "Online",
-            ProviderStatus = "Healthy"
+            ProviderStatus = "NotCalled"
         };
 
-        ClinicManagement.Domain.Entities.Specialty? targetSpec = null;
-        if (request.PendingSpecialtyId.HasValue)
+        var lower = cleanMessage.ToLowerInvariant();
+        ClinicManagement.Domain.Entities.Specialty? targetSpec = specialtiesWithFee
+            .FirstOrDefault(s => lower.Contains(s.Name.ToLowerInvariant())
+                || (!string.IsNullOrWhiteSpace(s.SpecialtyCode) && lower.Contains(s.SpecialtyCode.ToLowerInvariant()))
+                || (!string.IsNullOrWhiteSpace(s.Name.ToLowerInvariant().Replace("khoa", "").Trim()) &&
+                    Regex.IsMatch(lower, $@"\b{Regex.Escape(s.Name.ToLowerInvariant().Replace("khoa", "").Trim())}\b")));
+
+        if (targetSpec == null && request.PendingSpecialtyId.HasValue)
         {
             targetSpec = specialtiesWithFee.FirstOrDefault(s => s.Id == request.PendingSpecialtyId.Value);
-        }
-        if (targetSpec == null)
-        {
-            var lower = cleanMessage.ToLowerInvariant();
-            targetSpec = specialtiesWithFee.FirstOrDefault(s => lower.Contains(s.Name.ToLowerInvariant()) || lower.Contains(s.SpecialtyCode.ToLowerInvariant()));
         }
 
         if (targetSpec != null)
@@ -1946,7 +2019,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             PromptVersion = GeminiAiProvider.CurrentPromptVersion,
             PrimaryIntent = AiChatIntentTypes.ConfirmBooking,
             AssistantStatus = "Online",
-            ProviderStatus = "Healthy"
+            ProviderStatus = "NotCalled"
         };
 
         await PreserveExistingDraftAsync(request, response, cancellationToken);
@@ -1959,12 +2032,15 @@ public class AiSpecialtyService : IAiSpecialtyService
 
         if (hasSpec && hasDoc && hasSlot && hasValidReason)
         {
-            response.DialogueOutcome = "Confirmed";
+            var confirmationId = Guid.NewGuid().ToString("N");
+            draft!.ConfirmationId = confirmationId;
+
+            response.DialogueOutcome = "PendingConfirmation";
             response.Message = "Thông tin lịch khám đã đầy đủ và sẵn sàng xác nhận. Bạn vui lòng bấm nút \"Xác nhận đặt lịch\" bên dưới để hoàn tất nhé:";
 
             response.Actions.Add(new AiActionDto
             {
-                Id = $"act-confirm-booking-{draft!.SlotId}",
+                Id = $"act-confirm-booking-{draft.SlotId}",
                 Type = AiActionTypes.ConfirmBooking,
                 Label = "Xác nhận đặt lịch",
                 Description = $"Xác nhận khám với {draft.DoctorName} vào ngày {draft.SlotDate} ({draft.StartTime} - {draft.EndTime})",
@@ -1974,6 +2050,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 DraftVersion = nextDraftVersion,
                 Payload = new AiActionPayloadDto
                 {
+                    ConfirmationId = confirmationId,
                     SpecialtyId = draft.SpecialtyId,
                     SpecialtyName = draft.SpecialtyName,
                     DoctorId = draft.DoctorId,
@@ -2051,7 +2128,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             PrimaryIntent = AiChatIntentTypes.ReviewDraft,
             DialogueOutcome = "Success",
             AssistantStatus = "Online",
-            ProviderStatus = "Healthy"
+            ProviderStatus = "NotCalled"
         };
 
         await PreserveExistingDraftAsync(request, response, cancellationToken);
@@ -2433,9 +2510,36 @@ public class AiSpecialtyService : IAiSpecialtyService
 
     private static string? RecoverInitialReason(string cleanMessage, List<ChatMessageDto>? context, string? existingReason, string? extractedReason)
     {
-        // 1. If an existing reason is already preserved and not disallowed, keep it
+        // 0. If user explicitly modifies reason: "đổi lý do thành...", "sửa lý do:..."
+        var modifyMatch = Regex.Match(cleanMessage, @"(?:đổi|sửa|thay đổi)\s+lý\s+do\s*(?:thành|là|:)?\s*(.+)$", RegexOptions.IgnoreCase);
+        if (modifyMatch.Success)
+        {
+            var newReasonCandidate = modifyMatch.Groups[1].Value.Trim();
+            if (!VietnameseIntentClassifier.IsDisallowedReason(newReasonCandidate) && VietnameseIntentClassifier.IsPlausibleClinicalReason(newReasonCandidate))
+            {
+                return newReasonCandidate;
+            }
+        }
+
+        // 1. If an existing reason is already preserved and not disallowed
         if (!string.IsNullOrWhiteSpace(existingReason) && !VietnameseIntentClassifier.IsDisallowedReason(existingReason))
         {
+            // Do not merge if message is a booking modification/correction (e.g. "đổi ngày khám...", "đổi sang bác sĩ...")
+            bool isModificationCommand = Regex.IsMatch(cleanMessage, @"\b(?:đổi|sửa|thay\s+đổi|hủy|chọn|xem|khung\s+giờ|bác\s+sĩ)\b", RegexOptions.IgnoreCase);
+
+            // If current message adds clinical evidence or duration/symptoms, merge them!
+            if (!isModificationCommand && !VietnameseIntentClassifier.IsDisallowedReason(cleanMessage) &&
+                (VietnameseIntentClassifier.IsClinicalComplaint(cleanMessage) ||
+                 Regex.IsMatch(cleanMessage, @"\b(?:bị\s+\d+|được\s+\d+|\d+\s+ngày|kéo\s+dài|kèm|thêm|sốt|đau|mệt|ngứa|chóng mặt)\b", RegexOptions.IgnoreCase)))
+            {
+                return VietnameseIntentClassifier.MergeReasons(existingReason, cleanMessage);
+            }
+            if (!string.IsNullOrWhiteSpace(extractedReason) && !VietnameseIntentClassifier.IsDisallowedReason(extractedReason) &&
+                (VietnameseIntentClassifier.IsClinicalComplaint(extractedReason) ||
+                 Regex.IsMatch(extractedReason, @"\b(?:bị\s+\d+|được\s+\d+|\d+\s+ngày|kéo\s+dài|kèm|thêm|sốt|đau|mệt|ngứa|chóng mặt)\b", RegexOptions.IgnoreCase)))
+            {
+                return VietnameseIntentClassifier.MergeReasons(existingReason, extractedReason);
+            }
             return existingReason.Trim();
         }
 

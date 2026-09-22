@@ -30,6 +30,7 @@ export const PatientAiConsultation: React.FC = () => {
         submittingBooking,
         errorMsg,
         messages,
+        activeDraft,
         clearChat,
         handleSendMessage,
         handleActionClick,
@@ -198,11 +199,29 @@ export const PatientAiConsultation: React.FC = () => {
                                         {msg.actions.map(act => {
                                             const isPrimary = act.style === "primary";
                                             const isDanger = act.style === "danger";
-                                            const btnClass = isDanger
-                                                ? `${styles.actionBtn} ${styles.btnDanger}`
-                                                : isPrimary
-                                                    ? `${styles.actionBtn} ${styles.btnPrimary}`
-                                                    : `${styles.actionBtn} ${styles.btnSecondary}`;
+
+                                            const isBooking = ["SelectDoctor", "SelectSlot", "ConfirmBooking", "ReviewBooking", "ChangePreferredDate"].includes(act.type);
+                                            const rawActVersion = act.draftVersion ?? (act.payload as Record<string, unknown>)?.draftVersion;
+                                            const hasValidActVer = typeof rawActVersion === "number" && Number.isInteger(rawActVersion) && rawActVersion >= 1;
+                                            const activeVer = (typeof activeDraft?.version === "number" && Number.isInteger(activeDraft.version) && activeDraft.version >= 1)
+                                                ? activeDraft.version
+                                                : null;
+
+                                            const actConfirmationId = (act.payload as Record<string, unknown>)?.confirmationId;
+                                            const isStale = isBooking && (
+                                                (["ConfirmBooking", "ReviewBooking"].includes(act.type) && !activeDraft) ||
+                                                (act.type === "ConfirmBooking" && Boolean(actConfirmationId) && Boolean(activeDraft?.confirmationId) && actConfirmationId !== activeDraft?.confirmationId) ||
+                                                (hasValidActVer && activeVer !== null && (rawActVersion as number) < activeVer) ||
+                                                (!hasValidActVer && activeVer !== null && activeVer > 1)
+                                            );
+
+                                            const btnClass = `${
+                                                isDanger
+                                                    ? `${styles.actionBtn} ${styles.btnDanger}`
+                                                    : isPrimary
+                                                        ? `${styles.actionBtn} ${styles.btnPrimary}`
+                                                        : `${styles.actionBtn} ${styles.btnSecondary}`
+                                            } ${isStale ? styles.btnStale : ""}`;
 
                                             return (
                                                 <button
@@ -210,6 +229,9 @@ export const PatientAiConsultation: React.FC = () => {
                                                     type="button"
                                                     className={btnClass}
                                                     disabled={submittingBooking}
+                                                    data-stale={isStale ? "true" : undefined}
+                                                    aria-disabled={isStale ? "true" : undefined}
+                                                    title={isStale ? "Lựa chọn đã cũ" : undefined}
                                                     onClick={() => handleActionClick(act)}
                                                 >
                                                     {act.type === "ConfirmBooking" && <CheckCircle2 size={16} />}
@@ -220,6 +242,7 @@ export const PatientAiConsultation: React.FC = () => {
                                                     {act.type === "ViewPrescriptions" && <FileText size={16} />}
                                                     {act.type === "ViewBills" && <CreditCard size={16} />}
                                                     {submittingBooking && act.type === "ConfirmBooking" ? "Đang xử lý..." : act.label}
+                                                    {isStale && <span className={styles.staleTag}> (Lựa chọn đã cũ)</span>}
                                                 </button>
                                             );
                                         })}

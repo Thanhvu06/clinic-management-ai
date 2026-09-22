@@ -127,6 +127,7 @@ export interface ReviewBookingAction extends BaseAiAction {
         endTime?: string;
         reason?: string;
         draftVersion?: number;
+        confirmationId?: string;
     };
 }
 
@@ -143,6 +144,7 @@ export interface ConfirmBookingAction extends BaseAiAction {
         endTime: string;
         reason: string;
         draftVersion?: number;
+        confirmationId?: string;
     };
 }
 
@@ -280,6 +282,7 @@ export type AiActionPayload = Partial<{
     address: string;
     facilityName: string;
     draftVersion: number;
+    confirmationId: string;
 }>;
 
 export interface AiSpecialtySuggestion {
@@ -303,6 +306,7 @@ export interface AiBookingDraft {
     roomNumber?: string;
     isComplete: boolean;
     version?: number;
+    confirmationId?: string;
 }
 
 export interface AiChatResponse {

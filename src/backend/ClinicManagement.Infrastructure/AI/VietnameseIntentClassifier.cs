@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.IO;
+using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
@@ -15,6 +17,7 @@ namespace ClinicManagement.Infrastructure.AI;
 public class IntentInferenceInput
 {
     public string Text { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
 }
 
 public class IntentInferenceOutput
@@ -27,9 +30,18 @@ public class IntentInferenceOutput
 
 public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 {
-    private static readonly object _mlLock = new();
-    private static PredictionEngine<IntentInferenceInput, IntentInferenceOutput>? _mlEngine;
-    private static bool _mlAttempted;
+    private readonly IntentClassificationMode _mode;
+    private readonly string? _customModelPath;
+    private readonly float _optimalThreshold;
+
+    private static readonly object _initLock = new();
+    private static bool _modelLoadAttempted;
+    private static MLContext? _mlContext;
+    private static ITransformer? _loadedModel;
+    private static string? _loadedModelPath;
+    private static float _metadataOptimalThreshold = 0.35f;
+    private static readonly ConcurrentBag<PredictionEngine<IntentInferenceInput, IntentInferenceOutput>> _enginePool = new();
+
     private static readonly HashSet<string> ExactGreetings = new(StringComparer.OrdinalIgnoreCase)
     {
         "chào", "xin chào", "chào bạn", "chào bác sĩ", "chào bs", "alo", "hello", "hi", "hey",
@@ -56,7 +68,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         "kiểm tra thông tin", "xem lại bản nháp", "tóm tắt lịch khám", "kiểm tra lại"
     };
 
-    private static readonly string[] ClinicalKeywords = new[]
+    private static readonly string[] ClinicalKeywordTerms = new[]
     {
         "đau", "sốt", "ho", "mệt", "khó thở", "chóng mặt", "buồn nôn", "nôn", "ngứa",
         "dị ứng", "viêm", "nhức", "tức ngực", "phù", "co giật", "rát", "chảy máu",
@@ -67,6 +79,18 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         "tầm soát", "khám thai", "khám mắt", "khám răng", "khám tai mũi họng",
         "tim mạch", "tai mũi họng", "da liễu", "nhi khoa", "sản phụ khoa", "răng hàm mặt", "nội khoa", "ngoại khoa"
     };
+
+    public VietnameseIntentClassifier(
+        IntentClassificationMode mode = IntentClassificationMode.Shadow,
+        string? customModelPath = null,
+        float? overrideThreshold = null)
+    {
+        _mode = mode;
+        _customModelPath = customModelPath;
+        _optimalThreshold = overrideThreshold ?? _metadataOptimalThreshold;
+    }
+
+    public string? LoadedModelPath => _loadedModelPath;
 
     public IntentClassificationResult Classify(string? message, IntentClassificationContext? context = null)
     {
@@ -84,7 +108,35 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         var lower = trimmed.ToLowerInvariant();
         var normalized = NormalizeText(trimmed);
 
-        // 1. Check for Gibberish / Out of scope
+        // In Shadow mode: Run ML model in shadow/background to collect telemetry, never impacting decisions
+        if (_mode == IntentClassificationMode.Shadow)
+        {
+            var engine = RentEngine();
+            if (engine != null)
+            {
+                try
+                {
+                    var mlPred = engine.Predict(new IntentInferenceInput { Text = trimmed });
+                    float confidence = (mlPred.Score != null && mlPred.Score.Length > 0) ? mlPred.Score.Max() : 0.0f;
+                    if (!float.IsNaN(confidence) && !float.IsInfinity(confidence) && !string.IsNullOrWhiteSpace(mlPred.PredictedLabel))
+                    {
+                        result.ShadowIntent = mlPred.PredictedLabel;
+                        result.ShadowConfidence = confidence;
+                        result.Method = "RuleOnly (Shadow ML)";
+                    }
+                }
+                catch
+                {
+                    // Clean fallback
+                }
+                finally
+                {
+                    ReturnEngine(engine);
+                }
+            }
+        }
+
+        // 1. Gibberish / Nonsense Filter
         if (IsGibberish(trimmed, lower, normalized))
         {
             result.Intent = AiChatIntentTypes.UnclearOrOutOfScope;
@@ -93,7 +145,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return result;
         }
 
-        // 2. Cancellation Intent
+        // 2. Cancellation Intent ("hủy", "không đặt nữa")
         if (CancelWords.Any(w => lower == w || lower.StartsWith(w + " ") || lower.EndsWith(" " + w)))
         {
             result.Intent = AiChatIntentTypes.CancelDraft;
@@ -107,13 +159,18 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         }
 
         // 4. Confirmation Intent ("chốt", "đồng ý", "xác nhận")
-        if (ConfirmationWords.Any(w => lower == w || lower.StartsWith(w + " ") || lower.EndsWith(" " + w)))
+        // "Chưa chốt, giá bao nhiêu?" must NOT confirm!
+        if (lower.Contains("chưa chốt") || lower.Contains("khoan đã") || lower.Contains("từ từ"))
+        {
+            // Do not confirm, let subsequent pricing or inquiry handlers evaluate
+        }
+        else if (ConfirmationWords.Any(w => lower == w || lower.StartsWith(w + " ") || lower.EndsWith(" " + w)))
         {
             result.Intent = AiChatIntentTypes.ConfirmBooking;
             return result;
         }
 
-        // Context-dependent "ok"
+        // Context-dependent "ok" / "đồng ý"
         if (lower == "ok" || lower == "oke" || lower == "okay")
         {
             if (context != null && context.HasActiveDraft && context.HasSlot && context.HasReason)
@@ -132,33 +189,17 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return result;
         }
 
-        // 6. Greetings ("xin chào", "hello", "hi")
-        if (ExactGreetings.Contains(lower) || lower.StartsWith("chào ") || lower.StartsWith("xin chào"))
-        {
-            if (!ContainsClinicalEvidence(lower))
-            {
-                result.Intent = AiChatIntentTypes.Greeting;
-                return result;
-            }
-        }
-
-        // 7. Operational: Find Earliest Available Slot
-        if (lower.Contains("sớm nhất") || lower.Contains("lúc nào sớm nhất") || lower.Contains("tìm lịch sớm nhất"))
-        {
-            result.Intent = AiChatIntentTypes.FindEarliestAvailableSlot;
-            return result;
-        }
-
-        // 8. Pricing Inquiry
+        // 6. Pricing Inquiry ("giá bao nhiêu", "chi phí khám")
         if (lower.Contains("bảng giá") || lower.Contains("chi phí khám") || lower.Contains("giá khám") ||
             lower.Contains("bao nhiêu tiền") || lower.Contains("hết bao nhiêu tiền") || lower.Contains("tiền khám") ||
-            lower.Contains("phí khám") || lower.Contains("giá dịch vụ") || lower.Contains("viện phí"))
+            lower.Contains("phí khám") || lower.Contains("giá dịch vụ") || lower.Contains("viện phí") ||
+            lower.Contains("giá bao nhiêu"))
         {
             result.Intent = AiChatIntentTypes.PricingInquiry;
             return result;
         }
 
-        // 9. Facility / Reception Inquiry
+        // 7. Facility / Reception Inquiry
         if (lower.Contains("lễ tân") || lower.Contains("tiếp đón") || lower.Contains("bàn tiếp đón") ||
             lower.Contains("hotline") || lower.Contains("số điện thoại") || lower.Contains("sđt") ||
             lower.Contains("địa chỉ") || lower.Contains("ở đâu") || lower.Contains("giờ mở cửa") ||
@@ -169,24 +210,52 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return result;
         }
 
-        // 10. View Appointments
+        // 8. View Appointments
         if (lower.Contains("lịch hẹn của tôi") || lower.Contains("lịch đã đặt") || lower.Contains("xem lịch hẹn") ||
-            lower.Contains("danh sách lịch hẹn") || lower.Contains("các lịch khám của tôi") || lower.Contains("tra cứu lịch hẹn"))
+            lower.Contains("danh sách lịch hẹn") || lower.Contains("các lịch khám của tôi") || lower.Contains("tra cứu lịch hẹn") ||
+            lower.Contains("lịch sử đặt khám"))
         {
             result.Intent = AiChatIntentTypes.ViewAppointments;
             return result;
         }
 
-        // 11. Contextual Relative Doctor Selection ("người đầu", "bác sĩ đầu tiên", "bác sĩ 1")
-        if (lower == "người đầu" || lower == "bác sĩ đầu tiên" || lower == "bác sĩ thứ nhất" || lower == "bác sĩ 1" ||
-            lower == "người thứ nhất" || lower == "bác sĩ đầu")
+        // 9. Relative Doctor Selection ("người đầu", "người đầu tiên", "bác sĩ thứ nhất", "bác sĩ 1", "người thứ hai")
+        if (lower.Contains("người đầu") || lower.Contains("người đầu tiên") || lower.Contains("bác sĩ đầu tiên") ||
+            lower.Contains("bác sĩ thứ nhất") || lower.Contains("bác sĩ 1") || lower.Contains("người thứ nhất") ||
+            lower.Contains("bác sĩ đầu"))
         {
             result.Intent = AiChatIntentTypes.SelectDoctor;
-            result.ExtractedDoctorName = "@first";
+            result.ExtractedDoctorName = "@relative:1";
+            result.ExtractedRelativeDoctorIndex = 0;
+            return result;
+        }
+        if (lower.Contains("người thứ hai") || lower.Contains("người thứ 2") || lower.Contains("bác sĩ thứ hai") ||
+            lower.Contains("bác sĩ 2") || lower.Contains("người thứ nhì"))
+        {
+            result.Intent = AiChatIntentTypes.SelectDoctor;
+            result.ExtractedDoctorName = "@relative:2";
+            result.ExtractedRelativeDoctorIndex = 1;
             return result;
         }
 
-        // 12. Doctor Selection / Search with explicit doctor mention
+        // 10. Relative Slot Selection ("giờ đầu", "giờ đầu tiên", "ca đầu", "ca đầu tiên", "khung giờ đầu", "khung giờ thứ nhất")
+        if (lower.Contains("giờ đầu") || lower.Contains("giờ đầu tiên") || lower.Contains("khung giờ đầu") ||
+            lower.Contains("khung giờ thứ nhất") || lower.Contains("ca đầu") || lower.Contains("ca đầu tiên") ||
+            lower.Contains("suất đầu") || lower.Contains("khung giờ 1"))
+        {
+            result.Intent = AiChatIntentTypes.SelectSlot;
+            result.ExtractedRelativeSlotIndex = 0;
+            return result;
+        }
+        if (lower.Contains("giờ thứ hai") || lower.Contains("khung giờ thứ hai") || lower.Contains("giờ thứ 2") ||
+            lower.Contains("ca thứ hai") || lower.Contains("ca 2") || lower.Contains("khung giờ 2"))
+        {
+            result.Intent = AiChatIntentTypes.SelectSlot;
+            result.ExtractedRelativeSlotIndex = 1;
+            return result;
+        }
+
+        // 11. Doctor Selection / Search with explicit doctor mention
         var doctorMatch = Regex.Match(trimmed, @"(?:chọn\s+)?(?:bác sĩ|bac si|bs\.|bs|bác sỹ|bac sy)\s+([A-Za-z0-9À-ỹ\s]+)", RegexOptions.IgnoreCase);
         if (doctorMatch.Success)
         {
@@ -215,6 +284,13 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return result;
         }
 
+        // 12. Operational: Find Earliest Available Slot
+        if (lower.Contains("sớm nhất") || lower.Contains("lúc nào sớm nhất") || lower.Contains("tìm lịch sớm nhất") || lower.Contains("giờ nào sớm nhất"))
+        {
+            result.Intent = AiChatIntentTypes.FindEarliestAvailableSlot;
+            return result;
+        }
+
         // 13. Slot / Date Selection ("mai", "sáng mai", "09:30", "chọn khung giờ", "chọn giờ")
         if (lower == "mai" || lower == "ngày mai" || lower == "sáng mai" || lower == "chiều mai" ||
             lower.StartsWith("chọn khung giờ") || lower.StartsWith("chọn giờ") || lower.StartsWith("chọn ngày") ||
@@ -227,21 +303,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return result;
         }
 
-        // 14. Start Booking Intent
-        if (lower.StartsWith("tôi muốn đặt") || lower.StartsWith("muốn đặt lịch") || lower.StartsWith("đặt lịch") ||
-            lower.StartsWith("đặt khám") || lower.StartsWith("đăng ký khám") || lower.StartsWith("muốn khám") ||
-            lower.StartsWith("tôi muốn khám") || lower.StartsWith("tôi muốn hẹn") || lower.StartsWith("hẹn khám") ||
-            lower.Contains("tư vấn giúp tôi") || lower.Contains("tư vấn cho tôi") || lower == "tư vấn" ||
-            lower.Contains("xem lịch khám") || lower.Contains("xem lịch") || lower.Contains("lịch khám"))
-        {
-            if (!ContainsClinicalEvidence(lower))
-            {
-                result.Intent = AiChatIntentTypes.StartBooking;
-                return result;
-            }
-        }
-
-        // 15. Modify Draft Intent ("đổi ngày", "đổi bác sĩ", "đổi giờ")
+        // 14. Modify Draft Intent ("đổi ngày", "đổi bác sĩ", "đổi giờ")
         if (lower.StartsWith("đổi ngày") || lower.StartsWith("đổi bác sĩ") || lower.StartsWith("đổi giờ") ||
             lower.StartsWith("đổi khung giờ") || lower.StartsWith("chọn lại"))
         {
@@ -250,93 +312,178 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return result;
         }
 
-        // 16. Clinical Symptoms / Provide Reason
-        if (ContainsClinicalEvidence(lower))
+        // 15. Greetings ("xin chào", "hello", "hi")
+        // Mixed utterance: "chào bạn, tôi đau đầu hai ngày nay" -> ProvideReason!
+        if (ExactGreetings.Contains(lower) || lower.StartsWith("chào ") || lower.StartsWith("xin chào"))
+        {
+            if (ContainsClinicalEvidence(lower, out var symptomPart))
+            {
+                result.Intent = AiChatIntentTypes.ProvideReason;
+                result.ExtractedReason = symptomPart;
+                return result;
+            }
+            result.Intent = AiChatIntentTypes.Greeting;
+            return result;
+        }
+
+        // 16. Clinical Symptoms / Provide Reason (Strict word boundaries, negations separated)
+        if (ContainsClinicalEvidence(lower, out var extractedSymptom))
         {
             result.Intent = AiChatIntentTypes.ProvideReason;
-            result.ExtractedReason = trimmed;
+            result.ExtractedReason = extractedSymptom;
             return result;
         }
 
-        // ML.NET Model Fallback for semantic generalization
-        var engine = GetPredictionEngine();
-        if (engine != null)
+        // 17. Start Booking Intent
+        if (lower.StartsWith("tôi muốn đặt") || lower.StartsWith("muốn đặt lịch") || lower.StartsWith("đặt lịch") ||
+            lower.StartsWith("đặt khám") || lower.StartsWith("đăng ký khám") || lower.StartsWith("muốn khám") ||
+            lower.StartsWith("tôi muốn khám") || lower.StartsWith("tôi muốn hẹn") || lower.StartsWith("hẹn khám") ||
+            lower.Contains("tư vấn giúp tôi") || lower.Contains("tư vấn cho tôi") || lower == "tư vấn" ||
+            lower.Contains("xem lịch khám") || lower.Contains("xem lịch") || lower.Contains("lịch khám"))
         {
-            try
+            result.Intent = AiChatIntentTypes.StartBooking;
+            return result;
+        }
+
+        // 18. ML.NET Model Execution (Active mode)
+        if (_mode == IntentClassificationMode.Active)
+        {
+            var engine = RentEngine();
+            if (engine != null)
             {
-                var mlPred = engine.Predict(new IntentInferenceInput { Text = trimmed });
-                if (!string.IsNullOrWhiteSpace(mlPred.PredictedLabel))
+                try
                 {
-                    result.Intent = mlPred.PredictedLabel;
-                    result.IsClear = mlPred.PredictedLabel != AiChatIntentTypes.UnclearOrOutOfScope;
-                    if (!result.IsClear)
+                    var mlPred = engine.Predict(new IntentInferenceInput { Text = trimmed });
+                    float confidence = (mlPred.Score != null && mlPred.Score.Length > 0) ? mlPred.Score.Max() : 0.0f;
+
+                    if (!float.IsNaN(confidence) && !float.IsInfinity(confidence) && !string.IsNullOrWhiteSpace(mlPred.PredictedLabel) && confidence >= _optimalThreshold)
                     {
-                        result.ClarificationPrompt = "ClinicCare chưa hiểu rõ yêu cầu của bạn. Bạn có thể mô tả cụ thể hơn về triệu chứng sức khỏe, nhu cầu đặt lịch hoặc thông tin phòng khám cần tìm hiểu không ạ?";
+                        result.Intent = mlPred.PredictedLabel;
+                        result.Confidence = confidence;
+                        result.Method = "ML.NET Model";
+                        result.IsClear = mlPred.PredictedLabel != AiChatIntentTypes.UnclearOrOutOfScope;
+                        if (!result.IsClear)
+                        {
+                            result.ClarificationPrompt = "ClinicCare chưa hiểu rõ yêu cầu của bạn. Bạn có thể mô tả cụ thể hơn về triệu chứng sức khỏe, nhu cầu đặt lịch hoặc thông tin phòng khám cần tìm hiểu không ạ?";
+                        }
+                        return result;
                     }
-                    else if (result.Intent == AiChatIntentTypes.ProvideReason && ContainsClinicalEvidence(lower))
-                    {
-                        result.ExtractedReason = trimmed;
-                    }
-                    return result;
+                }
+                catch
+                {
+                    // Clean fallback to rule-based decision
+                }
+                finally
+                {
+                    ReturnEngine(engine);
                 }
             }
-            catch
-            {
-                // Fallback to heuristic
-            }
         }
 
-        // Fallback: If not gibberish, keep IsClear = true so AI Provider can handle conversational turns
+        // Fallback: Default to StartBooking for conversational non-gibberish Vietnamese sentences
         if (!IsGibberish(trimmed, lower, normalized) && trimmed.Length >= 2)
         {
-            result.Intent = ContainsClinicalEvidence(lower) ? AiChatIntentTypes.ProvideReason : AiChatIntentTypes.StartBooking;
+            result.Intent = AiChatIntentTypes.StartBooking;
             result.IsClear = true;
-            if (result.Intent == AiChatIntentTypes.ProvideReason)
-            {
-                result.ExtractedReason = trimmed;
-            }
+            result.Method = "RuleFallback";
             return result;
         }
 
-        // Only true gibberish / nonsensical input reaches here
         result.Intent = AiChatIntentTypes.UnclearOrOutOfScope;
         result.IsClear = false;
         result.ClarificationPrompt = "ClinicCare chưa hiểu rõ yêu cầu của bạn. Bạn có thể mô tả cụ thể hơn về triệu chứng sức khỏe, nhu cầu đặt lịch hoặc thông tin phòng khám cần tìm hiểu không ạ?";
         return result;
     }
 
-    private static PredictionEngine<IntentInferenceInput, IntentInferenceOutput>? GetPredictionEngine()
+    private PredictionEngine<IntentInferenceInput, IntentInferenceOutput>? RentEngine()
     {
-        if (_mlAttempted) return _mlEngine;
-        lock (_mlLock)
+        if (_enginePool.TryTake(out var existing))
         {
-            if (_mlAttempted) return _mlEngine;
-            _mlAttempted = true;
+            return existing;
+        }
+
+        EnsureModelLoaded();
+        if (_loadedModel == null || _mlContext == null)
+        {
+            return null;
+        }
+
+        lock (_initLock)
+        {
+            return _mlContext.Model.CreatePredictionEngine<IntentInferenceInput, IntentInferenceOutput>(_loadedModel, ignoreMissingColumns: true);
+        }
+    }
+
+    private static void ReturnEngine(PredictionEngine<IntentInferenceInput, IntentInferenceOutput> engine)
+    {
+        _enginePool.Add(engine);
+    }
+
+    private void EnsureModelLoaded()
+    {
+        if (_modelLoadAttempted) return;
+
+        lock (_initLock)
+        {
+            if (_modelLoadAttempted) return;
+            _modelLoadAttempted = true;
+
             try
             {
-                var candidates = new[]
+                var candidates = new List<string>();
+
+                if (!string.IsNullOrWhiteSpace(_customModelPath))
+                {
+                    candidates.Add(_customModelPath);
+                }
+
+                candidates.AddRange(new[]
                 {
                     Path.Combine(AppContext.BaseDirectory, "models", "vietnamese_intent_classifier_v1.zip"),
                     Path.Combine(AppContext.BaseDirectory, "vietnamese_intent_classifier_v1.zip"),
                     Path.Combine(Directory.GetCurrentDirectory(), "models", "vietnamese_intent_classifier_v1.zip"),
+                    Path.Combine(Directory.GetCurrentDirectory(), "src", "backend", "ClinicManagement.Api", "models", "vietnamese_intent_classifier_v1.zip"),
                     Path.Combine(Directory.GetCurrentDirectory(), "src", "tools", "ClinicManagement.AI.Training", "models", "vietnamese_intent_classifier_v1.zip"),
-                    Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "tools", "ClinicManagement.AI.Training", "models", "vietnamese_intent_classifier_v1.zip"),
-                    Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "tools", "ClinicManagement.AI.Training", "models", "vietnamese_intent_classifier_v1.zip")
-                };
+                    Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "tools", "ClinicManagement.AI.Training", "models", "vietnamese_intent_classifier_v1.zip")
+                });
 
-                var modelPath = candidates.FirstOrDefault(File.Exists);
-                if (modelPath != null)
+                var resolved = candidates.FirstOrDefault(File.Exists);
+                if (resolved != null)
                 {
-                    var mlContext = new MLContext(seed: 42);
-                    var model = mlContext.Model.Load(modelPath, out _);
-                    _mlEngine = mlContext.Model.CreatePredictionEngine<IntentInferenceInput, IntentInferenceOutput>(model);
+                    _mlContext = new MLContext(seed: 42);
+                    _loadedModel = _mlContext.Model.Load(resolved, out _);
+                    _loadedModelPath = resolved;
+
+                    // Read metadata for optimal threshold
+                    var metaPath = Path.Combine(Path.GetDirectoryName(resolved)!, "intent_model_metadata.json");
+                    if (File.Exists(metaPath))
+                    {
+                        try
+                        {
+                            var metaJson = File.ReadAllText(metaPath);
+                            using var doc = JsonDocument.Parse(metaJson);
+                            if (doc.RootElement.TryGetProperty("optimalConfidenceThreshold", out var optProp) && optProp.TryGetSingle(out var val))
+                            {
+                                _metadataOptimalThreshold = val;
+                            }
+                            else if (doc.RootElement.TryGetProperty("Benchmark", out var bProp) &&
+                                     bProp.TryGetProperty("optimalThreshold", out var optB) && optB.TryGetSingle(out var valB))
+                            {
+                                _metadataOptimalThreshold = valB;
+                            }
+                        }
+                        catch
+                        {
+                            // Keep default
+                        }
+                    }
                 }
             }
             catch
             {
-                _mlEngine = null;
+                _loadedModel = null;
+                _loadedModelPath = null;
             }
-            return _mlEngine;
         }
     }
 
@@ -353,7 +500,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 
         if (lower.StartsWith("tôi chọn") || lower.StartsWith("chọn ") || lower.StartsWith("hủy ") ||
             lower.StartsWith("xem ") || lower.StartsWith("liên hệ") || lower.StartsWith("bảng giá") ||
-            lower == "ok" || lower == "oke" || lower == "chốt")
+            lower == "ok" || lower == "oke" || lower == "chốt" || lower == "người đầu" || lower == "giờ đầu")
         {
             return true;
         }
@@ -361,36 +508,100 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         return IsGibberish(trimmed, lower, NormalizeText(trimmed));
     }
 
-    public static bool IsPlausibleClinicalReason(string? text)
+    /// <summary>
+    /// Checks if a string contains actual clinical evidence (symptoms or consultation purpose)
+    /// without relying on string length.
+    /// </summary>
+    public static bool IsClinicalComplaint(string? text)
     {
-        if (IsDisallowedReason(text)) return false;
-        var trimmed = text!.Trim();
-        var lower = trimmed.ToLowerInvariant();
-        return ContainsClinicalEvidence(lower) || trimmed.Length >= 10;
+        if (string.IsNullOrWhiteSpace(text) || IsDisallowedReason(text)) return false;
+        return ContainsClinicalEvidence(text.ToLowerInvariant(), out _);
     }
 
-    private static bool ContainsClinicalEvidence(string lower)
+    public static bool IsPlausibleClinicalReason(string? text) => IsClinicalComplaint(text);
+
+    /// <summary>
+    /// Business rule validation for the confirmation step (strictly 10 to 500 characters).
+    /// </summary>
+    public static bool IsValidBookingReason(string? text)
     {
-        return ClinicalKeywords.Any(k => lower.Contains(k));
+        if (string.IsNullOrWhiteSpace(text) || IsDisallowedReason(text)) return false;
+        var trimmed = text.Trim();
+        return trimmed.Length >= 10 && trimmed.Length <= 500 && IsClinicalComplaint(trimmed);
+    }
+
+    public static bool ContainsClinicalEvidence(string lower, out string extractedSymptom)
+    {
+        extractedSymptom = lower;
+
+        // Check for negation patterns: "tôi không sốt, chỉ đau đầu" -> excludes "sốt", keeps "đau đầu"
+        var negationMatch = Regex.Match(lower, @"(?:không|chẳng|chưa)\s+(?:bị\s+)?(sốt|ho|đau|mệt|khó thở|buồn nôn)[,\.\s]+(?:chỉ|mà)\s+(?:bị\s+)?(.*)$", RegexOptions.IgnoreCase);
+        if (negationMatch.Success)
+        {
+            extractedSymptom = negationMatch.Groups[2].Value.Trim();
+            if (!string.IsNullOrWhiteSpace(extractedSymptom))
+            {
+                return true;
+            }
+        }
+
+        // Check each clinical keyword with word boundaries (\bkeyword\b)
+        // This ensures "ho" does NOT match inside "cho tôi..."!
+        foreach (var kw in ClinicalKeywordTerms)
+        {
+            var pattern = $@"\b{Regex.Escape(kw)}\b";
+            if (Regex.IsMatch(lower, pattern, RegexOptions.IgnoreCase))
+            {
+                // If it's a mixed greeting ("chào bạn, tôi đau đầu hai ngày nay"), strip greeting
+                var clean = Regex.Replace(lower, @"^(?:chào\s+(?:bạn|bác sĩ|bs|phòng khám|em)|xin\s+chào|alo|hello|hi)[,\.\!\?]?\s*", "", RegexOptions.IgnoreCase).Trim();
+                extractedSymptom = !string.IsNullOrWhiteSpace(clean) ? clean : lower;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static string MergeReasons(string? existingReason, string? newReason)
+    {
+        if (string.IsNullOrWhiteSpace(existingReason)) return newReason?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(newReason)) return existingReason.Trim();
+
+        var trimmedExisting = existingReason.Trim();
+        var trimmedNew = newReason.Trim();
+
+        if (trimmedExisting.Equals(trimmedNew, StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmedExisting;
+        }
+
+        if (trimmedNew.Contains(trimmedExisting, StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmedNew;
+        }
+
+        if (trimmedExisting.Contains(trimmedNew, StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmedExisting;
+        }
+
+        return $"{trimmedExisting}, {trimmedNew}";
     }
 
     private static bool IsGibberish(string trimmed, string lower, string normalized)
     {
         if (trimmed.Length < 2) return true;
 
-        // Check for common consonant clusters in keyboard smashing (e.g. "jsdkjvsdcj", "sdjf", "asdfgh")
         if (Regex.IsMatch(normalized, @"[bcdfghjklmnpqrstvwxyz]{5,}", RegexOptions.IgnoreCase))
         {
             return true;
         }
 
-        // Check for repeated random characters (e.g. "aaaaa", "asdasd")
         if (Regex.IsMatch(lower, @"(.)\1{4,}"))
         {
             return true;
         }
 
-        // Has words with no vowels
         var words = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (words.Length > 0 && words.All(w => w.Length > 3 && !Regex.IsMatch(w, @"[aeiouy]")))
         {
@@ -423,7 +634,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         }
 
         // Pattern 2: "đổi sang ngày mai" / "đổi ngày"
-        if (lower.Contains("đổi sang ngày") || lower.Contains("đổi ngày") || lower.Contains("không khám hôm nay"))
+        if (lower.Contains("đổi sang ngày") || lower.Contains("đổi ngày") || lower.Contains("không khám hôm nay") || lower.Contains("chuyển sang ngày mai"))
         {
             result.Intent = AiChatIntentTypes.ModifyDraft;
             result.IsCorrection = true;

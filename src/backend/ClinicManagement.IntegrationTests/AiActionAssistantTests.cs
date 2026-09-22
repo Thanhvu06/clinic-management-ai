@@ -11,6 +11,7 @@ using System.Net.Http;
 using System.Text;
 using ClinicManagement.AI.Training;
 using ClinicManagement.Application.AI.DTOs;
+using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Domain.Entities;
@@ -1856,9 +1857,13 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.NotNull(res?.Data);
 
         Assert.Equal(AiChatIntentTypes.ConfirmBooking, res.Data.PrimaryIntent);
-        Assert.Equal("Confirmed", res.Data.DialogueOutcome);
+        Assert.Equal("PendingConfirmation", res.Data.DialogueOutcome);
+        Assert.Equal("NotCalled", res.Data.ProviderStatus);
         Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ConfirmBooking);
         Assert.Equal("Tôi bị đau nửa đầu liên tục 3 ngày nay", res.Data.BookingDraft?.Reason);
+        Assert.False(string.IsNullOrWhiteSpace(res.Data.BookingDraft?.ConfirmationId));
+        var confirmAction = res.Data.Actions.First(a => a.Type == AiActionTypes.ConfirmBooking);
+        Assert.Equal(res.Data.BookingDraft?.ConfirmationId, confirmAction.Payload?.ConfirmationId);
     }
 
     [Fact]
@@ -1881,6 +1886,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         // Remains Online, not Degraded
         Assert.Equal("Online", res.Data.AssistantStatus);
         Assert.Equal("UnclearInput", res.Data.DialogueOutcome);
+        Assert.Equal("NotCalled", res.Data.ProviderStatus);
         Assert.Equal(AiChatIntentTypes.UnclearOrOutOfScope, res.Data.PrimaryIntent);
 
         // Friendly clarification prompt
@@ -1911,6 +1917,7 @@ public class AiActionAssistantTests : IntegrationTestBase
 
         Assert.Equal(AiChatIntentTypes.CancelDraft, res.Data.PrimaryIntent);
         Assert.Equal("DraftCancelled", res.Data.DialogueOutcome);
+        Assert.Equal("NotCalled", res.Data.ProviderStatus);
         Assert.Null(res.Data.BookingDraft);
         Assert.Contains("Đã hủy bản nháp", res.Data.Message);
     }
@@ -1932,7 +1939,454 @@ public class AiActionAssistantTests : IntegrationTestBase
 
         Assert.Equal(AiChatIntentTypes.PricingInquiry, res.Data.PrimaryIntent);
         Assert.Equal("PricingInquiryResolved", res.Data.DialogueOutcome);
+        Assert.Equal("NotCalled", res.Data.ProviderStatus);
         Assert.Contains("bảng giá chi phí khám", res.Data.Message.ToLowerInvariant());
         Assert.Contains("VNĐ", res.Data.Message);
+    }
+
+    [Fact]
+    public async Task ScenarioF_Greeting_PreservesDraft_WithoutSlotEviction()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var testDate = GetFutureWorkingDate(23);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(13, 0), new TimeOnly(13, 30));
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Chào bạn",
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = DoctorEntityId,
+            PendingSlotId = slot.Id,
+            PendingSlotDate = testDate.ToString("yyyy-MM-dd"),
+            Reason = "Tái khám kiểm tra sức khỏe"
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        Assert.Equal("Greeting", res.Data.DialogueOutcome);
+        Assert.NotNull(res.Data.BookingDraft);
+        Assert.Equal(SpecialtyEntityId, res.Data.BookingDraft.SpecialtyId);
+        Assert.Equal(DoctorEntityId, res.Data.BookingDraft.DoctorId);
+        Assert.Equal(slot.Id, res.Data.BookingDraft.SlotId);
+        Assert.Equal("Tái khám kiểm tra sức khỏe", res.Data.BookingDraft.Reason);
+    }
+
+    [Fact]
+    public async Task ScenarioG_PricingInquiry_WithExistingDraftSpecialtyA_PreservesSpecialtyA()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Khoa Nhi giá khám bao nhiêu tiền?",
+            PendingSpecialtyId = CardiologySpecialtyId,
+            Reason = "Khám tim định kỳ"
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        Assert.Equal(AiChatIntentTypes.PricingInquiry, res.Data.PrimaryIntent);
+        Assert.Equal("PricingInquiryResolved", res.Data.DialogueOutcome);
+        Assert.Equal("NotCalled", res.Data.ProviderStatus);
+        Assert.Contains("Nhi khoa", res.Data.Message);
+        Assert.Contains("180,000", res.Data.Message);
+
+        // Crucial: The user's active draft for Cardiology was preserved and NOT overwritten by Pediatrics
+        Assert.NotNull(res.Data.BookingDraft);
+        Assert.Equal(CardiologySpecialtyId, res.Data.BookingDraft.SpecialtyId);
+        Assert.Equal("Khám tim định kỳ", res.Data.BookingDraft.Reason);
+    }
+
+    [Fact]
+    public async Task ScenarioH_DoctorModification_EvictsSlotAndClearsDoctor()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var testDate = GetFutureWorkingDate(24);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(14, 0), new TimeOnly(14, 30));
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Bạn muốn đổi sang bác sĩ nào ạ?",
+                PrimaryIntent = AiChatIntentTypes.ModifyDraft,
+                IsCorrection = true,
+                CorrectionTarget = "Doctor",
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Tôi muốn đổi sang bác sĩ khác",
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = DoctorEntityId,
+            PendingSlotId = slot.Id,
+            PendingSlotDate = testDate.ToString("yyyy-MM-dd"),
+            Reason = "Khám sức khỏe tổng quát"
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        Assert.Equal("DraftModified", res.Data.DialogueOutcome);
+        Assert.NotNull(res.Data.BookingDraft);
+        Assert.Equal(SpecialtyEntityId, res.Data.BookingDraft.SpecialtyId);
+        Assert.Null(res.Data.BookingDraft.DoctorId);
+        Assert.Null(res.Data.BookingDraft.SlotId);
+        Assert.False(res.Data.BookingDraft.IsComplete);
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ViewDoctors || a.Type == AiActionTypes.SelectDoctor);
+    }
+
+    [Fact]
+    public async Task ScenarioI_DateModification_EvictsSlotAndPreservesDoctorAndReason()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var testDate = GetFutureWorkingDate(25);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(15, 0), new TimeOnly(15, 30));
+
+        var tomorrow = GetFutureWorkingDate(26);
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Tôi đã cập nhật ngày khám sang ngày mai giúp bạn.",
+                PrimaryIntent = AiChatIntentTypes.ModifyDraft,
+                IsCorrection = true,
+                CorrectionTarget = "Date",
+                ExtractedDate = tomorrow.ToString("yyyy-MM-dd"),
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Đổi ngày khám sang ngày mai",
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = DoctorEntityId,
+            PendingSlotId = slot.Id,
+            PendingSlotDate = testDate.ToString("yyyy-MM-dd"),
+            Reason = "Khám đau dạ dày"
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        Assert.Equal("DraftModified", res.Data.DialogueOutcome);
+        Assert.NotNull(res.Data.BookingDraft);
+        Assert.Equal(SpecialtyEntityId, res.Data.BookingDraft.SpecialtyId);
+        Assert.Equal(DoctorEntityId, res.Data.BookingDraft.DoctorId);
+        Assert.Null(res.Data.BookingDraft.SlotId);
+        Assert.Equal("Khám đau dạ dày", res.Data.BookingDraft.Reason);
+    }
+
+    [Fact]
+    public async Task ScenarioJ_RelativeDoctor_FromDisplayedDoctorIds_ResolvesCorrectly()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Tôi đã chọn bác sĩ giúp bạn.",
+                PrimaryIntent = AiChatIntentTypes.SelectDoctor,
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Tôi chọn người đầu tiên",
+            PendingSpecialtyId = SpecialtyEntityId,
+            DisplayedDoctorIds = new List<long> { DoctorEntityId, Doctor2EntityId }
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        Assert.NotNull(res.Data.BookingDraft);
+        Assert.Equal(DoctorEntityId, res.Data.BookingDraft.DoctorId);
+    }
+
+    [Fact]
+    public async Task ScenarioK_RelativeDoctor_WithoutDisplayedDoctorIds_Clarifies_NeverGuessesFromDb()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Tôi đã chọn bác sĩ giúp bạn.",
+                PrimaryIntent = AiChatIntentTypes.SelectDoctor,
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Tôi chọn người đầu tiên",
+            PendingSpecialtyId = SpecialtyEntityId,
+            DisplayedDoctorIds = null // No displayed context!
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        Assert.Equal("ClarificationRequired", res.Data.DialogueOutcome);
+        Assert.Null(res.Data.BookingDraft?.DoctorId);
+        Assert.Contains("bác sĩ nào", res.Data.Message);
+    }
+
+    [Fact]
+    public async Task ScenarioL_RelativeSlot_FromDisplayedSlotIds_ResolvesCorrectly()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var testDate = GetFutureWorkingDate(26);
+        var slot1 = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(8, 0), new TimeOnly(8, 30));
+        var slot2 = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(8, 30), new TimeOnly(9, 0));
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Tôi đã chọn ca khám giúp bạn.",
+                PrimaryIntent = AiChatIntentTypes.SelectSlot,
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Tôi chọn ca đầu tiên",
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = DoctorEntityId,
+            PendingSlotDate = testDate.ToString("yyyy-MM-dd"),
+            DisplayedSlotIds = new List<long> { slot1.Id, slot2.Id }
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        Assert.NotNull(res.Data.BookingDraft);
+        Assert.Equal(slot1.Id, res.Data.BookingDraft.SlotId);
+    }
+
+    [Fact]
+    public async Task ScenarioM_NegatedDoctor_ExcludesNegatedDoctor()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Tôi đã đổi sang Doctor 2 giúp bạn.",
+                PrimaryIntent = AiChatIntentTypes.SelectDoctor,
+                ExtractedDoctorName = "Doctor 2",
+                NegatedDoctorName = "Doctor 1",
+                IsCorrection = true,
+                CorrectionTarget = "Doctor",
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Tôi không muốn khám Doctor 1, đổi sang Doctor 2 giúp tôi",
+            PendingSpecialtyId = SpecialtyEntityId
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        Assert.NotNull(res.Data.BookingDraft);
+        Assert.Equal(Doctor2EntityId, res.Data.BookingDraft.DoctorId);
+        Assert.NotEqual(DoctorEntityId, res.Data.BookingDraft.DoctorId);
+    }
+
+    [Fact]
+    public async Task ScenarioN_ClinicalReasonMerge_PreservesInitialComplaintWithDurationAndSymptoms()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Tôi đã ghi nhận thêm triệu chứng của bạn.",
+                PrimaryIntent = AiChatIntentTypes.ProvideReason,
+                ExtractedReason = "Bị được 3 ngày rồi, có sốt nhẹ",
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Bị được 3 ngày rồi, có sốt nhẹ",
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau rát họng khó nuốt"
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        Assert.NotNull(res.Data.BookingDraft);
+        Assert.Contains("Đau rát họng khó nuốt", res.Data.BookingDraft.Reason);
+        Assert.Contains("3 ngày", res.Data.BookingDraft.Reason);
+        Assert.Contains("sốt", res.Data.BookingDraft.Reason);
+    }
+
+    [Fact]
+    public async Task ScenarioO_GenericOrConfirmationKeywords_NeverAcceptedAsClinicalReason()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        var request = new AiChatRequestDto
+        {
+            Message = "chốt luôn ngay bây giờ", // Length 22 >= 10, but generic confirmation phrase!
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = DoctorEntityId,
+            Reason = null
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        // Must reject generic confirmation phrase as clinical reason
+        Assert.NotEqual("chốt luôn ngay bây giờ", res.Data.BookingDraft?.Reason);
+        Assert.True(string.IsNullOrWhiteSpace(res.Data.BookingDraft?.Reason));
+    }
+
+    [Fact]
+    public void ScenarioP_VietnameseIntentClassifier_ThreadSafeParallelExecution()
+    {
+        var classifier = new VietnameseIntentClassifier(IntentClassificationMode.Shadow);
+        var exceptions = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+
+        var phrases = new[]
+        {
+            "chào bác sĩ",
+            "tôi muốn đặt khám",
+            "giá khám là bao nhiêu",
+            "chốt lịch giúp tôi",
+            "hủy lịch khám",
+            "tôi bị đau đầu chóng mặt",
+            "đổi sang bác sĩ khác",
+            "xem lại thông tin lịch hẹn"
+        };
+
+        Parallel.For(0, 40, i =>
+        {
+            try
+            {
+                var phrase = phrases[i % phrases.Length];
+                var result = classifier.Classify(phrase);
+                Assert.NotNull(result);
+                Assert.False(string.IsNullOrWhiteSpace(result.Intent));
+            }
+            catch (Exception ex)
+            {
+                exceptions.Add(ex);
+            }
+        });
+
+        Assert.Empty(exceptions);
+    }
+
+    [Fact]
+    public void ScenarioQ_VietnameseIntentClassifier_ShadowModeTelemetry()
+    {
+        var classifier = new VietnameseIntentClassifier(IntentClassificationMode.Shadow);
+
+        var result = classifier.Classify("tôi muốn hủy lịch");
+        Assert.NotNull(result);
+        Assert.Equal(AiChatIntentTypes.CancelDraft, result.Intent);
+        Assert.False(string.IsNullOrWhiteSpace(result.ShadowIntent));
+        Assert.True(result.ShadowConfidence >= 0.0f);
+    }
+
+    [Fact]
+    public void ScenarioR_VietnameseIntentClassifier_OffModeNoMlLoading()
+    {
+        var classifier = new VietnameseIntentClassifier(IntentClassificationMode.Off);
+
+        var result = classifier.Classify("tôi muốn đặt khám");
+        Assert.NotNull(result);
+        Assert.Equal(AiChatIntentTypes.StartBooking, result.Intent);
+        Assert.Null(result.ShadowIntent);
+        Assert.Null(result.ShadowConfidence);
     }
 }

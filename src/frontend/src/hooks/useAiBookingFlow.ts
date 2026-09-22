@@ -22,6 +22,9 @@ export interface AiChatRequestPayload {
     pendingSlotDate?: string;
     reason?: string;
     draftVersion?: number;
+    displayedDoctorIds?: number[];
+    displayedSlotIds?: number[];
+    contextSnapshotId?: string;
 }
 
 export interface CreateAppointmentPayload {
@@ -123,6 +126,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     const activeRequestControllerRef = useRef<AbortController | null>(null);
     const accountKey = user ? (user.userId || (user.id !== undefined ? String(user.id) : null)) : null;
     const accountKeyRef = useRef(accountKey);
+    const lastConfirmationAttemptRef = useRef<{ attemptId: string; key: string } | null>(null);
 
     useEffect(() => {
         accountKeyRef.current = accountKey;
@@ -171,6 +175,18 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         try {
             const preservedReason = pendingPayload?.reason || activeDraft?.reason;
 
+            // Extract displayed doctor and slot IDs from the last assistant message
+            const lastModelMsg = [...messages].reverse().find(m => m.role === "model");
+            const displayedDoctorIds = lastModelMsg?.actions
+                ?.filter(a => a.type === "SelectDoctor" && a.payload && "doctorId" in a.payload && a.payload.doctorId)
+                ?.map(a => Number((a.payload as { doctorId: number }).doctorId))
+                ?.filter(id => !isNaN(id) && id > 0) || [];
+
+            const displayedSlotIds = lastModelMsg?.actions
+                ?.filter(a => a.type === "SelectSlot" && a.payload && "slotId" in a.payload && a.payload.slotId)
+                ?.map(a => Number((a.payload as { slotId: number }).slotId))
+                ?.filter(id => !isNaN(id) && id > 0) || [];
+
             const requestBody: AiChatRequestPayload = {
                 message: trimmed,
                 context: historyMessages,
@@ -180,7 +196,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 pendingSlotId: pendingPayload?.pendingSlotId ?? pendingPayload?.slotId ?? activeDraft?.slotId,
                 pendingSlotDate: pendingPayload?.pendingSlotDate ?? pendingPayload?.slotDate ?? activeDraft?.slotDate,
                 reason: preservedReason,
-                draftVersion: pendingPayload?.draftVersion ?? activeDraft?.version
+                draftVersion: pendingPayload?.draftVersion ?? activeDraft?.version,
+                displayedDoctorIds: displayedDoctorIds.length > 0 ? displayedDoctorIds : undefined,
+                displayedSlotIds: displayedSlotIds.length > 0 ? displayedSlotIds : undefined
             };
 
             const res = await axiosClient.post<AiChatRequestPayload, ApiResponse<AiChatResponse>>(
@@ -213,23 +231,46 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 
                 if (data.dialogueOutcome === "DraftCancelled") {
                     setActiveDraft(null);
-                } else if (data.bookingDraft) {
-                    const currentVersion = (typeof activeDraft?.version === "number" && Number.isInteger(activeDraft.version) && activeDraft.version >= 1)
-                        ? activeDraft.version
-                        : undefined;
-                    const hasIncomingVersion = typeof data.bookingDraft.version === "number" && Number.isInteger(data.bookingDraft.version) && data.bookingDraft.version >= 1;
-                    const incomingVersion = hasIncomingVersion ? data.bookingDraft.version : undefined;
+                } else {
+                    const fallbackDraftAction = data.actions?.find(a => (a.type === "ConfirmBooking" || a.type === "ReviewBooking") && a.payload?.slotId);
+                    const incomingDraft: AiBookingDraft | undefined = data.bookingDraft || (
+                        fallbackDraftAction
+                            ? {
+                                specialtyId: fallbackDraftAction.payload.specialtyId,
+                                specialtyName: fallbackDraftAction.payload.specialtyName,
+                                doctorId: fallbackDraftAction.payload.doctorId,
+                                doctorName: fallbackDraftAction.payload.doctorName,
+                                slotId: fallbackDraftAction.payload.slotId,
+                                slotDate: fallbackDraftAction.payload.slotDate,
+                                startTime: fallbackDraftAction.payload.startTime,
+                                endTime: fallbackDraftAction.payload.endTime,
+                                reason: fallbackDraftAction.payload.reason,
+                                isComplete: true,
+                                version: fallbackDraftAction.draftVersion ?? fallbackDraftAction.payload.draftVersion,
+                                confirmationId: fallbackDraftAction.payload.confirmationId
+                            }
+                            : undefined
+                    );
 
-                    if (currentVersion !== undefined && incomingVersion !== undefined && incomingVersion < currentVersion) {
-                        // Stale response received out-of-order, do not overwrite newer draft
-                    } else {
-                        const mergedDraft: AiBookingDraft = {
-                            ...data.bookingDraft,
-                            reason: data.bookingDraft.reason || preservedReason || activeDraft?.reason,
-                            version: incomingVersion ?? currentVersion
-                        };
-                        setActiveDraft(mergedDraft);
-                        aiMsg.bookingDraft = mergedDraft;
+                    if (incomingDraft) {
+                        const currentVersion = (typeof activeDraft?.version === "number" && Number.isInteger(activeDraft.version) && activeDraft.version >= 1)
+                            ? activeDraft.version
+                            : undefined;
+                        const hasIncomingVersion = typeof incomingDraft.version === "number" && Number.isInteger(incomingDraft.version) && incomingDraft.version >= 1;
+                        const incomingVersion = hasIncomingVersion ? incomingDraft.version : undefined;
+
+                        if (currentVersion !== undefined && incomingVersion !== undefined && incomingVersion < currentVersion) {
+                            // Stale response received out-of-order, do not overwrite newer draft
+                        } else {
+                            const mergedDraft: AiBookingDraft = {
+                                ...incomingDraft,
+                                reason: incomingDraft.reason || preservedReason || activeDraft?.reason,
+                                version: incomingVersion ?? currentVersion,
+                                confirmationId: incomingDraft.confirmationId || activeDraft?.confirmationId
+                            };
+                            setActiveDraft(mergedDraft);
+                            aiMsg.bookingDraft = mergedDraft;
+                        }
                     }
                 }
 
@@ -527,6 +568,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                             requiresConfirmation: true,
                             draftVersion: currentVersion,
                             payload: {
+                                confirmationId: action.payload.confirmationId || activeDraft?.confirmationId,
                                 specialtyId: specId,
                                 specialtyName: specName,
                                 doctorId: docId,
@@ -556,31 +598,48 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     return;
                 }
 
-                if (hasValidActionVersion && hasValidDraftVersion && actionVersion !== activeDraft!.version) {
+                if (!activeDraft) {
                     setMessages(prev => [...prev, {
                         role: "model",
-                        content: `Thông tin xác nhận lịch khám thuộc phiên bản cũ (v${actionVersion}). Phiên bản hiện tại là v${activeDraft!.version}. Vui lòng kiểm tra lại thông tin mới nhất trước khi xác nhận.`,
+                        content: "Bản nháp đặt lịch không tồn tại hoặc đã bị hủy. Vui lòng chọn lại thông tin khám để tiếp tục.",
+                        urgency: "ROUTINE"
+                    }]);
+                    return;
+                }
+
+                const actionConfirmationId = action.payload.confirmationId;
+                if (actionConfirmationId && activeDraft.confirmationId && actionConfirmationId !== activeDraft.confirmationId) {
+                    setMessages(prev => [...prev, {
+                        role: "model",
+                        content: "Yêu cầu xác nhận này không còn hiệu lực do bản nháp đã được cập nhật hoặc làm mới. Vui lòng xác nhận trên lựa chọn mới nhất.",
+                        urgency: "ROUTINE"
+                    }]);
+                    return;
+                }
+
+                if (hasValidActionVersion && hasValidDraftVersion && actionVersion !== activeDraft.version) {
+                    setMessages(prev => [...prev, {
+                        role: "model",
+                        content: `Thông tin xác nhận lịch khám thuộc phiên bản cũ (v${actionVersion}). Phiên bản hiện tại là v${activeDraft.version}. Vui lòng kiểm tra lại thông tin mới nhất trước khi xác nhận.`,
                         urgency: "ROUTINE"
                     }]);
                     return;
                 }
 
                 // If activeDraft has a specific slot or doctor selected, verify action matches current draft
-                if (activeDraft) {
-                    if (
-                        (activeDraft.specialtyId && action.payload.specialtyId && activeDraft.specialtyId !== action.payload.specialtyId) ||
-                        (activeDraft.doctorId && action.payload.doctorId && activeDraft.doctorId !== action.payload.doctorId) ||
-                        (activeDraft.slotId && action.payload.slotId && activeDraft.slotId !== action.payload.slotId) ||
-                        (activeDraft.slotDate && action.payload.slotDate && activeDraft.slotDate !== action.payload.slotDate) ||
-                        (activeDraft.startTime && action.payload.startTime && activeDraft.startTime !== action.payload.startTime)
-                    ) {
-                        setMessages(prev => [...prev, {
-                            role: "model",
-                            content: "Thông tin khung giờ bạn chọn đã thay đổi so với xác nhận trước đó. Vui lòng kiểm tra lại khung giờ mới nhất.",
-                            urgency: "ROUTINE"
-                        }]);
-                        return;
-                    }
+                if (
+                    (activeDraft.specialtyId && action.payload.specialtyId && activeDraft.specialtyId !== action.payload.specialtyId) ||
+                    (activeDraft.doctorId && action.payload.doctorId && activeDraft.doctorId !== action.payload.doctorId) ||
+                    (activeDraft.slotId && action.payload.slotId && activeDraft.slotId !== action.payload.slotId) ||
+                    (activeDraft.slotDate && action.payload.slotDate && activeDraft.slotDate !== action.payload.slotDate) ||
+                    (activeDraft.startTime && action.payload.startTime && activeDraft.startTime !== action.payload.startTime)
+                ) {
+                    setMessages(prev => [...prev, {
+                        role: "model",
+                        content: "Thông tin khung giờ bạn chọn đã thay đổi so với xác nhận trước đó. Vui lòng kiểm tra lại khung giờ mới nhất.",
+                        urgency: "ROUTINE"
+                    }]);
+                    return;
                 }
 
                 const slotId = action.payload.slotId || activeDraft?.slotId;
@@ -618,9 +677,16 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         reason
                     };
 
-                    const idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID
-                        ? crypto.randomUUID()
-                        : `chat_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                    const currentAttemptId = actionConfirmationId || `${slotId}_${actionVersion ?? activeDraft.version ?? 1}`;
+                    let idempotencyKey: string;
+                    if (lastConfirmationAttemptRef.current && lastConfirmationAttemptRef.current.attemptId === currentAttemptId) {
+                        idempotencyKey = lastConfirmationAttemptRef.current.key;
+                    } else {
+                        idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID
+                            ? crypto.randomUUID()
+                            : `chat_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                        lastConfirmationAttemptRef.current = { attemptId: currentAttemptId, key: idempotencyKey };
+                    }
 
                     const bookRes = await axiosClient.post<CreateAppointmentPayload, ApiResponse<AppointmentEntityDto>>(
                         "/appointments",
@@ -633,6 +699,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     );
 
                     if (bookRes.success && bookRes.data) {
+                        lastConfirmationAttemptRef.current = null;
                         const apt = bookRes.data;
                         const formattedDate = formatVietnameseDate(slotDate);
                         const successMsg: ChatMessage = {
@@ -826,5 +893,10 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 
 export const isValidBookingReason = (reason?: string): boolean => {
     const normalized = reason?.trim() ?? "";
-    return normalized.length >= 10 && normalized.length <= 500;
+    if (normalized.length < 10 || normalized.length > 500) return false;
+    const lower = normalized.toLowerCase();
+    if (lower === "ok" || lower === "chốt" || lower.startsWith("chốt ") || lower.startsWith("đồng ý") || lower.startsWith("tôi chọn")) {
+        return false;
+    }
+    return true;
 };

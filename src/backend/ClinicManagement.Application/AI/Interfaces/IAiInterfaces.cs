@@ -27,6 +27,13 @@ public interface IAiSpecialtyClassifier
     SpecialtyClassificationResult? ClassifySymptom(string symptomDescription);
 }
 
+public enum IntentClassificationMode
+{
+    Off,
+    Shadow,
+    Active
+}
+
 public interface IVietnameseIntentClassifier
 {
     IntentClassificationResult Classify(string? message, IntentClassificationContext? context = null);
@@ -41,6 +48,9 @@ public class IntentClassificationContext
     public string? LastModelQuestion { get; set; }
     public List<string>? DisplayedDoctorNames { get; set; }
     public List<string>? DisplayedSlotLabels { get; set; }
+    public List<long>? DisplayedDoctorIds { get; set; }
+    public List<long>? DisplayedSlotIds { get; set; }
+    public string? ContextSnapshotId { get; set; }
 }
 
 public class IntentClassificationResult
@@ -57,5 +67,9 @@ public class IntentClassificationResult
     public string? ExtractedDate { get; set; }
     public string? ExtractedTimePreference { get; set; }
     public string? ExtractedReason { get; set; }
+    public int? ExtractedRelativeDoctorIndex { get; set; }
+    public int? ExtractedRelativeSlotIndex { get; set; }
     public string Method { get; set; } = "RuleBased";
+    public string? ShadowIntent { get; set; }
+    public float? ShadowConfidence { get; set; }
 }

@@ -335,7 +335,10 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                     ? activeDraft.version
                                                     : null;
 
+                                                const actConfirmationId = (act.payload as Record<string, unknown>)?.confirmationId;
                                                 const isStale = isBooking && (
+                                                    (["ConfirmBooking", "ReviewBooking"].includes(act.type) && !activeDraft) ||
+                                                    (act.type === "ConfirmBooking" && Boolean(actConfirmationId) && Boolean(activeDraft?.confirmationId) && actConfirmationId !== activeDraft?.confirmationId) ||
                                                     (hasValidActVer && activeVer !== null && (rawActVersion as number) < activeVer) ||
                                                     (!hasValidActVer && activeVer !== null && activeVer > 1)
                                                 );

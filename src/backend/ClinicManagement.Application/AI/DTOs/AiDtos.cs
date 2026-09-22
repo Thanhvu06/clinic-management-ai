@@ -445,6 +445,7 @@ public class AiActionPayloadDto
     public string? Address { get; set; }
     public string? FacilityName { get; set; }
     public int? DraftVersion { get; set; }
+    public string? ConfirmationId { get; set; }
 }
 
 public class AiActionDto
@@ -474,6 +475,7 @@ public class AiBookingDraftDto
     public string? RoomNumber { get; set; }
     public bool IsComplete { get; set; }
     public int Version { get; set; } = 1;
+    public string? ConfirmationId { get; set; }
 }
 
 public class AiChatRequestDto
@@ -505,6 +507,10 @@ public class AiChatRequestDto
 
     [Range(1, int.MaxValue, ErrorMessage = "Phiên bản thảo lịch không hợp lệ.")]
     public int? DraftVersion { get; set; }
+
+    public List<long>? DisplayedDoctorIds { get; set; }
+    public List<long>? DisplayedSlotIds { get; set; }
+    public string? ContextSnapshotId { get; set; }
 }
 
 public class AiChatResponseDto
