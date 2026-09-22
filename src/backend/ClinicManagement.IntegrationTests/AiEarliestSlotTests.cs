@@ -194,7 +194,7 @@ public class AiEarliestSlotTests : IntegrationTestBase
         var invalidIntent = await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
         {
             Message = "Tìm lịch khám sớm nhất.",
-            Intent = "ConfirmBooking"
+            Intent = "UnknownUnsupportedIntent"
         });
         Assert.Equal(HttpStatusCode.BadRequest, invalidIntent.StatusCode);
         Assert.Contains("INVALID_AI_INTENT", await invalidIntent.Content.ReadAsStringAsync());

@@ -205,10 +205,15 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     actions: data.actions || [],
                     bookingDraft: data.bookingDraft,
                     missingFields: data.missingFields || [],
-                    assistantStatus: status
+                    assistantStatus: status,
+                    primaryIntent: data.primaryIntent,
+                    dialogueOutcome: data.dialogueOutcome,
+                    clarificationPrompt: data.clarificationPrompt
                 };
 
-                if (data.bookingDraft) {
+                if (data.dialogueOutcome === "DraftCancelled") {
+                    setActiveDraft(null);
+                } else if (data.bookingDraft) {
                     const currentVersion = (typeof activeDraft?.version === "number" && Number.isInteger(activeDraft.version) && activeDraft.version >= 1)
                         ? activeDraft.version
                         : undefined;

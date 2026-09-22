@@ -750,4 +750,51 @@ describe('AI Draft Version Management Contract & Flow', () => {
             expect(screen.queryByText(/Thao tác này thuộc phiên bản thảo lịch cũ/i)).not.toBeInTheDocument();
         });
     });
+
+    it('Scenario 11: DraftCancelled outcome from backend clears active draft and resets draft state', async () => {
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: '',
+            data: {
+                message: 'Đã hủy thông tin đặt lịch hẹn hiện tại. Bạn muốn hỗ trợ gì khác không?',
+                urgency: 'ROUTINE',
+                assistantStatus: 'Online',
+                primaryIntent: 'CancelDraft',
+                dialogueOutcome: 'DraftCancelled',
+                clarificationPrompt: 'Bạn có thể bắt đầu lại bằng cách mô tả triệu chứng hoặc yêu cầu chuyên khoa mới.',
+                specialtySuggestions: [],
+                actions: [],
+                missingFields: []
+            }
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/patient']}>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                    <DraftVersionController initialDraft={{ specialtyId: 2, specialtyName: 'Nhi khoa', version: 3, isComplete: false }} />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        // Initially set draft to v3
+        fireEvent.click(screen.getByText('Set Draft Version'));
+        expect(screen.getByTestId('active-draft-version')).toHaveTextContent('3');
+
+        // Open chat widget and cancel draft
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(input, { target: { value: 'Tôi muốn hủy lịch đang chọn' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Đã hủy thông tin đặt lịch hẹn hiện tại. Bạn muốn hỗ trợ gì khác không?')).toBeInTheDocument();
+        });
+
+        // Active draft must now be cleared ('none')
+        await waitFor(() => {
+            expect(screen.getByTestId('active-draft-version')).toHaveTextContent('none');
+        });
+    });
 });
+

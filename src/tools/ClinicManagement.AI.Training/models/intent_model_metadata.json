@@ -1,0 +1,43 @@
+{
+  "ModelVersion": "1.0.0",
+  "TrainedAtUtc": "2026-09-22T11:08:27.4694786Z",
+  "TotalRecords": 178,
+  "TrainCount": 118,
+  "ValCount": 30,
+  "TestCount": 30,
+  "Intents": [
+    "CancelDraft",
+    "ConfirmBooking",
+    "DoctorSearch",
+    "FacilityInquiry",
+    "FindEarliestAvailableSlot",
+    "Greeting",
+    "ModifyDraft",
+    "PricingInquiry",
+    "ProvideReason",
+    "ReviewDraft",
+    "SelectDoctor",
+    "SelectSlot",
+    "StartBooking",
+    "UnclearOrOutOfScope",
+    "ViewAppointments"
+  ],
+  "Benchmark": {
+    "TotalTestSamples": 30,
+    "MlNetCorrect": 20,
+    "MlNetAccuracy": 0.6666666666666666,
+    "RuleBasedCorrect": 12,
+    "RuleBasedAccuracy": 0.4,
+    "MlNetMetrics": {
+      "microAccuracy": 0.6666666666666666,
+      "macroAccuracy": 0.6666666666666666,
+      "logLoss": 1.1790535481938909,
+      "macroPrecision": 0.6666666666666666,
+      "macroRecall": 0.6666666666666666,
+      "macroF1": 0.6666666666666666,
+      "top3Accuracy": 0,
+      "perClassMetrics": {},
+      "confusionMatrix": ""
+    }
+  }
+}

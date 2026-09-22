@@ -26,3 +26,36 @@ public interface IAiSpecialtyClassifier
 {
     SpecialtyClassificationResult? ClassifySymptom(string symptomDescription);
 }
+
+public interface IVietnameseIntentClassifier
+{
+    IntentClassificationResult Classify(string? message, IntentClassificationContext? context = null);
+}
+
+public class IntentClassificationContext
+{
+    public bool HasActiveDraft { get; set; }
+    public bool HasDoctor { get; set; }
+    public bool HasSlot { get; set; }
+    public bool HasReason { get; set; }
+    public string? LastModelQuestion { get; set; }
+    public List<string>? DisplayedDoctorNames { get; set; }
+    public List<string>? DisplayedSlotLabels { get; set; }
+}
+
+public class IntentClassificationResult
+{
+    public string Intent { get; set; } = AiChatIntentTypes.UnclearOrOutOfScope;
+    public float Confidence { get; set; } = 1.0f;
+    public bool IsClear { get; set; } = true;
+    public string? ClarificationPrompt { get; set; }
+    public bool IsCorrection { get; set; }
+    public string? NegatedDoctorName { get; set; }
+    public string? NegatedSymptom { get; set; }
+    public string? CorrectionTarget { get; set; }
+    public string? ExtractedDoctorName { get; set; }
+    public string? ExtractedDate { get; set; }
+    public string? ExtractedTimePreference { get; set; }
+    public string? ExtractedReason { get; set; }
+    public string Method { get; set; } = "RuleBased";
+}

@@ -21,7 +21,22 @@ export type AiActionType =
 
 export type AiActionStyle = "primary" | "secondary" | "danger";
 
-export type AiChatIntent = "FindEarliestAvailableSlot";
+export type AiChatIntent =
+    | "Greeting"
+    | "FacilityInquiry"
+    | "PricingInquiry"
+    | "DoctorSearch"
+    | "StartBooking"
+    | "SelectDoctor"
+    | "SelectSlot"
+    | "ProvideReason"
+    | "ReviewDraft"
+    | "ConfirmBooking"
+    | "ModifyDraft"
+    | "CancelDraft"
+    | "ViewAppointments"
+    | "UnclearOrOutOfScope"
+    | "FindEarliestAvailableSlot";
 
 export interface BaseAiAction {
     id: string;
@@ -304,6 +319,9 @@ export interface AiChatResponse {
     manualSelectionRequired: boolean;
     assistantStatus?: "Online" | "Degraded" | "Offline";
     providerStatus?: string;
+    dialogueOutcome?: string;
+    clarificationPrompt?: string;
+    primaryIntent?: AiChatIntent | string;
 }
 
 export interface ChatMessage {
@@ -318,4 +336,7 @@ export interface ChatMessage {
     bookingDraft?: AiBookingDraft;
     missingFields?: string[];
     assistantStatus?: "Online" | "Degraded" | "Offline";
+    dialogueOutcome?: string;
+    clarificationPrompt?: string;
+    primaryIntent?: AiChatIntent | string;
 }

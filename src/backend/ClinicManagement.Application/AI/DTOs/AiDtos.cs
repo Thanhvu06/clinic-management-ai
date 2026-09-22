@@ -102,15 +102,45 @@ public static class AiActionTypes
 }
 
 /// <summary>
-/// Client-to-server intents are deliberately separate from response action types.
-/// Only operational intents that the server can execute deterministically belong here.
+/// Conversational and operational intents recognized across frontend, backend, LLM, and intent classifier.
 /// </summary>
 public static class AiChatIntentTypes
 {
+    // 14 Canonical Conversational Intents
+    public const string Greeting = "Greeting";
+    public const string FacilityInquiry = "FacilityInquiry";
+    public const string PricingInquiry = "PricingInquiry";
+    public const string DoctorSearch = "DoctorSearch";
+    public const string StartBooking = "StartBooking";
+    public const string SelectDoctor = "SelectDoctor";
+    public const string SelectSlot = "SelectSlot";
+    public const string ProvideReason = "ProvideReason";
+    public const string ReviewDraft = "ReviewDraft";
+    public const string ConfirmBooking = "ConfirmBooking";
+    public const string ModifyDraft = "ModifyDraft";
+    public const string CancelDraft = "CancelDraft";
+    public const string ViewAppointments = "ViewAppointments";
+    public const string UnclearOrOutOfScope = "UnclearOrOutOfScope";
+
+    // Operational Intents
     public const string FindEarliestAvailableSlot = "FindEarliestAvailableSlot";
 
-    private static readonly HashSet<string> AllAllowed = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> AllAllowed = new(StringComparer.OrdinalIgnoreCase)
     {
+        Greeting,
+        FacilityInquiry,
+        PricingInquiry,
+        DoctorSearch,
+        StartBooking,
+        SelectDoctor,
+        SelectSlot,
+        ProvideReason,
+        ReviewDraft,
+        ConfirmBooking,
+        ModifyDraft,
+        CancelDraft,
+        ViewAppointments,
+        UnclearOrOutOfScope,
         FindEarliestAvailableSlot
     };
 
@@ -519,6 +549,21 @@ public class AiChatResponseDto
     /// Technical provider status: "Healthy", "Disabled", "AuthFailure", "RateLimited", "Timeout", "NetworkError", "InvalidResponse", "Cancelled".
     /// </summary>
     public string ProviderStatus { get; set; } = "Healthy";
+
+    /// <summary>
+    /// Dialogue lifecycle outcome: "Success", "UnclearInput", "ClarificationRequired", "DraftModified", "DraftCancelled", "Confirmed", "NoMatchingDoctor", "NoAvailableSlots", "ProviderUnavailable".
+    /// </summary>
+    public string? DialogueOutcome { get; set; }
+
+    /// <summary>
+    /// Optional clarifying question if the intent was ambiguous or missing required details.
+    /// </summary>
+    public string? ClarificationPrompt { get; set; }
+
+    /// <summary>
+    /// Canonical primary intent identified for the user's turn.
+    /// </summary>
+    public string? PrimaryIntent { get; set; }
 }
 
 public class AiChatProviderResult
@@ -529,13 +574,21 @@ public class AiChatProviderResult
     public string Reply { get; set; } = string.Empty;
     public List<string> SuggestedSpecialtyCodes { get; set; } = new();
     public string Urgency { get; set; } = "ROUTINE";
+    public string? PrimaryIntent { get; set; }
+    public string? SecondaryIntent { get; set; }
+    public bool IsClear { get; set; } = true;
+    public string? ClarificationPrompt { get; set; }
     public string? ExtractedSpecialtyCode { get; set; }
-    public string? ExtractedDoctorName { get; set; }
+    public string? ExtractedDoctorName { get; set; } // Verbatim as uttered by the user
     public string? ExtractedDate { get; set; }
     public string? ExtractedTimePreference { get; set; }
     public bool WantsEarliest { get; set; }
     public string? RequestedActionType { get; set; }
     public string? ExtractedReason { get; set; }
+    public bool IsCorrection { get; set; }
+    public string? NegatedDoctorName { get; set; }
+    public string? NegatedSymptom { get; set; }
+    public string? CorrectionTarget { get; set; }
 }
 
 public class SpecialtyClassificationResult

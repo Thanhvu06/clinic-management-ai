@@ -12,4 +12,9 @@
     <PackageReference Include="Microsoft.ML" Version="4.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\backend\ClinicManagement.Application\ClinicManagement.Application.csproj" />
+    <ProjectReference Include="..\..\backend\ClinicManagement.Infrastructure\ClinicManagement.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>

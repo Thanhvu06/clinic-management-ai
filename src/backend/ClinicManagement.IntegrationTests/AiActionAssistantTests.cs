@@ -1747,4 +1747,192 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ContactReception);
         Assert.DoesNotContain(res.Data.Actions, a => a.Type == AiActionTypes.SelectDoctor || a.Type == AiActionTypes.SelectSlot);
     }
+
+    [Fact]
+    public async Task ScenarioA_GreetingDuringSlotSelection_PreservesAiMessageAndDraft_DoesNotSpamSlots()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var testDate = GetFutureWorkingDate(20);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(9, 0), new TimeOnly(9, 30));
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?",
+                PrimaryIntent = AiChatIntentTypes.Greeting,
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "hello",
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = DoctorEntityId,
+            PendingSlotId = slot.Id,
+            PendingSlotDate = testDate.ToString("yyyy-MM-dd")
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        // Greeting message preserved
+        Assert.Equal("Chào bạn! Tôi có thể giúp gì cho bạn hôm nay?", res.Data.Message);
+        Assert.Equal(AiChatIntentTypes.Greeting, res.Data.PrimaryIntent);
+
+        // Draft preserved with slot
+        Assert.NotNull(res.Data.BookingDraft);
+        Assert.Equal(slot.Id, res.Data.BookingDraft.SlotId);
+
+        // Does NOT overwrite with slot booking prompt or spam available slot buttons
+        Assert.DoesNotContain(res.Data.Actions, a => a.Type == AiActionTypes.SelectSlot);
+    }
+
+    [Fact]
+    public async Task ScenarioB_ChotKeyword_MapsToConfirmBooking_NeverPollutesReason_ClarifiesIfReasonMissing()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var testDate = GetFutureWorkingDate(21);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(10, 0), new TimeOnly(10, 30));
+
+        var request = new AiChatRequestDto
+        {
+            Message = "chốt",
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = DoctorEntityId,
+            PendingSlotId = slot.Id,
+            PendingSlotDate = testDate.ToString("yyyy-MM-dd"),
+            Reason = null // No reason provided yet
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        // Primary intent is ConfirmBooking
+        Assert.Equal(AiChatIntentTypes.ConfirmBooking, res.Data.PrimaryIntent);
+        Assert.Equal("ClarificationRequired", res.Data.DialogueOutcome);
+
+        // 'chốt' was NEVER saved as reason!
+        Assert.NotEqual("chốt", res.Data.BookingDraft?.Reason);
+        Assert.Null(res.Data.BookingDraft?.Reason);
+
+        // Prompt requests reason between 10-500 chars
+        Assert.Contains("10 đến 500 ký tự", res.Data.Message);
+        Assert.DoesNotContain(res.Data.Actions, a => a.Type == AiActionTypes.ConfirmBooking);
+    }
+
+    [Fact]
+    public async Task ScenarioB2_ChotKeyword_WithValidReason_EmitsConfirmBookingAction()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var testDate = GetFutureWorkingDate(22);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(11, 0), new TimeOnly(11, 30));
+
+        var request = new AiChatRequestDto
+        {
+            Message = "chốt",
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = DoctorEntityId,
+            PendingSlotId = slot.Id,
+            PendingSlotDate = testDate.ToString("yyyy-MM-dd"),
+            Reason = "Tôi bị đau nửa đầu liên tục 3 ngày nay" // >= 10 chars
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        Assert.Equal(AiChatIntentTypes.ConfirmBooking, res.Data.PrimaryIntent);
+        Assert.Equal("Confirmed", res.Data.DialogueOutcome);
+        Assert.Contains(res.Data.Actions, a => a.Type == AiActionTypes.ConfirmBooking);
+        Assert.Equal("Tôi bị đau nửa đầu liên tục 3 ngày nay", res.Data.BookingDraft?.Reason);
+    }
+
+    [Fact]
+    public async Task ScenarioC_GibberishInput_StaysOnline_PreservesDraft_ClarifiesPolitely_NeverPollutesReason()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        var request = new AiChatRequestDto
+        {
+            Message = "tôi jsdkjvsdcj",
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau tức vùng ngực trái kéo dài"
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        // Remains Online, not Degraded
+        Assert.Equal("Online", res.Data.AssistantStatus);
+        Assert.Equal("UnclearInput", res.Data.DialogueOutcome);
+        Assert.Equal(AiChatIntentTypes.UnclearOrOutOfScope, res.Data.PrimaryIntent);
+
+        // Friendly clarification prompt
+        Assert.Contains("chưa hiểu rõ yêu cầu", res.Data.Message);
+
+        // Draft and reason preserved without pollution
+        Assert.NotNull(res.Data.BookingDraft);
+        Assert.Equal("Đau tức vùng ngực trái kéo dài", res.Data.BookingDraft.Reason);
+        Assert.DoesNotContain("jsdkjvsdcj", res.Data.BookingDraft.Reason);
+    }
+
+    [Fact]
+    public async Task ScenarioD_CancelDraft_ReturnsDraftCancelled_ClearsDraftInSession()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        var request = new AiChatRequestDto
+        {
+            Message = "hủy đặt lịch",
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = DoctorEntityId
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        Assert.Equal(AiChatIntentTypes.CancelDraft, res.Data.PrimaryIntent);
+        Assert.Equal("DraftCancelled", res.Data.DialogueOutcome);
+        Assert.Null(res.Data.BookingDraft);
+        Assert.Contains("Đã hủy bản nháp", res.Data.Message);
+    }
+
+    [Fact]
+    public async Task ScenarioE_PricingInquiry_ReturnsHonestConsultationFeeFromDb()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        var request = new AiChatRequestDto
+        {
+            Message = "giá khám là bao nhiêu tiền"
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+
+        Assert.Equal(AiChatIntentTypes.PricingInquiry, res.Data.PrimaryIntent);
+        Assert.Equal("PricingInquiryResolved", res.Data.DialogueOutcome);
+        Assert.Contains("bảng giá chi phí khám", res.Data.Message.ToLowerInvariant());
+        Assert.Contains("VNĐ", res.Data.Message);
+    }
 }
