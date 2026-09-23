@@ -41,6 +41,10 @@ vi.mock('../api/axiosClient', () => ({
 
 describe('AI Action Assistant - Frontend Widget & Flow', () => {
     beforeEach(() => {
+        vi.mocked(axiosClient.post).mockReset();
+        vi.mocked(axiosClient.get).mockReset();
+        vi.mocked(axiosClient.put).mockReset();
+        vi.mocked(axiosClient.delete).mockReset();
         vi.clearAllMocks();
         sessionStorage.clear();
         mockUser = { id: 'pat-1', fullName: 'Nguyen Van Patient', role: 'Patient' };

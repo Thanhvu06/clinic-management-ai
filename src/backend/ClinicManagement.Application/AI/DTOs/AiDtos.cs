@@ -570,6 +570,11 @@ public class AiChatResponseDto
     /// Canonical primary intent identified for the user's turn.
     /// </summary>
     public string? PrimaryIntent { get; set; }
+
+    /// <summary>
+    /// Server-issued snapshot ID for the displayed doctor/slot options.
+    /// </summary>
+    public string? ContextSnapshotId { get; set; }
 }
 
 public class AiChatProviderResult

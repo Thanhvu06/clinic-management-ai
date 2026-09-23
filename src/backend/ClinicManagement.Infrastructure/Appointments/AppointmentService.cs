@@ -61,7 +61,7 @@ public class AppointmentService : IAppointmentService
             if (existingRecord != null)
             {
                 var payloadHash = ComputePayloadHash(request);
-                if (existingRecord.RequestHash != payloadHash)
+                if (existingRecord.RequestHash != payloadHash || existingRecord.UserId != currentUserId.Value)
                 {
                     throw new ConflictException("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "Idempotency key này đã được sử dụng cho một yêu cầu đặt lịch khác.");
                 }

@@ -36,6 +36,7 @@ public enum IntentClassificationMode
 
 public interface IVietnameseIntentClassifier
 {
+    float OptimalThreshold { get; }
     IntentClassificationResult Classify(string? message, IntentClassificationContext? context = null);
 }
 

@@ -149,6 +149,10 @@ const setupBookingGets = () => {
 
 describe('P0-1 earliest-slot booking context', () => {
     beforeEach(() => {
+        vi.mocked(axiosClient.post).mockReset();
+        vi.mocked(axiosClient.get).mockReset();
+        vi.mocked(axiosClient.put).mockReset();
+        vi.mocked(axiosClient.delete).mockReset();
         vi.clearAllMocks();
         sessionStorage.clear();
         setupBookingGets();

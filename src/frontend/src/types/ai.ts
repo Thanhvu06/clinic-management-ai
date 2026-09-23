@@ -326,6 +326,7 @@ export interface AiChatResponse {
     dialogueOutcome?: string;
     clarificationPrompt?: string;
     primaryIntent?: AiChatIntent | string;
+    contextSnapshotId?: string;
 }
 
 export interface ChatMessage {

@@ -87,10 +87,15 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
     {
         _mode = mode;
         _customModelPath = customModelPath;
+        if (_mode != IntentClassificationMode.Off)
+        {
+            EnsureModelLoaded();
+        }
         _optimalThreshold = overrideThreshold ?? _metadataOptimalThreshold;
     }
 
     public string? LoadedModelPath => _loadedModelPath;
+    public float OptimalThreshold => _optimalThreshold;
 
     public IntentClassificationResult Classify(string? message, IntentClassificationContext? context = null)
     {

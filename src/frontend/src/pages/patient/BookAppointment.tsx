@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import axiosClient from "../../api/axiosClient";
 import styles from "./BookAppointment.module.css";
@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useChatContext } from "../../contexts/ChatContext";
 import { useDialog } from "../../contexts/DialogContext";
+import { useAuth } from "../../auth/AuthContext";
 import { Breadcrumb } from "../../components/Breadcrumb";
 import { Button, FormField, TextInput, Textarea, FormError } from "../../components/forms";
 import { formatDoctorName, getNextWorkingDateString, isSundayDateString } from "../../utils/doctorNameHelper";
@@ -93,6 +94,37 @@ export const BookAppointment: React.FC = () => {
     const [submitting, setSubmitting] = useState(false);
     const [bookingError, setBookingError] = useState<string | null>(null);
     const [successBooking, setSuccessBooking] = useState<BookingSuccessData | null>(null);
+
+    const { user } = useAuth();
+    const prevDraftRef = useRef(activeDraft);
+    const prevUserIdRef = useRef(user ? (user.userId || (user.id !== undefined ? String(user.id) : null)) : null);
+
+    // Synchronize form when an active draft is cancelled, reset, or completed
+    useEffect(() => {
+        const prev = prevDraftRef.current;
+        prevDraftRef.current = activeDraft;
+
+        // Only clear if transitioning from an existing active draft to null
+        if (prev !== null && activeDraft === null) {
+            setPageDoctorId("");
+            setPageSlotId("");
+            setPageReason("");
+            setStep(1);
+        }
+    }, [activeDraft]);
+
+    // Clear form when account changes
+    useEffect(() => {
+        const currentUserId = user ? (user.userId || (user.id !== undefined ? String(user.id) : null)) : null;
+        if (prevUserIdRef.current !== null && prevUserIdRef.current !== currentUserId) {
+            setPageSpecialtyId("");
+            setPageDoctorId("");
+            setPageSlotId("");
+            setPageReason("");
+            setStep(1);
+        }
+        prevUserIdRef.current = currentUserId;
+    }, [user]);
 
     // 1. Fetch Specialties
     useEffect(() => {
