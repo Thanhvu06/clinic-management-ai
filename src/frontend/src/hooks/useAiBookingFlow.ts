@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useChatContext } from "../contexts/ChatContext";
 import { useAuth } from "../auth/AuthContext";
@@ -143,7 +143,26 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     const accountKeyRef = useRef(accountKey);
     const activeDraftRef = useRef(activeDraft);
     const sessionIdRef = useRef<string>("");
-    const lastConfirmationAttemptRef = useRef<{ attemptId: string; payloadFingerprint: string; key: string } | null>(null);
+    const lastConfirmationAttemptRef = useRef<{ attemptId: string; payloadFingerprint: string; key: string; status?: string } | null>(null);
+    
+    // Initialize from sessionStorage on mount to survive remount
+    const widgetStorageKey = useMemo(
+        () => `cliniccare_pending_widget_attempt_${accountKey ?? "anon"}`,
+        [accountKey]
+    );
+    useEffect(() => {
+        try {
+            const saved = sessionStorage.getItem(widgetStorageKey);
+            if (saved && !lastConfirmationAttemptRef.current) {
+                const parsed = JSON.parse(saved) as { attemptId: string; payloadFingerprint: string; key: string; status?: string };
+                if (parsed?.key && parsed?.attemptId) {
+                    lastConfirmationAttemptRef.current = parsed;
+                }
+            }
+        } catch {
+            // ignore storage error
+        }
+    }, [widgetStorageKey]);
     const isSubmittingBookingRef = useRef(false);
     const lastKnownGeminiStatusRef = useRef<"Unchecked" | "Healthy" | "Degraded">("Unchecked");
     const draftCancelledAtRef = useRef<number>(0);
@@ -825,6 +844,11 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 
                 isSubmittingBookingRef.current = true;
                 setSubmittingBooking(true);
+                
+                const currentAttemptId = `${bookingAccountKey ?? "anon"}_${bookingDraftIdAtStart ?? "draft"}_${actionConfirmationId || `${action.payload.slotId}_v${activeDraft.version}`}`;
+                const payloadFingerprint = `${action.payload.specialtyId}_${action.payload.doctorId}_${action.payload.slotId}_${action.payload.slotDate}_${action.payload.startTime}_${actionReason}`;
+                let idempotencyKey: string;
+
                 try {
                     const bookPayload: CreateAppointmentPayload = {
                         doctorId: action.payload.doctorId,
@@ -832,11 +856,6 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         appointmentSlotId: action.payload.slotId,
                         reason: actionReason
                     };
-
-                    const currentAttemptId = `${bookingAccountKey ?? "anon"}_${bookingDraftIdAtStart ?? "draft"}_${actionConfirmationId || `${action.payload.slotId}_v${activeDraft.version}`}`;
-                    const payloadFingerprint = `${action.payload.specialtyId}_${action.payload.doctorId}_${action.payload.slotId}_${action.payload.slotDate}_${action.payload.startTime}_${actionReason}`;
-
-                    let idempotencyKey: string;
                     if (
                         lastConfirmationAttemptRef.current &&
                         lastConfirmationAttemptRef.current.attemptId === currentAttemptId &&
@@ -852,6 +871,11 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                             payloadFingerprint,
                             key: idempotencyKey
                         };
+                        try {
+                            sessionStorage.setItem(widgetStorageKey, JSON.stringify(lastConfirmationAttemptRef.current));
+                        } catch {
+                            // ignore storage error
+                        }
                     }
 
                     const bookRes = await axiosClient.post<CreateAppointmentPayload, ApiResponse<AppointmentEntityDto>>(
@@ -867,6 +891,11 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     if (bookRes.success && bookRes.data) {
                         if (lastConfirmationAttemptRef.current?.key === idempotencyKey) {
                             lastConfirmationAttemptRef.current = null;
+                            try {
+                                sessionStorage.removeItem(widgetStorageKey);
+                            } catch {
+                                // ignore storage error
+                            }
                         }
                         if (!isBookingAttemptStillCurrent()) {
                             return;
@@ -904,6 +933,11 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 
                     if (errorCode === "SLOT_ALREADY_BOOKED") {
                         lastConfirmationAttemptRef.current = null;
+                        try {
+                            sessionStorage.removeItem(widgetStorageKey);
+                        } catch {
+                            // ignore storage error
+                        }
                         const conflictNotice: ChatMessage = {
                             role: "model",
                             content: "⚠️ **Khung giờ này vừa có bệnh nhân khác đặt trước.** Khung giờ đã được cập nhật, thông tin triệu chứng của bạn vẫn được lưu giữ. Vui lòng chọn khung giờ khác bên dưới:",
@@ -923,6 +957,18 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                             conflictNotice
                         );
                     } else {
+                        // Network/unknown error: preserve key as uncertain for retry
+                        if (lastConfirmationAttemptRef.current?.payloadFingerprint === payloadFingerprint) {
+                            lastConfirmationAttemptRef.current = {
+                                ...lastConfirmationAttemptRef.current,
+                                status: "uncertain"
+                            };
+                            try {
+                                sessionStorage.setItem(widgetStorageKey, JSON.stringify(lastConfirmationAttemptRef.current));
+                            } catch {
+                                // ignore storage error
+                            }
+                        }
                         const errorNotice = apiErr?.response?.data?.message || apiErr?.message || "Đặt lịch không thành công. Vui lòng thử lại.";
                         setMessages(prev => [...prev, {
                             role: "model",

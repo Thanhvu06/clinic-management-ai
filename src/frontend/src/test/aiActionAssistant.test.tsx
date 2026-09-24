@@ -1835,5 +1835,231 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         expect(screen.queryByText(/APT-LEAK-777/i)).not.toBeInTheDocument();
         unmount();
     });
-});
 
+    it('catch block: context change before error -> does NOT clear other turn attempt state', async () => {
+        const testStorageKey = 'cliniccare_pending_booking_attempt_pat-1';
+
+        let rejectA!: (err: unknown) => void;
+        const deferredA = new Promise((_, reject) => {
+            rejectA = reject;
+        });
+
+        vi.mocked(axiosClient.post).mockImplementation((url: string) => {
+            if (url === '/appointments') {
+                return deferredA as Promise<unknown>;
+            }
+            return Promise.resolve({ success: true, message: '', data: {} });
+        });
+
+        // Populate Draft A
+        sessionStorage.setItem('cliniccare_booking_draft_pat-1', JSON.stringify({
+            draftId: 'draft-A', // Different draft
+            specialtyId: 1,
+            specialtyName: 'Tim mạch',
+            doctorId: 101,
+            doctorName: 'BS Nguyễn Văn An',
+            slotId: 1001,
+            slotDate: '2026-09-23',
+            startTime: '09:00',
+            endTime: '09:30',
+            reason: 'Lý do khám',
+            isComplete: true,
+            version: 1
+        }));
+
+        const { unmount } = render(
+            <MemoryRouter initialEntries={['/patient/book']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        // Click to start request A
+        await screen.findByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i }));
+
+        await new Promise(r => setTimeout(r, 0));
+        unmount();
+        
+        // 1. Simulate Draft B is the current one in sessionStorage (context changed)
+        sessionStorage.setItem(testStorageKey, JSON.stringify({
+            accountKey: 'pat-1',
+            turnIdentity: 'pat-1_draft-B',
+            draftId: 'draft-B',
+            payloadFingerprint: 'std_1_101_2026-09-23_1001_Lý do khám',
+            key: 'key-B',
+            status: 'uncertain'
+        }));
+
+        // Now change the active draft to B to simulate context change
+        sessionStorage.setItem('cliniccare_booking_draft_pat-1', JSON.stringify({
+            draftId: 'draft-B', // Switched!
+            specialtyId: 1,
+            specialtyName: 'Tim mạch',
+            doctorId: 101,
+            doctorName: 'BS Nguyễn Văn An',
+            slotId: 1001,
+            slotDate: '2026-09-23',
+            startTime: '09:00',
+            endTime: '09:30',
+            reason: 'Lý do khám',
+            isComplete: true,
+            version: 1
+        }));
+        
+        console.log('BEFORE REJECT: ', sessionStorage.getItem(testStorageKey));
+        // Wait a bit, then reject A with 409
+        rejectA({
+            errorCode: 'SLOT_ALREADY_BOOKED',
+            response: {
+                status: 409,
+                data: { errorCode: 'SLOT_ALREADY_BOOKED' }
+            }
+        });
+
+        await new Promise(r => setTimeout(r, 50));
+
+        // Draft B's attempt should be untouched!
+        const finalSaved = sessionStorage.getItem(testStorageKey);
+        expect(finalSaved).not.toBeNull();
+        if (finalSaved) {
+            expect(JSON.parse(finalSaved).key).toBe('key-B');
+        }
+    });
+
+    it('widget: idempotency key survives remount via sessionStorage', async () => {
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: '',
+            data: {
+                message: 'Vui lòng xác nhận:',
+                urgency: 'ROUTINE',
+                bookingDraft: {
+                    specialtyId: 1, doctorId: 101, slotId: 1005, slotDate: '2026-09-24', startTime: '10:00', endTime: '10:30', reason: 'Triệu chứng', isComplete: true
+                },
+                actions: [
+                    {
+                        id: 'act-1', type: 'ConfirmBooking', label: 'Xác nhận đặt lịch', requiresConfirmation: true, payload: {
+                            specialtyId: 1, doctorId: 101, slotId: 1005, slotDate: '2026-09-24', startTime: '10:00', endTime: '10:30', reason: 'Triệu chứng'
+                        }
+                    }
+                ]
+            }
+        });
+
+        const deferredBooking = new Promise(() => {}); // never resolves
+        vi.mocked(axiosClient.post).mockImplementationOnce(() => deferredBooking);
+
+        const { unmount: unmountWidget } = render(
+            <MemoryRouter>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(input, { target: { value: 'Đặt lịch' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+        
+        await waitFor(() => {
+            expect(screen.getByText('Xác nhận đặt lịch')).toBeInTheDocument();
+        });
+        
+        fireEvent.click(screen.getByText('Xác nhận đặt lịch'));
+        
+        await waitFor(() => {
+            const saved = sessionStorage.getItem('cliniccare_pending_widget_attempt_pat-1');
+            expect(saved).not.toBeNull();
+            if (saved) {
+                expect(JSON.parse(saved).key).toBeDefined();
+            }
+        });
+
+        const savedBeforeUnmount = sessionStorage.getItem('cliniccare_pending_widget_attempt_pat-1');
+        
+        unmountWidget();
+        
+        // Remount
+        render(
+            <MemoryRouter>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+        
+        // Ensure it's still in storage
+        expect(sessionStorage.getItem('cliniccare_pending_widget_attempt_pat-1')).toBe(savedBeforeUnmount);
+    });
+
+    it('widget: deterministic rejection clears sessionStorage attempt', async () => {
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: '',
+            data: {
+                message: 'Vui lòng xác nhận:',
+                urgency: 'ROUTINE',
+                bookingDraft: {
+                    specialtyId: 1, doctorId: 101, slotId: 1005, slotDate: '2026-09-24', startTime: '10:00', endTime: '10:30', reason: 'Triệu chứng', isComplete: true
+                },
+                actions: [
+                    {
+                        id: 'act-1', type: 'ConfirmBooking', label: 'Xác nhận đặt lịch', requiresConfirmation: true, payload: {
+                            specialtyId: 1, doctorId: 101, slotId: 1005, slotDate: '2026-09-24', startTime: '10:00', endTime: '10:30', reason: 'Triệu chứng'
+                        }
+                    }
+                ]
+            }
+        });
+
+        vi.mocked(axiosClient.post).mockRejectedValueOnce({
+            errorCode: 'SLOT_ALREADY_BOOKED',
+            response: {
+                status: 409,
+                data: { errorCode: 'SLOT_ALREADY_BOOKED' }
+            }
+        });
+
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true, message: '', data: { actions: [] }
+        });
+
+        render(
+            <MemoryRouter>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(input, { target: { value: 'Đặt lịch' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+        
+        await waitFor(() => {
+            expect(screen.getByText('Xác nhận đặt lịch')).toBeInTheDocument();
+        });
+        
+        // Setting it manually to simulate storage
+        sessionStorage.setItem('cliniccare_pending_widget_attempt_pat-1', JSON.stringify({
+            attemptId: 'pat-1_draft_1005_v1',
+            payloadFingerprint: '1_101_1005_2026-09-24_10:00_Triệu chứng',
+            key: 'key-1'
+        }));
+        
+        fireEvent.click(screen.getByText('Xác nhận đặt lịch'));
+        
+        await waitFor(() => {
+            const saved = sessionStorage.getItem('cliniccare_pending_widget_attempt_pat-1');
+            expect(saved).toBeNull(); // Should be cleared on SLOT_ALREADY_BOOKED
+        });
+    });
+
+});

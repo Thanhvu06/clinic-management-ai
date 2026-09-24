@@ -67,7 +67,7 @@ public class AiSpecialtyService : IAiSpecialtyService
     }
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SelectionSnapshot> _snapshotStore = new();
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _cancelledDraftIds = new(StringComparer.Ordinal);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _cancelledDraftIds = new(StringComparer.Ordinal);
 
     private string CreateSelectionSnapshot(
         Guid? userId,
@@ -108,7 +108,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         return snapshotId;
     }
 
-    public static void InvalidateDraftSnapshots(string? draftId)
+    public static void InvalidateDraftSnapshots(string? draftId, Guid? userId = null)
     {
         if (string.IsNullOrWhiteSpace(draftId))
         {
@@ -116,13 +116,23 @@ public class AiSpecialtyService : IAiSpecialtyService
         }
 
         var cleanDraftId = draftId.Trim();
-        _cancelledDraftIds[cleanDraftId] = 1;
+        bool ownsDraft = !userId.HasValue;
+        
         foreach (var kvp in _snapshotStore)
         {
             if (string.Equals(kvp.Value.DraftId, cleanDraftId, StringComparison.Ordinal))
             {
-                _snapshotStore.TryRemove(kvp.Key, out _);
+                if (!userId.HasValue || kvp.Value.UserId == userId)
+                {
+                    ownsDraft = true;
+                    _snapshotStore.TryRemove(kvp.Key, out _);
+                }
             }
+        }
+
+        if (ownsDraft)
+        {
+            _cancelledDraftIds[cleanDraftId] = DateTime.UtcNow.AddHours(1);
         }
     }
 
@@ -130,7 +140,7 @@ public class AiSpecialtyService : IAiSpecialtyService
     {
         if (!string.IsNullOrWhiteSpace(draftId))
         {
-            InvalidateDraftSnapshots(draftId);
+            InvalidateDraftSnapshots(draftId, userId);
         }
 
         var cleanSessionId = !string.IsNullOrWhiteSpace(sessionId) ? sessionId.Trim() : null;
@@ -145,7 +155,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                     {
                         if (!string.IsNullOrWhiteSpace(snap.DraftId))
                         {
-                            _cancelledDraftIds[snap.DraftId] = 1;
+                            _cancelledDraftIds[snap.DraftId] = DateTime.UtcNow.AddHours(1);
                         }
                         _snapshotStore.TryRemove(kvp.Key, out _);
                     }
@@ -154,7 +164,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 {
                     if (!string.IsNullOrWhiteSpace(snap.DraftId))
                     {
-                        _cancelledDraftIds[snap.DraftId] = 1;
+                        _cancelledDraftIds[snap.DraftId] = DateTime.UtcNow.AddHours(1);
                     }
                     _snapshotStore.TryRemove(kvp.Key, out _);
                 }
@@ -164,7 +174,18 @@ public class AiSpecialtyService : IAiSpecialtyService
 
     public static bool IsDraftCancelled(string? draftId)
     {
-        return !string.IsNullOrWhiteSpace(draftId) && _cancelledDraftIds.ContainsKey(draftId.Trim());
+        if (string.IsNullOrWhiteSpace(draftId)) return false;
+        var cleanId = draftId.Trim();
+        if (_cancelledDraftIds.TryGetValue(cleanId, out var expiresAt))
+        {
+            if (DateTime.UtcNow > expiresAt)
+            {
+                _cancelledDraftIds.TryRemove(cleanId, out _);
+                return false;
+            }
+            return true;
+        }
+        return false;
     }
 
     public static bool ValidateSnapshot(
@@ -561,12 +582,14 @@ public class AiSpecialtyService : IAiSpecialtyService
 
         // 6. Call AI Provider for Intent & Information Extraction
         AiChatProviderResult? aiResult = null;
+        bool providerActuallyFailed = false;
         try
         {
             aiResult = await _aiProvider.ChatWithAiAsync(cleanMessage, cleanContext, whitelistData, clinicContextJson, cancellationToken);
         }
         catch (Exception ex)
         {
+            providerActuallyFailed = true;
             _logger.LogError(ex, "AI Provider chat failed.");
             if (!localClassification.ExtractedRelativeDoctorIndex.HasValue && !localClassification.ExtractedRelativeSlotIndex.HasValue)
             {
@@ -576,6 +599,7 @@ public class AiSpecialtyService : IAiSpecialtyService
 
         if (aiResult == null || !aiResult.IsSuccess || string.IsNullOrWhiteSpace(aiResult.Reply))
         {
+            providerActuallyFailed = true;
             if (localClassification.ExtractedRelativeDoctorIndex.HasValue || localClassification.ExtractedRelativeSlotIndex.HasValue)
             {
                 aiResult = new AiChatProviderResult
@@ -630,6 +654,10 @@ public class AiSpecialtyService : IAiSpecialtyService
             AssistantStatus = "Online",
             ProviderStatus = "Healthy"
         };
+        if (providerActuallyFailed)
+        {
+            responseDto.ProviderStatus = "Degraded";
+        }
 
         // Re-check emergency urgency from AI output
         if (string.Equals(responseDto.Urgency, "EMERGENCY", StringComparison.OrdinalIgnoreCase))
@@ -739,7 +767,8 @@ public class AiSpecialtyService : IAiSpecialtyService
             ? request.DraftId.Trim()
             : null;
 
-        responseDto.SessionId = activeSessionId ?? $"sess_{Guid.NewGuid():N}";
+        var resolvedSessionId = activeSessionId ?? $"sess_{Guid.NewGuid():N}";
+        responseDto.SessionId = resolvedSessionId;
         if (responseDto.BookingDraft != null)
         {
             var resolvedDraftId = activeDraftId ?? $"draft_{Guid.NewGuid():N}";
@@ -774,8 +803,8 @@ public class AiSpecialtyService : IAiSpecialtyService
                 activeDraftVersion,
                 docIdsInActions,
                 slotIdsInActions,
-                sessionId: activeSessionId,
-                draftId: activeDraftId,
+                sessionId: resolvedSessionId,
+                draftId: responseDto.DraftId,
                 specialtyId: responseDto.BookingDraft?.SpecialtyId ?? request.PendingSpecialtyId,
                 doctorId: responseDto.BookingDraft?.DoctorId ?? request.PendingDoctorId,
                 slotDate: responseDto.BookingDraft?.SlotDate ?? request.PendingSlotDate);
@@ -1031,7 +1060,8 @@ public class AiSpecialtyService : IAiSpecialtyService
 
         var activeSessionId = !string.IsNullOrWhiteSpace(request.SessionId) ? request.SessionId.Trim() : null;
         var activeDraftId = !string.IsNullOrWhiteSpace(request.DraftId) && !IsDraftCancelled(request.DraftId) ? request.DraftId.Trim() : null;
-        response.SessionId = activeSessionId ?? $"sess_{Guid.NewGuid():N}";
+        var resolvedSessionId = activeSessionId ?? $"sess_{Guid.NewGuid():N}";
+        response.SessionId = resolvedSessionId;
         if (response.BookingDraft != null)
         {
             var resolvedDraftId = activeDraftId ?? $"draft_{Guid.NewGuid():N}";
@@ -1048,8 +1078,8 @@ public class AiSpecialtyService : IAiSpecialtyService
                 nextDraftVersion,
                 earliestDocIds,
                 earliestSlotIds,
-                sessionId: activeSessionId,
-                draftId: activeDraftId,
+                sessionId: resolvedSessionId,
+                draftId: response.DraftId,
                 specialtyId: specialty.Id,
                 doctorId: selectedDoctor?.Id,
                 slotDate: searchFrom.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));

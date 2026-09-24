@@ -692,6 +692,11 @@ export const BookAppointment: React.FC = () => {
                 status === 409 ||
                 status === 422;
 
+            // GUARD: Do NOT mutate attempt state if context changed while request was in-flight
+            if (!isCurrentContext()) {
+                return;
+            }
+
             if (isDeterministicRejection) {
                 if (lastConfirmationAttemptRef.current?.payloadFingerprint === payloadFingerprint) {
                     lastConfirmationAttemptRef.current = null;
@@ -720,11 +725,6 @@ export const BookAppointment: React.FC = () => {
                         // ignore storage error
                     }
                 }
-            }
-
-            // Do NOT apply stale error or mutate draft B if context changed while Request A was in-flight
-            if (!isCurrentContext()) {
-                return;
             }
 
             let msg = apiErr?.response?.data?.message || apiErr?.message || "Có lỗi xảy ra khi đặt lịch.";

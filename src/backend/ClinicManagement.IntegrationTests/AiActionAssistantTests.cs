@@ -3071,4 +3071,178 @@ public class AiActionAssistantTests : IntegrationTestBase
 
         AiSpecialtyService.ClearSnapshotsForTesting();
     }
+
+    [Fact]
+    public async Task ScenarioY_a_ProviderFailure_RelativeSelection_ReturnsProviderDegraded()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        
+        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSpecialtyService.StoreSnapshotForTesting(new AiSpecialtyService.SelectionSnapshot
+        {
+            SnapshotId = "snap_rel_fail",
+            UserId = Patient1Id,
+            DoctorIds = new List<long> { DoctorEntityId },
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15)
+        });
+
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(It.IsAny<string>(), It.IsAny<List<ChatMessageDto>>(), It.IsAny<List<WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Network failure"));
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Bác sĩ đầu tiên",
+            ContextSnapshotId = "snap_rel_fail",
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Test"
+        };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = doc.RootElement.GetProperty("data");
+
+        Assert.Equal("Degraded", data.GetProperty("providerStatus").GetString());
+        var draft = data.GetProperty("bookingDraft");
+        Assert.Equal(DoctorEntityId, draft.GetProperty("doctorId").GetInt64());
+    }
+
+    [Fact]
+    public async Task ScenarioY_b_ProviderSuccess_ReturnsProviderHealthy()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(It.IsAny<string>(), It.IsAny<List<ChatMessageDto>>(), It.IsAny<List<WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Chào bạn.",
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Xin chào"
+        };
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = doc.RootElement.GetProperty("data");
+
+        Assert.Equal("Healthy", data.GetProperty("providerStatus").GetString());
+    }
+
+    [Fact]
+    public async Task ScenarioZ_a_FirstRequest_NoIds_SnapshotStoresResolvedIds()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        AiSpecialtyService.ClearSnapshotsForTesting();
+
+        var workingDate = GetFutureWorkingDate(3);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, workingDate, new TimeOnly(14, 0, 0), new TimeOnly(14, 30, 0));
+
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(It.IsAny<string>(), It.IsAny<List<ChatMessageDto>>(), It.IsAny<List<WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Vui lòng chọn bác sĩ.",
+                Urgency = "ROUTINE",
+                ExtractedSpecialtyCode = "SP06"
+            });
+
+        var request1 = new AiChatRequestDto
+        {
+            Message = "Tôi muốn khám tim mạch, tìm bác sĩ cho tôi",
+            Intent = AiChatIntentTypes.FindEarliestAvailableSlot,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau tức ngực"
+        };
+        var res1 = await Client.PostAsJsonAsync("/api/v1/ai/chat", request1);
+        Assert.Equal(HttpStatusCode.OK, res1.StatusCode);
+
+        var doc1 = JsonDocument.Parse(await res1.Content.ReadAsStringAsync());
+        var data1 = doc1.RootElement.GetProperty("data");
+        
+        var returnedSessionId = data1.GetProperty("sessionId").GetString()!;
+        var returnedDraftId = data1.GetProperty("draftId").GetString()!;
+        
+        Assert.True(data1.TryGetProperty("contextSnapshotId", out var snapProp) && snapProp.ValueKind != JsonValueKind.Null, "contextSnapshotId is missing or null");
+        var contextSnapshotId = snapProp.GetString()!;
+
+        Assert.StartsWith("sess_", returnedSessionId);
+        Assert.StartsWith("draft_", returnedDraftId);
+        Assert.NotNull(contextSnapshotId);
+
+        var request2 = new AiChatRequestDto
+        {
+            Message = "Bác sĩ đầu tiên",
+            SessionId = returnedSessionId,
+            DraftId = returnedDraftId,
+            DraftVersion = data1.GetProperty("bookingDraft").GetProperty("version").GetInt32(),
+            PendingSpecialtyId = data1.GetProperty("bookingDraft").GetProperty("specialtyId").GetInt64(),
+            Reason = "Đau tức ngực",
+            ContextSnapshotId = contextSnapshotId
+        };
+
+        var res2 = await Client.PostAsJsonAsync("/api/v1/ai/chat", request2);
+        Assert.Equal(HttpStatusCode.OK, res2.StatusCode);
+        
+        var doc2 = JsonDocument.Parse(await res2.Content.ReadAsStringAsync());
+        var data2 = doc2.RootElement.GetProperty("data");
+
+        Assert.True(data2.GetProperty("bookingDraft").GetProperty("doctorId").GetInt64() > 0);
+    }
+
+    [Fact]
+    public async Task ScenarioAA_a_UserBCannotRevokeUserASnapshot()
+    {
+        AiSpecialtyService.ClearSnapshotsForTesting();
+        var snapshotId = "snap_user_a";
+        var draftId = "draft_user_a";
+        AiSpecialtyService.StoreSnapshotForTesting(new AiSpecialtyService.SelectionSnapshot
+        {
+            SnapshotId = snapshotId,
+            UserId = Patient1Id,
+            DraftId = draftId,
+            SessionId = "sess_1",
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15)
+        });
+
+        AiSpecialtyService.InvalidateDraftSnapshotsForCancel(draftId, "sess_1", Patient2Id);
+
+        var result = AiSpecialtyService.ValidateSnapshot(
+            snapshotId,
+            Patient1Id,
+            null,
+            null,
+            null,
+            DateTime.UtcNow,
+            out var snapshot,
+            out var error,
+            currentSessionId: "sess_1",
+            currentDraftId: draftId);
+            
+        Assert.True(result, $"Snapshot should still be valid. Error: {error}");
+        Assert.NotNull(snapshot);
+    }
+
+    [Fact]
+    public async Task ScenarioAA_b_CancelledDraftTTLExpires()
+    {
+        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSpecialtyService.InvalidateDraftSnapshotsForCancel("test_draft", null, null);
+        Assert.True(AiSpecialtyService.IsDraftCancelled("test_draft"));
+
+        var dictField = typeof(AiSpecialtyService).GetField("_cancelledDraftIds", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        var dict = (System.Collections.Concurrent.ConcurrentDictionary<string, DateTime>)dictField!.GetValue(null)!;
+        dict["test_draft"] = DateTime.UtcNow.AddHours(-2);
+
+        Assert.False(AiSpecialtyService.IsDraftCancelled("test_draft"));
+    }
 }
