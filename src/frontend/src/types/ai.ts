@@ -294,6 +294,8 @@ export interface AiSpecialtySuggestion {
 }
 
 export interface AiBookingDraft {
+    draftId?: string;
+    sessionId?: string;
     specialtyId?: number;
     specialtyName?: string;
     doctorId?: number;
@@ -327,6 +329,8 @@ export interface AiChatResponse {
     clarificationPrompt?: string;
     primaryIntent?: AiChatIntent | string;
     contextSnapshotId?: string;
+    sessionId?: string;
+    draftId?: string;
 }
 
 export interface ChatMessage {

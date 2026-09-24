@@ -34,6 +34,8 @@ export interface AiChatRequestPayload {
     displayedDoctorIds?: number[];
     displayedSlotIds?: number[];
     contextSnapshotId?: string;
+    sessionId?: string;
+    draftId?: string;
 }
 
 export interface CreateAppointmentPayload {
@@ -111,6 +113,8 @@ interface SendMessageOptions {
     reason?: string;
     draftVersion?: number;
     contextSnapshotId?: string;
+    sessionId?: string;
+    draftId?: string;
 }
 
 export const useAiBookingFlow = (onNavigate?: () => void) => {
@@ -133,9 +137,12 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     const [errorMsg, setErrorMsg] = useState("");
     const navigate = useNavigate();
     const activeRequestIdRef = useRef(0);
+    const activeBookingSubmitIdRef = useRef(0);
     const activeRequestControllerRef = useRef<AbortController | null>(null);
     const accountKey = user ? (user.userId || (user.id !== undefined ? String(user.id) : null)) : null;
     const accountKeyRef = useRef(accountKey);
+    const activeDraftRef = useRef(activeDraft);
+    const sessionIdRef = useRef<string>("");
     const lastConfirmationAttemptRef = useRef<{ attemptId: string; payloadFingerprint: string; key: string } | null>(null);
     const isSubmittingBookingRef = useRef(false);
     const lastKnownGeminiStatusRef = useRef<"Unchecked" | "Healthy" | "Degraded">("Unchecked");
@@ -143,7 +150,19 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     const contextSnapshotIdRef = useRef<string | undefined>(undefined);
 
     useEffect(() => {
+        activeDraftRef.current = activeDraft;
+        if (!activeDraft) {
+            lastConfirmationAttemptRef.current = null;
+        }
+    }, [activeDraft]);
+
+    useEffect(() => {
         accountKeyRef.current = accountKey;
+        lastConfirmationAttemptRef.current = null;
+        contextSnapshotIdRef.current = undefined;
+        sessionIdRef.current = typeof crypto !== "undefined" && crypto.randomUUID
+            ? `sess_${crypto.randomUUID()}`
+            : `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         return () => {
             activeRequestControllerRef.current?.abort();
         };
@@ -214,7 +233,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 draftVersion: pendingPayload?.draftVersion ?? activeDraft?.version,
                 displayedDoctorIds: displayedDoctorIds.length > 0 ? displayedDoctorIds : undefined,
                 displayedSlotIds: displayedSlotIds.length > 0 ? displayedSlotIds : undefined,
-                contextSnapshotId: pendingPayload?.contextSnapshotId ?? contextSnapshotIdRef.current
+                contextSnapshotId: pendingPayload?.contextSnapshotId ?? contextSnapshotIdRef.current,
+                sessionId: pendingPayload?.sessionId ?? sessionIdRef.current,
+                draftId: pendingPayload?.draftId ?? activeDraft?.draftId
             };
 
             const res = await axiosClient.post<AiChatRequestPayload, ApiResponse<AiChatResponse>>(
@@ -227,6 +248,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 
             if (res.success && res.data) {
                 const data = res.data;
+                if (data.sessionId) {
+                    sessionIdRef.current = data.sessionId;
+                }
                 if (data.contextSnapshotId) {
                     contextSnapshotIdRef.current = data.contextSnapshotId;
                 }
@@ -789,6 +813,16 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     return;
                 }
 
+                const bookingSubmitId = ++activeBookingSubmitIdRef.current;
+                const bookingAccountKey = accountKeyRef.current;
+                const bookingContextVersionAtStart = getBookingContextVersion();
+                const bookingDraftIdAtStart = activeDraft.draftId;
+                const isBookingAttemptStillCurrent = () =>
+                    bookingSubmitId === activeBookingSubmitIdRef.current &&
+                    bookingAccountKey === accountKeyRef.current &&
+                    bookingContextVersionAtStart === getBookingContextVersion() &&
+                    activeDraftRef.current?.draftId === bookingDraftIdAtStart;
+
                 isSubmittingBookingRef.current = true;
                 setSubmittingBooking(true);
                 try {
@@ -799,7 +833,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         reason: actionReason
                     };
 
-                    const currentAttemptId = actionConfirmationId || `${action.payload.slotId}_v${activeDraft.version}`;
+                    const currentAttemptId = `${bookingAccountKey ?? "anon"}_${bookingDraftIdAtStart ?? "draft"}_${actionConfirmationId || `${action.payload.slotId}_v${activeDraft.version}`}`;
                     const payloadFingerprint = `${action.payload.specialtyId}_${action.payload.doctorId}_${action.payload.slotId}_${action.payload.slotDate}_${action.payload.startTime}_${actionReason}`;
 
                     let idempotencyKey: string;
@@ -831,7 +865,12 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     );
 
                     if (bookRes.success && bookRes.data) {
-                        lastConfirmationAttemptRef.current = null;
+                        if (lastConfirmationAttemptRef.current?.key === idempotencyKey) {
+                            lastConfirmationAttemptRef.current = null;
+                        }
+                        if (!isBookingAttemptStillCurrent()) {
+                            return;
+                        }
                         const apt = bookRes.data;
                         const formattedDate = formatVietnameseDate(action.payload.slotDate);
                         const finalReason = apt.reason || actionReason;
@@ -857,10 +896,14 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         setActiveDraft(null);
                     }
                 } catch (err: unknown) {
+                    if (!isBookingAttemptStillCurrent()) {
+                        return;
+                    }
                     const apiErr = err as { response?: { data?: { errorCode?: string; message?: string } }; errorCode?: string; message?: string };
                     const errorCode = apiErr?.response?.data?.errorCode || apiErr?.errorCode;
 
                     if (errorCode === "SLOT_ALREADY_BOOKED") {
+                        lastConfirmationAttemptRef.current = null;
                         const conflictNotice: ChatMessage = {
                             role: "model",
                             content: "⚠️ **Khung giờ này vừa có bệnh nhân khác đặt trước.** Khung giờ đã được cập nhật, thông tin triệu chứng của bạn vẫn được lưu giữ. Vui lòng chọn khung giờ khác bên dưới:",
@@ -888,8 +931,10 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         }]);
                     }
                 } finally {
-                    isSubmittingBookingRef.current = false;
-                    setSubmittingBooking(false);
+                    if (bookingSubmitId === activeBookingSubmitIdRef.current) {
+                        isSubmittingBookingRef.current = false;
+                        setSubmittingBooking(false);
+                    }
                 }
                 break;
             }

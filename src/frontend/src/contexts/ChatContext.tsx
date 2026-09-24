@@ -161,6 +161,11 @@ const loadStoredMessages = (accountKey: string | null): ChatMessage[] => {
     return [DEFAULT_AI_MESSAGE];
 };
 
+const generateDraftIdentity = (): string =>
+    typeof crypto !== "undefined" && crypto.randomUUID
+        ? `draft_${crypto.randomUUID()}`
+        : `draft_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
 const loadStoredDraft = (accountKey: string | null): AiBookingDraft | null => {
     if (!accountKey) return null;
     try {
@@ -171,6 +176,9 @@ const loadStoredDraft = (accountKey: string | null): AiBookingDraft | null => {
                 const raw = parsed as Record<string, unknown>;
                 if (raw.version === null || raw.version === undefined || typeof raw.version !== "number" || !Number.isInteger(raw.version) || raw.version < 1) {
                     raw.version = 1;
+                }
+                if (typeof raw.draftId !== "string" || !raw.draftId) {
+                    raw.draftId = generateDraftIdentity();
                 }
                 if (validateBookingDraftSchema(raw)) return raw;
             }
@@ -194,7 +202,22 @@ const AccountBoundChatProvider: React.FC<{
     const setActiveDraft = useCallback<React.Dispatch<React.SetStateAction<AiBookingDraft | null>>>((update) => {
         if (!accountKey) return;
         bookingContextVersionRef.current += 1;
-        setActiveDraftState(update);
+        setActiveDraftState(previous => {
+            const resolved = typeof update === "function" ? update(previous) : update;
+            if (!resolved) {
+                try {
+                    sessionStorage.removeItem(`cliniccare_pending_booking_attempt_${accountKey}`);
+                } catch {
+                    // ignore storage error
+                }
+                return null;
+            }
+            const nextDraftId = resolved.draftId || previous?.draftId || generateDraftIdentity();
+            return {
+                ...resolved,
+                draftId: nextDraftId
+            };
+        });
     }, [accountKey]);
 
     const setPendingSpecialtyId = useCallback((id: number | null) => {
@@ -217,6 +240,7 @@ const AccountBoundChatProvider: React.FC<{
                 sessionStorage.setItem(draftKey, JSON.stringify(activeDraft));
             } else {
                 sessionStorage.removeItem(draftKey);
+                sessionStorage.removeItem(`cliniccare_pending_booking_attempt_${accountKey}`);
             }
         } catch (error) {
             console.error("Failed to save booking draft", error);
@@ -246,6 +270,7 @@ const AccountBoundChatProvider: React.FC<{
         setAiAssistantStatus("Unchecked");
         sessionStorage.removeItem(`cliniccare_chat_history_${accountKey}`);
         sessionStorage.removeItem(`cliniccare_booking_draft_${accountKey}`);
+        sessionStorage.removeItem(`cliniccare_pending_booking_attempt_${accountKey}`);
     };
 
     return (

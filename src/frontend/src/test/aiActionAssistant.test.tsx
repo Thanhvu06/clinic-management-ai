@@ -1251,5 +1251,589 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
             expect(screen.getByText('Trực tuyến')).toBeInTheDocument();
         });
     });
+
+    it('P1_StaleResponse_A_SucceedsAfterDraftModifiedToB_PreservesDraftB_AndDoesNotOverwriteUI', async () => {
+        const specialties = [{ id: 1, specialtyCode: 'SP01', specialtyName: 'Tim mạch', description: 'Khoa Tim mạch' }];
+        const doctors = [{ id: 101, fullName: 'Nguyễn Văn An', academicTitle: 'BS', specialtyId: 1, specialtyName: 'Tim mạch' }];
+        const slots = [
+            { id: 1001, slotId: 1001, doctorId: 101, slotDate: '2026-09-23', startTime: '09:00:00', endTime: '09:30:00', isAvailable: true },
+            { id: 1002, slotId: 1002, doctorId: 101, slotDate: '2026-09-23', startTime: '10:00:00', endTime: '10:30:00', isAvailable: true }
+        ];
+
+        vi.mocked(axiosClient.get).mockImplementation((url: string) => {
+            if (url === '/specialties') return Promise.resolve({ success: true, message: '', data: specialties });
+            if (url === '/specialties/1/doctors') return Promise.resolve({ success: true, message: '', data: doctors });
+            if (url.includes('/doctors/101/available-slots')) return Promise.resolve({ success: true, message: '', data: slots });
+            return Promise.resolve({ success: true, message: '', data: [] });
+        });
+
+        let resolveRequestA!: (val: unknown) => void;
+        const deferredA = new Promise((resolve) => {
+            resolveRequestA = resolve;
+        });
+
+        let chatTurnA = 0;
+        vi.mocked(axiosClient.post).mockImplementation((url: string) => {
+            if (url === '/appointments') {
+                return deferredA as Promise<unknown>;
+            }
+            chatTurnA += 1;
+            if (chatTurnA === 1) {
+                return Promise.resolve({
+                    success: true,
+                    message: '',
+                    data: {
+                        message: 'Đã chuẩn bị bản nháp A',
+                        urgency: 'ROUTINE',
+                        providerStatus: 'Healthy',
+                        assistantStatus: 'Online',
+                        bookingDraft: {
+                            draftId: 'draft-a',
+                            specialtyId: 1,
+                            specialtyName: 'Tim mạch',
+                            doctorId: 101,
+                            doctorName: 'BS Nguyễn Văn An',
+                            slotId: 1001,
+                            slotDate: '2026-09-23',
+                            startTime: '09:00',
+                            endTime: '09:30',
+                            reason: 'Đau tức ngực trái kéo dài 3 ngày',
+                            isComplete: true,
+                            version: 1,
+                            confirmationId: 'conf_a_1'
+                        },
+                        actions: []
+                    }
+                });
+            }
+            return Promise.resolve({
+                success: true,
+                message: '',
+                data: {
+                    message: 'Đã cập nhật sang bản nháp B',
+                    urgency: 'ROUTINE',
+                    providerStatus: 'Healthy',
+                    assistantStatus: 'Online',
+                    bookingDraft: {
+                        draftId: 'draft-a',
+                        specialtyId: 1,
+                        specialtyName: 'Tim mạch',
+                        doctorId: 101,
+                        doctorName: 'BS Nguyễn Văn An',
+                        slotId: 1002,
+                        slotDate: '2026-09-23',
+                        startTime: '10:00',
+                        endTime: '10:30',
+                        reason: 'Đau tức ngực trái kèm khó thở về đêm (Draft B)',
+                        isComplete: true,
+                        version: 2,
+                        confirmationId: 'conf_b_2'
+                    },
+                    actions: []
+                }
+            });
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/patient/book']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                        <MedicalChatWidget />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        // Seed Draft A via chat
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const chatInput = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(chatInput, { target: { value: 'Đặt lịch khám tim mạch' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        const reasonTextarea = await screen.findByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
+        await waitFor(() => {
+            expect((reasonTextarea as HTMLTextAreaElement).value).toBe('Đau tức ngực trái kéo dài 3 ngày');
+        });
+
+        // Navigate to step 4 and submit Request A
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+        const confirmBtn = await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i });
+        fireEvent.click(confirmBtn);
+
+        // While Request A is in-flight, user modifies draft into Draft B via chat
+        fireEvent.change(chatInput, { target: { value: 'Đổi sang giờ 10:00 và lý do mới' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+        await waitFor(() => {
+            expect(screen.getByText('Đã cập nhật sang bản nháp B')).toBeInTheDocument();
+        });
+
+        // Now resolve stale Request A
+        resolveRequestA({
+            success: true,
+            message: '',
+            data: {
+                id: 901,
+                appointmentCode: 'APT-901',
+                doctorName: 'BS Nguyễn Văn An',
+                specialtyName: 'Tim mạch',
+                startTime: '09:00:00',
+                endTime: '09:30:00',
+                reason: 'Đau tức ngực trái kéo dài 3 ngày'
+            }
+        });
+
+        await new Promise(r => setTimeout(r, 30));
+
+        // Draft B must remain intact in sessionStorage and UI, NOT wiped or replaced by Request A's success screen
+        expect(screen.queryByText('APT-901')).not.toBeInTheDocument();
+        const savedDraftBRaw = sessionStorage.getItem('cliniccare_booking_draft_pat-1');
+        expect(savedDraftBRaw).not.toBeNull();
+        const savedDraftB = JSON.parse(savedDraftBRaw!);
+        expect(savedDraftB.slotId).toBe(1002);
+        expect(savedDraftB.version).toBe(2);
+        expect(savedDraftB.reason).toBe('Đau tức ngực trái kèm khó thở về đêm (Draft B)');
+    });
+
+    it('P1_StaleResponse_A_ReturnsSlotAlreadyBooked_AfterCancelAndNewDraftB_PreservesDraftBSlotAndVersion', async () => {
+        const specialties = [{ id: 1, specialtyCode: 'SP01', specialtyName: 'Tim mạch', description: 'Khoa Tim mạch' }];
+        const doctors = [{ id: 101, fullName: 'Nguyễn Văn An', academicTitle: 'BS', specialtyId: 1, specialtyName: 'Tim mạch' }];
+        const slots = [
+            { id: 1001, slotId: 1001, doctorId: 101, slotDate: '2026-09-23', startTime: '09:00:00', endTime: '09:30:00', isAvailable: true },
+            { id: 1002, slotId: 1002, doctorId: 101, slotDate: '2026-09-23', startTime: '10:00:00', endTime: '10:30:00', isAvailable: true }
+        ];
+
+        vi.mocked(axiosClient.get).mockImplementation((url: string) => {
+            if (url === '/specialties') return Promise.resolve({ success: true, message: '', data: specialties });
+            if (url === '/specialties/1/doctors') return Promise.resolve({ success: true, message: '', data: doctors });
+            if (url.includes('/doctors/101/available-slots')) return Promise.resolve({ success: true, message: '', data: slots });
+            return Promise.resolve({ success: true, message: '', data: [] });
+        });
+
+        let rejectRequestA!: (err: unknown) => void;
+        const deferredA = new Promise((_, reject) => {
+            rejectRequestA = reject;
+        });
+
+        let chatTurn = 0;
+        vi.mocked(axiosClient.post).mockImplementation((url: string) => {
+            if (url === '/appointments') {
+                return deferredA as Promise<unknown>;
+            }
+            chatTurn += 1;
+            if (chatTurn === 1) {
+                return Promise.resolve({
+                    success: true,
+                    message: '',
+                    data: {
+                        message: 'Bản nháp A',
+                        urgency: 'ROUTINE',
+                        providerStatus: 'Healthy',
+                        assistantStatus: 'Online',
+                        bookingDraft: {
+                            draftId: 'draft-a',
+                            specialtyId: 1,
+                            specialtyName: 'Tim mạch',
+                            doctorId: 101,
+                            doctorName: 'BS Nguyễn Văn An',
+                            slotId: 1001,
+                            slotDate: '2026-09-23',
+                            startTime: '09:00',
+                            endTime: '09:30',
+                            reason: 'Đau tức ngực trái kéo dài 3 ngày',
+                            isComplete: true,
+                            version: 1,
+                            confirmationId: 'conf_a_1'
+                        },
+                        actions: []
+                    }
+                });
+            }
+            if (chatTurn === 2) {
+                return Promise.resolve({
+                    success: true,
+                    message: '',
+                    data: {
+                        message: 'Đã hủy bản nháp A',
+                        urgency: 'ROUTINE',
+                        providerStatus: 'NotCalled',
+                        assistantStatus: 'Online',
+                        dialogueOutcome: 'DraftCancelled',
+                        bookingDraft: undefined,
+                        actions: []
+                    }
+                });
+            }
+            return Promise.resolve({
+                success: true,
+                message: '',
+                data: {
+                    message: 'Bản nháp B mới',
+                    urgency: 'ROUTINE',
+                    providerStatus: 'Healthy',
+                    assistantStatus: 'Online',
+                    bookingDraft: {
+                        draftId: 'draft-b',
+                        specialtyId: 1,
+                        specialtyName: 'Tim mạch',
+                        doctorId: 101,
+                        doctorName: 'BS Nguyễn Văn An',
+                        slotId: 1002,
+                        slotDate: '2026-09-23',
+                        startTime: '10:00',
+                        endTime: '10:30',
+                        reason: 'Khám định kỳ tim mạch tổng quát (Draft B)',
+                        isComplete: true,
+                        version: 1,
+                        confirmationId: 'conf_b_1'
+                    },
+                    actions: []
+                }
+            });
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/patient/book']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                        <MedicalChatWidget />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        // 1. Create Draft A
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const chatInput = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(chatInput, { target: { value: 'Đặt lịch A' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        await screen.findByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+        const confirmBtn = await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i });
+        fireEvent.click(confirmBtn);
+
+        // 2. Cancel Draft A via chat, then create Draft B with slot 1002
+        fireEvent.change(chatInput, { target: { value: 'Hủy đặt lịch' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+        await waitFor(() => {
+            expect(screen.getByText('Đã hủy bản nháp A')).toBeInTheDocument();
+        });
+
+        fireEvent.change(chatInput, { target: { value: 'Tạo lịch B' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+        await waitFor(() => {
+            expect(screen.getByText('Bản nháp B mới')).toBeInTheDocument();
+        });
+
+        // 3. Reject stale Request A with SLOT_ALREADY_BOOKED
+        rejectRequestA({
+            response: {
+                data: {
+                    errorCode: 'SLOT_ALREADY_BOOKED',
+                    message: 'Khung giờ này vừa được đặt bởi người khác.'
+                }
+            }
+        });
+
+        await new Promise(r => setTimeout(r, 30));
+
+        // Draft B in sessionStorage must still retain slotId: 1002, version: 1, confirmationId: 'conf_b_1'
+        const savedDraftRaw = sessionStorage.getItem('cliniccare_booking_draft_pat-1');
+        expect(savedDraftRaw).not.toBeNull();
+        const savedDraft = JSON.parse(savedDraftRaw!);
+        expect(savedDraft.slotId).toBe(1002);
+        expect(savedDraft.version).toBe(1);
+        expect(savedDraft.confirmationId).toBe('conf_b_1');
+    });
+
+    it('P1_Idempotency_TimeoutRetrySameTurn_CancelNewTurn_ModifyPayload_AndRemountReconciliation', async () => {
+        const specialties = [{ id: 1, specialtyCode: 'SP01', specialtyName: 'Tim mạch', description: 'Khoa Tim mạch' }];
+        const doctors = [{ id: 101, fullName: 'Nguyễn Văn An', academicTitle: 'BS', specialtyId: 1, specialtyName: 'Tim mạch' }];
+        const slots = [
+            { id: 1001, slotId: 1001, doctorId: 101, slotDate: '2026-09-23', startTime: '09:00:00', endTime: '09:30:00', isAvailable: true },
+            { id: 1002, slotId: 1002, doctorId: 101, slotDate: '2026-09-23', startTime: '10:00:00', endTime: '10:30:00', isAvailable: true }
+        ];
+
+        vi.mocked(axiosClient.get).mockImplementation((url: string) => {
+            if (url === '/specialties') return Promise.resolve({ success: true, message: '', data: specialties });
+            if (url === '/specialties/1/doctors') return Promise.resolve({ success: true, message: '', data: doctors });
+            if (url.includes('/doctors/101/available-slots')) return Promise.resolve({ success: true, message: '', data: slots });
+            return Promise.resolve({ success: true, message: '', data: [] });
+        });
+
+        const capturedKeys: string[] = [];
+        let shouldTimeout = true;
+
+        vi.mocked(axiosClient.post).mockImplementation((url: string, _data?: unknown, config?: unknown) => {
+            if (url === '/appointments') {
+                const headers = (config as { headers?: Record<string, string> } | undefined)?.headers;
+                const key = headers?.['Idempotency-Key'] || '';
+                capturedKeys.push(key);
+                if (shouldTimeout) {
+                    return Promise.reject(new Error('Network timeout'));
+                }
+                return Promise.resolve({
+                    success: true,
+                    message: '',
+                    data: {
+                        id: 999,
+                        appointmentCode: 'APT-999',
+                        doctorName: 'BS Nguyễn Văn An',
+                        specialtyName: 'Tim mạch',
+                        startTime: '09:00:00',
+                        endTime: '09:30:00',
+                        reason: 'Đau tức ngực trái kéo dài 3 ngày'
+                    }
+                });
+            }
+            return Promise.resolve({
+                success: true,
+                message: '',
+                data: {
+                    message: 'Đã chuẩn bị bản nháp',
+                    urgency: 'ROUTINE',
+                    providerStatus: 'Healthy',
+                    assistantStatus: 'Online',
+                    bookingDraft: {
+                        draftId: `draft-${capturedKeys.length}`,
+                        specialtyId: 1,
+                        specialtyName: 'Tim mạch',
+                        doctorId: 101,
+                        doctorName: 'BS Nguyễn Văn An',
+                        slotId: 1001,
+                        slotDate: '2026-09-23',
+                        startTime: '09:00',
+                        endTime: '09:30',
+                        reason: 'Đau tức ngực trái kéo dài 3 ngày',
+                        isComplete: true,
+                        version: 1,
+                        confirmationId: `conf_${capturedKeys.length}`
+                    },
+                    actions: []
+                }
+            });
+        });
+
+        // Pre-populate active draft in sessionStorage for user 1
+        sessionStorage.setItem('cliniccare_booking_draft_pat-1', JSON.stringify({
+            draftId: 'draft-turn-1',
+            specialtyId: 1,
+            specialtyName: 'Tim mạch',
+            doctorId: 101,
+            doctorName: 'BS Nguyễn Văn An',
+            slotId: 1001,
+            slotDate: '2026-09-23',
+            startTime: '09:00',
+            endTime: '09:30',
+            reason: 'Đau tức ngực trái kéo dài 3 ngày',
+            isComplete: true,
+            version: 1,
+            confirmationId: 'conf_turn_1'
+        }));
+
+        const { unmount } = render(
+            <MemoryRouter initialEntries={['/patient/book']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        await screen.findByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+        const confirmBtn = await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i });
+
+        // (a) First attempt times out -> records key K1
+        fireEvent.click(confirmBtn);
+        await waitFor(() => {
+            expect(capturedKeys.length).toBe(1);
+        });
+        const key1 = capturedKeys[0];
+        expect(key1).toBeTruthy();
+
+        // (f) Simulate remount/reload while outcome of K1 is still uncertain!
+        unmount();
+        const { unmount: unmount2 } = render(
+            <MemoryRouter initialEntries={['/patient/book']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        await screen.findByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i })).not.toBeDisabled();
+        });
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+        const confirmBtnAfterRemount = await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i });
+
+        // Retry after remount with same turn & payload MUST reuse key1!
+        fireEvent.click(confirmBtnAfterRemount);
+        await waitFor(() => {
+            expect(capturedKeys.length).toBe(2);
+        });
+        expect(capturedKeys[1]).toBe(key1);
+
+        // (d) Now user edits reason -> must generate a NEW key (key2 !== key1)
+        fireEvent.click(screen.getByRole('button', { name: /Quay lại/i }));
+        const reasonInput = await screen.findByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
+        fireEvent.change(reasonInput, { target: { value: 'Đau tức ngực trái kéo dài 5 ngày kèm mệt' } });
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i }));
+
+        await waitFor(() => {
+            expect(capturedKeys.length).toBe(3);
+        });
+        const key2 = capturedKeys[2];
+        expect(key2).not.toBe(key1);
+
+        // (c) Cancel draft -> start a NEW draft with the EXACT same payload as key2 -> MUST generate a brand new key (key3 !== key2)!
+        shouldTimeout = false;
+        unmount2();
+        sessionStorage.removeItem('cliniccare_booking_draft_pat-1');
+        sessionStorage.removeItem('cliniccare_pending_booking_attempt_pat-1');
+        sessionStorage.setItem('cliniccare_booking_draft_pat-1', JSON.stringify({
+            draftId: 'draft-turn-2-fresh',
+            specialtyId: 1,
+            specialtyName: 'Tim mạch',
+            doctorId: 101,
+            doctorName: 'BS Nguyễn Văn An',
+            slotId: 1001,
+            slotDate: '2026-09-23',
+            startTime: '09:00',
+            endTime: '09:30',
+            reason: 'Đau tức ngực trái kéo dài 5 ngày kèm mệt',
+            isComplete: true,
+            version: 1,
+            confirmationId: 'conf_turn_2'
+        }));
+
+        render(
+            <MemoryRouter initialEntries={['/patient/book']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        await screen.findByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i })).not.toBeDisabled();
+        });
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i }));
+
+        await waitFor(() => {
+            expect(capturedKeys.length).toBe(4);
+        });
+        const key3 = capturedKeys[3];
+        expect(key3).toBeTruthy();
+        expect(key3).not.toBe(key2);
+        expect(key3).not.toBe(key1);
+
+        // (2d) Response in valid context updates success state normally
+        await waitFor(() => {
+            expect(screen.getByText(/Đặt lịch khám thành công/i)).toBeInTheDocument();
+            expect(screen.getAllByText(/APT-999/i).length).toBeGreaterThan(0);
+        });
+    });
+
+    it('P1_StaleResponse_A_ResolvesAfterUserSwitchOrUnmount_DoesNotLeakState', async () => {
+        const specialties = [{ id: 1, specialtyCode: 'SP01', specialtyName: 'Tim mạch', description: 'Khoa Tim mạch' }];
+        const doctors = [{ id: 101, fullName: 'Nguyễn Văn An', academicTitle: 'BS', specialtyId: 1, specialtyName: 'Tim mạch' }];
+        const slots = [
+            { id: 1001, slotId: 1001, doctorId: 101, slotDate: '2026-09-23', startTime: '09:00:00', endTime: '09:30:00', isAvailable: true }
+        ];
+
+        vi.mocked(axiosClient.get).mockImplementation((url: string) => {
+            if (url === '/specialties') return Promise.resolve({ success: true, message: '', data: specialties });
+            if (url === '/specialties/1/doctors') return Promise.resolve({ success: true, message: '', data: doctors });
+            if (url.includes('/doctors/101/available-slots')) return Promise.resolve({ success: true, message: '', data: slots });
+            return Promise.resolve({ success: true, message: '', data: [] });
+        });
+
+        let resolveUser1Post!: (val: unknown) => void;
+        const deferredUser1 = new Promise((resolve) => {
+            resolveUser1Post = resolve;
+        });
+
+        vi.mocked(axiosClient.post).mockImplementation((url: string) => {
+            if (url === '/appointments') {
+                return deferredUser1 as Promise<unknown>;
+            }
+            return Promise.resolve({ success: true, message: '', data: {} });
+        });
+
+        sessionStorage.setItem('cliniccare_booking_draft_pat-1', JSON.stringify({
+            draftId: 'draft-user-1',
+            specialtyId: 1,
+            specialtyName: 'Tim mạch',
+            doctorId: 101,
+            doctorName: 'BS Nguyễn Văn An',
+            slotId: 1001,
+            slotDate: '2026-09-23',
+            startTime: '09:00',
+            endTime: '09:30',
+            reason: 'Đau tức ngực trái kéo dài 3 ngày',
+            isComplete: true,
+            version: 1,
+            confirmationId: 'conf_u1'
+        }));
+
+        const { rerender, unmount } = render(
+            <MemoryRouter initialEntries={['/patient/book']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        await screen.findByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i }));
+
+        // Switch user to pat-2 while Request A is in-flight
+        mockUser = { id: 'pat-2', fullName: 'Patient Two', role: 'Patient' };
+        rerender(
+            <MemoryRouter initialEntries={['/patient/book']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        resolveUser1Post({
+            success: true,
+            message: '',
+            data: {
+                id: 777,
+                appointmentCode: 'APT-LEAK-777',
+                doctorName: 'BS Nguyễn Văn An',
+                specialtyName: 'Tim mạch',
+                startTime: '09:00:00',
+                endTime: '09:30:00',
+                reason: 'Đau tức ngực trái kéo dài 3 ngày'
+            }
+        });
+
+        await new Promise(r => setTimeout(r, 30));
+
+        // Must NOT leak User 1's appointment success onto User 2's view
+        expect(screen.queryByText(/APT-LEAK-777/i)).not.toBeInTheDocument();
+        unmount();
+    });
 });
 

@@ -49,6 +49,13 @@ jobs:
           TEST_SQLSERVER_CONNECTION_STRING: "Server=localhost,1433;Database=ClinicManagement_CiTest;User Id=sa;Password=Your_password123!;TrustServerCertificate=True;Connect Timeout=30;"
         run: dotnet test src/backend/ClinicManagement.sln --no-build --configuration Release --verbosity normal
 
+      - name: Publish API and verify AI model artifacts
+        run: |
+          dotnet publish src/backend/ClinicManagement.Api/ClinicManagement.Api.csproj --no-restore --configuration Release -o ./publish_ci_verify
+          test -f ./publish_ci_verify/models/vietnamese_intent_classifier_v1.zip
+          test -f ./publish_ci_verify/models/intent_model_metadata.json
+          rm -rf ./publish_ci_verify
+
   frontend:
     name: Frontend Lint, Test & Build (Node 24)
     runs-on: ubuntu-latest

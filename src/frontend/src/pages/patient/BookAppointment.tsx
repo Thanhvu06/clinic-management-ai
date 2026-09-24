@@ -104,13 +104,50 @@ export const BookAppointment: React.FC = () => {
 
     const [submitting, setSubmitting] = useState(false);
     const isSubmittingRef = useRef(false);
-    const lastConfirmationAttemptRef = useRef<{ payloadFingerprint: string; key: string } | null>(null);
+    const isMountedRef = useRef(true);
+    const activeSubmitIdRef = useRef(0);
+    const pageTurnEpochRef = useRef(1);
+    const lastConfirmationAttemptRef = useRef<{
+        accountKey: string;
+        turnIdentity: string;
+        draftId?: string;
+        payloadFingerprint: string;
+        key: string;
+        status: "in_flight" | "uncertain" | "succeeded";
+    } | null>(null);
     const [bookingError, setBookingError] = useState<string | null>(null);
     const [successBooking, setSuccessBooking] = useState<BookingSuccessData | null>(null);
 
     const { user } = useAuth();
+    const currentAccountKey = user ? (user.userId || (user.id !== undefined ? String(user.id) : null)) : null;
+    const currentAccountKeyRef = useRef(currentAccountKey);
+    const activeDraftRef = useRef(activeDraft);
     const prevDraftRef = useRef(activeDraft);
-    const prevUserIdRef = useRef(user ? (user.userId || (user.id !== undefined ? String(user.id) : null)) : null);
+    const prevUserIdRef = useRef(currentAccountKey);
+
+    const currentPayloadFingerprint = `${revisitRequestId ?? "std"}_${specialtyId}_${doctorId}_${slotDate}_${slotId}_${reason.trim()}`;
+    const currentPayloadFingerprintRef = useRef(currentPayloadFingerprint);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        currentAccountKeyRef.current = currentAccountKey;
+        activeDraftRef.current = activeDraft;
+        const prevFingerprint = currentPayloadFingerprintRef.current;
+        currentPayloadFingerprintRef.current = currentPayloadFingerprint;
+
+        // If user edited draft/form payload while an older request was in-flight, release UI submit lock for the new draft
+        if (prevFingerprint !== currentPayloadFingerprint && isSubmittingRef.current) {
+            activeSubmitIdRef.current += 1;
+            isSubmittingRef.current = false;
+            setSubmitting(false);
+        }
+    }, [currentAccountKey, activeDraft, currentPayloadFingerprint]);
 
     // Synchronize form when an active draft is cancelled, reset, or completed
     useEffect(() => {
@@ -119,11 +156,36 @@ export const BookAppointment: React.FC = () => {
 
         // Only clear if transitioning from an existing active draft to null
         if (prev !== null && activeDraft === null) {
+            pageTurnEpochRef.current += 1;
+            activeSubmitIdRef.current += 1;
+            isSubmittingRef.current = false;
+            setSubmitting(false);
+            lastConfirmationAttemptRef.current = null;
+            if (currentAccountKeyRef.current) {
+                try {
+                    sessionStorage.removeItem(`cliniccare_pending_booking_attempt_${currentAccountKeyRef.current}`);
+                } catch {
+                    // ignore storage error
+                }
+            }
             setPageSpecialtyId("");
             setPageDoctorId("");
             setPageSlotId("");
             setPageReason("");
             setStep(1);
+        } else if (prev?.draftId && activeDraft?.draftId && prev.draftId !== activeDraft.draftId) {
+            pageTurnEpochRef.current += 1;
+            activeSubmitIdRef.current += 1;
+            isSubmittingRef.current = false;
+            setSubmitting(false);
+            lastConfirmationAttemptRef.current = null;
+            if (currentAccountKeyRef.current) {
+                try {
+                    sessionStorage.removeItem(`cliniccare_pending_booking_attempt_${currentAccountKeyRef.current}`);
+                } catch {
+                    // ignore storage error
+                }
+            }
         }
     }, [activeDraft]);
 
@@ -131,6 +193,13 @@ export const BookAppointment: React.FC = () => {
     useEffect(() => {
         const currentUserId = user ? (user.userId || (user.id !== undefined ? String(user.id) : null)) : null;
         if (prevUserIdRef.current !== null && prevUserIdRef.current !== currentUserId) {
+            pageTurnEpochRef.current += 1;
+            activeSubmitIdRef.current += 1;
+            isSubmittingRef.current = false;
+            setSubmitting(false);
+            lastConfirmationAttemptRef.current = null;
+            setSuccessBooking(null);
+            setBookingError(null);
             setPageSpecialtyId("");
             setPageDoctorId("");
             setPageSlotId("");
@@ -443,26 +512,90 @@ export const BookAppointment: React.FC = () => {
             return;
         }
 
+        const submitId = ++activeSubmitIdRef.current;
+        const requestAccountKey = currentAccountKeyRef.current ?? "anon";
+        const requestDraftId = activeDraftRef.current?.draftId;
+        const requestTurnEpoch = pageTurnEpochRef.current;
+        const requestTurnIdentity = `${requestAccountKey}_${requestDraftId ?? `epoch_${requestTurnEpoch}`}`;
+        const payloadFingerprint = `${revisitRequestId ?? "std"}_${specialtyId}_${doctorId}_${slotDate}_${slotId}_${normalizedReason}`;
+        const storageKey = `cliniccare_pending_booking_attempt_${requestAccountKey}`;
+
+        const isCurrentContext = () =>
+            isMountedRef.current &&
+            submitId === activeSubmitIdRef.current &&
+            (currentAccountKeyRef.current ?? "anon") === requestAccountKey &&
+            pageTurnEpochRef.current === requestTurnEpoch &&
+            activeDraftRef.current?.draftId === requestDraftId &&
+            currentPayloadFingerprintRef.current === payloadFingerprint;
+
         isSubmittingRef.current = true;
         setSubmitting(true);
         setBookingError(null);
 
         try {
-            const payloadFingerprint = `${revisitRequestId ?? "std"}_${specialtyId}_${doctorId}_${slotId}_${normalizedReason}`;
-            let idempotencyKey: string;
+            let idempotencyKey: string | undefined;
+
+            // 1. Check in-memory ref for active/uncertain attempt in the exact same turn and payload
             if (
                 lastConfirmationAttemptRef.current &&
-                lastConfirmationAttemptRef.current.payloadFingerprint === payloadFingerprint
+                lastConfirmationAttemptRef.current.accountKey === requestAccountKey &&
+                lastConfirmationAttemptRef.current.turnIdentity === requestTurnIdentity &&
+                lastConfirmationAttemptRef.current.payloadFingerprint === payloadFingerprint &&
+                lastConfirmationAttemptRef.current.status !== "succeeded"
             ) {
                 idempotencyKey = lastConfirmationAttemptRef.current.key;
-            } else {
+            }
+
+            // 2. Reconcile from sessionStorage if remounted/reloaded while an earlier attempt in the same draft was uncertain/in-flight
+            if (!idempotencyKey) {
+                try {
+                    const persistedRaw = sessionStorage.getItem(storageKey);
+                    if (persistedRaw) {
+                        const persisted = JSON.parse(persistedRaw) as {
+                            accountKey?: string;
+                            draftId?: string;
+                            payloadFingerprint?: string;
+                            key?: string;
+                            status?: string;
+                        };
+                        const matchesDraft = requestDraftId
+                            ? persisted.draftId === requestDraftId
+                            : !persisted.draftId;
+                        if (
+                            persisted.accountKey === requestAccountKey &&
+                            matchesDraft &&
+                            persisted.payloadFingerprint === payloadFingerprint &&
+                            persisted.status !== "succeeded" &&
+                            typeof persisted.key === "string" &&
+                            persisted.key.length > 0
+                        ) {
+                            idempotencyKey = persisted.key;
+                        }
+                    }
+                } catch {
+                    // ignore malformed storage
+                }
+            }
+
+            if (!idempotencyKey) {
                 idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID
                     ? crypto.randomUUID()
                     : `form_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                lastConfirmationAttemptRef.current = {
-                    payloadFingerprint,
-                    key: idempotencyKey
-                };
+            }
+
+            const attemptRecord = {
+                accountKey: requestAccountKey,
+                turnIdentity: requestTurnIdentity,
+                draftId: requestDraftId,
+                payloadFingerprint,
+                key: idempotencyKey,
+                status: "in_flight" as const
+            };
+            lastConfirmationAttemptRef.current = attemptRecord;
+            try {
+                sessionStorage.setItem(storageKey, JSON.stringify(attemptRecord));
+            } catch {
+                // ignore storage error
             }
 
             const res = revisitRequestId
@@ -494,7 +627,34 @@ export const BookAppointment: React.FC = () => {
                 );
 
             if (res.success && res.data) {
-                lastConfirmationAttemptRef.current = null;
+                // Clear attempt only if it still matches this request
+                if (lastConfirmationAttemptRef.current?.key === idempotencyKey) {
+                    lastConfirmationAttemptRef.current = null;
+                }
+                try {
+                    const currentSaved = sessionStorage.getItem(storageKey);
+                    if (currentSaved) {
+                        const parsed = JSON.parse(currentSaved) as { key?: string };
+                        if (parsed.key === idempotencyKey) {
+                            sessionStorage.removeItem(storageKey);
+                        }
+                    }
+                } catch {
+                    // ignore storage error
+                }
+
+                // If draft/session/user changed while Request A was in-flight, NEVER overwrite Draft B!
+                if (!isCurrentContext()) {
+                    if (isMountedRef.current && (currentAccountKeyRef.current ?? "anon") === requestAccountKey) {
+                        showAlert(
+                            `Lịch hẹn trước đó (${res.data.appointmentCode || res.data.id || ""}) đã được hệ thống ghi nhận. Bản nháp hiện tại của bạn được giữ nguyên.`,
+                            "Thông báo",
+                            "info"
+                        );
+                    }
+                    return;
+                }
+
                 setSuccessBooking({
                     appointmentId: res.data.id || res.data.appointmentId || 0,
                     appointmentCode: res.data.appointmentCode,
@@ -517,8 +677,56 @@ export const BookAppointment: React.FC = () => {
                 }
             }
         } catch (err: unknown) {
-            const apiErr = err as { errorCode?: string; message?: string; response?: { data?: { errorCode?: string; message?: string } } };
+            const apiErr = err as {
+                errorCode?: string;
+                message?: string;
+                response?: { status?: number; data?: { errorCode?: string; message?: string } };
+            };
             const errorCode = apiErr?.response?.data?.errorCode || apiErr?.errorCode;
+            const status = apiErr?.response?.status;
+            const isDeterministicRejection =
+                errorCode === "SLOT_ALREADY_BOOKED" ||
+                errorCode === "PATIENT_TIME_CONFLICT" ||
+                errorCode === "DOCTOR_NOT_AVAILABLE" ||
+                status === 400 ||
+                status === 409 ||
+                status === 422;
+
+            if (isDeterministicRejection) {
+                if (lastConfirmationAttemptRef.current?.payloadFingerprint === payloadFingerprint) {
+                    lastConfirmationAttemptRef.current = null;
+                }
+                try {
+                    const currentSaved = sessionStorage.getItem(storageKey);
+                    if (currentSaved) {
+                        const parsed = JSON.parse(currentSaved) as { payloadFingerprint?: string };
+                        if (parsed.payloadFingerprint === payloadFingerprint) {
+                            sessionStorage.removeItem(storageKey);
+                        }
+                    }
+                } catch {
+                    // ignore storage error
+                }
+            } else {
+                // Network error / timeout: outcome on server is uncertain, preserve idempotency key for safe retry
+                if (lastConfirmationAttemptRef.current?.payloadFingerprint === payloadFingerprint) {
+                    lastConfirmationAttemptRef.current = {
+                        ...lastConfirmationAttemptRef.current,
+                        status: "uncertain"
+                    };
+                    try {
+                        sessionStorage.setItem(storageKey, JSON.stringify(lastConfirmationAttemptRef.current));
+                    } catch {
+                        // ignore storage error
+                    }
+                }
+            }
+
+            // Do NOT apply stale error or mutate draft B if context changed while Request A was in-flight
+            if (!isCurrentContext()) {
+                return;
+            }
+
             let msg = apiErr?.response?.data?.message || apiErr?.message || "Có lỗi xảy ra khi đặt lịch.";
             if (errorCode === "SLOT_ALREADY_BOOKED") {
                 msg = "Khung giờ này vừa được đặt bởi người khác. Vui lòng chọn giờ khác.";
@@ -563,8 +771,10 @@ export const BookAppointment: React.FC = () => {
             setBookingError(msg);
             showAlert(msg, "Thông báo đặt lịch", "error");
         } finally {
-            isSubmittingRef.current = false;
-            setSubmitting(false);
+            if (submitId === activeSubmitIdRef.current && isMountedRef.current) {
+                isSubmittingRef.current = false;
+                setSubmitting(false);
+            }
         }
     };
 

@@ -498,6 +498,7 @@ public class AiActionDto
 
 public class AiBookingDraftDto
 {
+    public string? DraftId { get; set; }
     public long? SpecialtyId { get; set; }
     public string? SpecialtyName { get; set; }
     public long? DoctorId { get; set; }
@@ -542,6 +543,12 @@ public class AiChatRequestDto
 
     [Range(1, int.MaxValue, ErrorMessage = "Phiên bản thảo lịch không hợp lệ.")]
     public int? DraftVersion { get; set; }
+
+    [MaxLength(128)]
+    public string? SessionId { get; set; }
+
+    [MaxLength(128)]
+    public string? DraftId { get; set; }
 
     public List<long>? DisplayedDoctorIds { get; set; }
     public List<long>? DisplayedSlotIds { get; set; }
@@ -610,6 +617,16 @@ public class AiChatResponseDto
     /// Server-issued snapshot ID for the displayed doctor/slot options.
     /// </summary>
     public string? ContextSnapshotId { get; set; }
+
+    /// <summary>
+    /// Session identifier bound to the conversation tab/session.
+    /// </summary>
+    public string? SessionId { get; set; }
+
+    /// <summary>
+    /// Server-verified active booking draft lifecycle identifier.
+    /// </summary>
+    public string? DraftId { get; set; }
 }
 
 public class AiChatProviderResult

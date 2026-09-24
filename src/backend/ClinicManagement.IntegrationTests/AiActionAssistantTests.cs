@@ -19,6 +19,7 @@ using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.AI;
 using ClinicManagement.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -2736,5 +2737,338 @@ public class AiActionAssistantTests : IntegrationTestBase
         });
         var respOtherUser = await Client.SendAsync(reqOtherUser);
         Assert.Equal(HttpStatusCode.Conflict, respOtherUser.StatusCode);
+
+        // 4. Two near-simultaneous requests with SAME key + SAME user + SAME payload -> only 1 appointment in DB
+        await AuthenticateAsync("pat1@test.com");
+        var concurrentDate = GetFutureWorkingDate(33);
+        var concurrentSlot = await CreateAvailableSlotAsync(DoctorEntityId, concurrentDate, new TimeOnly(10, 0), new TimeOnly(10, 30));
+        var concurrentKey = $"idemp_conc_{Guid.NewGuid():N}";
+
+        async Task<HttpResponseMessage> SendConcurrentBookingAsync()
+        {
+            using var msg = new HttpRequestMessage(HttpMethod.Post, "/api/v1/appointments");
+            msg.Headers.Add("Idempotency-Key", concurrentKey);
+            msg.Content = JsonContent.Create(new
+            {
+                doctorId = DoctorEntityId,
+                specialtyId = SpecialtyEntityId,
+                appointmentSlotId = concurrentSlot.Id,
+                reason = "Khám tim mạch do nhịp tim nhanh kéo dài 2 ngày"
+            });
+            return await Client.SendAsync(msg);
+        }
+
+        var concurrentResults = await Task.WhenAll(SendConcurrentBookingAsync(), SendConcurrentBookingAsync());
+        Assert.Contains(concurrentResults, r => r.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created);
+        Assert.All(concurrentResults, r => Assert.True(
+            r.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created or HttpStatusCode.Conflict,
+            $"Unexpected status code: {r.StatusCode}"));
+
+        using var verifyScope = Factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var appointmentCount = await verifyDb.Appointments
+            .CountAsync(a => a.AppointmentSlotId == concurrentSlot.Id && a.Status != AppointmentStatus.Cancelled);
+        Assert.Equal(1, appointmentCount);
+    }
+
+    [Fact]
+    public async Task ScenarioX_SelectionSnapshot_SessionAndDraftIsolation_AndPostIssueDoctorSlotVerification()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        AiSpecialtyService.ClearSnapshotsForTesting();
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Tôi đã cập nhật lựa chọn của bạn.",
+                SuggestedSpecialtyCodes = new List<string> { "SP01" },
+                ExtractedSpecialtyCode = "SP01",
+                Urgency = "ROUTINE"
+            });
+
+        var workDate = GetFutureWorkingDate(35);
+        var slot1 = await CreateAvailableSlotAsync(Doctor2EntityId, workDate, new TimeOnly(8, 30), new TimeOnly(9, 0));
+        var slot2 = await CreateAvailableSlotAsync(Doctor2EntityId, workDate, new TimeOnly(9, 0), new TimeOnly(9, 30));
+
+        var validSnapshot = new AiSpecialtyService.SelectionSnapshot
+        {
+            SnapshotId = "snap_p1_valid_tabA",
+            UserId = Patient1Id,
+            SessionId = "sess_tab_A",
+            DraftId = "draft_tab_A_v1",
+            DraftVersion = 1,
+            SpecialtyId = SpecialtyEntityId,
+            DoctorId = Doctor2EntityId,
+            SlotDate = workDate.ToString("yyyy-MM-dd"),
+            DoctorIds = new List<long> { Doctor2EntityId, DoctorEntityId },
+            SlotIds = new List<long> { slot1.Id, slot2.Id },
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15)
+        };
+        AiSpecialtyService.StoreSnapshotForTesting(validSnapshot);
+
+        // (a) Valid snapshot matching (userId, sessionId, draftId, draftVersion):
+        // "bác sĩ đầu tiên" -> selects Doctor2EntityId (index 0 in snapshot, NOT DoctorEntityId which is smaller ID in DB)
+        var validDocReq = new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = "sess_tab_A",
+            DraftId = "draft_tab_A_v1",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingSlotDate = workDate.ToString("yyyy-MM-dd"),
+            Reason = "Đau tức ngực trái khi vận động mạnh 3 ngày nay",
+            ContextSnapshotId = "snap_p1_valid_tabA",
+            DisplayedDoctorIds = new List<long> { Doctor2EntityId, DoctorEntityId }
+        };
+        var validDocRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", validDocReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(validDocRes?.Data?.BookingDraft);
+        Assert.Equal(Doctor2EntityId, validDocRes.Data.BookingDraft.DoctorId);
+
+        // Re-store snapshot for v1 slot selection test
+        AiSpecialtyService.StoreSnapshotForTesting(validSnapshot);
+        var validSlotReq = new AiChatRequestDto
+        {
+            Message = "Chọn khung giờ thứ 2",
+            SessionId = "sess_tab_A",
+            DraftId = "draft_tab_A_v1",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = Doctor2EntityId,
+            PendingSlotDate = workDate.ToString("yyyy-MM-dd"),
+            Reason = "Đau tức ngực trái khi vận động mạnh 3 ngày nay",
+            ContextSnapshotId = "snap_p1_valid_tabA",
+            DisplayedSlotIds = new List<long> { slot1.Id, slot2.Id }
+        };
+        var validSlotRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", validSlotReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(validSlotRes?.Data?.BookingDraft);
+        Assert.Equal(slot2.Id, validSlotRes.Data.BookingDraft.SlotId);
+
+        // (b) Missing ContextSnapshotId while client sends forged DisplayedDoctorIds / DisplayedSlotIds -> ClarificationRequired
+        var missingSnapReq = new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = "sess_tab_A",
+            DraftId = "draft_tab_A_v1",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau tức ngực trái khi vận động mạnh 3 ngày nay",
+            ContextSnapshotId = null,
+            DisplayedDoctorIds = new List<long> { Doctor2EntityId, DoctorEntityId }
+        };
+        var missingSnapRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", missingSnapReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(missingSnapRes?.Data);
+        Assert.Equal("ClarificationRequired", missingSnapRes.Data.DialogueOutcome);
+        Assert.Null(missingSnapRes.Data.BookingDraft?.DoctorId);
+
+        // (c) Snapshot of another user -> Rejected
+        await AuthenticateAsync("pat2@test.com");
+        var otherUserReq = new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = "sess_tab_A",
+            DraftId = "draft_tab_A_v1",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau tức ngực trái khi vận động mạnh 3 ngày nay",
+            ContextSnapshotId = "snap_p1_valid_tabA",
+            DisplayedDoctorIds = new List<long> { Doctor2EntityId, DoctorEntityId }
+        };
+        var otherUserRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", otherUserReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(otherUserRes?.Data);
+        Assert.Equal("ClarificationRequired", otherUserRes.Data.DialogueOutcome);
+        Assert.Null(otherUserRes.Data.BookingDraft?.DoctorId);
+
+        await AuthenticateAsync("pat1@test.com");
+
+        // (d1) Same user, same DraftVersion = 1, but DIFFERENT SessionId (Tab B trying to use Tab A's snapshot) -> Rejected!
+        var diffSessionReq = new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = "sess_tab_B",
+            DraftId = "draft_tab_A_v1",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau tức ngực trái khi vận động mạnh 3 ngày nay",
+            ContextSnapshotId = "snap_p1_valid_tabA",
+            DisplayedDoctorIds = new List<long> { Doctor2EntityId, DoctorEntityId }
+        };
+        var diffSessionRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", diffSessionReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(diffSessionRes?.Data);
+        Assert.Equal("ClarificationRequired", diffSessionRes.Data.DialogueOutcome);
+        Assert.Null(diffSessionRes.Data.BookingDraft?.DoctorId);
+
+        // (d2) Same user, same SessionId, same DraftVersion = 1, but DIFFERENT DraftId (new draft after cancel) -> Rejected!
+        var diffDraftReq = new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = "sess_tab_A",
+            DraftId = "draft_tab_A_new_after_cancel",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau tức ngực trái khi vận động mạnh 3 ngày nay",
+            ContextSnapshotId = "snap_p1_valid_tabA",
+            DisplayedDoctorIds = new List<long> { Doctor2EntityId, DoctorEntityId }
+        };
+        var diffDraftRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", diffDraftReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(diffDraftRes?.Data);
+        Assert.Equal("ClarificationRequired", diffDraftRes.Data.DialogueOutcome);
+        Assert.Null(diffDraftRes.Data.BookingDraft?.DoctorId);
+
+        // (d3) CancelDraft explicitly invalidates snapshot of the cancelled draft even if DraftVersion == 1
+        AiSpecialtyService.StoreSnapshotForTesting(new AiSpecialtyService.SelectionSnapshot
+        {
+            SnapshotId = "snap_p1_to_be_cancelled",
+            UserId = Patient1Id,
+            SessionId = "sess_tab_cancel",
+            DraftId = "draft_to_be_cancelled",
+            DraftVersion = 1,
+            SpecialtyId = SpecialtyEntityId,
+            DoctorIds = new List<long> { Doctor2EntityId, DoctorEntityId },
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15)
+        });
+        var cancelReq = new AiChatRequestDto
+        {
+            Message = "Hủy đặt lịch",
+            Intent = AiChatIntentTypes.CancelDraft,
+            SessionId = "sess_tab_cancel",
+            DraftId = "draft_to_be_cancelled",
+            DraftVersion = 1
+        };
+        var cancelRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", cancelReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.Equal("DraftCancelled", cancelRes?.Data?.DialogueOutcome);
+        Assert.Null(cancelRes?.Data?.DraftId);
+
+        var reuseAfterCancelReq = new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = "sess_tab_cancel",
+            DraftId = "draft_to_be_cancelled",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau tức ngực trái khi vận động mạnh 3 ngày nay",
+            ContextSnapshotId = "snap_p1_to_be_cancelled"
+        };
+        var reuseAfterCancelRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", reuseAfterCancelReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(reuseAfterCancelRes?.Data);
+        Assert.Equal("ClarificationRequired", reuseAfterCancelRes.Data.DialogueOutcome);
+        Assert.Null(reuseAfterCancelRes.Data.BookingDraft?.DoctorId);
+
+        // (e) Expired snapshot -> Rejected
+        AiSpecialtyService.StoreSnapshotForTesting(new AiSpecialtyService.SelectionSnapshot
+        {
+            SnapshotId = "snap_p1_expired",
+            UserId = Patient1Id,
+            SessionId = "sess_tab_A",
+            DraftId = "draft_tab_A_v1",
+            DraftVersion = 1,
+            SpecialtyId = SpecialtyEntityId,
+            DoctorIds = new List<long> { Doctor2EntityId, DoctorEntityId },
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(-1)
+        });
+        var expiredReq = new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = "sess_tab_A",
+            DraftId = "draft_tab_A_v1",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau tức ngực trái khi vận động mạnh 3 ngày nay",
+            ContextSnapshotId = "snap_p1_expired"
+        };
+        var expiredRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", expiredReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(expiredRes?.Data);
+        Assert.Equal("ClarificationRequired", expiredRes.Data.DialogueOutcome);
+        Assert.Null(expiredRes.Data.BookingDraft?.DoctorId);
+
+        // (f) Snapshot still valid, but doctor at index 0 was just deactivated (IsActive = false) -> Rejected!
+        AiSpecialtyService.StoreSnapshotForTesting(validSnapshot);
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var doc2 = await db.Doctors.FindAsync(Doctor2EntityId);
+            Assert.NotNull(doc2);
+            doc2!.IsActive = false;
+            await db.SaveChangesAsync();
+        }
+        try
+        {
+            var inactiveDocReq = new AiChatRequestDto
+            {
+                Message = "Tôi chọn bác sĩ đầu tiên",
+                SessionId = "sess_tab_A",
+                DraftId = "draft_tab_A_v1",
+                DraftVersion = 1,
+                PendingSpecialtyId = SpecialtyEntityId,
+                Reason = "Đau tức ngực trái khi vận động mạnh 3 ngày nay",
+                ContextSnapshotId = "snap_p1_valid_tabA"
+            };
+            var inactiveDocRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", inactiveDocReq))
+                .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+            Assert.NotNull(inactiveDocRes?.Data);
+            Assert.Equal("ClarificationRequired", inactiveDocRes.Data.DialogueOutcome);
+            Assert.Null(inactiveDocRes.Data.BookingDraft?.DoctorId);
+        }
+        finally
+        {
+            using var scope = Factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var doc2 = await db.Doctors.FindAsync(Doctor2EntityId);
+            if (doc2 != null)
+            {
+                doc2.IsActive = true;
+                await db.SaveChangesAsync();
+            }
+        }
+
+        // (g) Snapshot still valid, but slot at index 1 (slot2) was just booked after snapshot was issued -> Rejected!
+        AiSpecialtyService.StoreSnapshotForTesting(validSnapshot);
+        await AuthenticateAsync("pat2@test.com");
+        var bookSlot2Resp = await Client.PostAsJsonAsync("/api/v1/appointments", new
+        {
+            doctorId = Doctor2EntityId,
+            specialtyId = SpecialtyEntityId,
+            appointmentSlotId = slot2.Id,
+            reason = "Đã đặt trước bởi bệnh nhân khác trước khi chọn"
+        });
+        Assert.True(bookSlot2Resp.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created);
+        await AuthenticateAsync("pat1@test.com");
+
+        var bookedSlotReq = new AiChatRequestDto
+        {
+            Message = "Chọn khung giờ thứ 2",
+            SessionId = "sess_tab_A",
+            DraftId = "draft_tab_A_v1",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = Doctor2EntityId,
+            PendingSlotDate = workDate.ToString("yyyy-MM-dd"),
+            Reason = "Đau tức ngực trái khi vận động mạnh 3 ngày nay",
+            ContextSnapshotId = "snap_p1_valid_tabA"
+        };
+        var bookedSlotRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", bookedSlotReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(bookedSlotRes?.Data);
+        Assert.Equal("ClarificationRequired", bookedSlotRes.Data.DialogueOutcome);
+        Assert.Null(bookedSlotRes.Data.BookingDraft?.SlotId);
+
+        AiSpecialtyService.ClearSnapshotsForTesting();
     }
 }
