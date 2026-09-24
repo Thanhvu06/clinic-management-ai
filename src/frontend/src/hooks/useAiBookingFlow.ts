@@ -138,7 +138,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     const accountKeyRef = useRef(accountKey);
     const lastConfirmationAttemptRef = useRef<{ attemptId: string; payloadFingerprint: string; key: string } | null>(null);
     const isSubmittingBookingRef = useRef(false);
-    const lastKnownGeminiStatusRef = useRef<"Healthy" | "Degraded">("Healthy");
+    const lastKnownGeminiStatusRef = useRef<"Unchecked" | "Healthy" | "Degraded">("Unchecked");
     const draftCancelledAtRef = useRef<number>(0);
     const contextSnapshotIdRef = useRef<string | undefined>(undefined);
 
@@ -243,9 +243,27 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     lastKnownGeminiStatusRef.current = "Degraded";
                 }
 
-                let effectiveStatus: "Online" | "Degraded" | "Offline" = data.assistantStatus || "Online";
-                if (data.providerStatus === "NotCalled" && lastKnownGeminiStatusRef.current === "Degraded") {
+                let effectiveStatus: "Unchecked" | "Online" | "Degraded" | "Offline";
+                if (data.providerStatus === "Healthy") {
+                    effectiveStatus = "Online";
+                } else if (
+                    data.assistantStatus === "Degraded" ||
+                    data.providerStatus === "Unavailable" ||
+                    data.providerStatus === "Degraded" ||
+                    data.providerStatus === "FallbackToLocal" ||
+                    data.providerStatus === "Error"
+                ) {
                     effectiveStatus = "Degraded";
+                } else if (data.providerStatus === "NotCalled" || !data.providerStatus) {
+                    if (lastKnownGeminiStatusRef.current === "Degraded") {
+                        effectiveStatus = "Degraded";
+                    } else if (lastKnownGeminiStatusRef.current === "Healthy") {
+                        effectiveStatus = "Online";
+                    } else {
+                        effectiveStatus = "Unchecked";
+                    }
+                } else {
+                    effectiveStatus = data.assistantStatus || "Unchecked";
                 }
                 setAiAssistantStatus(effectiveStatus);
 
@@ -313,12 +331,24 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         if (currentVersion !== undefined && incomingVersion !== undefined && incomingVersion < currentVersion) {
                             // Stale response received out-of-order, do not overwrite newer draft
                         } else {
+                            const isSubstantiveChange = Boolean(
+                                activeDraft && (
+                                    incomingDraft.specialtyId !== activeDraft.specialtyId ||
+                                    incomingDraft.doctorId !== activeDraft.doctorId ||
+                                    incomingDraft.slotId !== activeDraft.slotId ||
+                                    incomingDraft.slotDate !== activeDraft.slotDate ||
+                                    incomingDraft.startTime !== activeDraft.startTime ||
+                                    (incomingDraft.reason || "").trim() !== (activeDraft.reason || "").trim() ||
+                                    (incomingVersion !== undefined && currentVersion !== undefined && incomingVersion > currentVersion)
+                                )
+                            );
                             const mergedDraft: AiBookingDraft = {
                                 ...incomingDraft,
                                 reason: incomingDraft.reason || preservedReason || activeDraft?.reason,
                                 version: incomingVersion ?? currentVersion,
-                                confirmationId: incomingDraft.confirmationId || activeDraft?.confirmationId
+                                confirmationId: incomingDraft.confirmationId ?? (isSubstantiveChange ? undefined : activeDraft?.confirmationId)
                             };
+                            draftCancelledAtRef.current = 0;
                             setActiveDraft(mergedDraft);
                             aiMsg.bookingDraft = mergedDraft;
                         }
@@ -398,6 +428,15 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             activeDraft.version >= 1;
 
         if (isInteractiveBookingAction) {
+            if (!activeDraft && draftCancelledAtRef.current > 0) {
+                setMessages(prev => [...prev, {
+                    role: "model",
+                    content: "Bản nháp đặt lịch trước đó đã bị hủy. Vui lòng bắt đầu yêu cầu đặt lịch mới.",
+                    urgency: "ROUTINE"
+                }]);
+                return;
+            }
+
             if (actionVersion !== undefined && activeDraft?.version !== undefined && actionVersion !== activeDraft.version) {
                 const actVer = actionVersion;
                 const draftVer = activeDraft.version;
@@ -584,6 +623,15 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }
 
             case "ReviewBooking": {
+                if (!activeDraft && draftCancelledAtRef.current > 0) {
+                    setMessages(prev => [...prev, {
+                        role: "model",
+                        content: "Bản nháp đặt lịch trước đó đã bị hủy. Vui lòng bắt đầu yêu cầu đặt lịch mới.",
+                        urgency: "ROUTINE"
+                    }]);
+                    break;
+                }
+
                 const specId = action.payload.specialtyId || activeDraft?.specialtyId;
                 const docId = action.payload.doctorId || activeDraft?.doctorId;
                 const slotId = action.payload.slotId || activeDraft?.slotId;
@@ -604,6 +652,29 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     break;
                 }
 
+                if (actionVersion !== undefined && activeDraft?.version !== undefined && actionVersion !== activeDraft.version) {
+                    setMessages(prev => [...prev, {
+                        role: "model",
+                        content: `Thông tin xác nhận lịch khám thuộc phiên bản cũ (v${actionVersion}). Phiên bản hiện tại là v${activeDraft.version}. Vui lòng kiểm tra lại thông tin mới nhất trước khi xác nhận.`,
+                        urgency: "ROUTINE"
+                    }]);
+                    break;
+                }
+
+                if (action.payload.confirmationId && activeDraft?.confirmationId && action.payload.confirmationId !== activeDraft.confirmationId) {
+                    setMessages(prev => [...prev, {
+                        role: "model",
+                        content: "Yêu cầu xác nhận này không còn hiệu lực do bản nháp đã được cập nhật hoặc làm mới. Vui lòng xác nhận trên lựa chọn mới nhất.",
+                        urgency: "ROUTINE"
+                    }]);
+                    break;
+                }
+
+                const effectiveConfirmationId = activeDraft?.confirmationId || action.payload.confirmationId || `conf_v${currentVersion}_${slotId}`;
+                if (activeDraft && !activeDraft.confirmationId) {
+                    setActiveDraft(prev => prev ? { ...prev, confirmationId: effectiveConfirmationId } : prev);
+                }
+
                 const formattedDate = formatVietnameseDate(slotDate);
                 const reviewMsg: ChatMessage = {
                     role: "model",
@@ -619,7 +690,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                             requiresConfirmation: true,
                             draftVersion: currentVersion,
                             payload: {
-                                confirmationId: activeDraft?.confirmationId || action.payload.confirmationId,
+                                confirmationId: effectiveConfirmationId,
                                 specialtyId: specId,
                                 specialtyName: specName,
                                 doctorId: docId,
@@ -689,7 +760,10 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 }
 
                 const actionConfirmationId = action.payload.confirmationId;
-                if (activeDraft.confirmationId && (!actionConfirmationId || actionConfirmationId !== activeDraft.confirmationId)) {
+                if (
+                    (activeDraft.confirmationId && (!actionConfirmationId || actionConfirmationId !== activeDraft.confirmationId)) ||
+                    (!activeDraft.confirmationId && Boolean(actionConfirmationId))
+                ) {
                     setMessages(prev => [...prev, {
                         role: "model",
                         content: "Yêu cầu xác nhận này không còn hiệu lực do bản nháp đã được cập nhật hoặc làm mới. Vui lòng xác nhận trên lựa chọn mới nhất.",

@@ -12,6 +12,7 @@ using System.Text;
 using ClinicManagement.AI.Training;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
+using ClinicManagement.Application.Appointments.DTOs;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Domain.Entities;
@@ -2109,6 +2110,17 @@ public class AiActionAssistantTests : IntegrationTestBase
     {
         await AuthenticateAsync("pat1@test.com");
 
+        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSpecialtyService.StoreSnapshotForTesting(new AiSpecialtyService.SelectionSnapshot
+        {
+            SnapshotId = "snap_doc_valid_j",
+            UserId = Patient1Id,
+            DraftVersion = 1,
+            DoctorIds = new List<long> { DoctorEntityId, Doctor2EntityId },
+            SlotIds = new List<long>(),
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15)
+        });
+
         Factory.MockAiProvider.Reset();
         Factory.MockAiProvider
             .Setup(x => x.ChatWithAiAsync(
@@ -2130,6 +2142,8 @@ public class AiActionAssistantTests : IntegrationTestBase
         {
             Message = "Tôi chọn người đầu tiên",
             PendingSpecialtyId = SpecialtyEntityId,
+            DraftVersion = 1,
+            ContextSnapshotId = "snap_doc_valid_j",
             DisplayedDoctorIds = new List<long> { DoctorEntityId, Doctor2EntityId }
         };
 
@@ -2143,7 +2157,7 @@ public class AiActionAssistantTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task ScenarioK_RelativeDoctor_WithoutDisplayedDoctorIds_Clarifies_NeverGuessesFromDb()
+    public async Task ScenarioK_RelativeDoctor_WithoutSnapshotOrDisplayedDoctorIds_Clarifies_NeverGuessesFromDb()
     {
         await AuthenticateAsync("pat1@test.com");
 
@@ -2168,7 +2182,9 @@ public class AiActionAssistantTests : IntegrationTestBase
         {
             Message = "Tôi chọn người đầu tiên",
             PendingSpecialtyId = SpecialtyEntityId,
-            DisplayedDoctorIds = null // No displayed context!
+            Reason = "Đau ngực khó thở nhẹ khi leo cầu thang",
+            DisplayedDoctorIds = new List<long> { DoctorEntityId, Doctor2EntityId },
+            ContextSnapshotId = null // Missing server-side snapshot -> must NOT trust client DisplayedDoctorIds!
         };
 
         var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
@@ -2178,16 +2194,28 @@ public class AiActionAssistantTests : IntegrationTestBase
 
         Assert.Equal("ClarificationRequired", res.Data.DialogueOutcome);
         Assert.Null(res.Data.BookingDraft?.DoctorId);
-        Assert.Contains("bác sĩ nào", res.Data.Message);
+        Assert.Equal(SpecialtyEntityId, res.Data.BookingDraft?.SpecialtyId);
+        Assert.Contains("snapshot", res.Data.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task ScenarioL_RelativeSlot_FromDisplayedSlotIds_ResolvesCorrectly()
+    public async Task ScenarioL_RelativeSlot_FromDisplayedSlotIds_ResolvesCorrectly_WithValidSnapshot()
     {
         await AuthenticateAsync("pat1@test.com");
         var testDate = GetFutureWorkingDate(26);
         var slot1 = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(8, 0), new TimeOnly(8, 30));
         var slot2 = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(8, 30), new TimeOnly(9, 0));
+
+        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSpecialtyService.StoreSnapshotForTesting(new AiSpecialtyService.SelectionSnapshot
+        {
+            SnapshotId = "snap_slot_valid_l",
+            UserId = Patient1Id,
+            DraftVersion = 1,
+            DoctorIds = new List<long> { DoctorEntityId },
+            SlotIds = new List<long> { slot1.Id, slot2.Id },
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15)
+        });
 
         Factory.MockAiProvider.Reset();
         Factory.MockAiProvider
@@ -2212,6 +2240,8 @@ public class AiActionAssistantTests : IntegrationTestBase
             PendingSpecialtyId = SpecialtyEntityId,
             PendingDoctorId = DoctorEntityId,
             PendingSlotDate = testDate.ToString("yyyy-MM-dd"),
+            DraftVersion = 1,
+            ContextSnapshotId = "snap_slot_valid_l",
             DisplayedSlotIds = new List<long> { slot1.Id, slot2.Id }
         };
 
@@ -2312,12 +2342,17 @@ public class AiActionAssistantTests : IntegrationTestBase
     {
         await AuthenticateAsync("pat1@test.com");
 
+        foreach (var invalidPhrase in new[] { "chốt", "chốt luôn ngay bây giờ", "ok chốt lịch này nhé", "hủy lịch khám ngay", "tôi chọn số 1 trong danh sách", "bcdfghjklmnpqrstvwxyz" })
+        {
+            Assert.False(AiActionValidator.IsValidBookingReason(invalidPhrase));
+        }
+
         var request = new AiChatRequestDto
         {
             Message = "chốt luôn ngay bây giờ", // Length 22 >= 10, but generic confirmation phrase!
             PendingSpecialtyId = SpecialtyEntityId,
             PendingDoctorId = DoctorEntityId,
-            Reason = null
+            Reason = "chốt"
         };
 
         var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
@@ -2326,8 +2361,57 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.NotNull(res?.Data);
 
         // Must reject generic confirmation phrase as clinical reason
-        Assert.NotEqual("chốt luôn ngay bây giờ", res.Data.BookingDraft?.Reason);
         Assert.True(string.IsNullOrWhiteSpace(res.Data.BookingDraft?.Reason));
+
+        // Also verify POST /api/v1/appointments rejects "chốt" or generic confirmation phrase at service level
+        var slotDate = GetFutureWorkingDate(27);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, slotDate, new TimeOnly(10, 0), new TimeOnly(10, 30));
+        var createRes = await Client.PostAsJsonAsync("/api/v1/appointments", new
+        {
+            doctorId = DoctorEntityId,
+            specialtyId = SpecialtyEntityId,
+            appointmentSlotId = slot.Id,
+            reason = "chốt lịch khám ngay bây giờ"
+        });
+        Assert.True(createRes.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task ScenarioO2_NegatedSymptom_DoesNotPolluteBookingReason()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Tôi đã ghi nhận triệu chứng đau đầu của bạn.",
+                PrimaryIntent = AiChatIntentTypes.ProvideReason,
+                ExtractedReason = "Tôi không sốt, chỉ đau đầu kéo dài 3 ngày",
+                Urgency = "ROUTINE"
+            });
+
+        var request = new AiChatRequestDto
+        {
+            Message = "Tôi không sốt, chỉ đau đầu kéo dài 3 ngày",
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = DoctorEntityId
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data?.BookingDraft?.Reason);
+        Assert.Contains("đau đầu", res.Data.BookingDraft.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sốt", res.Data.BookingDraft.Reason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -2367,15 +2451,21 @@ public class AiActionAssistantTests : IntegrationTestBase
     }
 
     [Fact]
-    public void ScenarioQ_VietnameseIntentClassifier_ShadowModeTelemetry()
+    public void ScenarioQ_VietnameseIntentClassifier_ShadowAndActiveModeTelemetry()
     {
-        var classifier = new VietnameseIntentClassifier(IntentClassificationMode.Shadow);
+        var shadowClassifier = new VietnameseIntentClassifier(IntentClassificationMode.Shadow);
+        var shadowResult = shadowClassifier.Classify("tôi muốn hủy lịch");
+        Assert.NotNull(shadowResult);
+        Assert.Equal(AiChatIntentTypes.CancelDraft, shadowResult.Intent);
+        Assert.False(string.IsNullOrWhiteSpace(shadowResult.ShadowIntent));
+        Assert.True(shadowResult.ShadowConfidence >= 0.0f);
 
-        var result = classifier.Classify("tôi muốn hủy lịch");
-        Assert.NotNull(result);
-        Assert.Equal(AiChatIntentTypes.CancelDraft, result.Intent);
-        Assert.False(string.IsNullOrWhiteSpace(result.ShadowIntent));
-        Assert.True(result.ShadowConfidence >= 0.0f);
+        var activeClassifier = new VietnameseIntentClassifier(IntentClassificationMode.Active);
+        var activeResult = activeClassifier.Classify("tôi muốn đặt lịch khám chuyên khoa tim mạch");
+        Assert.NotNull(activeResult);
+        Assert.False(string.IsNullOrWhiteSpace(activeResult.Intent));
+        Assert.False(string.IsNullOrWhiteSpace(activeResult.ShadowIntent));
+        Assert.True(activeResult.ShadowConfidence >= 0.0f);
     }
 
     [Fact]
@@ -2393,134 +2483,81 @@ public class AiActionAssistantTests : IntegrationTestBase
     [Fact]
     public void ScenarioS_VietnameseIntentClassifier_OptimalThreshold_ReadFromMetadata()
     {
-        var classifier = new VietnameseIntentClassifier();
-        Assert.Equal(0.15f, classifier.OptimalThreshold, 2);
+        var offClassifier = new VietnameseIntentClassifier(IntentClassificationMode.Off);
+        var shadowClassifier = new VietnameseIntentClassifier(IntentClassificationMode.Shadow);
+        var activeClassifier = new VietnameseIntentClassifier(IntentClassificationMode.Active);
+
+        Assert.Equal(0.15f, offClassifier.OptimalThreshold, 2);
+        Assert.Equal(0.15f, shadowClassifier.OptimalThreshold, 2);
+        Assert.Equal(0.15f, activeClassifier.OptimalThreshold, 2);
     }
 
     [Fact]
-    public void ScenarioT_ContextSnapshot_Validation_Lifecycle()
+    public async Task ScenarioT_ContextSnapshot_BehavioralValidation_InChatAsync()
     {
+        await AuthenticateAsync("pat1@test.com");
         AiSpecialtyService.ClearSnapshotsForTesting();
 
-        var userId = Guid.NewGuid();
         var snapshot = new AiSpecialtyService.SelectionSnapshot
         {
             SnapshotId = "snap_test_123",
-            UserId = userId,
+            UserId = Patient1Id,
             DraftVersion = 2,
-            DoctorIds = new List<long> { 1, 2, 3 },
+            DoctorIds = new List<long> { DoctorEntityId, Doctor2EntityId },
             SlotIds = new List<long> { 101, 102 },
             ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15)
         };
         AiSpecialtyService.StoreSnapshotForTesting(snapshot);
 
-        // 1. Valid snapshot
-        var valid = AiSpecialtyService.ValidateSnapshot(
-            "snap_test_123",
-            userId,
-            2,
-            new List<long> { 1, 2, 3 },
-            new List<long> { 101, 102 },
-            DateTime.UtcNow,
-            out var resolvedSnap,
-            out var errMsg);
-        Assert.True(valid);
-        Assert.NotNull(resolvedSnap);
-        Assert.Null(errMsg);
+        // 1. Tampered doctor order via ChatAsync -> Rejected with ClarificationRequired and draft preserved
+        var tamperedReq = new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ thứ hai",
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau ngực khi gắng sức kéo dài 1 tuần",
+            DraftVersion = 2,
+            ContextSnapshotId = "snap_test_123",
+            DisplayedDoctorIds = new List<long> { Doctor2EntityId, DoctorEntityId } // Swapped order!
+        };
+        var tamperedRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", tamperedReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(tamperedRes?.Data);
+        Assert.Equal("ClarificationRequired", tamperedRes.Data.DialogueOutcome);
+        Assert.Null(tamperedRes.Data.BookingDraft?.DoctorId);
+        Assert.Equal(SpecialtyEntityId, tamperedRes.Data.BookingDraft?.SpecialtyId);
 
-        // 2. Missing snapshot ID
-        var missing = AiSpecialtyService.ValidateSnapshot(
-            null,
-            userId,
-            2,
-            null,
-            null,
-            DateTime.UtcNow,
-            out _,
-            out var missingErr);
-        Assert.False(missing);
-        Assert.Contains("thiếu snapshot", missingErr);
+        // 2. Wrong draftVersion via ChatAsync -> Rejected
+        var wrongVerReq = new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau ngực khi gắng sức kéo dài 1 tuần",
+            DraftVersion = 3, // Snapshot was v2
+            ContextSnapshotId = "snap_test_123",
+            DisplayedDoctorIds = new List<long> { DoctorEntityId, Doctor2EntityId }
+        };
+        var wrongVerRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", wrongVerReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(wrongVerRes?.Data);
+        Assert.Equal("ClarificationRequired", wrongVerRes.Data.DialogueOutcome);
+        Assert.Null(wrongVerRes.Data.BookingDraft?.DoctorId);
 
-        // 3. Non-existent snapshot ID
-        var nonExistent = AiSpecialtyService.ValidateSnapshot(
-            "snap_non_existent",
-            userId,
-            2,
-            null,
-            null,
-            DateTime.UtcNow,
-            out _,
-            out var nonExistentErr);
-        Assert.False(nonExistent);
-        Assert.Contains("không tồn tại hoặc đã hết hạn", nonExistentErr);
-
-        // 4. Expired snapshot (> 15m)
-        var expired = AiSpecialtyService.ValidateSnapshot(
-            "snap_test_123",
-            userId,
-            2,
-            null,
-            null,
-            DateTime.UtcNow.AddMinutes(16),
-            out _,
-            out var expiredErr);
-        Assert.False(expired);
-        Assert.Contains("hết hạn", expiredErr);
-
-        // Re-store snapshot for user/version mismatch tests
-        AiSpecialtyService.StoreSnapshotForTesting(snapshot);
-
-        // 5. User mismatch
-        var mismatchedUser = AiSpecialtyService.ValidateSnapshot(
-            "snap_test_123",
-            Guid.NewGuid(),
-            2,
-            null,
-            null,
-            DateTime.UtcNow,
-            out _,
-            out var userMismatchErr);
-        Assert.False(mismatchedUser);
-        Assert.Contains("phiên người dùng khác", userMismatchErr);
-
-        // 6. Draft version mismatch
-        var mismatchedVer = AiSpecialtyService.ValidateSnapshot(
-            "snap_test_123",
-            userId,
-            3,
-            null,
-            null,
-            DateTime.UtcNow,
-            out _,
-            out var verMismatchErr);
-        Assert.False(mismatchedVer);
-        Assert.Contains("không khớp với phiên bản", verMismatchErr);
-
-        // 7. Altered doctor list
-        var alteredDocList = AiSpecialtyService.ValidateSnapshot(
-            "snap_test_123",
-            userId,
-            2,
-            new List<long> { 1, 999 },
-            null,
-            DateTime.UtcNow,
-            out _,
-            out var alteredDocErr);
-        Assert.False(alteredDocList);
-        Assert.Contains("bị thay đổi", alteredDocErr);
-
-        // 8. Altered slot list
-        var alteredSlotList = AiSpecialtyService.ValidateSnapshot(
-            "snap_test_123",
-            userId,
-            2,
-            null,
-            new List<long> { 999 },
-            DateTime.UtcNow,
-            out _,
-            out var alteredSlotErr);
-        Assert.False(alteredSlotList);
-        Assert.Contains("bị thay đổi", alteredSlotErr);
+        // 3. Another user's snapshot via ChatAsync -> Rejected
+        await AuthenticateAsync("pat2@test.com");
+        var wrongUserReq = new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau ngực khi gắng sức kéo dài 1 tuần",
+            DraftVersion = 2,
+            ContextSnapshotId = "snap_test_123",
+            DisplayedDoctorIds = new List<long> { DoctorEntityId, Doctor2EntityId }
+        };
+        var wrongUserRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", wrongUserReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(wrongUserRes?.Data);
+        Assert.Equal("ClarificationRequired", wrongUserRes.Data.DialogueOutcome);
+        Assert.Null(wrongUserRes.Data.BookingDraft?.DoctorId);
 
         AiSpecialtyService.ClearSnapshotsForTesting();
     }
@@ -2579,13 +2616,16 @@ public class AiActionAssistantTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task ScenarioV_DateModification_EvictsSlot_AndUpdatesSlotDate()
+    public async Task ScenarioV_DateModification_EvictsOldSlot_AndReturnsSlotsForNewDate()
     {
         await AuthenticateAsync("pat1@test.com");
 
-        var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
-        var tomorrow = DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd");
+        var oldDate = GetFutureWorkingDate(28);
+        var newDate = GetFutureWorkingDate(30);
+        var oldSlot = await CreateAvailableSlotAsync(DoctorEntityId, oldDate, new TimeOnly(8, 0), new TimeOnly(8, 30));
+        var newSlot = await CreateAvailableSlotAsync(DoctorEntityId, newDate, new TimeOnly(14, 0), new TimeOnly(14, 30));
 
+        Factory.MockAiProvider.Reset();
         Factory.MockAiProvider
             .Setup(x => x.ChatWithAiAsync(
                 It.IsAny<string>(),
@@ -2595,66 +2635,106 @@ public class AiActionAssistantTests : IntegrationTestBase
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new AiChatProviderResult
             {
-                Reply = "Tôi đã cập nhật ngày khám sang ngày mai.",
+                IsSuccess = true,
+                Status = "Success",
+                Reply = "Tôi đã cập nhật ngày khám sang ngày mới.",
                 SuggestedSpecialtyCodes = new List<string> { "SP06" },
                 ExtractedSpecialtyCode = "SP06",
-                ExtractedDate = "ngày mai",
-                IsCorrection = true,
-                CorrectionTarget = "Date",
                 Urgency = "ROUTINE"
             });
 
         var request = new AiChatRequestDto
         {
-            Message = "Đổi sang ngày mai giúp tôi",
+            Message = $"Đổi sang ngày {newDate:dd/MM/yyyy} giúp tôi",
             DraftVersion = 1,
-            PendingSpecialtyId = 1,
-            PendingDoctorId = 1,
-            PendingSlotId = 999,
-            PendingSlotDate = today,
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = DoctorEntityId,
+            PendingSlotId = oldSlot.Id,
+            PendingSlotDate = oldDate.ToString("yyyy-MM-dd"),
             Reason = "Đau đầu chóng mặt kéo dài hai ngày"
         };
 
         var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var data = doc.RootElement.GetProperty("data");
+        var res = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(res?.Data);
+        Assert.Equal("DraftModified", res.Data.DialogueOutcome);
+        Assert.NotNull(res.Data.BookingDraft);
+        Assert.Null(res.Data.BookingDraft.SlotId);
+        Assert.Equal(newDate.ToString("yyyy-MM-dd"), res.Data.BookingDraft.SlotDate);
+        Assert.Equal(2, res.Data.BookingDraft.Version);
 
-        Assert.Equal("DraftModified", data.GetProperty("dialogueOutcome").GetString());
-        var draft = data.GetProperty("bookingDraft");
-        Assert.True(draft.GetProperty("slotId").ValueKind == JsonValueKind.Null);
-        Assert.Equal(tomorrow, draft.GetProperty("slotDate").GetString());
-        Assert.Equal(2, draft.GetProperty("version").GetInt32());
+        // Verify returned slot actions belong to newDate and NOT oldDate
+        var slotActions = res.Data.Actions.Where(a => a.Type == AiActionTypes.SelectSlot).ToList();
+        Assert.NotEmpty(slotActions);
+        Assert.Contains(slotActions, a => a.Payload?.SlotId == newSlot.Id && a.Payload?.SlotDate == newDate.ToString("yyyy-MM-dd"));
+        Assert.DoesNotContain(slotActions, a => a.Payload?.SlotId == oldSlot.Id);
     }
 
     [Fact]
-    public async Task ScenarioW_IdempotencyKey_UserIsolation_ThrowsConflict()
+    public async Task ScenarioW_IdempotencyKey_BehavioralReplay_PayloadConflict_AndUserIsolation()
     {
-        using var scope = Factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await AuthenticateAsync("pat1@test.com");
 
-        var userA = Guid.NewGuid();
-        var userB = Guid.NewGuid();
-        var key = $"idemp_iso_{Guid.NewGuid():N}";
-        var hash = "dummy_payload_hash_123";
+        var bookingDate = GetFutureWorkingDate(32);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, bookingDate, new TimeOnly(9, 0), new TimeOnly(9, 30));
+        var idempKey = $"idemp_behav_{Guid.NewGuid():N}";
 
-        db.IdempotencyRecords.Add(new IdempotencyRecord
+        using var req1 = new HttpRequestMessage(HttpMethod.Post, "/api/v1/appointments");
+        req1.Headers.Add("Idempotency-Key", idempKey);
+        req1.Content = JsonContent.Create(new
         {
-            Key = key,
-            Scope = "CreateAppointment",
-            UserId = userA,
-            RequestHash = hash,
-            ResponseBody = "{}",
-            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(30),
-            CreatedAtUtc = DateTime.UtcNow
+            doctorId = DoctorEntityId,
+            specialtyId = SpecialtyEntityId,
+            appointmentSlotId = slot.Id,
+            reason = "Khám tim mạch do đau tức ngực kéo dài 3 ngày"
         });
-        await db.SaveChangesAsync();
+        var resp1 = await Client.SendAsync(req1);
+        Assert.True(resp1.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created);
+        var body1 = await resp1.Content.ReadFromJsonAsync<ApiResponse<AppointmentDto>>();
+        Assert.NotNull(body1?.Data);
 
-        var record = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
-            db.IdempotencyRecords, r => r.Key == key && r.Scope == "CreateAppointment");
-        Assert.NotNull(record);
-        Assert.NotEqual(userB, record.UserId);
-        Assert.Equal(userA, record.UserId);
+        // 1. Replay with SAME key and SAME payload -> returns exact same appointment ID (idempotent)
+        using var req2 = new HttpRequestMessage(HttpMethod.Post, "/api/v1/appointments");
+        req2.Headers.Add("Idempotency-Key", idempKey);
+        req2.Content = JsonContent.Create(new
+        {
+            doctorId = DoctorEntityId,
+            specialtyId = SpecialtyEntityId,
+            appointmentSlotId = slot.Id,
+            reason = "Khám tim mạch do đau tức ngực kéo dài 3 ngày"
+        });
+        var resp2 = await Client.SendAsync(req2);
+        Assert.True(resp2.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created);
+        var body2 = await resp2.Content.ReadFromJsonAsync<ApiResponse<AppointmentDto>>();
+        Assert.Equal(body1.Data.Id, body2?.Data?.Id);
+
+        // 2. Replay with SAME key and DIFFERENT payload (different reason) -> 409 Conflict
+        using var reqDiffPayload = new HttpRequestMessage(HttpMethod.Post, "/api/v1/appointments");
+        reqDiffPayload.Headers.Add("Idempotency-Key", idempKey);
+        reqDiffPayload.Content = JsonContent.Create(new
+        {
+            doctorId = DoctorEntityId,
+            specialtyId = SpecialtyEntityId,
+            appointmentSlotId = slot.Id,
+            reason = "Đổi sang lý do khám khác hoàn toàn với ban đầu"
+        });
+        var respDiffPayload = await Client.SendAsync(reqDiffPayload);
+        Assert.Equal(HttpStatusCode.Conflict, respDiffPayload.StatusCode);
+
+        // 3. Replay with SAME key from DIFFERENT user -> 409 Conflict
+        await AuthenticateAsync("pat2@test.com");
+        using var reqOtherUser = new HttpRequestMessage(HttpMethod.Post, "/api/v1/appointments");
+        reqOtherUser.Headers.Add("Idempotency-Key", idempKey);
+        reqOtherUser.Content = JsonContent.Create(new
+        {
+            doctorId = DoctorEntityId,
+            specialtyId = SpecialtyEntityId,
+            appointmentSlotId = slot.Id,
+            reason = "Khám tim mạch do đau tức ngực kéo dài 3 ngày"
+        });
+        var respOtherUser = await Client.SendAsync(reqOtherUser);
+        Assert.Equal(HttpStatusCode.Conflict, respOtherUser.StatusCode);
     }
 }

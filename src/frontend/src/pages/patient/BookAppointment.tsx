@@ -51,6 +51,17 @@ interface BookingSuccessData {
     reason?: string;
 }
 
+interface AppointmentResponsePayload {
+    id?: number;
+    appointmentId?: number;
+    appointmentCode: string;
+    doctorName?: string;
+    specialtyName?: string;
+    startTime?: string;
+    endTime?: string;
+    reason?: string;
+}
+
 export const BookAppointment: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
@@ -92,6 +103,8 @@ export const BookAppointment: React.FC = () => {
     const [loadingSlots, setLoadingSlots] = useState(false);
 
     const [submitting, setSubmitting] = useState(false);
+    const isSubmittingRef = useRef(false);
+    const lastConfirmationAttemptRef = useRef<{ payloadFingerprint: string; key: string } | null>(null);
     const [bookingError, setBookingError] = useState<string | null>(null);
     const [successBooking, setSuccessBooking] = useState<BookingSuccessData | null>(null);
 
@@ -106,6 +119,7 @@ export const BookAppointment: React.FC = () => {
 
         // Only clear if transitioning from an existing active draft to null
         if (prev !== null && activeDraft === null) {
+            setPageSpecialtyId("");
             setPageDoctorId("");
             setPageSlotId("");
             setPageReason("");
@@ -131,7 +145,7 @@ export const BookAppointment: React.FC = () => {
         const fetchSpecs = async () => {
             try {
                 setLoadingSpecs(true);
-                const res = await axiosClient.get<any, ApiResponse<Specialty[]>>("/specialties");
+                const res = await axiosClient.get<unknown, ApiResponse<Specialty[]>>("/specialties");
                 if (res.success && res.data) {
                     setSpecialties(res.data);
                 }
@@ -193,7 +207,9 @@ export const BookAppointment: React.FC = () => {
                     endTime: specialtyChanged ? undefined : previous?.endTime,
                     slotDate: targetSlotDate,
                     reason: previous?.reason,
-                    isComplete: false
+                    isComplete: false,
+                    version: previous?.version !== undefined ? (specialtyChanged ? previous.version + 1 : previous.version) : undefined,
+                    confirmationId: specialtyChanged ? undefined : previous?.confirmationId
                 };
             });
         }
@@ -206,7 +222,9 @@ export const BookAppointment: React.FC = () => {
                 slotId: undefined,
                 startTime: undefined,
                 endTime: undefined,
-                isComplete: false
+                isComplete: false,
+                version: previous?.version !== undefined ? previous.version + 1 : undefined,
+                confirmationId: undefined
             }));
         }
     }, [specialties, pendingSpecialtyId, location.search, setPendingSpecialtyId, setActiveDraft, showAlert, slotDate]);
@@ -223,7 +241,7 @@ export const BookAppointment: React.FC = () => {
         const fetchDoctors = async () => {
             try {
                 setLoadingDocs(true);
-                const res = await axiosClient.get<any, ApiResponse<any>>(`/specialties/${specialtyId}/doctors`);
+                const res = await axiosClient.get<unknown, ApiResponse<Doctor[] | { items?: Doctor[] }>>(`/specialties/${specialtyId}/doctors`);
                 if (!active) return;
                 if (res.success && res.data) {
                     const list = Array.isArray(res.data) ? res.data : (res.data.items ?? []);
@@ -240,7 +258,9 @@ export const BookAppointment: React.FC = () => {
                             slotId: undefined,
                             startTime: undefined,
                             endTime: undefined,
-                            isComplete: false
+                            isComplete: false,
+                            version: previous.version !== undefined ? previous.version + 1 : undefined,
+                            confirmationId: undefined
                         } : previous);
                         showAlert("Bác sĩ đã chọn không thuộc chuyên khoa này. Vui lòng chọn lại bác sĩ.", "Thông báo", "info");
                     } else if (revisitRequestId && doctorId) {
@@ -281,7 +301,7 @@ export const BookAppointment: React.FC = () => {
             try {
                 setLoadingSlots(true);
                 const specParam = specialtyId ? `&specialtyId=${specialtyId}` : '';
-                const res = await axiosClient.get<any, ApiResponse<Slot[]>>(
+                const res = await axiosClient.get<unknown, ApiResponse<Slot[]>>(
                     `/doctors/${doctorId}/available-slots?fromDate=${slotDate}&toDate=${slotDate}${specParam}`
                 );
                 if (!active) return;
@@ -294,7 +314,9 @@ export const BookAppointment: React.FC = () => {
                             slotId: undefined,
                             startTime: undefined,
                             endTime: undefined,
-                            isComplete: false
+                            isComplete: false,
+                            version: previous.version !== undefined ? previous.version + 1 : undefined,
+                            confirmationId: undefined
                         } : previous);
                     }
                 } else {
@@ -328,7 +350,9 @@ export const BookAppointment: React.FC = () => {
                 specialtyName: specialty?.specialtyName,
                 slotDate,
                 reason: previous?.reason ?? reason,
-                isComplete: false
+                isComplete: false,
+                version: previous?.version !== undefined ? previous.version + 1 : undefined,
+                confirmationId: undefined
             }));
         }
     };
@@ -351,7 +375,9 @@ export const BookAppointment: React.FC = () => {
                 endTime: undefined,
                 slotDate,
                 reason: previous?.reason ?? reason,
-                isComplete: false
+                isComplete: false,
+                version: previous?.version !== undefined ? previous.version + 1 : undefined,
+                confirmationId: undefined
             }));
         }
     };
@@ -369,7 +395,9 @@ export const BookAppointment: React.FC = () => {
             startTime: slot.startTime.substring(0, 5),
             endTime: slot.endTime.substring(0, 5),
             reason,
-            isComplete: reason.trim().length >= 10 && reason.trim().length <= 500
+            isComplete: reason.trim().length >= 10 && reason.trim().length <= 500,
+            version: previous?.version !== undefined ? previous.version + 1 : undefined,
+            confirmationId: undefined
         }));
     };
 
@@ -382,7 +410,9 @@ export const BookAppointment: React.FC = () => {
             slotId: undefined,
             startTime: undefined,
             endTime: undefined,
-            isComplete: false
+            isComplete: false,
+            version: previous.version !== undefined ? previous.version + 1 : undefined,
+            confirmationId: undefined
         } : previous);
     };
 
@@ -398,29 +428,45 @@ export const BookAppointment: React.FC = () => {
                 previous.slotId &&
                 normalizedLength >= 10 &&
                 normalizedLength <= 500
-            )
+            ),
+            version: previous.version !== undefined ? previous.version + 1 : undefined,
+            confirmationId: undefined
         } : previous);
     };
 
     // Confirm booking submit
     const handleConfirm = async () => {
-        if (submitting || !specialtyId || !doctorId || !slotId) return;
+        if (submitting || isSubmittingRef.current || !specialtyId || !doctorId || !slotId) return;
         const normalizedReason = reason.trim();
         if (normalizedReason.length < 10 || normalizedReason.length > 500) {
             showAlert("Lý do khám phải từ 10 đến 500 ký tự.", "Thông báo", "error");
             return;
         }
 
+        isSubmittingRef.current = true;
         setSubmitting(true);
         setBookingError(null);
 
         try {
-            const idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID
-                ? crypto.randomUUID()
-                : `form_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            const payloadFingerprint = `${revisitRequestId ?? "std"}_${specialtyId}_${doctorId}_${slotId}_${normalizedReason}`;
+            let idempotencyKey: string;
+            if (
+                lastConfirmationAttemptRef.current &&
+                lastConfirmationAttemptRef.current.payloadFingerprint === payloadFingerprint
+            ) {
+                idempotencyKey = lastConfirmationAttemptRef.current.key;
+            } else {
+                idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID
+                    ? crypto.randomUUID()
+                    : `form_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                lastConfirmationAttemptRef.current = {
+                    payloadFingerprint,
+                    key: idempotencyKey
+                };
+            }
 
             const res = revisitRequestId
-                ? await axiosClient.post<any, ApiResponse<any>>(
+                ? await axiosClient.post<unknown, ApiResponse<AppointmentResponsePayload>>(
                     `/revisit-requests/${revisitRequestId}/accept`,
                     {
                         targetSlotId: slotId,
@@ -432,7 +478,7 @@ export const BookAppointment: React.FC = () => {
                         }
                     }
                 )
-                : await axiosClient.post<any, ApiResponse<any>>(
+                : await axiosClient.post<unknown, ApiResponse<AppointmentResponsePayload>>(
                     "/appointments",
                     {
                         doctorId,
@@ -448,8 +494,9 @@ export const BookAppointment: React.FC = () => {
                 );
 
             if (res.success && res.data) {
+                lastConfirmationAttemptRef.current = null;
                 setSuccessBooking({
-                    appointmentId: res.data.id || res.data.appointmentId,
+                    appointmentId: res.data.id || res.data.appointmentId || 0,
                     appointmentCode: res.data.appointmentCode,
                     doctorName: res.data.doctorName || selectedDoc?.fullName || "",
                     specialtyName: res.data.specialtyName || selectedSpec?.specialtyName || "",
@@ -469,9 +516,10 @@ export const BookAppointment: React.FC = () => {
                     navigate("/patient/book", { replace: true });
                 }
             }
-        } catch (err: any) {
-            const errorCode = err?.response?.data?.errorCode || err?.errorCode;
-            let msg = err?.response?.data?.message || err?.message || "Có lỗi xảy ra khi đặt lịch.";
+        } catch (err: unknown) {
+            const apiErr = err as { errorCode?: string; message?: string; response?: { data?: { errorCode?: string; message?: string } } };
+            const errorCode = apiErr?.response?.data?.errorCode || apiErr?.errorCode;
+            let msg = apiErr?.response?.data?.message || apiErr?.message || "Có lỗi xảy ra khi đặt lịch.";
             if (errorCode === "SLOT_ALREADY_BOOKED") {
                 msg = "Khung giờ này vừa được đặt bởi người khác. Vui lòng chọn giờ khác.";
                 setPageSlotId("");
@@ -480,7 +528,9 @@ export const BookAppointment: React.FC = () => {
                     slotId: undefined,
                     startTime: undefined,
                     endTime: undefined,
-                    isComplete: false
+                    isComplete: false,
+                    version: (previous.version ?? 1) + 1,
+                    confirmationId: undefined
                 } : previous);
                 setStep(3);
             } else if (errorCode === "PATIENT_TIME_CONFLICT") {
@@ -491,7 +541,9 @@ export const BookAppointment: React.FC = () => {
                     slotId: undefined,
                     startTime: undefined,
                     endTime: undefined,
-                    isComplete: false
+                    isComplete: false,
+                    version: (previous.version ?? 1) + 1,
+                    confirmationId: undefined
                 } : previous);
                 setStep(3);
             } else if (errorCode === "DOCTOR_NOT_AVAILABLE") {
@@ -502,13 +554,16 @@ export const BookAppointment: React.FC = () => {
                     slotId: undefined,
                     startTime: undefined,
                     endTime: undefined,
-                    isComplete: false
+                    isComplete: false,
+                    version: (previous.version ?? 1) + 1,
+                    confirmationId: undefined
                 } : previous);
                 setStep(3);
             }
             setBookingError(msg);
             showAlert(msg, "Thông báo đặt lịch", "error");
         } finally {
+            isSubmittingRef.current = false;
             setSubmitting(false);
         }
     };

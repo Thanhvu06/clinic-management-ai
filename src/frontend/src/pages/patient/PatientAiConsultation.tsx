@@ -19,7 +19,7 @@ const QUICK_PROMPTS = [
 ];
 
 export const PatientAiConsultation: React.FC = () => {
-    const { setPendingSpecialtyId } = useChatContext();
+    const { setPendingSpecialtyId, aiAssistantStatus } = useChatContext();
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
@@ -62,9 +62,27 @@ export const PatientAiConsultation: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.2rem', fontWeight: 600 }}>
                         <Stethoscope size={24} color="#0d9488" />
                         ClinicCare AI Action Assistant
-                        <span className={styles.statusPill}>
-                            <span className={styles.statusDot} />
-                            Trực tuyến
+                        <span className={`${styles.statusPill} ${
+                            aiAssistantStatus === "Degraded" || aiAssistantStatus === "Unchecked"
+                                ? styles.statusPillDegraded
+                                : aiAssistantStatus === "Offline"
+                                ? styles.statusPillOffline
+                                : styles.statusPillOnline
+                        }`}>
+                            <span className={`${styles.statusDot} ${
+                                aiAssistantStatus === "Degraded" || aiAssistantStatus === "Unchecked"
+                                    ? styles.statusDotDegraded
+                                    : aiAssistantStatus === "Offline"
+                                    ? styles.statusDotOffline
+                                    : styles.statusDotOnline
+                            }`} />
+                            {aiAssistantStatus === "Degraded"
+                                ? "Chế độ rút gọn"
+                                : aiAssistantStatus === "Offline"
+                                ? "Ngoại tuyến"
+                                : aiAssistantStatus === "Unchecked"
+                                ? "Chưa kiểm tra AI"
+                                : "Trực tuyến"}
                         </span>
                     </div>
                     <button

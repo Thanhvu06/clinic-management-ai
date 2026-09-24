@@ -792,7 +792,11 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
 
-        // Default status is Online ("Trực tuyến")
+        // Default status is Unchecked ("Chưa kiểm tra AI") before Gemini is verified
+        expect(screen.getByText('Chưa kiểm tra AI')).toBeInTheDocument();
+
+        // Switch to Online ("Trực tuyến")
+        fireEvent.click(screen.getByText('Set Online'));
         expect(screen.getByText('Trực tuyến')).toBeInTheDocument();
 
         // Switch to Degraded ("Chế độ rút gọn")
@@ -1001,6 +1005,250 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
                     })
                 })
             );
+        });
+    });
+
+    it('Phase0_FormEdit_InvalidatesOldChatConfirmation_AndIncrementsDraftVersion', async () => {
+        const specialties = [
+            { id: 1, specialtyCode: 'TM', specialtyName: 'Tim mạch', description: 'Tim', aiEnabled: true }
+        ];
+        const doctors = [
+            { id: 101, fullName: 'Nguyễn Văn An', academicTitle: 'BS', specialtyId: 1, specialtyName: 'Tim mạch' }
+        ];
+        const slots = [
+            { id: 1001, slotId: 1001, doctorId: 101, slotDate: '2026-09-23', startTime: '09:00:00', endTime: '09:30:00', isAvailable: true }
+        ];
+
+        vi.mocked(axiosClient.get).mockImplementation((url: string) => {
+            if (url === '/specialties') return Promise.resolve({ success: true, message: '', data: specialties });
+            if (url === '/specialties/1/doctors') return Promise.resolve({ success: true, message: '', data: doctors });
+            if (url.includes('/doctors/101/available-slots')) return Promise.resolve({ success: true, message: '', data: slots });
+            return Promise.resolve({ success: true, message: '', data: [] });
+        });
+
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: '',
+            data: {
+                message: 'Vui lòng xác nhận lịch khám:',
+                urgency: 'ROUTINE',
+                providerStatus: 'Healthy',
+                assistantStatus: 'Online',
+                bookingDraft: {
+                    specialtyId: 1,
+                    specialtyName: 'Tim mạch',
+                    doctorId: 101,
+                    doctorName: 'BS Nguyễn Văn An',
+                    slotId: 1001,
+                    slotDate: '2026-09-23',
+                    startTime: '09:00',
+                    endTime: '09:30',
+                    reason: 'Đau tức ngực trái kéo dài 3 ngày',
+                    isComplete: true,
+                    version: 1,
+                    confirmationId: 'conf_v1_1001'
+                },
+                actions: [
+                    {
+                        id: 'act-confirm-v1',
+                        type: 'ConfirmBooking',
+                        label: 'Xác nhận đặt lịch v1',
+                        style: 'primary',
+                        requiresAuthentication: true,
+                        requiresConfirmation: true,
+                        draftVersion: 1,
+                        payload: {
+                            confirmationId: 'conf_v1_1001',
+                            specialtyId: 1,
+                            specialtyName: 'Tim mạch',
+                            doctorId: 101,
+                            doctorName: 'BS Nguyễn Văn An',
+                            slotId: 1001,
+                            slotDate: '2026-09-23',
+                            startTime: '09:00',
+                            endTime: '09:30',
+                            reason: 'Đau tức ngực trái kéo dài 3 ngày',
+                            draftVersion: 1
+                        }
+                    }
+                ]
+            }
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/patient/book']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                        <MedicalChatWidget />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const chatInput = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(chatInput, { target: { value: 'Đặt lịch tim mạch' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Xác nhận đặt lịch v1')).toBeInTheDocument();
+        });
+
+        // Edit reason on BookAppointment form -> increments draft version to 2 and clears confirmationId
+        const reasonTextarea = await screen.findByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
+        fireEvent.change(reasonTextarea, { target: { value: 'Đau tức ngực trái kèm khó thở về đêm' } });
+
+        // Clicking old ConfirmBooking v1 in chat must be rejected and NOT call /appointments
+        fireEvent.click(screen.getByText('Xác nhận đặt lịch v1'));
+
+        await waitFor(() => {
+            expect(screen.getByText(/thuộc phiên bản cũ \(v1\)/i)).toBeInTheDocument();
+        });
+        expect(axiosClient.post).toHaveBeenCalledTimes(1); // Only the initial /ai/chat call
+    });
+
+    it('Phase0_CancelDraft_BlocksStaleActionButtons_AndPreventsResurrection', async () => {
+        vi.mocked(axiosClient.post)
+            .mockResolvedValueOnce({
+                success: true,
+                message: '',
+                data: {
+                    message: 'Chọn bác sĩ:',
+                    urgency: 'ROUTINE',
+                    providerStatus: 'Healthy',
+                    assistantStatus: 'Online',
+                    bookingDraft: { specialtyId: 1, specialtyName: 'Tim mạch', version: 1, isComplete: false },
+                    actions: [
+                        {
+                            id: 'act-doc-stale',
+                            type: 'SelectDoctor',
+                            label: 'Chọn BS Trần Văn B',
+                            style: 'secondary',
+                            requiresAuthentication: false,
+                            requiresConfirmation: false,
+                            draftVersion: 1,
+                            payload: { specialtyId: 1, doctorId: 102, doctorName: 'Trần Văn B', draftVersion: 1 }
+                        }
+                    ]
+                }
+            })
+            .mockResolvedValueOnce({
+                success: true,
+                message: '',
+                data: {
+                    message: 'Đã hủy bản nháp đặt lịch hiện tại.',
+                    urgency: 'ROUTINE',
+                    dialogueOutcome: 'DraftCancelled',
+                    providerStatus: 'NotCalled',
+                    assistantStatus: 'Online',
+                    bookingDraft: null,
+                    actions: []
+                }
+            });
+
+        render(
+            <MemoryRouter initialEntries={['/patient']}>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const chatInput = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(chatInput, { target: { value: 'Đặt lịch khám tim' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Chọn BS Trần Văn B')).toBeInTheDocument();
+        });
+
+        // Cancel draft
+        fireEvent.change(chatInput, { target: { value: 'Hủy đặt lịch' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Đã hủy bản nháp đặt lịch hiện tại/i)).toBeInTheDocument();
+        });
+
+        // Clicking old SelectDoctor button after cancellation must be blocked
+        fireEvent.click(screen.getByText('Chọn BS Trần Văn B'));
+        await waitFor(() => {
+            expect(screen.getByText(/Bản nháp đặt lịch trước đó đã bị hủy/i)).toBeInTheDocument();
+        });
+        expect(axiosClient.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('Phase0_ProviderStatus_503Degraded_NotPromotedByNotCalled_UntilHealthy', async () => {
+        vi.mocked(axiosClient.post)
+            .mockResolvedValueOnce({
+                success: true,
+                message: '',
+                data: {
+                    message: 'Đang dùng chế độ dự phòng.',
+                    urgency: 'ROUTINE',
+                    providerStatus: 'Unavailable',
+                    assistantStatus: 'Degraded',
+                    actions: []
+                }
+            })
+            .mockResolvedValueOnce({
+                success: true,
+                message: '',
+                data: {
+                    message: 'Giá khám là 150.000đ.',
+                    urgency: 'ROUTINE',
+                    providerStatus: 'NotCalled',
+                    assistantStatus: 'Online',
+                    actions: []
+                }
+            })
+            .mockResolvedValueOnce({
+                success: true,
+                message: '',
+                data: {
+                    message: 'Gemini đã kết nối lại.',
+                    urgency: 'ROUTINE',
+                    providerStatus: 'Healthy',
+                    assistantStatus: 'Online',
+                    actions: []
+                }
+            });
+
+        render(
+            <MemoryRouter initialEntries={['/patient']}>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        expect(screen.getByText('Chưa kiểm tra AI')).toBeInTheDocument();
+
+        const chatInput = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+
+        // 1. 503 Unavailable -> Degraded ("Chế độ rút gọn")
+        fireEvent.change(chatInput, { target: { value: 'Tôi bị đau đầu' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+        await waitFor(() => {
+            expect(screen.getByText('Chế độ rút gọn')).toBeInTheDocument();
+        });
+
+        // 2. Local turn with providerStatus: NotCalled -> must STAY Degraded ("Chế độ rút gọn")
+        fireEvent.change(chatInput, { target: { value: 'Giá khám bao nhiêu' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+        await waitFor(() => {
+            expect(screen.getByText(/150\.000đ/i)).toBeInTheDocument();
+        });
+        expect(screen.getByText('Chế độ rút gọn')).toBeInTheDocument();
+
+        // 3. Real Gemini success with providerStatus: Healthy -> Online ("Trực tuyến")
+        fireEvent.change(chatInput, { target: { value: 'Tư vấn thêm giúp tôi' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+        await waitFor(() => {
+            expect(screen.getByText('Trực tuyến')).toBeInTheDocument();
         });
     });
 });

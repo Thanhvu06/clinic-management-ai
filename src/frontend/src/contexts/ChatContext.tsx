@@ -4,7 +4,7 @@ import type { ChatMessage, AiBookingDraft, AiAction } from "../types/ai";
 
 export type { ChatMessage } from "../types/ai";
 
-export type AssistantStatus = "Online" | "Degraded" | "Offline";
+export type AssistantStatus = "Unchecked" | "Online" | "Degraded" | "Offline";
 
 interface ChatContextType {
     pendingSpecialtyId: number | null;
@@ -30,7 +30,7 @@ const ChatContext = createContext<ChatContextType>({
     setMessages: () => {},
     addMessage: () => {},
     clearChat: () => {},
-    aiAssistantStatus: "Online",
+    aiAssistantStatus: "Unchecked",
     setAiAssistantStatus: () => {}
 });
 
@@ -109,7 +109,7 @@ export function validateChatMessageSchema(item: unknown): item is ChatMessage {
         if (msg.urgency !== "ROUTINE" && msg.urgency !== "SOON" && msg.urgency !== "EMERGENCY") return false;
     }
     if (msg.assistantStatus !== undefined && msg.assistantStatus !== null) {
-        if (msg.assistantStatus !== "Online" && msg.assistantStatus !== "Degraded" && msg.assistantStatus !== "Offline") return false;
+        if (msg.assistantStatus !== "Unchecked" && msg.assistantStatus !== "Online" && msg.assistantStatus !== "Degraded" && msg.assistantStatus !== "Offline") return false;
     }
     return true;
 }
@@ -188,7 +188,7 @@ const AccountBoundChatProvider: React.FC<{
     const [pendingSpecialtyId, setPendingSpecialtyIdState] = useState<number | null>(null);
     const [activeDraft, setActiveDraftState] = useState<AiBookingDraft | null>(() => loadStoredDraft(accountKey));
     const [messages, setMessagesState] = useState<ChatMessage[]>(() => loadStoredMessages(accountKey));
-    const [aiAssistantStatus, setAiAssistantStatus] = useState<AssistantStatus>("Online");
+    const [aiAssistantStatus, setAiAssistantStatus] = useState<AssistantStatus>("Unchecked");
     const bookingContextVersionRef = useRef(0);
 
     const setActiveDraft = useCallback<React.Dispatch<React.SetStateAction<AiBookingDraft | null>>>((update) => {
@@ -243,7 +243,7 @@ const AccountBoundChatProvider: React.FC<{
         setMessagesState([DEFAULT_AI_MESSAGE]);
         setActiveDraftState(null);
         setPendingSpecialtyIdState(null);
-        setAiAssistantStatus("Online");
+        setAiAssistantStatus("Unchecked");
         sessionStorage.removeItem(`cliniccare_chat_history_${accountKey}`);
         sessionStorage.removeItem(`cliniccare_booking_draft_${accountKey}`);
     };

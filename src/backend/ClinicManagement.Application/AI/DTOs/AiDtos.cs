@@ -192,10 +192,45 @@ public static class SafeRoutes
 
 public static class AiActionValidator
 {
+    private static readonly HashSet<string> DisallowedReasons = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "chào", "xin chào", "chào bạn", "chào bác sĩ", "chào bs", "alo", "hello", "hi", "hey",
+        "cảm ơn", "thanks", "thank you", "tạm biệt", "bye", "dạ", "vâng", "ok", "oke", "okay",
+        "chốt", "chốt lịch", "chốt giúp tôi", "chốt lịch này", "đồng ý", "xác nhận", "xác nhận đặt lịch",
+        "ok chốt", "tôi đồng ý", "ok tôi đồng ý", "đồng ý đặt", "hoàn tất", "hoàn tất đặt lịch",
+        "chốt nhé", "xác nhận nhé", "chốt nha", "đồng ý nha",
+        "hủy", "hủy đặt lịch", "hủy lịch", "hủy bản nháp", "hủy thao tác", "không đặt nữa",
+        "bỏ qua", "thôi không đặt nữa", "thôi khỏi", "hủy bỏ", "không khám nữa",
+        "người đầu", "giờ đầu"
+    };
+
     public static bool IsValidBookingReason(string? reason)
     {
         var normalized = reason?.Trim();
-        return normalized is { Length: >= 10 and <= 500 };
+        if (normalized is not { Length: >= 10 and <= 500 })
+        {
+            return false;
+        }
+
+        var lower = normalized.ToLowerInvariant();
+        if (DisallowedReasons.Contains(lower) ||
+            lower.StartsWith("chốt ") ||
+            lower.StartsWith("ok chốt") ||
+            lower.StartsWith("đồng ý ") ||
+            lower.StartsWith("xác nhận ") ||
+            lower.StartsWith("tôi chọn ") ||
+            lower.StartsWith("chọn ") ||
+            lower.StartsWith("hủy "))
+        {
+            return false;
+        }
+
+        if (System.Text.RegularExpressions.Regex.IsMatch(lower, @"[bcdfghjklmnpqrstvwxyz]{5,}"))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static readonly HashSet<string> AuthRequiredActions = new(StringComparer.OrdinalIgnoreCase)
@@ -552,9 +587,9 @@ public class AiChatResponseDto
     public string AssistantStatus { get; set; } = "Online";
 
     /// <summary>
-    /// Technical provider status: "Healthy", "Disabled", "AuthFailure", "RateLimited", "Timeout", "NetworkError", "InvalidResponse", "Cancelled".
+    /// Technical provider status: "NotCalled", "Healthy", "Disabled", "AuthFailure", "RateLimited", "Timeout", "NetworkError", "InvalidResponse", "Cancelled".
     /// </summary>
-    public string ProviderStatus { get; set; } = "Healthy";
+    public string ProviderStatus { get; set; } = "NotCalled";
 
     /// <summary>
     /// Dialogue lifecycle outcome: "Success", "UnclearInput", "ClarificationRequired", "DraftModified", "DraftCancelled", "Confirmed", "NoMatchingDoctor", "NoAvailableSlots", "ProviderUnavailable".

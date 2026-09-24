@@ -87,6 +87,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
     {
         _mode = mode;
         _customModelPath = customModelPath;
+        EnsureMetadataLoaded(_customModelPath);
         if (_mode != IntentClassificationMode.Off)
         {
             EnsureModelLoaded();
@@ -94,6 +95,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         _optimalThreshold = overrideThreshold ?? _metadataOptimalThreshold;
     }
 
+    public IntentClassificationMode Mode => _mode;
     public string? LoadedModelPath => _loadedModelPath;
     public float OptimalThreshold => _optimalThreshold;
 
@@ -113,8 +115,8 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         var lower = trimmed.ToLowerInvariant();
         var normalized = NormalizeText(trimmed);
 
-        // In Shadow mode: Run ML model in shadow/background to collect telemetry, never impacting decisions
-        if (_mode == IntentClassificationMode.Shadow)
+        // In Shadow or Active mode: Run ML model to collect telemetry (and use for fallback in Active mode)
+        if (_mode == IntentClassificationMode.Shadow || _mode == IntentClassificationMode.Active)
         {
             var engine = RentEngine();
             if (engine != null)
@@ -424,64 +426,88 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         _enginePool.Add(engine);
     }
 
+    private static IEnumerable<string> GetCandidateModelPaths(string? customModelPath)
+    {
+        if (!string.IsNullOrWhiteSpace(customModelPath))
+        {
+            yield return customModelPath;
+        }
+
+        yield return Path.Combine(AppContext.BaseDirectory, "models", "vietnamese_intent_classifier_v1.zip");
+        yield return Path.Combine(AppContext.BaseDirectory, "vietnamese_intent_classifier_v1.zip");
+        yield return Path.Combine(Directory.GetCurrentDirectory(), "models", "vietnamese_intent_classifier_v1.zip");
+        yield return Path.Combine(Directory.GetCurrentDirectory(), "src", "backend", "ClinicManagement.Api", "models", "vietnamese_intent_classifier_v1.zip");
+        yield return Path.Combine(Directory.GetCurrentDirectory(), "src", "tools", "ClinicManagement.AI.Training", "models", "vietnamese_intent_classifier_v1.zip");
+        yield return Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "tools", "ClinicManagement.AI.Training", "models", "vietnamese_intent_classifier_v1.zip");
+    }
+
+    private static void EnsureMetadataLoaded(string? customModelPath)
+    {
+        lock (_initLock)
+        {
+            var resolvedModel = GetCandidateModelPaths(customModelPath).FirstOrDefault(File.Exists);
+            var metaCandidates = new List<string>();
+            if (resolvedModel != null)
+            {
+                var dir = Path.GetDirectoryName(resolvedModel);
+                if (!string.IsNullOrWhiteSpace(dir))
+                {
+                    metaCandidates.Add(Path.Combine(dir, "intent_model_metadata.json"));
+                }
+            }
+            metaCandidates.Add(Path.Combine(AppContext.BaseDirectory, "models", "intent_model_metadata.json"));
+            metaCandidates.Add(Path.Combine(Directory.GetCurrentDirectory(), "models", "intent_model_metadata.json"));
+            metaCandidates.Add(Path.Combine(Directory.GetCurrentDirectory(), "src", "backend", "ClinicManagement.Infrastructure", "models", "intent_model_metadata.json"));
+
+            var metaPath = metaCandidates.FirstOrDefault(File.Exists);
+            if (metaPath != null)
+            {
+                try
+                {
+                    var metaJson = File.ReadAllText(metaPath);
+                    using var doc = JsonDocument.Parse(metaJson);
+                    if (doc.RootElement.TryGetProperty("optimalConfidenceThreshold", out var optProp) && optProp.TryGetSingle(out var val))
+                    {
+                        _metadataOptimalThreshold = val;
+                    }
+                    else if (doc.RootElement.TryGetProperty("Benchmark", out var bProp) &&
+                             bProp.TryGetProperty("optimalThreshold", out var optB) && optB.TryGetSingle(out var valB))
+                    {
+                        _metadataOptimalThreshold = valB;
+                    }
+                }
+                catch
+                {
+                    // Keep default fallback
+                }
+            }
+        }
+    }
+
     private void EnsureModelLoaded()
     {
-        if (_modelLoadAttempted) return;
+        if (_modelLoadAttempted && (string.IsNullOrWhiteSpace(_customModelPath) || string.Equals(_loadedModelPath, _customModelPath, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
 
         lock (_initLock)
         {
-            if (_modelLoadAttempted) return;
+            if (_modelLoadAttempted && (string.IsNullOrWhiteSpace(_customModelPath) || string.Equals(_loadedModelPath, _customModelPath, StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
             _modelLoadAttempted = true;
 
             try
             {
-                var candidates = new List<string>();
-
-                if (!string.IsNullOrWhiteSpace(_customModelPath))
-                {
-                    candidates.Add(_customModelPath);
-                }
-
-                candidates.AddRange(new[]
-                {
-                    Path.Combine(AppContext.BaseDirectory, "models", "vietnamese_intent_classifier_v1.zip"),
-                    Path.Combine(AppContext.BaseDirectory, "vietnamese_intent_classifier_v1.zip"),
-                    Path.Combine(Directory.GetCurrentDirectory(), "models", "vietnamese_intent_classifier_v1.zip"),
-                    Path.Combine(Directory.GetCurrentDirectory(), "src", "backend", "ClinicManagement.Api", "models", "vietnamese_intent_classifier_v1.zip"),
-                    Path.Combine(Directory.GetCurrentDirectory(), "src", "tools", "ClinicManagement.AI.Training", "models", "vietnamese_intent_classifier_v1.zip"),
-                    Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "tools", "ClinicManagement.AI.Training", "models", "vietnamese_intent_classifier_v1.zip")
-                });
-
-                var resolved = candidates.FirstOrDefault(File.Exists);
+                var resolved = GetCandidateModelPaths(_customModelPath).FirstOrDefault(File.Exists);
                 if (resolved != null)
                 {
                     _mlContext = new MLContext(seed: 42);
                     _loadedModel = _mlContext.Model.Load(resolved, out _);
                     _loadedModelPath = resolved;
-
-                    // Read metadata for optimal threshold
-                    var metaPath = Path.Combine(Path.GetDirectoryName(resolved)!, "intent_model_metadata.json");
-                    if (File.Exists(metaPath))
-                    {
-                        try
-                        {
-                            var metaJson = File.ReadAllText(metaPath);
-                            using var doc = JsonDocument.Parse(metaJson);
-                            if (doc.RootElement.TryGetProperty("optimalConfidenceThreshold", out var optProp) && optProp.TryGetSingle(out var val))
-                            {
-                                _metadataOptimalThreshold = val;
-                            }
-                            else if (doc.RootElement.TryGetProperty("Benchmark", out var bProp) &&
-                                     bProp.TryGetProperty("optimalThreshold", out var optB) && optB.TryGetSingle(out var valB))
-                            {
-                                _metadataOptimalThreshold = valB;
-                            }
-                        }
-                        catch
-                        {
-                            // Keep default
-                        }
-                    }
+                    EnsureMetadataLoaded(resolved);
                 }
             }
             catch
@@ -505,6 +531,8 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 
         if (lower.StartsWith("tôi chọn") || lower.StartsWith("chọn ") || lower.StartsWith("hủy ") ||
             lower.StartsWith("xem ") || lower.StartsWith("liên hệ") || lower.StartsWith("bảng giá") ||
+            lower.StartsWith("chốt ") || lower.StartsWith("ok chốt") || lower.StartsWith("đồng ý ") ||
+            lower.StartsWith("xác nhận ") ||
             lower == "ok" || lower == "oke" || lower == "chốt" || lower == "người đầu" || lower == "giờ đầu")
         {
             return true;
@@ -535,12 +563,34 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         return trimmed.Length >= 10 && trimmed.Length <= 500 && IsClinicalComplaint(trimmed);
     }
 
+    public static string SanitizeClinicalReason(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        var trimmed = text.Trim();
+
+        // Strip negated symptom clause such as "tôi không sốt, chỉ đau đầu" -> "Đau đầu"
+        var negationMatch = Regex.Match(
+            trimmed,
+            @"^(?:tôi\s+|em\s+|mình\s+|bệnh\s+nhân\s+)?(?:không|chẳng|chưa)\s+(?:bị\s+|có\s+)?(?:sốt|ho|đau|mệt|khó thở|buồn nôn|nôn)[,\.\s]+(?:chỉ|mà\s+chỉ|mà|nhưng\s+chỉ|nhưng)\s+(?:bị\s+|có\s+)?(.+)$",
+            RegexOptions.IgnoreCase);
+        if (negationMatch.Success)
+        {
+            var positivePart = negationMatch.Groups[1].Value.Trim();
+            if (!string.IsNullOrWhiteSpace(positivePart))
+            {
+                return positivePart;
+            }
+        }
+
+        return trimmed;
+    }
+
     public static bool ContainsClinicalEvidence(string lower, out string extractedSymptom)
     {
         extractedSymptom = lower;
 
         // Check for negation patterns: "tôi không sốt, chỉ đau đầu" -> excludes "sốt", keeps "đau đầu"
-        var negationMatch = Regex.Match(lower, @"(?:không|chẳng|chưa)\s+(?:bị\s+)?(sốt|ho|đau|mệt|khó thở|buồn nôn)[,\.\s]+(?:chỉ|mà)\s+(?:bị\s+)?(.*)$", RegexOptions.IgnoreCase);
+        var negationMatch = Regex.Match(lower, @"(?:không|chẳng|chưa)\s+(?:bị\s+|có\s+)?(sốt|ho|đau|mệt|khó thở|buồn nôn|nôn)[,\.\s]+(?:chỉ|mà\s+chỉ|mà|nhưng\s+chỉ|nhưng)\s+(?:bị\s+|có\s+)?(.*)$", RegexOptions.IgnoreCase);
         if (negationMatch.Success)
         {
             extractedSymptom = negationMatch.Groups[2].Value.Trim();
@@ -559,7 +609,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             {
                 // If it's a mixed greeting ("chào bạn, tôi đau đầu hai ngày nay"), strip greeting
                 var clean = Regex.Replace(lower, @"^(?:chào\s+(?:bạn|bác sĩ|bs|phòng khám|em)|xin\s+chào|alo|hello|hi)[,\.\!\?]?\s*", "", RegexOptions.IgnoreCase).Trim();
-                extractedSymptom = !string.IsNullOrWhiteSpace(clean) ? clean : lower;
+                extractedSymptom = SanitizeClinicalReason(!string.IsNullOrWhiteSpace(clean) ? clean : lower);
                 return true;
             }
         }
@@ -569,28 +619,28 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 
     public static string MergeReasons(string? existingReason, string? newReason)
     {
-        if (string.IsNullOrWhiteSpace(existingReason)) return newReason?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(newReason)) return existingReason.Trim();
+        var sanitizedExisting = SanitizeClinicalReason(existingReason);
+        var sanitizedNew = SanitizeClinicalReason(newReason);
 
-        var trimmedExisting = existingReason.Trim();
-        var trimmedNew = newReason.Trim();
+        if (string.IsNullOrWhiteSpace(sanitizedExisting)) return sanitizedNew;
+        if (string.IsNullOrWhiteSpace(sanitizedNew)) return sanitizedExisting;
 
-        if (trimmedExisting.Equals(trimmedNew, StringComparison.OrdinalIgnoreCase))
+        if (sanitizedExisting.Equals(sanitizedNew, StringComparison.OrdinalIgnoreCase))
         {
-            return trimmedExisting;
+            return sanitizedExisting;
         }
 
-        if (trimmedNew.Contains(trimmedExisting, StringComparison.OrdinalIgnoreCase))
+        if (sanitizedNew.Contains(sanitizedExisting, StringComparison.OrdinalIgnoreCase))
         {
-            return trimmedNew;
+            return sanitizedNew;
         }
 
-        if (trimmedExisting.Contains(trimmedNew, StringComparison.OrdinalIgnoreCase))
+        if (sanitizedExisting.Contains(sanitizedNew, StringComparison.OrdinalIgnoreCase))
         {
-            return trimmedExisting;
+            return sanitizedExisting;
         }
 
-        return $"{trimmedExisting}, {trimmedNew}";
+        return $"{sanitizedExisting}, {sanitizedNew}";
     }
 
     private static bool IsGibberish(string trimmed, string lower, string normalized)
@@ -616,6 +666,33 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         return false;
     }
 
+    public static string? ExtractDateTokenFromText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var lower = text.Trim().ToLowerInvariant();
+
+        var isoMatch = Regex.Match(lower, @"\b(\d{4}-\d{2}-\d{2})\b");
+        if (isoMatch.Success) return isoMatch.Groups[1].Value;
+
+        var dmyMatch = Regex.Match(lower, @"\b(\d{1,2}[/-]\d{1,2}[/-]\d{4})\b");
+        if (dmyMatch.Success) return dmyMatch.Groups[1].Value.Replace('-', '/');
+
+        if (lower.Contains("ngày kia") || lower.Contains("ngày mốt") || Regex.IsMatch(lower, @"\bmốt\b"))
+            return "ngày kia";
+        if (lower.Contains("ngày mai") || lower.Contains("sáng mai") || lower.Contains("chiều mai") || Regex.IsMatch(lower, @"\bmai\b"))
+            return "ngày mai";
+        if (lower.Contains("hôm nay") || lower.Contains("sáng nay") || lower.Contains("chiều nay"))
+            return "hôm nay";
+
+        var days = new[] { "thứ hai", "thứ 2", "thứ ba", "thứ 3", "thứ tư", "thứ 4", "thứ năm", "thứ 5", "thứ sáu", "thứ 6", "thứ bảy", "thứ 7", "chủ nhật" };
+        foreach (var d in days)
+        {
+            if (lower.Contains(d)) return d;
+        }
+
+        return null;
+    }
+
     private static bool DetectCorrection(string trimmed, string lower, out IntentClassificationResult result)
     {
         result = new IntentClassificationResult();
@@ -638,13 +715,14 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             }
         }
 
-        // Pattern 2: "đổi sang ngày mai" / "đổi ngày"
-        if (lower.Contains("đổi sang ngày") || lower.Contains("đổi ngày") || lower.Contains("không khám hôm nay") || lower.Contains("chuyển sang ngày mai"))
+        // Pattern 2: "đổi sang ngày..." / "đổi ngày..." / "chuyển sang ngày..."
+        if (lower.Contains("đổi sang ngày") || lower.Contains("đổi ngày") || lower.Contains("đổi lịch sang") ||
+            lower.Contains("không khám hôm nay") || lower.Contains("chuyển sang ngày") || lower.Contains("dời sang ngày"))
         {
             result.Intent = AiChatIntentTypes.ModifyDraft;
             result.IsCorrection = true;
             result.CorrectionTarget = "Date";
-            if (lower.Contains("mai")) result.ExtractedDate = "mai";
+            result.ExtractedDate = ExtractDateTokenFromText(lower);
             return true;
         }
 

@@ -49,9 +49,12 @@ public class AppointmentService : IAppointmentService
         var normalizedReason = request.Reason?.Trim();
         if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length < 10 || normalizedReason.Length > 500)
             throw new BusinessException("VALIDATION_ERROR", "Lý do khám phải từ 10 đến 500 ký tự.");
+        if (!ClinicManagement.Application.AI.DTOs.AiActionValidator.IsValidBookingReason(normalizedReason))
+            throw new BusinessException("VALIDATION_ERROR", "Lý do khám không hợp lệ. Vui lòng nhập triệu chứng hoặc nhu cầu khám cụ thể.");
 
         // Idempotency Key check: Return existing appointment if retry with identical payload; Conflict if payload changed
         string? idempotencyKey = request.IdempotencyKey?.Trim();
+        var payloadHash = ComputePayloadHash(request);
         if (!string.IsNullOrWhiteSpace(idempotencyKey))
         {
             var existingRecord = await _dbContext.IdempotencyRecords
@@ -60,7 +63,6 @@ public class AppointmentService : IAppointmentService
 
             if (existingRecord != null)
             {
-                var payloadHash = ComputePayloadHash(request);
                 if (existingRecord.RequestHash != payloadHash || existingRecord.UserId != currentUserId.Value)
                 {
                     throw new ConflictException("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "Idempotency key này đã được sử dụng cho một yêu cầu đặt lịch khác.");
@@ -91,7 +93,7 @@ public class AppointmentService : IAppointmentService
         if (patient.Gender == null || patient.DateOfBirth == null)
             throw new BusinessException("VALIDATION_ERROR", "Vui lòng cập nhật đầy đủ Giới tính và Ngày sinh trước khi đặt lịch.");
 
-        // Idempotency check: If same patient already holds this slot with an active appointment, return it immediately
+        // Idempotency check: If same patient already holds this slot with an active appointment, verify payload matches
         var initialExisting = await _dbContext.Appointments
             .AsNoTracking()
             .Include(a => a.Doctor)
@@ -103,6 +105,13 @@ public class AppointmentService : IAppointmentService
 
         if (initialExisting != null)
         {
+            if (initialExisting.DoctorId != request.DoctorId ||
+                initialExisting.SpecialtyId != request.SpecialtyId ||
+                !string.Equals(initialExisting.Reason?.Trim(), normalizedReason, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ConflictException("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "Khung giờ này đã được bạn đặt với thông tin chuyên khoa/bác sĩ/lý do khám khác.");
+            }
+
             var initialDoctorName = "Bác sĩ";
             if (initialExisting.Doctor != null)
             {
@@ -163,6 +172,29 @@ public class AppointmentService : IAppointmentService
         try
         {
             transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+            if (!string.IsNullOrWhiteSpace(idempotencyKey))
+            {
+                var txExistingRecord = await _dbContext.IdempotencyRecords
+                    .FirstOrDefaultAsync(r => r.Key == idempotencyKey && r.Scope == "CreateAppointment" && r.ExpiresAtUtc > _dateTimeProvider.UtcNow);
+                if (txExistingRecord != null)
+                {
+                    await transaction.RollbackAsync();
+                    if (txExistingRecord.RequestHash != payloadHash || txExistingRecord.UserId != currentUserId.Value)
+                    {
+                        throw new ConflictException("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "Idempotency key này đã được sử dụng cho một yêu cầu đặt lịch khác.");
+                    }
+                    if (!string.IsNullOrWhiteSpace(txExistingRecord.ResponseBody))
+                    {
+                        var cachedDto = JsonSerializer.Deserialize<AppointmentDto>(txExistingRecord.ResponseBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (cachedDto != null)
+                        {
+                            return cachedDto;
+                        }
+                    }
+                }
+            }
+
             // Idempotency check: If same patient already has an active appointment for this slot, return it
             var existingAppointment = await _dbContext.Appointments
                 .Where(a => a.PatientId == patient.Id 
@@ -173,6 +205,12 @@ public class AppointmentService : IAppointmentService
             if (existingAppointment != null)
             {
                 await transaction.RollbackAsync();
+                if (existingAppointment.DoctorId != request.DoctorId ||
+                    existingAppointment.SpecialtyId != request.SpecialtyId ||
+                    !string.Equals(existingAppointment.Reason?.Trim(), normalizedReason, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new ConflictException("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "Khung giờ này đã được bạn đặt với thông tin chuyên khoa/bác sĩ/lý do khám khác.");
+                }
                 return new AppointmentDto
                 {
                     Id = existingAppointment.Id,
@@ -211,6 +249,12 @@ public class AppointmentService : IAppointmentService
 
                 if (samePatientAppointment != null)
                 {
+                    if (samePatientAppointment.DoctorId != request.DoctorId ||
+                        samePatientAppointment.SpecialtyId != request.SpecialtyId ||
+                        !string.Equals(samePatientAppointment.Reason?.Trim(), normalizedReason, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new ConflictException("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "Khung giờ này đã được bạn đặt với thông tin chuyên khoa/bác sĩ/lý do khám khác.");
+                    }
                     return new AppointmentDto
                     {
                         Id = samePatientAppointment.Id,
@@ -368,7 +412,6 @@ public class AppointmentService : IAppointmentService
 
             if (!string.IsNullOrWhiteSpace(idempotencyKey))
             {
-                var payloadHash = ComputePayloadHash(request);
                 var idemRecord = new IdempotencyRecord
                 {
                     Key = idempotencyKey,

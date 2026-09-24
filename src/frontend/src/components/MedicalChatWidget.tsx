@@ -144,14 +144,14 @@ const PatientMedicalChatWidget: React.FC = () => {
                             <Stethoscope size={22} />
                             <span>ClinicCare AI</span>
                             <span className={`${styles.statusPill} ${
-                                aiAssistantStatus === "Degraded"
+                                aiAssistantStatus === "Degraded" || aiAssistantStatus === "Unchecked"
                                     ? styles.statusPillDegraded
                                     : aiAssistantStatus === "Offline"
                                     ? styles.statusPillOffline
                                     : styles.statusPillOnline
                             }`}>
                                 <span className={`${styles.statusDot} ${
-                                    aiAssistantStatus === "Degraded"
+                                    aiAssistantStatus === "Degraded" || aiAssistantStatus === "Unchecked"
                                         ? styles.statusDotDegraded
                                         : aiAssistantStatus === "Offline"
                                         ? styles.statusDotOffline
@@ -161,6 +161,8 @@ const PatientMedicalChatWidget: React.FC = () => {
                                     ? "Chế độ rút gọn"
                                     : aiAssistantStatus === "Offline"
                                     ? "Ngoại tuyến"
+                                    : aiAssistantStatus === "Unchecked"
+                                    ? "Chưa kiểm tra AI"
                                     : "Trực tuyến"}
                             </span>
                         </div>

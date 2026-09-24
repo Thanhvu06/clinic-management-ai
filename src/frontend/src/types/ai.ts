@@ -321,7 +321,7 @@ export interface AiChatResponse {
     bookingDraft?: AiBookingDraft;
     promptVersion: string;
     manualSelectionRequired: boolean;
-    assistantStatus?: "Online" | "Degraded" | "Offline";
+    assistantStatus?: "Unchecked" | "Online" | "Degraded" | "Offline";
     providerStatus?: string;
     dialogueOutcome?: string;
     clarificationPrompt?: string;
@@ -340,7 +340,7 @@ export interface ChatMessage {
     actions?: AiAction[];
     bookingDraft?: AiBookingDraft;
     missingFields?: string[];
-    assistantStatus?: "Online" | "Degraded" | "Offline";
+    assistantStatus?: "Unchecked" | "Online" | "Degraded" | "Offline";
     dialogueOutcome?: string;
     clarificationPrompt?: string;
     primaryIntent?: AiChatIntent | string;
