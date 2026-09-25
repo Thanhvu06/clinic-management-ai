@@ -124,11 +124,23 @@ export const BookAppointment: React.FC = () => {
     const prevDraftRef = useRef(activeDraft);
     const prevUserIdRef = useRef(currentAccountKey);
 
+    const [uncertainAttempt, setUncertainAttempt] = useState<PendingBookingAttemptRecord | null>(() => {
+        const persisted = readPersistedBookingAttempt(currentAccountKey);
+        return persisted && persisted.status === "uncertain" ? persisted : null;
+    });
+
     const currentPayloadFingerprint = `${revisitRequestId ?? "std"}_${specialtyId}_${doctorId}_${slotDate}_${slotId}_${reason.trim()}`;
     const currentPayloadFingerprintRef = useRef(currentPayloadFingerprint);
 
     useEffect(() => {
         isMountedRef.current = true;
+        const persisted = readPersistedBookingAttempt(currentAccountKeyRef.current);
+        if (persisted) {
+            lastConfirmationAttemptRef.current = persisted;
+            if (persisted.status === "uncertain") {
+                setUncertainAttempt(persisted);
+            }
+        }
         return () => {
             isMountedRef.current = false;
         };
@@ -160,6 +172,7 @@ export const BookAppointment: React.FC = () => {
             isSubmittingRef.current = false;
             setSubmitting(false);
             lastConfirmationAttemptRef.current = null;
+            setUncertainAttempt(null);
             if (currentAccountKeyRef.current) {
                 removePersistedBookingAttempt(currentAccountKeyRef.current);
             }
@@ -174,6 +187,7 @@ export const BookAppointment: React.FC = () => {
             isSubmittingRef.current = false;
             setSubmitting(false);
             lastConfirmationAttemptRef.current = null;
+            setUncertainAttempt(null);
             if (currentAccountKeyRef.current) {
                 removePersistedBookingAttempt(currentAccountKeyRef.current);
             }
@@ -188,7 +202,9 @@ export const BookAppointment: React.FC = () => {
             activeSubmitIdRef.current += 1;
             isSubmittingRef.current = false;
             setSubmitting(false);
-            lastConfirmationAttemptRef.current = null;
+            const nextAccountPersisted = readPersistedBookingAttempt(currentUserId);
+            lastConfirmationAttemptRef.current = nextAccountPersisted;
+            setUncertainAttempt(nextAccountPersisted && nextAccountPersisted.status === "uncertain" ? nextAccountPersisted : null);
             setSuccessBooking(null);
             setBookingError(null);
             setPageSpecialtyId("");
@@ -444,21 +460,24 @@ export const BookAppointment: React.FC = () => {
 
     const handleSelectSlot = (slot: Slot) => {
         setPageSlotId(slot.slotId);
-        setActiveDraft(previous => ({
-            ...previous,
-            specialtyId: Number(specialtyId),
-            specialtyName: selectedSpec?.specialtyName,
-            doctorId: Number(doctorId),
-            doctorName: selectedDoc ? formatDoctorName(selectedDoc.academicTitle, selectedDoc.fullName) : undefined,
-            slotId: slot.slotId,
-            slotDate: slot.slotDate,
-            startTime: slot.startTime.substring(0, 5),
-            endTime: slot.endTime.substring(0, 5),
-            reason,
-            isComplete: reason.trim().length >= 10 && reason.trim().length <= 500,
-            version: previous?.version !== undefined ? previous.version + 1 : undefined,
-            confirmationId: undefined
-        }));
+        setActiveDraft(previous => {
+            const unchangedSlot = previous?.slotId === slot.slotId && previous?.slotDate === slot.slotDate;
+            return {
+                ...previous,
+                specialtyId: Number(specialtyId),
+                specialtyName: selectedSpec?.specialtyName,
+                doctorId: Number(doctorId),
+                doctorName: selectedDoc ? formatDoctorName(selectedDoc.academicTitle, selectedDoc.fullName) : undefined,
+                slotId: slot.slotId,
+                slotDate: slot.slotDate,
+                startTime: slot.startTime.substring(0, 5),
+                endTime: slot.endTime.substring(0, 5),
+                reason,
+                isComplete: reason.trim().length >= 10 && reason.trim().length <= 500,
+                version: previous?.version !== undefined ? (unchangedSlot ? previous.version : previous.version + 1) : undefined,
+                confirmationId: unchangedSlot ? previous?.confirmationId : undefined
+            };
+        });
     };
 
     const handleSlotDateChange = (nextDate: string) => {
@@ -479,19 +498,40 @@ export const BookAppointment: React.FC = () => {
     const handleReasonChange = (nextReason: string) => {
         setPageReason(nextReason);
         const normalizedLength = nextReason.trim().length;
-        setActiveDraft(previous => previous ? {
-            ...previous,
-            reason: nextReason,
-            isComplete: Boolean(
-                previous.specialtyId &&
-                previous.doctorId &&
-                previous.slotId &&
-                normalizedLength >= 10 &&
-                normalizedLength <= 500
-            ),
-            version: previous.version !== undefined ? previous.version + 1 : undefined,
-            confirmationId: undefined
-        } : previous);
+        setActiveDraft(previous => {
+            if (!previous) return previous;
+            const unchangedReason = (previous.reason ?? "").trim() === nextReason.trim();
+            return {
+                ...previous,
+                reason: nextReason,
+                isComplete: Boolean(
+                    previous.specialtyId &&
+                    previous.doctorId &&
+                    previous.slotId &&
+                    normalizedLength >= 10 &&
+                    normalizedLength <= 500
+                ),
+                version: previous.version !== undefined ? (unchangedReason ? previous.version : previous.version + 1) : undefined,
+                confirmationId: unchangedReason ? previous.confirmationId : undefined
+            };
+        });
+    };
+
+    const handleDiscardUncertainAndStartNewTurn = () => {
+        pageTurnEpochRef.current += 1;
+        activeSubmitIdRef.current += 1;
+        isSubmittingRef.current = false;
+        setSubmitting(false);
+        lastConfirmationAttemptRef.current = null;
+        setUncertainAttempt(null);
+        setBookingError(null);
+        removePersistedBookingAttempt(currentAccountKeyRef.current ?? "anon");
+        setActiveDraft(null);
+        setPageSpecialtyId("");
+        setPageDoctorId("");
+        setPageSlotId("");
+        setPageReason("");
+        setStep(1);
     };
 
     // Confirm booking submit
@@ -541,25 +581,30 @@ export const BookAppointment: React.FC = () => {
             // 2. Reconcile from sessionStorage if remounted/reloaded or started in widget while an earlier attempt in the same draft was uncertain/in-flight
             if (!idempotencyKey) {
                 const persisted = readPersistedBookingAttempt(requestAccountKey);
-                if (persisted) {
-                    const matchesDraft = requestDraftId
-                        ? persisted.draftId === requestDraftId
-                        : !persisted.draftId;
-                    const matchesVersion = (requestDraftVersion !== undefined && persisted.draftVersion !== undefined)
-                        ? persisted.draftVersion === requestDraftVersion
-                        : true;
-                    const matchesConfirmation = (activeDraft?.confirmationId && persisted.confirmationId)
-                        ? persisted.confirmationId === activeDraft.confirmationId
-                        : true;
-                    if (
-                        persisted.accountKey === requestAccountKey &&
-                        matchesDraft &&
-                        matchesVersion &&
-                        matchesConfirmation &&
-                        persisted.payloadFingerprint === payloadFingerprint &&
-                        persisted.status !== "succeeded"
-                    ) {
-                        idempotencyKey = persisted.key;
+                if (persisted && persisted.accountKey === requestAccountKey && persisted.status !== "succeeded") {
+                    if (persisted.payloadFingerprint === payloadFingerprint) {
+                        const isAiConfirmationFlow = Boolean(activeDraft?.confirmationId || persisted.confirmationId);
+                        if (isAiConfirmationFlow) {
+                            const matchesDraft = requestDraftId
+                                ? persisted.draftId === requestDraftId
+                                : !persisted.draftId;
+                            const matchesVersion = (requestDraftVersion !== undefined && persisted.draftVersion !== undefined)
+                                ? persisted.draftVersion === requestDraftVersion
+                                : true;
+                            const matchesConfirmation = (activeDraft?.confirmationId && persisted.confirmationId)
+                                ? persisted.confirmationId === activeDraft.confirmationId
+                                : true;
+                            if (matchesDraft && matchesVersion && matchesConfirmation) {
+                                idempotencyKey = persisted.key;
+                            }
+                        } else {
+                            // Manual form attempt (no AI confirmationId): reuse K1 when retrying the exact same payload after timeout/reload
+                            idempotencyKey = persisted.key;
+                        }
+                    } else {
+                        // User modified slot/doctor/specialty/reason and submitted a different payload -> discard old uncertain attempt so K1 is never reused
+                        removePersistedBookingAttempt(requestAccountKey, persisted.key);
+                        setUncertainAttempt(null);
                     }
                 }
             }
@@ -578,7 +623,8 @@ export const BookAppointment: React.FC = () => {
                 confirmationId: activeDraft?.confirmationId,
                 payloadFingerprint,
                 key: idempotencyKey,
-                status: "in_flight"
+                status: "in_flight",
+                isManualFormAttempt: !activeDraft?.confirmationId
             };
             lastConfirmationAttemptRef.current = attemptRecord;
             writePersistedBookingAttempt(attemptRecord);
@@ -615,6 +661,7 @@ export const BookAppointment: React.FC = () => {
                 // Clear attempt only if it still matches this request's idempotencyKey
                 if (lastConfirmationAttemptRef.current?.key === idempotencyKey) {
                     lastConfirmationAttemptRef.current = null;
+                    setUncertainAttempt(null);
                 }
                 removePersistedBookingAttempt(requestAccountKey, idempotencyKey);
 
@@ -675,6 +722,7 @@ export const BookAppointment: React.FC = () => {
             if (isDeterministicRejection) {
                 if (lastConfirmationAttemptRef.current?.key === idempotencyKey) {
                     lastConfirmationAttemptRef.current = null;
+                    setUncertainAttempt(null);
                 }
                 removePersistedBookingAttempt(requestAccountKey, idempotencyKey);
             } else if (lastConfirmationAttemptRef.current && lastConfirmationAttemptRef.current.key === idempotencyKey) {
@@ -684,6 +732,7 @@ export const BookAppointment: React.FC = () => {
                     status: "uncertain"
                 };
                 lastConfirmationAttemptRef.current = uncertainRecord;
+                setUncertainAttempt(uncertainRecord);
                 writePersistedBookingAttempt(uncertainRecord);
             }
 
@@ -881,6 +930,46 @@ export const BookAppointment: React.FC = () => {
             <div className={styles.bookingLayout}>
                 {/* Left Column: Current Wizard Step */}
                 <div className={styles.mainCard}>
+                    {uncertainAttempt && (
+                        <div
+                            role="status"
+                            style={{
+                                marginBottom: "20px",
+                                padding: "14px 16px",
+                                borderRadius: "10px",
+                                border: "1px solid #f59e0b",
+                                background: "#fffbeb",
+                                color: "#92400e",
+                                fontSize: "0.9rem"
+                            }}
+                        >
+                            <div style={{ fontWeight: 700, marginBottom: "6px" }}>
+                                Lượt đặt lịch trước đó đang chưa rõ kết quả do gián đoạn kết nối
+                            </div>
+                            <div style={{ marginBottom: "10px", lineHeight: 1.5 }}>
+                                Nếu bạn giữ/chọn lại đúng thông tin cũ và bấm Xác nhận, hệ thống sẽ tự động gửi lại mã đối soát cũ (Idempotency-Key) để nhận kết quả mà không tạo lịch thứ hai. Hoặc bạn có thể kiểm tra danh sách lịch hẹn đã tạo trước khi bắt đầu lượt mới.
+                            </div>
+                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => navigate("/patient/appointments")}
+                                    style={{ padding: "6px 12px", fontSize: "0.85rem" }}
+                                >
+                                    Đối soát lịch hẹn đã tạo
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={handleDiscardUncertainAndStartNewTurn}
+                                    style={{ padding: "6px 12px", fontSize: "0.85rem" }}
+                                >
+                                    Hủy & bắt đầu lượt đặt lịch mới
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {bookingError && (
                         <div style={{ marginBottom: '20px' }}>
                             <FormError message={bookingError} />

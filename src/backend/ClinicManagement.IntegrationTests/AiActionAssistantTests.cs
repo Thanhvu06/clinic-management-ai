@@ -3512,4 +3512,157 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.Null(resurrectedSnap);
         Assert.NotNull(errorMsg);
     }
+
+    [Fact]
+    public async Task ScenarioAB_CancelDraft_MissingSessionIdOrDraftId_FailsClosed_PreservesValidTabs_AndSupportsSafeSnapshotScope()
+    {
+        AiSpecialtyService.ClearSnapshotsForTesting();
+        await AuthenticateAsync("pat1@test.com");
+
+        const string sharedDraftId = "draft_shared_ab_same_string";
+        const string sessionTab1 = "sess_tab1_ab";
+        const string sessionTab2 = "sess_tab2_ab";
+
+        // 1. Same user creates two valid snapshots in two different sessions using the exact same DraftId
+        var resCreateTab1 = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tìm lịch khám sớm nhất",
+            Intent = AiChatIntentTypes.FindEarliestAvailableSlot,
+            SessionId = sessionTab1,
+            DraftId = sharedDraftId,
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau ngực âm ỉ ở tab 1 kéo dài 3 ngày"
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        var snapTab1 = resCreateTab1!.Data!.ContextSnapshotId!;
+        Assert.False(string.IsNullOrWhiteSpace(snapTab1));
+
+        var resCreateTab2 = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tìm lịch khám sớm nhất",
+            Intent = AiChatIntentTypes.FindEarliestAvailableSlot,
+            SessionId = sessionTab2,
+            DraftId = sharedDraftId,
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau ngực âm ỉ ở tab 2 kéo dài 3 ngày"
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        var snapTab2 = resCreateTab2!.Data!.ContextSnapshotId!;
+        Assert.False(string.IsNullOrWhiteSpace(snapTab2));
+
+        // 2. Send CancelDraft WITH DraftId but WITHOUT SessionId -> Must fail closed and NOT revoke either tab!
+        var cancelMissingSessionRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Hủy đặt lịch",
+            Intent = AiChatIntentTypes.CancelDraft,
+            SessionId = null,
+            DraftId = sharedDraftId,
+            DraftVersion = 1
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(cancelMissingSessionRes?.Data);
+        Assert.Equal("ClarificationRequired", cancelMissingSessionRes.Data.DialogueOutcome);
+        Assert.Contains("SessionId", cancelMissingSessionRes.Data.Message);
+
+        // 3. Send CancelDraft WITH SessionId but WITHOUT DraftId -> Must fail closed and NOT revoke either tab!
+        var cancelMissingDraftRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Hủy đặt lịch",
+            Intent = AiChatIntentTypes.CancelDraft,
+            SessionId = sessionTab1,
+            DraftId = null,
+            DraftVersion = 1
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(cancelMissingDraftRes?.Data);
+        Assert.Equal("ClarificationRequired", cancelMissingDraftRes.Data.DialogueOutcome);
+        Assert.Contains("DraftId", cancelMissingDraftRes.Data.Message);
+
+        // 4. Send CancelDraft missing BOTH SessionId and DraftId while active snapshots exist -> Must fail closed and NOT revoke either tab!
+        var cancelMissingBothRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Hủy đặt lịch",
+            Intent = AiChatIntentTypes.CancelDraft,
+            SessionId = null,
+            DraftId = null,
+            DraftVersion = 1
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(cancelMissingBothRes?.Data);
+        Assert.Equal("ClarificationRequired", cancelMissingBothRes.Data.DialogueOutcome);
+
+        // Verify relative selection on BOTH Tab 1 and Tab 2 still works after all three ambiguous cancel requests!
+        var selectTab2AfterAmbiguousRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = sessionTab2,
+            DraftId = sharedDraftId,
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau ngực âm ỉ ở tab 2 kéo dài 3 ngày",
+            ContextSnapshotId = snapTab2
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(selectTab2AfterAmbiguousRes?.Data?.BookingDraft?.DoctorId);
+
+        // 5. Legacy safe scope resolution: CancelDraft missing SessionId but supplying valid user-owned ContextSnapshotId of Tab 1
+        // -> Revokes ONLY Tab 1, leaving Tab 2 valid!
+        var cancelSafeSnapshotScopeRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Hủy đặt lịch",
+            Intent = AiChatIntentTypes.CancelDraft,
+            SessionId = null,
+            DraftId = sharedDraftId,
+            ContextSnapshotId = snapTab1,
+            DraftVersion = 1
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.Equal("DraftCancelled", cancelSafeSnapshotScopeRes?.Data?.DialogueOutcome);
+
+        // Tab 1 is now revoked
+        var selectTab1AfterSafeCancel = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = sessionTab1,
+            DraftId = sharedDraftId,
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau ngực âm ỉ ở tab 1 kéo dài 3 ngày",
+            ContextSnapshotId = snapTab1
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.Equal("ClarificationRequired", selectTab1AfterSafeCancel?.Data?.DialogueOutcome);
+        Assert.Null(selectTab1AfterSafeCancel?.Data?.BookingDraft?.DoctorId);
+
+        // Tab 2 (with the exact same DraftId!) STILL works for relative selection!
+        var selectTab2StillValidRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = sessionTab2,
+            DraftId = sharedDraftId,
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau ngực âm ỉ ở tab 2 kéo dài 3 ngày",
+            ContextSnapshotId = snapTab2
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(selectTab2StillValidRes?.Data?.BookingDraft?.DoctorId);
+
+        // 6. Cancel with full (UserId, SessionId, DraftId) for Tab 2 -> Revokes Tab 2
+        var cancelFullTab2Res = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Hủy đặt lịch",
+            Intent = AiChatIntentTypes.CancelDraft,
+            SessionId = sessionTab2,
+            DraftId = sharedDraftId,
+            DraftVersion = 1
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.Equal("DraftCancelled", cancelFullTab2Res?.Data?.DialogueOutcome);
+
+        var selectTab2AfterFullCancel = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = sessionTab2,
+            DraftId = sharedDraftId,
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau ngực âm ỉ ở tab 2 kéo dài 3 ngày",
+            ContextSnapshotId = snapTab2
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.Equal("ClarificationRequired", selectTab2AfterFullCancel?.Data?.DialogueOutcome);
+        Assert.Null(selectTab2AfterFullCancel?.Data?.BookingDraft?.DoctorId);
+    }
 }

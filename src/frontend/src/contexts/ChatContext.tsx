@@ -199,7 +199,11 @@ export interface PendingBookingAttemptRecord {
     payloadFingerprint: string;
     key: string;
     status: "in_flight" | "uncertain" | "succeeded";
+    isManualFormAttempt?: boolean;
+    createdAtMs?: number;
 }
+
+const PENDING_ATTEMPT_TTL_MS = 15 * 60 * 1000;
 
 export const getPendingBookingStorageKey = (accountKey: string | null | undefined): string =>
     `cliniccare_pending_booking_attempt_${accountKey ?? "anon"}`;
@@ -249,6 +253,10 @@ export function validatePendingBookingAttempt(
     if (r.confirmationId !== undefined && r.confirmationId !== null && (typeof r.confirmationId !== "string" || r.confirmationId.trim().length === 0)) {
         return false;
     }
+    if (r.createdAtMs !== undefined && r.createdAtMs !== null) {
+        if (typeof r.createdAtMs !== "number" || !Number.isFinite(r.createdAtMs)) return false;
+        if (Date.now() - r.createdAtMs > PENDING_ATTEMPT_TTL_MS) return false;
+    }
 
     r.accountKey = recordAccountKey;
     r.turnIdentity = recordTurnIdentity;
@@ -290,7 +298,13 @@ export function readPersistedBookingAttempt(accountKey: string | null | undefine
 
 export function writePersistedBookingAttempt(record: PendingBookingAttemptRecord): void {
     const effectiveAccount = record.accountKey || "anon";
-    const serialized = JSON.stringify(record);
+    const normalized: PendingBookingAttemptRecord = {
+        ...record,
+        accountKey: effectiveAccount,
+        attemptId: record.attemptId ?? record.turnIdentity,
+        createdAtMs: record.createdAtMs ?? Date.now()
+    };
+    const serialized = JSON.stringify(normalized);
     try {
         sessionStorage.setItem(getPendingBookingStorageKey(effectiveAccount), serialized);
         sessionStorage.setItem(getLegacyWidgetStorageKey(effectiveAccount), serialized);
@@ -336,6 +350,7 @@ const AccountBoundChatProvider: React.FC<{
     const [messages, setMessagesState] = useState<ChatMessage[]>(() => loadStoredMessages(accountKey));
     const [aiAssistantStatus, setAiAssistantStatus] = useState<AssistantStatus>("Unchecked");
     const bookingContextVersionRef = useRef(0);
+    const prevActiveDraftRef = useRef<AiBookingDraft | null>(activeDraft);
 
     const setActiveDraft = useCallback<React.Dispatch<React.SetStateAction<AiBookingDraft | null>>>((update) => {
         if (!accountKey) return;
@@ -346,7 +361,8 @@ const AccountBoundChatProvider: React.FC<{
                 removePersistedBookingAttempt(accountKey);
                 return null;
             }
-            const nextDraftId = resolved.draftId || previous?.draftId || generateDraftIdentity();
+            const persistedAttempt = !previous ? readPersistedBookingAttempt(accountKey) : null;
+            const nextDraftId = resolved.draftId || previous?.draftId || persistedAttempt?.draftId || generateDraftIdentity();
             if (previous?.draftId && nextDraftId !== previous.draftId) {
                 removePersistedBookingAttempt(accountKey);
             }
@@ -371,13 +387,19 @@ const AccountBoundChatProvider: React.FC<{
 
     useEffect(() => {
         if (!accountKey) return;
+        const prevDraft = prevActiveDraftRef.current;
+        prevActiveDraftRef.current = activeDraft;
         const draftKey = `cliniccare_booking_draft_${accountKey}`;
         try {
             if (activeDraft) {
                 sessionStorage.setItem(draftKey, JSON.stringify(activeDraft));
             } else {
                 sessionStorage.removeItem(draftKey);
-                removePersistedBookingAttempt(accountKey);
+                // Only clear persisted booking attempt when transitioning from an existing draft to null,
+                // never on initial mount/reload when activeDraft starts as null (manual form booking).
+                if (prevDraft !== null) {
+                    removePersistedBookingAttempt(accountKey);
+                }
             }
         } catch (error) {
             console.error("Failed to save booking draft", error);

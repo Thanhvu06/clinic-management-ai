@@ -134,9 +134,74 @@ public class AiSpecialtyService : IAiSpecialtyService
         return snapshotId;
     }
 
+    public static bool HasAnyActiveSnapshotForUser(Guid? userId, DateTime? nowUtc = null)
+    {
+        var effectiveNow = nowUtc ?? DateTime.UtcNow;
+        foreach (var kvp in _snapshotStore)
+        {
+            var snap = kvp.Value;
+            if (snap.UserId == userId && snap.ExpiresAtUtc > effectiveNow)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static bool TryResolveCancelScopeFromSnapshot(
+        string? contextSnapshotId,
+        Guid? userId,
+        string? requestedSessionId,
+        string? requestedDraftId,
+        DateTime nowUtc,
+        out string? resolvedSessionId,
+        out string? resolvedDraftId)
+    {
+        resolvedSessionId = !string.IsNullOrWhiteSpace(requestedSessionId) ? requestedSessionId.Trim() : null;
+        resolvedDraftId = !string.IsNullOrWhiteSpace(requestedDraftId) ? requestedDraftId.Trim() : null;
+
+        if (resolvedSessionId != null && resolvedDraftId != null)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(contextSnapshotId))
+        {
+            return false;
+        }
+
+        if (!_snapshotStore.TryGetValue(contextSnapshotId.Trim(), out var snap))
+        {
+            return false;
+        }
+
+        if (snap.ExpiresAtUtc <= nowUtc || snap.UserId != userId)
+        {
+            return false;
+        }
+
+        var snapSessionId = !string.IsNullOrWhiteSpace(snap.SessionId) ? snap.SessionId.Trim() : null;
+        var snapDraftId = !string.IsNullOrWhiteSpace(snap.DraftId) ? snap.DraftId.Trim() : null;
+
+        if (resolvedSessionId != null && !string.Equals(resolvedSessionId, snapSessionId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (resolvedDraftId != null && !string.Equals(resolvedDraftId, snapDraftId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        resolvedSessionId ??= snapSessionId;
+        resolvedDraftId ??= snapDraftId;
+
+        return resolvedSessionId != null && resolvedDraftId != null;
+    }
+
     public static void InvalidateDraftSnapshots(string? draftId, Guid? userId = null, string? sessionId = null, DateTime? nowUtc = null)
     {
-        if (string.IsNullOrWhiteSpace(draftId))
+        if (string.IsNullOrWhiteSpace(draftId) || string.IsNullOrWhiteSpace(sessionId))
         {
             return;
         }
@@ -151,55 +216,37 @@ public class AiSpecialtyService : IAiSpecialtyService
 
         var cleanDraftId = !string.IsNullOrWhiteSpace(draftId) ? draftId.Trim() : null;
         var cleanSessionId = !string.IsNullOrWhiteSpace(sessionId) ? sessionId.Trim() : null;
-        var expiresAt = effectiveNow.AddHours(1);
 
-        if (cleanDraftId != null)
+        // Fail closed: never expand scope to all sessions or all drafts when either identifier is missing
+        if (cleanDraftId == null || cleanSessionId == null)
         {
-            _cancelledDraftScopes[new CancelledDraftScopeKey(userId, cleanSessionId, cleanDraftId)] = expiresAt;
-
-            foreach (var kvp in _snapshotStore)
-            {
-                var snap = kvp.Value;
-                if (snap.UserId != userId)
-                {
-                    continue;
-                }
-
-                if (!string.Equals(snap.DraftId, cleanDraftId, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                if (cleanSessionId != null && snap.SessionId != null && !string.Equals(snap.SessionId, cleanSessionId, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                _cancelledDraftScopes[new CancelledDraftScopeKey(snap.UserId, snap.SessionId, cleanDraftId)] = expiresAt;
-                _snapshotStore.TryRemove(kvp.Key, out _);
-            }
             return;
         }
 
-        // Legacy fallback when DraftId is missing: only revoke snapshots without a DraftId in the exact same (userId, cleanSessionId)
-        if (cleanSessionId != null)
+        var expiresAt = effectiveNow.AddHours(1);
+        _cancelledDraftScopes[new CancelledDraftScopeKey(userId, cleanSessionId, cleanDraftId)] = expiresAt;
+
+        foreach (var kvp in _snapshotStore)
         {
-            foreach (var kvp in _snapshotStore)
+            var snap = kvp.Value;
+            if (snap.UserId != userId)
             {
-                var snap = kvp.Value;
-                if (snap.UserId == userId &&
-                    string.Equals(snap.SessionId, cleanSessionId, StringComparison.Ordinal) &&
-                    string.IsNullOrWhiteSpace(snap.DraftId))
-                {
-                    _snapshotStore.TryRemove(kvp.Key, out _);
-                }
+                continue;
             }
+
+            if (!string.Equals(snap.DraftId, cleanDraftId, StringComparison.Ordinal) ||
+                !string.Equals(snap.SessionId, cleanSessionId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            _snapshotStore.TryRemove(kvp.Key, out _);
         }
     }
 
     public static bool IsDraftCancelled(string? draftId, Guid? userId = null, string? sessionId = null, DateTime? nowUtc = null)
     {
-        if (string.IsNullOrWhiteSpace(draftId))
+        if (string.IsNullOrWhiteSpace(draftId) || string.IsNullOrWhiteSpace(sessionId))
         {
             return false;
         }
@@ -208,7 +255,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         PurgeExpiredCancelledDrafts(effectiveNow);
 
         var cleanDraftId = draftId.Trim();
-        var cleanSessionId = !string.IsNullOrWhiteSpace(sessionId) ? sessionId.Trim() : null;
+        var cleanSessionId = sessionId.Trim();
 
         var exactKey = new CancelledDraftScopeKey(userId, cleanSessionId, cleanDraftId);
         if (_cancelledDraftScopes.TryGetValue(exactKey, out var expiresAt))
@@ -218,19 +265,6 @@ public class AiSpecialtyService : IAiSpecialtyService
                 return true;
             }
             _cancelledDraftScopes.TryRemove(exactKey, out _);
-        }
-
-        if (cleanSessionId != null)
-        {
-            var sessionlessKey = new CancelledDraftScopeKey(userId, null, cleanDraftId);
-            if (_cancelledDraftScopes.TryGetValue(sessionlessKey, out var sessionlessExpiresAt))
-            {
-                if (effectiveNow <= sessionlessExpiresAt)
-                {
-                    return true;
-                }
-                _cancelledDraftScopes.TryRemove(sessionlessKey, out _);
-            }
         }
 
         return false;
@@ -562,8 +596,59 @@ public class AiSpecialtyService : IAiSpecialtyService
         // 3.2 Cancel Draft: Clears active draft in session without touching database appointments
         if (resolvedIntent == AiChatIntentTypes.CancelDraft)
         {
-            InvalidateDraftSnapshotsForCancel(request.DraftId, request.SessionId, _currentUserService.UserId, _dateTimeProvider.UtcNow);
-            var cancelResponse = new AiChatResponseDto
+            var currentUserId = _currentUserService.UserId;
+            var nowUtc = _dateTimeProvider.UtcNow;
+            var hasResolvedScope = TryResolveCancelScopeFromSnapshot(
+                request.ContextSnapshotId,
+                currentUserId,
+                request.SessionId,
+                request.DraftId,
+                nowUtc,
+                out var cancelTargetSessionId,
+                out var cancelTargetDraftId);
+
+            if (hasResolvedScope && cancelTargetSessionId != null && cancelTargetDraftId != null)
+            {
+                InvalidateDraftSnapshotsForCancel(cancelTargetDraftId, cancelTargetSessionId, currentUserId, nowUtc);
+                var cancelResponse = new AiChatResponseDto
+                {
+                    Message = "Đã hủy bản nháp đặt lịch hiện tại. Bạn có cần hỗ trợ gì khác không?",
+                    DialogueOutcome = "DraftCancelled",
+                    PrimaryIntent = AiChatIntentTypes.CancelDraft,
+                    AssistantStatus = "Online",
+                    ProviderStatus = "NotCalled",
+                    PromptVersion = GeminiAiProvider.CurrentPromptVersion,
+                    BookingDraft = null,
+                    SessionId = cancelTargetSessionId,
+                    DraftId = null
+                };
+                return WithDraftVersionSync(cancelResponse, passiveDraftVersion);
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.DraftId) ||
+                !string.IsNullOrWhiteSpace(request.SessionId) ||
+                !string.IsNullOrWhiteSpace(request.ContextSnapshotId) ||
+                request.DraftVersion.HasValue ||
+                string.Equals(request.Intent, AiChatIntentTypes.CancelDraft, StringComparison.Ordinal))
+            {
+                // Fail closed: do NOT revoke snapshots across sessions/drafts when target scope cannot be uniquely determined
+                var failClosedCancelResponse = new AiChatResponseDto
+                {
+                    Message = "Không thể xác định chính xác phiên làm việc hoặc bản nháp cần hủy (thiếu SessionId hoặc DraftId). Vui lòng gửi lại yêu cầu kèm đầy đủ SessionId và DraftId của phiên hiện tại.",
+                    ClarificationPrompt = "Vui lòng gửi đầy đủ SessionId và DraftId của phiên cần hủy.",
+                    DialogueOutcome = "ClarificationRequired",
+                    PrimaryIntent = AiChatIntentTypes.CancelDraft,
+                    AssistantStatus = "Online",
+                    ProviderStatus = "NotCalled",
+                    PromptVersion = GeminiAiProvider.CurrentPromptVersion,
+                    BookingDraft = null,
+                    SessionId = !string.IsNullOrWhiteSpace(request.SessionId) ? request.SessionId.Trim() : null,
+                    DraftId = null
+                };
+                return WithDraftVersionSync(failClosedCancelResponse, passiveDraftVersion);
+            }
+
+            var statelessCancelResponse = new AiChatResponseDto
             {
                 Message = "Đã hủy bản nháp đặt lịch hiện tại. Bạn có cần hỗ trợ gì khác không?",
                 DialogueOutcome = "DraftCancelled",
@@ -572,10 +657,10 @@ public class AiSpecialtyService : IAiSpecialtyService
                 ProviderStatus = "NotCalled",
                 PromptVersion = GeminiAiProvider.CurrentPromptVersion,
                 BookingDraft = null,
-                SessionId = !string.IsNullOrWhiteSpace(request.SessionId) ? request.SessionId.Trim() : $"sess_{Guid.NewGuid():N}",
+                SessionId = $"sess_{Guid.NewGuid():N}",
                 DraftId = null
             };
-            return WithDraftVersionSync(cancelResponse, passiveDraftVersion);
+            return WithDraftVersionSync(statelessCancelResponse, passiveDraftVersion);
         }
 
         // 3.3 Pricing Inquiry: Honest Consultation Fees from DB

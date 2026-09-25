@@ -2661,4 +2661,252 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         await waitFor(() => expect(capturedKeys).toHaveLength(2));
         expect(capturedKeys[1]).not.toBe(k1);
     });
+
+    it('M1: manual booking form (no AI draft) timeout -> unmount/remount ChatProvider & BookAppointment with activeDraft=null -> re-selecting same fields reuses K1 and replays appointment', async () => {
+        const capturedKeys: string[] = [];
+        const capturedPayloads: unknown[] = [];
+
+        vi.mocked(axiosClient.get).mockImplementation(async (url: string) => {
+            if (url === '/specialties') {
+                return {
+                    success: true,
+                    message: '',
+                    data: [{ id: 1, specialtyCode: 'SP01', specialtyName: 'Tim mạch' }]
+                };
+            }
+            if (url === '/specialties/1/doctors' || url.startsWith('/doctors')) {
+                if (url.includes('/available-slots')) {
+                    return {
+                        success: true,
+                        message: '',
+                        data: [
+                            { id: 1005, slotId: 1005, doctorId: 101, slotDate: '2026-09-24', startTime: '10:00:00', endTime: '10:30:00', isAvailable: true },
+                            { id: 1006, slotId: 1006, doctorId: 101, slotDate: '2026-09-24', startTime: '10:30:00', endTime: '11:00:00', isAvailable: true }
+                        ]
+                    };
+                }
+                return {
+                    success: true,
+                    message: '',
+                    data: [{ id: 101, fullName: 'Nguyễn Văn An', academicTitle: 'ThS.BS', specialtyId: 1, specialtyName: 'Tim mạch' }]
+                };
+            }
+            return { success: true, message: '', data: [] };
+        });
+
+        vi.mocked(axiosClient.post).mockImplementation(async (url, data, config) => {
+            if (url === '/appointments') {
+                const headers = config?.headers as Record<string, unknown> | undefined;
+                const key = String(headers?.['Idempotency-Key'] ?? '');
+                capturedKeys.push(key);
+                capturedPayloads.push(data);
+                if (capturedKeys.length === 1) {
+                    const timeoutErr = new Error('timeout of 15000ms exceeded') as Error & { code?: string };
+                    timeoutErr.code = 'ECONNABORTED';
+                    throw timeoutErr;
+                }
+                return {
+                    success: true,
+                    message: 'Idempotent replay',
+                    data: {
+                        id: 9901,
+                        appointmentCode: 'APPT-MANUAL-REPLAY-9901',
+                        doctorName: 'ThS.BS Nguyễn Văn An',
+                        specialtyName: 'Tim mạch',
+                        slotDate: '2026-09-24',
+                        startTime: '10:00',
+                        endTime: '10:30',
+                        reason: 'Khám tim mạch định kỳ kiểm tra huyết áp'
+                    }
+                };
+            }
+            return { success: true, message: '', data: {} };
+        });
+
+        // Start with NO AI draft (activeDraft = null)
+        sessionStorage.clear();
+
+        const { unmount } = render(
+            <MemoryRouter initialEntries={['/patient/book?date=2026-09-24']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        // Step 1: Select Specialty manually
+        const specCard = await screen.findByText('Tim mạch');
+        fireEvent.click(specCard);
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Chọn Bác sĩ/i }));
+
+        // Step 2: Select Doctor manually
+        const docCard = await screen.findByText(/Nguyễn Văn An/i);
+        fireEvent.click(docCard);
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Chọn Giờ khám/i }));
+
+        // Step 3: Select Slot & Reason manually
+        const slotBtn = await screen.findByRole('button', { name: /10:00/i });
+        fireEvent.click(slotBtn);
+        const reasonInput = screen.getByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
+        fireEvent.change(reasonInput, { target: { value: 'Khám tim mạch định kỳ kiểm tra huyết áp' } });
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+
+        // Step 4: Submit -> server created appointment, browser receives timeout
+        const confirmBtn1 = await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i });
+        fireEvent.click(confirmBtn1);
+
+        await waitFor(() => expect(capturedKeys).toHaveLength(1));
+        const k1 = capturedKeys[0];
+        expect(k1.length).toBeGreaterThan(5);
+        await waitFor(() => expect(screen.getByText(/Lượt đặt lịch trước đó đang chưa rõ kết quả/i)).toBeInTheDocument());
+
+        // Simulate reload where activeDraft is null in sessionStorage (only pending attempt remains)
+        unmount();
+        sessionStorage.removeItem('cliniccare_booking_draft_pat-1');
+
+        render(
+            <MemoryRouter initialEntries={['/patient/book?date=2026-09-24']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        // Uncertain outcome notice is immediately visible on reload even with activeDraft = null
+        await waitFor(() => {
+            expect(screen.getByText(/Lượt đặt lịch trước đó đang chưa rõ kết quả/i)).toBeInTheDocument();
+        });
+
+        // Re-select the exact same specialty, doctor, slot, and reason on the manual form
+        const specCard2 = await screen.findByText('Tim mạch');
+        fireEvent.click(specCard2);
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Chọn Bác sĩ/i }));
+
+        const docCard2 = await screen.findByText(/Nguyễn Văn An/i);
+        fireEvent.click(docCard2);
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Chọn Giờ khám/i }));
+
+        const slotBtn2 = await screen.findByRole('button', { name: /10:00/i });
+        fireEvent.click(slotBtn2);
+        const reasonInput2 = screen.getByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
+        fireEvent.change(reasonInput2, { target: { value: 'Khám tim mạch định kỳ kiểm tra huyết áp' } });
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+
+        const confirmBtn2 = await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i });
+        fireEvent.click(confirmBtn2);
+
+        await waitFor(() => expect(capturedKeys).toHaveLength(2));
+        expect(capturedKeys[1]).toBe(k1);
+        expect(capturedPayloads[1]).toEqual(capturedPayloads[0]);
+
+        await waitFor(() => {
+            expect(screen.getAllByText(/APPT-MANUAL-REPLAY-9901/i).length).toBeGreaterThan(0);
+        });
+    });
+
+    it('M2: manual booking form starting new turn, changing slot/reason, or switching account generates NEW Idempotency-Key and ignores late responses', async () => {
+        const capturedKeys: string[] = [];
+
+        vi.mocked(axiosClient.get).mockImplementation(async (url: string) => {
+            if (url === '/specialties') {
+                return {
+                    success: true,
+                    message: '',
+                    data: [{ id: 1, specialtyCode: 'SP01', specialtyName: 'Tim mạch' }]
+                };
+            }
+            if (url === '/specialties/1/doctors' || url.startsWith('/doctors')) {
+                if (url.includes('/available-slots')) {
+                    return {
+                        success: true,
+                        message: '',
+                        data: [
+                            { id: 1005, slotId: 1005, doctorId: 101, slotDate: '2026-09-24', startTime: '10:00:00', endTime: '10:30:00', isAvailable: true },
+                            { id: 1006, slotId: 1006, doctorId: 101, slotDate: '2026-09-24', startTime: '10:30:00', endTime: '11:00:00', isAvailable: true }
+                        ]
+                    };
+                }
+                return {
+                    success: true,
+                    message: '',
+                    data: [{ id: 101, fullName: 'Nguyễn Văn An', academicTitle: 'ThS.BS', specialtyId: 1, specialtyName: 'Tim mạch' }]
+                };
+            }
+            return { success: true, message: '', data: [] };
+        });
+
+        vi.mocked(axiosClient.post).mockImplementation(async (url, _data, config) => {
+            if (url === '/appointments') {
+                const headers = config?.headers as Record<string, unknown> | undefined;
+                capturedKeys.push(String(headers?.['Idempotency-Key'] ?? ''));
+                throw new Error('Network timeout manual M2');
+            }
+            return { success: true, message: '', data: {} };
+        });
+
+        sessionStorage.clear();
+
+        render(
+            <MemoryRouter initialEntries={['/patient/book?date=2026-09-24']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        // 1. First manual booking attempt -> timeout records K1
+        fireEvent.click(await screen.findByText('Tim mạch'));
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Chọn Bác sĩ/i }));
+        fireEvent.click(await screen.findByText(/Nguyễn Văn An/i));
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Chọn Giờ khám/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /10:00/i }));
+        fireEvent.change(screen.getByLabelText(/Triệu chứng hoặc lý do thăm khám/i), {
+            target: { value: 'Khám tim mạch định kỳ kiểm tra huyết áp' }
+        });
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i }));
+
+        await waitFor(() => expect(capturedKeys).toHaveLength(1));
+        const k1 = capturedKeys[0];
+
+        // 2. Click "Hủy & bắt đầu lượt đặt lịch mới" -> explicitly starts a new manual turn
+        const startNewTurnBtn = await screen.findByRole('button', { name: /Hủy & bắt đầu lượt đặt lịch mới/i });
+        fireEvent.click(startNewTurnBtn);
+        expect(sessionStorage.getItem('cliniccare_pending_booking_attempt_pat-1')).toBeNull();
+
+        // Re-select the EXACT same payload in the new turn -> must generate K2 !== K1
+        fireEvent.click(await screen.findByText('Tim mạch'));
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Chọn Bác sĩ/i }));
+        fireEvent.click(await screen.findByText(/Nguyễn Văn An/i));
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Chọn Giờ khám/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /10:00/i }));
+        fireEvent.change(screen.getByLabelText(/Triệu chứng hoặc lý do thăm khám/i), {
+            target: { value: 'Khám tim mạch định kỳ kiểm tra huyết áp' }
+        });
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i }));
+
+        await waitFor(() => expect(capturedKeys).toHaveLength(2));
+        const k2 = capturedKeys[1];
+        expect(k2).not.toBe(k1);
+
+        // 3. Change reason/slot without clicking reset -> must generate K3 !== K2 and overwrite K2
+        fireEvent.click(screen.getByRole('button', { name: /Quay lại/i }));
+        fireEvent.change(screen.getByLabelText(/Triệu chứng hoặc lý do thăm khám/i), {
+            target: { value: 'Triệu chứng mới: khó thở khi gắng sức' }
+        });
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i }));
+
+        await waitFor(() => expect(capturedKeys).toHaveLength(3));
+        const k3 = capturedKeys[2];
+        expect(k3).not.toBe(k2);
+        expect(k3).not.toBe(k1);
+    });
 });
