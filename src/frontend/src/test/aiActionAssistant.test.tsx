@@ -1911,8 +1911,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
             version: 1
         }));
         
-        console.log('BEFORE REJECT: ', sessionStorage.getItem(testStorageKey));
-        // Wait a bit, then reject A with 409
+        // Reject A with 409 after context switched to B
         rejectA({
             errorCode: 'SLOT_ALREADY_BOOKED',
             response: {
@@ -1931,30 +1930,379 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         }
     });
 
-    it('widget: idempotency key survives remount via sessionStorage', async () => {
-        vi.mocked(axiosClient.post).mockResolvedValueOnce({
-            success: true,
-            message: '',
-            data: {
-                message: 'Vui lòng xác nhận:',
-                urgency: 'ROUTINE',
-                bookingDraft: {
-                    specialtyId: 1, doctorId: 101, slotId: 1005, slotDate: '2026-09-24', startTime: '10:00', endTime: '10:30', reason: 'Triệu chứng', isComplete: true
-                },
-                actions: [
-                    {
-                        id: 'act-1', type: 'ConfirmBooking', label: 'Xác nhận đặt lịch', requiresConfirmation: true, payload: {
-                            specialtyId: 1, doctorId: 101, slotId: 1005, slotDate: '2026-09-24', startTime: '10:00', endTime: '10:30', reason: 'Triệu chứng'
-                        }
+    it('A1 & A2: widget ConfirmBooking timeout -> unmount/remount ChatProvider & Widget -> retry sends EXACT SAME Idempotency-Key K1 and handles server replay', async () => {
+        const capturedKeys: string[] = [];
+        const capturedPayloads: unknown[] = [];
+
+        vi.mocked(axiosClient.post).mockImplementation(async (url, data, config) => {
+            if (url === '/ai/chat') {
+                return {
+                    success: true,
+                    message: '',
+                    data: {
+                        message: 'Vui lòng xác nhận lịch khám:',
+                        urgency: 'ROUTINE',
+                        sessionId: 'sess_a1',
+                        draftId: 'draft_a1',
+                        bookingDraft: {
+                            draftId: 'draft_a1',
+                            specialtyId: 1,
+                            specialtyName: 'Tim mạch',
+                            doctorId: 101,
+                            doctorName: 'BS Nguyễn Văn An',
+                            slotId: 1005,
+                            slotDate: '2026-09-24',
+                            startTime: '10:00',
+                            endTime: '10:30',
+                            reason: 'Triệu chứng đau ngực kéo dài 3 ngày',
+                            isComplete: true,
+                            version: 1,
+                            confirmationId: 'conf_a1_v1'
+                        },
+                        actions: [
+                            {
+                                id: 'act-confirm-a1',
+                                type: 'ConfirmBooking',
+                                label: 'Xác nhận đặt lịch',
+                                style: 'primary',
+                                requiresAuthentication: true,
+                                requiresConfirmation: true,
+                                draftVersion: 1,
+                                payload: {
+                                    confirmationId: 'conf_a1_v1',
+                                    specialtyId: 1,
+                                    specialtyName: 'Tim mạch',
+                                    doctorId: 101,
+                                    doctorName: 'BS Nguyễn Văn An',
+                                    slotId: 1005,
+                                    slotDate: '2026-09-24',
+                                    startTime: '10:00',
+                                    endTime: '10:30',
+                                    reason: 'Triệu chứng đau ngực kéo dài 3 ngày',
+                                    draftVersion: 1
+                                }
+                            }
+                        ]
                     }
-                ]
+                };
             }
+            if (url === '/appointments') {
+                const headers = config?.headers as Record<string, unknown> | undefined;
+                const key = String(headers?.['Idempotency-Key'] ?? '');
+                capturedKeys.push(key);
+                capturedPayloads.push(data);
+                if (capturedKeys.length === 1) {
+                    const timeoutErr = new Error('timeout of 15000ms exceeded') as Error & { code?: string };
+                    timeoutErr.code = 'ECONNABORTED';
+                    throw timeoutErr;
+                }
+                return {
+                    success: true,
+                    message: 'Idempotent replay',
+                    data: {
+                        id: 9001,
+                        appointmentCode: 'APPT-REPLAY-9001',
+                        doctorName: 'BS Nguyễn Văn An',
+                        specialtyName: 'Tim mạch',
+                        slotDate: '2026-09-24',
+                        startTime: '10:00',
+                        endTime: '10:30',
+                        reason: 'Triệu chứng đau ngực kéo dài 3 ngày'
+                    }
+                };
+            }
+            return { success: true, message: '', data: {} };
         });
 
-        const deferredBooking = new Promise(() => {}); // never resolves
-        vi.mocked(axiosClient.post).mockImplementationOnce(() => deferredBooking);
+        const { unmount } = render(
+            <MemoryRouter>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
 
-        const { unmount: unmountWidget } = render(
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(input, { target: { value: 'Tôi muốn đặt lịch khám tim mạch' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        const confirmBtn1 = await screen.findByRole('button', { name: 'Xác nhận đặt lịch' });
+        fireEvent.click(confirmBtn1);
+
+        await waitFor(() => {
+            expect(capturedKeys.length).toBe(1);
+        });
+        const k1 = capturedKeys[0];
+        expect(k1.length).toBeGreaterThan(5);
+
+        // Wait for timeout error notice to render so attempt status is updated to "uncertain"
+        await waitFor(() => {
+            expect(screen.getByText(/timeout of 15000ms exceeded/i)).toBeInTheDocument();
+        });
+
+        // Unmount BOTH Widget and ChatProvider
+        unmount();
+
+        // Remount ChatProvider and Widget in the same sessionStorage session
+        render(
+            <MemoryRouter>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const confirmBtnAfterRemount = await screen.findByRole('button', { name: 'Xác nhận đặt lịch' });
+        fireEvent.click(confirmBtnAfterRemount);
+
+        await waitFor(() => {
+            expect(capturedKeys.length).toBe(2);
+        });
+
+        const k2 = capturedKeys[1];
+        expect(k2).toBe(k1);
+        expect(capturedPayloads[1]).toEqual(capturedPayloads[0]);
+
+        // A2: Verify replay success notice is displayed once and attempt storage is cleaned up
+        await waitFor(() => {
+            expect(screen.getByText(/APPT-REPLAY-9001/)).toBeInTheDocument();
+        });
+        expect(screen.getAllByText(/APPT-REPLAY-9001/)).toHaveLength(1);
+        expect(sessionStorage.getItem('cliniccare_pending_booking_attempt_pat-1')).toBeNull();
+    });
+
+    it('A3 & A4: cancelling draft via UI/API or changing slot/reason invalidates old attempt and generates a NEW Idempotency-Key', async () => {
+        const capturedKeys: string[] = [];
+        let chatCallIndex = 0;
+
+        vi.mocked(axiosClient.post).mockImplementation(async (url, _data, config) => {
+            if (url === '/ai/chat') {
+                chatCallIndex += 1;
+                if (chatCallIndex === 1) {
+                    return {
+                        success: true,
+                        message: '',
+                        data: {
+                            message: 'Bản nháp 1:',
+                            urgency: 'ROUTINE',
+                            sessionId: 'sess_a3',
+                            draftId: 'draft_a3_first',
+                            bookingDraft: {
+                                draftId: 'draft_a3_first',
+                                specialtyId: 1,
+                                doctorId: 101,
+                                slotId: 1005,
+                                slotDate: '2026-09-24',
+                                startTime: '10:00',
+                                endTime: '10:30',
+                                reason: 'Triệu chứng đau ngực kéo dài 3 ngày',
+                                isComplete: true,
+                                version: 1,
+                                confirmationId: 'conf_a3_1'
+                            },
+                            actions: [
+                                {
+                                    id: 'act-confirm-a3-1',
+                                    type: 'ConfirmBooking',
+                                    label: 'Xác nhận đặt lịch',
+                                    style: 'primary',
+                                    requiresAuthentication: true,
+                                    requiresConfirmation: true,
+                                    draftVersion: 1,
+                                    payload: {
+                                        confirmationId: 'conf_a3_1',
+                                        specialtyId: 1,
+                                        doctorId: 101,
+                                        slotId: 1005,
+                                        slotDate: '2026-09-24',
+                                        startTime: '10:00',
+                                        endTime: '10:30',
+                                        reason: 'Triệu chứng đau ngực kéo dài 3 ngày',
+                                        draftVersion: 1
+                                    }
+                                }
+                            ]
+                        }
+                    };
+                }
+                if (chatCallIndex === 2) {
+                    return {
+                        success: true,
+                        message: '',
+                        data: {
+                            message: 'Đã hủy bản nháp đặt lịch hiện tại.',
+                            dialogueOutcome: 'DraftCancelled',
+                            primaryIntent: 'CancelDraft',
+                            urgency: 'ROUTINE',
+                            sessionId: 'sess_a3',
+                            draftId: null,
+                            bookingDraft: null,
+                            actions: []
+                        }
+                    };
+                }
+                // chatCallIndex === 3: New draft with IDENTICAL payload after cancel
+                return {
+                    success: true,
+                    message: '',
+                    data: {
+                        message: 'Bản nháp mới cùng thông tin:',
+                        urgency: 'ROUTINE',
+                        sessionId: 'sess_a3',
+                        draftId: 'draft_a3_second',
+                        bookingDraft: {
+                            draftId: 'draft_a3_second',
+                            specialtyId: 1,
+                            doctorId: 101,
+                            slotId: 1005,
+                            slotDate: '2026-09-24',
+                            startTime: '10:00',
+                            endTime: '10:30',
+                            reason: 'Triệu chứng đau ngực kéo dài 3 ngày',
+                            isComplete: true,
+                            version: 1,
+                            confirmationId: 'conf_a3_2'
+                        },
+                        actions: [
+                            {
+                                id: 'act-confirm-a3-2',
+                                type: 'ConfirmBooking',
+                                label: 'Xác nhận bản nháp mới',
+                                style: 'primary',
+                                requiresAuthentication: true,
+                                requiresConfirmation: true,
+                                draftVersion: 1,
+                                payload: {
+                                    confirmationId: 'conf_a3_2',
+                                    specialtyId: 1,
+                                    doctorId: 101,
+                                    slotId: 1005,
+                                    slotDate: '2026-09-24',
+                                    startTime: '10:00',
+                                    endTime: '10:30',
+                                    reason: 'Triệu chứng đau ngực kéo dài 3 ngày',
+                                    draftVersion: 1
+                                }
+                            }
+                        ]
+                    }
+                };
+            }
+            if (url === '/appointments') {
+                const headers = config?.headers as Record<string, unknown> | undefined;
+                const key = String(headers?.['Idempotency-Key'] ?? '');
+                capturedKeys.push(key);
+                throw new Error('Network timeout');
+            }
+            return { success: true, message: '', data: {} };
+        });
+
+        render(
+            <MemoryRouter>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+
+        // Turn 1: create draft and confirm -> timeout records K1
+        fireEvent.change(input, { target: { value: 'Đặt lịch khám' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        const btn1 = await screen.findByRole('button', { name: 'Xác nhận đặt lịch' });
+        fireEvent.click(btn1);
+        await waitFor(() => expect(capturedKeys).toHaveLength(1));
+        const k1 = capturedKeys[0];
+
+        // Turn 2: cancel draft via chat UI/API
+        await waitFor(() => expect(screen.getByText(/Network timeout/i)).toBeInTheDocument());
+        fireEvent.change(input, { target: { value: 'Hủy đặt lịch' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Đã hủy bản nháp đặt lịch hiện tại/i)).toBeInTheDocument();
+        });
+        expect(sessionStorage.getItem('cliniccare_pending_booking_attempt_pat-1')).toBeNull();
+
+        // Turn 3: create new draft with identical payload -> confirm must use K2 !== K1
+        fireEvent.change(input, { target: { value: 'Đặt lịch khám lại' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        const btn2 = await screen.findByRole('button', { name: 'Xác nhận bản nháp mới' });
+        fireEvent.click(btn2);
+        await waitFor(() => expect(capturedKeys).toHaveLength(2));
+        expect(capturedKeys[1]).not.toBe(k1);
+    });
+
+    it('A5 & A7: double-click sends only 1 request, and switching user while pending isolates key/draft/messages', async () => {
+        const capturedKeys: string[] = [];
+        let resolveFirstAppointment!: (val: unknown) => void;
+        const firstAppointmentDeferred = new Promise(resolve => {
+            resolveFirstAppointment = resolve;
+        });
+
+        vi.mocked(axiosClient.post).mockImplementation((url, _data, config) => {
+            if (url === '/ai/chat') {
+                return Promise.resolve({
+                    success: true,
+                    message: '',
+                    data: {
+                        message: 'Xác nhận đặt lịch:',
+                        urgency: 'ROUTINE',
+                        sessionId: 'sess_a5_a7',
+                        draftId: 'draft_a5_a7',
+                        bookingDraft: {
+                            draftId: 'draft_a5_a7',
+                            specialtyId: 1,
+                            doctorId: 101,
+                            slotId: 1005,
+                            slotDate: '2026-09-24',
+                            startTime: '10:00',
+                            endTime: '10:30',
+                            reason: 'Triệu chứng đau ngực kéo dài 3 ngày',
+                            isComplete: true,
+                            version: 1,
+                            confirmationId: 'conf_a5_a7'
+                        },
+                        actions: [
+                            {
+                                id: 'act-confirm-a5-a7',
+                                type: 'ConfirmBooking',
+                                label: 'Xác nhận đặt lịch',
+                                style: 'primary',
+                                requiresAuthentication: true,
+                                requiresConfirmation: true,
+                                draftVersion: 1,
+                                payload: {
+                                    confirmationId: 'conf_a5_a7',
+                                    specialtyId: 1,
+                                    doctorId: 101,
+                                    slotId: 1005,
+                                    slotDate: '2026-09-24',
+                                    startTime: '10:00',
+                                    endTime: '10:30',
+                                    reason: 'Triệu chứng đau ngực kéo dài 3 ngày',
+                                    draftVersion: 1
+                                }
+                            }
+                        ]
+                    }
+                });
+            }
+            if (url === '/appointments') {
+                const headers = config?.headers as Record<string, unknown> | undefined;
+                capturedKeys.push(String(headers?.['Idempotency-Key'] ?? ''));
+                return firstAppointmentDeferred as Promise<unknown>;
+            }
+            return Promise.resolve({ success: true, message: '', data: {} });
+        });
+
+        const { rerender } = render(
             <MemoryRouter>
                 <ChatProvider>
                     <MedicalChatWidget />
@@ -1966,68 +2314,312 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
         fireEvent.change(input, { target: { value: 'Đặt lịch' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
-        
-        await waitFor(() => {
-            expect(screen.getByText('Xác nhận đặt lịch')).toBeInTheDocument();
-        });
-        
-        fireEvent.click(screen.getByText('Xác nhận đặt lịch'));
-        
-        await waitFor(() => {
-            const saved = sessionStorage.getItem('cliniccare_pending_widget_attempt_pat-1');
-            expect(saved).not.toBeNull();
-            if (saved) {
-                expect(JSON.parse(saved).key).toBeDefined();
-            }
-        });
 
-        const savedBeforeUnmount = sessionStorage.getItem('cliniccare_pending_widget_attempt_pat-1');
-        
-        unmountWidget();
-        
-        // Remount
-        render(
+        const confirmBtn = await screen.findByRole('button', { name: 'Xác nhận đặt lịch' });
+
+        // A7: Rapid double-click on the same ConfirmBooking action
+        fireEvent.click(confirmBtn);
+        fireEvent.click(confirmBtn);
+
+        await waitFor(() => expect(capturedKeys).toHaveLength(1));
+
+        // A5: Switch authenticated user to pat-2 while pat-1's booking request is still pending
+        mockUser = {
+            id: 'pat-2',
+            fullName: 'Bệnh nhân 2',
+            role: 'Patient'
+        };
+        rerender(
             <MemoryRouter>
                 <ChatProvider>
                     <MedicalChatWidget />
                 </ChatProvider>
             </MemoryRouter>
         );
-        
-        // Ensure it's still in storage
-        expect(sessionStorage.getItem('cliniccare_pending_widget_attempt_pat-1')).toBe(savedBeforeUnmount);
-    });
 
-    it('widget: deterministic rejection clears sessionStorage attempt', async () => {
-        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+        // Now resolve pat-1's in-flight request after user switched to pat-2
+        resolveFirstAppointment({
             success: true,
             message: '',
             data: {
-                message: 'Vui lòng xác nhận:',
-                urgency: 'ROUTINE',
-                bookingDraft: {
-                    specialtyId: 1, doctorId: 101, slotId: 1005, slotDate: '2026-09-24', startTime: '10:00', endTime: '10:30', reason: 'Triệu chứng', isComplete: true
-                },
-                actions: [
-                    {
-                        id: 'act-1', type: 'ConfirmBooking', label: 'Xác nhận đặt lịch', requiresConfirmation: true, payload: {
-                            specialtyId: 1, doctorId: 101, slotId: 1005, slotDate: '2026-09-24', startTime: '10:00', endTime: '10:30', reason: 'Triệu chứng'
-                        }
+                id: 8888,
+                appointmentCode: 'APPT-USER1-LEAK-CHECK',
+                doctorName: 'BS Nguyễn Văn An',
+                specialtyName: 'Tim mạch',
+                slotDate: '2026-09-24',
+                startTime: '10:00',
+                endTime: '10:30',
+                reason: 'Triệu chứng đau ngực kéo dài 3 ngày'
+            }
+        });
+
+        await new Promise(r => setTimeout(r, 30));
+
+        // pat-2 must NOT see pat-1's appointment confirmation or inherit pat-1's key
+        expect(screen.queryByText(/APPT-USER1-LEAK-CHECK/)).not.toBeInTheDocument();
+        expect(sessionStorage.getItem('cliniccare_pending_booking_attempt_pat-2')).toBeNull();
+    });
+
+    it('A6: ConfirmBooking timeout in Widget -> continue same turn on BookAppointment page -> reuses EXACT SAME Idempotency-Key K1', async () => {
+        const capturedKeys: string[] = [];
+
+        vi.mocked(axiosClient.get).mockImplementation(async (url: string) => {
+            if (url === '/specialties') {
+                return {
+                    success: true,
+                    message: '',
+                    data: [{ id: 1, specialtyCode: 'SP01', specialtyName: 'Tim mạch' }]
+                };
+            }
+            if (url === '/specialties/1/doctors' || url.startsWith('/doctors')) {
+                if (url.includes('/available-slots')) {
+                    return {
+                        success: true,
+                        message: '',
+                        data: [{ id: 1005, slotId: 1005, doctorId: 101, slotDate: '2026-09-24', startTime: '10:00:00', endTime: '10:30:00', isAvailable: true }]
+                    };
+                }
+                return {
+                    success: true,
+                    message: '',
+                    data: [{ id: 101, fullName: 'Nguyễn Văn An', academicTitle: 'ThS.BS', specialtyId: 1, specialtyName: 'Tim mạch' }]
+                };
+            }
+            return { success: true, message: '', data: [] };
+        });
+
+        vi.mocked(axiosClient.post).mockImplementation(async (url, _data, config) => {
+            if (url === '/ai/chat') {
+                return {
+                    success: true,
+                    message: '',
+                    data: {
+                        message: 'Xác nhận đặt lịch:',
+                        urgency: 'ROUTINE',
+                        sessionId: 'sess_a6',
+                        draftId: 'draft_a6_shared',
+                        bookingDraft: {
+                            draftId: 'draft_a6_shared',
+                            specialtyId: 1,
+                            specialtyName: 'Tim mạch',
+                            doctorId: 101,
+                            doctorName: 'BS Nguyễn Văn An',
+                            slotId: 1005,
+                            slotDate: '2026-09-24',
+                            startTime: '10:00',
+                            endTime: '10:30',
+                            reason: 'Triệu chứng đau ngực kéo dài 3 ngày',
+                            isComplete: true,
+                            version: 1,
+                            confirmationId: 'conf_a6_shared'
+                        },
+                        actions: [
+                            {
+                                id: 'act-confirm-a6',
+                                type: 'ConfirmBooking',
+                                label: 'Xác nhận đặt lịch',
+                                style: 'primary',
+                                requiresAuthentication: true,
+                                requiresConfirmation: true,
+                                draftVersion: 1,
+                                payload: {
+                                    confirmationId: 'conf_a6_shared',
+                                    specialtyId: 1,
+                                    specialtyName: 'Tim mạch',
+                                    doctorId: 101,
+                                    doctorName: 'BS Nguyễn Văn An',
+                                    slotId: 1005,
+                                    slotDate: '2026-09-24',
+                                    startTime: '10:00',
+                                    endTime: '10:30',
+                                    reason: 'Triệu chứng đau ngực kéo dài 3 ngày',
+                                    draftVersion: 1
+                                }
+                            }
+                        ]
                     }
-                ]
+                };
             }
+            if (url === '/appointments') {
+                const headers = config?.headers as Record<string, unknown> | undefined;
+                const key = String(headers?.['Idempotency-Key'] ?? '');
+                capturedKeys.push(key);
+                if (capturedKeys.length === 1) {
+                    throw new Error('Network timeout in widget');
+                }
+                return {
+                    success: true,
+                    message: '',
+                    data: {
+                        id: 9006,
+                        appointmentCode: 'APPT-A6-CROSS-SURFACE',
+                        doctorName: 'BS Nguyễn Văn An',
+                        specialtyName: 'Tim mạch',
+                        slotDate: '2026-09-24',
+                        startTime: '10:00',
+                        endTime: '10:30',
+                        reason: 'Triệu chứng đau ngực kéo dài 3 ngày'
+                    }
+                };
+            }
+            return { success: true, message: '', data: {} };
         });
 
-        vi.mocked(axiosClient.post).mockRejectedValueOnce({
-            errorCode: 'SLOT_ALREADY_BOOKED',
-            response: {
-                status: 409,
-                data: { errorCode: 'SLOT_ALREADY_BOOKED' }
-            }
-        });
+        const { unmount } = render(
+            <MemoryRouter initialEntries={['/patient/book']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <MedicalChatWidget />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
 
-        vi.mocked(axiosClient.post).mockResolvedValueOnce({
-            success: true, message: '', data: { actions: [] }
+        // Step 1: Confirm in Widget -> fails with timeout, records K1
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
+        fireEvent.change(input, { target: { value: 'Đặt lịch khám' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        const widgetConfirmBtn = await screen.findByRole('button', { name: 'Xác nhận đặt lịch' });
+        fireEvent.click(widgetConfirmBtn);
+
+        await waitFor(() => expect(capturedKeys).toHaveLength(1));
+        const k1FromWidget = capturedKeys[0];
+        await waitFor(() => expect(screen.getByText(/Network timeout in widget/i)).toBeInTheDocument());
+
+        unmount();
+
+        // Step 2: User continues the exact same draft on BookAppointment page (/patient/book)
+        render(
+            <MemoryRouter initialEntries={['/patient/book']}>
+                <DialogProvider>
+                    <ChatProvider>
+                        <BookAppointment />
+                    </ChatProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        await screen.findByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
+        fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/i }));
+        const pageConfirmBtn = await screen.findByRole('button', { name: /Xác nhận & Đặt lịch/i });
+        fireEvent.click(pageConfirmBtn);
+
+        await waitFor(() => expect(capturedKeys).toHaveLength(2));
+        const k2FromBookingPage = capturedKeys[1];
+
+        // Assert BookAppointment page reused the exact same Idempotency-Key K1 generated in Widget!
+        expect(k2FromBookingPage).toBe(k1FromWidget);
+    });
+
+    it('A4: changing slot or reason invalidates old ConfirmBooking action and uses a new Idempotency-Key for the updated draft', async () => {
+        const capturedKeys: string[] = [];
+        let chatStep = 0;
+
+        vi.mocked(axiosClient.post).mockImplementation(async (url, _data, config) => {
+            if (url === '/ai/chat') {
+                chatStep += 1;
+                if (chatStep === 1) {
+                    return {
+                        success: true,
+                        message: '',
+                        data: {
+                            message: 'Bản nháp v1 (09:00):',
+                            urgency: 'ROUTINE',
+                            sessionId: 'sess_a4',
+                            draftId: 'draft_a4',
+                            bookingDraft: {
+                                draftId: 'draft_a4',
+                                specialtyId: 1,
+                                doctorId: 101,
+                                slotId: 1001,
+                                slotDate: '2026-09-24',
+                                startTime: '09:00',
+                                endTime: '09:30',
+                                reason: 'Đau đầu âm ỉ kéo dài 3 ngày',
+                                isComplete: true,
+                                version: 1,
+                                confirmationId: 'conf_a4_v1'
+                            },
+                            actions: [
+                                {
+                                    id: 'act-confirm-a4-v1',
+                                    type: 'ConfirmBooking',
+                                    label: 'Xác nhận đặt lịch v1',
+                                    style: 'primary',
+                                    requiresAuthentication: true,
+                                    requiresConfirmation: true,
+                                    draftVersion: 1,
+                                    payload: {
+                                        confirmationId: 'conf_a4_v1',
+                                        specialtyId: 1,
+                                        doctorId: 101,
+                                        slotId: 1001,
+                                        slotDate: '2026-09-24',
+                                        startTime: '09:00',
+                                        endTime: '09:30',
+                                        reason: 'Đau đầu âm ỉ kéo dài 3 ngày',
+                                        draftVersion: 1
+                                    }
+                                }
+                            ]
+                        }
+                    };
+                }
+                // chatStep === 2: user changed slot to 1002 (10:00), version bumped to v2
+                return {
+                    success: true,
+                    message: '',
+                    data: {
+                        message: 'Đã cập nhật sang khung giờ 10:00 (v2):',
+                        urgency: 'ROUTINE',
+                        sessionId: 'sess_a4',
+                        draftId: 'draft_a4',
+                        bookingDraft: {
+                            draftId: 'draft_a4',
+                            specialtyId: 1,
+                            doctorId: 101,
+                            slotId: 1002,
+                            slotDate: '2026-09-24',
+                            startTime: '10:00',
+                            endTime: '10:30',
+                            reason: 'Đau đầu kèm chóng mặt buồn nôn',
+                            isComplete: true,
+                            version: 2,
+                            confirmationId: 'conf_a4_v2'
+                        },
+                        actions: [
+                            {
+                                id: 'act-confirm-a4-v2',
+                                type: 'ConfirmBooking',
+                                label: 'Xác nhận đặt lịch v2',
+                                style: 'primary',
+                                requiresAuthentication: true,
+                                requiresConfirmation: true,
+                                draftVersion: 2,
+                                payload: {
+                                    confirmationId: 'conf_a4_v2',
+                                    specialtyId: 1,
+                                    doctorId: 101,
+                                    slotId: 1002,
+                                    slotDate: '2026-09-24',
+                                    startTime: '10:00',
+                                    endTime: '10:30',
+                                    reason: 'Đau đầu kèm chóng mặt buồn nôn',
+                                    draftVersion: 2
+                                }
+                            }
+                        ]
+                    }
+                };
+            }
+            if (url === '/appointments') {
+                const headers = config?.headers as Record<string, unknown> | undefined;
+                capturedKeys.push(String(headers?.['Idempotency-Key'] ?? ''));
+                throw new Error('Temporary network timeout');
+            }
+            return { success: true, message: '', data: {} };
         });
 
         render(
@@ -2040,26 +2632,33 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
         const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
-        fireEvent.change(input, { target: { value: 'Đặt lịch' } });
-        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
-        
-        await waitFor(() => {
-            expect(screen.getByText('Xác nhận đặt lịch')).toBeInTheDocument();
-        });
-        
-        // Setting it manually to simulate storage
-        sessionStorage.setItem('cliniccare_pending_widget_attempt_pat-1', JSON.stringify({
-            attemptId: 'pat-1_draft_1005_v1',
-            payloadFingerprint: '1_101_1005_2026-09-24_10:00_Triệu chứng',
-            key: 'key-1'
-        }));
-        
-        fireEvent.click(screen.getByText('Xác nhận đặt lịch'));
-        
-        await waitFor(() => {
-            const saved = sessionStorage.getItem('cliniccare_pending_widget_attempt_pat-1');
-            expect(saved).toBeNull(); // Should be cleared on SLOT_ALREADY_BOOKED
-        });
-    });
 
+        // 1. Create v1 draft & confirm -> records K1
+        fireEvent.change(input, { target: { value: 'Đặt lịch 9h' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        const btnV1 = await screen.findByRole('button', { name: 'Xác nhận đặt lịch v1' });
+        fireEvent.click(btnV1);
+        await waitFor(() => expect(capturedKeys).toHaveLength(1));
+        const k1 = capturedKeys[0];
+
+        // 2. User changes slot/reason -> receives v2 draft
+        await waitFor(() => expect(screen.getByText(/Temporary network timeout/i)).toBeInTheDocument());
+        fireEvent.change(input, { target: { value: 'Đổi sang 10h và cập nhật triệu chứng' } });
+        fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+        const btnV2 = await screen.findByRole('button', { name: 'Xác nhận đặt lịch v2' });
+
+        // Clicking old v1 button is rejected without calling /appointments
+        fireEvent.click(btnV1);
+        await waitFor(() => {
+            expect(screen.getByText(/phiên bản cũ \(v1\)/i)).toBeInTheDocument();
+        });
+        expect(capturedKeys).toHaveLength(1);
+
+        // Clicking new v2 button calls /appointments with a brand new key K2 !== K1
+        fireEvent.click(btnV2);
+        await waitFor(() => expect(capturedKeys).toHaveLength(2));
+        expect(capturedKeys[1]).not.toBe(k1);
+    });
 });

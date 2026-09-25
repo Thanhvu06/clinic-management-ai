@@ -66,8 +66,33 @@ public class AiSpecialtyService : IAiSpecialtyService
         public DateTime ExpiresAtUtc { get; set; }
     }
 
+    public readonly record struct CancelledDraftScopeKey
+    {
+        public Guid? UserId { get; }
+        public string? SessionId { get; }
+        public string DraftId { get; }
+
+        public CancelledDraftScopeKey(Guid? userId, string? sessionId, string draftId)
+        {
+            UserId = userId;
+            SessionId = !string.IsNullOrWhiteSpace(sessionId) ? sessionId.Trim() : null;
+            DraftId = draftId.Trim();
+        }
+    }
+
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SelectionSnapshot> _snapshotStore = new();
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _cancelledDraftIds = new(StringComparer.Ordinal);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<CancelledDraftScopeKey, DateTime> _cancelledDraftScopes = new();
+
+    public static void PurgeExpiredCancelledDrafts(DateTime nowUtc)
+    {
+        foreach (var kvp in _cancelledDraftScopes)
+        {
+            if (kvp.Value <= nowUtc)
+            {
+                _cancelledDraftScopes.TryRemove(kvp.Key, out _);
+            }
+        }
+    }
 
     private string CreateSelectionSnapshot(
         Guid? userId,
@@ -81,6 +106,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         string? slotDate = null)
     {
         var now = _dateTimeProvider.UtcNow;
+        PurgeExpiredCancelledDrafts(now);
         foreach (var kvp in _snapshotStore)
         {
             if (kvp.Value.ExpiresAtUtc <= now)
@@ -108,83 +134,105 @@ public class AiSpecialtyService : IAiSpecialtyService
         return snapshotId;
     }
 
-    public static void InvalidateDraftSnapshots(string? draftId, Guid? userId = null)
+    public static void InvalidateDraftSnapshots(string? draftId, Guid? userId = null, string? sessionId = null, DateTime? nowUtc = null)
     {
         if (string.IsNullOrWhiteSpace(draftId))
         {
             return;
         }
 
-        var cleanDraftId = draftId.Trim();
-        bool ownsDraft = !userId.HasValue;
-        
-        foreach (var kvp in _snapshotStore)
-        {
-            if (string.Equals(kvp.Value.DraftId, cleanDraftId, StringComparison.Ordinal))
-            {
-                if (!userId.HasValue || kvp.Value.UserId == userId)
-                {
-                    ownsDraft = true;
-                    _snapshotStore.TryRemove(kvp.Key, out _);
-                }
-            }
-        }
-
-        if (ownsDraft)
-        {
-            _cancelledDraftIds[cleanDraftId] = DateTime.UtcNow.AddHours(1);
-        }
+        InvalidateDraftSnapshotsForCancel(draftId, sessionId, userId, nowUtc);
     }
 
-    public static void InvalidateDraftSnapshotsForCancel(string? draftId, string? sessionId, Guid? userId)
+    public static void InvalidateDraftSnapshotsForCancel(string? draftId, string? sessionId, Guid? userId, DateTime? nowUtc = null)
     {
-        if (!string.IsNullOrWhiteSpace(draftId))
-        {
-            InvalidateDraftSnapshots(draftId, userId);
-        }
+        var effectiveNow = nowUtc ?? DateTime.UtcNow;
+        PurgeExpiredCancelledDrafts(effectiveNow);
 
+        var cleanDraftId = !string.IsNullOrWhiteSpace(draftId) ? draftId.Trim() : null;
         var cleanSessionId = !string.IsNullOrWhiteSpace(sessionId) ? sessionId.Trim() : null;
-        foreach (var kvp in _snapshotStore)
+        var expiresAt = effectiveNow.AddHours(1);
+
+        if (cleanDraftId != null)
         {
-            var snap = kvp.Value;
-            if (userId.HasValue && snap.UserId == userId)
+            _cancelledDraftScopes[new CancelledDraftScopeKey(userId, cleanSessionId, cleanDraftId)] = expiresAt;
+
+            foreach (var kvp in _snapshotStore)
             {
-                if (cleanSessionId != null)
+                var snap = kvp.Value;
+                if (snap.UserId != userId)
                 {
-                    if (string.Equals(snap.SessionId, cleanSessionId, StringComparison.Ordinal))
-                    {
-                        if (!string.IsNullOrWhiteSpace(snap.DraftId))
-                        {
-                            _cancelledDraftIds[snap.DraftId] = DateTime.UtcNow.AddHours(1);
-                        }
-                        _snapshotStore.TryRemove(kvp.Key, out _);
-                    }
+                    continue;
                 }
-                else
+
+                if (!string.Equals(snap.DraftId, cleanDraftId, StringComparison.Ordinal))
                 {
-                    if (!string.IsNullOrWhiteSpace(snap.DraftId))
-                    {
-                        _cancelledDraftIds[snap.DraftId] = DateTime.UtcNow.AddHours(1);
-                    }
+                    continue;
+                }
+
+                if (cleanSessionId != null && snap.SessionId != null && !string.Equals(snap.SessionId, cleanSessionId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                _cancelledDraftScopes[new CancelledDraftScopeKey(snap.UserId, snap.SessionId, cleanDraftId)] = expiresAt;
+                _snapshotStore.TryRemove(kvp.Key, out _);
+            }
+            return;
+        }
+
+        // Legacy fallback when DraftId is missing: only revoke snapshots without a DraftId in the exact same (userId, cleanSessionId)
+        if (cleanSessionId != null)
+        {
+            foreach (var kvp in _snapshotStore)
+            {
+                var snap = kvp.Value;
+                if (snap.UserId == userId &&
+                    string.Equals(snap.SessionId, cleanSessionId, StringComparison.Ordinal) &&
+                    string.IsNullOrWhiteSpace(snap.DraftId))
+                {
                     _snapshotStore.TryRemove(kvp.Key, out _);
                 }
             }
         }
     }
 
-    public static bool IsDraftCancelled(string? draftId)
+    public static bool IsDraftCancelled(string? draftId, Guid? userId = null, string? sessionId = null, DateTime? nowUtc = null)
     {
-        if (string.IsNullOrWhiteSpace(draftId)) return false;
-        var cleanId = draftId.Trim();
-        if (_cancelledDraftIds.TryGetValue(cleanId, out var expiresAt))
+        if (string.IsNullOrWhiteSpace(draftId))
         {
-            if (DateTime.UtcNow > expiresAt)
-            {
-                _cancelledDraftIds.TryRemove(cleanId, out _);
-                return false;
-            }
-            return true;
+            return false;
         }
+
+        var effectiveNow = nowUtc ?? DateTime.UtcNow;
+        PurgeExpiredCancelledDrafts(effectiveNow);
+
+        var cleanDraftId = draftId.Trim();
+        var cleanSessionId = !string.IsNullOrWhiteSpace(sessionId) ? sessionId.Trim() : null;
+
+        var exactKey = new CancelledDraftScopeKey(userId, cleanSessionId, cleanDraftId);
+        if (_cancelledDraftScopes.TryGetValue(exactKey, out var expiresAt))
+        {
+            if (effectiveNow <= expiresAt)
+            {
+                return true;
+            }
+            _cancelledDraftScopes.TryRemove(exactKey, out _);
+        }
+
+        if (cleanSessionId != null)
+        {
+            var sessionlessKey = new CancelledDraftScopeKey(userId, null, cleanDraftId);
+            if (_cancelledDraftScopes.TryGetValue(sessionlessKey, out var sessionlessExpiresAt))
+            {
+                if (effectiveNow <= sessionlessExpiresAt)
+                {
+                    return true;
+                }
+                _cancelledDraftScopes.TryRemove(sessionlessKey, out _);
+            }
+        }
+
         return false;
     }
 
@@ -201,6 +249,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         string? currentDraftId = null,
         long? currentSpecialtyId = null)
     {
+        PurgeExpiredCancelledDrafts(nowUtc);
         snapshot = null;
         if (string.IsNullOrWhiteSpace(snapshotId))
         {
@@ -240,8 +289,9 @@ public class AiSpecialtyService : IAiSpecialtyService
 
         var cleanCurrentDraftId = !string.IsNullOrWhiteSpace(currentDraftId) ? currentDraftId.Trim() : null;
         var cleanSnapshotDraftId = !string.IsNullOrWhiteSpace(snapshot.DraftId) ? snapshot.DraftId.Trim() : null;
-        if ((cleanSnapshotDraftId != null && _cancelledDraftIds.ContainsKey(cleanSnapshotDraftId)) ||
-            (cleanCurrentDraftId != null && _cancelledDraftIds.ContainsKey(cleanCurrentDraftId)))
+        var effectiveSessionId = cleanCurrentSessionId ?? cleanSnapshotSessionId;
+        if ((cleanSnapshotDraftId != null && IsDraftCancelled(cleanSnapshotDraftId, currentUserId, cleanSnapshotSessionId, nowUtc)) ||
+            (cleanCurrentDraftId != null && IsDraftCancelled(cleanCurrentDraftId, currentUserId, effectiveSessionId, nowUtc)))
         {
             errorMessage = "Danh sách lựa chọn thuộc bản nháp đã hủy. Vui lòng chọn lại trên bản nháp mới.";
             return false;
@@ -298,7 +348,7 @@ public class AiSpecialtyService : IAiSpecialtyService
     public static void ClearSnapshotsForTesting()
     {
         _snapshotStore.Clear();
-        _cancelledDraftIds.Clear();
+        _cancelledDraftScopes.Clear();
     }
 
     public async Task<AiSuggestionResponseDto> GetSuggestionsAsync(AiSuggestionRequestDto request, CancellationToken cancellationToken = default)
@@ -512,7 +562,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         // 3.2 Cancel Draft: Clears active draft in session without touching database appointments
         if (resolvedIntent == AiChatIntentTypes.CancelDraft)
         {
-            InvalidateDraftSnapshotsForCancel(request.DraftId, request.SessionId, _currentUserService.UserId);
+            InvalidateDraftSnapshotsForCancel(request.DraftId, request.SessionId, _currentUserService.UserId, _dateTimeProvider.UtcNow);
             var cancelResponse = new AiChatResponseDto
             {
                 Message = "Đã hủy bản nháp đặt lịch hiện tại. Bạn có cần hỗ trợ gì khác không?",
@@ -763,7 +813,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         var activeSessionId = !string.IsNullOrWhiteSpace(request.SessionId)
             ? request.SessionId.Trim()
             : null;
-        var activeDraftId = !string.IsNullOrWhiteSpace(request.DraftId) && !IsDraftCancelled(request.DraftId)
+        var activeDraftId = !string.IsNullOrWhiteSpace(request.DraftId) && !IsDraftCancelled(request.DraftId, _currentUserService.UserId, activeSessionId, _dateTimeProvider.UtcNow)
             ? request.DraftId.Trim()
             : null;
 
@@ -1059,7 +1109,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         WithDraftVersionSync(response, nextDraftVersion);
 
         var activeSessionId = !string.IsNullOrWhiteSpace(request.SessionId) ? request.SessionId.Trim() : null;
-        var activeDraftId = !string.IsNullOrWhiteSpace(request.DraftId) && !IsDraftCancelled(request.DraftId) ? request.DraftId.Trim() : null;
+        var activeDraftId = !string.IsNullOrWhiteSpace(request.DraftId) && !IsDraftCancelled(request.DraftId, _currentUserService.UserId, activeSessionId, _dateTimeProvider.UtcNow) ? request.DraftId.Trim() : null;
         var resolvedSessionId = activeSessionId ?? $"sess_{Guid.NewGuid():N}";
         response.SessionId = resolvedSessionId;
         if (response.BookingDraft != null)

@@ -189,6 +189,144 @@ const loadStoredDraft = (accountKey: string | null): AiBookingDraft | null => {
     return null;
 };
 
+export interface PendingBookingAttemptRecord {
+    accountKey?: string;
+    turnIdentity: string;
+    attemptId?: string;
+    draftId?: string;
+    draftVersion?: number;
+    confirmationId?: string;
+    payloadFingerprint: string;
+    key: string;
+    status: "in_flight" | "uncertain" | "succeeded";
+}
+
+export const getPendingBookingStorageKey = (accountKey: string | null | undefined): string =>
+    `cliniccare_pending_booking_attempt_${accountKey ?? "anon"}`;
+
+export const getLegacyWidgetStorageKey = (accountKey: string | null | undefined): string =>
+    `cliniccare_pending_widget_attempt_${accountKey ?? "anon"}`;
+
+export const buildStandardBookingPayloadFingerprint = (
+    specialtyId: number | string,
+    doctorId: number | string,
+    slotDate: string,
+    slotId: number | string,
+    reason: string,
+    revisitRequestId?: number | string | null
+): string => `${revisitRequestId ?? "std"}_${specialtyId}_${doctorId}_${slotDate}_${slotId}_${reason.trim()}`;
+
+export function validatePendingBookingAttempt(
+    raw: unknown,
+    expectedAccountKey?: string | null
+): raw is PendingBookingAttemptRecord {
+    if (!raw || typeof raw !== "object") return false;
+    const r = raw as Record<string, unknown>;
+    if (typeof r.key !== "string" || r.key.trim().length === 0) return false;
+    if (typeof r.payloadFingerprint !== "string" || r.payloadFingerprint.trim().length === 0) return false;
+
+    const effectiveExpectedAccount = expectedAccountKey ?? "anon";
+    const recordAccountKey = typeof r.accountKey === "string" && r.accountKey.trim().length > 0
+        ? r.accountKey.trim()
+        : (typeof r.attemptId === "string" && r.attemptId.startsWith(`${effectiveExpectedAccount}_`)
+            ? effectiveExpectedAccount
+            : null);
+    if (!recordAccountKey || recordAccountKey !== effectiveExpectedAccount) return false;
+
+    const recordTurnIdentity = typeof r.turnIdentity === "string" && r.turnIdentity.trim().length > 0
+        ? r.turnIdentity.trim()
+        : (typeof r.attemptId === "string" && r.attemptId.trim().length > 0 ? r.attemptId.trim() : null);
+    if (!recordTurnIdentity) return false;
+
+    const status = r.status ?? "in_flight";
+    if (status !== "in_flight" && status !== "uncertain" && status !== "succeeded") return false;
+    if (r.draftId !== undefined && r.draftId !== null && (typeof r.draftId !== "string" || r.draftId.trim().length === 0)) {
+        return false;
+    }
+    if (r.draftVersion !== undefined && r.draftVersion !== null) {
+        if (typeof r.draftVersion !== "number" || !Number.isInteger(r.draftVersion) || r.draftVersion < 1) return false;
+    }
+    if (r.confirmationId !== undefined && r.confirmationId !== null && (typeof r.confirmationId !== "string" || r.confirmationId.trim().length === 0)) {
+        return false;
+    }
+
+    r.accountKey = recordAccountKey;
+    r.turnIdentity = recordTurnIdentity;
+    r.status = status;
+    return true;
+}
+
+export function readPersistedBookingAttempt(accountKey: string | null | undefined): PendingBookingAttemptRecord | null {
+    const effectiveAccount = accountKey ?? "anon";
+    const keysToCheck = [
+        getPendingBookingStorageKey(effectiveAccount),
+        getLegacyWidgetStorageKey(effectiveAccount)
+    ];
+
+    for (const storageKey of keysToCheck) {
+        try {
+            const raw = sessionStorage.getItem(storageKey);
+            if (!raw) continue;
+            const parsed: unknown = JSON.parse(raw);
+            if (!validatePendingBookingAttempt(parsed, effectiveAccount)) {
+                sessionStorage.removeItem(storageKey);
+                continue;
+            }
+            if (parsed.status === "succeeded") {
+                sessionStorage.removeItem(storageKey);
+                continue;
+            }
+            return parsed;
+        } catch {
+            try {
+                sessionStorage.removeItem(storageKey);
+            } catch {
+                // ignore storage error
+            }
+        }
+    }
+    return null;
+}
+
+export function writePersistedBookingAttempt(record: PendingBookingAttemptRecord): void {
+    const effectiveAccount = record.accountKey || "anon";
+    const serialized = JSON.stringify(record);
+    try {
+        sessionStorage.setItem(getPendingBookingStorageKey(effectiveAccount), serialized);
+        sessionStorage.setItem(getLegacyWidgetStorageKey(effectiveAccount), serialized);
+    } catch {
+        // ignore storage error
+    }
+}
+
+export function removePersistedBookingAttempt(accountKey: string | null | undefined, onlyIfKeyMatches?: string): void {
+    const effectiveAccount = accountKey ?? "anon";
+    const keysToCheck = [
+        getPendingBookingStorageKey(effectiveAccount),
+        getLegacyWidgetStorageKey(effectiveAccount)
+    ];
+    for (const storageKey of keysToCheck) {
+        try {
+            if (!onlyIfKeyMatches) {
+                sessionStorage.removeItem(storageKey);
+            } else {
+                const raw = sessionStorage.getItem(storageKey);
+                if (!raw) continue;
+                const parsed = JSON.parse(raw) as { key?: string };
+                if (!parsed || typeof parsed !== "object" || parsed.key === onlyIfKeyMatches) {
+                    sessionStorage.removeItem(storageKey);
+                }
+            }
+        } catch {
+            try {
+                sessionStorage.removeItem(storageKey);
+            } catch {
+                // ignore storage error
+            }
+        }
+    }
+}
+
 const AccountBoundChatProvider: React.FC<{
     accountKey: string | null;
     children: React.ReactNode;
@@ -205,14 +343,13 @@ const AccountBoundChatProvider: React.FC<{
         setActiveDraftState(previous => {
             const resolved = typeof update === "function" ? update(previous) : update;
             if (!resolved) {
-                try {
-                    sessionStorage.removeItem(`cliniccare_pending_booking_attempt_${accountKey}`);
-                } catch {
-                    // ignore storage error
-                }
+                removePersistedBookingAttempt(accountKey);
                 return null;
             }
             const nextDraftId = resolved.draftId || previous?.draftId || generateDraftIdentity();
+            if (previous?.draftId && nextDraftId !== previous.draftId) {
+                removePersistedBookingAttempt(accountKey);
+            }
             return {
                 ...resolved,
                 draftId: nextDraftId
@@ -240,7 +377,7 @@ const AccountBoundChatProvider: React.FC<{
                 sessionStorage.setItem(draftKey, JSON.stringify(activeDraft));
             } else {
                 sessionStorage.removeItem(draftKey);
-                sessionStorage.removeItem(`cliniccare_pending_booking_attempt_${accountKey}`);
+                removePersistedBookingAttempt(accountKey);
             }
         } catch (error) {
             console.error("Failed to save booking draft", error);

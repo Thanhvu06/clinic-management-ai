@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useChatContext } from "../contexts/ChatContext";
+import {
+    useChatContext,
+    buildStandardBookingPayloadFingerprint,
+    readPersistedBookingAttempt,
+    writePersistedBookingAttempt,
+    removePersistedBookingAttempt,
+    type PendingBookingAttemptRecord
+} from "../contexts/ChatContext";
 import { useAuth } from "../auth/AuthContext";
 import axiosClient from "../api/axiosClient";
 import type { ApiResponse } from "../types";
@@ -141,47 +148,85 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     const activeRequestControllerRef = useRef<AbortController | null>(null);
     const accountKey = user ? (user.userId || (user.id !== undefined ? String(user.id) : null)) : null;
     const accountKeyRef = useRef(accountKey);
+    const prevAccountKeyRef = useRef(accountKey);
     const activeDraftRef = useRef(activeDraft);
+    const prevDraftRef = useRef<AiBookingDraft | null>(activeDraft);
     const sessionIdRef = useRef<string>("");
-    const lastConfirmationAttemptRef = useRef<{ attemptId: string; payloadFingerprint: string; key: string; status?: string } | null>(null);
-    
-    // Initialize from sessionStorage on mount to survive remount
-    const widgetStorageKey = useMemo(
-        () => `cliniccare_pending_widget_attempt_${accountKey ?? "anon"}`,
-        [accountKey]
+    const lastConfirmationAttemptRef = useRef<PendingBookingAttemptRecord | null>(
+        readPersistedBookingAttempt(accountKey)
     );
-    useEffect(() => {
-        try {
-            const saved = sessionStorage.getItem(widgetStorageKey);
-            if (saved && !lastConfirmationAttemptRef.current) {
-                const parsed = JSON.parse(saved) as { attemptId: string; payloadFingerprint: string; key: string; status?: string };
-                if (parsed?.key && parsed?.attemptId) {
-                    lastConfirmationAttemptRef.current = parsed;
-                }
-            }
-        } catch {
-            // ignore storage error
-        }
-    }, [widgetStorageKey]);
     const isSubmittingBookingRef = useRef(false);
     const lastKnownGeminiStatusRef = useRef<"Unchecked" | "Healthy" | "Degraded">("Unchecked");
     const draftCancelledAtRef = useRef<number>(0);
     const contextSnapshotIdRef = useRef<string | undefined>(undefined);
 
     useEffect(() => {
+        const prevDraft = prevDraftRef.current;
+        prevDraftRef.current = activeDraft;
         activeDraftRef.current = activeDraft;
-        if (!activeDraft) {
+
+        if (prevDraft !== null && activeDraft === null) {
+            activeBookingSubmitIdRef.current += 1;
+            isSubmittingBookingRef.current = false;
+            setSubmittingBooking(false);
             lastConfirmationAttemptRef.current = null;
+            removePersistedBookingAttempt(accountKeyRef.current);
+            return;
+        }
+
+        if (prevDraft !== null && activeDraft !== null) {
+            const isDraftReplacedOrMutated =
+                (Boolean(prevDraft.draftId) && Boolean(activeDraft.draftId) && prevDraft.draftId !== activeDraft.draftId) ||
+                (prevDraft.specialtyId !== undefined && activeDraft.specialtyId !== prevDraft.specialtyId) ||
+                (prevDraft.doctorId !== undefined && activeDraft.doctorId !== prevDraft.doctorId) ||
+                (prevDraft.slotId !== undefined && activeDraft.slotId !== prevDraft.slotId) ||
+                (prevDraft.slotDate !== undefined && activeDraft.slotDate !== prevDraft.slotDate) ||
+                (prevDraft.startTime !== undefined && activeDraft.startTime !== prevDraft.startTime) ||
+                (Boolean(prevDraft.reason?.trim()) && (activeDraft.reason || "").trim() !== (prevDraft.reason || "").trim()) ||
+                (prevDraft.version !== undefined && activeDraft.version !== undefined && activeDraft.version !== prevDraft.version);
+
+            if (isDraftReplacedOrMutated) {
+                activeBookingSubmitIdRef.current += 1;
+                isSubmittingBookingRef.current = false;
+                setSubmittingBooking(false);
+                lastConfirmationAttemptRef.current = null;
+                removePersistedBookingAttempt(accountKeyRef.current);
+                return;
+            }
+        }
+
+        if (activeDraft && !lastConfirmationAttemptRef.current) {
+            const restored = readPersistedBookingAttempt(accountKeyRef.current);
+            if (restored && (!activeDraft.draftId || !restored.draftId || restored.draftId === activeDraft.draftId)) {
+                lastConfirmationAttemptRef.current = restored;
+            }
         }
     }, [activeDraft]);
 
     useEffect(() => {
+        const prevAccountKey = prevAccountKeyRef.current;
+        prevAccountKeyRef.current = accountKey;
         accountKeyRef.current = accountKey;
-        lastConfirmationAttemptRef.current = null;
-        contextSnapshotIdRef.current = undefined;
-        sessionIdRef.current = typeof crypto !== "undefined" && crypto.randomUUID
-            ? `sess_${crypto.randomUUID()}`
-            : `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+        if (prevAccountKey !== accountKey) {
+            activeBookingSubmitIdRef.current += 1;
+            isSubmittingBookingRef.current = false;
+            setSubmittingBooking(false);
+            contextSnapshotIdRef.current = undefined;
+            lastConfirmationAttemptRef.current = readPersistedBookingAttempt(accountKey);
+            sessionIdRef.current = typeof crypto !== "undefined" && crypto.randomUUID
+                ? `sess_${crypto.randomUUID()}`
+                : `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        } else {
+            if (!lastConfirmationAttemptRef.current) {
+                lastConfirmationAttemptRef.current = readPersistedBookingAttempt(accountKey);
+            }
+            if (!sessionIdRef.current) {
+                sessionIdRef.current = typeof crypto !== "undefined" && crypto.randomUUID
+                    ? `sess_${crypto.randomUUID()}`
+                    : `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            }
+        }
         return () => {
             activeRequestControllerRef.current?.abort();
         };
@@ -845,9 +890,40 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 isSubmittingBookingRef.current = true;
                 setSubmittingBooking(true);
                 
-                const currentAttemptId = `${bookingAccountKey ?? "anon"}_${bookingDraftIdAtStart ?? "draft"}_${actionConfirmationId || `${action.payload.slotId}_v${activeDraft.version}`}`;
-                const payloadFingerprint = `${action.payload.specialtyId}_${action.payload.doctorId}_${action.payload.slotId}_${action.payload.slotDate}_${action.payload.startTime}_${actionReason}`;
-                let idempotencyKey: string;
+                const effectiveAccountKey = bookingAccountKey ?? "anon";
+                const currentAttemptId = `${effectiveAccountKey}_${bookingDraftIdAtStart ?? "draft"}_${actionConfirmationId || `${action.payload.slotId}_v${activeDraft.version}`}`;
+                const payloadFingerprint = buildStandardBookingPayloadFingerprint(
+                    action.payload.specialtyId,
+                    action.payload.doctorId,
+                    action.payload.slotDate,
+                    action.payload.slotId,
+                    actionReason
+                );
+                const legacyWidgetFingerprint = `${action.payload.specialtyId}_${action.payload.doctorId}_${action.payload.slotId}_${action.payload.slotDate}_${action.payload.startTime}_${actionReason}`;
+
+                const doesCandidateMatchTurn = (candidate: PendingBookingAttemptRecord | null): candidate is PendingBookingAttemptRecord => {
+                    if (!candidate) return false;
+                    if (candidate.accountKey !== effectiveAccountKey) return false;
+                    if (candidate.status === "succeeded") return false;
+                    if (candidate.payloadFingerprint !== payloadFingerprint && candidate.payloadFingerprint !== legacyWidgetFingerprint) {
+                        return false;
+                    }
+                    if (bookingDraftIdAtStart && candidate.draftId && candidate.draftId !== bookingDraftIdAtStart) {
+                        return false;
+                    }
+                    if (activeDraft.version !== undefined && candidate.draftVersion !== undefined && candidate.draftVersion !== activeDraft.version) {
+                        return false;
+                    }
+                    if (actionConfirmationId && candidate.confirmationId && candidate.confirmationId !== actionConfirmationId) {
+                        return false;
+                    }
+                    if (!candidate.draftId && candidate.attemptId && candidate.attemptId !== currentAttemptId) {
+                        return false;
+                    }
+                    return true;
+                };
+
+                let idempotencyKey = "";
 
                 try {
                     const bookPayload: CreateAppointmentPayload = {
@@ -856,27 +932,35 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         appointmentSlotId: action.payload.slotId,
                         reason: actionReason
                     };
-                    if (
-                        lastConfirmationAttemptRef.current &&
-                        lastConfirmationAttemptRef.current.attemptId === currentAttemptId &&
-                        lastConfirmationAttemptRef.current.payloadFingerprint === payloadFingerprint
-                    ) {
-                        idempotencyKey = lastConfirmationAttemptRef.current.key;
+                    const inMemoryCandidate = lastConfirmationAttemptRef.current;
+                    const persistedCandidate = !doesCandidateMatchTurn(inMemoryCandidate)
+                        ? readPersistedBookingAttempt(effectiveAccountKey)
+                        : null;
+
+                    if (doesCandidateMatchTurn(inMemoryCandidate)) {
+                        idempotencyKey = inMemoryCandidate.key;
+                    } else if (doesCandidateMatchTurn(persistedCandidate)) {
+                        idempotencyKey = persistedCandidate.key;
+                        lastConfirmationAttemptRef.current = persistedCandidate;
                     } else {
                         idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID
                             ? crypto.randomUUID()
                             : `chat_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                        lastConfirmationAttemptRef.current = {
-                            attemptId: currentAttemptId,
-                            payloadFingerprint,
-                            key: idempotencyKey
-                        };
-                        try {
-                            sessionStorage.setItem(widgetStorageKey, JSON.stringify(lastConfirmationAttemptRef.current));
-                        } catch {
-                            // ignore storage error
-                        }
                     }
+
+                    const attemptRecord: PendingBookingAttemptRecord = {
+                        accountKey: effectiveAccountKey,
+                        turnIdentity: currentAttemptId,
+                        attemptId: currentAttemptId,
+                        draftId: bookingDraftIdAtStart,
+                        draftVersion: activeDraft.version,
+                        confirmationId: actionConfirmationId,
+                        payloadFingerprint,
+                        key: idempotencyKey,
+                        status: "in_flight"
+                    };
+                    lastConfirmationAttemptRef.current = attemptRecord;
+                    writePersistedBookingAttempt(attemptRecord);
 
                     const bookRes = await axiosClient.post<CreateAppointmentPayload, ApiResponse<AppointmentEntityDto>>(
                         "/appointments",
@@ -891,12 +975,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     if (bookRes.success && bookRes.data) {
                         if (lastConfirmationAttemptRef.current?.key === idempotencyKey) {
                             lastConfirmationAttemptRef.current = null;
-                            try {
-                                sessionStorage.removeItem(widgetStorageKey);
-                            } catch {
-                                // ignore storage error
-                            }
                         }
+                        removePersistedBookingAttempt(effectiveAccountKey, idempotencyKey);
                         if (!isBookingAttemptStillCurrent()) {
                             return;
                         }
@@ -928,16 +1008,36 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     if (!isBookingAttemptStillCurrent()) {
                         return;
                     }
-                    const apiErr = err as { response?: { data?: { errorCode?: string; message?: string } }; errorCode?: string; message?: string };
+                    const apiErr = err as {
+                        response?: { status?: number; data?: { errorCode?: string; message?: string } };
+                        errorCode?: string;
+                        message?: string;
+                    };
                     const errorCode = apiErr?.response?.data?.errorCode || apiErr?.errorCode;
+                    const status = apiErr?.response?.status;
+                    const isDeterministicRejection =
+                        errorCode === "SLOT_ALREADY_BOOKED" ||
+                        errorCode === "PATIENT_TIME_CONFLICT" ||
+                        errorCode === "DOCTOR_NOT_AVAILABLE" ||
+                        status === 400 ||
+                        status === 409 ||
+                        status === 422;
+
+                    if (isDeterministicRejection) {
+                        if (lastConfirmationAttemptRef.current?.key === idempotencyKey) {
+                            lastConfirmationAttemptRef.current = null;
+                        }
+                        removePersistedBookingAttempt(effectiveAccountKey, idempotencyKey);
+                    } else if (lastConfirmationAttemptRef.current?.key === idempotencyKey) {
+                        const uncertainRecord: PendingBookingAttemptRecord = {
+                            ...lastConfirmationAttemptRef.current,
+                            status: "uncertain"
+                        };
+                        lastConfirmationAttemptRef.current = uncertainRecord;
+                        writePersistedBookingAttempt(uncertainRecord);
+                    }
 
                     if (errorCode === "SLOT_ALREADY_BOOKED") {
-                        lastConfirmationAttemptRef.current = null;
-                        try {
-                            sessionStorage.removeItem(widgetStorageKey);
-                        } catch {
-                            // ignore storage error
-                        }
                         const conflictNotice: ChatMessage = {
                             role: "model",
                             content: "⚠️ **Khung giờ này vừa có bệnh nhân khác đặt trước.** Khung giờ đã được cập nhật, thông tin triệu chứng của bạn vẫn được lưu giữ. Vui lòng chọn khung giờ khác bên dưới:",
@@ -957,18 +1057,6 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                             conflictNotice
                         );
                     } else {
-                        // Network/unknown error: preserve key as uncertain for retry
-                        if (lastConfirmationAttemptRef.current?.payloadFingerprint === payloadFingerprint) {
-                            lastConfirmationAttemptRef.current = {
-                                ...lastConfirmationAttemptRef.current,
-                                status: "uncertain"
-                            };
-                            try {
-                                sessionStorage.setItem(widgetStorageKey, JSON.stringify(lastConfirmationAttemptRef.current));
-                            } catch {
-                                // ignore storage error
-                            }
-                        }
                         const errorNotice = apiErr?.response?.data?.message || apiErr?.message || "Đặt lịch không thành công. Vui lòng thử lại.";
                         setMessages(prev => [...prev, {
                             role: "model",

@@ -3200,49 +3200,316 @@ public class AiActionAssistantTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task ScenarioAA_a_UserBCannotRevokeUserASnapshot()
+    public async Task ScenarioAA_B1_UserBCannotRevokeUserASnapshot_EvenWithSameDraftIdAndValidSnapshot()
     {
         AiSpecialtyService.ClearSnapshotsForTesting();
-        var snapshotId = "snap_user_a";
-        var draftId = "draft_user_a";
-        AiSpecialtyService.StoreSnapshotForTesting(new AiSpecialtyService.SelectionSnapshot
+        var workingDate = GetFutureWorkingDate(4);
+        await CreateAvailableSlotAsync(DoctorEntityId, workingDate, new TimeOnly(8, 0, 0), new TimeOnly(8, 30, 0));
+        await CreateAvailableSlotAsync(Doctor2EntityId, workingDate, new TimeOnly(9, 0, 0), new TimeOnly(9, 30, 0));
+
+        const string sharedSessionId = "sess_shared_b1";
+        const string sharedDraftId = "draft_shared_collision_b1";
+
+        // 1. User A (pat1) creates a valid snapshot via /api/v1/ai/chat with sharedDraftId
+        await AuthenticateAsync("pat1@test.com");
+        var reqCreateA = new AiChatRequestDto
         {
-            SnapshotId = snapshotId,
-            UserId = Patient1Id,
-            DraftId = draftId,
-            SessionId = "sess_1",
-            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15)
-        });
+            Message = "Tìm lịch khám sớm nhất",
+            Intent = AiChatIntentTypes.FindEarliestAvailableSlot,
+            SessionId = sharedSessionId,
+            DraftId = sharedDraftId,
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau ngực âm ỉ kéo dài nhiều ngày"
+        };
+        var resCreateA = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", reqCreateA))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(resCreateA?.Data?.ContextSnapshotId);
+        var snapA = resCreateA!.Data!.ContextSnapshotId!;
+        Assert.Equal(sharedDraftId, resCreateA.Data.DraftId);
 
-        AiSpecialtyService.InvalidateDraftSnapshotsForCancel(draftId, "sess_1", Patient2Id);
+        // 2. User B (pat2) creates their OWN valid snapshot via /api/v1/ai/chat using the EXACT SAME DraftId and SessionId
+        await AuthenticateAsync("pat2@test.com");
+        var reqCreateB = new AiChatRequestDto
+        {
+            Message = "Tìm lịch khám sớm nhất",
+            Intent = AiChatIntentTypes.FindEarliestAvailableSlot,
+            SessionId = sharedSessionId,
+            DraftId = sharedDraftId,
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Khó thở khi leo cầu thang nhiều lần"
+        };
+        var resCreateB = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", reqCreateB))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(resCreateB?.Data?.ContextSnapshotId);
+        var snapB = resCreateB!.Data!.ContextSnapshotId!;
+        Assert.Equal(sharedDraftId, resCreateB.Data.DraftId);
 
-        var result = AiSpecialtyService.ValidateSnapshot(
-            snapshotId,
-            Patient1Id,
-            null,
-            null,
-            null,
-            DateTime.UtcNow,
-            out var snapshot,
-            out var error,
-            currentSessionId: "sess_1",
-            currentDraftId: draftId);
-            
-        Assert.True(result, $"Snapshot should still be valid. Error: {error}");
-        Assert.NotNull(snapshot);
+        // 3. User B cancels their own draft via /api/v1/ai/chat
+        var cancelBReq = new AiChatRequestDto
+        {
+            Message = "Hủy đặt lịch",
+            Intent = AiChatIntentTypes.CancelDraft,
+            SessionId = sharedSessionId,
+            DraftId = sharedDraftId,
+            DraftVersion = 1
+        };
+        var cancelBRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", cancelBReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.Equal("DraftCancelled", cancelBRes?.Data?.DialogueOutcome);
+
+        // 4. User B trying to use snapB after cancelling is REJECTED
+        var selectBReq = new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = sharedSessionId,
+            DraftId = sharedDraftId,
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Khó thở khi leo cầu thang nhiều lần",
+            ContextSnapshotId = snapB
+        };
+        var selectBRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", selectBReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(selectBRes?.Data);
+        Assert.Equal("ClarificationRequired", selectBRes!.Data!.DialogueOutcome);
+        Assert.Null(selectBRes.Data.BookingDraft?.DoctorId);
+
+        // 5. User A using snapA with the same sharedDraftId STILL SUCCEEDS!
+        await AuthenticateAsync("pat1@test.com");
+        var selectAReq = new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = sharedSessionId,
+            DraftId = sharedDraftId,
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau ngực âm ỉ kéo dài nhiều ngày",
+            ContextSnapshotId = snapA
+        };
+        var selectARes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", selectAReq))
+            .Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(selectARes?.Data?.BookingDraft);
+        Assert.True(selectARes!.Data!.BookingDraft!.DoctorId > 0);
+        Assert.Equal(sharedDraftId, selectARes.Data.DraftId);
     }
 
     [Fact]
-    public async Task ScenarioAA_b_CancelledDraftTTLExpires()
+    public async Task ScenarioAA_B2_B3_SameUserCancelIsolation_SameSessionDifferentDrafts_AndDifferentSessions()
     {
         AiSpecialtyService.ClearSnapshotsForTesting();
-        AiSpecialtyService.InvalidateDraftSnapshotsForCancel("test_draft", null, null);
-        Assert.True(AiSpecialtyService.IsDraftCancelled("test_draft"));
+        var workingDate = GetFutureWorkingDate(5);
+        await CreateAvailableSlotAsync(DoctorEntityId, workingDate, new TimeOnly(10, 0, 0), new TimeOnly(10, 30, 0));
 
-        var dictField = typeof(AiSpecialtyService).GetField("_cancelledDraftIds", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        var dict = (System.Collections.Concurrent.ConcurrentDictionary<string, DateTime>)dictField!.GetValue(null)!;
-        dict["test_draft"] = DateTime.UtcNow.AddHours(-2);
+        await AuthenticateAsync("pat1@test.com");
 
-        Assert.False(AiSpecialtyService.IsDraftCancelled("test_draft"));
+        // --- B2: Same user, SAME session, Draft A vs Draft B (late cancel of Draft A after Draft B exists) ---
+        const string sameSession = "sess_same_user_b2";
+        var resDraftA = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tìm lịch khám sớm nhất",
+            Intent = AiChatIntentTypes.FindEarliestAvailableSlot,
+            SessionId = sameSession,
+            DraftId = "draft_A_in_sess",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Triệu chứng của bản nháp A"
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        var snapDraftA = resDraftA!.Data!.ContextSnapshotId!;
+
+        var resDraftB = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tìm lịch khám sớm nhất",
+            Intent = AiChatIntentTypes.FindEarliestAvailableSlot,
+            SessionId = sameSession,
+            DraftId = "draft_B_in_sess",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Triệu chứng của bản nháp B"
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        var snapDraftB = resDraftB!.Data!.ContextSnapshotId!;
+
+        // Cancel Draft A in sameSession (even after Draft B was created)
+        var cancelARes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Hủy bản nháp A",
+            Intent = AiChatIntentTypes.CancelDraft,
+            SessionId = sameSession,
+            DraftId = "draft_A_in_sess",
+            DraftVersion = 1
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.Equal("DraftCancelled", cancelARes?.Data?.DialogueOutcome);
+
+        // Draft A snapshot is now rejected
+        var useARes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = sameSession,
+            DraftId = "draft_A_in_sess",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Triệu chứng của bản nháp A",
+            ContextSnapshotId = snapDraftA
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.Equal("ClarificationRequired", useARes?.Data?.DialogueOutcome);
+        Assert.Null(useARes?.Data?.BookingDraft?.DoctorId);
+
+        // Draft B snapshot in the SAME session remains valid and usable!
+        var useBRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = sameSession,
+            DraftId = "draft_B_in_sess",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Triệu chứng của bản nháp B",
+            ContextSnapshotId = snapDraftB
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(useBRes?.Data?.BookingDraft);
+        Assert.True(useBRes!.Data!.BookingDraft!.DoctorId > 0);
+        Assert.Equal("draft_B_in_sess", useBRes.Data.DraftId);
+
+        // --- B3: Same user, DIFFERENT sessions (sess_tab_1 vs sess_tab_2), even with same DraftId ---
+        var resTab1 = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tìm lịch khám sớm nhất",
+            Intent = AiChatIntentTypes.FindEarliestAvailableSlot,
+            SessionId = "sess_tab_1_b3",
+            DraftId = "draft_shared_tabs",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Khám ở tab 1"
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        var snapTab1 = resTab1!.Data!.ContextSnapshotId!;
+
+        var resTab2 = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tìm lịch khám sớm nhất",
+            Intent = AiChatIntentTypes.FindEarliestAvailableSlot,
+            SessionId = "sess_tab_2_b3",
+            DraftId = "draft_shared_tabs",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Khám ở tab 2"
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        var snapTab2 = resTab2!.Data!.ContextSnapshotId!;
+
+        // Cancel in sess_tab_1_b3
+        await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Hủy đặt lịch",
+            Intent = AiChatIntentTypes.CancelDraft,
+            SessionId = "sess_tab_1_b3",
+            DraftId = "draft_shared_tabs",
+            DraftVersion = 1
+        });
+
+        // Tab 1 is rejected
+        var useTab1Res = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = "sess_tab_1_b3",
+            DraftId = "draft_shared_tabs",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Khám ở tab 1",
+            ContextSnapshotId = snapTab1
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.Equal("ClarificationRequired", useTab1Res?.Data?.DialogueOutcome);
+
+        // Tab 2 still works!
+        var useTab2Res = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = "sess_tab_2_b3",
+            DraftId = "draft_shared_tabs",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Khám ở tab 2",
+            ContextSnapshotId = snapTab2
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(useTab2Res?.Data?.BookingDraft);
+        Assert.True(useTab2Res!.Data!.BookingDraft!.DoctorId > 0);
+    }
+
+    [Fact]
+    public async Task ScenarioAA_B4_B5_FailClosedOnStoreEviction_AndCancelledDraftTTLExpirationWithoutResurrection()
+    {
+        AiSpecialtyService.ClearSnapshotsForTesting();
+        var workingDate = GetFutureWorkingDate(6);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, workingDate, new TimeOnly(15, 0, 0), new TimeOnly(15, 30, 0));
+
+        await AuthenticateAsync("pat1@test.com");
+
+        // Issue a real snapshot via API
+        var resIssue = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tìm lịch khám sớm nhất",
+            Intent = AiChatIntentTypes.FindEarliestAvailableSlot,
+            SessionId = "sess_b4_b5",
+            DraftId = "draft_b4_b5",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau đầu chóng mặt kéo dài"
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        var issuedSnapshotId = resIssue!.Data!.ContextSnapshotId!;
+
+        // --- B4: Simulate store loss (e.g. backend restart / multi-instance miss) even with DisplayedDoctorIds/DisplayedSlotIds sent by client ---
+        AiSpecialtyService.ClearSnapshotsForTesting();
+
+        var storeLostRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tôi chọn bác sĩ đầu tiên",
+            SessionId = "sess_b4_b5",
+            DraftId = "draft_b4_b5",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau đầu chóng mặt kéo dài",
+            ContextSnapshotId = issuedSnapshotId,
+            DisplayedDoctorIds = new List<long> { DoctorEntityId, Doctor2EntityId },
+            DisplayedSlotIds = new List<long> { slot.Id }
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.Equal("ClarificationRequired", storeLostRes?.Data?.DialogueOutcome);
+        Assert.Null(storeLostRes?.Data?.BookingDraft?.DoctorId);
+
+        // --- B5: Cancelled draft TTL expires cleanly (tested via controllable clock parameter, no reflection) AND old snapshot never resurrects ---
+        var t0 = DateTime.UtcNow;
+        var resIssue2 = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tìm lịch khám sớm nhất",
+            Intent = AiChatIntentTypes.FindEarliestAvailableSlot,
+            SessionId = "sess_ttl_b5",
+            DraftId = "draft_ttl_b5",
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Đau đầu chóng mặt kéo dài"
+        })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        var snapTtl = resIssue2!.Data!.ContextSnapshotId!;
+
+        // Cancel draft_ttl_b5 at t0
+        AiSpecialtyService.InvalidateDraftSnapshotsForCancel("draft_ttl_b5", "sess_ttl_b5", Patient1Id, t0);
+        Assert.True(AiSpecialtyService.IsDraftCancelled("draft_ttl_b5", Patient1Id, "sess_ttl_b5", t0.AddMinutes(30)));
+        Assert.False(AiSpecialtyService.IsDraftCancelled("draft_ttl_b5", Patient2Id, "sess_ttl_b5", t0.AddMinutes(30)));
+
+        // Advance clock past 1-hour TTL -> cancelled entry is purged
+        var afterTtl = t0.AddHours(2);
+        Assert.False(AiSpecialtyService.IsDraftCancelled("draft_ttl_b5", Patient1Id, "sess_ttl_b5", afterTtl));
+
+        // Even after cancel TTL expires, the old snapshot snapTtl CANNOT come back to life (it was evicted from store on cancel)
+        var validAfterTtl = AiSpecialtyService.ValidateSnapshot(
+            snapTtl,
+            Patient1Id,
+            1,
+            null,
+            null,
+            afterTtl,
+            out var resurrectedSnap,
+            out var errorMsg,
+            currentSessionId: "sess_ttl_b5",
+            currentDraftId: "draft_ttl_b5");
+        Assert.False(validAfterTtl);
+        Assert.Null(resurrectedSnap);
+        Assert.NotNull(errorMsg);
     }
 }

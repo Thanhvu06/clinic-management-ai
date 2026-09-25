@@ -7,7 +7,13 @@ import {
     CheckCircle2, User, Clock, Stethoscope, FileText, 
     ArrowRight, ArrowLeft, Calendar, ShieldCheck, Sparkles, AlertCircle 
 } from "lucide-react";
-import { useChatContext } from "../../contexts/ChatContext";
+import {
+    useChatContext,
+    readPersistedBookingAttempt,
+    writePersistedBookingAttempt,
+    removePersistedBookingAttempt,
+    type PendingBookingAttemptRecord
+} from "../../contexts/ChatContext";
 import { useDialog } from "../../contexts/DialogContext";
 import { useAuth } from "../../auth/AuthContext";
 import { Breadcrumb } from "../../components/Breadcrumb";
@@ -107,14 +113,7 @@ export const BookAppointment: React.FC = () => {
     const isMountedRef = useRef(true);
     const activeSubmitIdRef = useRef(0);
     const pageTurnEpochRef = useRef(1);
-    const lastConfirmationAttemptRef = useRef<{
-        accountKey: string;
-        turnIdentity: string;
-        draftId?: string;
-        payloadFingerprint: string;
-        key: string;
-        status: "in_flight" | "uncertain" | "succeeded";
-    } | null>(null);
+    const lastConfirmationAttemptRef = useRef<PendingBookingAttemptRecord | null>(null);
     const [bookingError, setBookingError] = useState<string | null>(null);
     const [successBooking, setSuccessBooking] = useState<BookingSuccessData | null>(null);
 
@@ -162,11 +161,7 @@ export const BookAppointment: React.FC = () => {
             setSubmitting(false);
             lastConfirmationAttemptRef.current = null;
             if (currentAccountKeyRef.current) {
-                try {
-                    sessionStorage.removeItem(`cliniccare_pending_booking_attempt_${currentAccountKeyRef.current}`);
-                } catch {
-                    // ignore storage error
-                }
+                removePersistedBookingAttempt(currentAccountKeyRef.current);
             }
             setPageSpecialtyId("");
             setPageDoctorId("");
@@ -180,11 +175,7 @@ export const BookAppointment: React.FC = () => {
             setSubmitting(false);
             lastConfirmationAttemptRef.current = null;
             if (currentAccountKeyRef.current) {
-                try {
-                    sessionStorage.removeItem(`cliniccare_pending_booking_attempt_${currentAccountKeyRef.current}`);
-                } catch {
-                    // ignore storage error
-                }
+                removePersistedBookingAttempt(currentAccountKeyRef.current);
             }
         }
     }, [activeDraft]);
@@ -515,10 +506,10 @@ export const BookAppointment: React.FC = () => {
         const submitId = ++activeSubmitIdRef.current;
         const requestAccountKey = currentAccountKeyRef.current ?? "anon";
         const requestDraftId = activeDraftRef.current?.draftId;
+        const requestDraftVersion = activeDraftRef.current?.version;
         const requestTurnEpoch = pageTurnEpochRef.current;
         const requestTurnIdentity = `${requestAccountKey}_${requestDraftId ?? `epoch_${requestTurnEpoch}`}`;
         const payloadFingerprint = `${revisitRequestId ?? "std"}_${specialtyId}_${doctorId}_${slotDate}_${slotId}_${normalizedReason}`;
-        const storageKey = `cliniccare_pending_booking_attempt_${requestAccountKey}`;
 
         const isCurrentContext = () =>
             isMountedRef.current &&
@@ -532,8 +523,9 @@ export const BookAppointment: React.FC = () => {
         setSubmitting(true);
         setBookingError(null);
 
+        let idempotencyKey: string | undefined;
+
         try {
-            let idempotencyKey: string | undefined;
 
             // 1. Check in-memory ref for active/uncertain attempt in the exact same turn and payload
             if (
@@ -546,34 +538,29 @@ export const BookAppointment: React.FC = () => {
                 idempotencyKey = lastConfirmationAttemptRef.current.key;
             }
 
-            // 2. Reconcile from sessionStorage if remounted/reloaded while an earlier attempt in the same draft was uncertain/in-flight
+            // 2. Reconcile from sessionStorage if remounted/reloaded or started in widget while an earlier attempt in the same draft was uncertain/in-flight
             if (!idempotencyKey) {
-                try {
-                    const persistedRaw = sessionStorage.getItem(storageKey);
-                    if (persistedRaw) {
-                        const persisted = JSON.parse(persistedRaw) as {
-                            accountKey?: string;
-                            draftId?: string;
-                            payloadFingerprint?: string;
-                            key?: string;
-                            status?: string;
-                        };
-                        const matchesDraft = requestDraftId
-                            ? persisted.draftId === requestDraftId
-                            : !persisted.draftId;
-                        if (
-                            persisted.accountKey === requestAccountKey &&
-                            matchesDraft &&
-                            persisted.payloadFingerprint === payloadFingerprint &&
-                            persisted.status !== "succeeded" &&
-                            typeof persisted.key === "string" &&
-                            persisted.key.length > 0
-                        ) {
-                            idempotencyKey = persisted.key;
-                        }
+                const persisted = readPersistedBookingAttempt(requestAccountKey);
+                if (persisted) {
+                    const matchesDraft = requestDraftId
+                        ? persisted.draftId === requestDraftId
+                        : !persisted.draftId;
+                    const matchesVersion = (requestDraftVersion !== undefined && persisted.draftVersion !== undefined)
+                        ? persisted.draftVersion === requestDraftVersion
+                        : true;
+                    const matchesConfirmation = (activeDraft?.confirmationId && persisted.confirmationId)
+                        ? persisted.confirmationId === activeDraft.confirmationId
+                        : true;
+                    if (
+                        persisted.accountKey === requestAccountKey &&
+                        matchesDraft &&
+                        matchesVersion &&
+                        matchesConfirmation &&
+                        persisted.payloadFingerprint === payloadFingerprint &&
+                        persisted.status !== "succeeded"
+                    ) {
+                        idempotencyKey = persisted.key;
                     }
-                } catch {
-                    // ignore malformed storage
                 }
             }
 
@@ -583,20 +570,18 @@ export const BookAppointment: React.FC = () => {
                     : `form_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
             }
 
-            const attemptRecord = {
+            const attemptRecord: PendingBookingAttemptRecord = {
                 accountKey: requestAccountKey,
                 turnIdentity: requestTurnIdentity,
                 draftId: requestDraftId,
+                draftVersion: requestDraftVersion,
+                confirmationId: activeDraft?.confirmationId,
                 payloadFingerprint,
                 key: idempotencyKey,
-                status: "in_flight" as const
+                status: "in_flight"
             };
             lastConfirmationAttemptRef.current = attemptRecord;
-            try {
-                sessionStorage.setItem(storageKey, JSON.stringify(attemptRecord));
-            } catch {
-                // ignore storage error
-            }
+            writePersistedBookingAttempt(attemptRecord);
 
             const res = revisitRequestId
                 ? await axiosClient.post<unknown, ApiResponse<AppointmentResponsePayload>>(
@@ -627,21 +612,11 @@ export const BookAppointment: React.FC = () => {
                 );
 
             if (res.success && res.data) {
-                // Clear attempt only if it still matches this request
+                // Clear attempt only if it still matches this request's idempotencyKey
                 if (lastConfirmationAttemptRef.current?.key === idempotencyKey) {
                     lastConfirmationAttemptRef.current = null;
                 }
-                try {
-                    const currentSaved = sessionStorage.getItem(storageKey);
-                    if (currentSaved) {
-                        const parsed = JSON.parse(currentSaved) as { key?: string };
-                        if (parsed.key === idempotencyKey) {
-                            sessionStorage.removeItem(storageKey);
-                        }
-                    }
-                } catch {
-                    // ignore storage error
-                }
+                removePersistedBookingAttempt(requestAccountKey, idempotencyKey);
 
                 // If draft/session/user changed while Request A was in-flight, NEVER overwrite Draft B!
                 if (!isCurrentContext()) {
@@ -698,33 +673,18 @@ export const BookAppointment: React.FC = () => {
             }
 
             if (isDeterministicRejection) {
-                if (lastConfirmationAttemptRef.current?.payloadFingerprint === payloadFingerprint) {
+                if (lastConfirmationAttemptRef.current?.key === idempotencyKey) {
                     lastConfirmationAttemptRef.current = null;
                 }
-                try {
-                    const currentSaved = sessionStorage.getItem(storageKey);
-                    if (currentSaved) {
-                        const parsed = JSON.parse(currentSaved) as { payloadFingerprint?: string };
-                        if (parsed.payloadFingerprint === payloadFingerprint) {
-                            sessionStorage.removeItem(storageKey);
-                        }
-                    }
-                } catch {
-                    // ignore storage error
-                }
-            } else {
+                removePersistedBookingAttempt(requestAccountKey, idempotencyKey);
+            } else if (lastConfirmationAttemptRef.current && lastConfirmationAttemptRef.current.key === idempotencyKey) {
                 // Network error / timeout: outcome on server is uncertain, preserve idempotency key for safe retry
-                if (lastConfirmationAttemptRef.current?.payloadFingerprint === payloadFingerprint) {
-                    lastConfirmationAttemptRef.current = {
-                        ...lastConfirmationAttemptRef.current,
-                        status: "uncertain"
-                    };
-                    try {
-                        sessionStorage.setItem(storageKey, JSON.stringify(lastConfirmationAttemptRef.current));
-                    } catch {
-                        // ignore storage error
-                    }
-                }
+                const uncertainRecord: PendingBookingAttemptRecord = {
+                    ...lastConfirmationAttemptRef.current,
+                    status: "uncertain"
+                };
+                lastConfirmationAttemptRef.current = uncertainRecord;
+                writePersistedBookingAttempt(uncertainRecord);
             }
 
             let msg = apiErr?.response?.data?.message || apiErr?.message || "Có lỗi xảy ra khi đặt lịch.";
