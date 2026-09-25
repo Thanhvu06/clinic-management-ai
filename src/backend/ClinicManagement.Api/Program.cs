@@ -122,6 +122,8 @@ builder.Services.Configure<ClinicManagement.Infrastructure.AI.AiClassifierOption
 builder.Services.AddSingleton<ClinicManagement.Application.AI.Interfaces.IAiSpecialtyClassifier, ClinicManagement.Infrastructure.AI.MlNetSpecialtyClassifier>();
 builder.Services.AddSingleton<ClinicManagement.Application.AI.Interfaces.IVietnameseIntentClassifier, ClinicManagement.Infrastructure.AI.VietnameseIntentClassifier>();
 builder.Services.AddHttpClient<ClinicManagement.Application.AI.Interfaces.IAiSpecialtySuggestionProvider, ClinicManagement.Infrastructure.AI.GeminiAiProvider>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSessionSnapshotStore, ClinicManagement.Infrastructure.AI.Persistence.EfAiSessionSnapshotStore>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiAuditService, ClinicManagement.Infrastructure.AI.Persistence.EfAiAuditService>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSpecialtyService, ClinicManagement.Infrastructure.AI.AiSpecialtyService>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IClinicAiContextService, ClinicManagement.Infrastructure.AI.ClinicAiContextService>();
 builder.Services.AddScoped<ClinicManagement.Application.HealthPackages.Interfaces.IHealthPackageService, ClinicManagement.Infrastructure.HealthPackages.HealthPackageService>();

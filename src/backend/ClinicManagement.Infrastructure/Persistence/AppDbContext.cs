@@ -28,6 +28,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<RevisitRequest> RevisitRequests { get; set; } = null!;
     public DbSet<AiSuggestionLog> AiSuggestionLogs { get; set; } = null!;
     public DbSet<SystemAuditLog> SystemAuditLogs { get; set; } = null!;
+    public DbSet<AiSelectionSnapshot> AiSelectionSnapshots { get; set; } = null!;
+    public DbSet<AiCancelledDraftScope> AiCancelledDraftScopes { get; set; } = null!;
+    public DbSet<AiSession> AiSessions { get; set; } = null!;
+    public DbSet<AiAuditLog> AiAuditLogs { get; set; } = null!;
     
     // Pharmacy
     public DbSet<Medicine> Medicines { get; set; } = null!;

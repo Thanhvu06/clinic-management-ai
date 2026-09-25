@@ -20,6 +20,12 @@ public class CreateAppointmentRequest
 
     [MaxLength(128)]
     public string? IdempotencyKey { get; set; }
+
+    /// <summary>
+    /// Snapshot ID from AI conversation, used to validate the booking context.
+    /// </summary>
+    [MaxLength(100)]
+    public string? ContextSnapshotId { get; set; }
 }
 
 public class AppointmentDto

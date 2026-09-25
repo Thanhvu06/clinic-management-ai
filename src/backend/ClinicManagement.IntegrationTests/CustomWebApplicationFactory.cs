@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.IO;
 using System.Linq;
 using ClinicManagement.Application.AI.Interfaces;
+using ClinicManagement.Infrastructure.AI;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -17,6 +18,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     public Mock<IAiSpecialtySuggestionProvider> MockAiProvider { get; } = new();
     private readonly string _dbFilePath = Path.Combine(Path.GetTempPath(), $"clinic_test_{Guid.NewGuid():N}.db");
+    private IServiceProvider? _serviceProvider;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -68,6 +70,19 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             if (aiProviderDescriptor != null) services.Remove(aiProviderDescriptor);
             
             services.AddSingleton<IAiSpecialtySuggestionProvider>(MockAiProvider.Object);
+        });
+
+        builder.ConfigureServices(services =>
+        {
+            var sp = services.BuildServiceProvider();
+            _serviceProvider = sp;
+
+            // Set TestDbContextAccessor for static test methods
+            AiSpecialtyService.TestDbContextAccessor = () =>
+            {
+                var scope = sp.CreateScope();
+                return scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            };
         });
     }
 
