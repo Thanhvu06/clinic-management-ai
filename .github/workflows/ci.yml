@@ -50,7 +50,7 @@ jobs:
           --no-build --configuration Release --filter
           "FullyQualifiedName~AiPhase12ContractTests|FullyQualifiedName~AiSessionCleanupWorkerTests"
 
-      - name: Generate and validate official idempotent migration script
+      - name: Generate official idempotent migration script
         shell: bash
         run: |
           dotnet ef migrations script --idempotent --context AppDbContext \
@@ -59,19 +59,35 @@ jobs:
             --configuration Release --output ./phase12-ef-idempotent.sql
           grep -q "20260926114519_HardenAiPendingToolActionExecution" ./phase12-ef-idempotent.sql
           grep -q "__EFMigrationsHistory" ./phase12-ef-idempotent.sql
+
+      - name: Prepare SQL Server migration database
+        shell: bash
+        run: |
           docker ps --format 'table {{.ID}}\t{{.Image}}\t{{.Names}}'
           SQLSERVER_CONTAINER="$(docker ps --format '{{.ID}} {{.Image}} {{.Names}}' | awk 'tolower($2) ~ /mssql\/server/ { print $1; exit }')"
           test -n "$SQLSERVER_CONTAINER"
           echo "Using SQL Server service container $SQLSERVER_CONTAINER"
-          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
-            -Q "SELECT 1"
-          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
+          echo "SQLSERVER_CONTAINER=$SQLSERVER_CONTAINER" >> "$GITHUB_ENV"
+          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C -b -Q "SELECT 1"
+          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C -b \
             -Q "IF DB_ID('ClinicManagement_CiMigration') IS NULL EXEC(N'CREATE DATABASE [ClinicManagement_CiMigration]');"
+
+      - name: Apply official migration script to SQL Server
+        shell: bash
+        run: |
           docker cp ./phase12-ef-idempotent.sql "$SQLSERVER_CONTAINER:/tmp/phase12-ef-idempotent.sql"
           docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
             -d ClinicManagement_CiMigration -b -i /tmp/phase12-ef-idempotent.sql
+
+      - name: Reapply official migration script for idempotence
+        shell: bash
+        run: |
           docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
             -d ClinicManagement_CiMigration -b -i /tmp/phase12-ef-idempotent.sql
+
+      - name: Verify SQL Server migration schema and history
+        shell: bash
+        run: |
           docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
             -d ClinicManagement_CiMigration -b -Q "IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'AiPendingToolActions') THROW 50000, 'AiPendingToolActions table missing', 1; IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AiPendingToolActions_UserId_ResourceType_ResourceId') THROW 50000, 'Active action index missing', 1; IF NOT EXISTS (SELECT 1 FROM __EFMigrationsHistory WHERE MigrationId = '20260926114519_HardenAiPendingToolActionExecution') THROW 50000, 'Hardening migration history missing', 1;"
           rm -f ./phase12-ef-idempotent.sql
