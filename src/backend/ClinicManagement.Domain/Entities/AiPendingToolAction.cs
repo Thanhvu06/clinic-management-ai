@@ -1,4 +1,5 @@
 using System;
+using ClinicManagement.Domain.Enums;
 
 namespace ClinicManagement.Domain.Entities;
 
@@ -23,6 +24,11 @@ public class AiPendingToolAction
     public DateTime? ConfirmedAtUtc { get; set; }
     public DateTime? ExecutedAtUtc { get; set; }
     public DateTime? CancelledAtUtc { get; set; }
+    public AiPendingToolActionState State { get; set; } = AiPendingToolActionState.PendingConfirmation;
+    public Guid? ExecutionLeaseId { get; set; }
+    public DateTime? ExecutionLeaseExpiresAtUtc { get; set; }
+    public int ExecutionAttemptCount { get; set; }
+    public string? LastErrorCode { get; set; }
     public string? IdempotencyKeyHash { get; set; }
     public string? ExecutionResultReference { get; set; }
     public byte[] RowVersion { get; set; } = Array.Empty<byte>();

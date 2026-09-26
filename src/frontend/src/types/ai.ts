@@ -347,6 +347,8 @@ export interface AiChatResponse {
 export interface AiToolExecutionResult {
     status: "completed" | "pending_confirmation" | "failed" | string;
     data?: Record<string, unknown>;
+    resultType?: string;
+    displayText?: string;
     error?: { code?: string; message?: string; retryable?: boolean };
     requiresConfirmation?: boolean;
     actionId?: string;

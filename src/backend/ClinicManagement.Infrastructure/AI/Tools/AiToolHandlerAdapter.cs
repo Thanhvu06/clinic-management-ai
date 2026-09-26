@@ -13,6 +13,9 @@ public sealed class AiToolHandlerAdapter : IAiToolHandler
 
     public AiToolDefinition Definition { get; }
 
+    public AiToolArgumentValidationResult ValidateArguments(AiToolInvocation invocation, AiToolExecutionContext context) =>
+        _dispatcher.ValidateArguments(invocation, context);
+
     public Task<AiToolExecutionResult> ExecuteAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken = default) =>
         _dispatcher.ExecuteAsync(invocation, context, cancellationToken);
 }

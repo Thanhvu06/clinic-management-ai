@@ -23,6 +23,13 @@ public enum AiToolConfirmationRequirement
     ExistingBookingConfirmation
 }
 
+public enum AiToolInvocationChannel
+{
+    Planner,
+    DirectHumanConfirmation,
+    InternalSystem
+}
+
 public enum AiActorCapability
 {
     ReadClinicCatalog,
@@ -75,7 +82,23 @@ public sealed class AiToolExecutionContext
     public IReadOnlySet<AiActorRole> Roles { get; init; } = new HashSet<AiActorRole>();
     public string? SessionId { get; init; }
     public long? FacilityId { get; init; }
+    public AiToolInvocationChannel InvocationChannel { get; init; } = AiToolInvocationChannel.Planner;
     public string CorrelationId { get; init; } = Guid.NewGuid().ToString("N");
+}
+
+public sealed class AiToolArgumentValidationResult
+{
+    public bool IsValid { get; init; }
+    public string Code { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+
+    public static AiToolArgumentValidationResult Valid() => new() { IsValid = true };
+    public static AiToolArgumentValidationResult Invalid(string code, string message) => new()
+    {
+        IsValid = false,
+        Code = code,
+        Message = message
+    };
 }
 
 public sealed class AiToolError
@@ -89,6 +112,8 @@ public sealed class AiToolExecutionResult
 {
     public string Status { get; init; } = "completed";
     public object? Data { get; init; }
+    public string? ResultType { get; init; }
+    public string? DisplayText { get; init; }
     public AiToolError? Error { get; init; }
     public bool RequiresConfirmation { get; init; }
     public string? ActionId { get; init; }
@@ -105,6 +130,7 @@ public sealed class AiToolExecutionResult
 public interface IAiToolHandler
 {
     AiToolDefinition Definition { get; }
+    AiToolArgumentValidationResult ValidateArguments(AiToolInvocation invocation, AiToolExecutionContext context);
     Task<AiToolExecutionResult> ExecuteAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken = default);
 }
 
@@ -118,6 +144,8 @@ public interface IAiToolRegistry
 public interface IAiToolExecutor
 {
     Task<AiToolExecutionResult> ExecuteAsync(AiToolInvocation invocation, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<AiToolExecutionResult>> ExecutePlannerPlanAsync(IReadOnlyList<AiPlannerToolCall> plannedCalls, string? sessionId, CancellationToken cancellationToken = default);
+    Task<AiToolExecutionResult> ExecuteHumanConfirmationAsync(Guid actionId, string sessionId, string? concurrencyToken, CancellationToken cancellationToken = default);
 }
 
 public sealed class AiSafetyGuardResult

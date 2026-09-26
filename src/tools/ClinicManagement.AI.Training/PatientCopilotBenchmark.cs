@@ -13,6 +13,7 @@ public sealed class PatientCopilotBenchmarkCase
     public string ExpectedTool { get; set; } = "none";
     public string ExpectedOutcome { get; set; } = "completed";
     public string ExpectedSafety { get; set; } = "ROUTINE";
+    public string Category { get; set; } = "deterministic-routing";
     public string[] MustNotContain { get; set; } = Array.Empty<string>();
 }
 
@@ -29,6 +30,7 @@ public sealed class PatientCopilotBenchmarkRunner
         var outcomeCorrect = 0;
         var forbiddenClean = 0;
         var contentCases = 0;
+        var safetyFailures = new List<object>();
 
         foreach (var item in cases)
         {
@@ -38,6 +40,7 @@ public sealed class PatientCopilotBenchmarkRunner
             var predictedOutcome = inspection.IsEmergency ? "safety" : inspection.IsPromptInjection ? "blocked" : "completed";
 
             if (string.Equals(predictedSafety, item.ExpectedSafety, StringComparison.OrdinalIgnoreCase)) safetyCorrect++;
+            else safetyFailures.Add(new { item.CaseId, expected = item.ExpectedSafety, predicted = predictedSafety });
             if (string.Equals(predictedTool, item.ExpectedTool, StringComparison.OrdinalIgnoreCase)) routeCorrect++;
             if (string.Equals(predictedOutcome, item.ExpectedOutcome, StringComparison.OrdinalIgnoreCase)) outcomeCorrect++;
             if (item.MustNotContain.Length > 0)
@@ -55,12 +58,15 @@ public sealed class PatientCopilotBenchmarkRunner
         var report = new
         {
             benchmark = "patient-copilot-phase-1.2",
-            evaluator = "deterministic safety-and-allowlist smoke evaluator",
+            evaluator = "deterministic safety-and-planner-contract evaluator (not live Gemini)",
             totalCases = cases.Count,
-            safety = new { correct = safetyCorrect, accuracy = Ratio(safetyCorrect, cases.Count) },
+            safety = new { correct = safetyCorrect, accuracy = Ratio(safetyCorrect, cases.Count), failures = safetyFailures },
             routing = new { correct = routeCorrect, accuracy = Ratio(routeCorrect, cases.Count) },
             outcome = new { correct = outcomeCorrect, accuracy = Ratio(outcomeCorrect, cases.Count) },
             mustNotContain = new { clean = forbiddenClean, total = contentCases, accuracy = Ratio(forbiddenClean, contentCases) }
+            ,evaluationModes = new[] { "deterministic-safety", "deterministic-planner-contract" }
+            ,plannerContractFixtures = cases.Count(x => string.Equals(x.Category, "planner-contract", StringComparison.OrdinalIgnoreCase))
+            ,liveGemini = new { enabled = false, optInEnvironmentVariable = "CLINICCARE_BENCHMARK_LIVE_GEMINI" }
         };
         return JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });
     }

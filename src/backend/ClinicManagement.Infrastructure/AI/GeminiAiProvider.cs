@@ -222,7 +222,7 @@ FORMAT ĐẦU RA (BẮT BUỘC JSON object thuần túy):
 
 TOOL PLANNER CONTRACT:
 - toolCalls tối đa 3 phần tử; mỗi phần tử chỉ có name, version và arguments.
-- Chỉ được dùng các tên canonical đã cho phép: clinic.search_specialties, clinic.search_doctors, clinic.get_available_slots, clinic.get_facilities, clinic.get_pricing, patient.get_my_appointments, patient.get_appointment_detail, patient.prepare_booking, patient.prepare_cancel_appointment, patient.prepare_reschedule_appointment, patient.execute_confirmed_action.
+- Chỉ được dùng các tên canonical đã cho phép: clinic.search_specialties, clinic.search_doctors, clinic.get_available_slots, clinic.get_facilities, clinic.get_pricing, patient.get_my_appointments, patient.get_appointment_detail. Các tool prepare/ghi chỉ được gọi qua luồng backend xác nhận riêng và không được xuất hiện trong toolCalls của planner.
 - Không tự thêm actorId, role, userId, facility authorization hoặc quyền xác nhận vào arguments.
 - Không gọi tool đệ quy; nếu dữ liệu thiếu, dùng clarification thay vì tự bịa.
 """;

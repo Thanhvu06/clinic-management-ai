@@ -37,7 +37,8 @@ public class SpecialtyService : ISpecialtyService
                 SpecialtyCode = s.SpecialtyCode,
                 SpecialtyName = s.Name,
                 Description = s.Description ?? string.Empty,
-                AiEnabled = s.AiEnabled
+                AiEnabled = s.AiEnabled,
+                ConsultationFee = s.ConsultationFee
             })
             .ToListAsync();
     }
@@ -53,7 +54,8 @@ public class SpecialtyService : ISpecialtyService
                 SpecialtyCode = s.SpecialtyCode,
                 SpecialtyName = s.Name,
                 Description = s.Description ?? string.Empty,
-                AiEnabled = s.AiEnabled
+                AiEnabled = s.AiEnabled,
+                ConsultationFee = s.ConsultationFee
             })
             .FirstOrDefaultAsync();
 

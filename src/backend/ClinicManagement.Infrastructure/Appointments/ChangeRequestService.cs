@@ -102,11 +102,20 @@ public class ChangeRequestService : IChangeRequestService
         }, conflictErrorCode, conflictErrorMessage);
     }
 
-    public async Task<ChangeRequestDto> CreateRescheduleRequestAsync(long appointmentId, CreateRescheduleRequestDto request)
+    public async Task<ChangeRequestDto> CreateRescheduleRequestAsync(long appointmentId, CreateRescheduleRequestDto request, Guid? sourceAiActionId = null)
     {
         var userId = GetUserId();
         var patient = await _dbContext.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
         if (patient == null) throw new NotFoundException("Hồ sơ bệnh nhân không tồn tại.");
+
+        if (sourceAiActionId.HasValue)
+        {
+            var existing = await _dbContext.AppointmentChangeRequests
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.SourceAiActionId == sourceAiActionId.Value && x.RequestedByUserId == userId);
+            if (existing != null)
+                return await GetChangeRequestByIdAsync(existing.Id);
+        }
 
         var normalizedReason = request.Reason?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length < 5)
@@ -202,6 +211,13 @@ public class ChangeRequestService : IChangeRequestService
                 if (appAffected == 0)
                     throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
 
+                var existingBySource = sourceAiActionId.HasValue
+                    ? await _dbContext.AppointmentChangeRequests
+                        .FirstOrDefaultAsync(x => x.SourceAiActionId == sourceAiActionId.Value && x.RequestedByUserId == userId)
+                    : null;
+                if (existingBySource != null)
+                    return await GetChangeRequestByIdAsync(existingBySource.Id);
+
                 var changeRequest = new AppointmentChangeRequest
                 {
                     AppointmentId = appointment.Id,
@@ -211,6 +227,7 @@ public class ChangeRequestService : IChangeRequestService
                     Status = AppointmentChangeRequestStatus.Pending,
                     OriginalAppointmentStatus = oldStatus,
                     RequestedByUserId = userId,
+                    SourceAiActionId = sourceAiActionId,
                     CreatedAt = _dateTimeProvider.UtcNow
                 };
 
@@ -249,11 +266,20 @@ public class ChangeRequestService : IChangeRequestService
         }, "ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
     }
 
-    public async Task<ChangeRequestDto> CreateCancellationRequestAsync(long appointmentId, CreateCancellationRequestDto request)
+    public async Task<ChangeRequestDto> CreateCancellationRequestAsync(long appointmentId, CreateCancellationRequestDto request, Guid? sourceAiActionId = null)
     {
         var userId = GetUserId();
         var patient = await _dbContext.Patients.FirstOrDefaultAsync(p => p.UserId == userId);
         if (patient == null) throw new NotFoundException("Hồ sơ bệnh nhân không tồn tại.");
+
+        if (sourceAiActionId.HasValue)
+        {
+            var existing = await _dbContext.AppointmentChangeRequests
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.SourceAiActionId == sourceAiActionId.Value && x.RequestedByUserId == userId);
+            if (existing != null)
+                return await GetChangeRequestByIdAsync(existing.Id);
+        }
 
         var normalizedReason = request.Reason?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length < 5)
@@ -292,6 +318,13 @@ public class ChangeRequestService : IChangeRequestService
                 if (appAffected == 0)
                     throw new ConflictException("ACTIVE_CHANGE_REQUEST_EXISTS", "Lịch hẹn đã có yêu cầu thay đổi đang chờ xử lý.");
 
+                var existingBySource = sourceAiActionId.HasValue
+                    ? await _dbContext.AppointmentChangeRequests
+                        .FirstOrDefaultAsync(x => x.SourceAiActionId == sourceAiActionId.Value && x.RequestedByUserId == userId)
+                    : null;
+                if (existingBySource != null)
+                    return await GetChangeRequestByIdAsync(existingBySource.Id);
+
                 var changeRequest = new AppointmentChangeRequest
                 {
                     AppointmentId = appointment.Id,
@@ -300,6 +333,7 @@ public class ChangeRequestService : IChangeRequestService
                     Status = AppointmentChangeRequestStatus.Pending,
                     OriginalAppointmentStatus = oldStatus,
                     RequestedByUserId = userId,
+                    SourceAiActionId = sourceAiActionId,
                     CreatedAt = _dateTimeProvider.UtcNow
                 };
 

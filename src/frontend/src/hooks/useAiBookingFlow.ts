@@ -1290,19 +1290,15 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         }
     };
 
-    const confirmToolAction = async (actionId: string): Promise<void> => {
+    const confirmToolAction = async (actionId: string, concurrencyToken?: string): Promise<void> => {
         if (!actionId || loading || submittingBooking) return;
         try {
             const result = await axiosClient.post<{
-                toolName: string;
-                toolVersion: string;
-                argumentsJson: string;
-                sessionId?: string;
-            }, AiToolExecutionResult>("/ai/tools/execute", {
-                toolName: "patient.execute_confirmed_action",
-                toolVersion: "1.0",
-                argumentsJson: JSON.stringify({ actionId, confirm: true }),
-                sessionId: sessionIdRef.current || undefined
+                sessionId: string;
+                concurrencyToken?: string;
+            }, AiToolExecutionResult>(`/ai/tool-actions/${actionId}/confirm`, {
+                sessionId: sessionIdRef.current,
+                concurrencyToken
             });
             setMessages(previous => [...previous, {
                 role: "model",

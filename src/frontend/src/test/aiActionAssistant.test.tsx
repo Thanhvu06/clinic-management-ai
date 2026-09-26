@@ -93,6 +93,81 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         expect(screen.getByText('Tìm lịch khám sớm nhất.')).toBeInTheDocument();
     });
 
+    it('renders grounded tool data instead of a generic tool-success message', async () => {
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: '',
+            data: {
+                message: 'Bảng giá hiện hành từ ClinicCare.',
+                urgency: 'ROUTINE',
+                sessionId: 'sess_grounded',
+                toolResults: [{
+                    status: 'completed',
+                    resultType: 'pricing_catalog',
+                    displayText: 'Bảng giá dưới đây được lấy từ dữ liệu hiện hành của ClinicCare.',
+                    data: {
+                        consultation: [{ specialtyId: 1, specialty: 'Tim mạch', consultationFee: 250000, currency: 'VND' }],
+                        diagnostics: [{ serviceId: 2, name: 'Siêu âm', price: 180000, currency: 'VND' }]
+                    }
+                }]
+            }
+        });
+
+        render(
+            <MemoryRouter>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        fireEvent.click(screen.getByText('Tôi nên khám chuyên khoa nào?'));
+
+        expect(await screen.findByText(/Tim mạch: 250\.000 VND/i)).toBeInTheDocument();
+        expect(screen.getByText(/Siêu âm: 180\.000 VND/i)).toBeInTheDocument();
+        expect(screen.queryByText('Đã kiểm tra dữ liệu hệ thống')).not.toBeInTheDocument();
+    });
+
+    it('confirms pending copilot actions through the dedicated endpoint with session binding', async () => {
+        vi.mocked(axiosClient.post)
+            .mockResolvedValueOnce({
+                success: true,
+                message: '',
+                data: {
+                    message: 'Bạn có một thao tác đang chờ xác nhận.',
+                    urgency: 'ROUTINE',
+                    sessionId: 'sess_confirm',
+                    toolResults: [{
+                        status: 'pending_confirmation',
+                        actionId: '11111111-1111-1111-1111-111111111111',
+                        resultType: 'pending_action',
+                        data: { appointmentCode: 'APPT-42', concurrencyToken: 'AA==' }
+                    }]
+                }
+            })
+            .mockResolvedValueOnce({
+                status: 'completed',
+                resultType: 'change_request',
+                displayText: 'Yêu cầu hủy lịch đã được tạo.',
+                data: { changeRequestId: 42 }
+            });
+
+        render(
+            <MemoryRouter>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        fireEvent.click(screen.getByText('Tôi nên khám chuyên khoa nào?'));
+        fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
+
+        await waitFor(() => expect(axiosClient.post).toHaveBeenCalledTimes(2));
+        expect(axiosClient.post.mock.calls[1][0]).toBe('/ai/tool-actions/11111111-1111-1111-1111-111111111111/confirm');
+        expect(axiosClient.post.mock.calls[1][1]).toEqual({ sessionId: 'sess_confirm', concurrencyToken: 'AA==' });
+    });
+
     it('sends chat request when quick prompt is clicked and renders specialty suggestions', async () => {
         vi.mocked(axiosClient.post).mockResolvedValueOnce({
             success: true,

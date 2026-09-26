@@ -1,4 +1,5 @@
 using ClinicManagement.Domain.Entities;
+using ClinicManagement.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -19,11 +20,16 @@ public sealed class AiPendingToolActionConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.NormalizedArgumentsJson).HasMaxLength(4000).IsRequired();
         builder.Property(x => x.IdempotencyKeyHash).HasMaxLength(128);
         builder.Property(x => x.ExecutionResultReference).HasMaxLength(256);
+        builder.Property(x => x.State)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .IsRequired();
+        builder.Property(x => x.LastErrorCode).HasMaxLength(120);
         builder.Property(x => x.RowVersion).IsRowVersion();
         builder.HasIndex(x => new { x.UserId, x.ExpiresAtUtc });
         builder.HasIndex(x => new { x.UserId, x.ResourceType, x.ResourceId, x.ToolName });
         builder.HasIndex(x => new { x.UserId, x.ResourceType, x.ResourceId })
             .IsUnique()
-            .HasFilter("[ExecutedAtUtc] IS NULL AND [CancelledAtUtc] IS NULL");
+            .HasFilter("[State] IN ('PendingConfirmation', 'Executing', 'FailedRetryable')");
     }
 }

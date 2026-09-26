@@ -223,46 +223,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             }
         }
 
-        // 1. EMERGENCY RULES - Executed FIRST before any AI provider or database search
-        if (ContainsActiveEmergency(lowerMsg))
-        {
-            await _auditService.LogActionAsync(new AiAuditLogEntry
-            {
-                UserId = _currentUserService.UserId,
-                SessionId = request.SessionId,
-                ActionType = "EmergencyAlert",
-                Outcome = "EMERGENCY"
-            }, cancellationToken);
-
-            return new AiChatResponseDto
-            {
-                Message = "Dấu hiệu bạn mô tả có thể là tình huống y tế khẩn cấp. Bạn hãy gọi ngay 115 hoặc đến ngay cơ sở cấp cứu gần nhất. Vui lòng không chờ đợi phản hồi qua kênh trò chuyện.",
-                Urgency = "EMERGENCY",
-                SafetyNotice = "TÌNH HUỐNG Y TẾ CẤP CỨU: Hãy gọi 115 hoặc đến ngay cơ sở y tế gần nhất.",
-                PromptVersion = GeminiAiProvider.CurrentPromptVersion,
-                SpecialtySuggestions = new List<AiSpecialtySuggestionDto>(),
-                Actions = new List<AiActionDto>
-                {
-                    new AiActionDto
-                    {
-                        Id = "act-emergency-115",
-                        Type = AiActionTypes.CallEmergency,
-                        Label = "Gọi cấp cứu 115",
-                        Description = "Kết nối trực tiếp đường dây nóng cấp cứu y tế 115",
-                        Style = "danger",
-                        RequiresAuthentication = false,
-                        RequiresConfirmation = false,
-                        Payload = new AiActionPayloadDto
-                        {
-                            TargetUrl = "tel:115"
-                        }
-                    }
-                },
-                ManualSelectionRequired = false
-            };
-        }
-
-        // 2. PII FILTERING
+        // 1. PII FILTERING (the pre-provider safety guard already handled emergencies)
         bool hasPhone = Regex.IsMatch(rawMessage, @"(?:\+84|0)[35789]\d{8}");
         bool hasEmail = Regex.IsMatch(rawMessage, @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}");
         bool hasId = Regex.IsMatch(rawMessage, @"\b\d{9}\b|\b\d{12}\b");
@@ -594,9 +555,23 @@ public class AiSpecialtyService : IAiSpecialtyService
         };
         if (_toolExecutor != null && aiResult.ToolCalls.Count > 0)
         {
-            responseDto.ToolResults = await ExecutePlannedToolsAsync(aiResult.ToolCalls, request.SessionId, cancellationToken);
-            if (responseDto.ToolResults.Any(x => x.Status == "completed"))
+            responseDto.ToolResults = (await _toolExecutor.ExecutePlannerPlanAsync(aiResult.ToolCalls, request.SessionId, cancellationToken)).ToList();
+            var groundedMessages = responseDto.ToolResults
+                .Where(x => x.Status == "completed" && !string.IsNullOrWhiteSpace(x.DisplayText))
+                .Select(x => x.DisplayText!)
+                .ToList();
+            if (groundedMessages.Count > 0)
+            {
+                responseDto.Message = string.Join("\n\n", groundedMessages);
+                if (responseDto.ToolResults.Any(x => x.Status == "failed"))
+                    responseDto.Message += "\n\nMột phần dữ liệu chưa thể kiểm tra; bạn có thể thử lại.";
                 responseDto.DialogueOutcome = "ToolGrounded";
+            }
+            else
+            {
+                responseDto.Message = "ClinicCare chưa thể kiểm tra dữ liệu cho yêu cầu này. Vui lòng thử lại sau.";
+                responseDto.DialogueOutcome = "ToolUnavailable";
+            }
         }
         if (providerActuallyFailed)
         {
@@ -812,42 +787,6 @@ public class AiSpecialtyService : IAiSpecialtyService
             .ToList();
 
         return responseDto;
-    }
-
-    private async Task<List<AiToolExecutionResult>> ExecutePlannedToolsAsync(
-        IEnumerable<AiPlannerToolCall> plannedCalls,
-        string? sessionId,
-        CancellationToken cancellationToken)
-    {
-        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "clinic.search_specialties", "clinic.search_doctors", "clinic.get_available_slots",
-            "clinic.get_facilities", "clinic.get_pricing", "patient.get_my_appointments",
-            "patient.get_appointment_detail", "patient.prepare_booking",
-            "patient.prepare_cancel_appointment", "patient.prepare_reschedule_appointment",
-            "patient.execute_confirmed_action"
-        };
-        var results = new List<AiToolExecutionResult>();
-        foreach (var call in plannedCalls.Take(3))
-        {
-            if (string.IsNullOrWhiteSpace(call.Name) || !allowed.Contains(call.Name) ||
-                !string.Equals(call.Version, "1.0", StringComparison.OrdinalIgnoreCase) ||
-                call.Arguments.ValueKind != System.Text.Json.JsonValueKind.Object)
-            {
-                results.Add(AiToolExecutionResult.Failed("PLANNER_TOOL_NOT_ALLOWED", "Kế hoạch công cụ không nằm trong allowlist."));
-                continue;
-            }
-
-            var result = await _toolExecutor!.ExecuteAsync(new AiToolInvocation
-            {
-                ToolName = call.Name,
-                ToolVersion = call.Version,
-                ArgumentsJson = call.Arguments.GetRawText(),
-                SessionId = sessionId
-            }, cancellationToken);
-            results.Add(result);
-        }
-        return results;
     }
 
     private async Task<AiChatResponseDto> FindEarliestAvailableSlotsAsync(

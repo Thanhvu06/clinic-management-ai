@@ -11,7 +11,7 @@ import {
     FileText, Activity, CreditCard
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
-import type { AiAction, AiChatIntent } from "../types/ai";
+import type { AiAction, AiChatIntent, AiToolExecutionResult } from "../types/ai";
 import SafeMarkdown from "./SafeMarkdown";
 
 const QUICK_PROMPTS: Array<{ label: string; intent?: AiChatIntent }> = [
@@ -21,6 +21,59 @@ const QUICK_PROMPTS: Array<{ label: string; intent?: AiChatIntent }> = [
     { label: "Xem kết quả cận lâm sàng." },
     { label: "Liên hệ lễ tân." }
 ];
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+    value && typeof value === "object" ? value as Record<string, unknown> : {};
+
+const asRecords = (value: unknown): Array<Record<string, unknown>> =>
+    Array.isArray(value) ? value.filter(item => item && typeof item === "object") as Array<Record<string, unknown>> : [];
+
+const formatMoney = (value: unknown): string =>
+    typeof value === "number" ? `${value.toLocaleString("vi-VN")} VND` : "Chưa công bố";
+
+const GroundedToolData: React.FC<{ result: AiToolExecutionResult }> = ({ result }) => {
+    if (result.status !== "completed" || !result.resultType || !result.data) return null;
+    const data = asRecord(result.data);
+    let rows: Array<{ key: string; text: string }> = [];
+    switch (result.resultType) {
+        case "specialties":
+            rows = asRecords(result.data).map(item => ({ key: String(item.id), text: `${String(item.name ?? "")}${item.code ? ` (${String(item.code)})` : ""}` }));
+            break;
+        case "doctors":
+            rows = asRecords(result.data).map(item => ({ key: String(item.id), text: `${String(item.academicTitle ?? "")} ${String(item.name ?? "")}`.trim() }));
+            break;
+        case "available_slots":
+            rows = asRecords(result.data).map((item, index) => ({ key: String(item.slotId ?? index), text: `${String(item.slotDate ?? "")} · ${String(item.startTime ?? "")} - ${String(item.endTime ?? "")}` }));
+            break;
+        case "facilities":
+            rows = asRecords(result.data).map(item => ({ key: String(item.id), text: `${String(item.name ?? "")} · ${String(item.address ?? item.city ?? "")}` }));
+            break;
+        case "pricing_catalog":
+            rows = [
+                ...asRecords(data.consultation).map(item => ({ key: `c-${String(item.specialtyId)}`, text: `${String(item.specialty ?? "")}: ${formatMoney(item.consultationFee)}` })),
+                ...asRecords(data.diagnostics).map(item => ({ key: `d-${String(item.serviceId)}`, text: `${String(item.name ?? "")}: ${formatMoney(item.price)}` }))
+            ];
+            break;
+        case "appointments":
+            rows = asRecords(data.items).map(item => ({ key: String(item.id ?? item.appointmentId), text: `${String(item.appointmentCode ?? item.id ?? "Lịch hẹn")} · ${String(item.slotDate ?? item.appointmentDate ?? "")}` }));
+            break;
+        case "appointment_detail":
+            rows = [{ key: "detail", text: `${String(data.appointmentCode ?? data.id ?? "Lịch hẹn")} · ${String(data.status ?? "")}` }];
+            break;
+        case "pending_action":
+            rows = [{ key: "pending", text: `Lịch hẹn ${String(data.appointmentCode ?? data.appointmentId ?? "")} · chờ xác nhận` }];
+            break;
+        case "change_request":
+            rows = [{ key: "change", text: `Yêu cầu thay đổi #${String(data.changeRequestId ?? "")} đã được tạo` }];
+            break;
+    }
+    if (rows.length === 0) return null;
+    return (
+        <div className={styles.specialtyReason} role="list" aria-label="Dữ liệu đã kiểm chứng">
+            {rows.slice(0, 10).map(row => <div key={row.key} role="listitem">• {row.text}</div>)}
+        </div>
+    );
+};
 
 const PatientMedicalChatWidget: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -259,13 +312,14 @@ const PatientMedicalChatWidget: React.FC = () => {
                                             <div className={styles.bookingSummaryCard} role="status" aria-label="Trạng thái thao tác AI">
                                                 <h4 className={styles.bookingSummaryTitle}>
                                                     <CheckCircle2 size={18} color={toolResult.status === "failed" ? "#b91c1c" : "#0d9488"} />
-                                                    {toolResult.status === "pending_confirmation" ? "Đang chờ xác nhận" : toolResult.status === "completed" ? "Đã kiểm tra dữ liệu hệ thống" : "Không thể thực hiện thao tác"}
+                                                    {toolResult.status === "pending_confirmation" ? "Đang chờ xác nhận" : toolResult.status === "completed" ? "Dữ liệu từ hệ thống ClinicCare" : "Không thể thực hiện thao tác"}
                                                 </h4>
                                                 <p className={styles.specialtyReason}>
                                                     {toolResult.status === "pending_confirmation"
                                                         ? "Thao tác ghi chưa được thực hiện. Hãy kiểm tra thông tin và xác nhận trong luồng lịch hẹn."
-                                                        : toolResult.error?.message || "Kết quả được trả về từ dịch vụ ClinicCare đã kiểm chứng."}
+                                                        : toolResult.error?.message || toolResult.displayText || "Kết quả được trả về từ dịch vụ ClinicCare đã kiểm chứng."}
                                                 </p>
+                                                <GroundedToolData result={toolResult} />
                                                 {toolResult.status === "pending_confirmation" && toolResult.actionId && (
                                                     <button
                                                         type="button"
@@ -273,7 +327,8 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                         disabled={executingActionId === toolResult.actionId}
                                                         onClick={() => {
                                                             setExecutingActionId(toolResult.actionId || null);
-                                                            void confirmToolAction(toolResult.actionId || "").finally(() => setExecutingActionId(null));
+                                                            const token = typeof toolResult.data?.concurrencyToken === "string" ? toolResult.data.concurrencyToken : undefined;
+                                                            void confirmToolAction(toolResult.actionId || "", token).finally(() => setExecutingActionId(null));
                                                         }}
                                                     >
                                                         {executingActionId === toolResult.actionId ? "Đang xác nhận..." : "Xác nhận thực hiện"}

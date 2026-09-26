@@ -14,9 +14,8 @@ All tools use version 1.0. The registry is explicit and rejects duplicate or unk
 | patient.prepare_booking | Patient | Medium | existing booking confirmation | availability preview only |
 | patient.prepare_cancel_appointment | Patient | High | explicit user confirmation | creates pending action |
 | patient.prepare_reschedule_appointment | Patient | High | explicit user confirmation | creates pending action |
-| patient.execute_confirmed_action | Patient | High | explicit user confirmation | revalidates and creates change request |
+| patient.execute_confirmed_action | Patient | High | direct human confirmation endpoint only | revalidates and creates an idempotent change request |
 
 The gateway does not expose write tools for Receptionist, Doctor, Diagnostic Technician, Pharmacist or Admin in this phase. Their role/capability names are reserved for a later, separately reviewed catalog.
 
-Tool result statuses are completed, pending_confirmation and failed. Results identify verified data sources; they do not expose internal prompts, authorization claims, database credentials, API keys or raw audit payloads.
-
+Planner may only call read tools. Prepare tools are server-side write-intent operations and execute_confirmed_action is DirectHumanConfirmation-only. Every tool has a closed JSON schema: unknown fields, nested objects, authority fields, invalid identifiers, dates, ranges, pagination and excessive text are rejected with stable errors. Tool result statuses are completed, pending_confirmation and failed, with a typed resultType/displayText envelope. Results identify verified data sources; they do not expose internal prompts, authorization claims, database credentials, API keys or raw audit payloads.

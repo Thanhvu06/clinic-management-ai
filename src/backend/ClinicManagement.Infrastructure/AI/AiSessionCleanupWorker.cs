@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Infrastructure.Persistence;
+using ClinicManagement.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -74,10 +75,35 @@ public sealed class AiSessionCleanupWorker : BackgroundService
         var confirmationStore = scope.ServiceProvider.GetRequiredService<IAiBookingConfirmationStore>();
         await confirmationStore.PurgeExpiredAsync(clock.UtcNow, cancellationToken);
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var completedRetentionCutoff = clock.UtcNow.AddHours(-24);
+        var now = clock.UtcNow;
+        var completedRetentionCutoff = now.AddHours(-24);
         await db.AiPendingToolActions
-            .Where(x => (x.ExpiresAtUtc <= clock.UtcNow && x.ConfirmedAtUtc == null) ||
-                        (x.ExecutedAtUtc.HasValue && x.ExecutedAtUtc.Value <= completedRetentionCutoff) ||
+            .Where(x => x.ExpiresAtUtc <= now &&
+                        (x.State == AiPendingToolActionState.PendingConfirmation ||
+                         x.State == AiPendingToolActionState.Executing ||
+                         x.State == AiPendingToolActionState.FailedRetryable))
+            .ExecuteUpdateAsync(x => x
+                .SetProperty(a => a.State, AiPendingToolActionState.Expired)
+                .SetProperty(a => a.ExecutionLeaseId, (Guid?)null)
+                .SetProperty(a => a.ExecutionLeaseExpiresAtUtc, (DateTime?)null), cancellationToken);
+
+        // A crashed worker becomes retryable when its lease expires. The action
+        // remains a tombstone until its normal terminal retention window.
+        await db.AiPendingToolActions
+            .Where(x => x.State == AiPendingToolActionState.Executing &&
+                        x.ExecutionLeaseExpiresAtUtc <= now && x.ExpiresAtUtc > now)
+            .ExecuteUpdateAsync(x => x
+                .SetProperty(a => a.State, AiPendingToolActionState.FailedRetryable)
+                .SetProperty(a => a.ExecutionLeaseId, (Guid?)null)
+                .SetProperty(a => a.ExecutionLeaseExpiresAtUtc, (DateTime?)null)
+                .SetProperty(a => a.LastErrorCode, "STALE_EXECUTION_LEASE"), cancellationToken);
+
+        await db.AiPendingToolActions
+            .Where(x => ((x.State == AiPendingToolActionState.Completed || x.State == AiPendingToolActionState.Cancelled || x.State == AiPendingToolActionState.Expired) &&
+                         ((x.ExecutedAtUtc.HasValue && x.ExecutedAtUtc.Value <= completedRetentionCutoff) ||
+                          (x.CancelledAtUtc.HasValue && x.CancelledAtUtc.Value <= completedRetentionCutoff) ||
+                          (!x.ExecutedAtUtc.HasValue && !x.CancelledAtUtc.HasValue && x.ExpiresAtUtc <= completedRetentionCutoff))) ||
+                        (x.State == AiPendingToolActionState.FailedRetryable && x.ExpiresAtUtc <= completedRetentionCutoff) ||
                         (x.CancelledAtUtc.HasValue && x.CancelledAtUtc.Value <= completedRetentionCutoff))
             .ExecuteDeleteAsync(cancellationToken);
     }

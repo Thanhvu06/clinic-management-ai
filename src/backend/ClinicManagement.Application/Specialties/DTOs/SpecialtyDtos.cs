@@ -7,6 +7,7 @@ public class SpecialtyDto
     public string SpecialtyName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public bool AiEnabled { get; set; }
+    public decimal ConsultationFee { get; set; }
 }
 
 public class DoctorBasicDto

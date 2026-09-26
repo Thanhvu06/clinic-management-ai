@@ -57,5 +57,9 @@ public class AppointmentChangeRequestConfiguration : IEntityTypeConfiguration<Ap
         builder.HasIndex(acr => acr.AppointmentId)
             .IsUnique()
             .HasFilter("[Status] = 'Pending'");
+
+        builder.HasIndex(acr => acr.SourceAiActionId)
+            .IsUnique()
+            .HasFilter("[SourceAiActionId] IS NOT NULL");
     }
 }

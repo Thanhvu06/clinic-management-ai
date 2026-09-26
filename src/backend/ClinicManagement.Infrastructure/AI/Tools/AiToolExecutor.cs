@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Application.Authentication.Interfaces;
@@ -11,6 +12,7 @@ namespace ClinicManagement.Infrastructure.AI.Tools;
 public sealed class AiToolExecutor : IAiToolExecutor
 {
     private readonly IAiToolRegistry _registry;
+    private readonly IAiCapabilityResolver _capabilityResolver;
     private readonly ICurrentUserService _currentUser;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IAiAuditService _audit;
@@ -18,40 +20,102 @@ public sealed class AiToolExecutor : IAiToolExecutor
 
     public AiToolExecutor(
         IAiToolRegistry registry,
+        IAiCapabilityResolver capabilityResolver,
         ICurrentUserService currentUser,
         IHttpContextAccessor httpContextAccessor,
         IAiAuditService audit,
         ILogger<AiToolExecutor> logger)
     {
         _registry = registry;
+        _capabilityResolver = capabilityResolver;
         _currentUser = currentUser;
         _httpContextAccessor = httpContextAccessor;
         _audit = audit;
         _logger = logger;
     }
 
-    public async Task<AiToolExecutionResult> ExecuteAsync(AiToolInvocation invocation, CancellationToken cancellationToken = default)
+    public Task<AiToolExecutionResult> ExecuteAsync(AiToolInvocation invocation, CancellationToken cancellationToken = default) =>
+        ExecuteCoreAsync(invocation, AiToolInvocationChannel.Planner, cancellationToken);
+
+    public async Task<IReadOnlyList<AiToolExecutionResult>> ExecutePlannerPlanAsync(
+        IReadOnlyList<AiPlannerToolCall> plannedCalls,
+        string? sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (plannedCalls.Count > 3)
+            return new[] { AiToolExecutionResult.Failed("PLANNER_TOOL_LIMIT_EXCEEDED", "Kế hoạch AI vượt quá giới hạn số công cụ cho một lượt.") };
+
+        var invocations = new List<AiToolInvocation>(plannedCalls.Count);
+        var context = BuildContext(sessionId, AiToolInvocationChannel.Planner);
+        foreach (var call in plannedCalls)
+        {
+            var name = call.Name?.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(name) || !_registry.TryGetHandler(name, out var handler))
+                return new[] { AiToolExecutionResult.Failed("PLANNER_TOOL_NOT_ALLOWED", "Kế hoạch công cụ không nằm trong allowlist.") };
+
+            var definition = handler.Definition;
+            if (!definition.Enabled)
+                return new[] { AiToolExecutionResult.Failed("TOOL_DISABLED", "Công cụ AI hiện chưa được kích hoạt.") };
+            if (!string.Equals(definition.Version, call.Version?.Trim(), StringComparison.OrdinalIgnoreCase))
+                return new[] { AiToolExecutionResult.Failed("TOOL_VERSION_NOT_SUPPORTED", "Phiên bản công cụ không được hỗ trợ.") };
+            if (name.Equals("patient.execute_confirmed_action", StringComparison.OrdinalIgnoreCase))
+                return new[] { AiToolExecutionResult.Failed("PLANNER_WRITE_EXECUTION_FORBIDDEN", "Planner chỉ được lập kế hoạch đọc hoặc chuẩn bị; thao tác ghi cần xác nhận trực tiếp.") };
+
+            var invocation = new AiToolInvocation
+            {
+                ToolName = name,
+                ToolVersion = call.Version ?? string.Empty,
+                ArgumentsJson = call.Arguments.ValueKind == JsonValueKind.Undefined ? string.Empty : call.Arguments.GetRawText(),
+                SessionId = sessionId
+            };
+            var validation = await ValidateInvocationAsync(invocation, handler, definition, context, cancellationToken);
+            if (validation != null)
+                return new[] { validation };
+            invocations.Add(invocation);
+        }
+
+        var results = new List<AiToolExecutionResult>(invocations.Count);
+        foreach (var invocation in invocations)
+            results.Add(await ExecuteCoreAsync(invocation, AiToolInvocationChannel.Planner, cancellationToken));
+        return results;
+    }
+
+    public Task<AiToolExecutionResult> ExecuteHumanConfirmationAsync(
+        Guid actionId,
+        string sessionId,
+        string? concurrencyToken,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+            return Task.FromResult(AiToolExecutionResult.Failed("SESSION_REQUIRED", "Cần phiên hội thoại hợp lệ để xác nhận thao tác."));
+
+        // The channel and confirmation flag are created here, never accepted from
+        // the browser or from model output.
+        var arguments = JsonSerializer.Serialize(
+            new { actionId, confirm = true, concurrencyToken },
+            new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+        return ExecuteCoreAsync(new AiToolInvocation
+        {
+            ToolName = "patient.execute_confirmed_action",
+            ToolVersion = "1.0",
+            ArgumentsJson = arguments,
+            SessionId = sessionId
+        }, AiToolInvocationChannel.DirectHumanConfirmation, cancellationToken);
+    }
+
+    private async Task<AiToolExecutionResult> ExecuteCoreAsync(
+        AiToolInvocation invocation,
+        AiToolInvocationChannel channel,
+        CancellationToken cancellationToken)
     {
         var name = invocation.ToolName?.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(name) || !_registry.TryGetHandler(name, out var handler))
             return AiToolExecutionResult.Failed("UNKNOWN_TOOL", "Công cụ AI không được hỗ trợ.");
 
         var definition = handler.Definition;
-        var context = BuildContext(invocation);
-        AiToolExecutionResult result;
-
-        if (!definition.Enabled)
-            result = AiToolExecutionResult.Failed("TOOL_DISABLED", "Công cụ AI hiện chưa được kích hoạt.");
-        else if (!string.Equals(definition.Version, invocation.ToolVersion?.Trim(), StringComparison.OrdinalIgnoreCase))
-            result = AiToolExecutionResult.Failed("TOOL_VERSION_NOT_SUPPORTED", "Phiên bản công cụ không được hỗ trợ.");
-        else if (definition.AccessMode != AiToolAccessMode.Public && !context.IsAuthenticated)
-            result = AiToolExecutionResult.Failed("AUTHENTICATION_REQUIRED", "Bạn cần đăng nhập để sử dụng công cụ này.");
-        else if (definition.AccessMode == AiToolAccessMode.RoleRestricted &&
-                 !definition.AllowedRoles.Any(context.Roles.Contains))
-            result = AiToolExecutionResult.Failed("FORBIDDEN_TOOL", "Vai trò hiện tại không được phép dùng công cụ này.");
-        else if (!IsSafeArguments(invocation.ArgumentsJson))
-            result = AiToolExecutionResult.Failed("INVALID_TOOL_ARGUMENTS", "Tham số công cụ không hợp lệ.");
-        else
+        var context = BuildContext(invocation.SessionId, channel, invocation.CorrelationId);
+        var result = await ValidateInvocationAsync(invocation, handler, definition, context, cancellationToken);
+        if (result == null)
         {
             try
             {
@@ -83,6 +147,7 @@ public sealed class AiToolExecutor : IAiToolExecutor
                 version = definition.Version,
                 status = result.Status,
                 confirmationRequired = result.RequiresConfirmation,
+                invocationChannel = channel.ToString(),
                 source = "ai_tool_gateway"
             })
         }, cancellationToken);
@@ -90,7 +155,38 @@ public sealed class AiToolExecutor : IAiToolExecutor
         return result;
     }
 
-    private AiToolExecutionContext BuildContext(AiToolInvocation invocation)
+    private async Task<AiToolExecutionResult?> ValidateInvocationAsync(
+        AiToolInvocation invocation,
+        IAiToolHandler handler,
+        AiToolDefinition definition,
+        AiToolExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        if (!definition.Enabled)
+            return AiToolExecutionResult.Failed("TOOL_DISABLED", "Công cụ AI hiện chưa được kích hoạt.");
+        if (!string.Equals(definition.Version, invocation.ToolVersion?.Trim(), StringComparison.OrdinalIgnoreCase))
+            return AiToolExecutionResult.Failed("TOOL_VERSION_NOT_SUPPORTED", "Phiên bản công cụ không được hỗ trợ.");
+        if (definition.AccessMode != AiToolAccessMode.Public && !context.IsAuthenticated)
+            return AiToolExecutionResult.Failed("AUTHENTICATION_REQUIRED", "Bạn cần đăng nhập để sử dụng công cụ này.");
+        if (definition.AccessMode == AiToolAccessMode.RoleRestricted && !definition.AllowedRoles.Any(context.Roles.Contains))
+            return AiToolExecutionResult.Failed("FORBIDDEN_TOOL", "Vai trò hiện tại không được phép dùng công cụ này.");
+        if (!IsSafeArguments(invocation.ArgumentsJson))
+            return AiToolExecutionResult.Failed("INVALID_TOOL_ARGUMENTS", "Tham số công cụ không hợp lệ.");
+        if (definition.Name.Equals("patient.execute_confirmed_action", StringComparison.OrdinalIgnoreCase) &&
+            context.InvocationChannel != AiToolInvocationChannel.DirectHumanConfirmation)
+            return AiToolExecutionResult.Failed("DIRECT_CONFIRMATION_REQUIRED", "Thao tác này chỉ được thực hiện qua endpoint xác nhận trực tiếp.");
+
+        var capabilities = await _capabilityResolver.ResolveAsync(context, cancellationToken);
+        if (definition.Capabilities.Any(required => !capabilities.Contains(required)))
+            return AiToolExecutionResult.Failed("FORBIDDEN_CAPABILITY", "Tài khoản hiện tại không có capability cần thiết cho công cụ này.");
+
+        var argumentValidation = handler.ValidateArguments(invocation, context);
+        return argumentValidation.IsValid
+            ? null
+            : AiToolExecutionResult.Failed(argumentValidation.Code, argumentValidation.Message);
+    }
+
+    private AiToolExecutionContext BuildContext(string? sessionId, AiToolInvocationChannel channel, string? correlationId = null)
     {
         var principal = _httpContextAccessor.HttpContext?.User;
         var roles = new HashSet<AiActorRole>();
@@ -102,17 +198,18 @@ public sealed class AiToolExecutor : IAiToolExecutor
                 roles.Add(AiActorRole.DiagnosticTechnician);
         }
 
-        var actorId = _currentUser.UserId;
         var facilityClaim = principal?.FindFirst("facility_id")?.Value;
         long? facilityId = long.TryParse(facilityClaim, out var parsedFacilityId) && parsedFacilityId > 0 ? parsedFacilityId : null;
+        var actorId = _currentUser.UserId;
         return new AiToolExecutionContext
         {
             ActorId = actorId,
             IsAuthenticated = principal?.Identity?.IsAuthenticated == true && actorId.HasValue && actorId.Value != Guid.Empty,
             Roles = roles,
-            SessionId = invocation.SessionId,
+            SessionId = sessionId,
             FacilityId = facilityId,
-            CorrelationId = string.IsNullOrWhiteSpace(invocation.CorrelationId) ? Guid.NewGuid().ToString("N") : invocation.CorrelationId!
+            InvocationChannel = channel,
+            CorrelationId = string.IsNullOrWhiteSpace(correlationId) ? Guid.NewGuid().ToString("N") : correlationId!
         };
     }
 
