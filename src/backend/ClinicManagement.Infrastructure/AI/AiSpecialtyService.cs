@@ -133,6 +133,8 @@ public class AiSpecialtyService : IAiSpecialtyService
         }
     }
 
+    // Legacy static helpers for test compatibility only - DO NOT USE in runtime code
+    // All runtime code should use injected IAiSessionSnapshotStore instead
     public static void InvalidateDraftSnapshots(string? draftId, Guid? userId = null, string? sessionId = null, DateTime? nowUtc = null)
     {
         InvalidateDraftSnapshotsForCancel(draftId, sessionId, userId, nowUtc);
@@ -842,7 +844,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         var activeSessionId = !string.IsNullOrWhiteSpace(request.SessionId)
             ? request.SessionId.Trim()
             : null;
-        var activeDraftId = !string.IsNullOrWhiteSpace(request.DraftId) && !IsDraftCancelled(request.DraftId, _currentUserService.UserId, activeSessionId, _dateTimeProvider.UtcNow)
+        var activeDraftId = !string.IsNullOrWhiteSpace(request.DraftId) && !await _snapshotStore.IsDraftCancelledAsync(request.DraftId, _currentUserService.UserId, activeSessionId, _dateTimeProvider.UtcNow, cancellationToken)
             ? request.DraftId.Trim()
             : null;
 
@@ -1142,7 +1144,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         WithDraftVersionSync(response, nextDraftVersion);
 
         var activeSessionId = !string.IsNullOrWhiteSpace(request.SessionId) ? request.SessionId.Trim() : null;
-        var activeDraftId = !string.IsNullOrWhiteSpace(request.DraftId) && !IsDraftCancelled(request.DraftId, _currentUserService.UserId, activeSessionId, _dateTimeProvider.UtcNow) ? request.DraftId.Trim() : null;
+        var activeDraftId = !string.IsNullOrWhiteSpace(request.DraftId) && !await _snapshotStore.IsDraftCancelledAsync(request.DraftId, _currentUserService.UserId, activeSessionId, _dateTimeProvider.UtcNow, cancellationToken) ? request.DraftId.Trim() : null;
         var resolvedSessionId = activeSessionId ?? $"sess_{Guid.NewGuid():N}";
         response.SessionId = resolvedSessionId;
         if (response.BookingDraft != null)
@@ -1398,29 +1400,32 @@ public class AiSpecialtyService : IAiSpecialtyService
         if (localClassification.ExtractedRelativeDoctorIndex.HasValue)
         {
             var relIdx = localClassification.ExtractedRelativeDoctorIndex.Value; // 0-based
-            if (!ValidateSnapshot(
-                request.ContextSnapshotId,
-                _currentUserService.UserId,
-                request.DraftVersion,
-                request.DisplayedDoctorIds,
-                null,
-                _dateTimeProvider.UtcNow,
-                out var snapshot,
-                out var snapshotErr,
-                currentSessionId: request.SessionId,
-                currentDraftId: request.DraftId,
-                currentSpecialtyId: targetSpecialty?.Id ?? request.PendingSpecialtyId))
+            var validationResult = await _snapshotStore.ValidateSnapshotAsync(new ValidateSnapshotRequest
+            {
+                SnapshotId = request.ContextSnapshotId,
+                CurrentUserId = _currentUserService.UserId,
+                CurrentSessionId = request.SessionId,
+                CurrentDraftId = request.DraftId,
+                CurrentDraftVersion = request.DraftVersion,
+                CurrentSpecialtyId = targetSpecialty?.Id ?? request.PendingSpecialtyId,
+                RequestedDoctorIds = request.DisplayedDoctorIds,
+                RequestedSlotIds = null,
+                NowUtc = _dateTimeProvider.UtcNow
+            }, cancellationToken);
+
+            if (!validationResult.IsValid)
             {
                 request.PendingDoctorId = originalPendingDoctorId;
                 request.PendingSlotId = originalPendingSlotId;
                 await PreserveExistingDraftAsync(request, responseDto, cancellationToken);
-                responseDto.Message = snapshotErr ?? "Danh sách lựa chọn không hợp lệ. Vui lòng chọn lại.";
+                responseDto.Message = validationResult.ErrorMessage ?? "Danh sách lựa chọn không hợp lệ. Vui lòng chọn lại.";
                 responseDto.MissingFields = new List<string> { "Doctor", "TimeSlot" };
                 responseDto.DialogueOutcome = "ClarificationRequired";
                 return;
             }
 
-            var candidateDocIds = snapshot!.DoctorIds;
+            var snapshot = validationResult.Snapshot!;
+            var candidateDocIds = snapshot.DoctorIds;
             if (relIdx >= 0 && relIdx < candidateDocIds.Count)
             {
                 var resolvedDocId = candidateDocIds[relIdx];
@@ -1474,27 +1479,30 @@ public class AiSpecialtyService : IAiSpecialtyService
         if (localClassification.ExtractedRelativeSlotIndex.HasValue)
         {
             var relSlotIdx = localClassification.ExtractedRelativeSlotIndex.Value; // 0-based
-            if (!ValidateSnapshot(
-                request.ContextSnapshotId,
-                _currentUserService.UserId,
-                request.DraftVersion,
-                null,
-                request.DisplayedSlotIds,
-                _dateTimeProvider.UtcNow,
-                out var snapshot,
-                out var snapshotErr,
-                currentSessionId: request.SessionId,
-                currentDraftId: request.DraftId,
-                currentSpecialtyId: targetSpecialty?.Id ?? request.PendingSpecialtyId))
+            var validationResult = await _snapshotStore.ValidateSnapshotAsync(new ValidateSnapshotRequest
+            {
+                SnapshotId = request.ContextSnapshotId,
+                CurrentUserId = _currentUserService.UserId,
+                CurrentSessionId = request.SessionId,
+                CurrentDraftId = request.DraftId,
+                CurrentDraftVersion = request.DraftVersion,
+                CurrentSpecialtyId = targetSpecialty?.Id ?? request.PendingSpecialtyId,
+                RequestedDoctorIds = null,
+                RequestedSlotIds = request.DisplayedSlotIds,
+                NowUtc = _dateTimeProvider.UtcNow
+            }, cancellationToken);
+
+            if (!validationResult.IsValid)
             {
                 await PreserveExistingDraftAsync(request, responseDto, cancellationToken);
-                responseDto.Message = snapshotErr ?? "Danh sách lựa chọn không hợp lệ. Vui lòng chọn lại.";
+                responseDto.Message = validationResult.ErrorMessage ?? "Danh sách lựa chọn không hợp lệ. Vui lòng chọn lại.";
                 responseDto.MissingFields = new List<string> { "TimeSlot" };
                 responseDto.DialogueOutcome = "ClarificationRequired";
                 return;
             }
 
-            var candidateSlotIds = snapshot!.SlotIds;
+            var snapshot = validationResult.Snapshot!;
+            var candidateSlotIds = snapshot.SlotIds;
             if (relSlotIdx >= 0 && relSlotIdx < candidateSlotIds.Count)
             {
                 var resolvedSlotId = candidateSlotIds[relSlotIdx];
