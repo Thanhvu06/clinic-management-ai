@@ -411,7 +411,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     assistantStatus: effectiveStatus,
                     primaryIntent: data.primaryIntent,
                     dialogueOutcome: data.dialogueOutcome,
-                    clarificationPrompt: data.clarificationPrompt
+                    clarificationPrompt: data.clarificationPrompt,
+                    toolResults: data.toolResults
                 };
 
                 if (data.dialogueOutcome === "DraftCancelled" || data.dialogueOutcome === "SessionRejected") {

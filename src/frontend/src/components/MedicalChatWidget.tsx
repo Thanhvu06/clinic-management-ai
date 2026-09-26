@@ -253,6 +253,22 @@ const PatientMedicalChatWidget: React.FC = () => {
                                         </div>
                                     )}
 
+                                    {msg.toolResults?.map((toolResult, toolIndex) => (
+                                        <div key={`${toolResult.actionId ?? "tool"}-${toolIndex}`} className={styles.cardContainer}>
+                                            <div className={styles.bookingSummaryCard} role="status" aria-label="Trạng thái thao tác AI">
+                                                <h4 className={styles.bookingSummaryTitle}>
+                                                    <CheckCircle2 size={18} color={toolResult.status === "failed" ? "#b91c1c" : "#0d9488"} />
+                                                    {toolResult.status === "pending_confirmation" ? "Đang chờ xác nhận" : toolResult.status === "completed" ? "Đã kiểm tra dữ liệu hệ thống" : "Không thể thực hiện thao tác"}
+                                                </h4>
+                                                <p className={styles.specialtyReason}>
+                                                    {toolResult.status === "pending_confirmation"
+                                                        ? "Thao tác ghi chưa được thực hiện. Hãy kiểm tra thông tin và xác nhận trong luồng lịch hẹn."
+                                                        : toolResult.error?.message || "Kết quả được trả về từ dịch vụ ClinicCare đã kiểm chứng."}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+
                                     {/* Specialty Suggestions */}
                                     {msg.suggestions && msg.suggestions.length > 0 && msg.urgency !== "EMERGENCY" && (
                                         <div className={styles.cardContainer}>

@@ -341,6 +341,16 @@ export interface AiChatResponse {
     contextSnapshotId?: string;
     sessionId?: string;
     draftId?: string;
+    toolResults?: AiToolExecutionResult[];
+}
+
+export interface AiToolExecutionResult {
+    status: "completed" | "pending_confirmation" | "failed" | string;
+    data?: Record<string, unknown>;
+    error?: { code?: string; message?: string; retryable?: boolean };
+    requiresConfirmation?: boolean;
+    actionId?: string;
+    retrievedAtUtc?: string;
 }
 
 export interface ChatMessage {
@@ -358,4 +368,5 @@ export interface ChatMessage {
     dialogueOutcome?: string;
     clarificationPrompt?: string;
     primaryIntent?: AiChatIntent | string;
+    toolResults?: AiToolExecutionResult[];
 }

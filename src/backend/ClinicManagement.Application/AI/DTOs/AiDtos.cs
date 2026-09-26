@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using ClinicManagement.Application.AI.Tools;
 
 namespace ClinicManagement.Application.AI.DTOs;
 
@@ -632,6 +633,7 @@ public class AiChatResponseDto
     /// Server-verified active booking draft lifecycle identifier.
     /// </summary>
     public string? DraftId { get; set; }
+    public List<AiToolExecutionResult> ToolResults { get; set; } = new();
 }
 
 public class AiChatProviderResult
@@ -657,6 +659,10 @@ public class AiChatProviderResult
     public string? NegatedDoctorName { get; set; }
     public string? NegatedSymptom { get; set; }
     public string? CorrectionTarget { get; set; }
+    public string? ResponseMode { get; set; }
+    public List<AiPlannerToolCall> ToolCalls { get; set; } = new();
+    public string? Clarification { get; set; }
+    public string? Safety { get; set; }
 }
 
 public class SpecialtyClassificationResult

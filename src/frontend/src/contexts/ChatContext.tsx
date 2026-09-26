@@ -111,6 +111,7 @@ export function validateChatMessageSchema(item: unknown): item is ChatMessage {
     if (msg.assistantStatus !== undefined && msg.assistantStatus !== null) {
         if (msg.assistantStatus !== "Unchecked" && msg.assistantStatus !== "Online" && msg.assistantStatus !== "Degraded" && msg.assistantStatus !== "Offline") return false;
     }
+    if (msg.toolResults !== undefined && msg.toolResults !== null && !Array.isArray(msg.toolResults)) return false;
     return true;
 }
 

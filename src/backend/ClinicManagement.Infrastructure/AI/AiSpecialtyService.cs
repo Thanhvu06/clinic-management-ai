@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
+using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,8 @@ public class AiSpecialtyService : IAiSpecialtyService
     private readonly IAiBookingConfirmationStore _confirmationStore;
     private readonly IAiSpecialtyClassifier? _classifier;
     private readonly IVietnameseIntentClassifier _intentClassifier;
+    private readonly IAiSafetyGuard _safetyGuard;
+    private readonly IAiToolExecutor? _toolExecutor;
 
     public AiSpecialtyService(
         AppDbContext dbContext,
@@ -44,7 +47,9 @@ public class AiSpecialtyService : IAiSpecialtyService
         IAiAuditService? auditService = null,
         IAiBookingConfirmationStore? confirmationStore = null,
         IAiSpecialtyClassifier? classifier = null,
-        IVietnameseIntentClassifier? intentClassifier = null)
+        IVietnameseIntentClassifier? intentClassifier = null,
+        IAiSafetyGuard? safetyGuard = null,
+        IAiToolExecutor? toolExecutor = null)
     {
         _dbContext = dbContext;
         _aiProvider = aiProvider;
@@ -58,6 +63,8 @@ public class AiSpecialtyService : IAiSpecialtyService
         _confirmationStore = confirmationStore ?? new Persistence.EfAiBookingConfirmationStore(dbContext, dateTimeProvider, LoggerFactory.Create(_ => { }).CreateLogger<Persistence.EfAiBookingConfirmationStore>());
         _classifier = classifier;
         _intentClassifier = intentClassifier ?? new VietnameseIntentClassifier();
+        _safetyGuard = safetyGuard ?? new AiSafetyGuard();
+        _toolExecutor = toolExecutor;
     }
 
     public async Task<AiSuggestionResponseDto> GetSuggestionsAsync(AiSuggestionRequestDto request, CancellationToken cancellationToken = default)
@@ -142,6 +149,48 @@ public class AiSpecialtyService : IAiSpecialtyService
     {
         var rawMessage = request.Message ?? string.Empty;
         var lowerMsg = rawMessage.ToLowerInvariant();
+
+        var safety = _safetyGuard.Inspect(rawMessage);
+        if (safety.IsEmergency)
+        {
+            await _auditService.LogActionAsync(new AiAuditLogEntry
+            {
+                UserId = _currentUserService.UserId,
+                SessionId = request.SessionId,
+                ActionType = "SafetyGuard",
+                Outcome = "EMERGENCY",
+                ErrorCode = "EMERGENCY_RED_FLAG"
+            }, cancellationToken);
+            return new AiChatResponseDto
+            {
+                Message = "Dấu hiệu bạn mô tả có thể là tình huống y tế khẩn cấp. Hãy gọi ngay 115 hoặc đến cơ sở cấp cứu gần nhất. Không chờ phản hồi qua trò chuyện.",
+                Reply = "Dấu hiệu có thể là tình huống cấp cứu. Hãy gọi 115 ngay.",
+                Urgency = "EMERGENCY",
+                SafetyNotice = "TÌNH HUỐNG Y TẾ CẤP CỨU: Gọi 115 hoặc đến cơ sở cấp cứu gần nhất.",
+                PromptVersion = GeminiAiProvider.CurrentPromptVersion,
+                AssistantStatus = "Online",
+                ProviderStatus = "NotCalled",
+                DialogueOutcome = "SafetyEmergency",
+                Actions = new List<AiActionDto>
+                {
+                    new() { Id = "act-emergency-115", Type = AiActionTypes.CallEmergency, Label = "Gọi cấp cứu 115", Style = "danger", RequiresAuthentication = false, RequiresConfirmation = false, Payload = new AiActionPayloadDto { TargetUrl = "tel:115" } }
+                }
+            };
+        }
+        if (safety.IsPromptInjection)
+        {
+            return new AiChatResponseDto
+            {
+                Message = "Tôi là Trợ lý ClinicCare AI hỗ trợ điều hướng chuyên khoa, lịch khám và thông tin phòng khám. Tôi tuân thủ nghiêm ngặt các quy tắc an toàn y khoa và không thực hiện các yêu cầu nằm ngoài phạm vi hỗ trợ.",
+                Reply = "Tôi là Trợ lý ClinicCare AI hỗ trợ điều hướng chuyên khoa, lịch khám và thông tin phòng khám. Tôi tuân thủ nghiêm ngặt các quy tắc an toàn y khoa và không thực hiện các yêu cầu nằm ngoài phạm vi hỗ trợ.",
+                Urgency = "ROUTINE",
+                PromptVersion = GeminiAiProvider.CurrentPromptVersion,
+                AssistantStatus = "Online",
+                ProviderStatus = "NotCalled",
+                DialogueOutcome = "SafetyPromptInjectionBlocked",
+                ManualSelectionRequired = true
+            };
+        }
 
         // A client may start a new tab with no session ID, but an existing session
         // can never be silently rebound to another account or revived after expiry.
@@ -543,6 +592,12 @@ public class AiSpecialtyService : IAiSpecialtyService
             AssistantStatus = "Online",
             ProviderStatus = "Healthy"
         };
+        if (_toolExecutor != null && aiResult.ToolCalls.Count > 0)
+        {
+            responseDto.ToolResults = await ExecutePlannedToolsAsync(aiResult.ToolCalls, request.SessionId, cancellationToken);
+            if (responseDto.ToolResults.Any(x => x.Status == "completed"))
+                responseDto.DialogueOutcome = "ToolGrounded";
+        }
         if (providerActuallyFailed)
         {
             responseDto.ProviderStatus = "Degraded";
@@ -757,6 +812,42 @@ public class AiSpecialtyService : IAiSpecialtyService
             .ToList();
 
         return responseDto;
+    }
+
+    private async Task<List<AiToolExecutionResult>> ExecutePlannedToolsAsync(
+        IEnumerable<AiPlannerToolCall> plannedCalls,
+        string? sessionId,
+        CancellationToken cancellationToken)
+    {
+        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "clinic.search_specialties", "clinic.search_doctors", "clinic.get_available_slots",
+            "clinic.get_facilities", "clinic.get_pricing", "patient.get_my_appointments",
+            "patient.get_appointment_detail", "patient.prepare_booking",
+            "patient.prepare_cancel_appointment", "patient.prepare_reschedule_appointment",
+            "patient.execute_confirmed_action"
+        };
+        var results = new List<AiToolExecutionResult>();
+        foreach (var call in plannedCalls.Take(3))
+        {
+            if (string.IsNullOrWhiteSpace(call.Name) || !allowed.Contains(call.Name) ||
+                !string.Equals(call.Version, "1.0", StringComparison.OrdinalIgnoreCase) ||
+                call.Arguments.ValueKind != System.Text.Json.JsonValueKind.Object)
+            {
+                results.Add(AiToolExecutionResult.Failed("PLANNER_TOOL_NOT_ALLOWED", "Kế hoạch công cụ không nằm trong allowlist."));
+                continue;
+            }
+
+            var result = await _toolExecutor!.ExecuteAsync(new AiToolInvocation
+            {
+                ToolName = call.Name,
+                ToolVersion = call.Version,
+                ArgumentsJson = call.Arguments.GetRawText(),
+                SessionId = sessionId
+            }, cancellationToken);
+            results.Add(result);
+        }
+        return results;
     }
 
     private async Task<AiChatResponseDto> FindEarliestAvailableSlotsAsync(

@@ -127,6 +127,17 @@ builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiAuditSe
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiBookingConfirmationStore, ClinicManagement.Infrastructure.AI.Persistence.EfAiBookingConfirmationStore>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSpecialtyService, ClinicManagement.Infrastructure.AI.AiSpecialtyService>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IClinicAiContextService, ClinicManagement.Infrastructure.AI.ClinicAiContextService>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiSafetyGuard, ClinicManagement.Infrastructure.AI.AiSafetyGuard>();
+builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.Tools.PatientCopilotToolHandler>();
+foreach (var toolDefinition in ClinicManagement.Infrastructure.AI.Tools.PatientCopilotToolHandler.Definitions())
+{
+    var registeredDefinition = toolDefinition;
+    builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolHandler>(sp =>
+        new ClinicManagement.Infrastructure.AI.Tools.AiToolHandlerAdapter(
+            sp.GetRequiredService<ClinicManagement.Infrastructure.AI.Tools.PatientCopilotToolHandler>(), registeredDefinition));
+}
+builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolRegistry, ClinicManagement.Infrastructure.AI.Tools.AiToolRegistry>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolExecutor, ClinicManagement.Infrastructure.AI.Tools.AiToolExecutor>();
 builder.Services.AddScoped<ClinicManagement.Application.HealthPackages.Interfaces.IHealthPackageService, ClinicManagement.Infrastructure.HealthPackages.HealthPackageService>();
 builder.Services.AddScoped<ClinicManagement.Application.HealthPackages.Interfaces.IHealthPackageRegistrationService, ClinicManagement.Infrastructure.HealthPackages.HealthPackageRegistrationService>();
 builder.Services.AddScoped<ClinicManagement.Application.Locations.Interfaces.ILocationService, ClinicManagement.Infrastructure.Locations.LocationService>();

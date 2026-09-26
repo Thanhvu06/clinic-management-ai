@@ -57,6 +57,17 @@ public class Program
 
             return RunTrainIntent(dataPath, outDir);
         }
+        else if (command == "--evaluate-copilot")
+        {
+            var benchmarkPath = args.Length > 1 ? args[1] : Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "patient_copilot_benchmark.json");
+            if (!File.Exists(benchmarkPath))
+            {
+                Console.WriteLine($"Benchmark file not found: {benchmarkPath}");
+                return 1;
+            }
+            Console.WriteLine(PatientCopilotBenchmarkRunner.Evaluate(benchmarkPath));
+            return 0;
+        }
         else
         {
             Console.ForegroundColor = ConsoleColor.Red;
@@ -74,6 +85,7 @@ public class Program
         Console.WriteLine("  ClinicManagement.AI.Training --train [--data datasetPath] [--out outputDir] [--allow-demo-data] [--manifest manifestPath]");
         Console.WriteLine("  ClinicManagement.AI.Training --train-intent [--data datasetPath] [--out outputDir]");
         Console.WriteLine("  ClinicManagement.AI.Training --eval-intent [--data datasetPath]");
+        Console.WriteLine("  ClinicManagement.AI.Training --evaluate-copilot [benchmarkPath]");
     }
 
     private static int RunValidate(string dataPath)

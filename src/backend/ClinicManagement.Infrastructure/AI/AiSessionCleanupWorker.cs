@@ -3,6 +3,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.Common.Interfaces;
+using ClinicManagement.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -71,5 +73,12 @@ public sealed class AiSessionCleanupWorker : BackgroundService
         await store.PurgeExpiredRecordsAsync(clock.UtcNow, cancellationToken);
         var confirmationStore = scope.ServiceProvider.GetRequiredService<IAiBookingConfirmationStore>();
         await confirmationStore.PurgeExpiredAsync(clock.UtcNow, cancellationToken);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var completedRetentionCutoff = clock.UtcNow.AddHours(-24);
+        await db.AiPendingToolActions
+            .Where(x => (x.ExpiresAtUtc <= clock.UtcNow && x.ConfirmedAtUtc == null) ||
+                        (x.ExecutedAtUtc.HasValue && x.ExecutedAtUtc.Value <= completedRetentionCutoff) ||
+                        (x.CancelledAtUtc.HasValue && x.CancelledAtUtc.Value <= completedRetentionCutoff))
+            .ExecuteDeleteAsync(cancellationToken);
     }
 }
