@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.AI.Interfaces;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,10 +13,12 @@ namespace ClinicManagement.Infrastructure.AI;
 public class ClinicAiContextService : IClinicAiContextService
 {
     private readonly AppDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public ClinicAiContextService(AppDbContext dbContext)
+    public ClinicAiContextService(AppDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<string> GetClinicContextJsonAsync(CancellationToken cancellationToken = default)
@@ -34,24 +37,8 @@ public class ClinicAiContextService : IClinicAiContextService
 
         var specialtyIds = activeSpecialties.Select(s => s.Id).ToList();
 
-        var activeDoctors = await (from ds in _dbContext.DoctorSpecialties
-                                   join d in _dbContext.Doctors on ds.DoctorId equals d.Id
-                                   join u in _dbContext.Users on d.UserId equals u.Id
-                                   where d.IsActive && u.IsActive && specialtyIds.Contains(ds.SpecialtyId)
-                                   select new
-                                   {
-                                       ds.SpecialtyId,
-                                       DoctorName = u.FullName,
-                                       d.AcademicTitle,
-                                       d.ExperienceYears,
-                                       d.Description
-                                   })
-                                   .AsNoTracking()
-                                   .ToListAsync(cancellationToken);
-
-        var today = DateTime.UtcNow;
-        var dateToday = DateOnly.FromDateTime(today);
-        var timeNow = TimeOnly.FromDateTime(today);
+        var dateToday = _dateTimeProvider.VietnamToday;
+        var timeNow = _dateTimeProvider.VietnamTime;
         var toDate = dateToday.AddDays(7); // Next 7 days
 
         var availableSlots = await _dbContext.AppointmentSlots
@@ -63,10 +50,7 @@ public class ClinicAiContextService : IClinicAiContextService
             .Select(s => new { s.DoctorId, s.SlotDate })
             .Distinct()
             .ToListAsync(cancellationToken);
-            
-        var activeDoctorIds = activeDoctors.Select(d => d.SpecialtyId).Distinct().ToList(); // Wait, DoctorId is needed for available slots.
 
-        // Fix: Query active doctors with DoctorId
         var activeDoctorsWithId = await (from ds in _dbContext.DoctorSpecialties
                                          join d in _dbContext.Doctors on ds.DoctorId equals d.Id
                                          join u in _dbContext.Users on d.UserId equals u.Id
@@ -101,9 +85,38 @@ public class ClinicAiContextService : IClinicAiContextService
                 .ToList()
         }).ToList();
 
+        var primaryFacility = await _dbContext.Facilities
+            .AsNoTracking()
+            .Where(f => f.IsActive)
+            .OrderBy(f => f.Id)
+            .Select(f => new
+            {
+                f.Name,
+                f.Address,
+                f.City,
+                f.Phone,
+                f.Email,
+                f.Description
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var facilityInfo = primaryFacility != null
+            ? new
+            {
+                TenPhongKham = primaryFacility.Name,
+                DiaChi = string.IsNullOrWhiteSpace(primaryFacility.City) ? primaryFacility.Address : $"{primaryFacility.Address}, {primaryFacility.City}",
+                HotlineTiepDon = string.IsNullOrWhiteSpace(primaryFacility.Phone) ? "Chưa cấu hình" : primaryFacility.Phone,
+                Email = primaryFacility.Email ?? "Chưa cấu hình",
+                GioLamViec = "Thứ Hai đến Thứ Bảy: 07:30 - 17:00 (Nghỉ Chủ Nhật)."
+            }
+            : null;
+
         var payload = new
         {
-            Notice = "Hệ thống hiện chưa lưu địa chỉ, hotline và giờ mở cửa chung. Nếu người dùng hỏi, hãy trả lời rằng hệ thống chưa có thông tin đó.",
+            ThongTinCoSo = facilityInfo,
+            HuongDanCoSo = facilityInfo != null
+                ? $"Phòng khám: {facilityInfo.TenPhongKham}. Địa chỉ: {facilityInfo.DiaChi}. Hotline tiếp đón: {facilityInfo.HotlineTiepDon}. Giờ làm việc: {facilityInfo.GioLamViec}."
+                : "Thông tin liên hệ cơ sở và hotline lễ tân hiện chưa được cấu hình trong hệ thống. Nếu người dùng hỏi, trả lời trung thực là hệ thống chưa có cấu hình liên hệ.",
             Specialties = clinicData
         };
 

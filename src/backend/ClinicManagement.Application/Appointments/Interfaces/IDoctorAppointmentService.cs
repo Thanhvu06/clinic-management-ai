@@ -9,20 +9,51 @@ namespace ClinicManagement.Application.Appointments.Interfaces;
 
 public interface IDoctorAppointmentService
 {
-    Task<PagedResult<DoctorAppointmentDto>> GetMyAppointmentsAsync(string? status, string? search, int page, int pageSize);
+    // Dashboard & Schedule
+    Task<DoctorDashboardDto> GetDoctorDashboardAsync(DateOnly? date);
+    Task<List<DoctorScheduleDayDto>> GetDoctorScheduleAsync(DateOnly fromDate, DateOnly toDate);
+
+    // Appointments query & detail
+    Task<PagedResult<DoctorAppointmentDto>> GetMyAppointmentsAsync(DateOnly? date, string? status, string? search, int page, int pageSize);
     Task<DoctorAppointmentDto> GetAppointmentByIdAsync(long appointmentId);
     Task<List<AppointmentHistoryDto>> GetAppointmentHistoryAsync(long appointmentId);
-    Task CompleteAppointmentAsync(long appointmentId, CompleteAppointmentDto request);
+
+    // Patient clinical context
+    Task<PatientClinicalContextDto> GetPatientClinicalContextAsync(long appointmentId);
+
+    // Workflow state transitions
+    Task CheckInAppointmentAsync(long appointmentId);
+    Task StartConsultationAsync(long appointmentId);
+    Task CompleteAppointmentAsync(long appointmentId, CompleteConsultationRequest request);
     Task MarkNoShowAsync(long appointmentId, NoShowAppointmentDto request);
     Task<RevisitRequestDto> CreateRevisitRequestAsync(long appointmentId, CreateRevisitRequestDto request);
-    Task<ClinicManagement.Application.Prescriptions.DTOs.PrescriptionDetailDto> CreatePrescriptionAsync(long appointmentId, ClinicManagement.Application.Prescriptions.DTOs.CreatePrescriptionDto request);
-    Task<ClinicManagement.Application.Prescriptions.DTOs.PrescriptionDetailDto?> GetPrescriptionByAppointmentIdAsync(long appointmentId);
+
+    // Clinical encounter & vital signs
+    Task<ClinicalEncounterDto?> GetEncounterAsync(long appointmentId);
+    Task<ClinicalEncounterDto> SaveEncounterAsync(long appointmentId, SaveEncounterRequest request);
+    Task<VitalSignsDto?> GetVitalSignsAsync(long appointmentId);
+    Task<VitalSignsDto> SaveVitalSignsAsync(long appointmentId, SaveVitalSignsRequest request);
+
+    // Prescription draft & issuance
+    Task<PrescriptionDraftDto?> GetPrescriptionDraftAsync(long appointmentId);
+    Task<PrescriptionDraftDto> SavePrescriptionDraftAsync(long appointmentId, SavePrescriptionDraftRequest request);
+
+    // Visit-level Clinical Operations
+    Task<PatientClinicalContextDto> GetVisitClinicalContextAsync(long visitId);
+    Task StartVisitConsultationAsync(long visitId);
+    Task CompleteVisitConsultationAsync(long visitId, CompleteConsultationRequest request);
+    Task<ClinicalEncounterDto?> GetVisitEncounterAsync(long visitId);
+    Task<ClinicalEncounterDto> SaveVisitEncounterAsync(long visitId, SaveEncounterRequest request);
+    Task<VitalSignsDto?> GetVisitVitalSignsAsync(long visitId);
+    Task<VitalSignsDto> SaveVisitVitalSignsAsync(long visitId, SaveVitalSignsRequest request);
+    Task<PrescriptionDraftDto?> GetVisitPrescriptionDraftAsync(long visitId);
+    Task<PrescriptionDraftDto> SaveVisitPrescriptionDraftAsync(long visitId, SavePrescriptionDraftRequest request);
 }
 
 public interface IRevisitService
 {
     Task<PagedResult<RevisitRequestDto>> GetMyRevisitRequestsAsync(string? status, int page, int pageSize);
     Task<RevisitRequestDto> GetRevisitRequestByIdAsync(long id);
-    Task AcceptRevisitRequestAsync(long id, AcceptRevisitRequestDto request);
+    Task<AppointmentDto> AcceptRevisitRequestAsync(long id, AcceptRevisitRequestDto request);
     Task RejectRevisitRequestAsync(long id, RejectRevisitRequestDto request);
 }

@@ -9,4 +9,5 @@ public interface IDoctorService
     Task<DoctorDetailDto> GetDoctorByIdAsync(long doctorId);
     Task<List<SpecialtyDto>> GetSpecialtiesByDoctorAsync(long doctorId);
     Task<List<AvailableSlotDto>> GetAvailableSlotsAsync(long doctorId, DateOnly fromDate, DateOnly toDate, long? specialtyId);
+    Task<DoctorAvailabilityDto> GetDoctorAvailabilityAsync(long doctorId, DateOnly fromDate, DateOnly toDate, long? specialtyId);
 }

@@ -1,10 +1,12 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using ClinicManagement.Application.Appointments.DTOs;
 using ClinicManagement.Application.Appointments.DTOs.Revisit;
 using ClinicManagement.Application.Appointments.Interfaces;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
@@ -17,11 +19,16 @@ public class RevisitService : IRevisitService
 {
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public RevisitService(AppDbContext dbContext, ICurrentUserService currentUserService)
+    public RevisitService(
+        AppDbContext dbContext,
+        ICurrentUserService currentUserService,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     private Guid GetUserId()
@@ -54,6 +61,7 @@ public class RevisitService : IRevisitService
                     {
                         Request = r,
                         DoctorName = du.FullName,
+                        SpecialtyId = s.Id,
                         SpecialtyName = s.Name
                     };
 
@@ -64,10 +72,13 @@ public class RevisitService : IRevisitService
 
         query = query.OrderByDescending(x => x.Request.SuggestedDate);
 
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
+
         var totalItems = await query.CountAsync();
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
 
-        var resultItems = items.Select(x => MapToDto(x.Request, x.DoctorName, x.SpecialtyName)).ToList();
+        var resultItems = items.Select(x => MapToDto(x.Request, x.DoctorName, x.SpecialtyId, x.SpecialtyName)).ToList();
 
         return new PagedResult<RevisitRequestDto>(resultItems, totalItems, page, pageSize);
     }
@@ -86,67 +97,136 @@ public class RevisitService : IRevisitService
                     {
                         Request = r,
                         DoctorName = du.FullName,
+                        SpecialtyId = s.Id,
                         SpecialtyName = s.Name
                     };
 
         var item = await query.FirstOrDefaultAsync();
         if (item == null) throw new NotFoundException("Đề xuất tái khám không tồn tại.");
 
-        return MapToDto(item.Request, item.DoctorName, item.SpecialtyName);
+        return MapToDto(item.Request, item.DoctorName, item.SpecialtyId, item.SpecialtyName);
     }
 
-    public async Task AcceptRevisitRequestAsync(long id, AcceptRevisitRequestDto request)
+    public async Task<AppointmentDto> AcceptRevisitRequestAsync(long id, AcceptRevisitRequestDto request)
     {
         var patient = await GetCurrentPatientAsync();
         var userId = GetUserId();
+        var normalizedReason = string.IsNullOrWhiteSpace(request.Reason)
+            ? "Tái khám theo đề xuất của bác sĩ"
+            : request.Reason.Trim();
 
-        using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        if (normalizedReason.Length is < 10 or > 500)
+            throw new BusinessException("VALIDATION_ERROR", "Lý do khám phải từ 10 đến 500 ký tự.");
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         try
         {
             var revisitReq = await _dbContext.RevisitRequests
                 .Include(r => r.OriginalAppointment)
                 .FirstOrDefaultAsync(r => r.Id == id && r.PatientId == patient.Id);
 
-            if (revisitReq == null) throw new NotFoundException("Đề xuất tái khám không tồn tại.");
-            
+            if (revisitReq == null)
+                throw new NotFoundException("Đề xuất tái khám không tồn tại.");
+
             if (revisitReq.Status != RevisitRequestStatus.PendingPatientResponse)
                 throw new BusinessException("INVALID_STATE", "Chỉ có thể chấp nhận đề xuất đang chờ phản hồi.");
 
             var targetSlot = await _dbContext.AppointmentSlots
+                .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Id == request.TargetSlotId);
-            
-            if (targetSlot == null) throw new NotFoundException("Slot yêu cầu không tồn tại.");
+
+            if (targetSlot == null)
+                throw new NotFoundException("Khung giờ khám không tồn tại.");
 
             if (targetSlot.DoctorId != revisitReq.DoctorId)
-                throw new BusinessException("INVALID_TARGET", "Slot phải thuộc về bác sĩ đề xuất tái khám.");
+                throw new BusinessException("INVALID_TARGET", "Khung giờ phải thuộc về bác sĩ đề xuất tái khám.");
+
+            if ((targetSlot.SlotDate.ToDateTime(targetSlot.EndTime) -
+                 targetSlot.SlotDate.ToDateTime(targetSlot.StartTime)).TotalMinutes != 30)
+                throw new BusinessException("INVALID_TARGET", "Khung giờ tái khám phải có thời lượng đúng 30 phút.");
+
+            if (targetSlot.SlotDate.DayOfWeek == DayOfWeek.Sunday)
+                throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Phòng khám không mở lịch khám vào Chủ nhật.");
+
+            var vietnamToday = _dateTimeProvider.VietnamToday;
+            if (targetSlot.SlotDate < vietnamToday ||
+                (targetSlot.SlotDate == vietnamToday && targetSlot.StartTime <= _dateTimeProvider.VietnamTime))
+                throw new BusinessException("INVALID_TARGET", "Khung giờ tái khám phải ở trong tương lai.");
+
+            var doctor = await _dbContext.Doctors.AsNoTracking()
+                .FirstOrDefaultAsync(d => d.Id == targetSlot.DoctorId && d.IsActive);
+            if (doctor == null)
+                throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ không tồn tại hoặc đã ngừng hoạt động.");
+
+            var specialtyId = revisitReq.OriginalAppointment.SpecialtyId;
+            var specialty = await _dbContext.Specialties.AsNoTracking()
+                .FirstOrDefaultAsync(sp => sp.Id == specialtyId && sp.IsActive);
+            if (specialty == null)
+                throw new BusinessException("SPECIALTY_NOT_AVAILABLE", "Chuyên khoa không tồn tại hoặc đã ngừng hoạt động.");
+
+            var doctorHasSpecialty = await _dbContext.DoctorSpecialties
+                .AnyAsync(ds => ds.DoctorId == doctor.Id && ds.SpecialtyId == specialtyId);
+            if (!doctorHasSpecialty)
+                throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ không còn phụ trách chuyên khoa của lịch tái khám.");
 
             var slotStart = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime);
-            if (slotStart <= DateTime.UtcNow)
-                throw new BusinessException("INVALID_TARGET", "Slot yêu cầu phải ở trong tương lai.");
+            var slotEnd = targetSlot.SlotDate.ToDateTime(targetSlot.EndTime);
+
+            var hasWorkSchedule = await _dbContext.DoctorWorkSchedules
+                .AnyAsync(ws =>
+                    ws.DoctorId == doctor.Id &&
+                    ws.WorkDate == targetSlot.SlotDate &&
+                    ws.StartTime <= targetSlot.StartTime &&
+                    ws.EndTime >= targetSlot.EndTime &&
+                    ws.IsActive);
+            if (!hasWorkSchedule)
+                throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Khung giờ không nằm trong lịch làm việc đang hoạt động của bác sĩ.");
+
+            var isOnApprovedLeave = await _dbContext.DoctorLeaveRequests
+                .AnyAsync(leave =>
+                    leave.DoctorId == doctor.Id &&
+                    leave.Status == DoctorLeaveRequestStatus.Approved &&
+                    slotStart < leave.EndDateTime &&
+                    slotEnd > leave.StartDateTime);
+            if (isOnApprovedLeave)
+                throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ đang trong lịch nghỉ đã được duyệt.");
 
             var affectedRows = await _dbContext.AppointmentSlots
-                .Where(s => s.Id == targetSlot.Id && !s.IsBooked)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsBooked, true));
+                .Where(slot => slot.Id == targetSlot.Id && !slot.IsBooked)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(slot => slot.IsBooked, true));
 
-            if (affectedRows == 0)
-                throw new BusinessException("SLOT_TAKEN", "Slot yêu cầu đã được đặt hoặc không khả dụng.");
+            if (affectedRows != 1)
+                throw new ConflictException("SLOT_ALREADY_BOOKED", "Khung giờ vừa được đặt bởi người khác. Vui lòng chọn giờ khác.");
+
+            var hasPatientTimeConflict = await _dbContext.Appointments
+                .AnyAsync(appointment =>
+                    appointment.PatientId == patient.Id &&
+                    appointment.AppointmentDate == targetSlot.SlotDate &&
+                    AppointmentStatusExtensions.HoldingSlotStatuses.Contains(appointment.Status) &&
+                    appointment.StartTime < targetSlot.EndTime &&
+                    appointment.EndTime > targetSlot.StartTime);
+            if (hasPatientTimeConflict)
+                throw new BusinessException("PATIENT_TIME_CONFLICT", "Bạn đã có lịch khám khác trùng hoặc giao lấp với khung giờ này.");
+
+            var doctorUser = await _dbContext.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == doctor.UserId);
 
             var newAppointment = new Appointment
             {
-                AppointmentCode = "APT-" + DateTime.Now.ToString("yyMMdd") + "-" + Guid.NewGuid().ToString().Substring(0, 4).ToUpper(),
+                AppointmentCode = $"APT-{_dateTimeProvider.VietnamNow:yyMMdd}-{Guid.NewGuid():N}"[..18].ToUpper(),
                 PatientId = patient.Id,
-                DoctorId = targetSlot.DoctorId,
-                SpecialtyId = revisitReq.OriginalAppointment.SpecialtyId,
+                DoctorId = doctor.Id,
+                SpecialtyId = specialtyId,
                 AppointmentSlotId = targetSlot.Id,
                 AppointmentDate = targetSlot.SlotDate,
                 StartTime = targetSlot.StartTime,
                 EndTime = targetSlot.EndTime,
-                Reason = request.Reason ?? "Tái khám theo đề xuất của bác sĩ",
+                Reason = normalizedReason,
                 Status = AppointmentStatus.Pending
             };
 
             _dbContext.Appointments.Add(newAppointment);
-            await _dbContext.SaveChangesAsync(); // Save to generate ID
+            await _dbContext.SaveChangesAsync();
 
             revisitReq.Status = RevisitRequestStatus.Accepted;
             revisitReq.NewAppointmentId = newAppointment.Id;
@@ -157,17 +237,83 @@ public class RevisitService : IRevisitService
                 Action = AppointmentHistoryAction.Created,
                 OldStatus = null,
                 NewStatus = AppointmentStatus.Pending,
-                Note = "Bệnh nhân đặt lịch tái khám",
+                Note = "Bệnh nhân đặt lịch tái khám theo đề xuất của bác sĩ",
                 PerformedByUserId = userId,
                 CreatedAt = DateTime.UtcNow
             });
 
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = userId,
+                Type = NotificationType.Appointment,
+                Title = "Đặt lịch tái khám thành công",
+                Message = $"Lịch tái khám #{newAppointment.AppointmentCode} ngày {newAppointment.AppointmentDate:dd/MM/yyyy} lúc {newAppointment.StartTime:HH\\:mm} đã được tiếp nhận.",
+                Route = "/patient/appointments",
+                RelatedEntityType = "Appointment",
+                RelatedEntityId = newAppointment.Id.ToString(),
+                DedupeKey = $"revisit_booked_pat_{revisitReq.Id}",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+            var receptionistRole = await _dbContext.Roles
+                .FirstOrDefaultAsync(role => role.Name == ClinicManagement.Application.Common.Constants.RoleNames.Receptionist);
+            if (receptionistRole != null)
+            {
+                var receptionistUserIds = await _dbContext.UserRoles
+                    .Where(userRole => userRole.RoleId == receptionistRole.Id)
+                    .Select(userRole => userRole.UserId)
+                    .ToListAsync();
+
+                var activeReceptionistIds = await _dbContext.Users
+                    .Where(user => receptionistUserIds.Contains(user.Id) && user.IsActive)
+                    .Select(user => user.Id)
+                    .ToListAsync();
+
+                foreach (var receptionistId in activeReceptionistIds)
+                {
+                    _dbContext.Notifications.Add(new Notification
+                    {
+                        UserId = receptionistId,
+                        Type = NotificationType.Appointment,
+                        Title = "Lịch tái khám mới chờ xử lý",
+                        Message = $"Bệnh nhân đã đặt lịch tái khám #{newAppointment.AppointmentCode} ngày {newAppointment.AppointmentDate:dd/MM/yyyy}.",
+                        Route = "/reception/appointments",
+                        RelatedEntityType = "Appointment",
+                        RelatedEntityId = newAppointment.Id.ToString(),
+                        DedupeKey = $"revisit_booked_rec_{revisitReq.Id}_{receptionistId}",
+                        IsRead = false,
+                        CreatedAtUtc = DateTime.UtcNow
+                    });
+                }
+            }
+
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
+
+            return new AppointmentDto
+            {
+                Id = newAppointment.Id,
+                AppointmentCode = newAppointment.AppointmentCode,
+                PatientId = newAppointment.PatientId,
+                DoctorId = newAppointment.DoctorId,
+                DoctorName = string.IsNullOrWhiteSpace(doctor.AcademicTitle)
+                    ? doctorUser?.FullName ?? string.Empty
+                    : $"{doctor.AcademicTitle}. {doctorUser?.FullName}".Trim(),
+                SpecialtyId = newAppointment.SpecialtyId,
+                SpecialtyName = specialty.Name,
+                AppointmentSlotId = newAppointment.AppointmentSlotId,
+                AppointmentDate = newAppointment.AppointmentDate,
+                StartTime = newAppointment.StartTime,
+                EndTime = newAppointment.EndTime,
+                Reason = newAppointment.Reason,
+                Status = newAppointment.Status.ToString()
+            };
         }
         catch
         {
             await transaction.RollbackAsync();
+            _dbContext.ChangeTracker.Clear();
             throw;
         }
     }
@@ -190,16 +336,21 @@ public class RevisitService : IRevisitService
         await _dbContext.SaveChangesAsync();
     }
 
-    private static RevisitRequestDto MapToDto(RevisitRequest r, string doctorName, string specialtyName) => new()
+    private static RevisitRequestDto MapToDto(
+        RevisitRequest request,
+        string doctorName,
+        long specialtyId,
+        string specialtyName) => new()
     {
-        Id = r.Id,
-        AppointmentId = r.AppointmentId,
-        PatientId = r.PatientId,
-        DoctorId = r.DoctorId,
-        SuggestedDate = r.SuggestedDate,
-        Note = r.Note,
-        Status = r.Status.ToString(),
-        NewAppointmentId = r.NewAppointmentId,
+        Id = request.Id,
+        AppointmentId = request.AppointmentId,
+        PatientId = request.PatientId,
+        DoctorId = request.DoctorId,
+        SpecialtyId = specialtyId,
+        SuggestedDate = request.SuggestedDate,
+        Note = request.Note,
+        Status = request.Status.ToString(),
+        NewAppointmentId = request.NewAppointmentId,
         DoctorName = doctorName ?? string.Empty,
         SpecialtyName = specialtyName ?? string.Empty
     };

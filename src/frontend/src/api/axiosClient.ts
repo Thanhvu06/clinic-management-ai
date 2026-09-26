@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5258';
+
 const axiosClient = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL + '/api/v1',
+    baseURL: `${apiBase.replace(/\/$/, '')}/api/v1`,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -23,10 +25,12 @@ axiosClient.interceptors.response.use(
         if (error.response?.status === 401) {
             localStorage.removeItem('token');
             if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-                window.location.href = '/login';
+                const currentFull = window.location.pathname + window.location.search + window.location.hash;
+                const safeParam = currentFull && currentFull !== '/' ? `?returnUrl=${encodeURIComponent(currentFull)}` : '';
+                window.location.href = `/login${safeParam}`;
             }
         } else if (error.response?.status === 403) {
-            if (window.location.pathname !== '/forbidden') {
+            if (window.location.pathname !== '/forbidden' && window.location.pathname !== '/403') {
                 window.location.href = '/forbidden';
             }
         }

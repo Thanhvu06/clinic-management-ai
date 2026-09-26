@@ -2,14 +2,27 @@ name: ClinicCare CI
 
 on:
   push:
-    branches: [ main, "wip/**" ]
+    branches: [ main, "feat/**", "fix/**", "wip/**" ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, "feat/**" ]
 
 jobs:
   backend:
     name: Backend Build & Test (.NET 10)
     runs-on: ubuntu-latest
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Your_password123!"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Your_password123!' -C -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -19,17 +32,99 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Install dotnet-ef
+        run: dotnet tool install --global dotnet-ef
+
       - name: Restore dependencies
         run: dotnet restore src/backend/ClinicManagement.sln
 
       - name: Build backend
         run: dotnet build src/backend/ClinicManagement.sln --no-restore --configuration Release
 
+      - name: Check for pending EF Core model changes
+        run: dotnet ef migrations has-pending-model-changes --project src/backend/ClinicManagement.Infrastructure --startup-project src/backend/ClinicManagement.Api
+
+      - name: Run focused Phase 1.2 contract tests
+        run: >-
+          dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
+          --no-build --configuration Release --filter
+          "FullyQualifiedName~AiPhase12ContractTests|FullyQualifiedName~AiSessionCleanupWorkerTests"
+
+      - name: Generate official idempotent migration script
+        shell: bash
+        run: |
+          dotnet ef migrations script --idempotent --context AppDbContext \
+            --project src/backend/ClinicManagement.Infrastructure \
+            --startup-project src/backend/ClinicManagement.Api \
+            --configuration Release --output ./phase12-ef-idempotent.sql
+          grep -q "20260926114519_HardenAiPendingToolActionExecution" ./phase12-ef-idempotent.sql
+          grep -q "__EFMigrationsHistory" ./phase12-ef-idempotent.sql
+
+      - name: Prepare SQL Server migration database
+        shell: bash
+        run: |
+          docker ps --format 'table {{.ID}}\t{{.Image}}\t{{.Names}}'
+          SQLSERVER_CONTAINER="$(docker ps --format '{{.ID}} {{.Image}} {{.Names}}' | awk 'tolower($2) ~ /mssql\/server/ { print $1; exit }')"
+          test -n "$SQLSERVER_CONTAINER"
+          echo "Using SQL Server service container $SQLSERVER_CONTAINER"
+          echo "SQLSERVER_CONTAINER=$SQLSERVER_CONTAINER" >> "$GITHUB_ENV"
+          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C -b -Q "SELECT 1"
+          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C -b \
+            -Q "IF DB_ID('ClinicManagement_CiMigration') IS NULL EXEC(N'CREATE DATABASE [ClinicManagement_CiMigration]');"
+          for attempt in {1..30}; do
+            database_state="$(docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C -h -1 -W -b -Q "SET NOCOUNT ON; SELECT state_desc FROM sys.databases WHERE name = 'ClinicManagement_CiMigration';" | tr -d '\r' | xargs)"
+            if [[ "$database_state" == "ONLINE" ]]; then
+              break
+            fi
+            sleep 2
+          done
+          test "$database_state" = "ONLINE"
+
+      - name: Apply official migration script to SQL Server
+        shell: bash
+        run: |
+          printf '%s\n' \
+            'SET ANSI_NULLS ON;' \
+            'SET QUOTED_IDENTIFIER ON;' \
+            'SET ANSI_PADDING ON;' \
+            'SET ANSI_WARNINGS ON;' \
+            'SET ARITHABORT ON;' \
+            'SET CONCAT_NULL_YIELDS_NULL ON;' \
+            'SET NUMERIC_ROUNDABORT OFF;' \
+            'GO' \
+            ':r /tmp/phase12-ef-idempotent.sql' > ./phase12-ef-apply.sql
+          docker cp ./phase12-ef-idempotent.sql "$SQLSERVER_CONTAINER:/tmp/phase12-ef-idempotent.sql"
+          docker cp ./phase12-ef-apply.sql "$SQLSERVER_CONTAINER:/tmp/phase12-ef-apply.sql"
+          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
+            -d ClinicManagement_CiMigration -b -i /tmp/phase12-ef-apply.sql
+
+      - name: Reapply official migration script for idempotence
+        shell: bash
+        run: |
+          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
+            -d ClinicManagement_CiMigration -b -i /tmp/phase12-ef-apply.sql
+
+      - name: Verify SQL Server migration schema and history
+        shell: bash
+        run: |
+          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
+            -d ClinicManagement_CiMigration -b -Q "IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'AiPendingToolActions') THROW 50000, 'AiPendingToolActions table missing', 1; IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AiPendingToolActions_UserId_ResourceType_ResourceId') THROW 50000, 'Active action index missing', 1; IF NOT EXISTS (SELECT 1 FROM __EFMigrationsHistory WHERE MigrationId = '20260926114519_HardenAiPendingToolActionExecution') THROW 50000, 'Hardening migration history missing', 1;"
+          rm -f ./phase12-ef-idempotent.sql ./phase12-ef-apply.sql
+
       - name: Run backend tests
+        env:
+          TEST_SQLSERVER_CONNECTION_STRING: "Server=localhost,1433;Database=ClinicManagement_CiTest;User Id=sa;Password=Your_password123!;TrustServerCertificate=True;Connect Timeout=30;"
         run: dotnet test src/backend/ClinicManagement.sln --no-build --configuration Release --verbosity normal
 
+      - name: Publish API and verify AI model artifacts
+        run: |
+          dotnet publish src/backend/ClinicManagement.Api/ClinicManagement.Api.csproj --no-restore --configuration Release -o ./publish_ci_verify
+          test -f ./publish_ci_verify/models/vietnamese_intent_classifier_v1.zip
+          test -f ./publish_ci_verify/models/intent_model_metadata.json
+          rm -rf ./publish_ci_verify
+
   frontend:
-    name: Frontend Lint & Build (Node 24)
+    name: Frontend Lint, Test & Build (Node 24)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -49,6 +144,10 @@ jobs:
       - name: Run linter
         working-directory: src/frontend
         run: npm run lint
+
+      - name: Run unit tests
+        working-directory: src/frontend
+        run: npm run test
 
       - name: Build frontend
         working-directory: src/frontend

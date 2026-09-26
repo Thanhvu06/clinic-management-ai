@@ -7,6 +7,7 @@ public class SpecialtyDto
     public string SpecialtyName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public bool AiEnabled { get; set; }
+    public decimal ConsultationFee { get; set; }
 }
 
 public class DoctorBasicDto
@@ -15,6 +16,9 @@ public class DoctorBasicDto
     public string FullName { get; set; } = string.Empty;
     public string AcademicTitle { get; set; } = string.Empty;
     public int ExperienceYears { get; set; }
+    public long? SpecialtyId { get; set; }
+    public string SpecialtyName { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
 }
 
 public class RecommendedDoctorDto

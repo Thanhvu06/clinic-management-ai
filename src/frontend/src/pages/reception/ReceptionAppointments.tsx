@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
-import type { ApiResponse } from '../../types';
-import { Search, CalendarDays, Eye, X, Clock, RefreshCw } from 'lucide-react';
+import { patientVisitApi } from '../../api/patientVisitApi';
+import type { ApiResponse, CheckInTicketDto } from '../../types';
+import { Search, CalendarDays, Eye, X, Clock, RefreshCw, UserCheck } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
+import { CheckInTicketModal } from '../../components/CheckInTicketModal';
 
 interface ReceptionAppointment {
     id: number;
@@ -35,6 +37,11 @@ export const ReceptionAppointments: React.FC = () => {
     const [history, setHistory] = useState<any[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
     const [historyError, setHistoryError] = useState('');
+
+    // Check-in Ticket Modal state
+    const [ticketModalOpen, setTicketModalOpen] = useState(false);
+    const [currentTicket, setCurrentTicket] = useState<CheckInTicketDto | null>(null);
+    const [checkingInId, setCheckingInId] = useState<number | null>(null);
 
     const fetchAppointments = async () => {
         setLoading(true);
@@ -121,6 +128,33 @@ export const ReceptionAppointments: React.FC = () => {
         });
     };
 
+    const handleCheckIn = async (apt: ReceptionAppointment) => {
+        setCheckingInId(apt.id);
+        try {
+            const res = await patientVisitApi.receptionCheckInAppointment(apt.id);
+            if (res.success && res.data) {
+                setCurrentTicket(res.data);
+                setTicketModalOpen(true);
+                showAlert(
+                    'Tiếp nhận thành công!',
+                    `Bệnh nhân ${res.data.patientName} đã được cấp STT ${res.data.queueNumber} tại ${res.data.departmentName || 'phòng khám'}.`,
+                    'success'
+                );
+                if (modal.isOpen && modal.apt?.id === apt.id) {
+                    setModal({ ...modal, apt: { ...apt, status: 'CheckedIn' } });
+                    fetchHistory(apt.id);
+                }
+                fetchAppointments();
+            } else {
+                showAlert(res.message || 'Không thể tiếp nhận bệnh nhân.', 'Lỗi tiếp nhận', 'error');
+            }
+        } catch (error: any) {
+            showAlert(error?.message || 'Có lỗi xảy ra khi tiếp nhận bệnh nhân.', 'Lỗi tiếp nhận', 'error');
+        } finally {
+            setCheckingInId(null);
+        }
+    };
+
     const formatDate = (dateString: string) => {
         try {
             return new Intl.DateTimeFormat('vi-VN').format(new Date(dateString));
@@ -144,6 +178,7 @@ export const ReceptionAppointments: React.FC = () => {
         switch (status) {
             case 'Pending': return 'Chờ xác nhận';
             case 'Confirmed': return 'Đã xác nhận';
+            case 'CheckedIn': return 'Đã tiếp nhận (Chờ khám)';
             case 'Completed': return 'Đã hoàn thành';
             case 'Cancelled': return 'Đã hủy';
             case 'NoShow': return 'Không đến khám';
@@ -155,6 +190,7 @@ export const ReceptionAppointments: React.FC = () => {
         switch(status) {
             case 'Pending': return <span className="badge badge-warning">{translateStatus(status)}</span>;
             case 'Confirmed': return <span className="badge badge-info">{translateStatus(status)}</span>;
+            case 'CheckedIn': return <span className="badge badge-success">{translateStatus(status)}</span>;
             case 'Completed': return <span className="badge badge-success">{translateStatus(status)}</span>;
             case 'Cancelled': return <span className="badge badge-danger">{translateStatus(status)}</span>;
             case 'NoShow': return <span className="badge badge-muted">{translateStatus(status)}</span>;
@@ -166,6 +202,7 @@ export const ReceptionAppointments: React.FC = () => {
         switch (action) {
             case 'Created': return 'Tạo lịch hẹn';
             case 'Confirmed': return 'Xác nhận lịch';
+            case 'CheckedIn': return 'Tiếp nhận khám';
             case 'Cancelled': return 'Hủy lịch';
             case 'Rescheduled': return 'Đổi lịch';
             case 'Completed': return 'Hoàn thành khám';
@@ -253,7 +290,18 @@ export const ReceptionAppointments: React.FC = () => {
                                     <td style={{ padding: '16px' }}>
                                         {getStatusBadge(apt.status)}
                                     </td>
-                                    <td style={{ padding: '16px', textAlign: 'right' }}>
+                                    <td style={{ padding: '16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                        {apt.status === 'Confirmed' && (
+                                            <button 
+                                                className="btn-primary" 
+                                                style={{ padding: '6px 12px', fontSize: '0.85rem', marginRight: '8px', backgroundColor: '#059669', borderColor: '#059669' }} 
+                                                onClick={() => handleCheckIn(apt)}
+                                                disabled={checkingInId === apt.id}
+                                            >
+                                                <UserCheck size={14} style={{ marginRight: '4px' }} />
+                                                {checkingInId === apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận'}
+                                            </button>
+                                        )}
                                         <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => openDetail(apt)}>
                                             <Eye size={14} style={{ marginRight: '4px' }}/> Chi tiết
                                         </button>
@@ -346,7 +394,21 @@ export const ReceptionAppointments: React.FC = () => {
                                 </button>
                             </div>
                         )}
-                        {modal.apt.status !== 'Pending' && (
+                        {modal.apt.status === 'Confirmed' && (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid var(--c-border)' }}>
+                                <button className="btn-secondary" onClick={() => setModal({ isOpen: false, apt: null })}>Đóng</button>
+                                <button 
+                                    className="btn-primary" 
+                                    style={{ backgroundColor: '#059669', borderColor: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                    onClick={() => handleCheckIn(modal.apt!)}
+                                    disabled={checkingInId === modal.apt.id}
+                                >
+                                    <UserCheck size={16} />
+                                    {checkingInId === modal.apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận & Cấp phiếu STT'}
+                                </button>
+                            </div>
+                        )}
+                        {modal.apt.status !== 'Pending' && modal.apt.status !== 'Confirmed' && (
                             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                                 <button className="btn-secondary" onClick={() => setModal({ isOpen: false, apt: null })}>Đóng</button>
                             </div>
@@ -354,6 +416,13 @@ export const ReceptionAppointments: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            {/* Check-In Ticket Printable Modal */}
+            <CheckInTicketModal
+                isOpen={ticketModalOpen}
+                ticket={currentTicket}
+                onClose={() => setTicketModalOpen(false)}
+            />
         </div>
     );
 };

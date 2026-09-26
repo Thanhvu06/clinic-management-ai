@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClinicManagement.Api", "Cli
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClinicManagement.IntegrationTests", "ClinicManagement.IntegrationTests\ClinicManagement.IntegrationTests.csproj", "{BDDBF045-2074-4448-908D-4E458AA0A20B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClinicManagement.AI.Training", "..\tools\ClinicManagement.AI.Training\ClinicManagement.AI.Training.csproj", "{BC5557A9-44B9-410A-AB5F-53D5433D4AA5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,6 +85,18 @@ Global
 		{BDDBF045-2074-4448-908D-4E458AA0A20B}.Release|x64.Build.0 = Release|Any CPU
 		{BDDBF045-2074-4448-908D-4E458AA0A20B}.Release|x86.ActiveCfg = Release|Any CPU
 		{BDDBF045-2074-4448-908D-4E458AA0A20B}.Release|x86.Build.0 = Release|Any CPU
+		{BC5557A9-44B9-410A-AB5F-53D5433D4AA5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BC5557A9-44B9-410A-AB5F-53D5433D4AA5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BC5557A9-44B9-410A-AB5F-53D5433D4AA5}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{BC5557A9-44B9-410A-AB5F-53D5433D4AA5}.Debug|x64.Build.0 = Debug|Any CPU
+		{BC5557A9-44B9-410A-AB5F-53D5433D4AA5}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{BC5557A9-44B9-410A-AB5F-53D5433D4AA5}.Debug|x86.Build.0 = Debug|Any CPU
+		{BC5557A9-44B9-410A-AB5F-53D5433D4AA5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BC5557A9-44B9-410A-AB5F-53D5433D4AA5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BC5557A9-44B9-410A-AB5F-53D5433D4AA5}.Release|x64.ActiveCfg = Release|Any CPU
+		{BC5557A9-44B9-410A-AB5F-53D5433D4AA5}.Release|x64.Build.0 = Release|Any CPU
+		{BC5557A9-44B9-410A-AB5F-53D5433D4AA5}.Release|x86.ActiveCfg = Release|Any CPU
+		{BC5557A9-44B9-410A-AB5F-53D5433D4AA5}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

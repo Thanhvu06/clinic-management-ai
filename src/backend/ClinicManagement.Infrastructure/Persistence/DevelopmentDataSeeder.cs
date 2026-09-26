@@ -3,6 +3,7 @@ using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
@@ -12,359 +13,482 @@ using System.Threading.Tasks;
 
 namespace ClinicManagement.Infrastructure.Persistence;
 
+public class DevelopmentDataSeederOptions
+{
+    public bool SeedDoctorSchedulesAndSlots { get; set; } = false;
+    public int ScheduleDays { get; set; } = 7;
+    public bool SeedDemoAppointments { get; set; } = false;
+}
+
 public static class DevelopmentDataSeeder
 {
-    public static async Task SeedAsync(IServiceProvider serviceProvider)
+    public static async Task SeedAsync(IServiceProvider serviceProvider, DevelopmentDataSeederOptions? options = null)
     {
         var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DevelopmentDataSeeder");
         var userManager = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var db = serviceProvider.GetRequiredService<AppDbContext>();
+        var dateTimeProvider = serviceProvider.GetService<ClinicManagement.Application.Common.Interfaces.IDateTimeProvider>()
+            ?? new ClinicManagement.Infrastructure.Services.DateTimeProvider();
 
-        logger.LogInformation("Starting Development Data Seeding...");
+        var config = serviceProvider.GetService<IConfiguration>();
+        var seedSchedules = options?.SeedDoctorSchedulesAndSlots
+            ?? config?.GetValue<bool>("DemoSeed:GenerateSlots", false)
+            ?? false;
+
+        var scheduleDays = options?.ScheduleDays
+            ?? config?.GetValue<int?>("DemoSeed:ScheduleDays")
+            ?? 7;
+
+        var seedAppointments = options?.SeedDemoAppointments
+            ?? (seedSchedules && (config?.GetValue<bool>("DemoSeed:GenerateAppointments", false) ?? false));
+
+        logger.LogInformation("Starting Development Data Seeding (Schedules/Slots: {SeedSchedules}, Demo Appointments: {SeedAppointments})...", seedSchedules, seedAppointments);
 
         var password = "Demo@12345";
 
-        // Seed Users
+        // 1. Seed Users
         var adminId1 = await SeedUserAsync(userManager, "admin@cliniccare.local", "Quản trị viên", "0999999999", "Admin", password);
-
-        // Pharmacist
-        var pharmacist = await SeedUserAsync(userManager, "pharmacist@cliniccare.local", "Dược sĩ Lâm Sàng", "0977777777", "Pharmacist", password);
         var adminId2 = await SeedUserAsync(userManager, "admin.02@cliniccare.local", "Quản trị viên 2", "0980000002", "Admin", password);
-        
-        var rec1 = await SeedUserAsync(userManager, "reception@cliniccare.local", "Lễ tân 1", "0900000002", "Receptionist", password);
-        var rec2 = await SeedUserAsync(userManager, "letan.02@cliniccare.local", "Lễ tân 2", "0981000002", "Receptionist", password);
-        var rec3 = await SeedUserAsync(userManager, "letan.03@cliniccare.local", "Lễ tân 3", "0981000003", "Receptionist", password);
+
+        var pharmacist = await SeedUserAsync(userManager, "pharmacist@cliniccare.local", "Dược sĩ Lâm Sàng", "0977777777", "Pharmacist", password);
+        var technician = await SeedUserAsync(userManager, "technician@cliniccare.local", "Kỹ thuật viên cận lâm sàng", "0966666666", ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician, password);
+
+        var rec1 = await SeedUserAsync(userManager, "reception@cliniccare.local", "Lễ tân Nguyễn Thu Trang", "0900000002", "Receptionist", password);
+        var rec2 = await SeedUserAsync(userManager, "letan.02@cliniccare.local", "Lễ tân Trần Mai Anh", "0981000002", "Receptionist", password);
+        var rec3 = await SeedUserAsync(userManager, "letan.03@cliniccare.local", "Lễ tân Lê Hoàng Yến", "0981000003", "Receptionist", password);
+
+        // 10 Doctors with clean FullName (without duplicated academic titles) and exact specialty mappings
+        var doctorDefs = new[]
+        {
+            new { Email = "doctor@cliniccare.local", Name = "Nguyễn Minh Khải", Title = "BS.CKI", Exp = 12, Phone = "0900000003", PrimaryCode = "SP01", SecondaryCode = (string?)"SP06" },
+            new { Email = "bacsi.02@cliniccare.local", Name = "Trần Thu Hà", Title = "BS", Exp = 7, Phone = "0982000002", PrimaryCode = "SP03", SecondaryCode = (string?)null },
+            new { Email = "bacsi.03@cliniccare.local", Name = "Lê Hoàng Nam", Title = "BS.CKII", Exp = 18, Phone = "0982000003", PrimaryCode = "SP07", SecondaryCode = (string?)null },
+            new { Email = "bacsi.04@cliniccare.local", Name = "Phạm Văn Hùng", Title = "ThS.BS", Exp = 14, Phone = "0982000004", PrimaryCode = "SP05", SecondaryCode = (string?)null },
+            new { Email = "bacsi.05@cliniccare.local", Name = "Đinh Thị Yến", Title = "BS", Exp = 5, Phone = "0982000005", PrimaryCode = "SP04", SecondaryCode = (string?)null },
+            new { Email = "bacsi.06@cliniccare.local", Name = "Vũ Quang Vinh", Title = "BS.CKI", Exp = 10, Phone = "0982000006", PrimaryCode = "SP08", SecondaryCode = (string?)null },
+            new { Email = "bacsi.07@cliniccare.local", Name = "Bùi Hải Yến", Title = "TS.BS", Exp = 20, Phone = "0982000007", PrimaryCode = "SP09", SecondaryCode = (string?)null },
+            new { Email = "bacsi.08@cliniccare.local", Name = "Đỗ Tuấn Anh", Title = "BS", Exp = 4, Phone = "0982000008", PrimaryCode = "SP10", SecondaryCode = (string?)null },
+            new { Email = "bacsi.09@cliniccare.local", Name = "Lý Kim Dung", Title = "BS.CKI", Exp = 11, Phone = "0982000009", PrimaryCode = "SP02", SecondaryCode = (string?)null },
+            new { Email = "bacsi.10@cliniccare.local", Name = "Hoàng Văn Đạt", Title = "BS", Exp = 8, Phone = "0982000010", PrimaryCode = "SP11", SecondaryCode = (string?)null }
+        };
 
         var docUsers = new List<ApplicationUser>();
-        var docNames = new[] { "BS.CKI Nguyá»…n Minh Kháº£i", "BS. Tráº§n Thu HĂ ", "BS.CKII LĂª HoĂ ng Nam", "ThS.BS Pháº¡m VÄƒn HĂ¹ng", "BS. Äinh Thá»‹ Yáº¿n", "BS.CKI VÅ© Quang Vinh", "TS.BS BĂ¹i Háº£i Yáº¿n", "BS. Äá»— Tuáº¥n Anh", "BS.CKI LĂ½ Kim Dung", "BS. HoĂ ng VÄƒn Äáº¡t" };
-        docUsers.Add(await SeedUserAsync(userManager, "doctor@cliniccare.local", docNames[0], "0900000003", "Doctor", password));
-        for (int i = 2; i <= 10; i++) {
-            docUsers.Add(await SeedUserAsync(userManager, $"bacsi.{i:D2}@cliniccare.local", docNames[i-1], $"09820000{i:D2}", "Doctor", password));
+        foreach (var def in doctorDefs)
+        {
+            var u = await SeedUserAsync(userManager, def.Email, def.Name, def.Phone, "Doctor", password);
+            docUsers.Add(u);
         }
+
+        // 16 Patients with diverse demographics
+        var patientDefs = new[]
+        {
+            new { Name = "Nguyễn Đình Thành", Phone = "0900000004", Email = "patient@cliniccare.local", Dob = new DateOnly(1990, 5, 15), Gender = Gender.Male },
+            new { Name = "Lê Thị Lan", Phone = "0983000001", Email = "patient.01@cliniccare.local", Dob = new DateOnly(1985, 3, 22), Gender = Gender.Female },
+            new { Name = "Trần Văn Bình", Phone = "0983000002", Email = "patient.02@cliniccare.local", Dob = new DateOnly(1978, 11, 8), Gender = Gender.Male },
+            new { Name = "Phạm Thu Hương", Phone = "0983000003", Email = "patient.03@cliniccare.local", Dob = new DateOnly(1993, 7, 19), Gender = Gender.Female },
+            new { Name = "Hoàng Ngọc Sơn", Phone = "0983000004", Email = "patient.04@cliniccare.local", Dob = new DateOnly(1968, 9, 30), Gender = Gender.Male },
+            new { Name = "Vũ Thị Mai", Phone = "0983000005", Email = "patient.05@cliniccare.local", Dob = new DateOnly(2001, 1, 12), Gender = Gender.Female },
+            new { Name = "Đặng Văn Toàn", Phone = "0983000006", Email = "patient.06@cliniccare.local", Dob = new DateOnly(1982, 4, 5), Gender = Gender.Male },
+            new { Name = "Bùi Thị Tám", Phone = "0983000007", Email = "patient.07@cliniccare.local", Dob = new DateOnly(1955, 12, 25), Gender = Gender.Female },
+            new { Name = "Đỗ Minh Đức", Phone = "0983000008", Email = "patient.08@cliniccare.local", Dob = new DateOnly(1996, 6, 17), Gender = Gender.Male },
+            new { Name = "Hồ Quang Hiếu", Phone = "0983000009", Email = "patient.09@cliniccare.local", Dob = new DateOnly(1989, 8, 24), Gender = Gender.Male },
+            new { Name = "Ngô Phương Trinh", Phone = "0983000010", Email = "patient.10@cliniccare.local", Dob = new DateOnly(1994, 2, 14), Gender = Gender.Female },
+            new { Name = "Dương Quốc Cường", Phone = "0983000011", Email = "patient.11@cliniccare.local", Dob = new DateOnly(1975, 10, 3), Gender = Gender.Male },
+            new { Name = "Lý Tiểu Long", Phone = "0983000012", Email = "patient.12@cliniccare.local", Dob = new DateOnly(2003, 9, 9), Gender = Gender.Male },
+            new { Name = "Trần Đăng Khoa", Phone = "0983000013", Email = "patient.13@cliniccare.local", Dob = new DateOnly(1970, 6, 28), Gender = Gender.Male },
+            new { Name = "Nguyễn Thị Hoa", Phone = "0983000014", Email = "patient.14@cliniccare.local", Dob = new DateOnly(1987, 12, 1), Gender = Gender.Female },
+            new { Name = "Phan Anh Tuấn", Phone = "0983000015", Email = "patient.15@cliniccare.local", Dob = new DateOnly(1998, 4, 18), Gender = Gender.Male }
+        };
 
         var patUsers = new List<ApplicationUser>();
-        patUsers.Add(await SeedUserAsync(userManager, "patient@cliniccare.local", "Nguyá»…n ÄĂ¬nh ThĂ nh", "0900000004", "Patient", password));
-        var patNames = new[] { "LĂª Thá»‹ Lan", "Tráº§n VÄƒn BĂ¬nh", "Pháº¡m Thu HÆ°Æ¡ng", "HoĂ ng Ngá»c SÆ¡n", "VÅ© Thá»‹ Mai", "Äáº·ng VÄƒn ToĂ n", "BĂ¹i Thá»‹ TĂ¡m", "Äá»— Minh Äá»©c", "Há»“ Quang Hiáº¿u", "NgĂ´ PhÆ°Æ¡ng Trinh", "DÆ°Æ¡ng Quá»‘c CÆ°á»ng", "LĂ½ Tiá»ƒu Long", "Tráº§n ÄÄƒng Khoa", "Nguyá»…n Thá»‹ Hoa", "Phan Anh Tuáº¥n" };
-        for (int i = 1; i <= 15; i++) {
-            patUsers.Add(await SeedUserAsync(userManager, $"patient.{i:D2}@cliniccare.local", patNames[i-1], $"09830000{i:D2}", "Patient", password));
+        foreach (var pdef in patientDefs)
+        {
+            var u = await SeedUserAsync(userManager, pdef.Email, pdef.Name, pdef.Phone, "Patient", password);
+            patUsers.Add(u);
         }
 
-        // Specialties
-        if (!await db.Specialties.AnyAsync())
+        // 2. 11 Specialties with clean UTF-8
+        var specialtyDefs = new[]
         {
-            db.Specialties.AddRange(
-                new Specialty { SpecialtyCode = "SP01", Name = "Ná»™i tá»•ng quĂ¡t", Description = "KhĂ¡m vĂ  Ä‘iá»u trá»‹ cĂ¡c bá»‡nh lĂ½ ná»™i khoa chung", IsActive = true, AiEnabled = true },
-                new Specialty { SpecialtyCode = "SP02", Name = "Nhi khoa", Description = "KhĂ¡m, cháº©n Ä‘oĂ¡n vĂ  Ä‘iá»u trá»‹ bá»‡nh cho tráº» em", IsActive = true, AiEnabled = true },
-                new Specialty { SpecialtyCode = "SP03", Name = "Sáº£n phá»¥ khoa", Description = "KhĂ¡m thai Ä‘á»‹nh ká»³ vĂ  tÆ° váº¥n sá»©c khá»e phá»¥ khoa", IsActive = true, AiEnabled = true },
-                new Specialty { SpecialtyCode = "SP04", Name = "Da liá»…u", Description = "ChuyĂªn trá»‹ cĂ¡c váº¥n Ä‘á» vá» da, tĂ³c vĂ  mĂ³ng", IsActive = true, AiEnabled = true },
-                new Specialty { SpecialtyCode = "SP05", Name = "Tai mÅ©i há»ng", Description = "KhĂ¡m vĂ  Ä‘iá»u trá»‹ bá»‡nh lĂ½ tai mÅ©i há»ng", IsActive = true, AiEnabled = true },
-                new Specialty { SpecialtyCode = "SP06", Name = "Tim máº¡ch", Description = "Kiá»ƒm tra huyáº¿t Ă¡p, Ä‘o Ä‘iá»‡n tĂ¢m Ä‘á»“ vĂ  bá»‡nh lĂ½ tim máº¡ch", IsActive = true, AiEnabled = true },
-                new Specialty { SpecialtyCode = "SP07", Name = "CÆ¡ xÆ°Æ¡ng khá»›p", Description = "Äiá»u trá»‹ viĂªm khá»›p, thoĂ¡i hĂ³a khá»›p vĂ  cĂ¡c cháº¥n thÆ°Æ¡ng", IsActive = true, AiEnabled = true }
-            );
-            await db.SaveChangesAsync();
-            logger.LogInformation("Specialties seeded.");
-        }
-        var specs = await db.Specialties.ToListAsync();
-
-        // Doctors
-        if (!await db.Doctors.AnyAsync())
+            new Specialty { SpecialtyCode = "SP01", Name = "Nội tổng quát", Description = "Khám và điều trị các bệnh lý nội khoa chung (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 150000m },
+            new Specialty { SpecialtyCode = "SP02", Name = "Nhi khoa", Description = "Khám, chẩn đoán và điều trị bệnh cho trẻ em (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
+            new Specialty { SpecialtyCode = "SP03", Name = "Sản phụ khoa", Description = "Khám thai định kỳ và tư vấn sức khỏe phụ khoa (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 200000m },
+            new Specialty { SpecialtyCode = "SP04", Name = "Da liễu", Description = "Chuyên trị các vấn đề về da, tóc và móng (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 200000m },
+            new Specialty { SpecialtyCode = "SP05", Name = "Tai mũi họng", Description = "Khám và điều trị bệnh lý tai mũi họng (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
+            new Specialty { SpecialtyCode = "SP06", Name = "Tim mạch", Description = "Kiểm tra huyết áp, đo điện tâm đồ và bệnh lý tim mạch (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 250000m },
+            new Specialty { SpecialtyCode = "SP07", Name = "Cơ xương khớp", Description = "Điều trị viêm khớp, thoái hóa khớp và các chấn thương (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 220000m },
+            new Specialty { SpecialtyCode = "SP08", Name = "Thần kinh", Description = "Khám và điều trị các bệnh lý thần kinh và đau đầu (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 250000m },
+            new Specialty { SpecialtyCode = "SP09", Name = "Nội tiết", Description = "Khám và điều trị bệnh lý tiểu đường, tuyến giáp và rối loạn nội tiết (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 220000m },
+            new Specialty { SpecialtyCode = "SP10", Name = "Nhãn khoa", Description = "Khám và điều trị các bệnh lý về mắt và thị lực (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
+            new Specialty { SpecialtyCode = "SP11", Name = "Tiêu hóa", Description = "Khám và điều trị các bệnh lý dạ dày, đại tràng và tiêu hóa (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 200000m }
+        };
+        foreach (var sdef in specialtyDefs)
         {
-            var r = new Random(42);
-            for (int i = 0; i < docUsers.Count; i++)
+            var existingSpec = await db.Specialties.FirstOrDefaultAsync(s => s.SpecialtyCode == sdef.SpecialtyCode);
+            if (existingSpec == null)
             {
-                var d = new Doctor { UserId = docUsers[i].Id, IsActive = true, ExperienceYears = r.Next(3, 20), AcademicTitle = "BS" };
-                db.Doctors.Add(d);
+                db.Specialties.Add(sdef);
             }
-            await db.SaveChangesAsync();
-
-            var docsLocal = await db.Doctors.ToListAsync();
-            // Bind to specialties
-            for (int i = 0; i < docsLocal.Count; i++)
+            else
             {
-                var primarySpec = specs[i % specs.Count];
-                db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = docsLocal[i].Id, SpecialtyId = primarySpec.Id, IsPrimary = true });
-                
-                // Some have secondary
-                if (i % 3 == 0) {
-                    var sec = specs[(i + 1) % specs.Count];
-                    if (sec.Id != primarySpec.Id) {
-                        db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = docsLocal[i].Id, SpecialtyId = sec.Id, IsPrimary = false });
+                existingSpec.Name = sdef.Name;
+                existingSpec.Description = sdef.Description;
+                existingSpec.IsActive = true;
+                existingSpec.AiEnabled = true;
+                if (existingSpec.ConsultationFee <= 0)
+                {
+                    existingSpec.ConsultationFee = sdef.ConsultationFee;
+                }
+            }
+        }
+        await db.SaveChangesAsync();
+        logger.LogInformation("11 Specialties seeded and synchronized with demo consultation fees.");
+        var specs = await db.Specialties.ToListAsync();
+        var specByCode = specs.ToDictionary(s => s.SpecialtyCode, s => s);
+
+        // 3. Doctors & Specialty Bindings (Exact mapping by Email and SpecialtyCode)
+        var doctors = new List<Doctor>();
+        for (int i = 0; i < doctorDefs.Length; i++)
+        {
+            var def = doctorDefs[i];
+            var docUser = docUsers[i];
+            var d = await db.Doctors.Include(x => x.DoctorSpecialties).FirstOrDefaultAsync(x => x.UserId == docUser.Id);
+            if (d == null)
+            {
+                d = new Doctor
+                {
+                    UserId = docUser.Id,
+                    IsActive = true,
+                    ExperienceYears = def.Exp,
+                    AcademicTitle = def.Title,
+                    Description = $"Bác sĩ chuyên khoa tại ClinicCare AI với {def.Exp} năm kinh nghiệm chuyên môn."
+                };
+                db.Doctors.Add(d);
+                await db.SaveChangesAsync();
+            }
+            else
+            {
+                d.IsActive = true;
+                d.ExperienceYears = def.Exp;
+                d.AcademicTitle = def.Title;
+                if (string.IsNullOrWhiteSpace(d.Description))
+                {
+                    d.Description = $"Bác sĩ chuyên khoa tại ClinicCare AI với {def.Exp} năm kinh nghiệm chuyên môn.";
+                }
+            }
+
+            // Sync exact specialties
+            var primarySpec = specByCode[def.PrimaryCode];
+            var secondarySpec = def.SecondaryCode != null && specByCode.ContainsKey(def.SecondaryCode) ? specByCode[def.SecondaryCode] : null;
+
+            var currentBindings = await db.DoctorSpecialties.Where(ds => ds.DoctorId == d.Id).ToListAsync();
+
+            // Primary
+            var primaryBinding = currentBindings.FirstOrDefault(ds => ds.SpecialtyId == primarySpec.Id);
+            if (primaryBinding == null)
+            {
+                db.DoctorSpecialties.Add(new DoctorSpecialty
+                {
+                    DoctorId = d.Id,
+                    SpecialtyId = primarySpec.Id,
+                    IsPrimary = true
+                });
+            }
+            else
+            {
+                primaryBinding.IsPrimary = true;
+            }
+
+            // Secondary
+            if (secondarySpec != null)
+            {
+                var secondaryBinding = currentBindings.FirstOrDefault(ds => ds.SpecialtyId == secondarySpec.Id);
+                if (secondaryBinding == null)
+                {
+                    db.DoctorSpecialties.Add(new DoctorSpecialty
+                    {
+                        DoctorId = d.Id,
+                        SpecialtyId = secondarySpec.Id,
+                        IsPrimary = false
+                    });
+                }
+                else
+                {
+                    secondaryBinding.IsPrimary = false;
+                }
+            }
+
+            // Remove any other invalid bindings for this doctor
+            var allowedSpecIds = new HashSet<long> { primarySpec.Id };
+            if (secondarySpec != null) allowedSpecIds.Add(secondarySpec.Id);
+
+            foreach (var b in currentBindings)
+            {
+                if (!allowedSpecIds.Contains(b.SpecialtyId))
+                {
+                    db.DoctorSpecialties.Remove(b);
+                }
+            }
+
+            doctors.Add(d);
+        }
+        await db.SaveChangesAsync();
+        logger.LogInformation("10 Doctors and exact specialty mappings synchronized.");
+
+        // Fix any existing appointments where SpecialtyId is not one of doctor's specialties
+        var allAppts = await db.Appointments.Include(a => a.Doctor).ThenInclude(d => d.DoctorSpecialties).ToListAsync();
+        foreach (var appt in allAppts)
+        {
+            if (appt.Doctor?.DoctorSpecialties != null)
+            {
+                var validSpecialties = appt.Doctor.DoctorSpecialties.Select(ds => ds.SpecialtyId).ToList();
+                if (!validSpecialties.Contains(appt.SpecialtyId))
+                {
+                    var docPrimary = appt.Doctor.DoctorSpecialties.FirstOrDefault(ds => ds.IsPrimary) 
+                        ?? appt.Doctor.DoctorSpecialties.FirstOrDefault();
+                    if (docPrimary != null)
+                    {
+                        appt.SpecialtyId = docPrimary.SpecialtyId;
                     }
                 }
             }
-            await db.SaveChangesAsync();
-            logger.LogInformation("Doctors seeded.");
         }
-        var doctors = await db.Doctors.ToListAsync();
+        await db.SaveChangesAsync();
 
-        // Patients
-        if (!await db.Patients.AnyAsync())
+        // 4. Patients
+        var mrnGenerator = serviceProvider.GetService<ClinicManagement.Application.Mpi.Interfaces.IMrnGenerator>();
+        for (int i = 0; i < patUsers.Count; i++)
         {
-            foreach (var pat in patUsers)
+            var pdef = patientDefs[i];
+            if (!await db.Patients.AnyAsync(p => p.UserId == patUsers[i].Id))
             {
-                db.Patients.Add(new Patient { UserId = pat.Id, DateOfBirth = new DateOnly(1990, 1, 1), Gender = Gender.Male });
+                var mrn = mrnGenerator != null
+                    ? await mrnGenerator.GenerateNextMrnAsync()
+                    : $"BN-{DateTime.UtcNow.Year}-{(1000 + i + 1):D6}";
+
+                db.Patients.Add(new Patient
+                {
+                    UserId = patUsers[i].Id,
+                    FullName = pdef.Name,
+                    PhoneNumber = pdef.Phone,
+                    Email = pdef.Email,
+                    MedicalRecordNumber = mrn,
+                    DateOfBirth = pdef.Dob,
+                    Gender = pdef.Gender
+                });
             }
-            await db.SaveChangesAsync();
-            logger.LogInformation("Patients seeded.");
         }
+        await db.SaveChangesAsync();
+        logger.LogInformation("Patients seeded.");
         var patients = await db.Patients.ToListAsync();
 
-        // Work Schedules & Slots for next 14 days
-        var today = DateOnly.FromDateTime(DateTime.Now);
-        if (!await db.DoctorWorkSchedules.AnyAsync())
+        // 5. Clinic Locations
+        var locationDefs = new[]
         {
-            foreach (var doc in doctors)
+            new ClinicLocation
             {
-                for (int i = 1; i <= 14; i++)
-                {
-                    var date = today.AddDays(i);
-                    // Skip weekends for some variety
-                    if (date.DayOfWeek == DayOfWeek.Sunday) continue;
-
-                    var schedule = new DoctorWorkSchedule
-                    {
-                        DoctorId = doc.Id,
-                        WorkDate = date,
-                        StartTime = new TimeOnly(8, 0),
-                        EndTime = new TimeOnly(17, 0),
-                        IsActive = true
-                    };
-                    db.DoctorWorkSchedules.Add(schedule);
-                    await db.SaveChangesAsync();
-
-                    // Morning slots 08:00 to 11:30
-                    var startTime = new TimeOnly(8, 0);
-                    for (int j = 0; j < 7; j++)
-                    {
-                        db.AppointmentSlots.Add(new AppointmentSlot { DoctorId = doc.Id, SlotDate = date, StartTime = startTime, EndTime = startTime.AddMinutes(30), IsBooked = false });
-                        startTime = startTime.AddMinutes(30);
-                    }
-                    
-                    // Afternoon slots 13:30 to 17:00
-                    startTime = new TimeOnly(13, 30);
-                    for (int j = 0; j < 7; j++)
-                    {
-                        db.AppointmentSlots.Add(new AppointmentSlot { DoctorId = doc.Id, SlotDate = date, StartTime = startTime, EndTime = startTime.AddMinutes(30), IsBooked = false });
-                        startTime = startTime.AddMinutes(30);
-                    }
-                }
+                Code = "CS01",
+                Name = "Cơ sở 1 - Quận 1 (Trụ sở chính)",
+                Address = "123 Nguyễn Thị Minh Khai, Phường Bến Thành, Quận 1",
+                City = "TP. Hồ Chí Minh",
+                Phone = "028 3930 1234",
+                OpeningHours = "07:30 - 17:30 (Thứ 2 - Thứ 7) | 07:30 - 11:30 (Chủ nhật)",
+                Description = "Phòng khám đa khoa hiện đại đầy đủ các chuyên khoa, trang thiết bị chẩn đoán hình ảnh tiên tiến.",
+                ServicesJson = "[\"Khám tổng quát\",\"Chẩn đoán hình ảnh\",\"Xét nghiệm\",\"Nội soi tiêu hóa\",\"Nhà thuốc GPP\"]",
+                IsActive = true
+            },
+            new ClinicLocation
+            {
+                Code = "CS02",
+                Name = "Cơ sở 2 - Quận 7",
+                Address = "456 Nguyễn Lương Bằng, Phường Tân Phú, Quận 7",
+                City = "TP. Hồ Chí Minh",
+                Phone = "028 5412 5678",
+                OpeningHours = "07:30 - 17:00 (Thứ 2 - Thứ 7) | Chủ nhật nghỉ",
+                Description = "Cơ sở phía Nam thành phố, chuyên sâu Nhi khoa, Sản phụ khoa và Tim mạch can thiệp.",
+                ServicesJson = "[\"Khám Nhi - Sản\",\"Xét nghiệm máu nhanh\",\"Siêu âm tim Doppler màu\",\"Nhà thuốc GPP\"]",
+                IsActive = true
+            },
+            new ClinicLocation
+            {
+                Code = "CS03",
+                Name = "Cơ sở 3 - Thành phố Thủ Đức",
+                Address = "789 Võ Văn Ngân, Phường Linh Chiểu, TP. Thủ Đức",
+                City = "TP. Hồ Chí Minh",
+                Phone = "028 3896 9012",
+                OpeningHours = "07:30 - 17:00 (Thứ 2 - Thứ 7) | Chủ nhật nghỉ",
+                Description = "Cơ sở khu vực phía Đông, thuận tiện cho sinh viên, kỹ sư và cư dân khu công nghệ cao.",
+                ServicesJson = "[\"Khám nội tổng quát\",\"Da liễu & Thẩm mỹ y khoa\",\"Cơ xương khớp\",\"X-quang kỹ thuật số\"]",
+                IsActive = true
             }
-            await db.SaveChangesAsync();
-            logger.LogInformation("Work schedules and slots seeded.");
+        };
+        foreach (var ldef in locationDefs)
+        {
+            if (!await db.ClinicLocations.AnyAsync(l => l.Code == ldef.Code))
+            {
+                db.ClinicLocations.Add(ldef);
+            }
+        }
+        await db.SaveChangesAsync();
+        logger.LogInformation("Clinic locations seeded.");
+
+        var today = dateTimeProvider.VietnamToday;
+
+        // 6 & 7. Doctor Work Schedules, Slots & Demo Appointments (Decoupled from baseline master seed)
+        if (seedSchedules)
+        {
+            await SeedDoctorSchedulesAndSlotsInternalAsync(db, doctors, dateTimeProvider, logger, scheduleDays);
+
+            if (seedAppointments)
+            {
+                await SeedDemoAppointmentsInternalAsync(db, doctors, docUsers, adminId1, patients, specs, dateTimeProvider, logger);
+            }
+            else
+            {
+                logger.LogInformation("Demo appointments skipped (not requested).");
+            }
+        }
+        else
+        {
+            logger.LogInformation("Automatic schedule & slot generation skipped (baseline master seed). Configure 'DemoSeed:GenerateSlots' or invoke SeedDoctorSchedulesAndSlotsAsync to generate slots.");
         }
 
-        // Appointments
-        if (!await db.Appointments.AnyAsync())
+        // 8. Health Packages
+        var packageDefs = new[]
         {
-            var slots = await db.AppointmentSlots.ToListAsync();
-            var mainPat = patients[0];
-            var mainDoc = doctors[0];
-            var random = new Random(42);
-
-            var aptCount = 0;
-            // helper
-            async Task CreateApt(Patient p, Doctor d, AppointmentSlot s, AppointmentStatus status, bool isPast) {
-                var code = $"DEMO-{DateTime.Now.Ticks % 100000}-{aptCount++}";
-                var a = new Appointment {
-                    AppointmentCode = code,
-                    PatientId = p.Id, DoctorId = d.Id, SpecialtyId = specs[0].Id,
-                    AppointmentSlotId = s.Id, AppointmentDate = s.SlotDate,
-                    StartTime = s.StartTime, EndTime = s.EndTime,
-                    Reason = "KhĂ¡m tÆ° váº¥n", Status = status
-                };
-                db.Appointments.Add(a);
-                if (status != AppointmentStatus.Cancelled) s.IsBooked = true; 
-                await db.SaveChangesAsync();
-
-                db.AppointmentHistories.Add(new AppointmentHistory {
-                    AppointmentId = a.Id, Action = AppointmentHistoryAction.Created, NewStatus = AppointmentStatus.Pending, Note = "Bệnh nhân tự đặt lịch", PerformedByUserId = p.UserId, CreatedAt = DateTime.Now.AddDays(-10)
-                });
-
-                if (status != AppointmentStatus.Pending && status != AppointmentStatus.Cancelled) {
-                    db.AppointmentHistories.Add(new AppointmentHistory {
-                        AppointmentId = a.Id, Action = AppointmentHistoryAction.Confirmed, OldStatus = AppointmentStatus.Pending, NewStatus = AppointmentStatus.Confirmed, Note = "Lễ tân xác nhận", PerformedByUserId = adminId1.Id, CreatedAt = DateTime.Now.AddDays(-9)
-                    });
-                }
-                
-                if (status == AppointmentStatus.Completed) {
-                    db.AppointmentHistories.Add(new AppointmentHistory {
-                        AppointmentId = a.Id, Action = AppointmentHistoryAction.Completed, OldStatus = AppointmentStatus.Confirmed, NewStatus = AppointmentStatus.Completed, Note = "Bác sĩ hoàn thành", PerformedByUserId = d.UserId, CreatedAt = DateTime.Now.AddDays(-1)
-                    });
-                    db.VisitSummaries.Add(new VisitSummary {
-                        AppointmentId = a.Id, DoctorId = d.Id, Summary = "Sá»©c khá»e bá»‡nh nhĂ¢n tÆ°Æ¡ng Ä‘á»‘i á»•n Ä‘á»‹nh. ÄĂ£ kĂª Ä‘Æ¡n thuá»‘c vĂ  tÆ° váº¥n cháº¿ Ä‘á»™ Äƒn uá»‘ng.", FollowUpInstruction = "Uá»‘ng nhiá»u nÆ°á»›c, táº­p thá»ƒ dá»¥c thÆ°á»ng xuyĂªn."
-                    });
-                }
-                else if (status == AppointmentStatus.NoShow) {
-                    db.AppointmentHistories.Add(new AppointmentHistory {
-                        AppointmentId = a.Id, Action = AppointmentHistoryAction.NoShow, OldStatus = AppointmentStatus.Confirmed, NewStatus = AppointmentStatus.NoShow, Note = "Bệnh nhân vắng mặt", PerformedByUserId = d.UserId, CreatedAt = DateTime.Now.AddDays(-1)
-                    });
-                }
-                else if (status == AppointmentStatus.Cancelled) {
-                    db.AppointmentHistories.Add(new AppointmentHistory {
-                        AppointmentId = a.Id, Action = AppointmentHistoryAction.Cancelled, OldStatus = AppointmentStatus.Pending, NewStatus = AppointmentStatus.Cancelled, Note = "Khách yêu cầu hủy vì bận công việc", PerformedByUserId = p.UserId, CreatedAt = DateTime.Now.AddDays(-2)
-                    });
-                }
-                await db.SaveChangesAsync();
+            new HealthPackage
+            {
+                Code = "PKG01",
+                Name = "Gói Khám Sức Khỏe Tổng Quát Tiêu Chuẩn",
+                TargetAudience = "Mọi độ tuổi từ 18 trở lên",
+                Description = "Kiểm tra toàn diện các chỉ số huyết học, chức năng gan, thận, đường huyết, mỡ máu, X-quang phổi và siêu âm bụng tổng quát.",
+                Price = 1250000m,
+                IncludedServicesJson = "[\"Khám nội tổng quát\",\"Công thức máu 18 chỉ số\",\"Đo đường huyết Glucose\",\"Men gan AST/ALT\",\"Chức năng thận Ure/Creatinine\",\"X-quang tim phổi thẳng\",\"Siêu âm bụng tổng quát\"]",
+                IsActive = true
+            },
+            new HealthPackage
+            {
+                Code = "PKG02",
+                Name = "Gói Tầm Soát Tim Mạch Toàn Diện",
+                TargetAudience = "Người trưởng thành, trung niên và có tiền sử tim mạch",
+                Description = "Tầm soát chuyên sâu bệnh lý mạch vành, huyết áp, rối loạn nhịp tim và xơ vữa động mạch.",
+                Price = 2800000m,
+                IncludedServicesJson = "[\"Khám chuyên khoa Tim mạch\",\"Điện tâm đồ ECG 12 chuyển đạo\",\"Siêu âm tim Doppler màu\",\"Bộ mỡ máu toàn phần (Cholesterol, Triglyceride, HDL, LDL)\",\"Đo chỉ số xơ vữa ABI\",\"Tư vấn chế độ dinh dưỡng tim mạch\"]",
+                IsActive = true
+            },
+            new HealthPackage
+            {
+                Code = "PKG03",
+                Name = "Gói Chăm Sóc Sức Khỏe Nhi Khoa Toàn Diện",
+                TargetAudience = "Trẻ em từ 0 - 15 tuổi",
+                Description = "Đánh giá phát triển thể chất, dinh dưỡng, tầm soát thiếu máu, vi chất và kiểm tra tai mũi họng tổng quát.",
+                Price = 950000m,
+                IncludedServicesJson = "[\"Khám chuyên khoa Nhi\",\"Đánh giá chỉ số phát triển chiều cao - cân nặng\",\"Tổng phân tích tế bào máu\",\"Kiểm tra vi chất kẽm, canxi, sắt\",\"Nội soi tai mũi họng\",\"Tư vấn lịch tiêm chủng\"]",
+                IsActive = true
+            },
+            new HealthPackage
+            {
+                Code = "PKG04",
+                Name = "Gói Tầm Soát Sức Khỏe Phụ Nữ Chuyên Sâu",
+                TargetAudience = "Nữ giới từ 18 tuổi trở lên",
+                Description = "Tầm soát bệnh lý phụ khoa, ung thư cổ tử cung, tầm soát tuyến vú và các rối loạn nội tiết.",
+                Price = 1950000m,
+                IncludedServicesJson = "[\"Khám Sản phụ khoa chuyên sâu\",\"Soi tươi dịch âm đạo\",\"Siêu âm đầu dò tử cung buồng trứng\",\"Siêu âm tuyến vú 2 bên\",\"Xét nghiệm Pap smear tầm soát sớm\",\"Định lượng hormon nội tiết\"]",
+                IsActive = true
+            },
+            new HealthPackage
+            {
+                Code = "PKG05",
+                Name = "Gói Khám Cơ Xương Khớp & Loãng Xương",
+                TargetAudience = "Người cao tuổi, nhân viên văn phòng, người vận động thể thao",
+                Description = "Tầm soát thoái hóa khớp, thoát vị đĩa đệm, viêm khớp dạng thấp và đo mật độ xương toàn thân.",
+                Price = 1650000m,
+                IncludedServicesJson = "[\"Khám chuyên khoa Cơ xương khớp\",\"Đo mật độ xương DEXA\",\"X-quang khớp gối / cột sống thắt lưng\",\"Xét nghiệm Axit Uric (gút)\",\"Định lượng Canxi và Vitamin D3\"]",
+                IsActive = true
+            },
+            new HealthPackage
+            {
+                Code = "PKG06",
+                Name = "Gói Tầm Soát Gan Mật & Rối Loạn Chuyển Hóa",
+                TargetAudience = "Người có nguy cơ gan nhiễm mỡ, viêm gan, đái tháo đường",
+                Description = "Đánh giá chức năng gan mật, tầm soát virus viêm gan B/C, men gan và các chỉ số rối loạn chuyển hóa.",
+                Price = 1750000m,
+                IncludedServicesJson = "[\"Khám chuyên khoa Nội\",\"Xét nghiệm HBsAg, Anti-HCV\",\"Men gan toàn diện AST, ALT, GGT\",\"Siêu âm Doppler gan mật tụy lách\",\"Chỉ số đường huyết HbA1c\"]",
+                IsActive = true
             }
-
-            var futureSlots = slots.Where(x => x.SlotDate > today).ToList();
-            
-            // To make past appointments, we need past slots
-            var pastDate = today.AddDays(-5);
-            var pastSchedule = new DoctorWorkSchedule { DoctorId = mainDoc.Id, WorkDate = pastDate, StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(17, 0), IsActive = true };
-            db.DoctorWorkSchedules.Add(pastSchedule);
-            await db.SaveChangesAsync();
-            
-            var pastSlots = new List<AppointmentSlot>();
-            for(int i=0; i<15; i++) {
-                var s = new AppointmentSlot { DoctorId = mainDoc.Id, SlotDate = pastDate, StartTime = new TimeOnly(8, 0).AddMinutes(i*30), EndTime = new TimeOnly(8, 30).AddMinutes(i*30) };
-                pastSlots.Add(s);
+        };
+        foreach (var pdef in packageDefs)
+        {
+            if (!await db.HealthPackages.AnyAsync(p => p.Code == pdef.Code))
+            {
+                db.HealthPackages.Add(pdef);
             }
-            db.AppointmentSlots.AddRange(pastSlots);
-            await db.SaveChangesAsync();
-
-            // 12 Completed
-            for(int i=0; i<12; i++) await CreateApt(patients[i], mainDoc, pastSlots[i], AppointmentStatus.Completed, true);
-            // 3 NoShow
-            for(int i=12; i<15; i++) await CreateApt(patients[i], mainDoc, pastSlots[i], AppointmentStatus.NoShow, true);
-            
-            // Generate some cancelled past
-            var pastDate2 = today.AddDays(-4);
-            var pastSchedule2 = new DoctorWorkSchedule { DoctorId = mainDoc.Id, WorkDate = pastDate2, StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(17, 0), IsActive = true };
-            db.DoctorWorkSchedules.Add(pastSchedule2);
-            await db.SaveChangesAsync();
-            
-            var pastSlots2 = new List<AppointmentSlot>();
-            for(int i=0; i<5; i++) {
-                pastSlots2.Add(new AppointmentSlot { DoctorId = mainDoc.Id, SlotDate = pastDate2, StartTime = new TimeOnly(8, 0).AddMinutes(i*30), EndTime = new TimeOnly(8, 30).AddMinutes(i*30) });
-            }
-            db.AppointmentSlots.AddRange(pastSlots2);
-            await db.SaveChangesAsync();
-            // 5 Cancelled
-            for(int i=0; i<5; i++) await CreateApt(patients[i], mainDoc, pastSlots2[i], AppointmentStatus.Cancelled, true);
-
-            // 6 Pending future
-            for(int i=0; i<6; i++) await CreateApt(patients[i], doctors[i%doctors.Count], futureSlots[i], AppointmentStatus.Pending, false);
-            // 10 Confirmed future
-            for(int i=6; i<16; i++) await CreateApt(patients[i], doctors[(i+1)%doctors.Count], futureSlots[i], AppointmentStatus.Confirmed, false);
-            
-            logger.LogInformation("Appointments seeded.");
-            
-            // Change requests
-            var pendingAppt = await db.Appointments.Include(a => a.Patient).FirstAsync(a => a.Status == AppointmentStatus.Pending);
-            db.AppointmentChangeRequests.Add(new AppointmentChangeRequest {
-                AppointmentId = pendingAppt.Id, RequestType = AppointmentChangeRequestType.Cancellation, Reason = "Bận việc đột xuất", Status = AppointmentChangeRequestStatus.Pending, RequestedByUserId = pendingAppt.Patient.UserId, CreatedAt = DateTime.Now
-            });
-
-            var confAppt = await db.Appointments.Include(a => a.Patient).Skip(1).FirstAsync(a => a.Status == AppointmentStatus.Confirmed);
-            db.AppointmentChangeRequests.Add(new AppointmentChangeRequest {
-                AppointmentId = confAppt.Id, RequestType = AppointmentChangeRequestType.Reschedule, RequestedSlotId = futureSlots[100].Id, Reason = "Xin dá»i ngĂ y khĂ¡m sang tuáº§n sau", Status = AppointmentChangeRequestStatus.Pending, RequestedByUserId = confAppt.Patient.UserId, CreatedAt = DateTime.Now
-            });
-            await db.SaveChangesAsync();
-
-            // Revisit request
-            var compAppt = await db.Appointments.FirstAsync(a => a.Status == AppointmentStatus.Completed);
-            db.RevisitRequests.Add(new RevisitRequest {
-                AppointmentId = compAppt.Id, PatientId = compAppt.PatientId, DoctorId = compAppt.DoctorId, SuggestedDate = today.AddDays(7), Note = "TĂ¡i khĂ¡m sau 1 tuáº§n kiá»ƒm tra lÆ°á»£ng Ä‘Æ°á»ng", Status = RevisitRequestStatus.PendingPatientResponse
-            });
-            await db.SaveChangesAsync();
-
-            // Leave requests
-            db.DoctorLeaveRequests.Add(new DoctorLeaveRequest {
-                DoctorId = mainDoc.Id, StartDateTime = DateTime.Now.AddDays(2), EndDateTime = DateTime.Now.AddDays(3), Reason = "Nghỉ phép cá nhân", Status = DoctorLeaveRequestStatus.Pending
-            });
-            db.DoctorLeaveRequests.Add(new DoctorLeaveRequest {
-                DoctorId = doctors[1].Id, StartDateTime = DateTime.Now.AddDays(5), EndDateTime = DateTime.Now.AddDays(6), Reason = "Tham gia hội thảo chuyên ngành tại Hà Nội", Status = DoctorLeaveRequestStatus.Approved, AdminNote = "ÄĂ£ duyá»‡t, yĂªu cáº§u chuyá»ƒn ca cĂ¡c bá»‡nh nhĂ¢n ngĂ y 5."
-            });
-            await db.SaveChangesAsync();
-
-            logger.LogInformation("Requests and Leaves seeded.");
         }
+        await db.SaveChangesAsync();
+        logger.LogInformation("HealthPackages seeded.");
+        var packages = await db.HealthPackages.ToListAsync();
 
-        // 7. Health Care Packages (ClinicCare Branded)
-        if (!await db.HealthPackages.AnyAsync())
+        // 9. Health Package Registrations
+        if (!await db.HealthPackageRegistrations.AnyAsync(r => r.RegistrationCode.StartsWith("PKG-REG-")) && packages.Count > 0 && patients.Count > 0)
         {
-            db.HealthPackages.AddRange(
-                new HealthPackage
+            db.HealthPackageRegistrations.AddRange(
+                new HealthPackageRegistration
                 {
-                    Code = "PKG01",
-                    Name = "Gói Khám Sức Khỏe Tổng Quát Tiêu Chuẩn",
-                    TargetAudience = "Mọi độ tuổi từ 18 trở lên",
-                    Description = "Kiểm tra toàn diện các chỉ số huyết học, chức năng gan, thận, đường huyết, mỡ máu, X-quang phổi và siêu âm bụng tổng quát.",
-                    Price = 1250000m,
-                    IncludedServicesJson = "[\"Khám nội tổng quát\",\"Công thức máu 18 chỉ số\",\"Đo đường huyết Glucose\",\"Men gan AST/ALT\",\"Chức năng thận Ure/Creatinine\",\"X-quang tim phổi thẳng\",\"Siêu âm bụng tổng quát\"]",
-                    IsActive = true
+                    RegistrationCode = "PKG-REG-001",
+                    PatientId = patients[0].Id,
+                    HealthPackageId = packages[0].Id,
+                    PreferredDate = today.AddDays(3),
+                    ContactPhone = "0900000004",
+                    Note = "Ưu tiên khám buổi sáng sớm trước 9h",
+                    Status = HealthPackageRegistrationStatus.Pending,
+                    CreatedAt = DateTime.UtcNow.AddDays(-2)
                 },
-                new HealthPackage
+                new HealthPackageRegistration
                 {
-                    Code = "PKG02",
-                    Name = "Gói Tầm Soát Tim Mạch Toàn Diện",
-                    TargetAudience = "Người trưởng thành, trung niên và có tiền sử tim mạch",
-                    Description = "Tầm soát chuyên sâu bệnh lý mạch vành, huyết áp, rối loạn nhịp tim và xơ vữa động mạch.",
-                    Price = 2800000m,
-                    IncludedServicesJson = "[\"Khám chuyên khoa Tim mạch\",\"Điện tâm đồ ECG 12 chuyển đạo\",\"Siêu âm tim Doppler màu\",\"Bộ mỡ máu toàn phần (Cholesterol, Triglyceride, HDL, LDL)\",\"Đo chỉ số xơ vữa ABI\",\"Tư vấn chế độ dinh dưỡng tim mạch\"]",
-                    IsActive = true
+                    RegistrationCode = "PKG-REG-002",
+                    PatientId = patients[1 % patients.Count].Id,
+                    HealthPackageId = packages[1 % packages.Count].Id,
+                    PreferredDate = today.AddDays(5),
+                    ContactPhone = "0983000001",
+                    Note = "Có tiền sử tăng huyết áp gia đình",
+                    AdminNotes = "Đã liên hệ xác nhận hẹn lịch vào 8h30 ngày hẹn",
+                    Status = HealthPackageRegistrationStatus.Confirmed,
+                    CreatedAt = DateTime.UtcNow.AddDays(-3),
+                    UpdatedAt = DateTime.UtcNow.AddDays(-2)
                 },
-                new HealthPackage
+                new HealthPackageRegistration
                 {
-                    Code = "PKG03",
-                    Name = "Gói Chăm Sóc Sức Khỏe Nhi Khoa Toàn Diện",
-                    TargetAudience = "Trẻ em từ 0 - 15 tuổi",
-                    Description = "Đánh giá phát triển thể chất, dinh dưỡng, tầm soát thiếu máu, vi chất và kiểm tra tai mũi họng tổng quát.",
-                    Price = 950000m,
-                    IncludedServicesJson = "[\"Khám chuyên khoa Nhi\",\"Đánh giá chỉ số phát triển chiều cao - cân nặng\",\"Tổng phân tích tế bào máu\",\"Kiểm tra vi chất kẽm, canxi, sắt\",\"Nội soi tai mũi họng\",\"Tư vấn lịch tiêm chủng\"]",
-                    IsActive = true
-                },
-                new HealthPackage
-                {
-                    Code = "PKG04",
-                    Name = "Gói Tầm Soát Sức Khỏe Phụ Nữ Chuyên Sâu",
-                    TargetAudience = "Nữ giới từ 18 tuổi trở lên",
-                    Description = "Tầm soát bệnh lý phụ khoa, ung thư cổ tử cung, tầm soát tuyến vú và các rối loạn nội tiết.",
-                    Price = 1950000m,
-                    IncludedServicesJson = "[\"Khám Sản phụ khoa chuyên sâu\",\"Soi tươi dịch âm đạo\",\"Siêu âm đầu dò tử cung buồng trứng\",\"Siêu âm tuyến vú 2 bên\",\"Xét nghiệm Pap smear tầm soát sớm\",\"Định lượng hormon nội tiết\"]",
-                    IsActive = true
-                },
-                new HealthPackage
-                {
-                    Code = "PKG05",
-                    Name = "Gói Khám Cơ Xương Khớp & Loãng Xương",
-                    TargetAudience = "Người cao tuổi, nhân viên văn phòng, người vận động thể thao",
-                    Description = "Tầm soát thoái hóa khớp, thoát vị đĩa đệm, viêm khớp dạng thấp và đo mật độ xương toàn thân.",
-                    Price = 1650000m,
-                    IncludedServicesJson = "[\"Khám chuyên khoa Cơ xương khớp\",\"Đo mật độ xương DEXA\",\"X-quang khớp gối / cột sống thắt lưng\",\"Xét nghiệm Axit Uric (gút)\",\"Định lượng Canxi và Vitamin D3\"]",
-                    IsActive = true
-                },
-                new HealthPackage
-                {
-                    Code = "PKG06",
-                    Name = "Gói Tầm Soát Gan Mật & Rối Loạn Chuyển Hóa",
-                    TargetAudience = "Người có nguy cơ gan nhiễm mỡ, viêm gan, đái tháo đường",
-                    Description = "Đánh giá chức năng gan mật, tầm soát virus viêm gan B/C, men gan và các chỉ số rối loạn chuyển hóa.",
-                    Price = 1750000m,
-                    IncludedServicesJson = "[\"Khám chuyên khoa Nội\",\"Xét nghiệm HBsAg, Anti-HCV\",\"Men gan toàn diện AST, ALT, GGT\",\"Siêu âm Doppler gan mật tụy lách\",\"Chỉ số đường huyết HbA1c\"]",
-                    IsActive = true
+                    RegistrationCode = "PKG-REG-003",
+                    PatientId = patients[2 % patients.Count].Id,
+                    HealthPackageId = packages[3 % packages.Count].Id,
+                    PreferredDate = today.AddDays(2),
+                    ContactPhone = "0983000002",
+                    Note = "Khám tư vấn định kỳ",
+                    CancellationReason = "Khách hàng bận lịch công tác không đến được",
+                    Status = HealthPackageRegistrationStatus.Cancelled,
+                    CreatedAt = DateTime.UtcNow.AddDays(-4),
+                    UpdatedAt = DateTime.UtcNow.AddDays(-1)
                 }
             );
             await db.SaveChangesAsync();
-            logger.LogInformation("HealthPackages seeded.");
+            logger.LogInformation("HealthPackageRegistrations seeded.");
         }
 
-        // 8. Medicines & Pharmacy Seed
+        // 10. Medicines & Pharmacy Seed
         if (!await db.Medicines.AnyAsync())
         {
-            var med1 = new Medicine { Code = "MED01", Name = "Paracetamol 500mg", Unit = "Viên", StockQuantity = 500, ReorderLevel = 100, IsActive = true };
-            var med2 = new Medicine { Code = "MED02", Name = "Amoxicillin 500mg", Unit = "Viên", StockQuantity = 300, ReorderLevel = 50, IsActive = true };
-            var med3 = new Medicine { Code = "MED03", Name = "Ibuprofen 400mg", Unit = "Viên", StockQuantity = 250, ReorderLevel = 50, IsActive = true };
-            var med4 = new Medicine { Code = "MED04", Name = "Omeprazole 20mg", Unit = "Viên", StockQuantity = 400, ReorderLevel = 80, IsActive = true };
-            var med5 = new Medicine { Code = "MED05", Name = "Cefixime 200mg", Unit = "Viên", StockQuantity = 150, ReorderLevel = 40, IsActive = true };
-            var med6 = new Medicine { Code = "MED06", Name = "Loratadine 10mg", Unit = "Viên", StockQuantity = 200, ReorderLevel = 50, IsActive = true };
-            var med7 = new Medicine { Code = "MED07", Name = "Metformin 500mg", Unit = "Viên", StockQuantity = 350, ReorderLevel = 60, IsActive = true };
-            var med8 = new Medicine { Code = "MED08", Name = "Amlodipine 5mg", Unit = "Viên", StockQuantity = 300, ReorderLevel = 50, IsActive = true };
-            var med9 = new Medicine { Code = "MED09", Name = "Vitamin C 500mg", Unit = "Viên", StockQuantity = 600, ReorderLevel = 100, IsActive = true };
-            var med10 = new Medicine { Code = "MED10", Name = "Salbutamol 2mg", Unit = "Viên", StockQuantity = 25, ReorderLevel = 50, IsActive = true }; // Low stock alert!
-            var med11 = new Medicine { Code = "MED11", Name = "Berberin 100mg", Unit = "Viên", StockQuantity = 400, ReorderLevel = 80, IsActive = true };
-            var med12 = new Medicine { Code = "MED12", Name = "Phosphalugel 20g", Unit = "Gói", StockQuantity = 180, ReorderLevel = 40, IsActive = true };
+            var med1 = new Medicine { Code = "MED01", Name = "Paracetamol 500mg", Unit = "Viên", StockQuantity = 500, ReorderLevel = 100, UnitPrice = 2000m, IsActive = true };
+            var med2 = new Medicine { Code = "MED02", Name = "Amoxicillin 500mg", Unit = "Viên", StockQuantity = 300, ReorderLevel = 50, UnitPrice = 5000m, IsActive = true };
+            var med3 = new Medicine { Code = "MED03", Name = "Ibuprofen 400mg", Unit = "Viên", StockQuantity = 250, ReorderLevel = 50, UnitPrice = 3500m, IsActive = true };
+            var med4 = new Medicine { Code = "MED04", Name = "Omeprazole 20mg", Unit = "Viên", StockQuantity = 400, ReorderLevel = 80, UnitPrice = 4500m, IsActive = true };
+            var med5 = new Medicine { Code = "MED05", Name = "Cefixime 200mg", Unit = "Viên", StockQuantity = 150, ReorderLevel = 40, UnitPrice = 12000m, IsActive = true };
+            var med6 = new Medicine { Code = "MED06", Name = "Loratadine 10mg", Unit = "Viên", StockQuantity = 200, ReorderLevel = 50, UnitPrice = 3000m, IsActive = true };
+            var med7 = new Medicine { Code = "MED07", Name = "Metformin 500mg", Unit = "Viên", StockQuantity = 350, ReorderLevel = 60, UnitPrice = 2500m, IsActive = true };
+            var med8 = new Medicine { Code = "MED08", Name = "Amlodipine 5mg", Unit = "Viên", StockQuantity = 300, ReorderLevel = 50, UnitPrice = 4000m, IsActive = true };
+            var med9 = new Medicine { Code = "MED09", Name = "Vitamin C 500mg", Unit = "Viên", StockQuantity = 600, ReorderLevel = 100, UnitPrice = 1500m, IsActive = true };
+            var med10 = new Medicine { Code = "MED10", Name = "Salbutamol 2mg", Unit = "Viên", StockQuantity = 25, ReorderLevel = 50, UnitPrice = 2000m, IsActive = true }; // Low stock alert!
+            var med11 = new Medicine { Code = "MED11", Name = "Berberin 100mg", Unit = "Viên", StockQuantity = 400, ReorderLevel = 80, UnitPrice = 1000m, IsActive = true };
+            var med12 = new Medicine { Code = "MED12", Name = "Phosphalugel 20g", Unit = "Gói", StockQuantity = 180, ReorderLevel = 40, UnitPrice = 8000m, IsActive = true };
 
             db.Medicines.AddRange(med1, med2, med3, med4, med5, med6, med7, med8, med9, med10, med11, med12);
             await db.SaveChangesAsync();
@@ -438,8 +562,715 @@ public static class DevelopmentDataSeeder
                 logger.LogInformation("Sample Prescriptions seeded.");
             }
         }
+        else
+        {
+            var existingMedsWithoutPrice = await db.Medicines.Where(m => m.UnitPrice == null || m.UnitPrice <= 0).ToListAsync();
+            foreach (var m in existingMedsWithoutPrice)
+            {
+                m.UnitPrice = m.Code switch
+                {
+                    "MED01" => 2000m,
+                    "MED02" => 5000m,
+                    "MED03" => 3500m,
+                    "MED04" => 4500m,
+                    "MED05" => 12000m,
+                    "MED06" => 3000m,
+                    "MED07" => 2500m,
+                    "MED08" => 4000m,
+                    "MED09" => 1500m,
+                    "MED10" => 2000m,
+                    "MED11" => 1000m,
+                    "MED12" => 8000m,
+                    _ => 10000m
+                };
+            }
+            if (existingMedsWithoutPrice.Count > 0)
+            {
+                await db.SaveChangesAsync();
+            }
+        }
+        
+        // Diagnostic Services Catalog (Idempotent)
+        var diagnosticServiceDefs = new[]
+        {
+            new DiagnosticService { Code = "LAB-CBC", Name = "Tổng phân tích tế bào máu ngoại vi", Category = DiagnosticCategory.Laboratory, Price = 120000m, PreparationInstructions = "Không cần nhịn ăn đặc biệt.", IsActive = true },
+            new DiagnosticService { Code = "LAB-GLU", Name = "Định lượng Glucose máu", Category = DiagnosticCategory.Laboratory, Price = 80000m, PreparationInstructions = "Nhịn đói ít nhất 8 tiếng trước khi lấy mẫu.", IsActive = true },
+            new DiagnosticService { Code = "LAB-LIPID", Name = "Bộ mỡ máu toàn phần (Lipid panel)", Category = DiagnosticCategory.Laboratory, Price = 150000m, PreparationInstructions = "Nhịn ăn 10-12 tiếng trước khi lấy máu.", IsActive = true },
+            new DiagnosticService { Code = "LAB-LFT", Name = "Đánh giá chức năng gan (AST, ALT)", Category = DiagnosticCategory.Laboratory, Price = 140000m, PreparationInstructions = "Tránh uống rượu bia 24 giờ trước khi xét nghiệm.", IsActive = true },
+            new DiagnosticService { Code = "LAB-RFT", Name = "Đánh giá chức năng thận (Ure, Creatinin)", Category = DiagnosticCategory.Laboratory, Price = 130000m, PreparationInstructions = "Uống đủ nước, sinh hoạt bình thường.", IsActive = true },
+            new DiagnosticService { Code = "US-ABD", Name = "Siêu âm ổ bụng tổng quát", Category = DiagnosticCategory.Ultrasound, Price = 250000m, PreparationInstructions = "Nhịn ăn ít nhất 6 tiếng, uống nhiều nước và nhịn tiểu.", IsActive = true },
+            new DiagnosticService { Code = "US-THY", Name = "Siêu âm tuyến giáp", Category = DiagnosticCategory.Ultrasound, Price = 200000m, PreparationInstructions = "Không cần chuẩn bị trước.", IsActive = true },
+            new DiagnosticService { Code = "US-ECHO", Name = "Siêu âm Doppler tim màu", Category = DiagnosticCategory.Ultrasound, Price = 450000m, PreparationInstructions = "Nghỉ ngơi 15 phút trước khi thực hiện.", IsActive = true },
+            new DiagnosticService { Code = "IMG-CXR", Name = "Chụp X-quang ngực thẳng", Category = DiagnosticCategory.Imaging, Price = 180000m, PreparationInstructions = "Tháo bỏ trang sức kim loại vùng ngực và cổ.", IsActive = true },
+            new DiagnosticService { Code = "IMG-ECG", Name = "Điện tâm đồ (ECG 12 chuyển đạo)", Category = DiagnosticCategory.Other, Price = 100000m, PreparationInstructions = "Nghỉ ngơi yên tĩnh 10 phút trước khi đo.", IsActive = true }
+        };
+
+        foreach (var ds in diagnosticServiceDefs)
+        {
+            var existing = await db.DiagnosticServices.FirstOrDefaultAsync(s => s.Code == ds.Code);
+            if (existing == null)
+            {
+                db.DiagnosticServices.Add(ds);
+            }
+            else
+            {
+                existing.Name = ds.Name;
+                existing.Category = ds.Category;
+                existing.PreparationInstructions = ds.PreparationInstructions;
+                existing.IsActive = true;
+                if (!existing.Price.HasValue || existing.Price.Value <= 0)
+                {
+                    existing.Price = ds.Price;
+                }
+            }
+        }
+        await db.SaveChangesAsync();
+        logger.LogInformation("Diagnostic Services catalog seeded.");
+
+        // 11. Facility BV-TW-01, Departments, Rooms & Staff Facility Assignments
+        var fac = await db.Facilities.FirstOrDefaultAsync(f => f.Code == "BV-TW-01");
+        if (fac == null)
+        {
+            fac = new Facility
+            {
+                Code = "BV-TW-01",
+                Name = "Bệnh viện Đa khoa Trung Ương",
+                Address = "789 Đường Giải Phóng, Phường Phương Mai, Quận Đống Đa",
+                City = "Hà Nội",
+                Phone = "02438693731",
+                Email = "contact@bvtw.vn",
+                HospitalLevel = "Hạng Đặc biệt",
+                Description = "Bệnh viện Đa khoa Trung Ương - Cơ sở chính tiếp nhận",
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            db.Facilities.Add(fac);
+            await db.SaveChangesAsync();
+        }
+
+        var building = await db.Buildings.FirstOrDefaultAsync(b => b.FacilityId == fac.Id && b.Code == "TN-A");
+        if (building == null)
+        {
+            building = new Building
+            {
+                FacilityId = fac.Id,
+                Code = "TN-A",
+                Name = "Tòa nhà A - Khám bệnh Đa khoa",
+                NumberOfFloors = 5,
+                IsActive = true
+            };
+            db.Buildings.Add(building);
+            await db.SaveChangesAsync();
+        }
+
+        var deptDefs = new[]
+        {
+            new { Code = "KKB", Name = "Khoa Khám bệnh Ngoại trú", SpecialtyCode = "SP01", Type = DepartmentType.Clinical },
+            new { Code = "KNHI", Name = "Khoa Nhi", SpecialtyCode = "SP02", Type = DepartmentType.Clinical },
+            new { Code = "KPS", Name = "Khoa Sản phụ khoa", SpecialtyCode = "SP03", Type = DepartmentType.Clinical },
+            new { Code = "KTMH", Name = "Khoa Tai Mũi Họng", SpecialtyCode = "SP05", Type = DepartmentType.Clinical },
+            new { Code = "KTM", Name = "Khoa Tim mạch", SpecialtyCode = "SP06", Type = DepartmentType.Clinical }
+        };
+
+        var deptEntities = new List<Department>();
+        foreach (var dd in deptDefs)
+        {
+            var d = await db.Departments.FirstOrDefaultAsync(x => x.FacilityId == fac.Id && x.Code == dd.Code);
+            var spec = await db.Specialties.FirstOrDefaultAsync(s => s.SpecialtyCode == dd.SpecialtyCode);
+            if (d == null)
+            {
+                d = new Department
+                {
+                    FacilityId = fac.Id,
+                    BuildingId = building.Id,
+                    Code = dd.Code,
+                    Name = dd.Name,
+                    DepartmentType = dd.Type,
+                    SpecialtyId = spec?.Id,
+                    IsActive = true
+                };
+                db.Departments.Add(d);
+                await db.SaveChangesAsync();
+            }
+            else if (d.SpecialtyId == null && spec != null)
+            {
+                d.SpecialtyId = spec.Id;
+                await db.SaveChangesAsync();
+            }
+            deptEntities.Add(d);
+        }
+
+        var roomDefs = new[]
+        {
+            new { DeptCode = "KKB", RoomNumber = "P101", Name = "Phòng khám Nội 101", Floor = 1 },
+            new { DeptCode = "KKB", RoomNumber = "P102", Name = "Phòng khám Nội 102", Floor = 1 },
+            new { DeptCode = "KNHI", RoomNumber = "P201", Name = "Phòng khám Nhi 201", Floor = 2 },
+            new { DeptCode = "KPS", RoomNumber = "P202", Name = "Phòng khám Sản 202", Floor = 2 },
+            new { DeptCode = "KTMH", RoomNumber = "P301", Name = "Phòng khám TMH 301", Floor = 3 },
+            new { DeptCode = "KTM", RoomNumber = "P302", Name = "Phòng khám Tim mạch 302", Floor = 3 }
+        };
+
+        foreach (var rd in roomDefs)
+        {
+            var dept = deptEntities.FirstOrDefault(d => d.Code == rd.DeptCode);
+            if (dept != null)
+            {
+                var r = await db.Rooms.FirstOrDefaultAsync(x => x.DepartmentId == dept.Id && x.RoomNumber == rd.RoomNumber);
+                if (r == null)
+                {
+                    r = new Room
+                    {
+                        DepartmentId = dept.Id,
+                        BuildingId = building.Id,
+                        RoomNumber = rd.RoomNumber,
+                        Name = rd.Name,
+                        FloorNumber = rd.Floor,
+                        RoomType = RoomType.Consultation,
+                        IsActive = true
+                    };
+                    db.Rooms.Add(r);
+                    await db.SaveChangesAsync();
+                }
+            }
+        }
+
+        var staffUsers = new List<(ApplicationUser User, string Role)>
+        {
+            (adminId1, "Admin"),
+            (adminId2, "Admin"),
+            (rec1, "Receptionist"),
+            (rec2, "Receptionist"),
+            (rec3, "Receptionist"),
+            (pharmacist, "Pharmacist"),
+            (technician, ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician)
+        };
+
+        foreach (var du in docUsers)
+        {
+            staffUsers.Add((du, "Doctor"));
+        }
+
+        foreach (var (stUser, role) in staffUsers)
+        {
+            var existingAssignment = await db.StaffFacilityAssignments
+                .FirstOrDefaultAsync(a => a.UserId == stUser.Id && a.FacilityId == fac.Id);
+            if (existingAssignment == null)
+            {
+                var assignedDept = deptEntities.FirstOrDefault();
+                db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+                {
+                    UserId = stUser.Id,
+                    FacilityId = fac.Id,
+                    DepartmentId = assignedDept?.Id,
+                    Role = role,
+                    IsPrimary = true,
+                    IsActive = true,
+                    AssignedAtUtc = DateTime.UtcNow
+                });
+            }
+        }
+        await db.SaveChangesAsync();
+        logger.LogInformation("Facility BV-TW-01, departments, rooms, and staff assignments seeded.");
 
         logger.LogInformation("Development Data Seeding completed.");
+    }
+
+    public static async Task SeedMasterDataAsync(IServiceProvider serviceProvider)
+    {
+        await SeedAsync(serviceProvider, new DevelopmentDataSeederOptions
+        {
+            SeedDoctorSchedulesAndSlots = false,
+            SeedDemoAppointments = false
+        });
+    }
+
+    public static async Task SeedDoctorSchedulesAndSlotsAsync(IServiceProvider serviceProvider, int days = 7, bool seedDemoAppointments = false)
+    {
+        await SeedAsync(serviceProvider, new DevelopmentDataSeederOptions
+        {
+            SeedDoctorSchedulesAndSlots = true,
+            ScheduleDays = days,
+            SeedDemoAppointments = seedDemoAppointments
+        });
+    }
+
+    public static async Task SeedDoctorSchedulesAndSlotsInternalAsync(
+        AppDbContext db,
+        List<Doctor> doctors,
+        ClinicManagement.Application.Common.Interfaces.IDateTimeProvider dateTimeProvider,
+        ILogger logger,
+        int scheduleDays = 7)
+    {
+        var today = dateTimeProvider.VietnamToday;
+        var existingSchedules = await db.DoctorWorkSchedules.ToListAsync();
+        var scheduleLookup = existingSchedules
+            .GroupBy(s => (s.DoctorId, s.WorkDate, s.StartTime, s.EndTime))
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var existingSlots = await db.AppointmentSlots.ToListAsync();
+        var slotLookup = existingSlots
+            .GroupBy(s => (s.DoctorId, s.SlotDate, s.StartTime))
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var days = Math.Clamp(scheduleDays, 1, 30);
+        foreach (var doc in doctors)
+        {
+            for (int i = 0; i < days; i++)
+            {
+                var date = today.AddDays(i);
+                // Skip Sundays
+                if (date.DayOfWeek == DayOfWeek.Sunday) continue;
+
+                // Morning Shift (08:00 - 11:30)
+                var morningKey = (doc.Id, date, new TimeOnly(8, 0), new TimeOnly(11, 30));
+                if (!scheduleLookup.TryGetValue(morningKey, out var morningSchedule))
+                {
+                    morningSchedule = new DoctorWorkSchedule
+                    {
+                        DoctorId = doc.Id,
+                        WorkDate = date,
+                        StartTime = new TimeOnly(8, 0),
+                        EndTime = new TimeOnly(11, 30),
+                        IsActive = true
+                    };
+                    db.DoctorWorkSchedules.Add(morningSchedule);
+                    scheduleLookup[morningKey] = morningSchedule;
+                }
+                else if (!morningSchedule.IsActive)
+                {
+                    morningSchedule.IsActive = true;
+                }
+
+                // Afternoon Shift (13:30 - 17:00)
+                var afternoonKey = (doc.Id, date, new TimeOnly(13, 30), new TimeOnly(17, 0));
+                if (!scheduleLookup.TryGetValue(afternoonKey, out var afternoonSchedule))
+                {
+                    afternoonSchedule = new DoctorWorkSchedule
+                    {
+                        DoctorId = doc.Id,
+                        WorkDate = date,
+                        StartTime = new TimeOnly(13, 30),
+                        EndTime = new TimeOnly(17, 0),
+                        IsActive = true
+                    };
+                    db.DoctorWorkSchedules.Add(afternoonSchedule);
+                    scheduleLookup[afternoonKey] = afternoonSchedule;
+                }
+                else if (!afternoonSchedule.IsActive)
+                {
+                    afternoonSchedule.IsActive = true;
+                }
+
+                // Morning slots (7 slots: 08:00 to 11:30, 30m each)
+                var mStart = new TimeOnly(8, 0);
+                for (int s = 0; s < 7; s++)
+                {
+                    var slotKey = (doc.Id, date, mStart);
+                    if (!slotLookup.TryGetValue(slotKey, out var slot))
+                    {
+                        slot = new AppointmentSlot
+                        {
+                            DoctorId = doc.Id,
+                            SlotDate = date,
+                            StartTime = mStart,
+                            EndTime = mStart.AddMinutes(30),
+                            IsBooked = false
+                        };
+                        db.AppointmentSlots.Add(slot);
+                        slotLookup[slotKey] = slot;
+                    }
+                    mStart = mStart.AddMinutes(30);
+                }
+
+                // Afternoon slots (7 slots: 13:30 to 17:00, 30m each)
+                var aStart = new TimeOnly(13, 30);
+                for (int s = 0; s < 7; s++)
+                {
+                    var slotKey = (doc.Id, date, aStart);
+                    if (!slotLookup.TryGetValue(slotKey, out var slot))
+                    {
+                        slot = new AppointmentSlot
+                        {
+                            DoctorId = doc.Id,
+                            SlotDate = date,
+                            StartTime = aStart,
+                            EndTime = aStart.AddMinutes(30),
+                            IsBooked = false
+                        };
+                        db.AppointmentSlots.Add(slot);
+                        slotLookup[slotKey] = slot;
+                    }
+                    aStart = aStart.AddMinutes(30);
+                }
+            }
+        }
+        await db.SaveChangesAsync();
+
+        // Synchronize IsBooked on all slots based on active appointments holding slots
+        var activeApptSlotIds = await db.Appointments
+            .Where(a => AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
+            .Select(a => a.AppointmentSlotId)
+            .Distinct()
+            .ToListAsync();
+        var activeSlotIdSet = new HashSet<long>(activeApptSlotIds);
+
+        var allDoctorSlots = await db.AppointmentSlots.ToListAsync();
+        foreach (var slot in allDoctorSlots)
+        {
+            var shouldBeBooked = activeSlotIdSet.Contains(slot.Id);
+            if (slot.IsBooked != shouldBeBooked)
+            {
+                slot.IsBooked = shouldBeBooked;
+            }
+        }
+        await db.SaveChangesAsync();
+        logger.LogInformation("Work schedules ({Days} days [VietnamToday..+{DaysMinusOne}], 2 shifts) and slots (14 slots/day) seeded and synchronized.", days, days - 1);
+    }
+
+    private static async Task SeedDemoAppointmentsInternalAsync(
+        AppDbContext db,
+        List<Doctor> doctors,
+        List<ApplicationUser> docUsers,
+        ApplicationUser adminId1,
+        List<Patient> patients,
+        List<Specialty> specs,
+        ClinicManagement.Application.Common.Interfaces.IDateTimeProvider dateTimeProvider,
+        ILogger logger)
+    {
+        if (await db.Appointments.AnyAsync(a => a.AppointmentCode.StartsWith("DEMO-")))
+        {
+            logger.LogInformation("Demo appointments already exist. Skipping.");
+            return;
+        }
+
+        var today = dateTimeProvider.VietnamToday;
+        var slots = await db.AppointmentSlots.ToListAsync();
+        if (slots.Count == 0)
+        {
+            logger.LogWarning("No appointment slots found to link demo appointments.");
+            return;
+        }
+
+        var mainDoc = doctors.FirstOrDefault(d => d.UserId == docUsers[0].Id) ?? doctors[0];
+        var mainDocSpecId = mainDoc.DoctorSpecialties.FirstOrDefault(ds => ds.IsPrimary)?.SpecialtyId ?? specs[0].Id;
+        var aptCount = 0;
+
+        async Task CreateApt(Patient p, Doctor d, AppointmentSlot s, AppointmentStatus status, string reason)
+        {
+            if (s.DoctorId != d.Id)
+            {
+                throw new InvalidOperationException($"Appointment slot doctor {s.DoctorId} must match appointment doctor {d.Id}");
+            }
+
+            var docSpecId = d.DoctorSpecialties.FirstOrDefault(ds => ds.IsPrimary)?.SpecialtyId 
+                ?? d.DoctorSpecialties.FirstOrDefault()?.SpecialtyId 
+                ?? specs[0].Id;
+            var code = $"DEMO-{DateTime.Now.Ticks % 100000:D5}-{aptCount++:D2}";
+            var a = new Appointment
+            {
+                AppointmentCode = code,
+                PatientId = p.Id,
+                DoctorId = d.Id,
+                SpecialtyId = docSpecId,
+                AppointmentSlotId = s.Id,
+                AppointmentDate = s.SlotDate,
+                StartTime = s.StartTime,
+                EndTime = s.EndTime,
+                Reason = reason,
+                Status = status
+            };
+            db.Appointments.Add(a);
+            if (status != AppointmentStatus.Cancelled)
+            {
+                s.IsBooked = true;
+            }
+            await db.SaveChangesAsync();
+
+            db.AppointmentHistories.Add(new AppointmentHistory
+            {
+                AppointmentId = a.Id,
+                Action = AppointmentHistoryAction.Created,
+                NewStatus = AppointmentStatus.Pending,
+                Note = "Bệnh nhân tự đặt lịch hẹn qua ứng dụng",
+                PerformedByUserId = p.UserId ?? Guid.Empty,
+                CreatedAt = DateTime.UtcNow.AddDays(-10)
+            });
+
+            if (status != AppointmentStatus.Pending && status != AppointmentStatus.Cancelled)
+            {
+                db.AppointmentHistories.Add(new AppointmentHistory
+                {
+                    AppointmentId = a.Id,
+                    Action = AppointmentHistoryAction.Confirmed,
+                    OldStatus = AppointmentStatus.Pending,
+                    NewStatus = AppointmentStatus.Confirmed,
+                    Note = "Lễ tân liên hệ và xác nhận lịch hẹn",
+                    PerformedByUserId = adminId1.Id,
+                    CreatedAt = DateTime.UtcNow.AddDays(-9)
+                });
+            }
+
+            if (status == AppointmentStatus.Completed)
+            {
+                db.AppointmentHistories.Add(new AppointmentHistory
+                {
+                    AppointmentId = a.Id,
+                    Action = AppointmentHistoryAction.Completed,
+                    OldStatus = AppointmentStatus.Confirmed,
+                    NewStatus = AppointmentStatus.Completed,
+                    Note = "Bác sĩ hoàn thành phiên khám",
+                    PerformedByUserId = d.UserId,
+                    CreatedAt = DateTime.UtcNow.AddDays(-1)
+                });
+                db.VisitSummaries.Add(new VisitSummary
+                {
+                    AppointmentId = a.Id,
+                    DoctorId = d.Id,
+                    Summary = "Sức khỏe bệnh nhân tương đối ổn định. Đã kê đơn thuốc và tư vấn chế độ ăn uống, sinh hoạt lành mạnh.",
+                    FollowUpInstruction = "Uống nhiều nước ấm, tập thể dục nhẹ nhàng 30 phút mỗi ngày. Tái khám sau 2 tuần nếu triệu chứng tái phát."
+                });
+            }
+            else if (status == AppointmentStatus.NoShow)
+            {
+                db.AppointmentHistories.Add(new AppointmentHistory
+                {
+                    AppointmentId = a.Id,
+                    Action = AppointmentHistoryAction.NoShow,
+                    OldStatus = AppointmentStatus.Confirmed,
+                    NewStatus = AppointmentStatus.NoShow,
+                    Note = "Bệnh nhân không có mặt tại phòng khám vào giờ hẹn",
+                    PerformedByUserId = d.UserId,
+                    CreatedAt = DateTime.UtcNow.AddDays(-1)
+                });
+            }
+            else if (status == AppointmentStatus.Cancelled)
+            {
+                db.AppointmentHistories.Add(new AppointmentHistory
+                {
+                    AppointmentId = a.Id,
+                    Action = AppointmentHistoryAction.Cancelled,
+                    OldStatus = AppointmentStatus.Pending,
+                    NewStatus = AppointmentStatus.Cancelled,
+                    Note = "Bệnh nhân thông báo bận việc đột xuất xin hủy lịch",
+                    PerformedByUserId = p.UserId ?? Guid.Empty,
+                    CreatedAt = DateTime.UtcNow.AddDays(-2)
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var futureSlots = slots.Where(x => x.SlotDate > today).ToList();
+
+        // Historical past appointments (create past schedules & slots for realistic history)
+        var pastDate = today.AddDays(-5);
+        var pastSchedule = await db.DoctorWorkSchedules.FirstOrDefaultAsync(s => s.DoctorId == mainDoc.Id && s.WorkDate == pastDate);
+        if (pastSchedule == null)
+        {
+            pastSchedule = new DoctorWorkSchedule
+            {
+                DoctorId = mainDoc.Id,
+                WorkDate = pastDate,
+                StartTime = new TimeOnly(8, 0),
+                EndTime = new TimeOnly(17, 0),
+                IsActive = true
+            };
+            db.DoctorWorkSchedules.Add(pastSchedule);
+            await db.SaveChangesAsync();
+        }
+
+        var pastSlots = await db.AppointmentSlots.Where(s => s.DoctorId == mainDoc.Id && s.SlotDate == pastDate).ToListAsync();
+        if (pastSlots.Count < 15)
+        {
+            for (int i = pastSlots.Count; i < 15; i++)
+            {
+                var sTime = new TimeOnly(8, 0).AddMinutes(i * 30);
+                if (!pastSlots.Any(x => x.StartTime == sTime))
+                {
+                    var s = new AppointmentSlot
+                    {
+                        DoctorId = mainDoc.Id,
+                        SlotDate = pastDate,
+                        StartTime = sTime,
+                        EndTime = sTime.AddMinutes(30),
+                        IsBooked = true
+                    };
+                    pastSlots.Add(s);
+                    db.AppointmentSlots.Add(s);
+                }
+            }
+            await db.SaveChangesAsync();
+        }
+
+        // 12 Completed
+        for (int i = 0; i < 12; i++)
+        {
+            await CreateApt(patients[i % patients.Count], mainDoc, pastSlots[i % pastSlots.Count], AppointmentStatus.Completed, "Khám kiểm tra sức khỏe tổng quát định kỳ");
+        }
+        // 3 NoShow
+        for (int i = 12; i < 15; i++)
+        {
+            await CreateApt(patients[i % patients.Count], mainDoc, pastSlots[i % pastSlots.Count], AppointmentStatus.NoShow, "Tư vấn sức khỏe định kỳ");
+        }
+
+        // Past cancelled
+        var pastDate2 = today.AddDays(-4);
+        var pastSchedule2 = await db.DoctorWorkSchedules.FirstOrDefaultAsync(s => s.DoctorId == mainDoc.Id && s.WorkDate == pastDate2);
+        if (pastSchedule2 == null)
+        {
+            pastSchedule2 = new DoctorWorkSchedule
+            {
+                DoctorId = mainDoc.Id,
+                WorkDate = pastDate2,
+                StartTime = new TimeOnly(8, 0),
+                EndTime = new TimeOnly(17, 0),
+                IsActive = true
+            };
+            db.DoctorWorkSchedules.Add(pastSchedule2);
+            await db.SaveChangesAsync();
+        }
+
+        var pastSlots2 = await db.AppointmentSlots.Where(s => s.DoctorId == mainDoc.Id && s.SlotDate == pastDate2).ToListAsync();
+        if (pastSlots2.Count < 5)
+        {
+            for (int i = pastSlots2.Count; i < 5; i++)
+            {
+                var sTime = new TimeOnly(8, 0).AddMinutes(i * 30);
+                if (!pastSlots2.Any(x => x.StartTime == sTime))
+                {
+                    var s = new AppointmentSlot
+                    {
+                        DoctorId = mainDoc.Id,
+                        SlotDate = pastDate2,
+                        StartTime = sTime,
+                        EndTime = sTime.AddMinutes(30),
+                        IsBooked = false
+                    };
+                    pastSlots2.Add(s);
+                    db.AppointmentSlots.Add(s);
+                }
+            }
+            await db.SaveChangesAsync();
+        }
+
+        for (int i = 0; i < 5; i++)
+        {
+            await CreateApt(patients[i % patients.Count], mainDoc, pastSlots2[i % pastSlots2.Count], AppointmentStatus.Cancelled, "Tái khám theo hẹn của bác sĩ");
+        }
+
+        // Appointments for today for mainDoc (Dr. Khai) for immediate dashboard/workspace testing
+        var todaySlots = await db.AppointmentSlots
+            .Where(s => s.DoctorId == mainDoc.Id && s.SlotDate == today && !s.IsBooked)
+            .OrderBy(s => s.StartTime)
+            .ToListAsync();
+
+        if (todaySlots.Count >= 3)
+        {
+            await CreateApt(patients[0], mainDoc, todaySlots[0], AppointmentStatus.Confirmed, "Kiểm tra định kỳ huyết áp và đường huyết sáng nay");
+            await CreateApt(patients[1], mainDoc, todaySlots[1], AppointmentStatus.Confirmed, "Tái khám viêm họng hạt và sốt nhẹ");
+            await CreateApt(patients[2], mainDoc, todaySlots[2], AppointmentStatus.Confirmed, "Tư vấn dinh dưỡng và chăm sóc sức khỏe");
+        }
+
+        // Future appointments with strict slot & specialty doctor integrity
+        // 6 Pending
+        for (int i = 0; i < 6; i++)
+        {
+            var doc = doctors[i % doctors.Count];
+            var docSlot = futureSlots.FirstOrDefault(s => s.DoctorId == doc.Id && !s.IsBooked);
+            if (docSlot != null)
+            {
+                await CreateApt(patients[i % patients.Count], doc, docSlot, AppointmentStatus.Pending, "Đau đầu kéo dài kèm mệt mỏi nhẹ");
+            }
+        }
+        // 10 Confirmed
+        for (int i = 6; i < 16; i++)
+        {
+            var doc = doctors[(i + 1) % doctors.Count];
+            var docSlot = futureSlots.FirstOrDefault(s => s.DoctorId == doc.Id && !s.IsBooked);
+            if (docSlot != null)
+            {
+                await CreateApt(patients[i % patients.Count], doc, docSlot, AppointmentStatus.Confirmed, "Kiểm tra huyết áp và tư vấn lối sống");
+            }
+        }
+
+        logger.LogInformation("Appointments seeded.");
+
+        // Change requests
+        if (!await db.AppointmentChangeRequests.AnyAsync())
+        {
+            var pendingAppt = await db.Appointments.Include(a => a.Patient).FirstOrDefaultAsync(a => a.Status == AppointmentStatus.Pending);
+            if (pendingAppt != null)
+            {
+                db.AppointmentChangeRequests.Add(new AppointmentChangeRequest
+                {
+                    AppointmentId = pendingAppt.Id,
+                    RequestType = AppointmentChangeRequestType.Cancellation,
+                    Reason = "Bận chuyến công tác đột xuất tại Hà Nội",
+                    Status = AppointmentChangeRequestStatus.Pending,
+                    RequestedByUserId = pendingAppt.Patient.UserId ?? Guid.Empty,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            var confAppt = await db.Appointments.Include(a => a.Patient).Skip(1).FirstOrDefaultAsync(a => a.Status == AppointmentStatus.Confirmed);
+            if (confAppt != null)
+            {
+                var rescheduleSlot = futureSlots.FirstOrDefault(s => s.DoctorId == confAppt.DoctorId && !s.IsBooked);
+                db.AppointmentChangeRequests.Add(new AppointmentChangeRequest
+                {
+                    AppointmentId = confAppt.Id,
+                    RequestType = AppointmentChangeRequestType.Reschedule,
+                    RequestedSlotId = rescheduleSlot?.Id ?? confAppt.AppointmentSlotId,
+                    Reason = "Xin dời ngày khám sang tuần sau vì việc gia đình",
+                    Status = AppointmentChangeRequestStatus.Pending,
+                    RequestedByUserId = confAppt.Patient.UserId ?? Guid.Empty,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        // Revisit request
+        if (!await db.RevisitRequests.AnyAsync())
+        {
+            var compAppt = await db.Appointments.FirstOrDefaultAsync(a => a.Status == AppointmentStatus.Completed);
+            if (compAppt != null)
+            {
+                db.RevisitRequests.Add(new RevisitRequest
+                {
+                    AppointmentId = compAppt.Id,
+                    PatientId = compAppt.PatientId,
+                    DoctorId = compAppt.DoctorId,
+                    SuggestedDate = today.AddDays(7),
+                    Note = "Tái khám sau 1 tuần để kiểm tra lại đường huyết và men gan",
+                    Status = RevisitRequestStatus.PendingPatientResponse
+                });
+                await db.SaveChangesAsync();
+            }
+        }
+
+        // Leave requests
+        if (!await db.DoctorLeaveRequests.AnyAsync())
+        {
+            db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
+            {
+                DoctorId = mainDoc.Id,
+                StartDateTime = DateTime.UtcNow.AddDays(2),
+                EndDateTime = DateTime.UtcNow.AddDays(3),
+                Reason = "Nghỉ phép cá nhân giải quyết việc gia đình",
+                Status = DoctorLeaveRequestStatus.Pending
+            });
+            db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
+            {
+                DoctorId = doctors[1].Id,
+                StartDateTime = DateTime.UtcNow.AddDays(5),
+                EndDateTime = DateTime.UtcNow.AddDays(6),
+                Reason = "Tham gia hội thảo chuyên ngành tại Hà Nội",
+                Status = DoctorLeaveRequestStatus.Approved,
+                AdminNote = "Đã duyệt, yêu cầu chuyển giao ca trực và hỗ trợ bệnh nhân ngày 5."
+            });
+            await db.SaveChangesAsync();
+        }
+        logger.LogInformation("Requests and Leaves seeded.");
     }
 
     private static async Task<ApplicationUser> SeedUserAsync(UserManager<ApplicationUser> userManager, string email, string name, string phone, string role, string password)
@@ -448,11 +1279,34 @@ public static class DevelopmentDataSeeder
         if (user == null)
         {
             var existingByPhone = userManager.Users.FirstOrDefault(u => u.PhoneNumber == phone);
-            if (existingByPhone != null) return existingByPhone;
+            if (existingByPhone != null)
+            {
+                existingByPhone.UserName = email;
+                existingByPhone.Email = email;
+                existingByPhone.FullName = name;
+                existingByPhone.IsActive = true;
+                await userManager.UpdateAsync(existingByPhone);
+                if (!await userManager.IsInRoleAsync(existingByPhone, role))
+                {
+                    await userManager.AddToRoleAsync(existingByPhone, role);
+                }
+                return existingByPhone;
+            }
 
             user = new ApplicationUser { UserName = email, Email = email, FullName = name, PhoneNumber = phone, IsActive = true };
             await userManager.CreateAsync(user, password);
             await userManager.AddToRoleAsync(user, role);
+        }
+        else
+        {
+            user.FullName = name;
+            user.PhoneNumber = phone;
+            user.IsActive = true;
+            await userManager.UpdateAsync(user);
+            if (!await userManager.IsInRoleAsync(user, role))
+            {
+                await userManager.AddToRoleAsync(user, role);
+            }
         }
         return user;
     }

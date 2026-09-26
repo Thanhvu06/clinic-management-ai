@@ -6,19 +6,25 @@ namespace ClinicManagement.Domain.Entities;
 public class Prescription
 {
     public long Id { get; set; }
-    public long AppointmentId { get; set; }
+    public long? AppointmentId { get; set; }
+    public long? PatientVisitId { get; set; }
     public long PatientId { get; set; }
     public long DoctorId { get; set; }
     
-    public PrescriptionStatus Status { get; set; } = PrescriptionStatus.Issued;
+    public PrescriptionStatus Status { get; set; } = PrescriptionStatus.Draft;
     public string? Notes { get; set; }
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? DispensedAt { get; set; }
     public Guid? DispensedByUserId { get; set; }
 
+    public byte[]? RowVersion { get; set; } = Guid.NewGuid().ToByteArray();
+
     [ForeignKey("AppointmentId")]
     public Appointment? Appointment { get; set; }
+
+    [ForeignKey("PatientVisitId")]
+    public PatientVisit? PatientVisit { get; set; }
     
     [ForeignKey("PatientId")]
     public Patient? Patient { get; set; }

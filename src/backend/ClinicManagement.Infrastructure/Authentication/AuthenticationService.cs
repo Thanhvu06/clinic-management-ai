@@ -8,6 +8,7 @@ using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -21,17 +22,23 @@ public class AuthenticationService : IAuthenticationService
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly AppDbContext _dbContext;
     private readonly IConfiguration _configuration;
+    private readonly IHostEnvironment _environment;
+    private readonly ClinicManagement.Application.Mpi.Interfaces.IMrnGenerator _mrnGenerator;
 
     public AuthenticationService(
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
         AppDbContext dbContext,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment,
+        ClinicManagement.Application.Mpi.Interfaces.IMrnGenerator mrnGenerator)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _dbContext = dbContext;
         _configuration = configuration;
+        _environment = environment;
+        _mrnGenerator = mrnGenerator;
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
@@ -121,9 +128,15 @@ public class AuthenticationService : IAuthenticationService
             if (!roleResult.Succeeded)
                 throw new Exception("Lỗi cấp quyền Patient.");
 
+            var mrn = await _mrnGenerator.GenerateNextMrnAsync();
+
             var patient = new Patient
             {
                 UserId = user.Id,
+                MedicalRecordNumber = mrn,
+                FullName = user.FullName,
+                PhoneNumber = user.PhoneNumber,
+                Email = user.Email,
                 DateOfBirth = request.DateOfBirth,
                 Gender = request.Gender,
                 Address = request.Address
@@ -201,29 +214,57 @@ public class AuthenticationService : IAuthenticationService
         return (new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
     }
 
-    public async Task<string> ForgotPasswordAsync(ForgotPasswordRequest request)
+    private bool IsDevelopmentOrDemo()
     {
-        var user = await _userManager.FindByEmailAsync(request.Email.Trim());
-        if (user == null || !user.IsActive)
+        if (_environment.IsProduction())
         {
-            return "Nếu email tồn tại trong hệ thống, mã xác thực đặt lại mật khẩu đã được tạo.";
+            return false;
         }
 
-        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-        return token;
+        return _environment.IsDevelopment()
+            || _environment.IsEnvironment("Demo")
+            || _environment.IsEnvironment("Testing");
     }
+
+    public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request)
+    {
+        var email = request.Email?.Trim() ?? string.Empty;
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user == null || !user.IsActive)
+        {
+            return new ForgotPasswordResponse { ResetToken = null };
+        }
+
+        var isDevOrDemo = IsDevelopmentOrDemo();
+        string? token = null;
+        if (isDevOrDemo)
+        {
+            token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        }
+
+        return new ForgotPasswordResponse
+        {
+            ResetToken = token
+        };
+    }
+
+    public const string ResetPasswordGenericFailureMessage =
+        "Đặt lại mật khẩu không thành công. Mã xác thực không hợp lệ hoặc đã hết hạn.";
 
     public async Task ResetPasswordAsync(ResetPasswordRequest request)
     {
-        var user = await _userManager.FindByEmailAsync(request.Email.Trim());
+        var email = request.Email?.Trim() ?? string.Empty;
+        var user = await _userManager.FindByEmailAsync(email);
         if (user == null || !user.IsActive)
-            throw new NotFoundException("Tài khoản không tồn tại hoặc đã bị vô hiệu hóa.");
+        {
+            throw new BusinessException("RESET_PASSWORD_FAILED", ResetPasswordGenericFailureMessage);
+        }
 
-        var result = await _userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
+        var token = request.Token?.Trim() ?? string.Empty;
+        var result = await _userManager.ResetPasswordAsync(user, token, request.NewPassword);
         if (!result.Succeeded)
         {
-            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            throw new BusinessException("RESET_PASSWORD_FAILED", $"Đặt lại mật khẩu không thành công: {errors}");
+            throw new BusinessException("RESET_PASSWORD_FAILED", ResetPasswordGenericFailureMessage);
         }
     }
 }

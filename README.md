@@ -79,14 +79,14 @@ clinic-management-ai/
    - Xem chi tiết và lịch sử thay đổi (timeline), xác nhận lịch hẹn.
    - Xử lý phê duyệt / từ chối các yêu cầu dời hoặc hủy lịch của bệnh nhân.
 
-3. **Bác sĩ (Doctor):**
-   - Dashboard ca khám trong ngày của bản thân.
-   - Xem danh sách và lịch sử khám của bệnh nhân thuộc ca của mình.
-   - Thực hiện khám, hoàn tất ca khám và lưu tóm tắt kết quả (Visit Summary).
-   - Đánh dấu bệnh nhân vắng mặt (No-show).
-   - Kê đơn thuốc điện tử (chọn thuốc từ danh mục, nhập liều lượng, số lượng, lời dặn).
-   - Tạo đề xuất tái khám cho bệnh nhân.
-   - Gửi yêu cầu xin nghỉ phép / rút đơn và theo dõi trạng thái phê duyệt.
+3. **Bác sĩ (Doctor – Doctor Clinical Workspace):**
+   - Dashboard ca khám trực tuyến trong ngày, KPI thời gian thực (chờ khám, đang khám, hoàn tất, vắng mặt).
+   - Hàng đợi bệnh nhân (Queue) với phân luồng tiếp nhận nhanh và trạng thái sinh hiệu.
+   - Không gian khám bệnh lâm sàng chuyên sâu: Dấu hiệu sinh tồn với tính toán BMI tự động theo chuẩn WHO châu Á, ghi nhận bệnh án điện tử (Chief Complaint, ICD-10, Clinical Findings, Treatment Plan).
+   - Kê đơn thuốc điện tử tương tác kho dược thời gian thực, lưu bản nháp hoặc phát hành đơn nguyên tử khi hoàn tất ca khám.
+   - Kiểm soát đồng thời lạc quan (Optimistic Concurrency Control với RowVersion token) ngăn chặn xung đột dữ liệu.
+   - Quản lý lịch trực tuần và đăng ký nghỉ phép có tính năng xem trước (preview) số lượng lịch hẹn bệnh nhân bị ảnh hưởng.
+   - Xem chi tiết tại: [`docs/DOCTOR_CLINICAL_WORKSPACE.md`](docs/DOCTOR_CLINICAL_WORKSPACE.md).
 
 4. **Dược sĩ (Pharmacist - Module Pharmacy):**
    - Dashboard tổng quan kho dược: đơn chờ cấp phát, đơn đã cấp trong ngày, cảnh báo thuốc sắp hết hàng.
@@ -182,3 +182,7 @@ npm test
 1. Tuyệt đối không commit API Key thật, JWT secret key sản xuất hoặc connection string production lên git.
 2. Tất cả các endpoint nghiệp vụ đều được kiểm soát phân quyền chặt chẽ trên Backend (JWT Authorize role-based).
 3. AI chỉ đóng vai trò phân luồng thông tin tham khảo, không thay thế chẩn đoán y khoa.
+4. **Cơ chế Quên / Đặt lại mật khẩu:**
+   - Luồng trả mã token reset trực tiếp trong response API (`POST /api/v1/auth/forgot-password`) chỉ dành riêng cho môi trường Development/demo/Testing nhằm phục vụ phát triển và kiểm thử giao diện.
+   - Khi chạy ở môi trường Production, hệ thống tự động ẩn reset token (`resetToken: null`) và trả về thông báo chung để chống rò rỉ token và ngăn ngừa rủi ro dò quét tài khoản (account enumeration).
+   - Hệ thống hiện tại **chưa gửi email thật** (chưa tích hợp SMTP/email provider). Khi triển khai môi trường Production thực tế, bắt buộc phải tích hợp email provider riêng (ví dụ SMTP, SendGrid, AWS SES) để gửi liên kết đặt lại mật khẩu an toàn.

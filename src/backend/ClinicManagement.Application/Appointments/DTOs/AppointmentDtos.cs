@@ -13,8 +13,31 @@ public class CreateAppointmentRequest
     [Required]
     public long AppointmentSlotId { get; set; }
     
-    [MaxLength(500)]
-    public string? Reason { get; set; }
+    [Required(ErrorMessage = "Lý do khám không được để trống.")]
+    [MinLength(10, ErrorMessage = "Lý do khám phải từ 10 đến 500 ký tự.")]
+    [MaxLength(500, ErrorMessage = "Lý do khám phải từ 10 đến 500 ký tự.")]
+    public string Reason { get; set; } = string.Empty;
+
+    [MaxLength(128)]
+    public string? IdempotencyKey { get; set; }
+
+    /// <summary>
+    /// Snapshot ID from AI conversation, used to validate the booking context.
+    /// </summary>
+    [MaxLength(100)]
+    public string? ContextSnapshotId { get; set; }
+
+    [MaxLength(64)]
+    public string? ConfirmationId { get; set; }
+
+    [MaxLength(128)]
+    public string? SessionId { get; set; }
+
+    [MaxLength(128)]
+    public string? DraftId { get; set; }
+
+    [Range(1, int.MaxValue)]
+    public int? DraftVersion { get; set; }
 }
 
 public class AppointmentDto

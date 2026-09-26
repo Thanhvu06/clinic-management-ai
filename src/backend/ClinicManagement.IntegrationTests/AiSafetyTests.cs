@@ -21,7 +21,7 @@ public class AiSafetyTests : IntegrationTestBase
             .Setup(x => x.GetSuggestionsFromAiAsync(It.IsAny<string>(), It.IsAny<List<WhitelistItemDto>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<AiProviderSuggestionResult>
             {
-                new AiProviderSuggestionResult { SpecialtyCode = "SP-01", Reason = "Mock reason" }
+                new AiProviderSuggestionResult { SpecialtyCode = "SP01", Reason = "Mock reason" }
             });
 
         var request = new AiSuggestionRequestDto { SymptomDescription = "Tôi bị đau đầu rất nhiều." };
@@ -30,7 +30,7 @@ public class AiSafetyTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var json = await response.Content.ReadAsStringAsync();
         Assert.Contains("SUCCESS", json);
-        Assert.Contains("SP-01", json);
+        Assert.Contains("SP01", json);
         Assert.Contains("Gợi ý chỉ mang tính tham khảo", json);
     }
 

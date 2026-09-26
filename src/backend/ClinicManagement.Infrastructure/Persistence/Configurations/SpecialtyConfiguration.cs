@@ -21,5 +21,15 @@ public class SpecialtyConfiguration : IEntityTypeConfiguration<Specialty>
         builder.Property(s => s.IsActive).IsRequired();
         
         builder.Property(s => s.AiEnabled).IsRequired().HasDefaultValue(false);
+
+        builder.Property(s => s.ConsultationFee)
+            .HasPrecision(18, 2)
+            .HasDefaultValue(0m)
+            .IsRequired();
+
+        builder.ToTable("Specialties", t =>
+        {
+            t.HasCheckConstraint("CK_Specialties_ConsultationFee_NonNegative", "[ConsultationFee] >= 0");
+        });
     }
 }

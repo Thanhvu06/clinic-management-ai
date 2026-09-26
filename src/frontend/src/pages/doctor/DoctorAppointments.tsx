@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { Search, CalendarDays, Eye, CheckCircle, XCircle, Clock, PlusCircle, RefreshCw, X, Send, Pill, Trash2, Plus } from 'lucide-react';
+import { Search, CalendarDays, Eye, CheckCircle, XCircle, Clock, PlusCircle, RefreshCw, X, Send, Pill, Trash2, Plus, Stethoscope } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
 
 interface DoctorAppointment {
@@ -38,6 +39,7 @@ interface PrescriptionItemForm {
 }
 
 export const DoctorAppointments: React.FC = () => {
+    const navigate = useNavigate();
     const { showAlert, showConfirm } = useDialog();
     const [appointments, setAppointments] = useState<DoctorAppointment[]>([]);
     const [loading, setLoading] = useState(true);
@@ -48,6 +50,7 @@ export const DoctorAppointments: React.FC = () => {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [dateFilter, setDateFilter] = useState(''); // 'today' or ''
+    const [fetchError, setFetchError] = useState<string | null>(null);
 
     // Modals
     const [modal, setModal] = useState<{ isOpen: boolean, apt: DoctorAppointment | null, view: 'detail' | 'complete' | 'revisit' | 'noshow' }>({ isOpen: false, apt: null, view: 'detail' });
@@ -82,6 +85,7 @@ export const DoctorAppointments: React.FC = () => {
 
     const fetchAppointments = async () => {
         setLoading(true);
+        setFetchError(null);
         try {
             const params = new URLSearchParams({
                 page: page.toString(),
@@ -89,6 +93,10 @@ export const DoctorAppointments: React.FC = () => {
             });
             if (search) params.append('search', search);
             if (statusFilter) params.append('status', statusFilter);
+            if (dateFilter === 'today') {
+                const todayStr = new Date().toISOString().split('T')[0];
+                params.append('date', todayStr);
+            }
 
             const res = await axiosClient.get<any, ApiResponse<any>>(`/doctor/appointments?${params.toString()}`);
             if (res.success && res.data) {
@@ -107,8 +115,8 @@ export const DoctorAppointments: React.FC = () => {
                 setAppointments(items);
                 setTotalItems(res.data.totalItems);
             }
-        } catch {
-            // Handled
+        } catch (err: any) {
+            setFetchError(err.response?.data?.message || err.message || 'Lỗi tải danh sách lịch khám. Vui lòng thử lại.');
         } finally {
             setLoading(false);
         }
@@ -344,6 +352,13 @@ export const DoctorAppointments: React.FC = () => {
                 </form>
             </div>
 
+            {fetchError && (
+                <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{fetchError}</span>
+                    <button type="button" onClick={() => fetchAppointments()} className="btn-secondary" style={{ padding: '4px 12px', fontSize: '0.85rem' }}>Thử lại</button>
+                </div>
+            )}
+
             <div className="card table-responsive" style={{ padding: 0 }}>
                 {loading ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
@@ -392,9 +407,19 @@ export const DoctorAppointments: React.FC = () => {
                                     </td>
                                     <td style={{ padding: '16px', textAlign: 'right' }}>
                                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                                            <button className="btn-secondary" style={{ padding: '4px 10px', fontSize: '0.85rem' }} onClick={() => openModal(apt, 'detail')}>
-                                                <Eye size={14} style={{ marginRight: '4px' }}/> Chi tiết
+                                            <button className="btn-secondary" style={{ padding: '4px 10px', fontSize: '0.85rem' }} onClick={() => navigate(`/doctor/appointments/${apt.id}`)}>
+                                                <Eye size={14} style={{ marginRight: '4px' }}/> Hồ sơ
                                             </button>
+                                            {apt.status === 'InConsultation' && (
+                                                <button className="btn-primary" style={{ padding: '4px 10px', fontSize: '0.85rem', backgroundColor: '#4f46e5' }} onClick={() => navigate(`/doctor/appointments/${apt.id}/examination`)}>
+                                                    <Stethoscope size={14} style={{ marginRight: '4px' }}/> Tiếp tục khám
+                                                </button>
+                                            )}
+                                            {apt.status === 'CheckedIn' && (
+                                                <button className="btn-primary" style={{ padding: '4px 10px', fontSize: '0.85rem' }} onClick={() => navigate(`/doctor/appointments/${apt.id}/examination`)}>
+                                                    <Stethoscope size={14} style={{ marginRight: '4px' }}/> Vào khám
+                                                </button>
+                                            )}
                                             {apt.status === 'Confirmed' && (
                                                 <button className="btn-primary" style={{ padding: '4px 10px', fontSize: '0.85rem' }} onClick={() => openModal(apt, 'complete')}>
                                                     <CheckCircle size={14} style={{ marginRight: '4px' }}/> Khám

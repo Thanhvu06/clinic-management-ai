@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ClinicManagement.Api\ClinicManagement.Api.csproj" />
+    <ProjectReference Include="..\..\tools\ClinicManagement.AI.Training\ClinicManagement.AI.Training.csproj" />
   </ItemGroup>
 
 </Project>

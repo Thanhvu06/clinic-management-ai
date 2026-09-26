@@ -27,6 +27,9 @@ public class Appointment
     public ICollection<AppointmentChangeRequest> ChangeRequests { get; set; } = new List<AppointmentChangeRequest>();
 
     public VisitSummary? VisitSummary { get; set; }
+    public AppointmentVitalSigns? VitalSigns { get; set; }
+    public Prescription? Prescription { get; set; }
+    public PatientVisit? PatientVisit { get; set; }
     public RevisitRequest? RevisitRequest { get; set; }
     public RevisitRequest? SourceRevisitRequest { get; set; }
 }

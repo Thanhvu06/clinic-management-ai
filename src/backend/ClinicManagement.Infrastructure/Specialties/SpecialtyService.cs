@@ -1,7 +1,10 @@
+using ClinicManagement.Application.Appointments.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.Specialties.DTOs;
 using ClinicManagement.Application.Specialties.Interfaces;
+using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,10 +13,17 @@ namespace ClinicManagement.Infrastructure.Specialties;
 public class SpecialtyService : ISpecialtyService
 {
     private readonly AppDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IAppointmentAvailabilityPolicy _availabilityPolicy;
 
-    public SpecialtyService(AppDbContext dbContext)
+    public SpecialtyService(
+        AppDbContext dbContext,
+        IDateTimeProvider dateTimeProvider,
+        IAppointmentAvailabilityPolicy availabilityPolicy)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
+        _availabilityPolicy = availabilityPolicy;
     }
 
     public async Task<List<SpecialtyDto>> GetSpecialtiesAsync()
@@ -27,7 +37,8 @@ public class SpecialtyService : ISpecialtyService
                 SpecialtyCode = s.SpecialtyCode,
                 SpecialtyName = s.Name,
                 Description = s.Description ?? string.Empty,
-                AiEnabled = s.AiEnabled
+                AiEnabled = s.AiEnabled,
+                ConsultationFee = s.ConsultationFee
             })
             .ToListAsync();
     }
@@ -43,7 +54,8 @@ public class SpecialtyService : ISpecialtyService
                 SpecialtyCode = s.SpecialtyCode,
                 SpecialtyName = s.Name,
                 Description = s.Description ?? string.Empty,
-                AiEnabled = s.AiEnabled
+                AiEnabled = s.AiEnabled,
+                ConsultationFee = s.ConsultationFee
             })
             .FirstOrDefaultAsync();
 
@@ -116,30 +128,13 @@ public class SpecialtyService : ISpecialtyService
         var toDate = fromDate.AddDays(days - 1);
         var doctorIds = doctors.Select(d => d.Id).ToList();
 
-        var today = DateTime.UtcNow;
-        var dateToday = DateOnly.FromDateTime(today);
-        var timeNow = TimeOnly.FromDateTime(today);
-
-        var availableSlots = await _dbContext.AppointmentSlots
-            .AsNoTracking()
-            .Where(s => doctorIds.Contains(s.DoctorId)
-                        && !s.IsBooked
-                        && s.SlotDate >= fromDate
-                        && s.SlotDate <= toDate
-                        && (s.SlotDate > dateToday || (s.SlotDate == dateToday && s.StartTime > timeNow)))
-            .ToListAsync();
-
-        var leaves = await _dbContext.DoctorLeaveRequests
-            .AsNoTracking()
-            .Where(l => doctorIds.Contains(l.DoctorId) && l.Status == ClinicManagement.Domain.Enums.DoctorLeaveRequestStatus.Approved 
-                     && l.EndDateTime >= today)
-            .ToListAsync();
-
-        var validSlots = availableSlots.Where(s => {
-            var slotStart = s.SlotDate.ToDateTime(s.StartTime);
-            var slotEnd = s.SlotDate.ToDateTime(s.EndTime);
-            return !leaves.Any(l => l.DoctorId == s.DoctorId && slotStart < l.EndDateTime && slotEnd > l.StartDateTime);
-        }).ToList();
+        var validSlots = await _availabilityPolicy.GetAvailableSlotsAsync(new BatchSlotAvailabilityRequest
+        {
+            DoctorIds = doctorIds,
+            SpecialtyId = specialtyId,
+            FromDate = fromDate,
+            ToDate = toDate
+        });
 
         var earliestSlots = validSlots
             .GroupBy(s => s.DoctorId)
