@@ -44,42 +44,12 @@ jobs:
       - name: Check for pending EF Core model changes
         run: dotnet ef migrations has-pending-model-changes --project src/backend/ClinicManagement.Infrastructure --startup-project src/backend/ClinicManagement.Api
 
-      - name: Diagnose phase 1.2 focused contract groups
-        id: diagnose_phase12_groups
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -o pipefail
-          test_project="src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj"
-          dotnet test "$test_project" --no-build --configuration Release --filter "FullyQualifiedName~AiPhase12ContractTests.Concurrent_confirmation_claims_one_lease_and_creates_one_change_request|FullyQualifiedName~AiPhase12ContractTests.Confirmation_rejects_an_active_lease_and_reclaims_an_expired_lease_once"
-          dotnet test "$test_project" --no-build --configuration Release --filter "FullyQualifiedName~AiPhase12ContractTests.Dedicated_confirmation_rejects_expired_and_cancelled_actions_without_side_effects|FullyQualifiedName~AiPhase12ContractTests.Failed_retryable_action_can_retry_and_complete|FullyQualifiedName~AiPhase12ContractTests.Corrupt_persisted_arguments_fail_closed_and_become_terminal"
-          dotnet test "$test_project" --no-build --configuration Release --filter "FullyQualifiedName~AiPhase12ContractTests.Confirmation_revalidates_ownership_and_all_token_binding_fields_at_execution_time|FullyQualifiedName~AiPhase12ContractTests.Reschedule_confirmation_revalidates_changed_slot_doctor_schedule_leave_and_conflict"
-          dotnet test "$test_project" --no-build --configuration Release --filter "FullyQualifiedName~AiPhase12ContractTests.Crash_window_with_existing_source_record_completes_without_duplicate_change_request|FullyQualifiedName~AiPhase12ContractTests.Planner_rejects_mixed_or_unknown_write_plan_before_first_read_handler"
-          dotnet test "$test_project" --no-build --configuration Release --filter "FullyQualifiedName~AiPhase12ContractTests"
-
-      - name: Diagnose session cleanup focused contracts
-        id: diagnose_cleanup_group
-        continue-on-error: true
-        run: >-
-          dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
-          --no-build --configuration Release --filter
-          "FullyQualifiedName~AiSessionCleanupWorkerTests"
-
       - name: Run focused Phase 1.2 contract tests
-        if: always()
-        id: run_focused
         run: >-
           dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
           --no-build --configuration Release --filter
           "FullyQualifiedName~AiPhase12ContractTests|FullyQualifiedName~AiSessionCleanupWorkerTests"
-
-      - name: Fail if a diagnostic focused group failed
-        if: always()
-        shell: bash
-        run: |
-          if [[ "${{ steps.diagnose_phase12_groups.outcome }}" != "success" || "${{ steps.diagnose_cleanup_group.outcome }}" != "success" || "${{ steps.run_focused.outcome }}" != "success" ]]; then
-            exit 1
-          fi
+          -- xunit.parallelizeTestCollections=false
 
       - name: Generate official idempotent migration script
         shell: bash
