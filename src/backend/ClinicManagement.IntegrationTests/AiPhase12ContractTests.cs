@@ -14,6 +14,7 @@ using Xunit;
 
 namespace ClinicManagement.IntegrationTests;
 
+[Collection(AiPhase12AcceptanceCollection.Name)]
 public sealed class AiPhase12ContractTests : IntegrationTestBase
 {
     public AiPhase12ContractTests(CustomWebApplicationFactory factory) : base(factory) { }

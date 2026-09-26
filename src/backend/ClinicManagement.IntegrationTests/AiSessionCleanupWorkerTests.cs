@@ -16,6 +16,7 @@ using Xunit;
 
 namespace ClinicManagement.IntegrationTests;
 
+[Collection(AiPhase12AcceptanceCollection.Name)]
 public class AiSessionCleanupWorkerTests
 {
     [Fact]

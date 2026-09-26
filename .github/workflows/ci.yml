@@ -49,7 +49,6 @@ jobs:
           dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
           --no-build --configuration Release --filter
           "FullyQualifiedName~AiPhase12ContractTests|FullyQualifiedName~AiSessionCleanupWorkerTests"
-          -- xunit.parallelizeTestCollections=false
 
       - name: Generate official idempotent migration script
         shell: bash
