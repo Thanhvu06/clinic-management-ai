@@ -84,22 +84,33 @@ jobs:
       - name: Apply official migration script to SQL Server
         shell: bash
         run: |
+          printf '%s\n' \
+            'SET ANSI_NULLS ON;' \
+            'SET QUOTED_IDENTIFIER ON;' \
+            'SET ANSI_PADDING ON;' \
+            'SET ANSI_WARNINGS ON;' \
+            'SET ARITHABORT ON;' \
+            'SET CONCAT_NULL_YIELDS_NULL ON;' \
+            'SET NUMERIC_ROUNDABORT OFF;' \
+            'GO' \
+            ':r /tmp/phase12-ef-idempotent.sql' > ./phase12-ef-apply.sql
           docker cp ./phase12-ef-idempotent.sql "$SQLSERVER_CONTAINER:/tmp/phase12-ef-idempotent.sql"
-          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -I -S localhost,1433 -U sa -P 'Your_password123!' -C \
-            -d ClinicManagement_CiMigration -b -i /tmp/phase12-ef-idempotent.sql
+          docker cp ./phase12-ef-apply.sql "$SQLSERVER_CONTAINER:/tmp/phase12-ef-apply.sql"
+          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
+            -d ClinicManagement_CiMigration -b -i /tmp/phase12-ef-apply.sql
 
       - name: Reapply official migration script for idempotence
         shell: bash
         run: |
-          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -I -S localhost,1433 -U sa -P 'Your_password123!' -C \
-            -d ClinicManagement_CiMigration -b -i /tmp/phase12-ef-idempotent.sql
+          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
+            -d ClinicManagement_CiMigration -b -i /tmp/phase12-ef-apply.sql
 
       - name: Verify SQL Server migration schema and history
         shell: bash
         run: |
           docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
             -d ClinicManagement_CiMigration -b -Q "IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'AiPendingToolActions') THROW 50000, 'AiPendingToolActions table missing', 1; IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AiPendingToolActions_UserId_ResourceType_ResourceId') THROW 50000, 'Active action index missing', 1; IF NOT EXISTS (SELECT 1 FROM __EFMigrationsHistory WHERE MigrationId = '20260926114519_HardenAiPendingToolActionExecution') THROW 50000, 'Hardening migration history missing', 1;"
-          rm -f ./phase12-ef-idempotent.sql
+          rm -f ./phase12-ef-idempotent.sql ./phase12-ef-apply.sql
 
       - name: Run backend tests
         env:
