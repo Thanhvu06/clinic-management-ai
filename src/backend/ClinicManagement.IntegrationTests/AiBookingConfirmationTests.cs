@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
@@ -18,6 +19,8 @@ namespace ClinicManagement.IntegrationTests;
 
 public class AiBookingConfirmationTests : IntegrationTestBase
 {
+    private static int _confirmationFixtureSequence;
+
     public AiBookingConfirmationTests(CustomWebApplicationFactory factory) : base(factory)
     {
     }
@@ -333,7 +336,11 @@ public class AiBookingConfirmationTests : IntegrationTestBase
 
     private async Task<ConfirmationFixture> PrepareConfirmationAsync(string suffix, TimeSpan? ttl = null)
     {
-        var date = GetFutureWorkingDate(500 + Math.Abs(suffix.GetHashCode()) % 20);
+        // Use a process-unique future date so parallel/ordered tests cannot
+        // accidentally share the same doctor slot and bypass confirmation
+        // validation through the existing-appointment fast path.
+        var sequence = Interlocked.Increment(ref _confirmationFixtureSequence);
+        var date = GetFutureWorkingDate(500 + sequence);
         var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(10, 0), new TimeOnly(10, 30));
         var sessionId = $"sess_{suffix}_{Guid.NewGuid():N}";
         var draftId = $"draft_{suffix}_{Guid.NewGuid():N}";

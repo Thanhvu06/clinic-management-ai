@@ -336,7 +336,7 @@ public class AiSessionSnapshotStoreTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task PurgeExpiredRecords_RemovesExpiredRows_AndKeepsLiveRows()
+    public async Task PurgeExpiredRecords_RemovesExpiredSnapshotsAndSessions_ButRetainsCancellationTombstones()
     {
         var now = DateTime.UtcNow;
         var expiredSessionId = $"sess_expired_{Guid.NewGuid():N}";
@@ -403,7 +403,7 @@ public class AiSessionSnapshotStoreTests : IntegrationTestBase
         Assert.True(await verifyDb.AiSessions.AnyAsync(x => x.SessionId == liveSessionId));
         Assert.False(await verifyDb.AiSelectionSnapshots.AnyAsync(x => x.SessionId == expiredSessionId));
         Assert.True(await verifyDb.AiSelectionSnapshots.AnyAsync(x => x.SessionId == liveSessionId));
-        Assert.False(await verifyDb.AiCancelledDraftScopes.AnyAsync(x => x.SessionId == expiredSessionId));
+        Assert.True(await verifyDb.AiCancelledDraftScopes.AnyAsync(x => x.SessionId == expiredSessionId));
     }
 
     [Fact]
@@ -470,5 +470,146 @@ public class AiSessionSnapshotStoreTests : IntegrationTestBase
         var replay = await replayStore.TouchSessionAsync(sessionId, userId, draftId, 1, null);
         Assert.False(replay.IsAccepted);
         Assert.Equal("DRAFT_CANCELLED", replay.ErrorCode);
+    }
+
+    [Fact]
+    public async Task CancelledDraft_RemainsTerminalAfterThirtyDayCleanup_AndCannotRecreateSessionOrSnapshot()
+    {
+        var now = DateTime.UtcNow;
+        var userId = Guid.NewGuid();
+        var sessionId = $"sess_terminal_{Guid.NewGuid():N}";
+        var draftId = $"draft_terminal_{Guid.NewGuid():N}";
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
+            await store.TouchSessionAsync(sessionId, userId, draftId, 1, null);
+            await store.CreateSnapshotAsync(new CreateSnapshotRequest
+            {
+                UserId = userId,
+                SessionId = sessionId,
+                DraftId = draftId,
+                DraftVersion = 1,
+                DoctorIds = new List<long> { 1 }
+            });
+            await store.InvalidateDraftSnapshotsForCancelAsync(draftId, sessionId, userId, nowUtc: now);
+        }
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var tombstone = await db.AiCancelledDraftScopes.SingleAsync(x =>
+                x.UserId == userId && x.SessionId == sessionId && x.DraftId == draftId);
+            Assert.Equal(DateTime.MaxValue, tombstone.ExpiresAtUtc);
+
+            var session = await db.AiSessions.SingleAsync(x => x.SessionId == sessionId && x.UserId == userId);
+            session.ExpiresAtUtc = now.AddHours(-1);
+            await db.SaveChangesAsync();
+        }
+
+        using (var cleanupScope = Factory.Services.CreateScope())
+        {
+            var store = cleanupScope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
+            await store.PurgeExpiredRecordsAsync(now.AddDays(30));
+        }
+
+        using (var verifyScope = Factory.Services.CreateScope())
+        {
+            var db = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.True(await db.AiCancelledDraftScopes.AnyAsync(x =>
+                x.UserId == userId && x.SessionId == sessionId && x.DraftId == draftId));
+            Assert.False(await db.AiSessions.AnyAsync(x => x.UserId == userId && x.SessionId == sessionId));
+            Assert.False(await db.AiSelectionSnapshots.AnyAsync(x =>
+                x.UserId == userId && x.SessionId == sessionId && x.DraftId == draftId));
+        }
+
+        using var replayScope = Factory.Services.CreateScope();
+        var replayStore = replayScope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
+        var replay = await replayStore.TouchSessionAsync(sessionId, userId, draftId, 1, null);
+        Assert.False(replay.IsAccepted);
+        Assert.Equal("DRAFT_CANCELLED", replay.ErrorCode);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => replayStore.CreateSnapshotAsync(new CreateSnapshotRequest
+        {
+            UserId = userId,
+            SessionId = sessionId,
+            DraftId = draftId,
+            DraftVersion = 1,
+            DoctorIds = new List<long> { 1 }
+        }));
+
+        using var finalVerifyScope = Factory.Services.CreateScope();
+        var finalDb = finalVerifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.False(await finalDb.AiSessions.AnyAsync(x => x.UserId == userId && x.SessionId == sessionId));
+        Assert.False(await finalDb.AiSelectionSnapshots.AnyAsync(x =>
+            x.UserId == userId && x.SessionId == sessionId && x.DraftId == draftId));
+    }
+
+    [Fact]
+    public async Task CancelledDraft_BlocksOnlyExactUserSessionDraftScope_AfterCleanup()
+    {
+        var now = DateTime.UtcNow;
+        var userA = Guid.NewGuid();
+        var userB = Guid.NewGuid();
+        var sessionA = $"sess_isolated_{Guid.NewGuid():N}";
+        var sessionB = $"sess_other_{Guid.NewGuid():N}";
+        var draftA = $"draft_isolated_{Guid.NewGuid():N}";
+        var draftB = $"draft_other_{Guid.NewGuid():N}";
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
+            await store.TouchSessionAsync(sessionA, userA, draftA, 1, null);
+            await store.CreateSnapshotAsync(new CreateSnapshotRequest
+            {
+                UserId = userA,
+                SessionId = sessionA,
+                DraftId = draftA,
+                DraftVersion = 1,
+                DoctorIds = new List<long> { 1 }
+            });
+            await store.InvalidateDraftSnapshotsForCancelAsync(draftA, sessionA, userA, nowUtc: now);
+            await store.PurgeExpiredRecordsAsync(now.AddDays(30));
+        }
+
+        using var verifyScope = Factory.Services.CreateScope();
+        var verifyStore = verifyScope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
+
+        var exactScope = await verifyStore.TouchSessionAsync(sessionA, userA, draftA, 1, null);
+        Assert.False(exactScope.IsAccepted);
+        Assert.Equal("DRAFT_CANCELLED", exactScope.ErrorCode);
+
+        var otherUser = await verifyStore.TouchSessionAsync(sessionA, userB, draftA, 1, null);
+        Assert.True(otherUser.IsAccepted);
+        await verifyStore.CreateSnapshotAsync(new CreateSnapshotRequest
+        {
+            UserId = userB,
+            SessionId = sessionA,
+            DraftId = draftA,
+            DraftVersion = 1,
+            DoctorIds = new List<long> { 2 }
+        });
+
+        var otherSession = await verifyStore.TouchSessionAsync(sessionB, userA, draftA, 1, null);
+        Assert.True(otherSession.IsAccepted);
+        await verifyStore.CreateSnapshotAsync(new CreateSnapshotRequest
+        {
+            UserId = userA,
+            SessionId = sessionB,
+            DraftId = draftA,
+            DraftVersion = 1,
+            DoctorIds = new List<long> { 3 }
+        });
+
+        var otherDraft = await verifyStore.TouchSessionAsync(sessionA, userA, draftB, 1, null);
+        Assert.True(otherDraft.IsAccepted);
+        await verifyStore.CreateSnapshotAsync(new CreateSnapshotRequest
+        {
+            UserId = userA,
+            SessionId = sessionA,
+            DraftId = draftB,
+            DraftVersion = 1,
+            DoctorIds = new List<long> { 4 }
+        });
     }
 }

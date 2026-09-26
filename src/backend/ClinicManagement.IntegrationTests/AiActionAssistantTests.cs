@@ -3434,7 +3434,7 @@ public class AiActionAssistantTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task ScenarioAA_B4_B5_FailClosedOnStoreEviction_AndCancelledDraftTTLExpirationWithoutResurrection()
+    public async Task ScenarioAA_B4_B5_FailClosedOnStoreEviction_AndCancelledDraftPermanentTombstoneWithoutResurrection()
     {
         AiSnapshotTestHelper.Clear(Factory.Services);
         var workingDate = GetFutureWorkingDate(6);
@@ -3473,7 +3473,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.Equal("ClarificationRequired", storeLostRes?.Data?.DialogueOutcome);
         Assert.Null(storeLostRes?.Data?.BookingDraft?.DoctorId);
 
-        // --- B5: Cancelled draft TTL expires cleanly (tested via controllable clock parameter, no reflection) AND old snapshot never resurrects ---
+        // --- B5: Permanent cancellation tombstone survives cleanup time AND old snapshot never resurrects ---
         var t0 = DateTime.UtcNow;
         var resIssue2 = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
         {
@@ -3492,18 +3492,19 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.True(await AiSnapshotTestHelper.IsCancelledAsync(Factory.Services, "draft_ttl_b5", Patient1Id, "sess_ttl_b5", t0.AddMinutes(30)));
         Assert.False(await AiSnapshotTestHelper.IsCancelledAsync(Factory.Services, "draft_ttl_b5", Patient2Id, "sess_ttl_b5", t0.AddMinutes(30)));
 
-        // Advance clock past the seven-day cancellation retention window.
-        var afterTtl = t0.AddDays(8);
-        Assert.False(await AiSnapshotTestHelper.IsCancelledAsync(Factory.Services, "draft_ttl_b5", Patient1Id, "sess_ttl_b5", afterTtl));
+        // Advance the cleanup clock well beyond the old seven-day retention window.
+        var afterCleanup = t0.AddDays(30);
+        Assert.True(await AiSnapshotTestHelper.IsCancelledAsync(Factory.Services, "draft_ttl_b5", Patient1Id, "sess_ttl_b5", afterCleanup));
+        Assert.False(await AiSnapshotTestHelper.IsCancelledAsync(Factory.Services, "draft_ttl_b5", Patient2Id, "sess_ttl_b5", afterCleanup));
 
-        // Even after cancel TTL expires, the old snapshot snapTtl CANNOT come back to life (it was evicted from store on cancel)
+        // Even after cleanup time passes, the old snapshot snapTtl CANNOT come back to life (it was evicted from store on cancel)
         var validAfterTtl = await AiSnapshotTestHelper.ValidateAsync(Factory.Services,
             snapTtl,
             Patient1Id,
             1,
             null,
             null,
-            afterTtl,
+            afterCleanup,
             sessionId: "sess_ttl_b5",
             draftId: "draft_ttl_b5");
         Assert.False(validAfterTtl.IsValid);

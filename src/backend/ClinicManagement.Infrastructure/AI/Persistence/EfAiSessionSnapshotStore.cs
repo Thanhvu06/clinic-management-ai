@@ -22,7 +22,10 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
     private static readonly TimeSpan DefaultSnapshotTtl = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan MaxSnapshotTtl = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan SessionTtl = TimeSpan.FromHours(24);
-    private static readonly TimeSpan CancellationRetention = TimeSpan.FromDays(7);
+    // Cancellation tombstones are terminal anti-replay records, not TTL cache rows.
+    // DateTime.MaxValue is supported by SQL Server datetime2 and keeps an exact
+    // cancelled scope blocked after sessions/snapshots have been purged.
+    private static readonly DateTime PermanentCancellationExpiryUtc = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc);
     private readonly AppDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<EfAiSessionSnapshotStore> _logger;
@@ -91,7 +94,7 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
                 // transaction that inserts the snapshot, so it cannot be bypassed by a
                 // second application instance.
                 if (cleanDraftId != null && cleanSessionId != null &&
-                    await IsDraftCancelledInternalAsync(cleanDraftId, request.UserId, cleanSessionId, now, cancellationToken))
+                    await IsDraftCancelledInternalAsync(cleanDraftId, request.UserId, cleanSessionId, cancellationToken))
                 {
                     _logger.LogWarning("Snapshot creation blocked: draft {DraftId} in session {SessionId} is cancelled", cleanDraftId, cleanSessionId);
                     throw new InvalidOperationException("Cannot create snapshot for cancelled draft.");
@@ -172,12 +175,12 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
 
             // Check if draft has been cancelled
             var effectiveSessionId = cleanCurrentSessionId ?? cleanSnapshotSessionId;
-            if (cleanSnapshotDraftId != null && await IsDraftCancelledInternalAsync(cleanSnapshotDraftId, request.CurrentUserId, cleanSnapshotSessionId, request.NowUtc, cancellationToken))
+            if (cleanSnapshotDraftId != null && await IsDraftCancelledInternalAsync(cleanSnapshotDraftId, request.CurrentUserId, cleanSnapshotSessionId, cancellationToken))
             {
                 return SnapshotValidationResult.Fail("DRAFT_CANCELLED", "Danh sách lựa chọn thuộc bản nháp đã hủy. Vui lòng chọn lại trên bản nháp mới.");
             }
 
-            if (cleanCurrentDraftId != null && await IsDraftCancelledInternalAsync(cleanCurrentDraftId, request.CurrentUserId, effectiveSessionId, request.NowUtc, cancellationToken))
+            if (cleanCurrentDraftId != null && await IsDraftCancelledInternalAsync(cleanCurrentDraftId, request.CurrentUserId, effectiveSessionId, cancellationToken))
             {
                 return SnapshotValidationResult.Fail("DRAFT_CANCELLED", "Danh sách lựa chọn thuộc bản nháp đã hủy. Vui lòng chọn lại trên bản nháp mới.");
             }
@@ -265,9 +268,9 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
         }
 
         var effectiveNow = nowUtc ?? _dateTimeProvider.UtcNow;
-        // Keep the cancellation tombstone well beyond the 24-hour session TTL.
-        // Session cleanup must never make an old session+draft replayable.
-        var expiresAt = effectiveNow.Add(CancellationRetention);
+        // Keep a permanent terminal tombstone. Session/snapshot cleanup must
+        // never make an old session+draft replayable.
+        var expiresAt = PermanentCancellationExpiryUtc;
 
         for (var attempt = 1; attempt <= 3; attempt++)
         {
@@ -346,11 +349,10 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
             return false;
         }
 
-        var effectiveNow = nowUtc ?? _dateTimeProvider.UtcNow;
-        return await IsDraftCancelledInternalAsync(draftId.Trim(), userId, sessionId.Trim(), effectiveNow, cancellationToken);
+        return await IsDraftCancelledInternalAsync(draftId.Trim(), userId, sessionId.Trim(), cancellationToken);
     }
 
-    private async Task<bool> IsDraftCancelledInternalAsync(string cleanDraftId, Guid? userId, string? cleanSessionId, DateTime effectiveNow, CancellationToken cancellationToken)
+    private async Task<bool> IsDraftCancelledInternalAsync(string cleanDraftId, Guid? userId, string? cleanSessionId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(cleanSessionId))
         {
@@ -361,7 +363,7 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
         {
             var isCancelled = await _dbContext.AiCancelledDraftScopes
                 .AsNoTracking()
-                .AnyAsync(c => c.UserId == userId && c.SessionId == cleanSessionId && c.DraftId == cleanDraftId && c.ExpiresAtUtc > effectiveNow, cancellationToken);
+                .AnyAsync(c => c.UserId == userId && c.SessionId == cleanSessionId && c.DraftId == cleanDraftId, cancellationToken);
 
             return isCancelled;
         }
@@ -502,7 +504,7 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
 
                 if (session == null)
                 {
-                    if (cleanDraftId != null && await IsDraftCancelledInternalAsync(cleanDraftId, userId, cleanSessionId, now, cancellationToken))
+                    if (cleanDraftId != null && await IsDraftCancelledInternalAsync(cleanDraftId, userId, cleanSessionId, cancellationToken))
                     {
                         await transaction.RollbackAsync(cancellationToken);
                         return AiSessionTouchResult.Rejected("DRAFT_CANCELLED", "Bản nháp đã bị hủy. Vui lòng bắt đầu bản nháp mới.");
@@ -529,7 +531,7 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
                         return AiSessionTouchResult.Rejected("SESSION_EXPIRED", "Phiên làm việc đã hết hạn. Vui lòng bắt đầu lại.");
                     }
 
-                    if (cleanDraftId != null && await IsDraftCancelledInternalAsync(cleanDraftId, userId, cleanSessionId, now, cancellationToken))
+                    if (cleanDraftId != null && await IsDraftCancelledInternalAsync(cleanDraftId, userId, cleanSessionId, cancellationToken))
                     {
                         await transaction.RollbackAsync(cancellationToken);
                         return AiSessionTouchResult.Rejected("DRAFT_CANCELLED", "Bản nháp đã bị hủy. Vui lòng bắt đầu bản nháp mới.");
@@ -578,16 +580,6 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
                 _dbContext.AiSelectionSnapshots.RemoveRange(expiredSnapshots);
             }
 
-            var expiredScopes = await _dbContext.AiCancelledDraftScopes
-                .Where(c => c.ExpiresAtUtc <= nowUtc)
-                .Take(500)
-                .ToListAsync(cancellationToken);
-
-            if (expiredScopes.Count > 0)
-            {
-                _dbContext.AiCancelledDraftScopes.RemoveRange(expiredScopes);
-            }
-
             var expiredSessions = await _dbContext.AiSessions
                 .Where(s => s.ExpiresAtUtc <= nowUtc)
                 .Take(500)
@@ -598,11 +590,11 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
                 _dbContext.AiSessions.RemoveRange(expiredSessions);
             }
 
-            if (expiredSnapshots.Count > 0 || expiredScopes.Count > 0 || expiredSessions.Count > 0)
+            if (expiredSnapshots.Count > 0 || expiredSessions.Count > 0)
             {
                 await _dbContext.SaveChangesAsync(cancellationToken);
-                _logger.LogInformation("Purged {SnapshotCount} expired snapshots, {ScopeCount} expired cancel scopes, {SessionCount} expired sessions",
-                    expiredSnapshots.Count, expiredScopes.Count, expiredSessions.Count);
+                _logger.LogInformation("Purged {SnapshotCount} expired snapshots and {SessionCount} expired sessions; cancellation tombstones are retained permanently",
+                    expiredSnapshots.Count, expiredSessions.Count);
             }
         }
         catch (Exception ex)

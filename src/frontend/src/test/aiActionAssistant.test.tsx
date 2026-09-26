@@ -474,7 +474,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         });
     });
 
-    it('renders ReviewBooking summary and allows confirmation from review', async () => {
+    it('rejects ReviewBooking without a persisted confirmation and does not invent an ID', async () => {
         vi.mocked(axiosClient.post).mockResolvedValueOnce({
             success: true,
             message: '',
@@ -525,8 +525,8 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(screen.getByText('Kiểm tra lại thông tin'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Thông tin xác nhận lịch hẹn/i)).toBeInTheDocument();
-            expect(screen.getByText('Xác nhận đặt lịch')).toBeInTheDocument();
+            expect(screen.getByText(/Chưa có mã xác nhận đặt lịch hợp lệ từ hệ thống/i)).toBeInTheDocument();
+            expect(screen.queryByText('Xác nhận đặt lịch')).not.toBeInTheDocument();
         });
     });
 

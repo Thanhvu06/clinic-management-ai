@@ -227,8 +227,7 @@ public class AppointmentService : IAppointmentService
                 var draftCancelled = await _dbContext.AiCancelledDraftScopes.AnyAsync(c =>
                     c.UserId == currentUserId.Value &&
                     c.SessionId == request.SessionId.Trim() &&
-                    c.DraftId == request.DraftId.Trim() &&
-                    c.ExpiresAtUtc > nowUtc);
+                    c.DraftId == request.DraftId.Trim());
                 if (snapshot == null || snapshot.IsRevoked || snapshot.ExpiresAtUtc <= nowUtc || draftCancelled ||
                     snapshot.UserId != currentUserId.Value ||
                     !string.Equals(snapshot.SessionId, request.SessionId.Trim(), StringComparison.Ordinal) ||

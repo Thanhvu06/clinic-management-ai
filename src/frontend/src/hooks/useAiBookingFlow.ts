@@ -826,9 +826,14 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     break;
                 }
 
-                const effectiveConfirmationId = activeDraft?.confirmationId || action.payload.confirmationId || `conf_v${currentVersion}_${slotId}`;
-                if (activeDraft && !activeDraft.confirmationId) {
-                    setActiveDraft(prev => prev ? { ...prev, confirmationId: effectiveConfirmationId } : prev);
+                const effectiveConfirmationId = activeDraft?.confirmationId || action.payload.confirmationId;
+                if (!effectiveConfirmationId) {
+                    setMessages(prev => [...prev, {
+                        role: "model",
+                        content: "Chưa có mã xác nhận đặt lịch hợp lệ từ hệ thống. Vui lòng tải lại thông tin lịch khám mới nhất trước khi xác nhận.",
+                        urgency: "ROUTINE"
+                    }]);
+                    break;
                 }
 
                 const formattedDate = formatVietnameseDate(slotDate);
