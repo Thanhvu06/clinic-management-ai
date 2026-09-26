@@ -4,8 +4,8 @@ namespace ClinicManagement.Infrastructure.AI.Tools;
 
 public sealed class AiToolHandlerAdapter : IAiToolHandler
 {
-    private readonly PatientCopilotToolHandler _dispatcher;
-    public AiToolHandlerAdapter(PatientCopilotToolHandler dispatcher, AiToolDefinition definition)
+    private readonly IAiToolHandler _dispatcher;
+    public AiToolHandlerAdapter(IAiToolHandler dispatcher, AiToolDefinition definition)
     {
         _dispatcher = dispatcher;
         Definition = definition;

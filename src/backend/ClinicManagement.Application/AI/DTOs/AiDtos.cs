@@ -125,6 +125,10 @@ public static class AiChatIntentTypes
 
     // Operational Intents
     public const string FindEarliestAvailableSlot = "FindEarliestAvailableSlot";
+    public const string SpecialtyRecommendation = "SpecialtyRecommendation";
+    public const string FindDoctorForSymptom = "FindDoctorForSymptom";
+    public const string EmergencyEscalation = "EmergencyEscalation";
+    public const string PromptInjection = "PromptInjection";
 
     private static readonly HashSet<string> AllAllowed = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -142,7 +146,11 @@ public static class AiChatIntentTypes
         CancelDraft,
         ViewAppointments,
         UnclearOrOutOfScope,
-        FindEarliestAvailableSlot
+        FindEarliestAvailableSlot,
+        SpecialtyRecommendation,
+        FindDoctorForSymptom,
+        EmergencyEscalation,
+        PromptInjection
     };
 
     public static IReadOnlyCollection<string> All => AllAllowed;
@@ -600,9 +608,13 @@ public class AiChatResponseDto
     public string AssistantStatus { get; set; } = "Online";
 
     /// <summary>
-    /// Technical provider status: "NotCalled", "Healthy", "Disabled", "AuthFailure", "RateLimited", "Timeout", "NetworkError", "InvalidResponse", "Cancelled".
+    /// Legacy provider detail retained for compatibility. Use ProviderState for
+    /// the stable client contract (NotCalled/Online/Degraded/Unavailable/SafetyBlocked).
     /// </summary>
     public string ProviderStatus { get; set; } = "NotCalled";
+
+    /// <summary>Stable provider state for all copilot clients.</summary>
+    public string ProviderState { get; set; } = "NotCalled";
 
     /// <summary>
     /// Dialogue lifecycle outcome: "Success", "UnclearInput", "ClarificationRequired", "DraftModified", "DraftCancelled", "Confirmed", "NoMatchingDoctor", "NoAvailableSlots", "ProviderUnavailable".

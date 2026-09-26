@@ -8,6 +8,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.AI.DTOs;
+using ClinicManagement.Application.AI;
+using ClinicManagement.Application.AI.Conversation;
 using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Application.Common.Interfaces;
@@ -34,6 +36,7 @@ public class AiSpecialtyService : IAiSpecialtyService
     private readonly IVietnameseIntentClassifier _intentClassifier;
     private readonly IAiSafetyGuard _safetyGuard;
     private readonly IAiToolExecutor? _toolExecutor;
+    private readonly IAiConversationPipeline? _conversationPipeline;
 
     public AiSpecialtyService(
         AppDbContext dbContext,
@@ -49,7 +52,8 @@ public class AiSpecialtyService : IAiSpecialtyService
         IAiSpecialtyClassifier? classifier = null,
         IVietnameseIntentClassifier? intentClassifier = null,
         IAiSafetyGuard? safetyGuard = null,
-        IAiToolExecutor? toolExecutor = null)
+        IAiToolExecutor? toolExecutor = null,
+        IAiConversationPipeline? conversationPipeline = null)
     {
         _dbContext = dbContext;
         _aiProvider = aiProvider;
@@ -65,6 +69,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         _intentClassifier = intentClassifier ?? new VietnameseIntentClassifier();
         _safetyGuard = safetyGuard ?? new AiSafetyGuard();
         _toolExecutor = toolExecutor;
+        _conversationPipeline = conversationPipeline;
     }
 
     public async Task<AiSuggestionResponseDto> GetSuggestionsAsync(AiSuggestionRequestDto request, CancellationToken cancellationToken = default)
@@ -170,6 +175,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 PromptVersion = GeminiAiProvider.CurrentPromptVersion,
                 AssistantStatus = "Online",
                 ProviderStatus = "NotCalled",
+                ProviderState = AiProviderStatusContract.SafetyBlocked,
                 DialogueOutcome = "SafetyEmergency",
                 Actions = new List<AiActionDto>
                 {
@@ -187,6 +193,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 PromptVersion = GeminiAiProvider.CurrentPromptVersion,
                 AssistantStatus = "Online",
                 ProviderStatus = "NotCalled",
+                ProviderState = AiProviderStatusContract.SafetyBlocked,
                 DialogueOutcome = "SafetyPromptInjectionBlocked",
                 ManualSelectionRequired = true
             };
@@ -292,7 +299,8 @@ public class AiSpecialtyService : IAiSpecialtyService
             ContextSnapshotId = request.ContextSnapshotId
         };
 
-        var localClassification = _intentClassifier.Classify(cleanMessage, intentContext);
+        var localClassification = _conversationPipeline?.Analyze(cleanMessage, intentContext).Intent
+            ?? _intentClassifier.Classify(cleanMessage, intentContext);
         var resolvedIntent = !string.IsNullOrWhiteSpace(request.Intent) && AiChatIntentTypes.IsAllowed(request.Intent)
             ? request.Intent
             : localClassification.Intent;
@@ -551,7 +559,8 @@ public class AiSpecialtyService : IAiSpecialtyService
             PromptVersion = GeminiAiProvider.CurrentPromptVersion,
             PrimaryIntent = effectivePrimaryIntent,
             AssistantStatus = "Online",
-            ProviderStatus = "Healthy"
+            ProviderStatus = "Healthy",
+            ProviderState = AiProviderStatusContract.FromProviderResult(aiResult.Status, called: true)
         };
         if (_toolExecutor != null && aiResult.ToolCalls.Count > 0)
         {
@@ -576,6 +585,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         if (providerActuallyFailed)
         {
             responseDto.ProviderStatus = "Degraded";
+            responseDto.ProviderState = AiProviderStatusContract.Degraded;
         }
 
         // Re-check emergency urgency from AI output
@@ -3231,7 +3241,7 @@ public class AiSpecialtyService : IAiSpecialtyService
     private static string SanitizeInput(string input)
     {
         if (string.IsNullOrWhiteSpace(input)) return string.Empty;
-        var text = input.Trim();
+        var text = AiTextNormalizer.Normalize(input);
 
         // Remove emails
         text = Regex.Replace(text, @"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "[EMAIL_REMOVED]");

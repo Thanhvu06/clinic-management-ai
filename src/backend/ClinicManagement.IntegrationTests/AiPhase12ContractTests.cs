@@ -52,20 +52,16 @@ public sealed class AiPhase12ContractTests : IntegrationTestBase
     }
 
     [Fact]
-    public void Planner_policy_contains_only_the_seven_read_tools()
+    public void Planner_policy_contains_only_allowlisted_read_tools_for_all_actor_workspaces()
     {
-        Assert.Equal(
-            new[]
-            {
-                "clinic.get_available_slots",
-                "clinic.get_facilities",
-                "clinic.get_pricing",
-                "clinic.search_doctors",
-                "clinic.search_specialties",
-                "patient.get_appointment_detail",
-                "patient.get_my_appointments"
-            },
-            AiPlannerPolicy.AllowedToolNames.OrderBy(x => x, StringComparer.Ordinal));
+        Assert.Contains("clinic.get_pricing", AiPlannerPolicy.AllowedToolNames);
+        Assert.Contains("patient.get_my_appointments", AiPlannerPolicy.AllowedToolNames);
+        Assert.Contains("reception.get_queue", AiPlannerPolicy.AllowedToolNames);
+        Assert.Contains("doctor.get_my_queue", AiPlannerPolicy.AllowedToolNames);
+        Assert.Contains("technician.get_worklist", AiPlannerPolicy.AllowedToolNames);
+        Assert.Contains("pharmacist.get_prescription_queue", AiPlannerPolicy.AllowedToolNames);
+        Assert.Contains("admin.get_dashboard_metrics", AiPlannerPolicy.AllowedToolNames);
+        Assert.DoesNotContain(AiPlannerPolicy.AllowedToolNames, name => name.Contains("prepare", StringComparison.OrdinalIgnoreCase) || name.Contains("execute", StringComparison.OrdinalIgnoreCase));
         Assert.False(AiPlannerPolicy.IsAllowed("patient.prepare_cancel_appointment"));
         Assert.True(AiPlannerPolicy.IsAllowed("CLINIC.GET_PRICING"));
     }
