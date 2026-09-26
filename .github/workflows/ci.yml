@@ -72,6 +72,14 @@ jobs:
           docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C -b -Q "SELECT 1"
           docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C -b \
             -Q "IF DB_ID('ClinicManagement_CiMigration') IS NULL EXEC(N'CREATE DATABASE [ClinicManagement_CiMigration]');"
+          for attempt in {1..30}; do
+            database_state="$(docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C -h -1 -W -b -Q "SET NOCOUNT ON; SELECT state_desc FROM sys.databases WHERE name = 'ClinicManagement_CiMigration';" | tr -d '\r' | xargs)"
+            if [[ "$database_state" == "ONLINE" ]]; then
+              break
+            fi
+            sleep 2
+          done
+          test "$database_state" = "ONLINE"
 
       - name: Apply official migration script to SQL Server
         shell: bash
