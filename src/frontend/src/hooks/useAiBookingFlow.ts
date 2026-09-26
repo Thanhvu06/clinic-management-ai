@@ -18,7 +18,8 @@ import type {
     AiBookingDraft,
     AiChatIntent,
     ConfirmBookingAction,
-    ReviewBookingAction
+    ReviewBookingAction,
+    AiToolExecutionResult
 } from "../types/ai";
 
 export function isBookingConfirmationAction(action: AiAction): action is ConfirmBookingAction | ReviewBookingAction {
@@ -1289,6 +1290,34 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         }
     };
 
+    const confirmToolAction = async (actionId: string): Promise<void> => {
+        if (!actionId || loading || submittingBooking) return;
+        try {
+            const result = await axiosClient.post<{
+                toolName: string;
+                toolVersion: string;
+                argumentsJson: string;
+                sessionId?: string;
+            }, AiToolExecutionResult>("/ai/tools/execute", {
+                toolName: "patient.execute_confirmed_action",
+                toolVersion: "1.0",
+                argumentsJson: JSON.stringify({ actionId, confirm: true }),
+                sessionId: sessionIdRef.current || undefined
+            });
+            setMessages(previous => [...previous, {
+                role: "model",
+                content: result.status === "completed"
+                    ? "Thao tác đã được xác nhận và gửi đến hệ thống ClinicCare."
+                    : result.error?.message || "ClinicCare chưa thể hoàn tất thao tác này.",
+                urgency: "ROUTINE",
+                toolResults: [result],
+                assistantStatus: result.status === "completed" ? "Online" : "Degraded"
+            }]);
+        } catch {
+            setErrorMsg("Không thể xác nhận thao tác lúc này. Vui lòng thử lại hoặc mở lại lịch hẹn.");
+        }
+    };
+
     return {
         input,
         setInput,
@@ -1301,6 +1330,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         clearChat,
         handleSendMessage,
         handleActionClick,
+        confirmToolAction,
         formatVietnameseDate,
         aiAssistantStatus
     };

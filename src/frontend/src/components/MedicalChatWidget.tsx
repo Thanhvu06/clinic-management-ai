@@ -43,6 +43,7 @@ const PatientMedicalChatWidget: React.FC = () => {
         clearChat,
         handleSendMessage,
         handleActionClick,
+        confirmToolAction,
         formatVietnameseDate
     } = useAiBookingFlow(() => setIsOpen(false));
 
@@ -265,6 +266,19 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                         ? "Thao tác ghi chưa được thực hiện. Hãy kiểm tra thông tin và xác nhận trong luồng lịch hẹn."
                                                         : toolResult.error?.message || "Kết quả được trả về từ dịch vụ ClinicCare đã kiểm chứng."}
                                                 </p>
+                                                {toolResult.status === "pending_confirmation" && toolResult.actionId && (
+                                                    <button
+                                                        type="button"
+                                                        className={`${styles.actionBtn} ${styles.btnPrimary}`}
+                                                        disabled={executingActionId === toolResult.actionId}
+                                                        onClick={() => {
+                                                            setExecutingActionId(toolResult.actionId || null);
+                                                            void confirmToolAction(toolResult.actionId || "").finally(() => setExecutingActionId(null));
+                                                        }}
+                                                    >
+                                                        {executingActionId === toolResult.actionId ? "Đang xác nhận..." : "Xác nhận thực hiện"}
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     ))}
