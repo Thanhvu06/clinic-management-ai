@@ -92,6 +92,10 @@ jobs:
             -d ClinicManagement_CiMigration -b -i /tmp/phase12-ef-idempotent.sql > ./migration-apply.log 2>&1
           status=$?
           cat ./migration-apply.log
+          if [[ "$status" -ne 0 ]]; then
+            diagnostic="$(tr '\r\n' ' ' < ./migration-apply.log | sed 's/%/%25/g' | head -c 6000)"
+            echo "::error title=SQL Server migration apply failed::$diagnostic"
+          fi
           exit "$status"
 
       - name: Upload SQL Server migration diagnostics
