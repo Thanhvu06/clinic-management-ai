@@ -618,8 +618,9 @@ public sealed class AiPhase12ContractTests : IntegrationTestBase
     private async Task<(AiPendingToolAction Action, string Token, long TargetSlotId)> SeedPendingRescheduleAsync(string sessionId)
     {
         var date = GetFutureWorkingDate(23);
-        var sourceSlot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(13, 0), new TimeOnly(13, 30));
-        var targetSlot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(14, 0), new TimeOnly(14, 30));
+        var rescheduleDoctorId = Doctor2EntityId == 0 ? DoctorEntityId : Doctor2EntityId;
+        var sourceSlot = await CreateAvailableSlotAsync(rescheduleDoctorId, date, new TimeOnly(13, 0), new TimeOnly(13, 30));
+        var targetSlot = await CreateAvailableSlotAsync(rescheduleDoctorId, date, new TimeOnly(14, 0), new TimeOnly(14, 30));
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var sourceSlotDb = await db.AppointmentSlots.SingleAsync(x => x.Id == sourceSlot.Id);
@@ -630,7 +631,7 @@ public sealed class AiPhase12ContractTests : IntegrationTestBase
         {
             AppointmentCode = $"APT-AI-{Guid.NewGuid():N}"[..18].ToUpperInvariant(),
             PatientId = Patient1EntityId,
-            DoctorId = DoctorEntityId,
+            DoctorId = rescheduleDoctorId,
             SpecialtyId = SpecialtyEntityId,
             AppointmentSlotId = sourceSlot.Id,
             AppointmentDate = date,
