@@ -3,13 +3,14 @@ using System.Data.Common;
 using System.IO;
 using System.Linq;
 using ClinicManagement.Application.AI.Interfaces;
-using ClinicManagement.Infrastructure.AI;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace ClinicManagement.IntegrationTests;
@@ -18,13 +19,21 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     public Mock<IAiSpecialtySuggestionProvider> MockAiProvider { get; } = new();
     private readonly string _dbFilePath = Path.Combine(Path.GetTempPath(), $"clinic_test_{Guid.NewGuid():N}.db");
-    private IServiceProvider? _serviceProvider;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.ConfigureLogging(logging =>
+        {
+            // The Windows EventLog provider can throw while reporting expected
+            // domain exceptions when the test process lacks EventLog rights.
+            logging.ClearProviders();
+            logging.AddDebug();
+        });
         builder.ConfigureServices(services =>
         {
+            services.AddDataProtection().UseEphemeralDataProtectionProvider();
+
             var descriptors = services.Where(d => 
                 d.ServiceType.Name.Contains("DbContextOptions") || 
                 d.ServiceType == typeof(DbConnection) ||
@@ -62,7 +71,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
             services.AddDbContext<AppDbContext>(options =>
             {
-                options.UseSqlite(connectionString);
+                options.UseSqlite(connectionString)
+                    .ConfigureWarnings(warnings =>
+                        warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.FirstWithoutOrderByAndFilterWarning));
             });
 
             // Replace AI Provider with Mock
@@ -72,18 +83,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             services.AddSingleton<IAiSpecialtySuggestionProvider>(MockAiProvider.Object);
         });
 
-        builder.ConfigureServices(services =>
-        {
-            var sp = services.BuildServiceProvider();
-            _serviceProvider = sp;
-
-            // Set TestDbContextAccessor for static test methods
-            AiSpecialtyService.TestDbContextAccessor = () =>
-            {
-                var scope = sp.CreateScope();
-                return scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            };
-        });
     }
 
     protected override void Dispose(bool disposing)

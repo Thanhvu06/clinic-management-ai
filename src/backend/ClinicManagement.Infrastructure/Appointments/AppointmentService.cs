@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Appointments.DTOs;
 using ClinicManagement.Application.Appointments.Interfaces;
+using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Common.Models;
@@ -27,17 +28,20 @@ public class AppointmentService : IAppointmentService
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IAppointmentAvailabilityPolicy _availabilityPolicy;
+    private readonly IAiBookingConfirmationStore _confirmationStore;
 
     public AppointmentService(
         AppDbContext dbContext,
         ICurrentUserService currentUserService,
         IDateTimeProvider dateTimeProvider,
-        IAppointmentAvailabilityPolicy availabilityPolicy)
+        IAppointmentAvailabilityPolicy availabilityPolicy,
+        IAiBookingConfirmationStore confirmationStore)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _dateTimeProvider = dateTimeProvider;
         _availabilityPolicy = availabilityPolicy;
+        _confirmationStore = confirmationStore;
     }
 
     public async Task<AppointmentDto> CreateAppointmentAsync(CreateAppointmentRequest request)
@@ -172,6 +176,69 @@ public class AppointmentService : IAppointmentService
         try
         {
             transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+            AiBookingConfirmationValidationResult? confirmationValidation = null;
+            if (!string.IsNullOrWhiteSpace(request.ConfirmationId))
+            {
+                if (string.IsNullOrWhiteSpace(request.ContextSnapshotId) ||
+                    string.IsNullOrWhiteSpace(request.SessionId) ||
+                    string.IsNullOrWhiteSpace(request.DraftId) ||
+                    !request.DraftVersion.HasValue)
+                {
+                    await transaction.RollbackAsync();
+                    throw new BusinessException("MISSING_CONFIRMATION_CONTEXT", "Thiếu thông tin phiên xác nhận AI. Vui lòng mở lại bản nháp và xác nhận lại.");
+                }
+
+                var confirmationSlot = await _dbContext.AppointmentSlots
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.Id == request.AppointmentSlotId);
+                if (confirmationSlot == null)
+                {
+                    await transaction.RollbackAsync();
+                    throw new NotFoundException("Khung giờ khám không tồn tại.");
+                }
+
+                confirmationValidation = await _confirmationStore.ValidateForAppointmentAsync(new ValidateAiBookingConfirmationRequest
+                {
+                    ConfirmationId = request.ConfirmationId,
+                    UserId = currentUserId.Value,
+                    SessionId = request.SessionId,
+                    DraftId = request.DraftId,
+                    DraftVersion = request.DraftVersion.Value,
+                    ContextSnapshotId = request.ContextSnapshotId,
+                    SpecialtyId = request.SpecialtyId,
+                    DoctorId = request.DoctorId,
+                    SlotId = request.AppointmentSlotId,
+                    SlotDate = confirmationSlot.SlotDate,
+                    StartTime = confirmationSlot.StartTime,
+                    EndTime = confirmationSlot.EndTime,
+                    Reason = normalizedReason!,
+                    IdempotencyKey = idempotencyKey
+                });
+                if (!confirmationValidation.IsValid)
+                {
+                    await transaction.RollbackAsync();
+                    throw new ConflictException(confirmationValidation.ErrorCode ?? "CONFIRMATION_INVALID", confirmationValidation.ErrorMessage ?? "Mã xác nhận AI không còn hợp lệ.");
+                }
+
+                var snapshot = await _dbContext.AiSelectionSnapshots
+                    .FirstOrDefaultAsync(s => s.SnapshotId == request.ContextSnapshotId.Trim());
+                var nowUtc = _dateTimeProvider.UtcNow;
+                var draftCancelled = await _dbContext.AiCancelledDraftScopes.AnyAsync(c =>
+                    c.UserId == currentUserId.Value &&
+                    c.SessionId == request.SessionId.Trim() &&
+                    c.DraftId == request.DraftId.Trim() &&
+                    c.ExpiresAtUtc > nowUtc);
+                if (snapshot == null || snapshot.IsRevoked || snapshot.ExpiresAtUtc <= nowUtc || draftCancelled ||
+                    snapshot.UserId != currentUserId.Value ||
+                    !string.Equals(snapshot.SessionId, request.SessionId.Trim(), StringComparison.Ordinal) ||
+                    !string.Equals(snapshot.DraftId, request.DraftId.Trim(), StringComparison.Ordinal) ||
+                    snapshot.DraftVersion != request.DraftVersion)
+                {
+                    await transaction.RollbackAsync();
+                    throw new ConflictException("CONFIRMATION_CONTEXT_INVALID", "Bản nháp hoặc lựa chọn AI đã bị thay đổi, thu hồi hoặc hủy.");
+                }
+            }
 
             if (!string.IsNullOrWhiteSpace(idempotencyKey))
             {
@@ -424,6 +491,11 @@ public class AppointmentService : IAppointmentService
                     ExpiresAtUtc = _dateTimeProvider.UtcNow.AddHours(24)
                 };
                 _dbContext.IdempotencyRecords.Add(idemRecord);
+            }
+
+            if (confirmationValidation?.IsValid == true && !string.IsNullOrWhiteSpace(request.ConfirmationId))
+            {
+                await _confirmationStore.MarkUsedAsync(request.ConfirmationId, appointment.Id, idempotencyKey);
             }
 
             await _dbContext.SaveChangesAsync();
@@ -716,7 +788,12 @@ public class AppointmentService : IAppointmentService
             request.DoctorId,
             request.SpecialtyId,
             request.AppointmentSlotId,
-            Reason = request.Reason?.Trim()
+            Reason = request.Reason?.Trim(),
+            request.ConfirmationId,
+            request.ContextSnapshotId,
+            request.SessionId,
+            request.DraftId,
+            request.DraftVersion
         };
         var json = System.Text.Json.JsonSerializer.Serialize(normalized);
         using var sha = System.Security.Cryptography.SHA256.Create();

@@ -50,6 +50,11 @@ export interface CreateAppointmentPayload {
     specialtyId: number;
     appointmentSlotId: number;
     reason: string;
+    confirmationId?: string;
+    contextSnapshotId?: string;
+    sessionId?: string;
+    draftId?: string;
+    draftVersion?: number;
 }
 
 export interface AppointmentEntityDto {
@@ -105,6 +110,40 @@ export const formatVietnameseDate = (dateStr?: string): string => {
         // fallback
     }
     return dateStr;
+};
+
+const generateSessionIdentity = (): string =>
+    typeof crypto !== "undefined" && crypto.randomUUID
+        ? `sess_${crypto.randomUUID()}`
+        : `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+const sessionStorageKey = (accountKey: string | null | undefined): string =>
+    `cliniccare_ai_session_${accountKey ?? "anon"}`;
+
+const loadOrCreateSessionIdentity = (accountKey: string | null | undefined): string => {
+    try {
+        const persisted = sessionStorage.getItem(sessionStorageKey(accountKey));
+        if (persisted && /^sess_[A-Za-z0-9_-]{1,123}$/.test(persisted)) return persisted;
+    } catch {
+        // Storage can be unavailable in privacy mode; an in-memory session is still safe.
+    }
+
+    const generated = generateSessionIdentity();
+    try {
+        sessionStorage.setItem(sessionStorageKey(accountKey), generated);
+    } catch {
+        // Keep the generated identity in memory when storage is unavailable.
+    }
+    return generated;
+};
+
+const persistSessionIdentity = (accountKey: string | null | undefined, sessionId: string): void => {
+    if (!/^sess_[A-Za-z0-9_-]{1,123}$/.test(sessionId)) return;
+    try {
+        sessionStorage.setItem(sessionStorageKey(accountKey), sessionId);
+    } catch {
+        // Best effort only; the backend remains authoritative.
+    }
 };
 
 interface SendMessageOptions {
@@ -169,6 +208,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             activeBookingSubmitIdRef.current += 1;
             isSubmittingBookingRef.current = false;
             setSubmittingBooking(false);
+            contextSnapshotIdRef.current = undefined;
             lastConfirmationAttemptRef.current = null;
             removePersistedBookingAttempt(accountKeyRef.current);
             return;
@@ -189,6 +229,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 activeBookingSubmitIdRef.current += 1;
                 isSubmittingBookingRef.current = false;
                 setSubmittingBooking(false);
+                contextSnapshotIdRef.current = undefined;
                 lastConfirmationAttemptRef.current = null;
                 removePersistedBookingAttempt(accountKeyRef.current);
                 return;
@@ -214,17 +255,13 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             setSubmittingBooking(false);
             contextSnapshotIdRef.current = undefined;
             lastConfirmationAttemptRef.current = readPersistedBookingAttempt(accountKey);
-            sessionIdRef.current = typeof crypto !== "undefined" && crypto.randomUUID
-                ? `sess_${crypto.randomUUID()}`
-                : `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            sessionIdRef.current = loadOrCreateSessionIdentity(accountKey);
         } else {
             if (!lastConfirmationAttemptRef.current) {
                 lastConfirmationAttemptRef.current = readPersistedBookingAttempt(accountKey);
             }
             if (!sessionIdRef.current) {
-                sessionIdRef.current = typeof crypto !== "undefined" && crypto.randomUUID
-                    ? `sess_${crypto.randomUUID()}`
-                    : `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                sessionIdRef.current = loadOrCreateSessionIdentity(accountKey);
             }
         }
         return () => {
@@ -314,6 +351,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 const data = res.data;
                 if (data.sessionId) {
                     sessionIdRef.current = data.sessionId;
+                    persistSessionIdentity(accountKeyRef.current, data.sessionId);
                 }
                 if (data.contextSnapshotId) {
                     contextSnapshotIdRef.current = data.contextSnapshotId;
@@ -372,6 +410,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 
                 if (data.dialogueOutcome === "DraftCancelled") {
                     draftCancelledAtRef.current = Date.now();
+                    contextSnapshotIdRef.current = undefined;
                     setActiveDraft(null);
                 } else if (draftCancelledAtRef.current > requestSentAt) {
                     // Stale response received after draft was cancelled, do not resurrect draft
@@ -932,6 +971,16 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         appointmentSlotId: action.payload.slotId,
                         reason: actionReason
                     };
+                    // A server-issued confirmation carries the complete AI
+                    // contract. Legacy/manual actions without one remain a
+                    // regular manual booking request and never invent IDs.
+                    if (actionConfirmationId) {
+                        bookPayload.confirmationId = actionConfirmationId;
+                        bookPayload.contextSnapshotId = contextSnapshotIdRef.current;
+                        bookPayload.sessionId = sessionIdRef.current;
+                        bookPayload.draftId = bookingDraftIdAtStart;
+                        bookPayload.draftVersion = activeDraft.version;
+                    }
                     const inMemoryCandidate = lastConfirmationAttemptRef.current;
                     const persistedCandidate = !doesCandidateMatchTurn(inMemoryCandidate)
                         ? readPersistedBookingAttempt(effectiveAccountKey)

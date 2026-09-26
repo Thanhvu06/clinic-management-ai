@@ -2111,8 +2111,8 @@ public class AiActionAssistantTests : IntegrationTestBase
     {
         await AuthenticateAsync("pat1@test.com");
 
-        AiSpecialtyService.ClearSnapshotsForTesting();
-        AiSpecialtyService.StoreSnapshotForTesting(new AiSpecialtyService.SelectionSnapshot
+        AiSnapshotTestHelper.Clear(Factory.Services);
+        AiSnapshotTestHelper.Store(Factory.Services, new TestSelectionSnapshot
         {
             SnapshotId = "snap_doc_valid_j",
             UserId = Patient1Id,
@@ -2207,8 +2207,8 @@ public class AiActionAssistantTests : IntegrationTestBase
         var slot1 = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(8, 0), new TimeOnly(8, 30));
         var slot2 = await CreateAvailableSlotAsync(DoctorEntityId, testDate, new TimeOnly(8, 30), new TimeOnly(9, 0));
 
-        AiSpecialtyService.ClearSnapshotsForTesting();
-        AiSpecialtyService.StoreSnapshotForTesting(new AiSpecialtyService.SelectionSnapshot
+        AiSnapshotTestHelper.Clear(Factory.Services);
+        AiSnapshotTestHelper.Store(Factory.Services, new TestSelectionSnapshot
         {
             SnapshotId = "snap_slot_valid_l",
             UserId = Patient1Id,
@@ -2497,9 +2497,9 @@ public class AiActionAssistantTests : IntegrationTestBase
     public async Task ScenarioT_ContextSnapshot_BehavioralValidation_InChatAsync()
     {
         await AuthenticateAsync("pat1@test.com");
-        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSnapshotTestHelper.Clear(Factory.Services);
 
-        var snapshot = new AiSpecialtyService.SelectionSnapshot
+        var snapshot = new TestSelectionSnapshot
         {
             SnapshotId = "snap_test_123",
             UserId = Patient1Id,
@@ -2508,7 +2508,7 @@ public class AiActionAssistantTests : IntegrationTestBase
             SlotIds = new List<long> { 101, 102 },
             ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15)
         };
-        AiSpecialtyService.StoreSnapshotForTesting(snapshot);
+        AiSnapshotTestHelper.Store(Factory.Services, snapshot);
 
         // 1. Tampered doctor order via ChatAsync -> Rejected with ClarificationRequired and draft preserved
         var tamperedReq = new AiChatRequestDto
@@ -2560,7 +2560,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.Equal("ClarificationRequired", wrongUserRes.Data.DialogueOutcome);
         Assert.Null(wrongUserRes.Data.BookingDraft?.DoctorId);
 
-        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSnapshotTestHelper.Clear(Factory.Services);
     }
 
     [Fact]
@@ -2775,7 +2775,7 @@ public class AiActionAssistantTests : IntegrationTestBase
     public async Task ScenarioX_SelectionSnapshot_SessionAndDraftIsolation_AndPostIssueDoctorSlotVerification()
     {
         await AuthenticateAsync("pat1@test.com");
-        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSnapshotTestHelper.Clear(Factory.Services);
 
         Factory.MockAiProvider.Reset();
         Factory.MockAiProvider
@@ -2799,7 +2799,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         var slot1 = await CreateAvailableSlotAsync(Doctor2EntityId, workDate, new TimeOnly(8, 30), new TimeOnly(9, 0));
         var slot2 = await CreateAvailableSlotAsync(Doctor2EntityId, workDate, new TimeOnly(9, 0), new TimeOnly(9, 30));
 
-        var validSnapshot = new AiSpecialtyService.SelectionSnapshot
+        var validSnapshot = new TestSelectionSnapshot
         {
             SnapshotId = "snap_p1_valid_tabA",
             UserId = Patient1Id,
@@ -2813,7 +2813,7 @@ public class AiActionAssistantTests : IntegrationTestBase
             SlotIds = new List<long> { slot1.Id, slot2.Id },
             ExpiresAtUtc = DateTime.UtcNow.AddMinutes(15)
         };
-        AiSpecialtyService.StoreSnapshotForTesting(validSnapshot);
+        AiSnapshotTestHelper.Store(Factory.Services, validSnapshot);
 
         // (a) Valid snapshot matching (userId, sessionId, draftId, draftVersion):
         // "bác sĩ đầu tiên" -> selects Doctor2EntityId (index 0 in snapshot, NOT DoctorEntityId which is smaller ID in DB)
@@ -2835,7 +2835,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.Equal(Doctor2EntityId, validDocRes.Data.BookingDraft.DoctorId);
 
         // Re-store snapshot for v1 slot selection test
-        AiSpecialtyService.StoreSnapshotForTesting(validSnapshot);
+        AiSnapshotTestHelper.Store(Factory.Services, validSnapshot);
         var validSlotReq = new AiChatRequestDto
         {
             Message = "Chọn khung giờ thứ 2",
@@ -2930,7 +2930,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.Null(diffDraftRes.Data.BookingDraft?.DoctorId);
 
         // (d3) CancelDraft explicitly invalidates snapshot of the cancelled draft even if DraftVersion == 1
-        AiSpecialtyService.StoreSnapshotForTesting(new AiSpecialtyService.SelectionSnapshot
+        AiSnapshotTestHelper.Store(Factory.Services, new TestSelectionSnapshot
         {
             SnapshotId = "snap_p1_to_be_cancelled",
             UserId = Patient1Id,
@@ -2971,7 +2971,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.Null(reuseAfterCancelRes.Data.BookingDraft?.DoctorId);
 
         // (e) Expired snapshot -> Rejected
-        AiSpecialtyService.StoreSnapshotForTesting(new AiSpecialtyService.SelectionSnapshot
+        AiSnapshotTestHelper.Store(Factory.Services, new TestSelectionSnapshot
         {
             SnapshotId = "snap_p1_expired",
             UserId = Patient1Id,
@@ -2999,7 +2999,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.Null(expiredRes.Data.BookingDraft?.DoctorId);
 
         // (f) Snapshot still valid, but doctor at index 0 was just deactivated (IsActive = false) -> Rejected!
-        AiSpecialtyService.StoreSnapshotForTesting(validSnapshot);
+        AiSnapshotTestHelper.Store(Factory.Services, validSnapshot);
         using (var scope = Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -3039,7 +3039,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         }
 
         // (g) Snapshot still valid, but slot at index 1 (slot2) was just booked after snapshot was issued -> Rejected!
-        AiSpecialtyService.StoreSnapshotForTesting(validSnapshot);
+        AiSnapshotTestHelper.Store(Factory.Services, validSnapshot);
         await AuthenticateAsync("pat2@test.com");
         var bookSlot2Resp = await Client.PostAsJsonAsync("/api/v1/appointments", new
         {
@@ -3069,7 +3069,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.Equal("ClarificationRequired", bookedSlotRes.Data.DialogueOutcome);
         Assert.Null(bookedSlotRes.Data.BookingDraft?.SlotId);
 
-        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSnapshotTestHelper.Clear(Factory.Services);
     }
 
     [Fact]
@@ -3077,8 +3077,8 @@ public class AiActionAssistantTests : IntegrationTestBase
     {
         await AuthenticateAsync("pat1@test.com");
         
-        AiSpecialtyService.ClearSnapshotsForTesting();
-        AiSpecialtyService.StoreSnapshotForTesting(new AiSpecialtyService.SelectionSnapshot
+        AiSnapshotTestHelper.Clear(Factory.Services);
+        AiSnapshotTestHelper.Store(Factory.Services, new TestSelectionSnapshot
         {
             SnapshotId = "snap_rel_fail",
             UserId = Patient1Id,
@@ -3140,7 +3140,7 @@ public class AiActionAssistantTests : IntegrationTestBase
     public async Task ScenarioZ_a_FirstRequest_NoIds_SnapshotStoresResolvedIds()
     {
         await AuthenticateAsync("pat1@test.com");
-        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSnapshotTestHelper.Clear(Factory.Services);
 
         var workingDate = GetFutureWorkingDate(3);
         var slot = await CreateAvailableSlotAsync(DoctorEntityId, workingDate, new TimeOnly(14, 0, 0), new TimeOnly(14, 30, 0));
@@ -3202,7 +3202,7 @@ public class AiActionAssistantTests : IntegrationTestBase
     [Fact]
     public async Task ScenarioAA_B1_UserBCannotRevokeUserASnapshot_EvenWithSameDraftIdAndValidSnapshot()
     {
-        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSnapshotTestHelper.Clear(Factory.Services);
         var workingDate = GetFutureWorkingDate(4);
         await CreateAvailableSlotAsync(DoctorEntityId, workingDate, new TimeOnly(8, 0, 0), new TimeOnly(8, 30, 0));
         await CreateAvailableSlotAsync(Doctor2EntityId, workingDate, new TimeOnly(9, 0, 0), new TimeOnly(9, 30, 0));
@@ -3298,7 +3298,7 @@ public class AiActionAssistantTests : IntegrationTestBase
     [Fact]
     public async Task ScenarioAA_B2_B3_SameUserCancelIsolation_SameSessionDifferentDrafts_AndDifferentSessions()
     {
-        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSnapshotTestHelper.Clear(Factory.Services);
         var workingDate = GetFutureWorkingDate(5);
         await CreateAvailableSlotAsync(DoctorEntityId, workingDate, new TimeOnly(10, 0, 0), new TimeOnly(10, 30, 0));
 
@@ -3436,7 +3436,7 @@ public class AiActionAssistantTests : IntegrationTestBase
     [Fact]
     public async Task ScenarioAA_B4_B5_FailClosedOnStoreEviction_AndCancelledDraftTTLExpirationWithoutResurrection()
     {
-        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSnapshotTestHelper.Clear(Factory.Services);
         var workingDate = GetFutureWorkingDate(6);
         var slot = await CreateAvailableSlotAsync(DoctorEntityId, workingDate, new TimeOnly(15, 0, 0), new TimeOnly(15, 30, 0));
 
@@ -3456,7 +3456,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         var issuedSnapshotId = resIssue!.Data!.ContextSnapshotId!;
 
         // --- B4: Simulate store loss (e.g. backend restart / multi-instance miss) even with DisplayedDoctorIds/DisplayedSlotIds sent by client ---
-        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSnapshotTestHelper.Clear(Factory.Services);
 
         var storeLostRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
         {
@@ -3488,35 +3488,33 @@ public class AiActionAssistantTests : IntegrationTestBase
         var snapTtl = resIssue2!.Data!.ContextSnapshotId!;
 
         // Cancel draft_ttl_b5 at t0
-        AiSpecialtyService.InvalidateDraftSnapshotsForCancel("draft_ttl_b5", "sess_ttl_b5", Patient1Id, t0);
-        Assert.True(AiSpecialtyService.IsDraftCancelled("draft_ttl_b5", Patient1Id, "sess_ttl_b5", t0.AddMinutes(30)));
-        Assert.False(AiSpecialtyService.IsDraftCancelled("draft_ttl_b5", Patient2Id, "sess_ttl_b5", t0.AddMinutes(30)));
+        await AiSnapshotTestHelper.InvalidateAsync(Factory.Services, "draft_ttl_b5", "sess_ttl_b5", Patient1Id, t0);
+        Assert.True(await AiSnapshotTestHelper.IsCancelledAsync(Factory.Services, "draft_ttl_b5", Patient1Id, "sess_ttl_b5", t0.AddMinutes(30)));
+        Assert.False(await AiSnapshotTestHelper.IsCancelledAsync(Factory.Services, "draft_ttl_b5", Patient2Id, "sess_ttl_b5", t0.AddMinutes(30)));
 
         // Advance clock past 1-hour TTL -> cancelled entry is purged
-        var afterTtl = t0.AddHours(2);
-        Assert.False(AiSpecialtyService.IsDraftCancelled("draft_ttl_b5", Patient1Id, "sess_ttl_b5", afterTtl));
+        var afterTtl = t0.AddHours(25);
+        Assert.False(await AiSnapshotTestHelper.IsCancelledAsync(Factory.Services, "draft_ttl_b5", Patient1Id, "sess_ttl_b5", afterTtl));
 
         // Even after cancel TTL expires, the old snapshot snapTtl CANNOT come back to life (it was evicted from store on cancel)
-        var validAfterTtl = AiSpecialtyService.ValidateSnapshot(
+        var validAfterTtl = await AiSnapshotTestHelper.ValidateAsync(Factory.Services,
             snapTtl,
             Patient1Id,
             1,
             null,
             null,
             afterTtl,
-            out var resurrectedSnap,
-            out var errorMsg,
-            currentSessionId: "sess_ttl_b5",
-            currentDraftId: "draft_ttl_b5");
-        Assert.False(validAfterTtl);
-        Assert.Null(resurrectedSnap);
-        Assert.NotNull(errorMsg);
+            sessionId: "sess_ttl_b5",
+            draftId: "draft_ttl_b5");
+        Assert.False(validAfterTtl.IsValid);
+        Assert.Null(validAfterTtl.Snapshot);
+        Assert.NotNull(validAfterTtl.ErrorMessage);
     }
 
     [Fact]
     public async Task ScenarioAB_CancelDraft_MissingSessionIdOrDraftId_FailsClosed_PreservesValidTabs_AndSupportsSafeSnapshotScope()
     {
-        AiSpecialtyService.ClearSnapshotsForTesting();
+        AiSnapshotTestHelper.Clear(Factory.Services);
         await AuthenticateAsync("pat1@test.com");
 
         const string sharedDraftId = "draft_shared_ab_same_string";

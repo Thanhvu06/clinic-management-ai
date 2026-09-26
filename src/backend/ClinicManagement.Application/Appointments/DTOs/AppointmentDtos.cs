@@ -26,6 +26,18 @@ public class CreateAppointmentRequest
     /// </summary>
     [MaxLength(100)]
     public string? ContextSnapshotId { get; set; }
+
+    [MaxLength(64)]
+    public string? ConfirmationId { get; set; }
+
+    [MaxLength(128)]
+    public string? SessionId { get; set; }
+
+    [MaxLength(128)]
+    public string? DraftId { get; set; }
+
+    [Range(1, int.MaxValue)]
+    public int? DraftVersion { get; set; }
 }
 
 public class AppointmentDto

@@ -61,14 +61,14 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         {
             if (await db.Users.AnyAsync())
             {
-                var docExisting = await db.Doctors.FirstAsync();
+                var docExisting = await db.Doctors.OrderBy(d => d.Id).FirstAsync();
                 var doc2Existing = await db.Doctors.OrderBy(d => d.Id).Skip(1).FirstOrDefaultAsync();
-                var pat1Existing = await db.Patients.FirstAsync();
+                var pat1Existing = await db.Patients.OrderBy(p => p.Id).FirstAsync();
                 var pat2Existing = await db.Patients.OrderBy(p => p.Id).Skip(1).FirstOrDefaultAsync();
-                var specExisting = await db.Specialties.FirstAsync();
-                var slotExisting = await db.AppointmentSlots.FirstAsync();
-                var medExisting = await db.Medicines.FirstAsync();
-                var pkgExisting = await db.HealthPackages.FirstAsync();
+                var specExisting = await db.Specialties.OrderBy(s => s.Id).FirstAsync();
+                var slotExisting = await db.AppointmentSlots.OrderBy(s => s.Id).FirstAsync();
+                var medExisting = await db.Medicines.OrderBy(m => m.Id).FirstAsync();
+                var pkgExisting = await db.HealthPackages.OrderBy(p => p.Id).FirstAsync();
 
                 DoctorEntityId = docExisting.Id;
                 Doctor2EntityId = doc2Existing?.Id ?? 0;

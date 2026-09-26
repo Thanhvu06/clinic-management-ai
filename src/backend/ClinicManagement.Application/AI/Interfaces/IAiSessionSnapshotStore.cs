@@ -72,6 +72,21 @@ public class ResolveCancelScopeResult
     public string? DraftId { get; set; }
 }
 
+public class AiSessionTouchResult
+{
+    public bool IsAccepted { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+
+    public static AiSessionTouchResult Accepted() => new() { IsAccepted = true };
+    public static AiSessionTouchResult Rejected(string code, string message) => new()
+    {
+        IsAccepted = false,
+        ErrorCode = code,
+        ErrorMessage = message
+    };
+}
+
 public interface IAiSessionSnapshotStore
 {
     Task<AiSelectionSnapshotDto> CreateSnapshotAsync(CreateSnapshotRequest request, CancellationToken cancellationToken = default);
@@ -80,6 +95,6 @@ public interface IAiSessionSnapshotStore
     Task<bool> IsDraftCancelledAsync(string? draftId, Guid? userId = null, string? sessionId = null, DateTime? nowUtc = null, CancellationToken cancellationToken = default);
     Task<ResolveCancelScopeResult> TryResolveCancelScopeFromSnapshotAsync(string? snapshotId, Guid? userId, string? requestedSessionId, string? requestedDraftId, DateTime nowUtc, CancellationToken cancellationToken = default);
     Task<bool> HasAnyActiveSnapshotForUserAsync(Guid? userId, DateTime? nowUtc = null, CancellationToken cancellationToken = default);
-    Task TouchSessionAsync(string sessionId, Guid? userId, string? draftId, int? draftVersion, long? facilityId, CancellationToken cancellationToken = default);
+    Task<AiSessionTouchResult> TouchSessionAsync(string sessionId, Guid? userId, string? draftId, int? draftVersion, long? facilityId, CancellationToken cancellationToken = default);
     Task PurgeExpiredRecordsAsync(DateTime nowUtc, CancellationToken cancellationToken = default);
 }

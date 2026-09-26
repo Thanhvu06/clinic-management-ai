@@ -28,6 +28,7 @@ public class AiSpecialtyService : IAiSpecialtyService
     private readonly ClinicManagement.Application.Authentication.Interfaces.ICurrentUserService _currentUserService;
     private readonly IAiSessionSnapshotStore _snapshotStore;
     private readonly IAiAuditService _auditService;
+    private readonly IAiBookingConfirmationStore _confirmationStore;
     private readonly IAiSpecialtyClassifier? _classifier;
     private readonly IVietnameseIntentClassifier _intentClassifier;
 
@@ -41,6 +42,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         ClinicManagement.Application.Authentication.Interfaces.ICurrentUserService currentUserService,
         IAiSessionSnapshotStore? snapshotStore = null,
         IAiAuditService? auditService = null,
+        IAiBookingConfirmationStore? confirmationStore = null,
         IAiSpecialtyClassifier? classifier = null,
         IVietnameseIntentClassifier? intentClassifier = null)
     {
@@ -53,243 +55,9 @@ public class AiSpecialtyService : IAiSpecialtyService
         _currentUserService = currentUserService;
         _snapshotStore = snapshotStore ?? new Persistence.EfAiSessionSnapshotStore(dbContext, dateTimeProvider, LoggerFactory.Create(_ => { }).CreateLogger<Persistence.EfAiSessionSnapshotStore>());
         _auditService = auditService ?? new Persistence.EfAiAuditService(dbContext, dateTimeProvider, LoggerFactory.Create(_ => { }).CreateLogger<Persistence.EfAiAuditService>());
+        _confirmationStore = confirmationStore ?? new Persistence.EfAiBookingConfirmationStore(dbContext, dateTimeProvider, LoggerFactory.Create(_ => { }).CreateLogger<Persistence.EfAiBookingConfirmationStore>());
         _classifier = classifier;
         _intentClassifier = intentClassifier ?? new VietnameseIntentClassifier();
-    }
-
-    public sealed class SelectionSnapshot
-    {
-        public string SnapshotId { get; set; } = string.Empty;
-        public Guid? UserId { get; set; }
-        public string? SessionId { get; set; }
-        public string? DraftId { get; set; }
-        public int? DraftVersion { get; set; }
-        public long? FacilityId { get; set; }
-        public long? SpecialtyId { get; set; }
-        public long? DoctorId { get; set; }
-        public string? SlotDate { get; set; }
-        public List<long> DoctorIds { get; set; } = new();
-        public List<long> SlotIds { get; set; } = new();
-        public DateTime ExpiresAtUtc { get; set; }
-    }
-
-    public static Func<AppDbContext>? TestDbContextAccessor { get; set; }
-
-    public static void StoreSnapshotForTesting(SelectionSnapshot snapshot)
-    {
-        if (TestDbContextAccessor != null)
-        {
-            using var db = TestDbContextAccessor();
-            var existing = db.AiSelectionSnapshots.FirstOrDefault(s => s.SnapshotId == snapshot.SnapshotId);
-            if (existing != null)
-            {
-                existing.UserId = snapshot.UserId;
-                existing.SessionId = snapshot.SessionId;
-                existing.DraftId = snapshot.DraftId;
-                existing.DraftVersion = snapshot.DraftVersion;
-                existing.FacilityId = snapshot.FacilityId;
-                existing.SpecialtyId = snapshot.SpecialtyId;
-                existing.DoctorId = snapshot.DoctorId;
-                existing.SlotDate = snapshot.SlotDate;
-                existing.DoctorIdsJson = System.Text.Json.JsonSerializer.Serialize(snapshot.DoctorIds);
-                existing.SlotIdsJson = System.Text.Json.JsonSerializer.Serialize(snapshot.SlotIds);
-                existing.ExpiresAtUtc = snapshot.ExpiresAtUtc;
-                existing.IsRevoked = false;
-            }
-            else
-            {
-                db.AiSelectionSnapshots.Add(new Domain.Entities.AiSelectionSnapshot
-                {
-                    SnapshotId = snapshot.SnapshotId,
-                    UserId = snapshot.UserId,
-                    SessionId = snapshot.SessionId,
-                    DraftId = snapshot.DraftId,
-                    DraftVersion = snapshot.DraftVersion,
-                    FacilityId = snapshot.FacilityId,
-                    SpecialtyId = snapshot.SpecialtyId,
-                    DoctorId = snapshot.DoctorId,
-                    SlotDate = snapshot.SlotDate,
-                    DoctorIdsJson = System.Text.Json.JsonSerializer.Serialize(snapshot.DoctorIds),
-                    SlotIdsJson = System.Text.Json.JsonSerializer.Serialize(snapshot.SlotIds),
-                    CreatedAtUtc = DateTime.UtcNow,
-                    ExpiresAtUtc = snapshot.ExpiresAtUtc,
-                    IsRevoked = false
-                });
-            }
-            db.SaveChanges();
-        }
-    }
-
-    public static void ClearSnapshotsForTesting()
-    {
-        if (TestDbContextAccessor != null)
-        {
-            using var db = TestDbContextAccessor();
-            db.AiSelectionSnapshots.RemoveRange(db.AiSelectionSnapshots);
-            db.AiCancelledDraftScopes.RemoveRange(db.AiCancelledDraftScopes);
-            db.AiAuditLogs.RemoveRange(db.AiAuditLogs);
-            db.AiSessions.RemoveRange(db.AiSessions);
-            db.SaveChanges();
-        }
-    }
-
-    // Legacy static helpers for test compatibility only - DO NOT USE in runtime code
-    // All runtime code should use injected IAiSessionSnapshotStore instead
-    public static void InvalidateDraftSnapshots(string? draftId, Guid? userId = null, string? sessionId = null, DateTime? nowUtc = null)
-    {
-        InvalidateDraftSnapshotsForCancel(draftId, sessionId, userId, nowUtc);
-    }
-
-    public static void InvalidateDraftSnapshotsForCancel(string? draftId, string? sessionId, Guid? userId, DateTime? nowUtc = null)
-    {
-        if (string.IsNullOrWhiteSpace(draftId) || string.IsNullOrWhiteSpace(sessionId))
-        {
-            return;
-        }
-
-        if (TestDbContextAccessor != null)
-        {
-            using var db = TestDbContextAccessor();
-            var dateTimeProvider = new ClinicManagement.Infrastructure.Services.DateTimeProvider();
-            using var loggerFactory = LoggerFactory.Create(_ => { });
-            var storeLogger = loggerFactory.CreateLogger<Persistence.EfAiSessionSnapshotStore>();
-            var store = new Persistence.EfAiSessionSnapshotStore(db, dateTimeProvider, storeLogger);
-            store.InvalidateDraftSnapshotsForCancelAsync(draftId, sessionId, userId, null, nowUtc).GetAwaiter().GetResult();
-        }
-    }
-
-    public static bool IsDraftCancelled(string? draftId, Guid? userId = null, string? sessionId = null, DateTime? nowUtc = null)
-    {
-        if (string.IsNullOrWhiteSpace(draftId) || string.IsNullOrWhiteSpace(sessionId))
-        {
-            return false;
-        }
-
-        if (TestDbContextAccessor != null)
-        {
-            using var db = TestDbContextAccessor();
-            var dateTimeProvider = new ClinicManagement.Infrastructure.Services.DateTimeProvider();
-            using var loggerFactory = LoggerFactory.Create(_ => { });
-            var storeLogger = loggerFactory.CreateLogger<Persistence.EfAiSessionSnapshotStore>();
-            var store = new Persistence.EfAiSessionSnapshotStore(db, dateTimeProvider, storeLogger);
-            return store.IsDraftCancelledAsync(draftId, userId, sessionId, nowUtc).GetAwaiter().GetResult();
-        }
-
-        return false;
-    }
-
-    public static bool HasAnyActiveSnapshotForUser(Guid? userId, DateTime? nowUtc = null)
-    {
-        if (TestDbContextAccessor != null)
-        {
-            using var db = TestDbContextAccessor();
-            var dateTimeProvider = new ClinicManagement.Infrastructure.Services.DateTimeProvider();
-            using var loggerFactory = LoggerFactory.Create(_ => { });
-            var storeLogger = loggerFactory.CreateLogger<Persistence.EfAiSessionSnapshotStore>();
-            var store = new Persistence.EfAiSessionSnapshotStore(db, dateTimeProvider, storeLogger);
-            return store.HasAnyActiveSnapshotForUserAsync(userId, nowUtc).GetAwaiter().GetResult();
-        }
-
-        return false;
-    }
-
-    public static bool TryResolveCancelScopeFromSnapshot(
-        string? contextSnapshotId,
-        Guid? userId,
-        string? requestedSessionId,
-        string? requestedDraftId,
-        DateTime nowUtc,
-        out string? resolvedSessionId,
-        out string? resolvedDraftId)
-    {
-        resolvedSessionId = null;
-        resolvedDraftId = null;
-
-        if (TestDbContextAccessor != null)
-        {
-            using var db = TestDbContextAccessor();
-            var dateTimeProvider = new ClinicManagement.Infrastructure.Services.DateTimeProvider();
-            using var loggerFactory = LoggerFactory.Create(_ => { });
-            var storeLogger = loggerFactory.CreateLogger<Persistence.EfAiSessionSnapshotStore>();
-            var store = new Persistence.EfAiSessionSnapshotStore(db, dateTimeProvider, storeLogger);
-            var res = store.TryResolveCancelScopeFromSnapshotAsync(contextSnapshotId, userId, requestedSessionId, requestedDraftId, nowUtc).GetAwaiter().GetResult();
-            if (res.HasResolved)
-            {
-                resolvedSessionId = res.SessionId;
-                resolvedDraftId = res.DraftId;
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public static bool ValidateSnapshot(
-        string? snapshotId,
-        Guid? currentUserId,
-        int? currentDraftVersion,
-        List<long>? requestedDoctorIds,
-        List<long>? requestedSlotIds,
-        DateTime nowUtc,
-        out SelectionSnapshot? snapshot,
-        out string? errorMessage,
-        string? currentSessionId = null,
-        string? currentDraftId = null,
-        long? currentSpecialtyId = null)
-    {
-        snapshot = null;
-        errorMessage = null;
-
-        if (TestDbContextAccessor != null)
-        {
-            using var db = TestDbContextAccessor();
-            var dateTimeProvider = new ClinicManagement.Infrastructure.Services.DateTimeProvider();
-            using var loggerFactory = LoggerFactory.Create(_ => { });
-            var storeLogger = loggerFactory.CreateLogger<Persistence.EfAiSessionSnapshotStore>();
-            var store = new Persistence.EfAiSessionSnapshotStore(db, dateTimeProvider, storeLogger);
-
-            var result = store.ValidateSnapshotAsync(new ValidateSnapshotRequest
-            {
-                SnapshotId = snapshotId,
-                CurrentUserId = currentUserId,
-                CurrentSessionId = currentSessionId,
-                CurrentDraftId = currentDraftId,
-                CurrentDraftVersion = currentDraftVersion,
-                CurrentSpecialtyId = currentSpecialtyId,
-                RequestedDoctorIds = requestedDoctorIds,
-                RequestedSlotIds = requestedSlotIds,
-                NowUtc = nowUtc
-            }).GetAwaiter().GetResult();
-
-            if (!result.IsValid)
-            {
-                errorMessage = result.ErrorMessage;
-                return false;
-            }
-
-            if (result.Snapshot != null)
-            {
-                snapshot = new SelectionSnapshot
-                {
-                    SnapshotId = result.Snapshot.SnapshotId,
-                    UserId = result.Snapshot.UserId,
-                    SessionId = result.Snapshot.SessionId,
-                    DraftId = result.Snapshot.DraftId,
-                    DraftVersion = result.Snapshot.DraftVersion,
-                    FacilityId = result.Snapshot.FacilityId,
-                    SpecialtyId = result.Snapshot.SpecialtyId,
-                    DoctorId = result.Snapshot.DoctorId,
-                    SlotDate = result.Snapshot.SlotDate,
-                    DoctorIds = result.Snapshot.DoctorIds,
-                    SlotIds = result.Snapshot.SlotIds,
-                    ExpiresAtUtc = result.Snapshot.ExpiresAtUtc
-                };
-            }
-            return true;
-        }
-
-        errorMessage = "TestDbContextAccessor not configured.";
-        return false;
     }
 
     public async Task<AiSuggestionResponseDto> GetSuggestionsAsync(AiSuggestionRequestDto request, CancellationToken cancellationToken = default)
@@ -374,6 +142,37 @@ public class AiSpecialtyService : IAiSpecialtyService
     {
         var rawMessage = request.Message ?? string.Empty;
         var lowerMsg = rawMessage.ToLowerInvariant();
+
+        // A client may start a new tab with no session ID, but an existing session
+        // can never be silently rebound to another account or revived after expiry.
+        // Stateless cancellation intentionally remains stateless until its scope is
+        // proven, so an ambiguous cancel cannot create a new session as a side effect.
+        var likelyCancel = string.Equals(request.Intent, AiChatIntentTypes.CancelDraft, StringComparison.OrdinalIgnoreCase) ||
+                           lowerMsg.Contains("hủy", StringComparison.OrdinalIgnoreCase) ||
+                           lowerMsg.Contains("huy", StringComparison.OrdinalIgnoreCase);
+        // If a caller is continuing from a server-bound snapshot, leave the
+        // session unset until snapshot validation. This preserves support for
+        // legacy user-bound snapshots while still rejecting bound snapshots
+        // presented without their session identifier.
+        if (string.IsNullOrWhiteSpace(request.SessionId) && !likelyCancel && string.IsNullOrWhiteSpace(request.ContextSnapshotId))
+        {
+            request.SessionId = $"sess_{Guid.NewGuid():N}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.SessionId))
+        {
+            var sessionTouch = await _snapshotStore.TouchSessionAsync(
+                request.SessionId,
+                _currentUserService.UserId,
+                draftId: null,
+                draftVersion: request.DraftVersion,
+                facilityId: null,
+                cancellationToken: cancellationToken);
+            if (!sessionTouch.IsAccepted)
+            {
+                return BuildSessionFailureResponse(request, sessionTouch);
+            }
+        }
 
         // 1. EMERGENCY RULES - Executed FIRST before any AI provider or database search
         if (ContainsActiveEmergency(lowerMsg))
@@ -534,6 +333,15 @@ public class AiSpecialtyService : IAiSpecialtyService
                     facilityId: null,
                     nowUtc: nowUtc,
                     cancellationToken: cancellationToken);
+
+                if (currentUserId.HasValue)
+                {
+                    await _confirmationStore.RevokeForDraftAsync(
+                        currentUserId.Value,
+                        cancelTargetSessionId,
+                        cancelTargetDraftId,
+                        cancellationToken);
+                }
 
                 await _auditService.LogActionAsync(new AiAuditLogEntry
                 {
@@ -866,6 +674,30 @@ public class AiSpecialtyService : IAiSpecialtyService
             .Where(a => AiActionValidator.Validate(a, out _))
             .Take(6)
             .ToList();
+
+        if (string.Equals(responseDto.DialogueOutcome, "DraftModified", StringComparison.OrdinalIgnoreCase) &&
+            _currentUserService.UserId.HasValue &&
+            !string.IsNullOrWhiteSpace(request.SessionId) &&
+            !string.IsNullOrWhiteSpace(request.DraftId))
+        {
+            await _confirmationStore.RevokeForDraftAsync(
+                _currentUserService.UserId.Value,
+                request.SessionId.Trim(),
+                request.DraftId.Trim(),
+                cancellationToken);
+        }
+
+        var finalSessionTouch = await _snapshotStore.TouchSessionAsync(
+            resolvedSessionId,
+            _currentUserService.UserId,
+            responseDto.DraftId,
+            activeDraftVersion,
+            facilityId: null,
+            cancellationToken: cancellationToken);
+        if (!finalSessionTouch.IsAccepted)
+        {
+            return BuildSessionFailureResponse(request, finalSessionTouch);
+        }
 
         var docIdsInActions = responseDto.Actions
             .Where(a => a.Type == AiActionTypes.SelectDoctor && a.Payload?.DoctorId != null)
@@ -2785,8 +2617,114 @@ public class AiSpecialtyService : IAiSpecialtyService
 
         if (hasSpec && hasDoc && hasSlot && hasValidReason)
         {
-            var confirmationId = Guid.NewGuid().ToString("N");
-            draft!.ConfirmationId = confirmationId;
+            var currentUserId = _currentUserService.UserId;
+            if (string.IsNullOrWhiteSpace(request.SessionId))
+            {
+                request.SessionId = $"sess_{Guid.NewGuid():N}";
+            }
+            if (string.IsNullOrWhiteSpace(request.DraftId))
+            {
+                request.DraftId = $"draft_{Guid.NewGuid():N}";
+            }
+            if (!currentUserId.HasValue)
+            {
+                response.DialogueOutcome = "ClarificationRequired";
+                response.Message = "Không thể xác định phiên hoặc bản nháp hiện tại. Vui lòng tải lại phiên đặt lịch rồi xác nhận lại.";
+                return WithDraftVersionSync(response, nextDraftVersion);
+            }
+
+            var patient = await _dbContext.Patients.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.UserId == currentUserId.Value, cancellationToken);
+            var slotCheck = await _availabilityPolicy.EvaluateSlotAvailabilityAsync(new ClinicManagement.Application.Appointments.Interfaces.SlotAvailabilityRequest
+            {
+                SlotId = draft!.SlotId!.Value,
+                DoctorId = draft.DoctorId!.Value,
+                SpecialtyId = draft.SpecialtyId!.Value,
+                PatientId = patient?.Id,
+                CheckAiEnabledSpecialty = true
+            }, cancellationToken);
+            if (!slotCheck.IsAvailable || !slotCheck.SlotDate.HasValue || !slotCheck.StartTime.HasValue || !slotCheck.EndTime.HasValue)
+            {
+                response.DialogueOutcome = "ClarificationRequired";
+                response.Message = slotCheck.FailureReason ?? "Khung giờ đã thay đổi hoặc không còn khả dụng. Vui lòng chọn lại khung giờ mới.";
+                response.MissingFields = new List<string> { "TimeSlot" };
+                return WithDraftVersionSync(response, nextDraftVersion);
+            }
+
+            var snapshotId = request.ContextSnapshotId;
+            if (string.IsNullOrWhiteSpace(snapshotId))
+            {
+                var snapshot = await _snapshotStore.CreateSnapshotAsync(new CreateSnapshotRequest
+                {
+                    UserId = currentUserId,
+                    SessionId = request.SessionId,
+                    DraftId = request.DraftId,
+                    DraftVersion = nextDraftVersion,
+                    SpecialtyId = draft.SpecialtyId,
+                    DoctorId = draft.DoctorId,
+                    SlotDate = slotCheck.SlotDate.Value.ToString("yyyy-MM-dd"),
+                    DoctorIds = new List<long> { draft.DoctorId.Value },
+                    SlotIds = new List<long> { draft.SlotId.Value }
+                }, cancellationToken);
+                snapshotId = snapshot.SnapshotId;
+            }
+            else
+            {
+                var snapshotValidation = await _snapshotStore.ValidateSnapshotAsync(new ValidateSnapshotRequest
+                {
+                    SnapshotId = snapshotId,
+                    CurrentUserId = currentUserId,
+                    CurrentSessionId = request.SessionId,
+                    CurrentDraftId = request.DraftId,
+                    CurrentDraftVersion = nextDraftVersion,
+                    CurrentSpecialtyId = draft.SpecialtyId,
+                    RequestedDoctorIds = new List<long> { draft.DoctorId.Value },
+                    RequestedSlotIds = new List<long> { draft.SlotId.Value },
+                    NowUtc = _dateTimeProvider.UtcNow
+                }, cancellationToken);
+                if (!snapshotValidation.IsValid)
+                {
+                    response.DialogueOutcome = "ClarificationRequired";
+                    response.Message = snapshotValidation.ErrorMessage ?? "Danh sách lựa chọn đã thay đổi. Vui lòng chọn lại rồi xác nhận.";
+                    response.MissingFields = new List<string> { "Selection" };
+                    return WithDraftVersionSync(response, nextDraftVersion);
+                }
+            }
+
+            var touch = await _snapshotStore.TouchSessionAsync(
+                request.SessionId,
+                currentUserId,
+                request.DraftId,
+                nextDraftVersion,
+                facilityId: null,
+                cancellationToken: cancellationToken);
+            if (!touch.IsAccepted)
+            {
+                return BuildSessionFailureResponse(request, touch);
+            }
+
+            var confirmation = await _confirmationStore.CreateAsync(new CreateAiBookingConfirmationRequest
+            {
+                UserId = currentUserId.Value,
+                SessionId = request.SessionId.Trim(),
+                DraftId = request.DraftId.Trim(),
+                DraftVersion = nextDraftVersion,
+                ContextSnapshotId = snapshotId,
+                SpecialtyId = draft.SpecialtyId.Value,
+                DoctorId = draft.DoctorId.Value,
+                SlotId = draft.SlotId.Value,
+                SlotDate = slotCheck.SlotDate.Value,
+                StartTime = slotCheck.StartTime.Value,
+                EndTime = slotCheck.EndTime.Value,
+                Reason = draft.Reason!
+            }, cancellationToken);
+
+            var confirmationId = confirmation.ConfirmationId;
+            draft.ConfirmationId = confirmationId;
+            draft.DraftId = request.DraftId.Trim();
+            response.ContextSnapshotId = snapshotId;
+            response.SessionId = request.SessionId.Trim();
+            response.DraftId = request.DraftId.Trim();
 
             response.DialogueOutcome = "PendingConfirmation";
             response.Message = "Thông tin lịch khám đã đầy đủ và sẵn sàng xác nhận. Bạn vui lòng bấm nút \"Xác nhận đặt lịch\" bên dưới để hoàn tất nhé:";
@@ -2867,6 +2805,21 @@ public class AiSpecialtyService : IAiSpecialtyService
         }
 
         return WithDraftVersionSync(response, nextDraftVersion);
+    }
+
+    private static AiChatResponseDto BuildSessionFailureResponse(AiChatRequestDto request, AiSessionTouchResult result)
+    {
+        return new AiChatResponseDto
+        {
+            Message = result.ErrorMessage ?? "Phiên làm việc không còn hợp lệ. Vui lòng bắt đầu lại thao tác đặt lịch.",
+            DialogueOutcome = "SessionRejected",
+            PrimaryIntent = request.Intent,
+            AssistantStatus = "Online",
+            ProviderStatus = "NotCalled",
+            SessionId = request.SessionId,
+            DraftId = null,
+            ManualSelectionRequired = true
+        };
     }
 
     private async Task<AiChatResponseDto> HandleReviewDraftIntentAsync(

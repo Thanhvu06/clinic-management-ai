@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -16,6 +17,11 @@ namespace ClinicManagement.Infrastructure.AI.Persistence;
 
 public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
 {
+    private const int MaxIdentifierLength = 128;
+    private const int MaxSnapshotListSize = 100;
+    private static readonly TimeSpan DefaultSnapshotTtl = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan MaxSnapshotTtl = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan SessionTtl = TimeSpan.FromHours(24);
     private readonly AppDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<EfAiSessionSnapshotStore> _logger;
@@ -37,20 +43,17 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
     {
         var now = _dateTimeProvider.UtcNow;
         var ttl = request.Ttl ?? TimeSpan.FromMinutes(15);
+        if (ttl <= TimeSpan.Zero || ttl > MaxSnapshotTtl)
+        {
+            ttl = DefaultSnapshotTtl;
+        }
         var expiresAt = now.Add(ttl);
 
-        var cleanSessionId = !string.IsNullOrWhiteSpace(request.SessionId) ? request.SessionId.Trim() : null;
-        var cleanDraftId = !string.IsNullOrWhiteSpace(request.DraftId) ? request.DraftId.Trim() : null;
-
-        // Fail-closed: Do not create snapshot if draft is cancelled
-        if (cleanDraftId != null && cleanSessionId != null)
+        var cleanSessionId = NormalizeIdentifier(request.SessionId);
+        var cleanDraftId = NormalizeIdentifier(request.DraftId);
+        if (request.DoctorIds?.Count > MaxSnapshotListSize || request.SlotIds?.Count > MaxSnapshotListSize)
         {
-            var isCancelled = await IsDraftCancelledInternalAsync(cleanDraftId, request.UserId, cleanSessionId, now, cancellationToken);
-            if (isCancelled)
-            {
-                _logger.LogWarning("Snapshot creation blocked: draft {DraftId} in session {SessionId} is cancelled", cleanDraftId, cleanSessionId);
-                throw new InvalidOperationException("Cannot create snapshot for cancelled draft.");
-            }
+            throw new ArgumentException("Snapshot selection lists are too large.", nameof(request));
         }
 
         var randomHex = RandomNumberGenerator.GetHexString(8);
@@ -77,15 +80,39 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
             IsRevoked = false
         };
 
-        try
+        for (var attempt = 1; attempt <= 3; attempt++)
         {
-            _dbContext.AiSelectionSnapshots.Add(snapshot);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to persist AI selection snapshot {SnapshotId}", snapshotId);
-            throw;
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            try
+            {
+                // Serializable is deliberate here: cancellation and creation must observe a
+                // single database order. The cancellation marker is read in the same
+                // transaction that inserts the snapshot, so it cannot be bypassed by a
+                // second application instance.
+                if (cleanDraftId != null && cleanSessionId != null &&
+                    await IsDraftCancelledInternalAsync(cleanDraftId, request.UserId, cleanSessionId, now, cancellationToken))
+                {
+                    _logger.LogWarning("Snapshot creation blocked: draft {DraftId} in session {SessionId} is cancelled", cleanDraftId, cleanSessionId);
+                    throw new InvalidOperationException("Cannot create snapshot for cancelled draft.");
+                }
+
+                _dbContext.AiSelectionSnapshots.Add(snapshot);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                break;
+            }
+            catch (Exception ex) when (attempt < 3 && IsUniqueOrSerializationConflict(ex))
+            {
+                try { await transaction.RollbackAsync(cancellationToken); } catch { }
+                _dbContext.ChangeTracker.Clear();
+                await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to persist AI selection snapshot {SnapshotId}", snapshotId);
+                try { await transaction.RollbackAsync(cancellationToken); } catch { }
+                throw;
+            }
         }
 
         return MapToDto(snapshot, cleanDoctorIds, cleanSlotIds);
@@ -101,6 +128,10 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
         try
         {
             var cleanSnapshotId = request.SnapshotId.Trim();
+            if (cleanSnapshotId.Length > 64)
+            {
+                return SnapshotValidationResult.Fail("INVALID_SNAPSHOT", "Mã snapshot không hợp lệ.");
+            }
             var snapshot = await _dbContext.AiSelectionSnapshots
                 .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.SnapshotId == cleanSnapshotId, cancellationToken);
@@ -125,8 +156,8 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
                 return SnapshotValidationResult.Fail("USER_MISMATCH", "Danh sách lựa chọn thuộc phiên người dùng khác. Vui lòng chọn trên phiên của bạn.");
             }
 
-            var cleanCurrentSessionId = !string.IsNullOrWhiteSpace(request.CurrentSessionId) ? request.CurrentSessionId.Trim() : null;
-            var cleanSnapshotSessionId = !string.IsNullOrWhiteSpace(snapshot.SessionId) ? snapshot.SessionId.Trim() : null;
+            var cleanCurrentSessionId = NormalizeIdentifier(request.CurrentSessionId);
+            var cleanSnapshotSessionId = NormalizeIdentifier(snapshot.SessionId);
             if (cleanSnapshotSessionId != null || cleanCurrentSessionId != null)
             {
                 if (!string.Equals(cleanSnapshotSessionId, cleanCurrentSessionId, StringComparison.Ordinal))
@@ -135,8 +166,8 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
                 }
             }
 
-            var cleanCurrentDraftId = !string.IsNullOrWhiteSpace(request.CurrentDraftId) ? request.CurrentDraftId.Trim() : null;
-            var cleanSnapshotDraftId = !string.IsNullOrWhiteSpace(snapshot.DraftId) ? snapshot.DraftId.Trim() : null;
+            var cleanCurrentDraftId = NormalizeIdentifier(request.CurrentDraftId);
+            var cleanSnapshotDraftId = NormalizeIdentifier(snapshot.DraftId);
 
             // Check if draft has been cancelled
             var effectiveSessionId = cleanCurrentSessionId ?? cleanSnapshotSessionId;
@@ -233,53 +264,77 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
         }
 
         var effectiveNow = nowUtc ?? _dateTimeProvider.UtcNow;
-        var expiresAt = effectiveNow.AddHours(1);
+        // Keep the cancellation tombstone for at least as long as a session can be
+        // replayed. Removing it after one hour could make an old draft valid again.
+        var expiresAt = effectiveNow.Add(SessionTtl);
 
-        using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
+        for (var attempt = 1; attempt <= 3; attempt++)
         {
-            // Record cancellation scope
-            var existingScope = await _dbContext.AiCancelledDraftScopes
-                .FirstOrDefaultAsync(c => c.UserId == userId && c.SessionId == cleanSessionId && c.DraftId == cleanDraftId, cancellationToken);
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            try
+            {
+                var existingScope = await _dbContext.AiCancelledDraftScopes
+                    .FirstOrDefaultAsync(c => c.UserId == userId && c.SessionId == cleanSessionId && c.DraftId == cleanDraftId, cancellationToken);
 
-            if (existingScope != null)
-            {
-                existingScope.CancelledAtUtc = effectiveNow;
-                existingScope.ExpiresAtUtc = expiresAt;
-                if (facilityId.HasValue) existingScope.FacilityId = facilityId;
-            }
-            else
-            {
-                _dbContext.AiCancelledDraftScopes.Add(new AiCancelledDraftScope
+                if (existingScope != null)
                 {
-                    UserId = userId,
-                    SessionId = cleanSessionId,
-                    DraftId = cleanDraftId,
-                    FacilityId = facilityId,
-                    CancelledAtUtc = effectiveNow,
-                    ExpiresAtUtc = expiresAt
-                });
+                    existingScope.CancelledAtUtc = effectiveNow;
+                    existingScope.ExpiresAtUtc = expiresAt;
+                    if (facilityId.HasValue) existingScope.FacilityId = facilityId;
+                }
+                else
+                {
+                    _dbContext.AiCancelledDraftScopes.Add(new AiCancelledDraftScope
+                    {
+                        UserId = userId,
+                        SessionId = cleanSessionId,
+                        DraftId = cleanDraftId,
+                        FacilityId = facilityId,
+                        CancelledAtUtc = effectiveNow,
+                        ExpiresAtUtc = expiresAt
+                    });
+                }
+
+                // Revoke the rows in the same transaction as the tombstone.
+                var matchingSnapshots = await _dbContext.AiSelectionSnapshots
+                    .Where(s => s.UserId == userId && s.SessionId == cleanSessionId && s.DraftId == cleanDraftId && !s.IsRevoked)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var s in matchingSnapshots)
+                {
+                    s.IsRevoked = true;
+                    s.RevokedAtUtc = effectiveNow;
+                }
+
+                var matchingSessions = await _dbContext.AiSessions
+                    .Where(s => s.UserId == userId && s.SessionId == cleanSessionId && s.IsActive)
+                    .ToListAsync(cancellationToken);
+                foreach (var session in matchingSessions)
+                {
+                    if (string.Equals(session.ActiveDraftId, cleanDraftId, StringComparison.Ordinal))
+                    {
+                        session.ActiveDraftId = null;
+                        session.ActiveDraftVersion = null;
+                    }
+                    session.LastActiveAtUtc = effectiveNow;
+                }
+
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return;
             }
-
-            // Immediately revoke active snapshots in this scope
-            var matchingSnapshots = await _dbContext.AiSelectionSnapshots
-                .Where(s => s.UserId == userId && s.SessionId == cleanSessionId && s.DraftId == cleanDraftId && !s.IsRevoked)
-                .ToListAsync(cancellationToken);
-
-            foreach (var s in matchingSnapshots)
+            catch (Exception ex) when (attempt < 3 && IsUniqueOrSerializationConflict(ex))
             {
-                s.IsRevoked = true;
-                s.RevokedAtUtc = effectiveNow;
+                try { await transaction.RollbackAsync(cancellationToken); } catch { }
+                _dbContext.ChangeTracker.Clear();
+                await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken);
             }
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            _logger.LogError(ex, "Failed to persist draft cancellation scope for draft {DraftId} in session {SessionId}", cleanDraftId, cleanSessionId);
-            throw;
+            catch (Exception ex)
+            {
+                try { await transaction.RollbackAsync(cancellationToken); } catch { }
+                _logger.LogError(ex, "Failed to persist draft cancellation scope for draft {DraftId} in session {SessionId}", cleanDraftId, cleanSessionId);
+                throw;
+            }
         }
     }
 
@@ -330,7 +385,36 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
 
         if (resolvedSessionId != null && resolvedDraftId != null)
         {
-            return new ResolveCancelScopeResult { HasResolved = true, SessionId = resolvedSessionId, DraftId = resolvedDraftId };
+            try
+            {
+                var activeSessionOwnsDraft = await _dbContext.AiSessions
+                    .AsNoTracking()
+                    .AnyAsync(s => s.SessionId == resolvedSessionId
+                        && s.UserId == userId
+                        && s.IsActive
+                        && s.ExpiresAtUtc > nowUtc
+                        && s.ActiveDraftId == resolvedDraftId, cancellationToken);
+
+                var activeSnapshotMatchesDraft = await _dbContext.AiSelectionSnapshots
+                    .AsNoTracking()
+                    .AnyAsync(s => s.SessionId == resolvedSessionId
+                        && s.DraftId == resolvedDraftId
+                        && s.UserId == userId
+                        && !s.IsRevoked
+                        && s.ExpiresAtUtc > nowUtc, cancellationToken);
+
+                if (activeSessionOwnsDraft || activeSnapshotMatchesDraft)
+                {
+                    return new ResolveCancelScopeResult { HasResolved = true, SessionId = resolvedSessionId, DraftId = resolvedDraftId };
+                }
+
+                return new ResolveCancelScopeResult { HasResolved = false };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Fail-closed: Error validating cancel scope {SessionId}/{DraftId}", resolvedSessionId, resolvedDraftId);
+                return new ResolveCancelScopeResult { HasResolved = false };
+            }
         }
 
         if (string.IsNullOrWhiteSpace(snapshotId))
@@ -396,18 +480,21 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
         }
     }
 
-    public async Task TouchSessionAsync(string sessionId, Guid? userId, string? draftId, int? draftVersion, long? facilityId, CancellationToken cancellationToken = default)
+    public async Task<AiSessionTouchResult> TouchSessionAsync(string sessionId, Guid? userId, string? draftId, int? draftVersion, long? facilityId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(sessionId)) return;
-        var cleanSessionId = sessionId.Trim();
+        var cleanSessionId = NormalizeIdentifier(sessionId);
+        if (cleanSessionId == null)
+        {
+            return AiSessionTouchResult.Rejected("INVALID_SESSION", "Phiên làm việc không hợp lệ.");
+        }
+        var cleanDraftId = NormalizeIdentifier(draftId);
         var now = _dateTimeProvider.UtcNow;
-        var sessionTtl = TimeSpan.FromHours(24);
-        var expiresAt = now.Add(sessionTtl);
+        var expiresAt = now.Add(SessionTtl);
 
         try
         {
             var session = await _dbContext.AiSessions
-                .FirstOrDefaultAsync(s => s.SessionId == cleanSessionId, cancellationToken);
+                .FirstOrDefaultAsync(s => s.SessionId == cleanSessionId && s.UserId == userId, cancellationToken);
 
             if (session == null)
             {
@@ -415,7 +502,7 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
                 {
                     SessionId = cleanSessionId,
                     UserId = userId,
-                    ActiveDraftId = draftId,
+                    ActiveDraftId = cleanDraftId,
                     ActiveDraftVersion = draftVersion,
                     FacilityId = facilityId,
                     CreatedAtUtc = now,
@@ -426,8 +513,28 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
             }
             else
             {
+                if (!session.IsActive || session.ExpiresAtUtc <= now)
+                {
+                    return AiSessionTouchResult.Rejected("SESSION_EXPIRED", "Phiên làm việc đã hết hạn. Vui lòng bắt đầu lại.");
+                }
+
+                if (session.UserId.HasValue && session.UserId != userId)
+                {
+                    return AiSessionTouchResult.Rejected("SESSION_OWNER_MISMATCH", "Phiên làm việc thuộc tài khoản khác.");
+                }
+
+                if (!userId.HasValue && session.UserId.HasValue)
+                {
+                    return AiSessionTouchResult.Rejected("SESSION_OWNER_MISMATCH", "Cần đăng nhập đúng tài khoản của phiên làm việc.");
+                }
+
+                if (cleanDraftId != null && await IsDraftCancelledInternalAsync(cleanDraftId, userId, cleanSessionId, now, cancellationToken))
+                {
+                    return AiSessionTouchResult.Rejected("DRAFT_CANCELLED", "Bản nháp đã bị hủy. Vui lòng bắt đầu bản nháp mới.");
+                }
+
                 if (userId.HasValue) session.UserId = userId;
-                if (!string.IsNullOrWhiteSpace(draftId)) session.ActiveDraftId = draftId.Trim();
+                if (cleanDraftId != null) session.ActiveDraftId = cleanDraftId;
                 if (draftVersion.HasValue) session.ActiveDraftVersion = draftVersion;
                 if (facilityId.HasValue) session.FacilityId = facilityId;
                 session.LastActiveAtUtc = now;
@@ -435,10 +542,12 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
             }
 
             await _dbContext.SaveChangesAsync(cancellationToken);
+            return AiSessionTouchResult.Accepted();
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Non-fatal error updating AI session {SessionId}", cleanSessionId);
+            _logger.LogWarning(ex, "Failed to update AI session {SessionId}", cleanSessionId);
+            return AiSessionTouchResult.Rejected("SESSION_STORE_ERROR", "Không thể xác thực phiên làm việc. Vui lòng thử lại.");
         }
     }
 
@@ -520,5 +629,32 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
         {
             return new List<long>();
         }
+    }
+
+    private static string? NormalizeIdentifier(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var clean = value.Trim();
+        return clean.Length <= MaxIdentifierLength ? clean : null;
+    }
+
+    private static bool IsUniqueOrSerializationConflict(Exception ex)
+    {
+        var current = ex;
+        while (current != null)
+        {
+            var name = current.GetType().FullName ?? string.Empty;
+            if (name.Contains("SqliteException", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("SqlException", StringComparison.OrdinalIgnoreCase) ||
+                current.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) ||
+                current.Message.Contains("constraint", StringComparison.OrdinalIgnoreCase) ||
+                current.Message.Contains("deadlock", StringComparison.OrdinalIgnoreCase) ||
+                current.Message.Contains("locked", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            current = current.InnerException;
+        }
+        return false;
     }
 }

@@ -18,7 +18,16 @@ public class AiAuditLogEntry
     public string? MetadataJson { get; set; }
 }
 
+public class AiAuditWriteResult
+{
+    public bool Succeeded { get; init; }
+    public string? ErrorCode { get; init; }
+
+    public static AiAuditWriteResult Success() => new() { Succeeded = true };
+    public static AiAuditWriteResult Failed(string errorCode) => new() { Succeeded = false, ErrorCode = errorCode };
+}
+
 public interface IAiAuditService
 {
-    Task LogActionAsync(AiAuditLogEntry entry, CancellationToken cancellationToken = default);
+    Task<AiAuditWriteResult> LogActionAsync(AiAuditLogEntry entry, CancellationToken cancellationToken = default);
 }

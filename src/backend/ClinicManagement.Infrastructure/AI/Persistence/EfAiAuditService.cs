@@ -1,5 +1,7 @@
 using System;
-using System.Text.RegularExpressions;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.AI.Interfaces;
@@ -26,13 +28,14 @@ public class EfAiAuditService : IAiAuditService
         _logger = logger;
     }
 
-    public async Task LogActionAsync(AiAuditLogEntry entry, CancellationToken cancellationToken = default)
+    public async Task<AiAuditWriteResult> LogActionAsync(AiAuditLogEntry entry, CancellationToken cancellationToken = default)
     {
+        AiAuditLog? log = null;
         try
         {
             var sanitizedMetadata = SanitizeAuditMetadata(entry.MetadataJson);
 
-            var log = new AiAuditLog
+            log = new AiAuditLog
             {
                 UserId = entry.UserId,
                 SessionId = !string.IsNullOrWhiteSpace(entry.SessionId) ? entry.SessionId.Trim() : null,
@@ -49,11 +52,18 @@ public class EfAiAuditService : IAiAuditService
 
             _dbContext.AiAuditLogs.Add(log);
             await _dbContext.SaveChangesAsync(cancellationToken);
+            return AiAuditWriteResult.Success();
         }
         catch (Exception ex)
         {
+            if (log != null)
+            {
+                // Do not leave a failed Added entity in the scoped DbContext. A later
+                // SaveChanges in the same request must not retry the broken audit row.
+                _dbContext.Entry(log).State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+            }
             _logger.LogError(ex, "Failed to persist AI audit action {ActionType} for user {UserId}", entry.ActionType, entry.UserId);
-            // Non-fatal: audit failure should not crash main patient flow
+            return AiAuditWriteResult.Failed("AUDIT_WRITE_FAILED");
         }
     }
 
@@ -61,16 +71,49 @@ public class EfAiAuditService : IAiAuditService
     {
         if (string.IsNullOrWhiteSpace(rawMetadata)) return null;
 
-        // Ensure no bearer tokens, passwords, medical symptoms or reason strings leaked into metadata
-        var sanitized = rawMetadata;
-        sanitized = Regex.Replace(sanitized, @"(?i)(bearer\s+[a-zA-Z0-9_\-\.]+)", "[REDACTED_TOKEN]");
-        sanitized = Regex.Replace(sanitized, @"(?i)(password|secret|apikey|api_key)\s*[:=]\s*""?[^"",}]+""?", "$1:\"[REDACTED]\"");
-
-        if (sanitized.Length > 2000)
+        try
         {
-            sanitized = sanitized[..2000];
-        }
+            using var document = JsonDocument.Parse(rawMetadata);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
 
-        return sanitized;
+            var safe = new Dictionary<string, object?>(StringComparer.Ordinal);
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (!AllowedFields.Contains(property.Name)) continue;
+                switch (property.Value.ValueKind)
+                {
+                    case JsonValueKind.String:
+                        var value = property.Value.GetString();
+                        if (value is { Length: <= 128 }) safe[property.Name] = value;
+                        break;
+                    case JsonValueKind.Number when property.Value.TryGetInt64(out var number):
+                        safe[property.Name] = number;
+                        break;
+                    case JsonValueKind.True:
+                    case JsonValueKind.False:
+                        safe[property.Name] = property.Value.GetBoolean();
+                        break;
+                }
+            }
+
+            return safe.Count == 0
+                ? null
+                : JsonSerializer.Serialize(safe, new JsonSerializerOptions { WriteIndented = false });
+        }
+        catch (JsonException)
+        {
+            // Invalid JSON is not truncated into another invalid JSON value and is
+            // never persisted as if it were a successful audit payload.
+            return null;
+        }
     }
+
+    private static readonly HashSet<string> AllowedFields = new(StringComparer.Ordinal)
+    {
+        "source", "operation", "provider", "status", "errorCode", "retryCount",
+        "appointmentId", "idempotencyKey", "confirmationState"
+    };
 }

@@ -36,8 +36,10 @@ public class AiSessionConfiguration : IEntityTypeConfiguration<AiSession>
         builder.Property(s => s.RowVersion)
             .IsRowVersion();
 
-        builder.HasIndex(s => s.SessionId)
-            .IsUnique();
+        // Session identifiers are scoped to the authenticated user. Keeping the
+        // index non-unique allows two users to legitimately use the same client
+        // generated identifier without sharing ownership or draft state.
+        builder.HasIndex(s => s.SessionId);
 
         builder.HasIndex(s => new { s.UserId, s.IsActive });
 

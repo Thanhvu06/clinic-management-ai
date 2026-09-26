@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ClinicManagement.Application.AI.Interfaces;
+using ClinicManagement.Domain.Entities;
+using ClinicManagement.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -263,5 +266,143 @@ public class AiSessionSnapshotStoreTests : IntegrationTestBase
 
         // Assert
         Assert.True(isCancelled);
+    }
+
+    [Fact]
+    public async Task ConcurrentCreateAndCancel_ProducesOneOrderedOutcome_AndNeverLeavesUsableSnapshot()
+    {
+        var userId = Guid.NewGuid();
+        var sessionId = $"sess_{Guid.NewGuid():N}";
+        var draftId = $"draft_{Guid.NewGuid():N}";
+
+        async Task<(bool Created, string? SnapshotId, Exception? Error)> CreateAsync()
+        {
+            try
+            {
+                using var scope = Factory.Services.CreateScope();
+                var store = scope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
+                var snapshot = await store.CreateSnapshotAsync(new CreateSnapshotRequest
+                {
+                    UserId = userId,
+                    SessionId = sessionId,
+                    DraftId = draftId,
+                    DraftVersion = 1,
+                    DoctorIds = new List<long> { 1 },
+                    SlotIds = new List<long> { 2 }
+                });
+                return (true, snapshot.SnapshotId, null);
+            }
+            catch (Exception ex)
+            {
+                return (false, null, ex);
+            }
+        }
+
+        async Task CancelAsync()
+        {
+            using var scope = Factory.Services.CreateScope();
+            var store = scope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
+            await store.InvalidateDraftSnapshotsForCancelAsync(draftId, sessionId, userId);
+        }
+
+        var createTask = CreateAsync();
+        var cancelTask1 = CancelAsync();
+        var cancelTask2 = CancelAsync();
+        await Task.WhenAll(createTask, cancelTask1, cancelTask2);
+        var createResult = await createTask;
+
+        if (createResult.Created)
+        {
+            using var verifyScope = Factory.Services.CreateScope();
+            var verifyStore = verifyScope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
+            var validation = await verifyStore.ValidateSnapshotAsync(new ValidateSnapshotRequest
+            {
+                SnapshotId = createResult.SnapshotId!,
+                CurrentUserId = userId,
+                CurrentSessionId = sessionId,
+                CurrentDraftId = draftId,
+                CurrentDraftVersion = 1,
+                NowUtc = DateTime.UtcNow
+            });
+
+            Assert.False(validation.IsValid);
+            Assert.Contains(validation.ErrorCode, new[] { "REVOKED", "DRAFT_CANCELLED" });
+        }
+        else
+        {
+            Assert.NotNull(createResult.Error);
+            Assert.IsType<InvalidOperationException>(createResult.Error);
+        }
+    }
+
+    [Fact]
+    public async Task PurgeExpiredRecords_RemovesExpiredRows_AndKeepsLiveRows()
+    {
+        var now = DateTime.UtcNow;
+        var expiredSessionId = $"sess_expired_{Guid.NewGuid():N}";
+        var liveSessionId = $"sess_live_{Guid.NewGuid():N}";
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.AiSessions.AddRange(
+                new AiSession
+                {
+                    SessionId = expiredSessionId,
+                    CreatedAtUtc = now.AddHours(-2),
+                    LastActiveAtUtc = now.AddHours(-2),
+                    ExpiresAtUtc = now.AddMinutes(-1),
+                    IsActive = true
+                },
+                new AiSession
+                {
+                    SessionId = liveSessionId,
+                    CreatedAtUtc = now,
+                    LastActiveAtUtc = now,
+                    ExpiresAtUtc = now.AddHours(1),
+                    IsActive = true
+                });
+            db.AiSelectionSnapshots.AddRange(
+                new AiSelectionSnapshot
+                {
+                    SnapshotId = $"snap_expired_{Guid.NewGuid():N}",
+                    SessionId = expiredSessionId,
+                    CreatedAtUtc = now.AddMinutes(-20),
+                    ExpiresAtUtc = now.AddMinutes(-1),
+                    DoctorIdsJson = "[]",
+                    SlotIdsJson = "[]"
+                },
+                new AiSelectionSnapshot
+                {
+                    SnapshotId = $"snap_live_{Guid.NewGuid():N}",
+                    SessionId = liveSessionId,
+                    CreatedAtUtc = now,
+                    ExpiresAtUtc = now.AddMinutes(10),
+                    DoctorIdsJson = "[]",
+                    SlotIdsJson = "[]"
+                });
+            db.AiCancelledDraftScopes.Add(new AiCancelledDraftScope
+            {
+                SessionId = expiredSessionId,
+                DraftId = "draft_expired",
+                CancelledAtUtc = now.AddHours(-2),
+                ExpiresAtUtc = now.AddMinutes(-1)
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
+            await store.PurgeExpiredRecordsAsync(now);
+        }
+
+        using var verifyScope = Factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.False(await verifyDb.AiSessions.AnyAsync(x => x.SessionId == expiredSessionId));
+        Assert.True(await verifyDb.AiSessions.AnyAsync(x => x.SessionId == liveSessionId));
+        Assert.False(await verifyDb.AiSelectionSnapshots.AnyAsync(x => x.SessionId == expiredSessionId));
+        Assert.True(await verifyDb.AiSelectionSnapshots.AnyAsync(x => x.SessionId == liveSessionId));
+        Assert.False(await verifyDb.AiCancelledDraftScopes.AnyAsync(x => x.SessionId == expiredSessionId));
     }
 }

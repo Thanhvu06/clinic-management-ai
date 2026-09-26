@@ -6,9 +6,11 @@ using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace ClinicManagement.IntegrationTests;
@@ -32,8 +34,15 @@ public sealed class AtomicityTestWebApplicationFactory : WebApplicationFactory<P
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.ConfigureLogging(logging =>
+        {
+            logging.ClearProviders();
+            logging.AddDebug();
+        });
         builder.ConfigureServices(services =>
         {
+            services.AddDataProtection().UseEphemeralDataProtectionProvider();
+
             // Remove existing DbContext registrations
             var descriptors = services.Where(d =>
                 d.ServiceType.Name.Contains("DbContextOptions") ||
@@ -72,7 +81,9 @@ public sealed class AtomicityTestWebApplicationFactory : WebApplicationFactory<P
             services.AddDbContext<AppDbContext>(options =>
             {
                 options.UseSqlite(connectionString)
-                       .AddInterceptors(Interceptor);
+                       .AddInterceptors(Interceptor)
+                       .ConfigureWarnings(warnings =>
+                           warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.FirstWithoutOrderByAndFilterWarning));
             });
 
             // Replace AI provider with mock

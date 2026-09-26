@@ -32,6 +32,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<AiCancelledDraftScope> AiCancelledDraftScopes { get; set; } = null!;
     public DbSet<AiSession> AiSessions { get; set; } = null!;
     public DbSet<AiAuditLog> AiAuditLogs { get; set; } = null!;
+    public DbSet<AiBookingConfirmation> AiBookingConfirmations { get; set; } = null!;
     
     // Pharmacy
     public DbSet<Medicine> Medicines { get; set; } = null!;
