@@ -335,6 +335,7 @@ export interface AiChatResponse {
     manualSelectionRequired: boolean;
     assistantStatus?: "Unchecked" | "Online" | "Degraded" | "Offline";
     providerStatus?: string;
+    providerState?: "NotCalled" | "Online" | "Degraded" | "Unavailable" | "SafetyBlocked";
     dialogueOutcome?: string;
     clarificationPrompt?: string;
     primaryIntent?: AiChatIntent | string;
@@ -367,6 +368,7 @@ export interface ChatMessage {
     bookingDraft?: AiBookingDraft;
     missingFields?: string[];
     assistantStatus?: "Unchecked" | "Online" | "Degraded" | "Offline";
+    providerState?: "NotCalled" | "Online" | "Degraded" | "Unavailable" | "SafetyBlocked";
     dialogueOutcome?: string;
     clarificationPrompt?: string;
     primaryIntent?: AiChatIntent | string;

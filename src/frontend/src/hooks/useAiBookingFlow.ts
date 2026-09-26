@@ -365,27 +365,33 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     contextSnapshotIdRef.current = data.contextSnapshotId;
                 }
 
-                if (data.providerStatus === "Healthy") {
+                if (data.providerState === "Online" || data.providerStatus === "Healthy") {
                     lastKnownGeminiStatusRef.current = "Healthy";
                 } else if (
                     data.assistantStatus === "Degraded" ||
                     data.providerStatus === "Unavailable" ||
                     data.providerStatus === "Degraded" ||
                     data.providerStatus === "FallbackToLocal" ||
-                    data.providerStatus === "Error"
+                    data.providerStatus === "Error" ||
+                    data.providerState === "Degraded" ||
+                    data.providerState === "Unavailable" ||
+                    data.providerState === "SafetyBlocked"
                 ) {
                     lastKnownGeminiStatusRef.current = "Degraded";
                 }
 
                 let effectiveStatus: "Unchecked" | "Online" | "Degraded" | "Offline";
-                if (data.providerStatus === "Healthy") {
+                if (data.providerState === "Online" || data.providerStatus === "Healthy") {
                     effectiveStatus = "Online";
                 } else if (
                     data.assistantStatus === "Degraded" ||
                     data.providerStatus === "Unavailable" ||
                     data.providerStatus === "Degraded" ||
                     data.providerStatus === "FallbackToLocal" ||
-                    data.providerStatus === "Error"
+                    data.providerStatus === "Error" ||
+                    data.providerState === "Degraded" ||
+                    data.providerState === "Unavailable" ||
+                    data.providerState === "SafetyBlocked"
                 ) {
                     effectiveStatus = "Degraded";
                 } else if (data.providerStatus === "NotCalled" || !data.providerStatus) {
@@ -412,6 +418,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     missingFields: data.missingFields || [],
                     assistantStatus: effectiveStatus,
                     primaryIntent: data.primaryIntent,
+                    providerState: data.providerState,
                     dialogueOutcome: data.dialogueOutcome,
                     clarificationPrompt: data.clarificationPrompt,
                     toolResults: data.toolResults

@@ -9,6 +9,7 @@ import {
     Receipt, TrendingUp, FlaskConical, Building2, UserPlus
 } from 'lucide-react';
 import { NotificationBell } from '../components/common/NotificationBell';
+import { RoleCopilotPanel } from '../components/RoleCopilotPanel';
 
 export const MainLayout: React.FC = () => {
     const { user, logout } = useAuth();
@@ -257,6 +258,7 @@ export const MainLayout: React.FC = () => {
                     <Outlet />
                 </div>
             </main>
+            <RoleCopilotPanel />
         </div>
     );
 };

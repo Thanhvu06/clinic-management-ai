@@ -50,6 +50,12 @@ jobs:
           --no-build --configuration Release --filter
           "FullyQualifiedName~AiPhase12ContractTests|FullyQualifiedName~AiSessionCleanupWorkerTests"
 
+      - name: Run focused Phase 2 copilot tests
+        run: >-
+          dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
+          --no-build --configuration Release --filter
+          "FullyQualifiedName~AiPhase2ConversationIntelligenceTests|FullyQualifiedName~AiPhase2RoleCopilotIntegrationTests"
+
       - name: Generate official idempotent migration script
         shell: bash
         run: |

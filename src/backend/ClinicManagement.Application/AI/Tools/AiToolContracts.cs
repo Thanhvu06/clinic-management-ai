@@ -36,7 +36,12 @@ public enum AiActorCapability
     ReadOwnAppointments,
     PrepareBooking,
     PrepareAppointmentChange,
-    ExecuteConfirmedPatientAction
+    ExecuteConfirmedPatientAction,
+    ReadReceptionWorkspace,
+    ReadDoctorWorkspace,
+    ReadDiagnosticWorkspace,
+    ReadPharmacyWorkspace,
+    ReadAdminMetrics
 }
 
 public enum AiActorRole

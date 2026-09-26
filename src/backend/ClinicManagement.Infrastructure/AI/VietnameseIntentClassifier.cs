@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using ClinicManagement.Application.AI.DTOs;
+using ClinicManagement.Application.AI.Conversation;
 using ClinicManagement.Application.AI.Interfaces;
 using Microsoft.ML;
 using Microsoft.ML.Data;
@@ -111,7 +112,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return result;
         }
 
-        var trimmed = message.Trim();
+        var trimmed = AiTextNormalizer.Normalize(message);
         var lower = trimmed.ToLowerInvariant();
         var normalized = NormalizeText(trimmed);
 
@@ -196,6 +197,16 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return result;
         }
 
+        // A question about which doctor is suitable for a symptom is not a
+        // doctor-name lookup. Resolve the symptom first and leave DoctorName
+        // empty; the service will ground recommendations against real data.
+        if (TryExtractSpecialtyRecommendation(trimmed, out var recommendationReason))
+        {
+            result.Intent = AiChatIntentTypes.SpecialtyRecommendation;
+            result.ExtractedReason = recommendationReason;
+            return result;
+        }
+
         // 6. Pricing Inquiry ("giá bao nhiêu", "chi phí khám")
         if (lower.Contains("bảng giá") || lower.Contains("chi phí khám") || lower.Contains("giá khám") ||
             lower.Contains("bao nhiêu tiền") || lower.Contains("hết bao nhiêu tiền") || lower.Contains("tiền khám") ||
@@ -269,6 +280,12 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             var rawName = doctorMatch.Groups[1].Value;
             var delimiterMatch = Regex.Match(rawName, @"^(.*?)(?:\s+(?:vào|từ|lúc|ngày|khoa|chuyên khoa|sáng|chiều|tối)\b|[,\.\?!])", RegexOptions.IgnoreCase);
             var candidateName = (delimiterMatch.Success ? delimiterMatch.Groups[1].Value : rawName).Trim();
+
+            if (Regex.IsMatch(candidateName, @"\b(?:nào|ai|người nào|vị nào|bác sĩ gì|ở đâu)\b", RegexOptions.IgnoreCase) ||
+                Regex.IsMatch(lower, @"(?:có|nên chọn)\s+bác sĩ\s+nào", RegexOptions.IgnoreCase))
+            {
+                candidateName = string.Empty;
+            }
 
             if (!string.IsNullOrWhiteSpace(candidateName) && candidateName.Length >= 2)
             {
@@ -566,7 +583,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
     public static string SanitizeClinicalReason(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-        var trimmed = text.Trim();
+        var trimmed = AiTextNormalizer.NormalizeClinicalReason(text);
 
         // Strip negated symptom clause such as "tôi không sốt, chỉ đau đầu" -> "Đau đầu"
         var negationMatch = Regex.Match(
@@ -582,7 +599,39 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             }
         }
 
-        return trimmed;
+        return AiTextNormalizer.NormalizeClinicalReason(trimmed);
+    }
+
+    public static bool TryExtractSpecialtyRecommendation(string? text, out string reason)
+    {
+        reason = string.Empty;
+        var normalized = AiTextNormalizer.Normalize(text);
+        if (normalized.Length == 0) return false;
+
+        var lower = normalized.ToLowerInvariant();
+        var recommendationQuestion = Regex.IsMatch(
+            lower,
+            @"(?:bác\s+sĩ\s+nào|nên\s+chọn\s+bác\s+sĩ|khám\s+ai|chuyên\s+khoa\s+nào|khoa\s+nào)",
+            RegexOptions.IgnoreCase);
+        if (!recommendationQuestion)
+            return false;
+
+        var doctorQuestion = Regex.Match(
+            normalized,
+            @"(?:có\s+)?bác\s+sĩ\s+nào\s+(?:khám|chữa|điều\s+trị)\s+(?:bệnh\s+)?(?<reason>.+?)(?:\s+không)?$",
+            RegexOptions.IgnoreCase);
+        var extracted = string.Empty;
+        if (doctorQuestion.Success)
+        {
+            extracted = doctorQuestion.Groups["reason"].Value;
+        }
+        else if (ContainsClinicalEvidence(lower, out var symptom))
+        {
+            extracted = symptom;
+        }
+
+        reason = AiTextNormalizer.NormalizeClinicalReason(extracted);
+        return !string.IsNullOrWhiteSpace(reason) && IsPlausibleClinicalReason(reason);
     }
 
     public static bool ContainsClinicalEvidence(string lower, out string extractedSymptom)
@@ -640,6 +689,10 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return sanitizedExisting;
         }
 
+        // Only the first character of the combined clinical reason is
+        // sentence-cased; appended clauses keep their natural casing.
+        if (sanitizedNew.Length > 0)
+            sanitizedNew = char.ToLowerInvariant(sanitizedNew[0]) + sanitizedNew[1..];
         return $"{sanitizedExisting}, {sanitizedNew}";
     }
 
@@ -732,7 +785,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
     private static string NormalizeText(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-        var normalized = text.Trim().Normalize(NormalizationForm.FormD);
+        var normalized = AiTextNormalizer.Normalize(text).Normalize(NormalizationForm.FormD);
         var sb = new StringBuilder(normalized.Length);
         foreach (var c in normalized)
         {
