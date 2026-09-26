@@ -294,7 +294,7 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
             if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.SqlServer")
             {
                 // 1. Backfill FullName, PhoneNumber, Email from AspNetUsers for existing patients that have UserId
-                migrationBuilder.Sql(@"
+                ExecuteSqlAfterDdl(migrationBuilder, @"
                     UPDATE p
                     SET p.FullName = ISNULL(NULLIF(u.FullName, ''), N'Bệnh nhân'),
                         p.PhoneNumber = COALESCE(p.PhoneNumber, u.PhoneNumber),
@@ -305,14 +305,14 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                 ");
 
                 // Fallback for any patients without user or where FullName is still null
-                migrationBuilder.Sql(@"
+                ExecuteSqlAfterDdl(migrationBuilder, @"
                     UPDATE Patients
                     SET FullName = N'Bệnh nhân ' + CAST(Id AS NVARCHAR(20))
                     WHERE FullName IS NULL OR FullName = '';
                 ");
 
                 // 2. Deterministic sequential MRN backfill by Patient.Id (BN-{CurrentYear}-{Index:D6})
-                migrationBuilder.Sql(@"
+                ExecuteSqlAfterDdl(migrationBuilder, @"
                     ;WITH NumberedPatients AS (
                         SELECT Id, ROW_NUMBER() OVER (ORDER BY Id) AS RowNum
                         FROM Patients
@@ -325,7 +325,7 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                 ");
 
                 // 3. Seed or update MrnSequences table with the highest sequence number for the current year
-                migrationBuilder.Sql(@"
+                ExecuteSqlAfterDdl(migrationBuilder, @"
                     DECLARE @CurrentYear INT = YEAR(GETUTCDATE());
                     DECLARE @MaxSeq BIGINT = (
                         SELECT ISNULL(MAX(CAST(RIGHT(MedicalRecordNumber, 6) AS BIGINT)), 0)
@@ -588,6 +588,11 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                 table: "Patients",
                 column: "UserId",
                 unique: true);
+        }
+
+        private static void ExecuteSqlAfterDdl(MigrationBuilder migrationBuilder, string sql)
+        {
+            migrationBuilder.Sql($"EXEC(N'{sql.Replace("'", "''")}');");
         }
     }
 }

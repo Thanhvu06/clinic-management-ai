@@ -1956,15 +1956,15 @@ IF NOT EXISTS (
     WHERE [MigrationId] = N'20260913045133_AddHospitalOrganizationCoreAndMpi'
 )
 BEGIN
-
+    EXEC(N'
                         UPDATE p
-                        SET p.FullName = ISNULL(NULLIF(u.FullName, ''), N'Bệnh nhân'),
+                        SET p.FullName = ISNULL(NULLIF(u.FullName, ''''), N''Bệnh nhân''),
                             p.PhoneNumber = COALESCE(p.PhoneNumber, u.PhoneNumber),
                             p.Email = COALESCE(p.Email, u.Email)
                         FROM Patients p
                         INNER JOIN AspNetUsers u ON p.UserId = u.Id
-                        WHERE p.FullName IS NULL OR p.FullName = '';
-                    
+                        WHERE p.FullName IS NULL OR p.FullName = '''';
+                    ');
 END;
 
 IF NOT EXISTS (
@@ -1972,11 +1972,11 @@ IF NOT EXISTS (
     WHERE [MigrationId] = N'20260913045133_AddHospitalOrganizationCoreAndMpi'
 )
 BEGIN
-
+    EXEC(N'
                         UPDATE Patients
-                        SET FullName = N'Bệnh nhân ' + CAST(Id AS NVARCHAR(20))
-                        WHERE FullName IS NULL OR FullName = '';
-                    
+                        SET FullName = N''Bệnh nhân '' + CAST(Id AS NVARCHAR(20))
+                        WHERE FullName IS NULL OR FullName = '''';
+                    ');
 END;
 
 IF NOT EXISTS (
@@ -1984,17 +1984,17 @@ IF NOT EXISTS (
     WHERE [MigrationId] = N'20260913045133_AddHospitalOrganizationCoreAndMpi'
 )
 BEGIN
-
+    EXEC(N'
                         ;WITH NumberedPatients AS (
                             SELECT Id, ROW_NUMBER() OVER (ORDER BY Id) AS RowNum
                             FROM Patients
-                            WHERE MedicalRecordNumber IS NULL OR MedicalRecordNumber = ''
+                            WHERE MedicalRecordNumber IS NULL OR MedicalRecordNumber = ''''
                         )
                         UPDATE p
-                        SET p.MedicalRecordNumber = 'BN-' + CAST(YEAR(GETUTCDATE()) AS NVARCHAR(4)) + '-' + RIGHT('000000' + CAST(np.RowNum AS NVARCHAR(10)), 6)
+                        SET p.MedicalRecordNumber = ''BN-'' + CAST(YEAR(GETUTCDATE()) AS NVARCHAR(4)) + ''-'' + RIGHT(''000000'' + CAST(np.RowNum AS NVARCHAR(10)), 6)
                         FROM Patients p
                         INNER JOIN NumberedPatients np ON p.Id = np.Id;
-                    
+                    ');
 END;
 
 IF NOT EXISTS (
@@ -2002,12 +2002,12 @@ IF NOT EXISTS (
     WHERE [MigrationId] = N'20260913045133_AddHospitalOrganizationCoreAndMpi'
 )
 BEGIN
-
+    EXEC(N'
                         DECLARE @CurrentYear INT = YEAR(GETUTCDATE());
                         DECLARE @MaxSeq BIGINT = (
                             SELECT ISNULL(MAX(CAST(RIGHT(MedicalRecordNumber, 6) AS BIGINT)), 0)
                             FROM Patients
-                            WHERE MedicalRecordNumber LIKE 'BN-' + CAST(@CurrentYear AS NVARCHAR(4)) + '-%'
+                            WHERE MedicalRecordNumber LIKE ''BN-'' + CAST(@CurrentYear AS NVARCHAR(4)) + ''-%''
                         );
 
                         IF EXISTS (SELECT 1 FROM MrnSequences WHERE [Year] = @CurrentYear)
@@ -2021,7 +2021,7 @@ BEGIN
                             INSERT INTO MrnSequences ([Year], LastSequenceNumber)
                             VALUES (@CurrentYear, @MaxSeq);
                         END
-                    
+                    ');
 END;
 
 IF NOT EXISTS (
@@ -3476,15 +3476,15 @@ IF NOT EXISTS (
     WHERE [MigrationId] = N'20260926114519_HardenAiPendingToolActionExecution'
 )
 BEGIN
-
+    EXEC(N'
     UPDATE [AiPendingToolActions]
     SET [State] = CASE
-        WHEN [ExecutedAtUtc] IS NOT NULL THEN 'Completed'
-        WHEN [CancelledAtUtc] IS NOT NULL THEN 'Cancelled'
-        WHEN [ExpiresAtUtc] <= SYSUTCDATETIME() THEN 'Expired'
-        ELSE 'PendingConfirmation'
+        WHEN [ExecutedAtUtc] IS NOT NULL THEN ''Completed''
+        WHEN [CancelledAtUtc] IS NOT NULL THEN ''Cancelled''
+        WHEN [ExpiresAtUtc] <= SYSUTCDATETIME() THEN ''Expired''
+        ELSE ''PendingConfirmation''
     END
-    WHERE [State] IS NULL;
+    WHERE [State] IS NULL;');
 END;
 
 IF NOT EXISTS (

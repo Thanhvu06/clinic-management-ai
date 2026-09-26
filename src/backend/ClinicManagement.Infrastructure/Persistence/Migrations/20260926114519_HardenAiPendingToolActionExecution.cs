@@ -57,7 +57,7 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
             // Backfill legacy Phase 1.1 rows before making State mandatory.
             // Executed/cancelled rows remain terminal tombstones; only genuinely
             // active rows participate in the new filtered unique index.
-            migrationBuilder.Sql(@"
+            ExecuteSqlAfterDdl(migrationBuilder, @"
 UPDATE [AiPendingToolActions]
 SET [State] = CASE
     WHEN [ExecutedAtUtc] IS NOT NULL THEN 'Completed'
@@ -138,6 +138,17 @@ WHERE [State] IS NULL;");
                 unique: true,
                 filter: "[ExecutedAtUtc] IS NULL AND [CancelledAtUtc] IS NULL");
 #pragma warning restore CS0162
+        }
+
+        private static void ExecuteSqlAfterDdl(MigrationBuilder migrationBuilder, string sql)
+        {
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.SqlServer")
+            {
+                migrationBuilder.Sql($"EXEC(N'{sql.Replace("'", "''")}');");
+                return;
+            }
+
+            migrationBuilder.Sql(sql);
         }
     }
 }
