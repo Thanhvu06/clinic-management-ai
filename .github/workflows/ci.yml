@@ -82,39 +82,16 @@ jobs:
           test "$database_state" = "ONLINE"
 
       - name: Apply official migration script to SQL Server
-        id: apply_migration
-        continue-on-error: true
         shell: bash
         run: |
           docker cp ./phase12-ef-idempotent.sql "$SQLSERVER_CONTAINER:/tmp/phase12-ef-idempotent.sql"
-          set +e
-          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
-            -d ClinicManagement_CiMigration -b -i /tmp/phase12-ef-idempotent.sql > ./migration-apply.log 2>&1
-          status=$?
-          cat ./migration-apply.log
-          if [[ "$status" -ne 0 ]]; then
-            diagnostic="$(tr '\r\n' ' ' < ./migration-apply.log | sed 's/%/%25/g' | head -c 6000)"
-            echo "::error title=SQL Server migration apply failed::$diagnostic"
-          fi
-          exit "$status"
-
-      - name: Upload SQL Server migration diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: sqlserver-migration-diagnostics
-          path: migration-apply.log
-          if-no-files-found: error
-
-      - name: Stop after migration apply diagnostics
-        if: always()
-        shell: bash
-        run: test "${{ steps.apply_migration.outcome }}" = "success"
+          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -I -S localhost,1433 -U sa -P 'Your_password123!' -C \
+            -d ClinicManagement_CiMigration -b -i /tmp/phase12-ef-idempotent.sql
 
       - name: Reapply official migration script for idempotence
         shell: bash
         run: |
-          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
+          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -I -S localhost,1433 -U sa -P 'Your_password123!' -C \
             -d ClinicManagement_CiMigration -b -i /tmp/phase12-ef-idempotent.sql
 
       - name: Verify SQL Server migration schema and history
