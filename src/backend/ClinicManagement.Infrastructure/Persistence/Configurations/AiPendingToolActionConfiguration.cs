@@ -22,5 +22,8 @@ public sealed class AiPendingToolActionConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.RowVersion).IsRowVersion();
         builder.HasIndex(x => new { x.UserId, x.ExpiresAtUtc });
         builder.HasIndex(x => new { x.UserId, x.ResourceType, x.ResourceId, x.ToolName });
+        builder.HasIndex(x => new { x.UserId, x.ResourceType, x.ResourceId })
+            .IsUnique()
+            .HasFilter("[ExecutedAtUtc] IS NULL AND [CancelledAtUtc] IS NULL");
     }
 }

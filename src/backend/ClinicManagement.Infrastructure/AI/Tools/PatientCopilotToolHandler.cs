@@ -229,7 +229,7 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
             }
         }
         var active = await _db.AiPendingToolActions.FirstOrDefaultAsync(x =>
-            x.UserId == context.ActorId.Value && x.ToolName == $"patient.prepare_{operation}_appointment" &&
+            x.UserId == context.ActorId.Value &&
             x.ResourceId == appointment.Id.ToString() && x.ExpiresAtUtc > now && x.ExecutedAtUtc == null && x.CancelledAtUtc == null, cancellationToken);
         if (active != null)
         {

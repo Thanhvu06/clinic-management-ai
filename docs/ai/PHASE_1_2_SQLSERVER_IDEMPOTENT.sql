@@ -3393,3 +3393,24 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260926111032_EnforceSingleActiveAiToolAction'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_AiPendingToolActions_UserId_ResourceType_ResourceId] ON [AiPendingToolActions] ([UserId], [ResourceType], [ResourceId]) WHERE [ExecutedAtUtc] IS NULL AND [CancelledAtUtc] IS NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20260926111032_EnforceSingleActiveAiToolAction'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20260926111032_EnforceSingleActiveAiToolAction', N'10.0.11');
+END;
+
+COMMIT;
+GO
+
