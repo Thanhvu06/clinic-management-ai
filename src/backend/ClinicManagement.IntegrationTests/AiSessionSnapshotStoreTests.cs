@@ -405,4 +405,70 @@ public class AiSessionSnapshotStoreTests : IntegrationTestBase
         Assert.True(await verifyDb.AiSelectionSnapshots.AnyAsync(x => x.SessionId == liveSessionId));
         Assert.False(await verifyDb.AiCancelledDraftScopes.AnyAsync(x => x.SessionId == expiredSessionId));
     }
+
+    [Fact]
+    public async Task TouchSession_ConcurrentRequests_CreateOneRowPerScope_AndAllowDifferentUsers()
+    {
+        var sessionId = $"sess_scope_{Guid.NewGuid():N}";
+        var userA = Guid.NewGuid();
+        var userB = Guid.NewGuid();
+
+        async Task<AiSessionTouchResult> TouchAsync(Guid? userId)
+        {
+            using var scope = Factory.Services.CreateScope();
+            var store = scope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
+            return await store.TouchSessionAsync(sessionId, userId, $"draft_{userId:N}", 1, null);
+        }
+
+        var sameScope = await Task.WhenAll(TouchAsync(userA), TouchAsync(userA));
+        Assert.All(sameScope, result => Assert.True(result.IsAccepted));
+
+        var anonymousScope = await Task.WhenAll(TouchAsync(null), TouchAsync(null));
+        Assert.All(anonymousScope, result => Assert.True(result.IsAccepted));
+
+        var differentUser = await TouchAsync(userB);
+        Assert.True(differentUser.IsAccepted);
+
+        using var verifyScope = Factory.Services.CreateScope();
+        var db = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(1, await db.AiSessions.CountAsync(x => x.SessionId == sessionId && x.UserId == userA));
+        Assert.Equal(1, await db.AiSessions.CountAsync(x => x.SessionId == sessionId && x.UserId == userB));
+        Assert.Equal(1, await db.AiSessions.CountAsync(x => x.SessionId == sessionId && x.UserId == null));
+    }
+
+    [Fact]
+    public async Task CancelledDraft_RemainsBlockedAfterSessionCleanup()
+    {
+        var now = DateTime.UtcNow;
+        var userId = Guid.NewGuid();
+        var sessionId = $"sess_replay_{Guid.NewGuid():N}";
+        var draftId = $"draft_replay_{Guid.NewGuid():N}";
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
+            await store.TouchSessionAsync(sessionId, userId, draftId, 1, null);
+            await store.InvalidateDraftSnapshotsForCancelAsync(draftId, sessionId, userId, nowUtc: now);
+        }
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var session = await db.AiSessions.SingleAsync(x => x.SessionId == sessionId && x.UserId == userId);
+            session.ExpiresAtUtc = now.AddHours(-1);
+            await db.SaveChangesAsync();
+        }
+
+        using (var cleanupScope = Factory.Services.CreateScope())
+        {
+            var store = cleanupScope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
+            await store.PurgeExpiredRecordsAsync(now);
+        }
+
+        using var replayScope = Factory.Services.CreateScope();
+        var replayStore = replayScope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
+        var replay = await replayStore.TouchSessionAsync(sessionId, userId, draftId, 1, null);
+        Assert.False(replay.IsAccepted);
+        Assert.Equal("DRAFT_CANCELLED", replay.ErrorCode);
+    }
 }

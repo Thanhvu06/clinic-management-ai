@@ -591,10 +591,14 @@ export const BookAppointment: React.FC = () => {
                             const matchesVersion = (requestDraftVersion !== undefined && persisted.draftVersion !== undefined)
                                 ? persisted.draftVersion === requestDraftVersion
                                 : true;
-                            const matchesConfirmation = (activeDraft?.confirmationId && persisted.confirmationId)
-                                ? persisted.confirmationId === activeDraft.confirmationId
-                                : true;
-                            if (matchesDraft && matchesVersion && matchesConfirmation) {
+                            const matchesConfirmation = Boolean(activeDraft?.confirmationId) && persisted.confirmationId === activeDraft?.confirmationId;
+                            const matchesSession = activeDraft?.sessionId
+                                ? persisted.sessionId === activeDraft.sessionId
+                                : !persisted.sessionId;
+                            const matchesSnapshot = activeDraft?.contextSnapshotId
+                                ? persisted.contextSnapshotId === activeDraft.contextSnapshotId
+                                : !persisted.contextSnapshotId;
+                            if (matchesDraft && matchesVersion && matchesConfirmation && matchesSession && matchesSnapshot) {
                                 idempotencyKey = persisted.key;
                             }
                         } else {
@@ -621,6 +625,8 @@ export const BookAppointment: React.FC = () => {
                 draftId: requestDraftId,
                 draftVersion: requestDraftVersion,
                 confirmationId: activeDraft?.confirmationId,
+                sessionId: activeDraft?.sessionId,
+                contextSnapshotId: activeDraft?.contextSnapshotId,
                 payloadFingerprint,
                 key: idempotencyKey,
                 status: "in_flight",
@@ -628,6 +634,20 @@ export const BookAppointment: React.FC = () => {
             };
             lastConfirmationAttemptRef.current = attemptRecord;
             writePersistedBookingAttempt(attemptRecord);
+
+            const appointmentPayload = {
+                doctorId,
+                specialtyId,
+                appointmentSlotId: slotId,
+                reason: normalizedReason,
+                ...(activeDraft?.confirmationId ? {
+                    confirmationId: activeDraft.confirmationId,
+                    contextSnapshotId: activeDraft.contextSnapshotId,
+                    sessionId: activeDraft.sessionId,
+                    draftId: activeDraft.draftId,
+                    draftVersion: activeDraft.version
+                } : {})
+            };
 
             const res = revisitRequestId
                 ? await axiosClient.post<unknown, ApiResponse<AppointmentResponsePayload>>(
@@ -644,12 +664,7 @@ export const BookAppointment: React.FC = () => {
                 )
                 : await axiosClient.post<unknown, ApiResponse<AppointmentResponsePayload>>(
                     "/appointments",
-                    {
-                        doctorId,
-                        specialtyId,
-                        appointmentSlotId: slotId,
-                        reason: normalizedReason
-                    },
+                    appointmentPayload,
                     {
                         headers: {
                             "Idempotency-Key": idempotencyKey

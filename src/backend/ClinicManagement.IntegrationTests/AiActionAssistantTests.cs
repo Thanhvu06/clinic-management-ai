@@ -3492,8 +3492,8 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.True(await AiSnapshotTestHelper.IsCancelledAsync(Factory.Services, "draft_ttl_b5", Patient1Id, "sess_ttl_b5", t0.AddMinutes(30)));
         Assert.False(await AiSnapshotTestHelper.IsCancelledAsync(Factory.Services, "draft_ttl_b5", Patient2Id, "sess_ttl_b5", t0.AddMinutes(30)));
 
-        // Advance clock past 1-hour TTL -> cancelled entry is purged
-        var afterTtl = t0.AddHours(25);
+        // Advance clock past the seven-day cancellation retention window.
+        var afterTtl = t0.AddDays(8);
         Assert.False(await AiSnapshotTestHelper.IsCancelledAsync(Factory.Services, "draft_ttl_b5", Patient1Id, "sess_ttl_b5", afterTtl));
 
         // Even after cancel TTL expires, the old snapshot snapTtl CANNOT come back to life (it was evicted from store on cancel)

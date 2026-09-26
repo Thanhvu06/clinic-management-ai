@@ -1944,6 +1944,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
                         urgency: 'ROUTINE',
                         sessionId: 'sess_a1',
                         draftId: 'draft_a1',
+                        contextSnapshotId: 'snap_a1',
                         bookingDraft: {
                             draftId: 'draft_a1',
                             specialtyId: 1,
@@ -1970,6 +1971,9 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
                                 draftVersion: 1,
                                 payload: {
                                     confirmationId: 'conf_a1_v1',
+                                    contextSnapshotId: 'snap_a1',
+                                    sessionId: 'sess_a1',
+                                    draftId: 'draft_a1',
                                     specialtyId: 1,
                                     specialtyName: 'Tim mạch',
                                     doctorId: 101,
@@ -2035,6 +2039,13 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         });
         const k1 = capturedKeys[0];
         expect(k1.length).toBeGreaterThan(5);
+        expect(capturedPayloads[0]).toMatchObject({
+            confirmationId: 'conf_a1_v1',
+            contextSnapshotId: 'snap_a1',
+            sessionId: 'sess_a1',
+            draftId: 'draft_a1',
+            draftVersion: 1
+        });
 
         // Wait for timeout error notice to render so attempt status is updated to "uncertain"
         await waitFor(() => {

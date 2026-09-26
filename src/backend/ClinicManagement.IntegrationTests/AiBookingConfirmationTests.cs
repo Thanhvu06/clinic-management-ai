@@ -9,7 +9,9 @@ using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.Appointments.DTOs;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Moq;
 using Xunit;
 
 namespace ClinicManagement.IntegrationTests;
@@ -95,6 +97,187 @@ public class AiBookingConfirmationTests : IntegrationTestBase
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.Equal(1, db.Appointments.Count(a => a.AppointmentSlotId == fixture.SlotId));
+    }
+
+    [Fact]
+    public async Task OrdinaryChatTurn_PersistsConfirmationAction_AndAppointmentIsVisibleAcrossActors()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult
+            {
+                Reply = "Tôi đã đối chiếu đủ thông tin lịch khám.",
+                PrimaryIntent = AiChatIntentTypes.ProvideReason,
+                ExtractedReason = "Đau đầu kéo dài nhiều ngày cần được bác sĩ kiểm tra",
+                Urgency = "ROUTINE",
+                IsClear = true
+            });
+
+        var date = GetFutureWorkingDate(140);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(13, 0), new TimeOnly(13, 30));
+        var sessionId = $"sess_ordinary_{Guid.NewGuid():N}";
+        var draftId = $"draft_ordinary_{Guid.NewGuid():N}";
+        var reason = "Đau đầu kéo dài nhiều ngày cần được bác sĩ kiểm tra";
+
+        var chatResponse = await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tôi muốn đặt lịch theo thông tin đã chọn",
+            SessionId = sessionId,
+            DraftId = draftId,
+            DraftVersion = 1,
+            PendingSpecialtyId = SpecialtyEntityId,
+            PendingDoctorId = DoctorEntityId,
+            PendingSlotId = slot.Id,
+            PendingSlotDate = date.ToString("yyyy-MM-dd"),
+            Reason = reason
+        });
+
+        Assert.Equal(HttpStatusCode.OK, chatResponse.StatusCode);
+        var chatBody = await chatResponse.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(chatBody?.Data);
+        Assert.Equal("PendingConfirmation", chatBody!.Data!.DialogueOutcome);
+        var action = chatBody.Data.Actions.Single(x => x.Type == AiActionTypes.ConfirmBooking);
+        Assert.False(string.IsNullOrWhiteSpace(action.Payload?.ConfirmationId));
+        Assert.Equal(sessionId, action.Payload?.SessionId);
+        Assert.Equal(draftId, action.Payload?.DraftId);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.True(await db.AiBookingConfirmations.AnyAsync(x => x.ConfirmationId == action.Payload!.ConfirmationId));
+        }
+
+        var idempotencyKey = $"ai-ordinary-{Guid.NewGuid():N}";
+        var createPayload = new CreateAppointmentRequest
+        {
+            DoctorId = action.Payload!.DoctorId!.Value,
+            SpecialtyId = action.Payload.SpecialtyId!.Value,
+            AppointmentSlotId = action.Payload.SlotId!.Value,
+            Reason = action.Payload.Reason!,
+            ConfirmationId = action.Payload.ConfirmationId,
+            ContextSnapshotId = action.Payload.ContextSnapshotId,
+            SessionId = action.Payload.SessionId,
+            DraftId = action.Payload.DraftId,
+            DraftVersion = action.Payload.DraftVersion,
+            IdempotencyKey = idempotencyKey
+        };
+        var first = await Client.PostAsJsonAsync("/api/v1/appointments", createPayload);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        var firstBody = await first.Content.ReadFromJsonAsync<ApiResponse<AppointmentDto>>();
+        Assert.NotNull(firstBody?.Data);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.Appointments.CountAsync(x => x.Id == firstBody!.Data!.Id));
+        }
+
+        var patientView = await Client.GetStringAsync("/api/v1/appointments/my");
+        Assert.Contains(firstBody!.Data!.AppointmentCode, patientView, StringComparison.Ordinal);
+
+        var receptionClient = await CreateAuthenticatedClientAsync("rec@test.com");
+        var receptionView = await receptionClient.GetAsync($"/api/v1/reception/appointments/{firstBody.Data.Id}");
+        Assert.Equal(HttpStatusCode.OK, receptionView.StatusCode);
+        var receptionJson = await receptionView.Content.ReadAsStringAsync();
+        Assert.Contains(firstBody.Data.AppointmentCode, receptionJson, StringComparison.Ordinal);
+
+        var retry = await Client.PostAsJsonAsync("/api/v1/appointments", createPayload);
+        Assert.Equal(HttpStatusCode.Created, retry.StatusCode);
+        var retryBody = await retry.Content.ReadFromJsonAsync<ApiResponse<AppointmentDto>>();
+        Assert.Equal(firstBody.Data.Id, retryBody?.Data?.Id);
+    }
+
+    [Fact]
+    public async Task ConcurrentConfirmationCreation_LeavesOnePendingAndOnlyWinnerCanBook()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var fixture = await PrepareConfirmationAsync("confirm-active-race");
+        var request = new CreateAiBookingConfirmationRequest
+        {
+            UserId = Patient1Id,
+            SessionId = fixture.SessionId,
+            DraftId = fixture.DraftId,
+            DraftVersion = 1,
+            ContextSnapshotId = fixture.SnapshotId,
+            SpecialtyId = SpecialtyEntityId,
+            DoctorId = DoctorEntityId,
+            SlotId = fixture.SlotId,
+            SlotDate = fixture.SlotDate,
+            StartTime = fixture.StartTime,
+            EndTime = fixture.EndTime,
+            Reason = fixture.Reason
+        };
+
+        async Task<AiBookingConfirmationDto> CreateInIndependentContextAsync()
+        {
+            using var scope = Factory.Services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<IAiBookingConfirmationStore>().CreateAsync(request);
+        }
+
+        var created = await Task.WhenAll(CreateInIndependentContextAsync(), CreateInIndependentContextAsync());
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var pending = await db.AiBookingConfirmations
+                .Where(x => x.UserId == Patient1Id && x.SessionId == fixture.SessionId && x.DraftId == fixture.DraftId && !x.UsedAtUtc.HasValue && !x.RevokedAtUtc.HasValue)
+                .ToListAsync();
+            Assert.Single(pending);
+            Assert.Contains(pending[0].ConfirmationId, created.Select(x => x.ConfirmationId));
+            Assert.Equal(1, await db.AiBookingConfirmations.CountAsync(x => x.ConfirmationId == fixture.ConfirmationId && x.RevokedAtUtc.HasValue));
+        }
+
+        AiBookingConfirmationDto winner;
+        // Resolve the winner from a fresh context rather than relying on task order.
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            winner = created.Single(x => db.AiBookingConfirmations.Any(y => y.ConfirmationId == x.ConfirmationId && !y.RevokedAtUtc.HasValue && !y.UsedAtUtc.HasValue));
+        }
+
+        var key = $"ai-active-race-{Guid.NewGuid():N}";
+        var booked = await Client.PostAsJsonAsync("/api/v1/appointments", BuildRequest(fixture with { ConfirmationId = winner.ConfirmationId }, key));
+        Assert.Equal(HttpStatusCode.Created, booked.StatusCode);
+        var bookedBody = await booked.Content.ReadFromJsonAsync<ApiResponse<AppointmentDto>>();
+        Assert.NotNull(bookedBody?.Data);
+
+        using var finalScope = Factory.Services.CreateScope();
+        var finalDb = finalScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(1, await finalDb.Appointments.CountAsync(x => x.AppointmentSlotId == fixture.SlotId));
+        var oldIds = created.Select(x => x.ConfirmationId).Where(x => x != winner.ConfirmationId).ToList();
+        foreach (var oldId in oldIds)
+        {
+            Assert.True(await finalDb.AiBookingConfirmations.AnyAsync(x => x.ConfirmationId == oldId && x.RevokedAtUtc.HasValue));
+        }
+    }
+
+    [Fact]
+    public async Task ConfirmationCleanup_UsesRetentionForExpiredRevokedAndUsedRows()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var expired = await PrepareConfirmationAsync("confirm-cleanup-expired", TimeSpan.FromMinutes(-1));
+        var used = await PrepareConfirmationAsync("confirm-cleanup-used");
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IAiBookingConfirmationStore>();
+            await store.MarkUsedAsync(used.ConfirmationId, 9001, "cleanup-key");
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.SaveChangesAsync();
+            await store.PurgeExpiredAsync(DateTime.UtcNow.AddHours(23));
+            Assert.True(await db.AiBookingConfirmations.AnyAsync(x => x.ConfirmationId == used.ConfirmationId));
+            await store.PurgeExpiredAsync(DateTime.UtcNow.AddHours(26));
+        }
+
+        using var verifyScope = Factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.False(await verifyDb.AiBookingConfirmations.AnyAsync(x => x.ConfirmationId == expired.ConfirmationId));
+        Assert.False(await verifyDb.AiBookingConfirmations.AnyAsync(x => x.ConfirmationId == used.ConfirmationId));
     }
 
     [Fact]

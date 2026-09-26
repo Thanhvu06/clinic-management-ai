@@ -10,11 +10,13 @@ using ClinicManagement.Domain.Entities;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Data;
 
 namespace ClinicManagement.Infrastructure.AI.Persistence;
 
 public sealed class EfAiBookingConfirmationStore : IAiBookingConfirmationStore
 {
+    private static readonly TimeSpan RetentionAfterTerminalState = TimeSpan.FromHours(24);
     private readonly AppDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<EfAiBookingConfirmationStore> _logger;
@@ -33,35 +35,61 @@ public sealed class EfAiBookingConfirmationStore : IAiBookingConfirmationStore
         CreateAiBookingConfirmationRequest request,
         CancellationToken cancellationToken = default)
     {
+        var cleanSessionId = Normalize(request.SessionId) ?? throw new ArgumentException("SessionId is required.", nameof(request));
+        var cleanDraftId = Normalize(request.DraftId) ?? throw new ArgumentException("DraftId is required.", nameof(request));
         var now = _dateTimeProvider.UtcNow;
-        var confirmation = new AiBookingConfirmation
-        {
-            ConfirmationId = $"conf_{Guid.NewGuid():N}",
-            UserId = request.UserId,
-            SessionId = request.SessionId.Trim(),
-            DraftId = request.DraftId.Trim(),
-            DraftVersion = request.DraftVersion,
-            ContextSnapshotId = string.IsNullOrWhiteSpace(request.ContextSnapshotId) ? null : request.ContextSnapshotId.Trim(),
-            SpecialtyId = request.SpecialtyId,
-            DoctorId = request.DoctorId,
-            SlotId = request.SlotId,
-            SlotDate = request.SlotDate,
-            StartTime = request.StartTime,
-            EndTime = request.EndTime,
-            ReasonHash = AiBookingConfirmationHasher.Compute(request.Reason),
-            CreatedAtUtc = now,
-            ExpiresAtUtc = now.Add(request.Ttl ?? TimeSpan.FromMinutes(15))
-        };
+        var ttl = request.Ttl ?? TimeSpan.FromMinutes(15);
+        if (ttl > TimeSpan.FromMinutes(30)) ttl = TimeSpan.FromMinutes(15);
 
-        await RevokeForDraftAsync(request.UserId, request.SessionId, request.DraftId, cancellationToken);
-        _dbContext.AiBookingConfirmations.Add(confirmation);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        return new AiBookingConfirmationDto
+        for (var attempt = 1; attempt <= 3; attempt++)
         {
-            ConfirmationId = confirmation.ConfirmationId,
-            ExpiresAtUtc = confirmation.ExpiresAtUtc
-        };
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            try
+            {
+                var pending = await _dbContext.AiBookingConfirmations
+                    .Where(x => x.UserId == request.UserId && x.SessionId == cleanSessionId && x.DraftId == cleanDraftId && !x.UsedAtUtc.HasValue && !x.RevokedAtUtc.HasValue)
+                    .ToListAsync(cancellationToken);
+                foreach (var item in pending) item.RevokedAtUtc = now;
+
+                var confirmation = new AiBookingConfirmation
+                {
+                    ConfirmationId = $"conf_{Guid.NewGuid():N}",
+                    UserId = request.UserId,
+                    SessionId = cleanSessionId,
+                    DraftId = cleanDraftId,
+                    DraftVersion = request.DraftVersion,
+                    ContextSnapshotId = Normalize(request.ContextSnapshotId),
+                    SpecialtyId = request.SpecialtyId,
+                    DoctorId = request.DoctorId,
+                    SlotId = request.SlotId,
+                    SlotDate = request.SlotDate,
+                    StartTime = request.StartTime,
+                    EndTime = request.EndTime,
+                    ReasonHash = AiBookingConfirmationHasher.Compute(request.Reason),
+                    CreatedAtUtc = now,
+                    ExpiresAtUtc = now.Add(ttl)
+                };
+
+                _dbContext.AiBookingConfirmations.Add(confirmation);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return new AiBookingConfirmationDto { ConfirmationId = confirmation.ConfirmationId, ExpiresAtUtc = confirmation.ExpiresAtUtc };
+            }
+            catch (Exception ex) when (attempt < 3 && IsRetryable(ex))
+            {
+                try { await transaction.RollbackAsync(cancellationToken); } catch { }
+                _dbContext.ChangeTracker.Clear();
+                await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken);
+            }
+            catch
+            {
+                try { await transaction.RollbackAsync(cancellationToken); } catch { }
+                _dbContext.ChangeTracker.Clear();
+                throw;
+            }
+        }
+
+        throw new InvalidOperationException("Could not persist an AI booking confirmation after retries.");
     }
 
     public async Task<AiBookingConfirmationValidationResult> ValidateForAppointmentAsync(
@@ -162,18 +190,57 @@ public sealed class EfAiBookingConfirmationStore : IAiBookingConfirmationStore
             return;
         }
 
-        var pending = await _dbContext.AiBookingConfirmations
-            .Where(x => x.UserId == userId && x.SessionId == cleanSessionId && x.DraftId == cleanDraftId && !x.UsedAtUtc.HasValue && !x.RevokedAtUtc.HasValue)
-            .ToListAsync(cancellationToken);
-
-        var now = _dateTimeProvider.UtcNow;
-        foreach (var item in pending)
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
         {
-            item.RevokedAtUtc = now;
+            var pending = await _dbContext.AiBookingConfirmations
+                .Where(x => x.UserId == userId && x.SessionId == cleanSessionId && x.DraftId == cleanDraftId && !x.UsedAtUtc.HasValue && !x.RevokedAtUtc.HasValue)
+                .ToListAsync(cancellationToken);
+
+            var now = _dateTimeProvider.UtcNow;
+            foreach (var item in pending) item.RevokedAtUtc = now;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            try { await transaction.RollbackAsync(cancellationToken); } catch { }
+            _dbContext.ChangeTracker.Clear();
+            throw;
         }
     }
 
+    public async Task PurgeExpiredAsync(DateTime nowUtc, CancellationToken cancellationToken = default)
+    {
+        var cutoff = nowUtc.Subtract(RetentionAfterTerminalState);
+        var batch = await _dbContext.AiBookingConfirmations
+            .Where(x => (x.ExpiresAtUtc <= cutoff) ||
+                        (x.RevokedAtUtc.HasValue && x.RevokedAtUtc.Value <= cutoff) ||
+                        (x.UsedAtUtc.HasValue && x.UsedAtUtc.Value <= cutoff))
+            .OrderBy(x => x.Id)
+            .Take(500)
+            .ToListAsync(cancellationToken);
+        if (batch.Count == 0) return;
+        _dbContext.AiBookingConfirmations.RemoveRange(batch);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Purged {Count} retained AI booking confirmations", batch.Count);
+    }
+
     private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static bool IsRetryable(Exception ex)
+    {
+        for (var current = ex; current != null; current = current.InnerException!)
+        {
+            var type = current.GetType().FullName ?? string.Empty;
+            if (type.Contains("SqliteException", StringComparison.OrdinalIgnoreCase) ||
+                type.Contains("SqlException", StringComparison.OrdinalIgnoreCase) ||
+                current.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) ||
+                current.Message.Contains("locked", StringComparison.OrdinalIgnoreCase) ||
+                current.Message.Contains("deadlock", StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
 }
 
 public static class AiBookingConfirmationHasher

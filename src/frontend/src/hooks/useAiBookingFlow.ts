@@ -146,6 +146,12 @@ const persistSessionIdentity = (accountKey: string | null | undefined, sessionId
     }
 };
 
+const rotateSessionIdentity = (accountKey: string | null | undefined): string => {
+    const next = generateSessionIdentity();
+    persistSessionIdentity(accountKey, next);
+    return next;
+};
+
 interface SendMessageOptions {
     intent?: AiChatIntent;
     specialtyId?: number;
@@ -408,9 +414,12 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     clarificationPrompt: data.clarificationPrompt
                 };
 
-                if (data.dialogueOutcome === "DraftCancelled") {
+                if (data.dialogueOutcome === "DraftCancelled" || data.dialogueOutcome === "SessionRejected") {
                     draftCancelledAtRef.current = Date.now();
                     contextSnapshotIdRef.current = undefined;
+                    sessionIdRef.current = rotateSessionIdentity(accountKeyRef.current);
+                    lastConfirmationAttemptRef.current = null;
+                    removePersistedBookingAttempt(accountKeyRef.current);
                     setActiveDraft(null);
                 } else if (draftCancelledAtRef.current > requestSentAt) {
                     // Stale response received after draft was cancelled, do not resurrect draft
@@ -430,6 +439,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         if (specId && docId && sId && sDate && sTime && eTime) {
                             const isComplete = isValidBookingReason(draftReason);
                             fallbackDraft = {
+                                sessionId: data.sessionId,
+                                contextSnapshotId: data.contextSnapshotId,
                                 specialtyId: specId,
                                 specialtyName: p.specialtyName,
                                 doctorId: docId,
@@ -471,6 +482,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                             );
                             const mergedDraft: AiBookingDraft = {
                                 ...incomingDraft,
+                                sessionId: data.sessionId ?? incomingDraft.sessionId,
+                                contextSnapshotId: data.contextSnapshotId ?? incomingDraft.contextSnapshotId,
                                 reason: incomingDraft.reason || preservedReason || activeDraft?.reason,
                                 version: incomingVersion ?? currentVersion,
                                 confirmationId: incomingDraft.confirmationId ?? (isSubstantiveChange ? undefined : activeDraft?.confirmationId)
@@ -493,6 +506,22 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             const apiErr = err as { errorCode?: string; message?: string; response?: { data?: { errorCode?: string; message?: string } } };
             const errorCode = apiErr?.response?.data?.errorCode || apiErr?.errorCode;
             const message = apiErr?.response?.data?.message || apiErr?.message || "";
+
+            if (errorCode === "SESSION_EXPIRED" || errorCode === "DRAFT_CANCELLED") {
+                draftCancelledAtRef.current = Date.now();
+                contextSnapshotIdRef.current = undefined;
+                sessionIdRef.current = rotateSessionIdentity(accountKeyRef.current);
+                lastConfirmationAttemptRef.current = null;
+                removePersistedBookingAttempt(accountKeyRef.current);
+                setActiveDraft(null);
+                setMessages(prev => [...prev, {
+                    role: "model",
+                    content: "Phiên hoặc bản nháp cũ đã hết hiệu lực. Tôi đã tạo phiên mới; vui lòng chọn lại thông tin đặt lịch.",
+                    urgency: "ROUTINE",
+                    assistantStatus: "Offline"
+                }]);
+                return;
+            }
 
             if (errorCode === "TOO_MANY_REQUESTS" || message.includes("quá nhiều")) {
                 setMessages(prev => [...prev, {
@@ -887,6 +916,10 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 }
 
                 const actionConfirmationId = action.payload.confirmationId;
+                const actionSessionId = action.payload.sessionId ?? sessionIdRef.current;
+                const actionDraftId = action.payload.draftId ?? activeDraft.draftId;
+                const actionDraftVersion = action.payload.draftVersion ?? activeDraft.version;
+                const actionSnapshotId = action.payload.contextSnapshotId ?? contextSnapshotIdRef.current;
                 if (
                     (activeDraft.confirmationId && (!actionConfirmationId || actionConfirmationId !== activeDraft.confirmationId)) ||
                     (!activeDraft.confirmationId && Boolean(actionConfirmationId))
@@ -947,13 +980,21 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     if (candidate.payloadFingerprint !== payloadFingerprint && candidate.payloadFingerprint !== legacyWidgetFingerprint) {
                         return false;
                     }
-                    if (bookingDraftIdAtStart && candidate.draftId && candidate.draftId !== bookingDraftIdAtStart) {
+                    if (actionConfirmationId) {
+                        if (candidate.confirmationId !== actionConfirmationId) return false;
+                    } else if (candidate.confirmationId) {
                         return false;
                     }
-                    if (activeDraft.version !== undefined && candidate.draftVersion !== undefined && candidate.draftVersion !== activeDraft.version) {
+                    if (actionSessionId && candidate.sessionId !== actionSessionId) {
                         return false;
                     }
-                    if (actionConfirmationId && candidate.confirmationId && candidate.confirmationId !== actionConfirmationId) {
+                    if (actionDraftId && candidate.draftId !== actionDraftId) {
+                        return false;
+                    }
+                    if (actionDraftVersion !== undefined && candidate.draftVersion !== actionDraftVersion) {
+                        return false;
+                    }
+                    if (actionSnapshotId && candidate.contextSnapshotId !== actionSnapshotId) {
                         return false;
                     }
                     if (!candidate.draftId && candidate.attemptId && candidate.attemptId !== currentAttemptId) {
@@ -976,10 +1017,10 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     // regular manual booking request and never invent IDs.
                     if (actionConfirmationId) {
                         bookPayload.confirmationId = actionConfirmationId;
-                        bookPayload.contextSnapshotId = contextSnapshotIdRef.current;
-                        bookPayload.sessionId = sessionIdRef.current;
-                        bookPayload.draftId = bookingDraftIdAtStart;
-                        bookPayload.draftVersion = activeDraft.version;
+                        bookPayload.contextSnapshotId = actionSnapshotId;
+                        bookPayload.sessionId = actionSessionId;
+                        bookPayload.draftId = actionDraftId;
+                        bookPayload.draftVersion = actionDraftVersion;
                     }
                     const inMemoryCandidate = lastConfirmationAttemptRef.current;
                     const persistedCandidate = !doesCandidateMatchTurn(inMemoryCandidate)
@@ -1004,6 +1045,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         draftId: bookingDraftIdAtStart,
                         draftVersion: activeDraft.version,
                         confirmationId: actionConfirmationId,
+                        sessionId: actionSessionId,
+                        contextSnapshotId: actionSnapshotId,
                         payloadFingerprint,
                         key: idempotencyKey,
                         status: "in_flight"

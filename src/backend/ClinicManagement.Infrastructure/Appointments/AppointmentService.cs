@@ -511,7 +511,12 @@ public class AppointmentService : IAppointmentService
                 try { await transaction.RollbackAsync(); } catch { }
             }
 
-            // Outside transaction, check if this patient already holds this slot (idempotency)
+            _dbContext.ChangeTracker.Clear();
+
+            // A concurrency fallback is only a retry success when every
+            // booking identity and the AI confirmation/idempotency contract
+            // matches the request. A same-slot appointment alone is not proof
+            // that this request created or owns it.
             var samePatientAppointment = await _dbContext.Appointments
                 .AsNoTracking()
                 .Where(a => a.PatientId == patient.Id 
@@ -519,8 +524,41 @@ public class AppointmentService : IAppointmentService
                          && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
                 .FirstOrDefaultAsync();
 
-            if (samePatientAppointment != null)
+            if (samePatientAppointment != null &&
+                samePatientAppointment.PatientId == patient.Id &&
+                samePatientAppointment.DoctorId == request.DoctorId &&
+                samePatientAppointment.SpecialtyId == request.SpecialtyId &&
+                samePatientAppointment.AppointmentSlotId == request.AppointmentSlotId &&
+                string.Equals(samePatientAppointment.Reason?.Trim(), normalizedReason, StringComparison.OrdinalIgnoreCase))
             {
+                var idempotencyMatches = false;
+                if (!string.IsNullOrWhiteSpace(idempotencyKey))
+                {
+                    var record = await _dbContext.IdempotencyRecords
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(r => r.Key == idempotencyKey && r.Scope == "CreateAppointment", CancellationToken.None);
+                    idempotencyMatches = record != null &&
+                        record.UserId == currentUserId.Value &&
+                        record.RequestHash == payloadHash;
+                }
+
+                var confirmationMatches = string.IsNullOrWhiteSpace(request.ConfirmationId);
+                if (!string.IsNullOrWhiteSpace(request.ConfirmationId))
+                {
+                    var confirmation = await _dbContext.AiBookingConfirmations
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(c => c.ConfirmationId == request.ConfirmationId.Trim(), CancellationToken.None);
+                    confirmationMatches = confirmation != null &&
+                        confirmation.UserId == currentUserId.Value &&
+                        confirmation.UsedAppointmentId == samePatientAppointment.Id &&
+                        string.Equals(confirmation.UsedIdempotencyKey, idempotencyKey?.Trim(), StringComparison.Ordinal);
+                }
+
+                if (!idempotencyMatches || !confirmationMatches)
+                {
+                    throw new ConflictException("CONCURRENCY_FALLBACK_CONTRACT_MISMATCH", "Giao dịch đặt lịch đồng thời không khớp với yêu cầu hiện tại.");
+                }
+
                 return new AppointmentDto
                 {
                     Id = samePatientAppointment.Id,

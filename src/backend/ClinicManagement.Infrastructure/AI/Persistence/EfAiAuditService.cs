@@ -114,6 +114,6 @@ public class EfAiAuditService : IAiAuditService
     private static readonly HashSet<string> AllowedFields = new(StringComparer.Ordinal)
     {
         "source", "operation", "provider", "status", "errorCode", "retryCount",
-        "appointmentId", "idempotencyKey", "confirmationState"
+        "appointmentId", "confirmationState"
     };
 }

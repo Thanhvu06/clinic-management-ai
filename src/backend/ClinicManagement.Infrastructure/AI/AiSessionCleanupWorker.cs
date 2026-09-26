@@ -24,23 +24,22 @@ public sealed class AiSessionCleanupWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        try
+        await Task.Delay(FirstRunDelay, stoppingToken);
+        using var timer = new PeriodicTimer(RunInterval);
+        while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            await Task.Delay(FirstRunDelay, stoppingToken);
-            using var timer = new PeriodicTimer(RunInterval);
-            do
+            try
             {
                 await PurgeOnceAsync(stoppingToken);
             }
-            while (await timer.WaitForNextTickAsync(stoppingToken));
-        }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-            // Normal host shutdown.
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "AI session cleanup worker stopped unexpectedly.");
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "AI cleanup cycle failed; the next cycle will retry.");
+            }
         }
     }
 
@@ -50,5 +49,7 @@ public sealed class AiSessionCleanupWorker : BackgroundService
         var clock = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>();
         var store = scope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
         await store.PurgeExpiredRecordsAsync(clock.UtcNow, cancellationToken);
+        var confirmationStore = scope.ServiceProvider.GetRequiredService<IAiBookingConfirmationStore>();
+        await confirmationStore.PurgeExpiredAsync(clock.UtcNow, cancellationToken);
     }
 }

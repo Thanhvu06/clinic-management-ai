@@ -36,10 +36,15 @@ public class AiSessionConfiguration : IEntityTypeConfiguration<AiSession>
         builder.Property(s => s.RowVersion)
             .IsRowVersion();
 
-        // Session identifiers are scoped to the authenticated user. Keeping the
-        // index non-unique allows two users to legitimately use the same client
-        // generated identifier without sharing ownership or draft state.
-        builder.HasIndex(s => s.SessionId);
+        // A client session is scoped by account. Anonymous sessions use a
+        // separate filtered unique index because SQL Server treats nullable
+        // values in a composite unique index differently from SQLite.
+        builder.HasIndex(s => new { s.SessionId, s.UserId })
+            .IsUnique()
+            .HasFilter("[UserId] IS NOT NULL");
+        builder.HasIndex(s => s.SessionId)
+            .IsUnique()
+            .HasFilter("[UserId] IS NULL");
 
         builder.HasIndex(s => new { s.UserId, s.IsActive });
 

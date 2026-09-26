@@ -72,4 +72,5 @@ public interface IAiBookingConfirmationStore
     Task<AiBookingConfirmationValidationResult> ValidateForAppointmentAsync(ValidateAiBookingConfirmationRequest request, CancellationToken cancellationToken = default);
     Task MarkUsedAsync(string confirmationId, long appointmentId, string? idempotencyKey, CancellationToken cancellationToken = default);
     Task RevokeForDraftAsync(Guid userId, string sessionId, string draftId, CancellationToken cancellationToken = default);
+    Task PurgeExpiredAsync(DateTime nowUtc, CancellationToken cancellationToken = default);
 }

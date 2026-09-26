@@ -23,5 +23,8 @@ public class AiBookingConfirmationConfiguration : IEntityTypeConfiguration<AiBoo
         builder.HasIndex(x => x.ConfirmationId).IsUnique();
         builder.HasIndex(x => new { x.UserId, x.SessionId, x.DraftId, x.RevokedAtUtc });
         builder.HasIndex(x => x.ExpiresAtUtc);
+        builder.HasIndex(x => new { x.UserId, x.SessionId, x.DraftId })
+            .IsUnique()
+            .HasFilter("[UsedAtUtc] IS NULL AND [RevokedAtUtc] IS NULL");
     }
 }

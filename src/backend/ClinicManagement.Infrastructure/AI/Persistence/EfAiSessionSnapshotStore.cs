@@ -22,6 +22,7 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
     private static readonly TimeSpan DefaultSnapshotTtl = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan MaxSnapshotTtl = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan SessionTtl = TimeSpan.FromHours(24);
+    private static readonly TimeSpan CancellationRetention = TimeSpan.FromDays(7);
     private readonly AppDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<EfAiSessionSnapshotStore> _logger;
@@ -264,9 +265,9 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
         }
 
         var effectiveNow = nowUtc ?? _dateTimeProvider.UtcNow;
-        // Keep the cancellation tombstone for at least as long as a session can be
-        // replayed. Removing it after one hour could make an old draft valid again.
-        var expiresAt = effectiveNow.Add(SessionTtl);
+        // Keep the cancellation tombstone well beyond the 24-hour session TTL.
+        // Session cleanup must never make an old session+draft replayable.
+        var expiresAt = effectiveNow.Add(CancellationRetention);
 
         for (var attempt = 1; attempt <= 3; attempt++)
         {
@@ -491,64 +492,76 @@ public class EfAiSessionSnapshotStore : IAiSessionSnapshotStore
         var now = _dateTimeProvider.UtcNow;
         var expiresAt = now.Add(SessionTtl);
 
-        try
+        for (var attempt = 1; attempt <= 3; attempt++)
         {
-            var session = await _dbContext.AiSessions
-                .FirstOrDefaultAsync(s => s.SessionId == cleanSessionId && s.UserId == userId, cancellationToken);
-
-            if (session == null)
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            try
             {
-                _dbContext.AiSessions.Add(new AiSession
+                var session = await _dbContext.AiSessions
+                    .FirstOrDefaultAsync(s => s.SessionId == cleanSessionId && s.UserId == userId, cancellationToken);
+
+                if (session == null)
                 {
-                    SessionId = cleanSessionId,
-                    UserId = userId,
-                    ActiveDraftId = cleanDraftId,
-                    ActiveDraftVersion = draftVersion,
-                    FacilityId = facilityId,
-                    CreatedAtUtc = now,
-                    LastActiveAtUtc = now,
-                    ExpiresAtUtc = expiresAt,
-                    IsActive = true
-                });
+                    if (cleanDraftId != null && await IsDraftCancelledInternalAsync(cleanDraftId, userId, cleanSessionId, now, cancellationToken))
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                        return AiSessionTouchResult.Rejected("DRAFT_CANCELLED", "Bản nháp đã bị hủy. Vui lòng bắt đầu bản nháp mới.");
+                    }
+
+                    _dbContext.AiSessions.Add(new AiSession
+                    {
+                        SessionId = cleanSessionId,
+                        UserId = userId,
+                        ActiveDraftId = cleanDraftId,
+                        ActiveDraftVersion = draftVersion,
+                        FacilityId = facilityId,
+                        CreatedAtUtc = now,
+                        LastActiveAtUtc = now,
+                        ExpiresAtUtc = expiresAt,
+                        IsActive = true
+                    });
+                }
+                else
+                {
+                    if (!session.IsActive || session.ExpiresAtUtc <= now)
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                        return AiSessionTouchResult.Rejected("SESSION_EXPIRED", "Phiên làm việc đã hết hạn. Vui lòng bắt đầu lại.");
+                    }
+
+                    if (cleanDraftId != null && await IsDraftCancelledInternalAsync(cleanDraftId, userId, cleanSessionId, now, cancellationToken))
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                        return AiSessionTouchResult.Rejected("DRAFT_CANCELLED", "Bản nháp đã bị hủy. Vui lòng bắt đầu bản nháp mới.");
+                    }
+
+                    if (cleanDraftId != null) session.ActiveDraftId = cleanDraftId;
+                    if (draftVersion.HasValue) session.ActiveDraftVersion = draftVersion;
+                    if (facilityId.HasValue) session.FacilityId = facilityId;
+                    session.LastActiveAtUtc = now;
+                    session.ExpiresAtUtc = expiresAt;
+                }
+
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return AiSessionTouchResult.Accepted();
             }
-            else
+            catch (Exception ex) when (attempt < 3 && IsUniqueOrSerializationConflict(ex))
             {
-                if (!session.IsActive || session.ExpiresAtUtc <= now)
-                {
-                    return AiSessionTouchResult.Rejected("SESSION_EXPIRED", "Phiên làm việc đã hết hạn. Vui lòng bắt đầu lại.");
-                }
-
-                if (session.UserId.HasValue && session.UserId != userId)
-                {
-                    return AiSessionTouchResult.Rejected("SESSION_OWNER_MISMATCH", "Phiên làm việc thuộc tài khoản khác.");
-                }
-
-                if (!userId.HasValue && session.UserId.HasValue)
-                {
-                    return AiSessionTouchResult.Rejected("SESSION_OWNER_MISMATCH", "Cần đăng nhập đúng tài khoản của phiên làm việc.");
-                }
-
-                if (cleanDraftId != null && await IsDraftCancelledInternalAsync(cleanDraftId, userId, cleanSessionId, now, cancellationToken))
-                {
-                    return AiSessionTouchResult.Rejected("DRAFT_CANCELLED", "Bản nháp đã bị hủy. Vui lòng bắt đầu bản nháp mới.");
-                }
-
-                if (userId.HasValue) session.UserId = userId;
-                if (cleanDraftId != null) session.ActiveDraftId = cleanDraftId;
-                if (draftVersion.HasValue) session.ActiveDraftVersion = draftVersion;
-                if (facilityId.HasValue) session.FacilityId = facilityId;
-                session.LastActiveAtUtc = now;
-                session.ExpiresAtUtc = expiresAt;
+                try { await transaction.RollbackAsync(cancellationToken); } catch { }
+                _dbContext.ChangeTracker.Clear();
+                await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken);
             }
+            catch (Exception ex)
+            {
+                try { await transaction.RollbackAsync(cancellationToken); } catch { }
+                _dbContext.ChangeTracker.Clear();
+                _logger.LogWarning(ex, "Failed to update AI session {SessionId}", cleanSessionId);
+                return AiSessionTouchResult.Rejected("SESSION_STORE_ERROR", "Không thể xác thực phiên làm việc. Vui lòng thử lại.");
+            }
+        }
 
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            return AiSessionTouchResult.Accepted();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to update AI session {SessionId}", cleanSessionId);
-            return AiSessionTouchResult.Rejected("SESSION_STORE_ERROR", "Không thể xác thực phiên làm việc. Vui lòng thử lại.");
-        }
+        return AiSessionTouchResult.Rejected("SESSION_STORE_ERROR", "Không thể xác thực phiên làm việc sau nhiều lần thử. Vui lòng thử lại.");
     }
 
     public async Task PurgeExpiredRecordsAsync(DateTime nowUtc, CancellationToken cancellationToken = default)

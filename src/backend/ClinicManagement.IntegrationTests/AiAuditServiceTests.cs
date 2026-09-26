@@ -30,7 +30,7 @@ public class AiAuditServiceTests : IntegrationTestBase
             password = "Pass@123",
             token = "secret-token",
             nested = new { reason = "không được lưu" },
-            idempotencyKey = new string('x', 300)
+            idempotencyKey = "short-but-never-persisted"
         });
 
         var result = await audit.LogActionAsync(new AiAuditLogEntry

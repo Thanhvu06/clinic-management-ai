@@ -196,6 +196,8 @@ export interface PendingBookingAttemptRecord {
     draftId?: string;
     draftVersion?: number;
     confirmationId?: string;
+    sessionId?: string;
+    contextSnapshotId?: string;
     payloadFingerprint: string;
     key: string;
     status: "in_flight" | "uncertain" | "succeeded";

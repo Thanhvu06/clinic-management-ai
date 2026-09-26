@@ -481,6 +481,9 @@ public class AiActionPayloadDto
     public string? FacilityName { get; set; }
     public int? DraftVersion { get; set; }
     public string? ConfirmationId { get; set; }
+    public string? ContextSnapshotId { get; set; }
+    public string? SessionId { get; set; }
+    public string? DraftId { get; set; }
 }
 
 public class AiActionDto
@@ -499,6 +502,8 @@ public class AiActionDto
 public class AiBookingDraftDto
 {
     public string? DraftId { get; set; }
+    public string? SessionId { get; set; }
+    public string? ContextSnapshotId { get; set; }
     public long? SpecialtyId { get; set; }
     public string? SpecialtyName { get; set; }
     public long? DoctorId { get; set; }

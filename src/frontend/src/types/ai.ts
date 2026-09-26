@@ -128,6 +128,9 @@ export interface ReviewBookingAction extends BaseAiAction {
         reason?: string;
         draftVersion?: number;
         confirmationId?: string;
+        contextSnapshotId?: string;
+        sessionId?: string;
+        draftId?: string;
     };
 }
 
@@ -145,6 +148,9 @@ export interface ConfirmBookingAction extends BaseAiAction {
         reason: string;
         draftVersion?: number;
         confirmationId?: string;
+        contextSnapshotId?: string;
+        sessionId?: string;
+        draftId?: string;
     };
 }
 
@@ -283,6 +289,9 @@ export type AiActionPayload = Partial<{
     facilityName: string;
     draftVersion: number;
     confirmationId: string;
+    contextSnapshotId: string;
+    sessionId: string;
+    draftId: string;
 }>;
 
 export interface AiSpecialtySuggestion {
@@ -296,6 +305,7 @@ export interface AiSpecialtySuggestion {
 export interface AiBookingDraft {
     draftId?: string;
     sessionId?: string;
+    contextSnapshotId?: string;
     specialtyId?: number;
     specialtyName?: string;
     doctorId?: number;
