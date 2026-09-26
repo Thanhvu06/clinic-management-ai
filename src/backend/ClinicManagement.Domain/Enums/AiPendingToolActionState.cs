@@ -6,6 +6,7 @@ public enum AiPendingToolActionState
     Executing,
     Completed,
     FailedRetryable,
+    FailedTerminal,
     Cancelled,
     Expired
 }

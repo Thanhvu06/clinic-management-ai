@@ -61,12 +61,12 @@ public sealed class PatientCopilotBenchmarkRunner
             evaluator = "deterministic safety-and-planner-contract evaluator (not live Gemini)",
             totalCases = cases.Count,
             safety = new { correct = safetyCorrect, accuracy = Ratio(safetyCorrect, cases.Count), failures = safetyFailures },
-            routing = new { correct = routeCorrect, accuracy = Ratio(routeCorrect, cases.Count) },
+            heuristicBaselineRouting = new { correct = routeCorrect, accuracy = Ratio(routeCorrect, cases.Count) },
             outcome = new { correct = outcomeCorrect, accuracy = Ratio(outcomeCorrect, cases.Count) },
             mustNotContain = new { clean = forbiddenClean, total = contentCases, accuracy = Ratio(forbiddenClean, contentCases) }
             ,evaluationModes = new[] { "deterministic-safety", "deterministic-planner-contract" }
             ,plannerContractFixtures = cases.Count(x => string.Equals(x.Category, "planner-contract", StringComparison.OrdinalIgnoreCase))
-            ,liveGemini = new { enabled = false, optInEnvironmentVariable = "CLINICCARE_BENCHMARK_LIVE_GEMINI" }
+            ,liveGemini = new { enabled = false, liveGeminiExecuted = false, optInEnvironmentVariable = "CLINICCARE_BENCHMARK_LIVE_GEMINI" }
         };
         return JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });
     }

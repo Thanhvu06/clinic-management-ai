@@ -8,16 +8,16 @@ Emergency responses use EMERGENCY, direct the patient to call 115 or go to the n
 
 ## Gemini and ML.NET
 
-Gemini is a structured planner/grounded response provider. Its tool plan is allowlisted, capped at three calls and never receives authority fields or the direct-only execute tool. The backend executor preflights the complete plan and fails closed before any handler on malformed, unknown, version-mismatched, direct-only or over-limit plans. The backend executor, not the model, owns identity, role, capability, ownership, session, confirmation and facility policy.
+Gemini is a structured planner/grounded response provider. Its tool plan is allowlisted by the immutable backend `AiPlannerPolicy` to exactly seven read tools, capped at three calls, and never receives authority fields or prepare/write tools. The backend executor preflights the complete plan and fails closed before any handler on malformed, unknown, version-mismatched or over-limit plans. The backend executor, not the model, owns identity, role, capability, ownership, session, confirmation and facility policy.
 
 The existing ML.NET intent/specialty classifier remains Shadow/local support. It may provide comparison and degraded-mode suggestions; it cannot authenticate, authorize, write appointments, execute change requests or diagnose.
 
 ## Benchmark
 
-src/tools/ClinicManagement.AI.Training/data/patient_copilot_benchmark.json contains deterministic non-sensitive fixtures covering emergency positives/repeats/mixed injection, negation, authority injection, planner contracts, role/session/expiry failures, malformed arguments, pricing grounding, empty data and provider-unavailable behavior. It is classified as deterministic safety + planner-contract evaluation; live Gemini is off unless an explicit environment opt-in exists. Run:
+src/tools/ClinicManagement.AI.Training/data/patient_copilot_benchmark.json contains deterministic non-sensitive fixtures covering emergency positives/repeats/mixed injection, negation, authority injection, planner contracts, role/session/expiry failures, malformed arguments, pricing grounding, empty data and provider-unavailable behavior. The safety layer directly evaluates `IAiSafetyGuard`; the routing layer is explicitly named `heuristicBaselineRouting` and does not exercise Gemini, HTTP, authorization, session or DB. A separate runtime contract suite exercises those boundaries. Live Gemini is off unless an explicit environment opt-in exists and reports `liveGeminiExecuted: false` when off. Run:
 
 ~~~text
 dotnet run --project src/tools/ClinicManagement.AI.Training/ClinicManagement.AI.Training.csproj -- --evaluate-copilot
 ~~~
 
-The runner prints machine-readable JSON with actual safety, route, outcome and safety-content metrics. It is a deterministic safety/allowlist evaluator, not a claim of Gemini semantic accuracy.
+The runner prints machine-readable JSON with separate safety, `heuristicBaselineRouting`, outcome and safety-content metrics. It is not an AI-accuracy claim and cannot substitute for the HTTP/runtime contract suite.

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Data.Common;
 using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Application.Appointments.DTOs.ChangeRequests;
@@ -81,7 +82,7 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
             ["patient.prepare_booking"] = (new[] { "specialtyId", "doctorId", "slotId", "reason" }, new[] { "specialtyId", "doctorId", "slotId" }),
             ["patient.prepare_cancel_appointment"] = (new[] { "appointmentId", "reason" }, new[] { "appointmentId", "reason" }),
             ["patient.prepare_reschedule_appointment"] = (new[] { "appointmentId", "requestedSlotId", "reason" }, new[] { "appointmentId", "requestedSlotId", "reason" }),
-            ["patient.execute_confirmed_action"] = (new[] { "actionId", "confirm", "concurrencyToken" }, new[] { "actionId", "confirm" })
+            ["patient.execute_confirmed_action"] = (new[] { "actionId", "confirm", "concurrencyToken" }, new[] { "actionId", "confirm", "concurrencyToken" })
         };
 
         if (!schemas.TryGetValue(name, out var schema))
@@ -90,14 +91,14 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
         var allowed = schema.Allowed.ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var property in args.EnumerateObject())
         {
-            if (!allowed.Contains(property.Name))
-                return AiToolArgumentValidationResult.Invalid("UNKNOWN_TOOL_ARGUMENT", $"Tham số '{property.Name}' không được phép.");
             if (property.Name.Equals("userId", StringComparison.OrdinalIgnoreCase) ||
                 property.Name.Equals("actorId", StringComparison.OrdinalIgnoreCase) ||
                 property.Name.Equals("role", StringComparison.OrdinalIgnoreCase) ||
                 property.Name.Equals("channel", StringComparison.OrdinalIgnoreCase) ||
                 property.Name.Equals("facilityAuthorization", StringComparison.OrdinalIgnoreCase))
                 return AiToolArgumentValidationResult.Invalid("FORBIDDEN_TOOL_ARGUMENT", "Tham số quyền hạn chỉ được xác định phía server.");
+            if (!allowed.Contains(property.Name))
+                return AiToolArgumentValidationResult.Invalid("UNKNOWN_TOOL_ARGUMENT", $"Tham số '{property.Name}' không được phép.");
         }
 
         foreach (var required in schema.Required)
@@ -174,7 +175,7 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
                 (property.Value.ValueKind != JsonValueKind.String || !Guid.TryParse(property.Value.GetString(), out _)))
                 return AiToolArgumentValidationResult.Invalid("INVALID_ACTION_ID", "Mã thao tác không hợp lệ.");
             if (property.Name.Equals("concurrencyToken", StringComparison.OrdinalIgnoreCase) &&
-                (property.Value.ValueKind != JsonValueKind.String || (property.Value.GetString()?.Length ?? 0) > 256))
+                (property.Value.ValueKind != JsonValueKind.String || !IsValidConfirmationToken(property.Value.GetString())))
                 return AiToolArgumentValidationResult.Invalid("INVALID_CONCURRENCY_TOKEN", "Mã đồng bộ không hợp lệ.");
             if (property.Name.EndsWith("Id", StringComparison.OrdinalIgnoreCase) &&
                 property.Name is not "actionId" &&
@@ -370,7 +371,7 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
         if (!string.IsNullOrWhiteSpace(invocation.IdempotencyKey))
         {
             var sameKey = await _db.AiPendingToolActions.FirstOrDefaultAsync(x =>
-                x.UserId == context.ActorId.Value && x.IdempotencyKeyHash == idempotencyHash &&
+                x.UserId == context.ActorId.Value && x.SessionId == context.SessionId && x.IdempotencyKeyHash == idempotencyHash &&
                 x.ExpiresAtUtc > now && x.State != AiPendingToolActionState.Cancelled && x.State != AiPendingToolActionState.Expired, cancellationToken);
             if (sameKey != null)
             {
@@ -381,6 +382,7 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
         }
         var active = await _db.AiPendingToolActions.FirstOrDefaultAsync(x =>
             x.UserId == context.ActorId.Value &&
+            x.SessionId == context.SessionId &&
             x.ResourceId == appointment.Id.ToString() && x.ExpiresAtUtc > now &&
             (x.State == AiPendingToolActionState.PendingConfirmation || x.State == AiPendingToolActionState.Executing || x.State == AiPendingToolActionState.FailedRetryable), cancellationToken);
         if (active != null)
@@ -407,7 +409,7 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
         {
             _db.ChangeTracker.Clear();
             var concurrent = await _db.AiPendingToolActions.FirstOrDefaultAsync(x =>
-                x.UserId == context.ActorId.Value && x.ResourceId == appointment.Id.ToString() &&
+                x.UserId == context.ActorId.Value && x.SessionId == context.SessionId && x.ResourceId == appointment.Id.ToString() &&
                 x.ExpiresAtUtc > now &&
                 (x.State == AiPendingToolActionState.PendingConfirmation || x.State == AiPendingToolActionState.Executing || x.State == AiPendingToolActionState.FailedRetryable), cancellationToken);
             if (concurrent != null && string.Equals(concurrent.RequestHash, requestHash, StringComparison.Ordinal))
@@ -436,7 +438,9 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
             return Completed(new { actionId, status = "already_completed", reference = action.ExecutionResultReference }, "pending_action", "Thao tác này đã được hoàn tất trước đó.");
 
         var now = _dateTimeProvider.UtcNow;
-        if (action.CancelledAtUtc.HasValue || action.State is AiPendingToolActionState.Cancelled or AiPendingToolActionState.Expired || action.ExpiresAtUtc <= now)
+        if (action.CancelledAtUtc.HasValue || action.State == AiPendingToolActionState.Cancelled)
+            return AiToolExecutionResult.Failed("ACTION_CANCELLED", "Thao tác đã bị hủy và không thể thực hiện lại.");
+        if (action.State == AiPendingToolActionState.Expired || action.ExpiresAtUtc <= now)
         {
             await _db.AiPendingToolActions.Where(x => x.ActionId == actionId && x.UserId == context.ActorId.Value)
                 .ExecuteUpdateAsync(x => x
@@ -447,18 +451,9 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
         }
 
         var suppliedToken = GetString(args, "concurrencyToken");
-        if (!string.IsNullOrWhiteSpace(suppliedToken) && action.RowVersion.Length > 0)
-        {
-            try
-            {
-                if (!action.RowVersion.SequenceEqual(Convert.FromBase64String(suppliedToken)))
-                    return AiToolExecutionResult.Failed("CONCURRENCY_CONFLICT", "Thao tác đã thay đổi, vui lòng tạo lại yêu cầu xác nhận.", true);
-            }
-            catch (FormatException)
-            {
-                return AiToolExecutionResult.Failed("INVALID_CONCURRENCY_TOKEN", "Mã đồng bộ không hợp lệ.");
-            }
-        }
+        if (!IsValidConfirmationToken(suppliedToken) ||
+            !FixedTimeTokenEquals(suppliedToken!, BuildConfirmationToken(action)))
+            return AiToolExecutionResult.Failed("CONCURRENCY_CONFLICT", "Thao tác đã thay đổi, vui lòng tạo lại yêu cầu xác nhận.", true);
 
         if (action.State == AiPendingToolActionState.Executing && action.ExecutionLeaseExpiresAtUtc > now)
             return AiToolExecutionResult.Failed("ACTION_IN_PROGRESS", "Thao tác này đang được xử lý, vui lòng chờ kết quả.", true);
@@ -484,8 +479,14 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
 
         var stored = Parse(action.NormalizedArgumentsJson);
         var appointmentId = GetLong(stored, "appointmentId");
-        if (!appointmentId.HasValue) return AiToolExecutionResult.Failed("INVALID_PENDING_ACTION", "Dữ liệu thao tác không hợp lệ.");
-        var isReschedule = action.ToolName.Contains("reschedule", StringComparison.OrdinalIgnoreCase);
+        var isReschedule = action.ToolName.Equals("patient.prepare_reschedule_appointment", StringComparison.OrdinalIgnoreCase);
+        var isCancellation = action.ToolName.Equals("patient.prepare_cancel_appointment", StringComparison.OrdinalIgnoreCase);
+        if (!appointmentId.HasValue || (!isReschedule && !isCancellation) ||
+            (isReschedule && !(GetLong(stored, "requestedSlotId") > 0)))
+        {
+            await MarkTerminalFailureAsync(actionId, leaseId, "INVALID_PENDING_ACTION", cancellationToken);
+            return AiToolExecutionResult.Failed("INVALID_PENDING_ACTION", "Dữ liệu thao tác đã lưu không hợp lệ.");
+        }
         try
         {
             // Revalidate through the canonical appointment/change-request services.
@@ -514,18 +515,29 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
         }
         catch (Exception ex)
         {
-            var errorCode = ex is ClinicManagement.Application.Common.Exceptions.ConflictException conflict
-                ? conflict.ErrorCode
-                : "ACTION_EXECUTION_FAILED";
+            var conflict = ex as ClinicManagement.Application.Common.Exceptions.ConflictException;
+            var errorCode = conflict?.ErrorCode ?? "ACTION_EXECUTION_FAILED";
+            var retryable = IsRetryableExecutionFailure(ex);
             await _db.AiPendingToolActions
                 .Where(x => x.ActionId == actionId && x.ExecutionLeaseId == leaseId && x.State == AiPendingToolActionState.Executing)
                 .ExecuteUpdateAsync(x => x
-                    .SetProperty(a => a.State, AiPendingToolActionState.FailedRetryable)
+                    .SetProperty(a => a.State, retryable ? AiPendingToolActionState.FailedRetryable : AiPendingToolActionState.FailedTerminal)
                     .SetProperty(a => a.LastErrorCode, errorCode)
                     .SetProperty(a => a.ExecutionLeaseId, (Guid?)null)
                     .SetProperty(a => a.ExecutionLeaseExpiresAtUtc, (DateTime?)null), cancellationToken);
-            return AiToolExecutionResult.Failed(errorCode, "Không thể hoàn tất thao tác lúc này; bạn có thể thử lại.", true);
+            return AiToolExecutionResult.Failed(errorCode, retryable ? "Không thể hoàn tất thao tác lúc này; bạn có thể thử lại." : "Thao tác không thể thực hiện với dữ liệu/trạng thái hiện tại.", retryable);
         }
+    }
+
+    private async Task MarkTerminalFailureAsync(Guid actionId, Guid leaseId, string errorCode, CancellationToken cancellationToken)
+    {
+        await _db.AiPendingToolActions
+            .Where(x => x.ActionId == actionId && x.ExecutionLeaseId == leaseId && x.State == AiPendingToolActionState.Executing)
+            .ExecuteUpdateAsync(x => x
+                .SetProperty(a => a.State, AiPendingToolActionState.FailedTerminal)
+                .SetProperty(a => a.LastErrorCode, errorCode)
+                .SetProperty(a => a.ExecutionLeaseId, (Guid?)null)
+                .SetProperty(a => a.ExecutionLeaseExpiresAtUtc, (DateTime?)null), cancellationToken);
     }
 
     private async Task<long?> ResolvePatientIdAsync(Guid? userId, CancellationToken cancellationToken)
@@ -539,7 +551,7 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
         Status = "pending_confirmation", RequiresConfirmation = true, ActionId = action.ActionId.ToString(),
         ResultType = "pending_action",
         DisplayText = $"Thao tác trên lịch hẹn {appointment.AppointmentCode} đang chờ bạn xác nhận.",
-        Data = new { actionId = action.ActionId, appointmentId = appointment.Id, appointmentCode = appointment.AppointmentCode, expiresAtUtc = action.ExpiresAtUtc, confirmation = "Xác nhận thao tác này", concurrencyToken = action.RowVersion.Length == 0 ? null : Convert.ToBase64String(action.RowVersion) },
+        Data = new { actionId = action.ActionId, appointmentId = appointment.Id, appointmentCode = appointment.AppointmentCode, expiresAtUtc = action.ExpiresAtUtc, confirmation = "Xác nhận thao tác này", concurrencyToken = BuildConfirmationToken(action) },
         DataSources = new[] { new AiToolDataSource("appointment_service", "service"), new AiToolDataSource("pending_action_store", "database") }
     };
 
@@ -560,8 +572,26 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
     private static DateOnly? GetDate(Dictionary<string, JsonElement> args, string name) => DateOnly.TryParse(GetString(args, name), out var date) ? date : null;
     private static bool Contains(string? text, string query) => !string.IsNullOrWhiteSpace(text) && text.Contains(query, StringComparison.OrdinalIgnoreCase);
     private static string Hash(string? value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value ?? string.Empty)));
+    private static string BuildConfirmationToken(AiPendingToolAction action)
+    {
+        var material = $"{action.ActionId:N}|{action.UserId:N}|{action.SessionId}|{action.ToolName}|{action.ToolVersion}|{action.ResourceType}|{action.ResourceId}|{action.RequestHash}";
+        return Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(material)))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    private static bool IsValidConfirmationToken(string? token) =>
+        !string.IsNullOrWhiteSpace(token) && token.Length == 43 && token.All(ch =>
+            ch is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9' or '-' or '_');
+
+    private static bool FixedTimeTokenEquals(string supplied, string expected) =>
+        CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(supplied), Encoding.ASCII.GetBytes(expected));
+
+    private static bool IsRetryableExecutionFailure(Exception exception) =>
+        exception is DbUpdateException or TimeoutException or DbException;
     private static bool IsValidSessionId(string? sessionId) =>
-        !string.IsNullOrWhiteSpace(sessionId) && sessionId.Length <= 128 && sessionId.StartsWith("sess_", StringComparison.Ordinal);
+        !string.IsNullOrWhiteSpace(sessionId) && sessionId.Length is >= 6 and <= 128 &&
+        sessionId.StartsWith("sess_", StringComparison.Ordinal) &&
+        sessionId[5..].All(ch => ch is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9' or '-' or '_');
 
     public static IReadOnlyList<AiToolDefinition> Definitions() => new[]
     {

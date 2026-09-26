@@ -99,7 +99,7 @@ public sealed class AiSessionCleanupWorker : BackgroundService
                 .SetProperty(a => a.LastErrorCode, "STALE_EXECUTION_LEASE"), cancellationToken);
 
         await db.AiPendingToolActions
-            .Where(x => ((x.State == AiPendingToolActionState.Completed || x.State == AiPendingToolActionState.Cancelled || x.State == AiPendingToolActionState.Expired) &&
+            .Where(x => ((x.State == AiPendingToolActionState.Completed || x.State == AiPendingToolActionState.FailedTerminal || x.State == AiPendingToolActionState.Cancelled || x.State == AiPendingToolActionState.Expired) &&
                          ((x.ExecutedAtUtc.HasValue && x.ExecutedAtUtc.Value <= completedRetentionCutoff) ||
                           (x.CancelledAtUtc.HasValue && x.CancelledAtUtc.Value <= completedRetentionCutoff) ||
                           (!x.ExecutedAtUtc.HasValue && !x.CancelledAtUtc.HasValue && x.ExpiresAtUtc <= completedRetentionCutoff))) ||

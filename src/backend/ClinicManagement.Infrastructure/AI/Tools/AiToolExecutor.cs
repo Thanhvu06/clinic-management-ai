@@ -50,7 +50,7 @@ public sealed class AiToolExecutor : IAiToolExecutor
         foreach (var call in plannedCalls)
         {
             var name = call.Name?.Trim().ToLowerInvariant();
-            if (string.IsNullOrWhiteSpace(name) || !_registry.TryGetHandler(name, out var handler))
+            if (!AiPlannerPolicy.IsAllowed(name) || !_registry.TryGetHandler(name!, out var handler))
                 return new[] { AiToolExecutionResult.Failed("PLANNER_TOOL_NOT_ALLOWED", "Kế hoạch công cụ không nằm trong allowlist.") };
 
             var definition = handler.Definition;
@@ -58,12 +58,9 @@ public sealed class AiToolExecutor : IAiToolExecutor
                 return new[] { AiToolExecutionResult.Failed("TOOL_DISABLED", "Công cụ AI hiện chưa được kích hoạt.") };
             if (!string.Equals(definition.Version, call.Version?.Trim(), StringComparison.OrdinalIgnoreCase))
                 return new[] { AiToolExecutionResult.Failed("TOOL_VERSION_NOT_SUPPORTED", "Phiên bản công cụ không được hỗ trợ.") };
-            if (name.Equals("patient.execute_confirmed_action", StringComparison.OrdinalIgnoreCase))
-                return new[] { AiToolExecutionResult.Failed("PLANNER_WRITE_EXECUTION_FORBIDDEN", "Planner chỉ được lập kế hoạch đọc hoặc chuẩn bị; thao tác ghi cần xác nhận trực tiếp.") };
-
             var invocation = new AiToolInvocation
             {
-                ToolName = name,
+                ToolName = name!,
                 ToolVersion = call.Version ?? string.Empty,
                 ArgumentsJson = call.Arguments.ValueKind == JsonValueKind.Undefined ? string.Empty : call.Arguments.GetRawText(),
                 SessionId = sessionId
@@ -170,6 +167,8 @@ public sealed class AiToolExecutor : IAiToolExecutor
             return AiToolExecutionResult.Failed("AUTHENTICATION_REQUIRED", "Bạn cần đăng nhập để sử dụng công cụ này.");
         if (definition.AccessMode == AiToolAccessMode.RoleRestricted && !definition.AllowedRoles.Any(context.Roles.Contains))
             return AiToolExecutionResult.Failed("FORBIDDEN_TOOL", "Vai trò hiện tại không được phép dùng công cụ này.");
+        if (context.InvocationChannel == AiToolInvocationChannel.Planner && !AiPlannerPolicy.IsAllowed(definition.Name))
+            return AiToolExecutionResult.Failed("PLANNER_TOOL_NOT_ALLOWED", "Kế hoạch công cụ không nằm trong allowlist.");
         if (!IsSafeArguments(invocation.ArgumentsJson))
             return AiToolExecutionResult.Failed("INVALID_TOOL_ARGUMENTS", "Tham số công cụ không hợp lệ.");
         if (definition.Name.Equals("patient.execute_confirmed_action", StringComparison.OrdinalIgnoreCase) &&

@@ -30,7 +30,12 @@ public sealed class AiToolGatewayController : ControllerBase
         var result = await _executor.ExecuteAsync(invocation, cancellationToken);
         if (result.Error?.Code is "AUTHENTICATION_REQUIRED") return Unauthorized(result);
         if (result.Error?.Code is "FORBIDDEN_TOOL") return Forbid();
-        if (result.Error != null && result.Error.Code is "UNKNOWN_TOOL" or "TOOL_DISABLED" or "TOOL_VERSION_NOT_SUPPORTED") return BadRequest(result);
+        if (result.Error != null && result.Error.Code is
+            "UNKNOWN_TOOL" or "TOOL_DISABLED" or "TOOL_VERSION_NOT_SUPPORTED" or
+            "PLANNER_TOOL_NOT_ALLOWED" or "DIRECT_CONFIRMATION_REQUIRED" or
+            "INVALID_TOOL_ARGUMENTS" or "UNKNOWN_TOOL_ARGUMENT" or "FORBIDDEN_TOOL_ARGUMENT" or
+            "MISSING_TOOL_ARGUMENT" or "INVALID_CONCURRENCY_TOKEN" or "CONCURRENCY_TOKEN_REQUIRED")
+            return BadRequest(result);
         return Ok(result);
     }
 
@@ -43,6 +48,8 @@ public sealed class AiToolGatewayController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.SessionId))
             return BadRequest(AiToolExecutionResult.Failed("SESSION_REQUIRED", "Cần phiên hội thoại hợp lệ để xác nhận thao tác."));
+        if (string.IsNullOrWhiteSpace(request.ConcurrencyToken))
+            return BadRequest(AiToolExecutionResult.Failed("CONCURRENCY_TOKEN_REQUIRED", "Cần mã đồng bộ do hệ thống cấp để xác nhận thao tác."));
 
         var result = await _executor.ExecuteHumanConfirmationAsync(
             actionId,
@@ -53,6 +60,12 @@ public sealed class AiToolGatewayController : ControllerBase
             return Forbid();
         if (result.Error?.Code is "ACTION_NOT_FOUND" or "SESSION_MISMATCH")
             return NotFound(result);
+        if (result.Error?.Code is "CONCURRENCY_CONFLICT" or "ACTION_IN_PROGRESS")
+            return Conflict(result);
+        if (result.Error?.Code is "ACTION_EXPIRED" or "ACTION_CANCELLED")
+            return StatusCode(StatusCodes.Status410Gone, result);
+        if (result.Error != null && result.Error.Code is "CONCURRENCY_TOKEN_REQUIRED" or "INVALID_CONCURRENCY_TOKEN" or "INVALID_PENDING_ACTION")
+            return BadRequest(result);
         return Ok(result);
     }
 }

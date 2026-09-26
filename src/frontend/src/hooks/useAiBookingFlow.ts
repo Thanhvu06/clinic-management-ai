@@ -202,6 +202,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         readPersistedBookingAttempt(accountKey)
     );
     const isSubmittingBookingRef = useRef(false);
+    const isConfirmingToolActionRef = useRef(false);
     const lastKnownGeminiStatusRef = useRef<"Unchecked" | "Healthy" | "Degraded">("Unchecked");
     const draftCancelledAtRef = useRef<number>(0);
     const contextSnapshotIdRef = useRef<string | undefined>(undefined);
@@ -1291,7 +1292,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     };
 
     const confirmToolAction = async (actionId: string, concurrencyToken?: string): Promise<void> => {
-        if (!actionId || loading || submittingBooking) return;
+        if (!actionId || !concurrencyToken || loading || submittingBooking || isConfirmingToolActionRef.current) return;
+        isConfirmingToolActionRef.current = true;
         try {
             const result = await axiosClient.post<{
                 sessionId: string;
@@ -1304,13 +1306,36 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 role: "model",
                 content: result.status === "completed"
                     ? "Thao tác đã được xác nhận và gửi đến hệ thống ClinicCare."
-                    : result.error?.message || "ClinicCare chưa thể hoàn tất thao tác này.",
+                    : result.error?.code === "ACTION_IN_PROGRESS"
+                        ? "Thao tác đang được xử lý, vui lòng chờ kết quả."
+                        : result.error?.code === "CONCURRENCY_CONFLICT"
+                            ? "Thông tin xác nhận đã cũ. Vui lòng tạo lại thao tác."
+                            : result.error?.code === "ACTION_EXPIRED"
+                                ? "Thao tác đã hết hạn. Vui lòng chọn lại từ lịch hẹn."
+                                : result.data?.status === "already_completed"
+                                    ? "Thao tác này đã được hoàn tất trước đó."
+                                    : result.error?.message || "ClinicCare chưa thể hoàn tất thao tác này.",
                 urgency: "ROUTINE",
                 toolResults: [result],
-                assistantStatus: result.status === "completed" ? "Online" : "Degraded"
             }]);
-        } catch {
-            setErrorMsg("Không thể xác nhận thao tác lúc này. Vui lòng thử lại hoặc mở lại lịch hẹn.");
+        } catch (err: unknown) {
+            const response = (err as { response?: { data?: AiToolExecutionResult } })?.response;
+            const failed = response?.data;
+            const code = failed?.error?.code;
+            setMessages(previous => [...previous, {
+                role: "model",
+                content: code === "ACTION_IN_PROGRESS"
+                    ? "Thao tác đang được xử lý, vui lòng chờ kết quả."
+                    : code === "CONCURRENCY_CONFLICT"
+                        ? "Thông tin xác nhận đã cũ. Vui lòng tạo lại thao tác."
+                        : code === "ACTION_EXPIRED"
+                            ? "Thao tác đã hết hạn. Vui lòng chọn lại từ lịch hẹn."
+                            : failed?.error?.message || "Không thể xác nhận thao tác lúc này. Vui lòng thử lại hoặc mở lại lịch hẹn.",
+                urgency: "ROUTINE",
+                toolResults: failed ? [failed] : undefined
+            }]);
+        } finally {
+            isConfirmingToolActionRef.current = false;
         }
     };
 

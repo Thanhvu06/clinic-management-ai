@@ -44,6 +44,23 @@ jobs:
       - name: Check for pending EF Core model changes
         run: dotnet ef migrations has-pending-model-changes --project src/backend/ClinicManagement.Infrastructure --startup-project src/backend/ClinicManagement.Api
 
+      - name: Run focused Phase 1.2 contract tests
+        run: >-
+          dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
+          --no-build --configuration Release --filter
+          FullyQualifiedName~AiPhase12ContractTests|FullyQualifiedName~AiSessionCleanupWorkerTests
+
+      - name: Generate and validate official idempotent migration script
+        shell: bash
+        run: |
+          dotnet ef migrations script --idempotent --context AppDbContext \
+            --project src/backend/ClinicManagement.Infrastructure \
+            --startup-project src/backend/ClinicManagement.Api \
+            --configuration Release --output ./phase12-ef-idempotent.sql
+          grep -q "20260926114519_HardenAiPendingToolActionExecution" ./phase12-ef-idempotent.sql
+          grep -q "__EFMigrationsHistory" ./phase12-ef-idempotent.sql
+          rm -f ./phase12-ef-idempotent.sql
+
       - name: Run backend tests
         env:
           TEST_SQLSERVER_CONNECTION_STRING: "Server=localhost,1433;Database=ClinicManagement_CiTest;User Id=sa;Password=Your_password123!;TrustServerCertificate=True;Connect Timeout=30;"

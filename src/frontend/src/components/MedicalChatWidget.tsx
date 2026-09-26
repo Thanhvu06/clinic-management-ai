@@ -324,14 +324,25 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         className={`${styles.actionBtn} ${styles.btnPrimary}`}
-                                                        disabled={executingActionId === toolResult.actionId}
+                                                        disabled={
+                                                            executingActionId === toolResult.actionId ||
+                                                            typeof toolResult.data?.concurrencyToken !== "string" ||
+                                                            toolResult.data.concurrencyToken.length === 0
+                                                        }
                                                         onClick={() => {
+                                                            const token = typeof toolResult.data?.concurrencyToken === "string"
+                                                                ? toolResult.data.concurrencyToken
+                                                                : undefined;
+                                                            if (!token) return;
                                                             setExecutingActionId(toolResult.actionId || null);
-                                                            const token = typeof toolResult.data?.concurrencyToken === "string" ? toolResult.data.concurrencyToken : undefined;
                                                             void confirmToolAction(toolResult.actionId || "", token).finally(() => setExecutingActionId(null));
                                                         }}
                                                     >
-                                                        {executingActionId === toolResult.actionId ? "Đang xác nhận..." : "Xác nhận thực hiện"}
+                                                        {executingActionId === toolResult.actionId
+                                                            ? "Đang xác nhận..."
+                                                            : typeof toolResult.data?.concurrencyToken !== "string"
+                                                                ? "Thiếu mã xác nhận"
+                                                                : "Xác nhận thực hiện"}
                                                     </button>
                                                 )}
                                             </div>

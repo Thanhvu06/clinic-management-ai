@@ -141,7 +141,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
                         status: 'pending_confirmation',
                         actionId: '11111111-1111-1111-1111-111111111111',
                         resultType: 'pending_action',
-                        data: { appointmentCode: 'APPT-42', concurrencyToken: 'AA==' }
+                    data: { appointmentCode: 'APPT-42', concurrencyToken: 'A'.repeat(43) }
                     }]
                 }
             })
@@ -164,8 +164,80 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
 
         await waitFor(() => expect(axiosClient.post).toHaveBeenCalledTimes(2));
-        expect(axiosClient.post.mock.calls[1][0]).toBe('/ai/tool-actions/11111111-1111-1111-1111-111111111111/confirm');
-        expect(axiosClient.post.mock.calls[1][1]).toEqual({ sessionId: 'sess_confirm', concurrencyToken: 'AA==' });
+        expect(vi.mocked(axiosClient.post).mock.calls[1][0]).toBe('/ai/tool-actions/11111111-1111-1111-1111-111111111111/confirm');
+        expect(vi.mocked(axiosClient.post).mock.calls[1][1]).toEqual({ sessionId: 'sess_confirm', concurrencyToken: 'A'.repeat(43) });
+    });
+
+    it('fails closed and disables confirmation when the grounded action has no concurrency token', async () => {
+        vi.mocked(axiosClient.post).mockResolvedValueOnce({
+            success: true,
+            message: '',
+            data: {
+                message: 'Cần xác nhận.',
+                urgency: 'ROUTINE',
+                sessionId: 'sess_missing_token',
+                toolResults: [{
+                    status: 'pending_confirmation',
+                    actionId: '22222222-2222-2222-2222-222222222222',
+                    resultType: 'pending_action',
+                    data: { appointmentCode: 'APPT-43' }
+                }]
+            }
+        });
+
+        render(
+            <MemoryRouter>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        fireEvent.click(screen.getByText('Tôi nên khám chuyên khoa nào?'));
+
+        const confirmButton = await screen.findByRole('button', { name: 'Thiếu mã xác nhận' });
+        expect(confirmButton).toBeDisabled();
+        fireEvent.click(confirmButton);
+        expect(axiosClient.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not issue two confirmation requests when the user double-clicks', async () => {
+        let releaseConfirmation!: (value: unknown) => void;
+        const confirmation = new Promise(resolve => { releaseConfirmation = resolve; });
+        vi.mocked(axiosClient.post)
+            .mockResolvedValueOnce({
+                success: true,
+                message: '',
+                data: {
+                    message: 'Cần xác nhận.',
+                    urgency: 'ROUTINE',
+                    sessionId: 'sess_double_click',
+                    toolResults: [{
+                        status: 'pending_confirmation',
+                        actionId: '33333333-3333-3333-3333-333333333333',
+                        resultType: 'pending_action',
+                        data: { appointmentCode: 'APPT-44', concurrencyToken: 'B'.repeat(43) }
+                    }]
+                }
+            })
+            .mockReturnValueOnce(confirmation);
+
+        render(
+            <MemoryRouter>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        fireEvent.click(screen.getByText('Tôi nên khám chuyên khoa nào?'));
+        const confirmButton = await screen.findByRole('button', { name: 'Xác nhận thực hiện' });
+        fireEvent.click(confirmButton);
+        fireEvent.click(confirmButton);
+
+        await waitFor(() => expect(axiosClient.post).toHaveBeenCalledTimes(2));
+        expect(vi.mocked(axiosClient.post).mock.calls.filter((call: readonly unknown[]) => String(call[0]).includes('/tool-actions/')).length).toBe(1);
+        releaseConfirmation({ status: 'completed', resultType: 'change_request', data: {} });
     });
 
     it('sends chat request when quick prompt is clicked and renders specialty suggestions', async () => {

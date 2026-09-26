@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
+using ClinicManagement.Application.AI.Tools;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -137,6 +138,7 @@ PATIENT SYMPTOM DESCRIPTION:
         var sw = Stopwatch.StartNew();
 
         var whitelistJson = JsonSerializer.Serialize(whitelist.Select(w => new { w.Code, w.Name }));
+        var plannerToolNames = string.Join(", ", AiPlannerPolicy.AllowedToolNames.OrderBy(x => x, StringComparer.Ordinal));
 
         var prompt = $$"""
 Bạn là trợ lý y tế AI thông minh của Phòng khám ClinicCare (Phiên bản prompt: {{CurrentPromptVersion}}).
@@ -222,7 +224,7 @@ FORMAT ĐẦU RA (BẮT BUỘC JSON object thuần túy):
 
 TOOL PLANNER CONTRACT:
 - toolCalls tối đa 3 phần tử; mỗi phần tử chỉ có name, version và arguments.
-- Chỉ được dùng các tên canonical đã cho phép: clinic.search_specialties, clinic.search_doctors, clinic.get_available_slots, clinic.get_facilities, clinic.get_pricing, patient.get_my_appointments, patient.get_appointment_detail. Các tool prepare/ghi chỉ được gọi qua luồng backend xác nhận riêng và không được xuất hiện trong toolCalls của planner.
+- Chỉ được dùng các tên canonical đã cho phép: {{plannerToolNames}}. Các tool prepare/ghi chỉ được gọi qua luồng backend xác nhận riêng và không được xuất hiện trong toolCalls của planner.
 - Không tự thêm actorId, role, userId, facility authorization hoặc quyền xác nhận vào arguments.
 - Không gọi tool đệ quy; nếu dữ liệu thiếu, dùng clarification thay vì tự bịa.
 """;
