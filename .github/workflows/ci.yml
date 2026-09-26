@@ -59,7 +59,8 @@ jobs:
             --configuration Release --output ./phase12-ef-idempotent.sql
           grep -q "20260926114519_HardenAiPendingToolActionExecution" ./phase12-ef-idempotent.sql
           grep -q "__EFMigrationsHistory" ./phase12-ef-idempotent.sql
-          SQLSERVER_CONTAINER="$(docker ps --filter ancestor=mcr.microsoft.com/mssql/server:2022-latest --format '{{.ID}}')"
+          docker ps --format 'table {{.ID}}\t{{.Image}}\t{{.Names}}'
+          SQLSERVER_CONTAINER="$(docker ps --format '{{.ID}} {{.Image}} {{.Names}}' | awk 'tolower($2) ~ /mssql\/server/ { print $1; exit }')"
           test -n "$SQLSERVER_CONTAINER"
           echo "Using SQL Server service container $SQLSERVER_CONTAINER"
           docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
