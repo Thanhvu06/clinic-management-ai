@@ -48,7 +48,7 @@ jobs:
         run: >-
           dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
           --no-build --configuration Release --filter
-          FullyQualifiedName~AiPhase12ContractTests|FullyQualifiedName~AiSessionCleanupWorkerTests
+          "FullyQualifiedName~AiPhase12ContractTests|FullyQualifiedName~AiSessionCleanupWorkerTests"
 
       - name: Generate and validate official idempotent migration script
         shell: bash
@@ -59,6 +59,16 @@ jobs:
             --configuration Release --output ./phase12-ef-idempotent.sql
           grep -q "20260926114519_HardenAiPendingToolActionExecution" ./phase12-ef-idempotent.sql
           grep -q "__EFMigrationsHistory" ./phase12-ef-idempotent.sql
+          SQLSERVER_CONTAINER="$(docker ps --filter ancestor=mcr.microsoft.com/mssql/server:2022-latest --format '{{.ID}}')"
+          test -n "$SQLSERVER_CONTAINER"
+          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
+            -Q "IF DB_ID('ClinicManagement_CiMigration') IS NULL CREATE DATABASE [ClinicManagement_CiMigration];"
+          docker exec -i "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
+            -d ClinicManagement_CiMigration -b < ./phase12-ef-idempotent.sql
+          docker exec -i "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
+            -d ClinicManagement_CiMigration -b < ./phase12-ef-idempotent.sql
+          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
+            -d ClinicManagement_CiMigration -b -Q "IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'AiPendingToolActions') THROW 50000, 'AiPendingToolActions table missing', 1; IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AiPendingToolActions_UserId_ResourceType_ResourceId') THROW 50000, 'Active action index missing', 1; IF NOT EXISTS (SELECT 1 FROM __EFMigrationsHistory WHERE MigrationId = '20260926114519_HardenAiPendingToolActionExecution') THROW 50000, 'Hardening migration history missing', 1;"
           rm -f ./phase12-ef-idempotent.sql
 
       - name: Run backend tests

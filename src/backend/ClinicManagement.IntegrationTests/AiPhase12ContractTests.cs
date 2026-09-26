@@ -243,6 +243,19 @@ public sealed class AiPhase12ContractTests : IntegrationTestBase
         Assert.Equal(1, await db.AppointmentChangeRequests.CountAsync(x => x.SourceAiActionId == action.ActionId));
         var savedAction = await db.AiPendingToolActions.SingleAsync(x => x.ActionId == action.ActionId);
         Assert.Equal(AiPendingToolActionState.Completed, savedAction.State);
+        Assert.Equal(AppointmentStatus.PendingCancellation,
+            await db.Appointments.Where(x => x.Id.ToString() == action.ResourceId).Select(x => x.Status).SingleAsync());
+        Assert.Equal(1, await db.AppointmentHistories.CountAsync(x =>
+            x.AppointmentId.ToString() == action.ResourceId && x.Action == AppointmentHistoryAction.CancelRequested));
+        var requestId = await db.AppointmentChangeRequests
+            .Where(x => x.SourceAiActionId == action.ActionId)
+            .Select(x => x.Id)
+            .SingleAsync();
+        Assert.Equal(1, await db.Notifications.CountAsync(x =>
+            x.DedupeKey != null && x.DedupeKey.StartsWith($"chg_req_cancel_{requestId}_")));
+        Assert.Equal(1, await db.AiAuditLogs.CountAsync(x =>
+            x.ActionType == "Tool:patient.execute_confirmed_action" &&
+            x.SessionId == action.SessionId && x.Outcome == "completed"));
     }
 
     [Fact]
@@ -281,15 +294,281 @@ public sealed class AiPhase12ContractTests : IntegrationTestBase
         var clientB = await CreateAuthenticatedClientAsync("pat1@test.com");
         var payload = new { sessionId = action.SessionId, concurrencyToken = token };
 
-        var responses = await Task.WhenAll(
-            clientA.PostAsJsonAsync($"/api/v1/ai/tool-actions/{action.ActionId}/confirm", payload),
-            clientB.PostAsJsonAsync($"/api/v1/ai/tool-actions/{action.ActionId}/confirm", payload));
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requestA = Task.Run(async () =>
+        {
+            await gate.Task;
+            return await clientA.PostAsJsonAsync($"/api/v1/ai/tool-actions/{action.ActionId}/confirm", payload);
+        });
+        var requestB = Task.Run(async () =>
+        {
+            await gate.Task;
+            return await clientB.PostAsJsonAsync($"/api/v1/ai/tool-actions/{action.ActionId}/confirm", payload);
+        });
+        gate.SetResult();
+        var responses = await Task.WhenAll(requestA, requestB);
 
         Assert.Contains(responses, x => x.StatusCode == HttpStatusCode.OK || x.StatusCode == HttpStatusCode.Conflict);
         Assert.DoesNotContain(responses, x => x.StatusCode == HttpStatusCode.InternalServerError);
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.Equal(1, await db.AppointmentChangeRequests.CountAsync(x => x.SourceAiActionId == action.ActionId));
+        Assert.Equal(1, await db.AiAuditLogs.CountAsync(x =>
+            x.ActionType == "Tool:patient.execute_confirmed_action" &&
+            x.SessionId == action.SessionId && x.Outcome == "completed"));
+    }
+
+    [Fact]
+    public async Task Dedicated_confirmation_rejects_expired_and_cancelled_actions_without_side_effects()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        var (expired, expiredToken) = await SeedPendingCancellationAsync(Patient1Id, "sess_expired_contract");
+        await MutateActionAsync(expired.ActionId, action =>
+        {
+            action.State = AiPendingToolActionState.Expired;
+            action.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(-1);
+        });
+
+        var expiredResponse = await ConfirmAsync(Client, expired, expiredToken);
+        Assert.Equal(HttpStatusCode.Gone, expiredResponse.StatusCode);
+        Assert.Equal("ACTION_EXPIRED", (await expiredResponse.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Error?.Code);
+
+        var (cancelled, cancelledToken) = await SeedPendingCancellationAsync(Patient1Id, "sess_cancelled_contract");
+        await MutateActionAsync(cancelled.ActionId, action =>
+        {
+            action.State = AiPendingToolActionState.Cancelled;
+            action.CancelledAtUtc = DateTime.UtcNow;
+        });
+
+        var cancelledResponse = await ConfirmAsync(Client, cancelled, cancelledToken);
+        Assert.Equal(HttpStatusCode.Gone, cancelledResponse.StatusCode);
+        Assert.Equal("ACTION_CANCELLED", (await cancelledResponse.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Error?.Code);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(0, await db.AppointmentChangeRequests.CountAsync(x =>
+            x.SourceAiActionId == expired.ActionId || x.SourceAiActionId == cancelled.ActionId));
+    }
+
+    [Fact]
+    public async Task Confirmation_rejects_an_active_lease_and_reclaims_an_expired_lease_once()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        var (active, activeToken) = await SeedPendingCancellationAsync(Patient1Id, "sess_active_lease_contract");
+        var activeLease = Guid.NewGuid();
+        await MutateActionAsync(active.ActionId, action =>
+        {
+            action.State = AiPendingToolActionState.Executing;
+            action.ExecutionLeaseId = activeLease;
+            action.ExecutionLeaseExpiresAtUtc = DateTime.UtcNow.AddMinutes(2);
+        });
+
+        var activeResponse = await ConfirmAsync(Client, active, activeToken);
+        Assert.Equal(HttpStatusCode.Conflict, activeResponse.StatusCode);
+        Assert.Equal("ACTION_IN_PROGRESS", (await activeResponse.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Error?.Code);
+
+        var (expiredLease, expiredLeaseToken) = await SeedPendingCancellationAsync(Patient1Id, "sess_expired_lease_contract");
+        await MutateActionAsync(expiredLease.ActionId, action =>
+        {
+            action.State = AiPendingToolActionState.Executing;
+            action.ExecutionLeaseId = Guid.NewGuid();
+            action.ExecutionLeaseExpiresAtUtc = DateTime.UtcNow.AddMinutes(-1);
+        });
+
+        var clientA = await CreateAuthenticatedClientAsync("pat1@test.com");
+        var clientB = await CreateAuthenticatedClientAsync("pat1@test.com");
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requestA = Task.Run(async () =>
+        {
+            await gate.Task;
+            return await ConfirmAsync(clientA, expiredLease, expiredLeaseToken);
+        });
+        var requestB = Task.Run(async () =>
+        {
+            await gate.Task;
+            return await ConfirmAsync(clientB, expiredLease, expiredLeaseToken);
+        });
+        gate.SetResult();
+        var responses = await Task.WhenAll(requestA, requestB);
+
+        Assert.DoesNotContain(responses, response => response.StatusCode == HttpStatusCode.InternalServerError);
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(1, await db.AppointmentChangeRequests.CountAsync(x => x.SourceAiActionId == expiredLease.ActionId));
+        var saved = await db.AiPendingToolActions.SingleAsync(x => x.ActionId == expiredLease.ActionId);
+        Assert.Equal(AiPendingToolActionState.Completed, saved.State);
+        Assert.Null(saved.ExecutionLeaseId);
+        Assert.Equal(1, saved.ExecutionAttemptCount);
+    }
+
+    [Fact]
+    public async Task Failed_retryable_action_can_retry_and_complete()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var (action, token) = await SeedPendingCancellationAsync(Patient1Id, "sess_retryable_contract");
+        await MutateActionAsync(action.ActionId, pending =>
+        {
+            pending.State = AiPendingToolActionState.FailedRetryable;
+            pending.LastErrorCode = "DB_TIMEOUT";
+        });
+
+        var response = await ConfirmAsync(Client, action, token);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("completed", (await response.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Status);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(1, await db.AppointmentChangeRequests.CountAsync(x => x.SourceAiActionId == action.ActionId));
+        Assert.Equal(AiPendingToolActionState.Completed,
+            (await db.AiPendingToolActions.SingleAsync(x => x.ActionId == action.ActionId)).State);
+    }
+
+    [Theory]
+    [InlineData("{", "malformed_json")]
+    [InlineData("{\"appointmentId\":\"not-a-number\"}", "wrong_schema")]
+    public async Task Corrupt_persisted_arguments_fail_closed_and_become_terminal(string corruptArguments, string _)
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var (seeded, _) = await SeedPendingCancellationAsync(Patient1Id, $"sess_corrupt_{Guid.NewGuid():N}");
+        await MutateActionAsync(seeded.ActionId, action => action.NormalizedArgumentsJson = corruptArguments);
+        var action = await ReadActionAsync(seeded.ActionId);
+        Assert.Equal(corruptArguments, action.NormalizedArgumentsJson);
+        var response = await ConfirmAsync(Client, action, BuildConfirmationToken(action));
+
+        var body = await response.Content.ReadFromJsonAsync<AiToolExecutionResult>();
+        Assert.Equal("failed", body?.Status);
+        Assert.Equal("INVALID_PENDING_ACTION", body?.Error?.Code);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var saved = await db.AiPendingToolActions.SingleAsync(x => x.ActionId == action.ActionId);
+        Assert.Equal(AiPendingToolActionState.FailedTerminal, saved.State);
+        Assert.Equal(0, await db.AppointmentChangeRequests.CountAsync(x => x.SourceAiActionId == action.ActionId));
+    }
+
+    [Fact]
+    public async Task Confirmation_revalidates_ownership_and_all_token_binding_fields_at_execution_time()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var (action, _) = await SeedPendingCancellationAsync(Patient1Id, "sess_binding_contract");
+
+        foreach (var alteredToken in new[]
+        {
+            BuildConfirmationToken(action, resourceId: "999999"),
+            BuildConfirmationToken(action, toolVersion: "9.9"),
+            BuildConfirmationToken(action, requestHash: "different-request-hash"),
+            new string('A', 43)
+        })
+        {
+            var response = await ConfirmAsync(Client, action, alteredToken);
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.Equal("CONCURRENCY_CONFLICT", (await response.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Error?.Code);
+        }
+
+        var changed = await ReadActionAsync(action.ActionId);
+        await ChangeAppointmentOwnerAsync(long.Parse(changed.ResourceId), Patient2EntityId);
+        using (var changedScope = Factory.Services.CreateScope())
+        {
+            var changedDb = changedScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(Patient2EntityId, await changedDb.Appointments.Where(x => x.Id.ToString() == changed.ResourceId).Select(x => x.PatientId).SingleAsync());
+        }
+        var ownershipResponse = await ConfirmAsync(Client, changed, BuildConfirmationToken(changed));
+        Assert.Equal(HttpStatusCode.OK, ownershipResponse.StatusCode);
+        var ownershipBody = await ownershipResponse.Content.ReadFromJsonAsync<AiToolExecutionResult>();
+        Assert.Equal("failed", ownershipBody?.Status);
+        Assert.Equal("ACTION_EXECUTION_FAILED", ownershipBody?.Error?.Code);
+
+        using var verifyScope = Factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(AiPendingToolActionState.FailedTerminal,
+            (await verifyDb.AiPendingToolActions.SingleAsync(x => x.ActionId == action.ActionId)).State);
+        Assert.Equal(0, await verifyDb.AppointmentChangeRequests.CountAsync(x => x.SourceAiActionId == action.ActionId));
+    }
+
+    [Theory]
+    [InlineData("slot")]
+    [InlineData("doctor")]
+    [InlineData("schedule")]
+    [InlineData("leave")]
+    [InlineData("conflict")]
+    public async Task Reschedule_confirmation_revalidates_changed_slot_doctor_schedule_leave_and_conflict(string mutation)
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var (action, token, targetSlotId) = await SeedPendingRescheduleAsync("sess_reschedule_" + mutation);
+        await MutateRescheduleResourceAsync(action, targetSlotId, mutation);
+
+        var response = await ConfirmAsync(Client, action, token);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<AiToolExecutionResult>();
+        Assert.Equal("failed", body?.Status);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var saved = await db.AiPendingToolActions.SingleAsync(x => x.ActionId == action.ActionId);
+        Assert.Equal(AiPendingToolActionState.FailedTerminal, saved.State);
+        Assert.Equal(0, await db.AppointmentChangeRequests.CountAsync(x => x.SourceAiActionId == action.ActionId));
+    }
+
+    [Fact]
+    public async Task Crash_window_with_existing_source_record_completes_without_duplicate_change_request()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        var (action, token) = await SeedPendingCancellationAsync(Patient1Id, "sess_crash_window_contract");
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var appointmentId = long.Parse(action.ResourceId);
+            db.AppointmentChangeRequests.Add(new AppointmentChangeRequest
+            {
+                AppointmentId = appointmentId,
+                RequestType = AppointmentChangeRequestType.Cancellation,
+                Reason = "existing crash-window request",
+                Status = AppointmentChangeRequestStatus.Pending,
+                OriginalAppointmentStatus = AppointmentStatus.Confirmed,
+                RequestedByUserId = Patient1Id,
+                SourceAiActionId = action.ActionId,
+                CreatedAt = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var response = await ConfirmAsync(Client, action, token);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var verifyScope = Factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(1, await verifyDb.AppointmentChangeRequests.CountAsync(x => x.SourceAiActionId == action.ActionId));
+        Assert.Equal(AiPendingToolActionState.Completed,
+            (await verifyDb.AiPendingToolActions.SingleAsync(x => x.ActionId == action.ActionId)).State);
+    }
+
+    [Fact]
+    public async Task Planner_rejects_mixed_or_unknown_write_plan_before_first_read_handler()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var executor = scope.ServiceProvider.GetRequiredService<IAiToolExecutor>();
+        var before = await scope.ServiceProvider.GetRequiredService<AppDbContext>().AiAuditLogs.CountAsync(x =>
+            x.ActionType == "Tool:clinic.get_facilities" && x.SessionId == "sess_planner_preflight");
+
+        var result = await executor.ExecutePlannerPlanAsync(new[]
+        {
+            new AiPlannerToolCall { Name = "clinic.get_facilities", Version = "1.0", Arguments = JsonDocument.Parse("{}").RootElement.Clone() },
+            new AiPlannerToolCall { Name = "patient.execute_confirmed_action", Version = "1.0", Arguments = JsonDocument.Parse("{}").RootElement.Clone() }
+        }, "sess_planner_preflight");
+
+        Assert.Equal("PLANNER_TOOL_NOT_ALLOWED", Assert.Single(result).Error?.Code);
+        var afterMixed = await scope.ServiceProvider.GetRequiredService<AppDbContext>().AiAuditLogs.CountAsync(x =>
+            x.ActionType == "Tool:clinic.get_facilities" && x.SessionId == "sess_planner_preflight");
+        Assert.Equal(before, afterMixed);
+
+        var unknown = await executor.ExecutePlannerPlanAsync(new[]
+        {
+            new AiPlannerToolCall { Name = "clinic.search_future_write_tool", Version = "1.0", Arguments = JsonDocument.Parse("{}").RootElement.Clone() }
+        }, "sess_planner_preflight");
+        Assert.Equal("PLANNER_TOOL_NOT_ALLOWED", Assert.Single(unknown).Error?.Code);
     }
 
     private async Task<(AiPendingToolAction Action, string Token)> SeedPendingCancellationAsync(Guid userId, string sessionId)
@@ -336,9 +615,154 @@ public sealed class AiPhase12ContractTests : IntegrationTestBase
         return (action, BuildConfirmationToken(action));
     }
 
-    private static string BuildConfirmationToken(AiPendingToolAction action)
+    private async Task<(AiPendingToolAction Action, string Token, long TargetSlotId)> SeedPendingRescheduleAsync(string sessionId)
     {
-        var material = $"{action.ActionId:N}|{action.UserId:N}|{action.SessionId}|{action.ToolName}|{action.ToolVersion}|{action.ResourceType}|{action.ResourceId}|{action.RequestHash}";
+        var date = GetFutureWorkingDate(23);
+        var sourceSlot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(13, 0), new TimeOnly(13, 30));
+        var targetSlot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(14, 0), new TimeOnly(14, 30));
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var sourceSlotDb = await db.AppointmentSlots.SingleAsync(x => x.Id == sourceSlot.Id);
+        var targetSlotDb = await db.AppointmentSlots.SingleAsync(x => x.Id == targetSlot.Id);
+        sourceSlotDb.IsBooked = true;
+        targetSlotDb.IsBooked = false;
+        var appointment = new Appointment
+        {
+            AppointmentCode = $"APT-AI-{Guid.NewGuid():N}"[..18].ToUpperInvariant(),
+            PatientId = Patient1EntityId,
+            DoctorId = DoctorEntityId,
+            SpecialtyId = SpecialtyEntityId,
+            AppointmentSlotId = sourceSlot.Id,
+            AppointmentDate = date,
+            StartTime = sourceSlot.StartTime,
+            EndTime = sourceSlot.EndTime,
+            Reason = "Đau đầu kéo dài để kiểm thử đổi lịch",
+            Status = AppointmentStatus.Confirmed
+        };
+        db.Appointments.Add(appointment);
+        await db.SaveChangesAsync();
+
+        var action = new AiPendingToolAction
+        {
+            ActionId = Guid.NewGuid(),
+            UserId = Patient1Id,
+            SessionId = sessionId,
+            ToolName = "patient.prepare_reschedule_appointment",
+            ToolVersion = "1.0",
+            RequestHash = $"phase12-reschedule-{Guid.NewGuid():N}",
+            ResourceType = "appointment",
+            ResourceId = appointment.Id.ToString(),
+            NormalizedArgumentsJson = JsonSerializer.Serialize(new { appointmentId = appointment.Id, requestedSlotId = targetSlot.Id }),
+            CreatedAtUtc = DateTime.UtcNow,
+            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(10),
+            State = AiPendingToolActionState.PendingConfirmation
+        };
+        db.AiPendingToolActions.Add(action);
+        await db.SaveChangesAsync();
+        return (action, BuildConfirmationToken(action), targetSlot.Id);
+    }
+
+    private async Task MutateRescheduleResourceAsync(AiPendingToolAction action, long targetSlotId, string mutation)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var targetSlot = await db.AppointmentSlots.SingleAsync(x => x.Id == targetSlotId);
+        switch (mutation)
+        {
+            case "slot":
+                targetSlot.IsBooked = true;
+                break;
+            case "doctor":
+                (await db.Doctors.SingleAsync(x => x.Id == targetSlot.DoctorId)).IsActive = false;
+                break;
+            case "schedule":
+                var schedules = await db.DoctorWorkSchedules
+                    .Where(x => x.DoctorId == targetSlot.DoctorId && x.WorkDate == targetSlot.SlotDate)
+                    .ToListAsync();
+                foreach (var schedule in schedules) schedule.IsActive = false;
+                break;
+            case "leave":
+                var slotStart = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime);
+                db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
+                {
+                    DoctorId = targetSlot.DoctorId,
+                    StartDateTime = slotStart.AddMinutes(-5),
+                    EndDateTime = slotStart.AddMinutes(35),
+                    Reason = "Kiểm thử lịch nghỉ phát sinh",
+                    Status = DoctorLeaveRequestStatus.Approved
+                });
+                break;
+            case "conflict":
+                var conflictSlot = new AppointmentSlot
+                {
+                    DoctorId = targetSlot.DoctorId,
+                    SlotDate = targetSlot.SlotDate,
+                    StartTime = targetSlot.EndTime,
+                    EndTime = targetSlot.EndTime.AddMinutes(30),
+                    IsBooked = true
+                };
+                db.AppointmentSlots.Add(conflictSlot);
+                await db.SaveChangesAsync();
+                db.Appointments.Add(new Appointment
+                {
+                    AppointmentCode = $"APT-AI-{Guid.NewGuid():N}"[..18].ToUpperInvariant(),
+                    PatientId = Patient1EntityId,
+                    DoctorId = targetSlot.DoctorId,
+                    SpecialtyId = SpecialtyEntityId,
+                    AppointmentSlotId = conflictSlot.Id,
+                    AppointmentDate = targetSlot.SlotDate,
+                    StartTime = targetSlot.StartTime,
+                    EndTime = targetSlot.EndTime,
+                    Reason = "Lịch xung đột phát sinh để kiểm thử",
+                    Status = AppointmentStatus.Confirmed
+                });
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null);
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    private async Task MutateActionAsync(Guid actionId, Action<AiPendingToolAction> mutate)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var action = await db.AiPendingToolActions.SingleAsync(x => x.ActionId == actionId);
+        mutate(action);
+        await db.SaveChangesAsync();
+    }
+
+    private async Task ChangeAppointmentOwnerAsync(long appointmentId, long patientId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var appointment = await db.Appointments.SingleAsync(x => x.Id == appointmentId);
+        appointment.PatientId = patientId;
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<AiPendingToolAction> ReadActionAsync(Guid actionId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.AiPendingToolActions.AsNoTracking().SingleAsync(x => x.ActionId == actionId);
+    }
+
+    private static Task<HttpResponseMessage> ConfirmAsync(HttpClient client, AiPendingToolAction action, string token) =>
+        client.PostAsJsonAsync($"/api/v1/ai/tool-actions/{action.ActionId}/confirm", new
+        {
+            sessionId = action.SessionId,
+            concurrencyToken = token
+        });
+
+    private static string BuildConfirmationToken(
+        AiPendingToolAction action,
+        string? toolVersion = null,
+        string? resourceId = null,
+        string? requestHash = null)
+    {
+        var material = $"{action.ActionId:N}|{action.UserId:N}|{action.SessionId}|{action.ToolName}|{toolVersion ?? action.ToolVersion}|{action.ResourceType}|{resourceId ?? action.ResourceId}|{requestHash ?? action.RequestHash}";
         return Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(material)))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }

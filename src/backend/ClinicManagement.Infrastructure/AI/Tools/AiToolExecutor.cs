@@ -129,25 +129,31 @@ public sealed class AiToolExecutor : IAiToolExecutor
             }
         }
 
-        await _audit.LogActionAsync(new AiAuditLogEntry
+        var isIdempotentConfirmationReplay = channel == AiToolInvocationChannel.DirectHumanConfirmation &&
+            (string.Equals(result.ResultType, "idempotent_replay", StringComparison.Ordinal) ||
+             string.Equals(result.Error?.Code, "ACTION_IN_PROGRESS", StringComparison.Ordinal));
+        if (!isIdempotentConfirmationReplay)
         {
-            UserId = context.ActorId,
-            SessionId = context.SessionId,
-            FacilityId = context.FacilityId,
-            ActionType = $"Tool:{definition.Name}",
-            Outcome = result.Status,
-            ErrorCode = result.Error?.Code,
-            CorrelationId = context.CorrelationId,
-            MetadataJson = JsonSerializer.Serialize(new
+            await _audit.LogActionAsync(new AiAuditLogEntry
             {
-                tool = definition.Name,
-                version = definition.Version,
-                status = result.Status,
-                confirmationRequired = result.RequiresConfirmation,
-                invocationChannel = channel.ToString(),
-                source = "ai_tool_gateway"
-            })
-        }, cancellationToken);
+                UserId = context.ActorId,
+                SessionId = context.SessionId,
+                FacilityId = context.FacilityId,
+                ActionType = $"Tool:{definition.Name}",
+                Outcome = result.Status,
+                ErrorCode = result.Error?.Code,
+                CorrelationId = context.CorrelationId,
+                MetadataJson = JsonSerializer.Serialize(new
+                {
+                    tool = definition.Name,
+                    version = definition.Version,
+                    status = result.Status,
+                    confirmationRequired = result.RequiresConfirmation,
+                    invocationChannel = channel.ToString(),
+                    source = "ai_tool_gateway"
+                })
+            }, cancellationToken);
+        }
 
         return result;
     }

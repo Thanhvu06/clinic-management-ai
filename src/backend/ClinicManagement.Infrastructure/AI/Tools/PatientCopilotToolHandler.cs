@@ -435,7 +435,7 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
         if (action == null || action.UserId != context.ActorId.Value) return AiToolExecutionResult.Failed("ACTION_NOT_FOUND", "Thao tác không tồn tại hoặc không thuộc tài khoản này.");
         if (!string.Equals(action.SessionId, context.SessionId, StringComparison.Ordinal)) return AiToolExecutionResult.Failed("SESSION_MISMATCH", "Thao tác thuộc một phiên hội thoại khác.");
         if (action.State == AiPendingToolActionState.Completed || action.ExecutedAtUtc.HasValue)
-            return Completed(new { actionId, status = "already_completed", reference = action.ExecutionResultReference }, "pending_action", "Thao tác này đã được hoàn tất trước đó.");
+            return Completed(new { actionId, status = "already_completed", reference = action.ExecutionResultReference }, "idempotent_replay", "Thao tác này đã được hoàn tất trước đó.");
 
         var now = _dateTimeProvider.UtcNow;
         if (action.CancelledAtUtc.HasValue || action.State == AiPendingToolActionState.Cancelled)
@@ -566,8 +566,10 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
         catch (JsonException) { return new(); }
     }
     private static string? GetString(Dictionary<string, JsonElement> args, string name) => args.TryGetValue(name, out var x) && x.ValueKind == JsonValueKind.String ? x.GetString()?.Trim() : null;
-    private static long? GetLong(Dictionary<string, JsonElement> args, string name) => args.TryGetValue(name, out var x) && x.TryGetInt64(out var v) ? v : null;
-    private static int? GetInt(Dictionary<string, JsonElement> args, string name) => args.TryGetValue(name, out var x) && x.TryGetInt32(out var v) ? v : null;
+    private static long? GetLong(Dictionary<string, JsonElement> args, string name) =>
+        args.TryGetValue(name, out var x) && x.ValueKind == JsonValueKind.Number && x.TryGetInt64(out var v) ? v : null;
+    private static int? GetInt(Dictionary<string, JsonElement> args, string name) =>
+        args.TryGetValue(name, out var x) && x.ValueKind == JsonValueKind.Number && x.TryGetInt32(out var v) ? v : null;
     private static bool GetBool(Dictionary<string, JsonElement> args, string name) => args.TryGetValue(name, out var x) && x.ValueKind == JsonValueKind.True;
     private static DateOnly? GetDate(Dictionary<string, JsonElement> args, string name) => DateOnly.TryParse(GetString(args, name), out var date) ? date : null;
     private static bool Contains(string? text, string query) => !string.IsNullOrWhiteSpace(text) && text.Contains(query, StringComparison.OrdinalIgnoreCase);
