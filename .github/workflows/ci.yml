@@ -44,11 +44,71 @@ jobs:
       - name: Check for pending EF Core model changes
         run: dotnet ef migrations has-pending-model-changes --project src/backend/ClinicManagement.Infrastructure --startup-project src/backend/ClinicManagement.Api
 
-      - name: Run focused Phase 1.2 contract tests
+      - name: Diagnose confirmation concurrency contracts
+        id: diagnose_confirmation_concurrency
+        continue-on-error: true
         run: >-
           dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
           --no-build --configuration Release --filter
-          "FullyQualifiedName~AiPhase12ContractTests|FullyQualifiedName~AiSessionCleanupWorkerTests"
+          "FullyQualifiedName~AiPhase12ContractTests.Concurrent_confirmation_claims_one_lease_and_creates_one_change_request|FullyQualifiedName~AiPhase12ContractTests.Confirmation_rejects_an_active_lease_and_reclaims_an_expired_lease_once"
+
+      - name: Diagnose confirmation validation contracts
+        id: diagnose_confirmation_validation
+        continue-on-error: true
+        run: >-
+          dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
+          --no-build --configuration Release --filter
+          "FullyQualifiedName~AiPhase12ContractTests.Dedicated_confirmation_rejects_expired_and_cancelled_actions_without_side_effects|FullyQualifiedName~AiPhase12ContractTests.Failed_retryable_action_can_retry_and_complete|FullyQualifiedName~AiPhase12ContractTests.Corrupt_persisted_arguments_fail_closed_and_become_terminal"
+
+      - name: Diagnose execution revalidation contracts
+        id: diagnose_execution_revalidation
+        continue-on-error: true
+        run: >-
+          dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
+          --no-build --configuration Release --filter
+          "FullyQualifiedName~AiPhase12ContractTests.Confirmation_revalidates_ownership_and_all_token_binding_fields_at_execution_time|FullyQualifiedName~AiPhase12ContractTests.Reschedule_confirmation_revalidates_changed_slot_doctor_schedule_leave_and_conflict"
+
+      - name: Diagnose idempotency planner contracts
+        id: diagnose_idempotency_planner
+        continue-on-error: true
+        run: >-
+          dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
+          --no-build --configuration Release --filter
+          "FullyQualifiedName~AiPhase12ContractTests.Crash_window_with_existing_source_record_completes_without_duplicate_change_request|FullyQualifiedName~AiPhase12ContractTests.Planner_rejects_mixed_or_unknown_write_plan_before_first_read_handler"
+
+      - name: Diagnose remaining Phase 1.2 contracts
+        id: diagnose_remaining_contracts
+        continue-on-error: true
+        run: >-
+          dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
+          --no-build --configuration Release --filter
+          "FullyQualifiedName~AiPhase12ContractTests"
+
+      - name: Diagnose session cleanup contracts
+        id: diagnose_session_cleanup
+        continue-on-error: true
+        run: >-
+          dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
+          --no-build --configuration Release --filter
+          "FullyQualifiedName~AiSessionCleanupWorkerTests"
+
+      - name: Fail if any focused diagnostic group failed
+        if: always()
+        shell: bash
+        run: |
+          failed=0
+          for outcome in \
+            "${{ steps.diagnose_confirmation_concurrency.outcome }}" \
+            "${{ steps.diagnose_confirmation_validation.outcome }}" \
+            "${{ steps.diagnose_execution_revalidation.outcome }}" \
+            "${{ steps.diagnose_idempotency_planner.outcome }}" \
+            "${{ steps.diagnose_remaining_contracts.outcome }}" \
+            "${{ steps.diagnose_session_cleanup.outcome }}"; do
+            if [[ "$outcome" != "success" ]]; then
+              failed=1
+            fi
+          done
+          exit "$failed"
 
       - name: Generate and validate official idempotent migration script
         shell: bash
