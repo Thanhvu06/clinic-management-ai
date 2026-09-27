@@ -49,6 +49,24 @@ jobs:
           dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
           --no-build --configuration Release --filter
           "FullyQualifiedName~AiPhase12ContractTests|FullyQualifiedName~AiSessionCleanupWorkerTests"
+          --logger "trx;LogFileName=phase12.trx"
+
+      - name: Surface focused Phase 1.2 test failures
+        if: failure()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          namespace = {"trx": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
+          for path in glob.glob("**/TestResults/phase12.trx", recursive=True):
+              root = ET.parse(path).getroot()
+              for result in root.findall(".//trx:UnitTestResult[@outcome='Failed']", namespace):
+                  name = result.attrib.get("testName", "unknown test")
+                  message = result.findtext(".//trx:Message", default="No failure message", namespaces=namespace)
+                  print(f"::error title={name}::{message.replace(chr(10), ' ')[:1500]}")
+          PY
 
       - name: Run focused Phase 2 copilot tests
         run: >-
