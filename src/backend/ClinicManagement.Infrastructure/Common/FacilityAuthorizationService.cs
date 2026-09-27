@@ -66,6 +66,7 @@ public class FacilityAuthorizationService : IFacilityAuthorizationService
             .Where(a => a.Id == appointmentId)
             .Select(a => new { 
                 a.Id, 
+                a.FacilityId,
                 VisitFacilityId = (long?)(a.PatientVisit != null ? a.PatientVisit.FacilityId : null),
                 DoctorUserId = a.Doctor.UserId,
                 a.SpecialtyId
@@ -78,6 +79,15 @@ public class FacilityAuthorizationService : IFacilityAuthorizationService
         if (await HasFullFacilityAccessAsync(userId, cancellationToken))
             return;
 
+        if (appt.FacilityId.HasValue && appt.FacilityId.Value > 0)
+        {
+            await ValidateUserFacilityAccessAsync(userId, appt.FacilityId.Value, cancellationToken);
+            return;
+        }
+
+        // Legacy rows created before Appointment.FacilityId are resolved from
+        // an existing visit only. New appointments must always use the
+        // explicit facility binding above.
         if (appt.VisitFacilityId.HasValue && appt.VisitFacilityId.Value > 0)
         {
             await ValidateUserFacilityAccessAsync(userId, appt.VisitFacilityId.Value, cancellationToken);
@@ -136,13 +146,10 @@ public class FacilityAuthorizationService : IFacilityAuthorizationService
             return;
         }
 
-        // Multi-facility doctor: if the appointment's facility cannot be uniquely determined,
-        // do NOT guess facility or grant global access.
-        // User must have access to all candidate facilities, otherwise access is indeterminate and denied.
-        if (!candidateFacilityIds.All(cf => userFacilityIds.Contains(cf)))
-        {
-            throw new ForbiddenException("ACCESS_DENIED_TO_FACILITY_RESOURCE", "Không thể xác định chính xác cơ sở y tế của lịch hẹn giữa các cơ sở của bác sĩ.");
-        }
+        // Multi-facility legacy appointment: access is indeterminate and must
+        // fail closed. Do not grant access merely because the caller happens
+        // to have assignments at every candidate facility.
+        throw new ForbiddenException("ACCESS_DENIED_TO_FACILITY_RESOURCE", "Không thể xác định chính xác cơ sở y tế của lịch hẹn giữa các cơ sở của bác sĩ.");
     }
 
     public async Task ValidateInvoiceAccessAsync(Guid userId, long invoiceId, CancellationToken cancellationToken = default)

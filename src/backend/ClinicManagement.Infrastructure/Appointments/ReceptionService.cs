@@ -71,7 +71,7 @@ public class ReceptionService : IReceptionService
                     join s in _dbContext.Specialties.AsNoTracking() on a.SpecialtyId equals s.Id
                     join pv in _dbContext.PatientVisits.AsNoTracking() on a.Id equals pv.AppointmentId into pvGroup
                     from pv in pvGroup.DefaultIfEmpty()
-                    join f in _dbContext.Facilities.AsNoTracking() on pv.FacilityId equals f.Id into fGroup
+                    join f in _dbContext.Facilities.AsNoTracking() on a.FacilityId equals f.Id into fGroup
                     from f in fGroup.DefaultIfEmpty()
                     select new
                     {
@@ -86,20 +86,22 @@ public class ReceptionService : IReceptionService
                         SpecialtyName = s.Name,
                         PatientVisitId = pv != null ? (long?)pv.Id : null,
                         VisitFacilityId = pv != null ? (long?)pv.FacilityId : null,
-                        FacilityId = pv != null ? (long?)pv.FacilityId : _dbContext.StaffFacilityAssignments.Where(sa => sa.UserId == d.UserId && sa.IsActive).Select(sa => (long?)sa.FacilityId).FirstOrDefault(),
-                        FacilityName = f != null ? f.Name : _dbContext.StaffFacilityAssignments.Where(sa => sa.UserId == d.UserId && sa.IsActive).Select(sa => sa.Facility.Name).FirstOrDefault()
+                        FacilityId = a.FacilityId ?? (pv != null ? (long?)pv.FacilityId : null),
+                        FacilityName = f != null ? f.Name : (pv != null ? pv.Facility.Name : null)
                     };
 
         if (facilityId.HasValue && facilityId.Value > 0)
         {
             var facId = facilityId.Value;
-            query = query.Where(x => (x.VisitFacilityId.HasValue && x.VisitFacilityId.Value == facId)
-                                  || (!x.VisitFacilityId.HasValue && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == x.DoctorUserId && s.IsActive && s.FacilityId == facId)));
+            query = query.Where(x => x.Appointment.FacilityId == facId ||
+                                  (!x.Appointment.FacilityId.HasValue && x.VisitFacilityId.HasValue && x.VisitFacilityId.Value == facId) ||
+                                  (!x.Appointment.FacilityId.HasValue && !x.VisitFacilityId.HasValue && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == x.DoctorUserId && s.IsActive && s.FacilityId == facId)));
         }
         else if (!isGlobalAdmin)
         {
-            query = query.Where(x => (x.VisitFacilityId.HasValue && allowedFacilityIds.Contains(x.VisitFacilityId.Value))
-                                  || (!x.VisitFacilityId.HasValue && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == x.DoctorUserId && s.IsActive && allowedFacilityIds.Contains(s.FacilityId))));
+            query = query.Where(x => (x.Appointment.FacilityId.HasValue && allowedFacilityIds.Contains(x.Appointment.FacilityId.Value)) ||
+                                  (!x.Appointment.FacilityId.HasValue && x.VisitFacilityId.HasValue && allowedFacilityIds.Contains(x.VisitFacilityId.Value)) ||
+                                  (!x.Appointment.FacilityId.HasValue && !x.VisitFacilityId.HasValue && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == x.DoctorUserId && s.IsActive && allowedFacilityIds.Contains(s.FacilityId))));
         }
 
         var effectiveFilter = (!string.IsNullOrWhiteSpace(tab) ? tab : status)?.Trim().ToLower();
@@ -176,7 +178,7 @@ public class ReceptionService : IReceptionService
                     join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
                     join pv in _dbContext.PatientVisits on a.Id equals pv.AppointmentId into pvGroup
                     from pv in pvGroup.DefaultIfEmpty()
-                    join f in _dbContext.Facilities on pv.FacilityId equals f.Id into fGroup
+                    join f in _dbContext.Facilities on a.FacilityId equals f.Id into fGroup
                     from f in fGroup.DefaultIfEmpty()
                     where a.Id == appointmentId
                     select new
@@ -189,8 +191,8 @@ public class ReceptionService : IReceptionService
                         DoctorName = du != null ? du.FullName : "Bác sĩ",
                         SpecialtyName = s.Name,
                         PatientVisitId = pv != null ? (long?)pv.Id : null,
-                        FacilityId = pv != null ? (long?)pv.FacilityId : _dbContext.StaffFacilityAssignments.Where(sa => sa.UserId == d.UserId && sa.IsActive).Select(sa => (long?)sa.FacilityId).FirstOrDefault(),
-                        FacilityName = f != null ? f.Name : _dbContext.StaffFacilityAssignments.Where(sa => sa.UserId == d.UserId && sa.IsActive).Select(sa => sa.Facility.Name).FirstOrDefault()
+                        FacilityId = a.FacilityId ?? (pv != null ? (long?)pv.FacilityId : null),
+                        FacilityName = f != null ? f.Name : (pv != null ? pv.Facility.Name : null)
                     };
 
         var item = await query.FirstOrDefaultAsync();
@@ -376,13 +378,15 @@ public class ReceptionService : IReceptionService
         if (facilityId.HasValue && facilityId.Value > 0)
         {
             var facId = facilityId.Value;
-            apptQuery = apptQuery.Where(a => (a.PatientVisit != null && a.PatientVisit.FacilityId == facId)
-                                          || (a.PatientVisit == null && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == a.Doctor.UserId && s.IsActive && s.FacilityId == facId)));
+            apptQuery = apptQuery.Where(a => a.FacilityId == facId ||
+                                          (!a.FacilityId.HasValue && a.PatientVisit != null && a.PatientVisit.FacilityId == facId) ||
+                                          (!a.FacilityId.HasValue && a.PatientVisit == null && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == a.Doctor.UserId && s.IsActive && s.FacilityId == facId)));
         }
         else if (!isGlobalAdmin)
         {
-            apptQuery = apptQuery.Where(a => (a.PatientVisit != null && allowedFacilityIds.Contains(a.PatientVisit.FacilityId))
-                                          || (a.PatientVisit == null && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == a.Doctor.UserId && s.IsActive && allowedFacilityIds.Contains(s.FacilityId))));
+            apptQuery = apptQuery.Where(a => (a.FacilityId.HasValue && allowedFacilityIds.Contains(a.FacilityId.Value)) ||
+                                          (!a.FacilityId.HasValue && a.PatientVisit != null && allowedFacilityIds.Contains(a.PatientVisit.FacilityId)) ||
+                                          (!a.FacilityId.HasValue && a.PatientVisit == null && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == a.Doctor.UserId && s.IsActive && allowedFacilityIds.Contains(s.FacilityId))));
         }
 
         var appointmentsToday = await apptQuery

@@ -66,19 +66,19 @@ public sealed class AiCopilotContextResolver : IAiCopilotContextResolver
             .Select(x => new
             {
                 x.Id, x.Doctor.UserId, PatientUserId = x.Patient.UserId, x.DoctorId, x.PatientId,
-                x.AppointmentSlotId, x.AppointmentDate, x.StartTime, x.Status
+                x.FacilityId, x.AppointmentSlotId, x.AppointmentDate, x.StartTime, x.Status
             }).SingleOrDefaultAsync(ct);
         if (item is null) return false;
         var scoped = role switch
         {
-            AiActorRole.Doctor => item.UserId == actorId,
+            AiActorRole.Doctor when item.FacilityId.HasValue => item.UserId == actorId && await HasFacility(actorId, item.FacilityId.Value, role, null, ct),
             AiActorRole.Patient => item.PatientUserId == actorId,
-            AiActorRole.Receptionist => await HasSharedDoctorFacility(actorId, item.UserId, AiActorRole.Receptionist, ct),
+            AiActorRole.Receptionist when item.FacilityId.HasValue => await HasFacility(actorId, item.FacilityId.Value, role, null, ct),
             _ => false
         };
         if (!scoped) return false;
         if (string.IsNullOrWhiteSpace(version)) return true;
-        var canonical = $"{item.Id}|{item.DoctorId}|{item.PatientId}|{item.AppointmentSlotId}|{item.AppointmentDate:yyyy-MM-dd}|{item.StartTime:HH:mm:ss}|{item.Status}";
+        var canonical = $"{item.Id}|{item.DoctorId}|{item.PatientId}|{item.FacilityId}|{item.AppointmentSlotId}|{item.AppointmentDate:yyyy-MM-dd}|{item.StartTime:HH:mm:ss}|{item.Status}";
         return FixedEquals(version, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))));
     }
 
@@ -130,10 +130,6 @@ public sealed class AiCopilotContextResolver : IAiCopilotContextResolver
 
     private Task<bool> HasFacility(Guid userId, long facilityId, AiActorRole role, long? departmentId, CancellationToken ct) =>
         _db.StaffFacilityAssignments.AsNoTracking().AnyAsync(x => x.UserId == userId && x.IsActive && x.Role == role.ToString() && x.FacilityId == facilityId && (!departmentId.HasValue || !x.DepartmentId.HasValue || x.DepartmentId == departmentId), ct);
-
-    private Task<bool> HasSharedDoctorFacility(Guid actorId, Guid doctorUserId, AiActorRole actorRole, CancellationToken ct) =>
-        _db.StaffFacilityAssignments.AsNoTracking().AnyAsync(actor => actor.UserId == actorId && actor.IsActive && actor.Role == actorRole.ToString() &&
-            _db.StaffFacilityAssignments.Any(doctor => doctor.UserId == doctorUserId && doctor.IsActive && doctor.Role == AiActorRole.Doctor.ToString() && doctor.FacilityId == actor.FacilityId), ct);
 
     private static bool HasAnyResource(AiResolvedResourceContext x) => x.AppointmentId.HasValue || x.VisitId.HasValue || x.EncounterId.HasValue || x.DiagnosticOrderId.HasValue || x.PrescriptionId.HasValue;
     private static bool VersionMatches(string? requested, byte[]? actual) => string.IsNullOrWhiteSpace(requested) || actual is not null && FixedEquals(requested, Convert.ToBase64String(actual));

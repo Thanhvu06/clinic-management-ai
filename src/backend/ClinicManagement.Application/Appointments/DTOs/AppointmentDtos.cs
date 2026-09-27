@@ -10,6 +10,12 @@ public class CreateAppointmentRequest
     public long DoctorId { get; set; }
     [Required]
     public long SpecialtyId { get; set; }
+    /// <summary>
+    /// Required when a doctor is actively assigned to multiple eligible
+    /// facilities. Omitting it is allowed only when the server can select one
+    /// unambiguously from the doctor's active assignment.
+    /// </summary>
+    public long? FacilityId { get; set; }
     [Required]
     public long AppointmentSlotId { get; set; }
     
@@ -49,6 +55,7 @@ public class AppointmentDto
     public string DoctorName { get; set; } = string.Empty;
     public long SpecialtyId { get; set; }
     public string SpecialtyName { get; set; } = string.Empty;
+    public long? FacilityId { get; set; }
     public long AppointmentSlotId { get; set; }
     public DateOnly AppointmentDate { get; set; }
     public TimeOnly StartTime { get; set; }

@@ -475,6 +475,7 @@ public class PatientVisitService : IPatientVisitService
 
         if (existingVisit != null)
         {
+            await _facilityAuthService.ValidateUserFacilityAccessAsync(currentUserId, existingVisit.FacilityId, cancellationToken);
             var rName = await GetUserNameAsync(existingVisit.CreatedByUserId, cancellationToken);
             var docName = await GetDoctorNameAsync(existingVisit.AssignedDoctorId, cancellationToken);
             return MapToTicket(existingVisit, rName, docName);
@@ -496,27 +497,39 @@ public class PatientVisitService : IPatientVisitService
         if (appointment.Status == AppointmentStatus.Completed)
             throw new BusinessException("APPOINTMENT_COMPLETED", "Lịch hẹn đã hoàn thành khám.");
 
+        // Appointments created before the facility binding migration can only
+        // be repaired when one facility is provably eligible. Ambiguous legacy
+        // rows stay fail-closed instead of being assigned to an arbitrary
+        // doctor location.
+        var appointmentFacilityId = appointment.FacilityId ?? await ResolveUniqueLegacyAppointmentFacilityAsync(appointment, cancellationToken);
+        if (!appointmentFacilityId.HasValue)
+            throw new BusinessException("APPOINTMENT_FACILITY_UNBOUND", "Lịch hẹn chưa được ràng vào cơ sở y tế; không thể check-in an toàn.");
+        if (!appointment.FacilityId.HasValue)
+            appointment.FacilityId = appointmentFacilityId.Value;
+        if (request.FacilityId.HasValue && request.FacilityId.Value != appointmentFacilityId.Value)
+            throw new BusinessException("FACILITY_SCOPE_DENIED", "Cơ sở yêu cầu không khớp với cơ sở đã ràng cho lịch hẹn.");
+
         // 3. Resolve Department
         Department? department = null;
         if (request.DepartmentId.HasValue)
         {
             department = await _dbContext.Departments
                 .Include(d => d.Facility)
-                .FirstOrDefaultAsync(d => d.Id == request.DepartmentId.Value && d.IsActive, cancellationToken);
+                .FirstOrDefaultAsync(d => d.Id == request.DepartmentId.Value && d.FacilityId == appointmentFacilityId.Value && d.IsActive, cancellationToken);
         }
 
         if (department == null)
         {
             department = await _dbContext.Departments
                 .Include(d => d.Facility)
-                .FirstOrDefaultAsync(d => d.SpecialtyId == appointment.SpecialtyId && d.IsActive, cancellationToken);
+                .FirstOrDefaultAsync(d => d.FacilityId == appointmentFacilityId.Value && d.SpecialtyId == appointment.SpecialtyId && d.IsActive, cancellationToken);
         }
 
         if (department == null)
         {
             department = await _dbContext.Departments
                 .Include(d => d.Facility)
-                .FirstOrDefaultAsync(d => d.IsActive, cancellationToken);
+                .FirstOrDefaultAsync(d => d.FacilityId == appointmentFacilityId.Value && d.IsActive, cancellationToken);
         }
 
         if (department == null)
@@ -524,7 +537,7 @@ public class PatientVisitService : IPatientVisitService
             throw new NotFoundException("Khoa tiếp nhận không tồn tại hoặc đã ngừng hoạt động.");
         }
 
-        var facilityId = request.FacilityId ?? department.FacilityId;
+        var facilityId = appointmentFacilityId.Value;
         await _facilityAuthService.ValidateUserFacilityAccessAsync(currentUserId, facilityId, cancellationToken);
 
         // Verify room if specified
@@ -537,7 +550,13 @@ public class PatientVisitService : IPatientVisitService
 
         var assignedDoctorId = request.AssignedDoctorId ?? appointment.DoctorId;
         var doctor = await _dbContext.Doctors
-            .FirstOrDefaultAsync(d => d.Id == assignedDoctorId, cancellationToken);
+            .FirstOrDefaultAsync(d => d.Id == assignedDoctorId && d.IsActive, cancellationToken);
+        if (doctor == null || !await _dbContext.StaffFacilityAssignments.AsNoTracking().AnyAsync(
+                x => x.UserId == doctor.UserId && x.IsActive && x.Role == "Doctor" && x.FacilityId == facilityId,
+                cancellationToken))
+        {
+            throw new BusinessException("FACILITY_SCOPE_DENIED", "Bác sĩ được phân công không thuộc cơ sở của lịch hẹn.");
+        }
 
         var queueNumber = await GetNextQueueNumberAsync(facilityId, department.Id, appointment.AppointmentDate, cancellationToken);
         var visitCode = await GenerateVisitCodeAsync(appointment.AppointmentDate, queueNumber, cancellationToken);
@@ -935,6 +954,26 @@ public class PatientVisitService : IPatientVisitService
             Priority = visit.Priority.ToString(),
             ArrivalType = visit.ArrivalType.ToString()
         };
+    }
+
+    private async Task<long?> ResolveUniqueLegacyAppointmentFacilityAsync(Appointment appointment, CancellationToken cancellationToken)
+    {
+        var candidates = await (from assignment in _dbContext.StaffFacilityAssignments.AsNoTracking()
+                                join department in _dbContext.Departments.AsNoTracking() on assignment.FacilityId equals department.FacilityId
+                                join facility in _dbContext.Facilities.AsNoTracking() on assignment.FacilityId equals facility.Id
+                                where assignment.UserId == appointment.Doctor.UserId &&
+                                      assignment.IsActive &&
+                                      assignment.Role == "Doctor" &&
+                                      facility.IsActive &&
+                                      department.IsActive &&
+                                      department.SpecialtyId == appointment.SpecialtyId &&
+                                      (!assignment.DepartmentId.HasValue || assignment.DepartmentId == department.Id)
+                                select assignment.FacilityId)
+            .Distinct()
+            .Take(2)
+            .ToListAsync(cancellationToken);
+
+        return candidates.Count == 1 ? candidates[0] : null;
     }
 
     private async Task<Patient> ResolveOrCreatePatientAsync(WalkInRegistrationRequest request, long facilityId, CancellationToken cancellationToken)

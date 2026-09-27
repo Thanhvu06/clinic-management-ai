@@ -61,6 +61,14 @@ Role`. Resource hints and versions are revalidated on every turn.
   Confirmation rechecks assignment, facility, ownership, state,
   schedule/leave/conflict, resource version and domain state before claiming a
   short lease.
+- `Appointment.FacilityId` is the durable facility binding for new bookings.
+  The server selects it only from an active doctor/specialty assignment; when
+  more than one eligible facility exists and no single primary assignment can
+  resolve it, booking fails closed until the caller chooses a facility. Role
+  reads, check-in, doctor draft actions and context validation use this stored
+  binding rather than deriving a facility from any current doctor assignment.
+  Legacy unbound appointments are denied for role actions and remain readable
+  only through the narrowly scoped legacy authorization fallback.
 - Implemented role actions call existing domain services for appointment
   check-in, verified-patient walk-in intake, diagnostic-order creation,
   prescription draft, technician start/result/complete, pharmacy reservation

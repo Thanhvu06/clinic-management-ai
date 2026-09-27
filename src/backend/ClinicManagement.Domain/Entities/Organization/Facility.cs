@@ -21,4 +21,5 @@ public class Facility
 
     public ICollection<Building> Buildings { get; set; } = new List<Building>();
     public ICollection<Department> Departments { get; set; } = new List<Department>();
+    public ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
 }

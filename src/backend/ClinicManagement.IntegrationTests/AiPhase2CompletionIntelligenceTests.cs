@@ -235,6 +235,11 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var appointmentDate = date ?? GetFutureWorkingDate(4);
         var discriminator = Guid.NewGuid().ToString("N")[..8];
+        var facilityId = await db.Departments
+            .Where(department => department.IsActive && department.SpecialtyId == SpecialtyEntityId)
+            .OrderBy(department => department.Id)
+            .Select(department => department.FacilityId)
+            .FirstAsync();
         var slot = new AppointmentSlot
         {
             DoctorId = doctorId,
@@ -251,6 +256,7 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
             PatientId = Patient1EntityId,
             DoctorId = doctorId,
             SpecialtyId = SpecialtyEntityId,
+            FacilityId = facilityId,
             AppointmentSlotId = slot.Id,
             AppointmentDate = appointmentDate,
             StartTime = slot.StartTime,

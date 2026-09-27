@@ -48,6 +48,22 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.BadRequest, generic.StatusCode);
         Assert.Equal("PLANNER_TOOL_NOT_ALLOWED", (await generic.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Error?.Code);
         await AssertNoVisitAsync(appointment.AppointmentId);
+
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var executor = scope.ServiceProvider.GetRequiredService<IAiToolExecutor>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var before = await db.AiAuditLogs.CountAsync(x => x.ActionType == "Tool:clinic.get_facilities" && x.SessionId == "sess_role_planner_preflight");
+        var mixedPlan = await executor.ExecutePlannerPlanAsync(new[]
+        {
+            new AiPlannerToolCall { Name = "clinic.get_facilities", Version = "1.0", Arguments = JsonDocument.Parse("{}").RootElement.Clone() },
+            new AiPlannerToolCall { Name = "reception.prepare_check_in_appointment", Version = "1.0", Arguments = JsonDocument.Parse($"{{\"appointmentId\":{appointment.AppointmentId},\"departmentId\":{appointment.DepartmentId}}}").RootElement.Clone() },
+            new AiPlannerToolCall { Name = "role.execute_confirmed_action", Version = "1.0", Arguments = JsonDocument.Parse("{}").RootElement.Clone() }
+        }, "sess_role_planner_preflight");
+
+        Assert.Equal("PLANNER_TOOL_NOT_ALLOWED", Assert.Single(mixedPlan).Error?.Code);
+        var after = await db.AiAuditLogs.CountAsync(x => x.ActionType == "Tool:clinic.get_facilities" && x.SessionId == "sess_role_planner_preflight");
+        Assert.Equal(before, after);
+        await AssertNoVisitAsync(appointment.AppointmentId);
     }
 
     [Fact]
@@ -69,6 +85,19 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
 
         var replay = await ConfirmAsync(receptionist, pending);
         Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+
+        // Simulate a process crash after the domain transaction has committed
+        // but before the pending-action row was marked completed.
+        await MutateActionAsync(pending.ActionId, action =>
+        {
+            action.State = AiPendingToolActionState.FailedRetryable;
+            action.ExecutedAtUtc = null;
+            action.ExecutionResultReference = null;
+            action.LastErrorCode = "SIMULATED_CRASH_AFTER_DOMAIN_COMMIT";
+        });
+        var crashReplay = await ConfirmAsync(receptionist, pending);
+        Assert.Equal(HttpStatusCode.OK, crashReplay.StatusCode);
+        Assert.True((await crashReplay.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.IsIdempotentReplay);
 
         long visitId;
         await using (var scope = Factory.Services.CreateAsyncScope())
@@ -111,7 +140,8 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
         {
             action => action.ResourceId = "999999",
             action => action.ResourceVersion = "stale-version",
-            action => action.RequestHash = "different-request-hash"
+            action => action.RequestHash = "different-request-hash",
+            action => action.ExpiresAtUtc = action.ExpiresAtUtc.AddMinutes(1)
         })
         {
             var appointment = await CreateAppointmentAsync();
@@ -177,6 +207,14 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
         Assert.Contains(confirmations, x => x.StatusCode == HttpStatusCode.OK);
         Assert.DoesNotContain(confirmations, x => x.StatusCode == HttpStatusCode.InternalServerError);
         await AssertSingleVisitAsync(reclaim.Appointment.AppointmentId);
+        await using (var reclaimScope = Factory.Services.CreateAsyncScope())
+        {
+            var reclaimDb = reclaimScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await reclaimDb.AppointmentHistories.CountAsync(x => x.AppointmentId == reclaim.Appointment.AppointmentId && x.Action == AppointmentHistoryAction.CheckedIn));
+            Assert.Equal(1, await reclaimDb.Notifications.CountAsync(x => x.DedupeKey == $"checkin_appointment_{reclaim.Appointment.AppointmentId}"));
+            Assert.Equal(1, await reclaimDb.Notifications.CountAsync(x => x.DedupeKey == $"appt_checkin_doc_{reclaim.Appointment.AppointmentId}_{DoctorId}"));
+            Assert.Equal(1, await reclaimDb.AiAuditLogs.CountAsync(x => x.ActionType == "Tool:role.execute_confirmed_action" && x.SessionId == reclaim.Pending.SessionId && x.Outcome == "completed"));
+        }
 
         var retry = await PrepareReceptionActionAsync(receptionist, "retry");
         await MutateActionAsync(retry.Pending.ActionId, action =>
@@ -237,6 +275,113 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
         });
         Assert.Equal(HttpStatusCode.Forbidden, crossFacility.StatusCode);
         await AssertNoVisitAsync(isolated.AppointmentId);
+
+        // Doctor2 has assignments at both facilities. Supplying a department
+        // from the reception user's facility must not re-home an appointment
+        // that was explicitly bound to the isolated facility.
+        var assignmentPivot = await receptionist.PostAsJsonAsync("/api/v1/ai/copilot/actions/prepare", new
+        {
+            toolName = "reception.prepare_check_in_appointment",
+            toolVersion = "1.0",
+            argumentsJson = JsonSerializer.Serialize(new { appointmentId = isolated.AppointmentId, departmentId = baseAppointment.DepartmentId }),
+            sessionId = Session("cross-facility-assignment-pivot")
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, assignmentPivot.StatusCode);
+        await AssertNoVisitAsync(isolated.AppointmentId);
+    }
+
+    [Fact]
+    public async Task Role_read_gateway_uses_persisted_facility_binding_and_does_not_leak_another_facility()
+    {
+        var isolated = await CreateIsolatedFacilityAppointmentAsync();
+        var isolatedData = await CreateIsolatedFacilityClinicalDataAsync(isolated);
+
+        var receptionist = await CreateAuthenticatedClientAsync("rec@test.com");
+        var receptionLookup = await ExecuteReadAsync(receptionist, "reception.lookup_appointment", new { appointmentCode = isolated.AppointmentCode }, "read-isolated-reception");
+        Assert.Equal(HttpStatusCode.OK, receptionLookup.StatusCode);
+        Assert.Equal("NOT_FOUND", (await receptionLookup.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Error?.Code);
+
+        var technician = await CreateAuthenticatedClientAsync("tech@test.com");
+        var technicianWorklist = await ExecuteReadAsync(technician, "technician.get_worklist", new { }, "read-isolated-tech");
+        Assert.Equal(HttpStatusCode.OK, technicianWorklist.StatusCode);
+        var technicianResult = await technicianWorklist.Content.ReadFromJsonAsync<AiToolExecutionResult>();
+        Assert.Equal("completed", technicianResult?.Status);
+        Assert.DoesNotContain(isolatedData.OrderCode, JsonSerializer.Serialize(technicianResult?.Data), StringComparison.Ordinal);
+
+        var pharmacist = await CreateAuthenticatedClientAsync("pharm@test.com");
+        var pharmacyQueue = await ExecuteReadAsync(pharmacist, "pharmacist.get_prescription_queue", new { }, "read-isolated-pharmacy");
+        Assert.Equal(HttpStatusCode.OK, pharmacyQueue.StatusCode);
+        var pharmacyResult = await pharmacyQueue.Content.ReadFromJsonAsync<AiToolExecutionResult>();
+        Assert.Equal("completed", pharmacyResult?.Status);
+        var pharmacyItems = Assert.IsType<JsonElement>(pharmacyResult!.Data);
+        Assert.DoesNotContain(pharmacyItems.EnumerateArray(), item => item.GetProperty("id").GetInt64() == isolatedData.PrescriptionId);
+
+        // Inventory is explicitly global in the current domain model. The
+        // gateway still requires an active pharmacist facility assignment.
+        var inventory = await ExecuteReadAsync(pharmacist, "pharmacist.get_inventory_status", new { }, "read-global-inventory");
+        Assert.Equal(HttpStatusCode.OK, inventory.StatusCode);
+        Assert.Contains("toàn hệ thống", (await inventory.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.DisplayText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Patient_booking_persists_the_selected_facility_and_fails_closed_when_a_multi_facility_choice_is_missing()
+    {
+        var isolated = await CreateIsolatedFacilityAppointmentAsync();
+        long slotId;
+        var bookingDate = GetFutureWorkingDate(9);
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            if (!await db.DoctorWorkSchedules.AnyAsync(x => x.DoctorId == Doctor2EntityId && x.WorkDate == bookingDate && x.StartTime <= new TimeOnly(10, 0) && x.EndTime >= new TimeOnly(10, 30)))
+            {
+                db.DoctorWorkSchedules.Add(new DoctorWorkSchedule
+                {
+                    DoctorId = Doctor2EntityId,
+                    WorkDate = bookingDate,
+                    StartTime = new TimeOnly(8, 0),
+                    EndTime = new TimeOnly(17, 0),
+                    IsActive = true
+                });
+            }
+            var slot = new AppointmentSlot
+            {
+                DoctorId = Doctor2EntityId,
+                SlotDate = bookingDate,
+                StartTime = new TimeOnly(10, 0),
+                EndTime = new TimeOnly(10, 30),
+                IsBooked = false
+            };
+            db.AppointmentSlots.Add(slot);
+            await db.SaveChangesAsync();
+            slotId = slot.Id;
+        }
+
+        var patient = await CreateAuthenticatedClientAsync("pat1@test.com");
+        var missingFacility = await patient.PostAsJsonAsync("/api/v1/appointments", new
+        {
+            doctorId = Doctor2EntityId,
+            specialtyId = SpecialtyEntityId,
+            appointmentSlotId = slotId,
+            reason = "Cần khám tại cơ sở đã chọn để kiểm thử ràng buộc"
+        });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, missingFacility.StatusCode);
+        Assert.Contains("FACILITY_SELECTION_REQUIRED", await missingFacility.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        var boundBooking = await patient.PostAsJsonAsync("/api/v1/appointments", new
+        {
+            doctorId = Doctor2EntityId,
+            specialtyId = SpecialtyEntityId,
+            facilityId = isolated.FacilityId,
+            appointmentSlotId = slotId,
+            reason = "Cần khám tại cơ sở đã chọn để kiểm thử ràng buộc"
+        });
+        Assert.Equal(HttpStatusCode.Created, boundBooking.StatusCode);
+        var bookingBody = await boundBooking.Content.ReadFromJsonAsync<ClinicManagement.Application.Common.Models.ApiResponse<ClinicManagement.Application.Appointments.DTOs.AppointmentDto>>();
+        Assert.NotNull(bookingBody?.Data);
+        Assert.Equal(isolated.FacilityId, bookingBody.Data.FacilityId);
+        await using var verifyScope = Factory.Services.CreateAsyncScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(isolated.FacilityId, await verifyDb.Appointments.Where(x => x.Id == bookingBody.Data.Id).Select(x => x.FacilityId).SingleAsync());
     }
 
     [Fact]
@@ -428,6 +573,15 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
     private static Task<HttpResponseMessage> ConfirmAsync(HttpClient client, PendingAction action) =>
         client.PostAsJsonAsync($"/api/v1/ai/copilot/actions/{action.ActionId}/confirm", new { sessionId = action.SessionId, concurrencyToken = action.Token });
 
+    private static Task<HttpResponseMessage> ExecuteReadAsync(HttpClient client, string toolName, object arguments, string suffix) =>
+        client.PostAsJsonAsync("/api/v1/ai/tools/execute", new
+        {
+            toolName,
+            toolVersion = "1.0",
+            argumentsJson = JsonSerializer.Serialize(arguments),
+            sessionId = Session(suffix)
+        });
+
     private async Task<RoleAppointment> CreateAppointmentAsync(long? doctorId = null, long? facilityId = null, long? departmentId = null)
     {
         await using var scope = Factory.Services.CreateAsyncScope();
@@ -448,6 +602,7 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
             PatientId = Patient1EntityId,
             DoctorId = doctor,
             SpecialtyId = SpecialtyEntityId,
+            FacilityId = facilityId ?? department.FacilityId,
             AppointmentSlotId = slot.Id,
             AppointmentDate = date,
             StartTime = slot.StartTime,
@@ -457,7 +612,7 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
         };
         db.Appointments.Add(appointment);
         await db.SaveChangesAsync();
-        return new RoleAppointment(appointment.Id, department.Id, facilityId ?? department.FacilityId);
+        return new RoleAppointment(appointment.Id, appointment.AppointmentCode, department.Id, appointment.FacilityId!.Value);
     }
 
     private async Task<RoleAppointment> CreateIsolatedFacilityAppointmentAsync()
@@ -473,6 +628,53 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
         db.StaffFacilityAssignments.Add(new StaffFacilityAssignment { UserId = Doctor2UserId, FacilityId = facility.Id, DepartmentId = department.Id, Role = "Doctor", IsActive = true, IsPrimary = true });
         await db.SaveChangesAsync();
         return await CreateAppointmentAsync(Doctor2EntityId, facility.Id, department.Id);
+    }
+
+    private async Task<IsolatedClinicalData> CreateIsolatedFacilityClinicalDataAsync(RoleAppointment appointment)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var visit = new PatientVisit
+        {
+            VisitCode = $"VIS-ISO-{Guid.NewGuid():N}"[..20],
+            PatientId = Patient1EntityId,
+            FacilityId = appointment.FacilityId,
+            DepartmentId = appointment.DepartmentId,
+            AssignedDoctorId = Doctor2EntityId,
+            VisitDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)),
+            ArrivalType = VisitArrivalType.WalkIn,
+            Priority = VisitPriority.Normal,
+            ChiefComplaint = "Dữ liệu scope facility cô lập",
+            QueueNumber = 20000 + Interlocked.Increment(ref _sequence),
+            Status = VisitStatus.WaitingForDoctor,
+            CreatedByUserId = Doctor2UserId
+        };
+        db.PatientVisits.Add(visit);
+        await db.SaveChangesAsync();
+
+        var orderCode = $"ORD-ISO-{Guid.NewGuid():N}"[..20];
+        db.DiagnosticOrders.Add(new DiagnosticOrder
+        {
+            OrderCode = orderCode,
+            PatientVisitId = visit.Id,
+            PatientId = Patient1EntityId,
+            OrderingDoctorId = Doctor2EntityId,
+            FacilityId = appointment.FacilityId,
+            PerformingDepartmentId = appointment.DepartmentId,
+            ClinicalIndication = "Không được lộ sang cơ sở khác",
+            Status = DiagnosticOrderStatus.Ordered
+        });
+        var prescription = new Prescription
+        {
+            PatientVisitId = visit.Id,
+            PatientId = Patient1EntityId,
+            DoctorId = Doctor2EntityId,
+            Status = PrescriptionStatus.Issued,
+            Notes = "Không được lộ sang cơ sở khác"
+        };
+        db.Prescriptions.Add(prescription);
+        await db.SaveChangesAsync();
+        return new IsolatedClinicalData(orderCode, prescription.Id);
     }
 
     private async Task<RoleVisit> CreateVisitAsync(VisitStatus status)
@@ -527,6 +729,7 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
     private static string Session(string suffix) => $"sess_role_{suffix}_{Guid.NewGuid():N}";
 
     private sealed record PendingAction(Guid ActionId, string Token, string SessionId);
-    private sealed record RoleAppointment(long AppointmentId, long DepartmentId, long FacilityId);
+    private sealed record RoleAppointment(long AppointmentId, string AppointmentCode, long DepartmentId, long FacilityId);
     private sealed record RoleVisit(long VisitId, long FacilityId, long DiagnosticServiceId);
+    private sealed record IsolatedClinicalData(string OrderCode, long PrescriptionId);
 }

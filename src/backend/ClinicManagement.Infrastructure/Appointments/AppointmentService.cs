@@ -97,6 +97,19 @@ public class AppointmentService : IAppointmentService
         if (patient.Gender == null || patient.DateOfBirth == null)
             throw new BusinessException("VALIDATION_ERROR", "Vui lòng cập nhật đầy đủ Giới tính và Ngày sinh trước khi đặt lịch.");
 
+        var bookingDoctorUserId = await _dbContext.Doctors
+            .AsNoTracking()
+            .Where(d => d.Id == request.DoctorId && d.IsActive)
+            .Select(d => (Guid?)d.UserId)
+            .FirstOrDefaultAsync();
+        if (!bookingDoctorUserId.HasValue || bookingDoctorUserId.Value == Guid.Empty)
+            throw new NotFoundException("Bác sĩ không tồn tại hoặc đã ngừng hoạt động.");
+
+        // A doctor can have active assignments at several facilities. Bind the
+        // appointment to a real facility now; do not infer it later from an
+        // assignment that might be unrelated or changed after booking.
+        var appointmentFacilityId = await ResolveAppointmentFacilityAsync(request, bookingDoctorUserId.Value);
+
         // Idempotency check: If same patient already holds this slot with an active appointment, verify payload matches
         var initialExisting = await _dbContext.Appointments
             .AsNoTracking()
@@ -111,6 +124,7 @@ public class AppointmentService : IAppointmentService
         {
             if (initialExisting.DoctorId != request.DoctorId ||
                 initialExisting.SpecialtyId != request.SpecialtyId ||
+                initialExisting.FacilityId != appointmentFacilityId ||
                 !string.Equals(initialExisting.Reason?.Trim(), normalizedReason, StringComparison.OrdinalIgnoreCase))
             {
                 throw new ConflictException("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "Khung giờ này đã được bạn đặt với thông tin chuyên khoa/bác sĩ/lý do khám khác.");
@@ -132,6 +146,7 @@ public class AppointmentService : IAppointmentService
                 DoctorName = initialDoctorName,
                 SpecialtyId = initialExisting.SpecialtyId,
                 SpecialtyName = initialExisting.Specialty?.Name ?? "Chuyên khoa",
+                FacilityId = initialExisting.FacilityId,
                 AppointmentSlotId = initialExisting.AppointmentSlotId,
                 AppointmentDate = initialExisting.AppointmentDate,
                 StartTime = initialExisting.StartTime,
@@ -273,6 +288,7 @@ public class AppointmentService : IAppointmentService
                 await transaction.RollbackAsync();
                 if (existingAppointment.DoctorId != request.DoctorId ||
                     existingAppointment.SpecialtyId != request.SpecialtyId ||
+                    existingAppointment.FacilityId != appointmentFacilityId ||
                     !string.Equals(existingAppointment.Reason?.Trim(), normalizedReason, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new ConflictException("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "Khung giờ này đã được bạn đặt với thông tin chuyên khoa/bác sĩ/lý do khám khác.");
@@ -286,6 +302,7 @@ public class AppointmentService : IAppointmentService
                     DoctorName = doctorName,
                     SpecialtyId = existingAppointment.SpecialtyId,
                     SpecialtyName = specialtyName,
+                    FacilityId = existingAppointment.FacilityId,
                     AppointmentSlotId = existingAppointment.AppointmentSlotId,
                     AppointmentDate = existingAppointment.AppointmentDate,
                     StartTime = existingAppointment.StartTime,
@@ -317,6 +334,7 @@ public class AppointmentService : IAppointmentService
                 {
                     if (samePatientAppointment.DoctorId != request.DoctorId ||
                         samePatientAppointment.SpecialtyId != request.SpecialtyId ||
+                        samePatientAppointment.FacilityId != appointmentFacilityId ||
                         !string.Equals(samePatientAppointment.Reason?.Trim(), normalizedReason, StringComparison.OrdinalIgnoreCase))
                     {
                         throw new ConflictException("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "Khung giờ này đã được bạn đặt với thông tin chuyên khoa/bác sĩ/lý do khám khác.");
@@ -330,6 +348,7 @@ public class AppointmentService : IAppointmentService
                         DoctorName = doctorName,
                         SpecialtyId = samePatientAppointment.SpecialtyId,
                         SpecialtyName = specialtyName,
+                        FacilityId = samePatientAppointment.FacilityId,
                         AppointmentSlotId = samePatientAppointment.AppointmentSlotId,
                         AppointmentDate = samePatientAppointment.AppointmentDate,
                         StartTime = samePatientAppointment.StartTime,
@@ -365,6 +384,7 @@ public class AppointmentService : IAppointmentService
                 PatientId = patient.Id,
                 DoctorId = request.DoctorId,
                 SpecialtyId = request.SpecialtyId,
+                FacilityId = appointmentFacilityId,
                 AppointmentSlotId = slot.Id,
                 AppointmentDate = slot.SlotDate,
                 StartTime = slot.StartTime,
@@ -408,14 +428,14 @@ public class AppointmentService : IAppointmentService
             var recRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Name == ClinicManagement.Application.Common.Constants.RoleNames.Receptionist);
             if (recRole != null)
             {
-                var recUserIds = await _dbContext.UserRoles
-                    .Where(ur => ur.RoleId == recRole.Id)
-                    .Select(ur => ur.UserId)
-                    .ToListAsync();
-
-                var activeRecUserIds = await _dbContext.Users
-                    .Where(u => recUserIds.Contains(u.Id) && u.IsActive)
-                    .Select(u => u.Id)
+                var activeRecUserIds = await (from userRole in _dbContext.UserRoles
+                                               join staff in _dbContext.StaffFacilityAssignments on userRole.UserId equals staff.UserId
+                                               join recipient in _dbContext.Users on userRole.UserId equals recipient.Id
+                                               where userRole.RoleId == recRole.Id && recipient.IsActive && staff.IsActive &&
+                                                     staff.Role == ClinicManagement.Application.Common.Constants.RoleNames.Receptionist &&
+                                                     staff.FacilityId == appointmentFacilityId
+                                               select recipient.Id)
+                    .Distinct()
                     .ToListAsync();
 
                 foreach (var recUserId in activeRecUserIds)
@@ -468,6 +488,7 @@ public class AppointmentService : IAppointmentService
                 DoctorName = doctorName,
                 SpecialtyId = appointment.SpecialtyId,
                 SpecialtyName = specialtyName,
+                FacilityId = appointment.FacilityId,
                 AppointmentSlotId = appointment.AppointmentSlotId,
                 AppointmentDate = appointment.AppointmentDate,
                 StartTime = appointment.StartTime,
@@ -527,6 +548,7 @@ public class AppointmentService : IAppointmentService
                 samePatientAppointment.PatientId == patient.Id &&
                 samePatientAppointment.DoctorId == request.DoctorId &&
                 samePatientAppointment.SpecialtyId == request.SpecialtyId &&
+                samePatientAppointment.FacilityId == appointmentFacilityId &&
                 samePatientAppointment.AppointmentSlotId == request.AppointmentSlotId &&
                 string.Equals(samePatientAppointment.Reason?.Trim(), normalizedReason, StringComparison.OrdinalIgnoreCase))
             {
@@ -567,6 +589,7 @@ public class AppointmentService : IAppointmentService
                     DoctorName = doctorName,
                     SpecialtyId = samePatientAppointment.SpecialtyId,
                     SpecialtyName = specialtyName,
+                    FacilityId = samePatientAppointment.FacilityId,
                     AppointmentSlotId = samePatientAppointment.AppointmentSlotId,
                     AppointmentDate = samePatientAppointment.AppointmentDate,
                     StartTime = samePatientAppointment.StartTime,
@@ -633,6 +656,7 @@ public class AppointmentService : IAppointmentService
                                DoctorName = u.FullName,
                                SpecialtyId = a.SpecialtyId,
                                SpecialtyName = s.Name,
+                               FacilityId = a.FacilityId,
                                AppointmentSlotId = a.AppointmentSlotId,
                                AppointmentDate = a.AppointmentDate,
                                StartTime = a.StartTime,
@@ -671,6 +695,7 @@ public class AppointmentService : IAppointmentService
                                      DoctorName = u.FullName,
                                      SpecialtyId = a.SpecialtyId,
                                      SpecialtyName = s.Name,
+                                     FacilityId = a.FacilityId,
                                      AppointmentSlotId = a.AppointmentSlotId,
                                      AppointmentDate = a.AppointmentDate,
                                      StartTime = a.StartTime,
@@ -777,6 +802,48 @@ public class AppointmentService : IAppointmentService
         return phone.Substring(0, 3) + "****" + phone.Substring(phone.Length - 3);
     }
 
+    private async Task<long> ResolveAppointmentFacilityAsync(CreateAppointmentRequest request, Guid doctorUserId)
+    {
+        // A facility is eligible only when the doctor has a live Doctor
+        // assignment there which can serve the requested specialty. This keeps
+        // the booking binding independent of a later check-in department.
+        var candidates = await (from assignment in _dbContext.StaffFacilityAssignments.AsNoTracking()
+                                join facility in _dbContext.Facilities.AsNoTracking() on assignment.FacilityId equals facility.Id
+                                join department in _dbContext.Departments.AsNoTracking() on assignment.FacilityId equals department.FacilityId
+                                where assignment.UserId == doctorUserId &&
+                                      assignment.IsActive &&
+                                      assignment.Role == "Doctor" &&
+                                      facility.IsActive &&
+                                      department.IsActive &&
+                                      department.SpecialtyId == request.SpecialtyId &&
+                                      (!assignment.DepartmentId.HasValue || assignment.DepartmentId == department.Id)
+                                select new { assignment.FacilityId, assignment.IsPrimary })
+            .ToListAsync();
+
+        var facilities = candidates
+            .GroupBy(x => x.FacilityId)
+            .Select(group => new { FacilityId = group.Key, IsPrimary = group.Any(x => x.IsPrimary) })
+            .ToList();
+
+        if (request.FacilityId.HasValue)
+        {
+            if (request.FacilityId.Value <= 0 || !facilities.Any(x => x.FacilityId == request.FacilityId.Value))
+                throw new BusinessException("FACILITY_SCOPE_DENIED", "Cơ sở được chọn không có bác sĩ/chuyên khoa khả dụng cho lịch hẹn này.");
+            return request.FacilityId.Value;
+        }
+
+        if (facilities.Count == 1)
+            return facilities[0].FacilityId;
+
+        var primaryFacilities = facilities.Where(x => x.IsPrimary).ToList();
+        if (primaryFacilities.Count == 1)
+            return primaryFacilities[0].FacilityId;
+
+        throw new BusinessException(
+            "FACILITY_SELECTION_REQUIRED",
+            "Bác sĩ có nhiều cơ sở phù hợp; vui lòng chọn cơ sở trước khi đặt lịch.");
+    }
+
     private static bool IsConcurrencyOrConflictException(Exception ex)
     {
         if (ex is ConflictException || ex is BusinessException || ex is NotFoundException)
@@ -824,6 +891,7 @@ public class AppointmentService : IAppointmentService
         {
             request.DoctorId,
             request.SpecialtyId,
+            request.FacilityId,
             request.AppointmentSlotId,
             Reason = request.Reason?.Trim(),
             request.ConfirmationId,

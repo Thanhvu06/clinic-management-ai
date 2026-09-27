@@ -328,9 +328,9 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
         var departmentId = GetLong(args, "departmentId")!.Value;
         var resolved = await ResolveReceptionAppointmentAsync(context.ActorId!.Value, appointmentId, departmentId, GetLong(args, "roomId"), GetLong(args, "assignedDoctorId"), ct);
         EnsureFacility(action, resolved.FacilityId);
-        EnsureVersion(action, resolved.Version);
         var existing = await _db.PatientVisits.AsNoTracking().FirstOrDefaultAsync(x => x.AppointmentId == appointmentId, ct);
         if (existing != null) return new ExecutionResult(existing.Id.ToString(), "check_in_ticket", "Lịch hẹn đã được check-in trước đó.", true);
+        EnsureVersion(action, resolved.Version);
         var ticket = await _visits.CheckInAppointmentAsync(new AppointmentCheckInRequest
         {
             AppointmentId = appointmentId,
@@ -490,6 +490,7 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
                 DoctorUserId = x.Doctor.UserId,
                 x.DoctorId,
                 x.PatientId,
+                x.FacilityId,
                 x.AppointmentSlotId,
                 x.AppointmentDate,
                 x.StartTime,
@@ -497,10 +498,11 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
                 x.Reason,
                 x.Status
             }).FirstOrDefaultAsync(ct);
-        if (appointment == null || appointment.Status is AppointmentStatus.Cancelled or AppointmentStatus.Completed)
+        if (appointment == null || !appointment.FacilityId.HasValue || appointment.Status is AppointmentStatus.Cancelled or AppointmentStatus.Completed)
             return Preparation.Invalid("RESOURCE_SCOPE_DENIED", "Lịch hẹn không còn có thể check-in.");
         var department = await _db.Departments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == departmentId && x.IsActive, ct);
-        if (department == null || !await HasFacilityRoleAsync(actorId, AiActorRole.Receptionist, department.FacilityId, null, ct) ||
+        if (department == null || department.FacilityId != appointment.FacilityId ||
+            !await HasFacilityRoleAsync(actorId, AiActorRole.Receptionist, appointment.FacilityId.Value, null, ct) ||
             !await HasDoctorAtFacilityAsync(appointment.DoctorUserId, department.FacilityId, ct))
             return Preparation.Invalid("FACILITY_SCOPE_DENIED", "Lịch hẹn không thuộc cơ sở tiếp nhận được phân quyền.");
 
@@ -513,8 +515,8 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
         if (!executingDoctorUserId.HasValue || !await HasDoctorAtFacilityAsync(executingDoctorUserId.Value, department.FacilityId, ct))
             return Preparation.Invalid("FACILITY_SCOPE_DENIED", "Bác sĩ được phân công không thuộc cơ sở tiếp nhận.");
 
-        var version = Hash($"{AppointmentVersion(appointment.Id, appointment.DoctorId, appointment.PatientId, appointment.AppointmentSlotId, appointment.AppointmentDate, appointment.StartTime, appointment.EndTime, appointment.Reason, appointment.Status)}|{department.Id}|{department.FacilityId}|{roomId}|{assignedDoctorId}|{executingDoctorUserId}");
-        return new Preparation("appointment", appointmentId.ToString(), department.FacilityId, version);
+        var version = Hash($"{AppointmentVersion(appointment.Id, appointment.DoctorId, appointment.PatientId, appointment.FacilityId.Value, appointment.AppointmentSlotId, appointment.AppointmentDate, appointment.StartTime, appointment.EndTime, appointment.Reason, appointment.Status)}|{department.Id}|{department.FacilityId}|{roomId}|{assignedDoctorId}|{executingDoctorUserId}");
+        return new Preparation("appointment", appointmentId.ToString(), appointment.FacilityId.Value, version);
     }
 
     private async Task<Preparation> ResolveWalkInAsync(
@@ -556,17 +558,17 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
             return new Preparation("visit", visit.Id.ToString(), visit.FacilityId, Hash($"{Version(visit.RowVersion)}|{visitPrescriptionVersion}"), visit.Id, null);
         }
         var appointment = await _db.Appointments.AsNoTracking().Include(x => x.Doctor).FirstOrDefaultAsync(x => x.Id == appointmentId!.Value, ct);
-        if (appointment == null || appointment.Doctor.UserId != actorId)
+        if (appointment == null || !appointment.FacilityId.HasValue || appointment.Doctor.UserId != actorId)
             return Preparation.Invalid("RESOURCE_SCOPE_DENIED", "Lịch hẹn không thuộc bác sĩ hiện tại.");
         var departmentId = GetLong(args, "departmentId");
         var department = departmentId.HasValue
-            ? await _db.Departments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == departmentId.Value && x.IsActive && x.SpecialtyId == appointment.SpecialtyId, ct)
+            ? await _db.Departments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == departmentId.Value && x.FacilityId == appointment.FacilityId.Value && x.IsActive && x.SpecialtyId == appointment.SpecialtyId, ct)
             : null;
         if (department == null || !await HasFacilityRoleAsync(actorId, AiActorRole.Doctor, department.FacilityId, department.Id, ct))
             return Preparation.Invalid("FACILITY_SCOPE_DENIED", "Lịch hẹn phải được ràng vào khoa và cơ sở bác sĩ đang được phân quyền.");
         var prescriptionVersion = await GetPrescriptionVersionAsync(null, appointment.Id, ct);
-        return new Preparation("appointment", appointment.Id.ToString(), department.FacilityId,
-            Hash($"{AppointmentVersion(appointment.Id, appointment.DoctorId, appointment.PatientId, appointment.AppointmentSlotId, appointment.AppointmentDate, appointment.StartTime, appointment.EndTime, appointment.Reason, appointment.Status)}|{department.Id}|{department.FacilityId}|{prescriptionVersion}"), null, appointment.Id);
+        return new Preparation("appointment", appointment.Id.ToString(), appointment.FacilityId.Value,
+            Hash($"{AppointmentVersion(appointment.Id, appointment.DoctorId, appointment.PatientId, appointment.FacilityId.Value, appointment.AppointmentSlotId, appointment.AppointmentDate, appointment.StartTime, appointment.EndTime, appointment.Reason, appointment.Status)}|{department.Id}|{department.FacilityId}|{prescriptionVersion}"), null, appointment.Id);
     }
 
     private async Task<Preparation> ResolveTechnicianOrderAsync(Guid actorId, long orderId, CancellationToken ct)
@@ -860,7 +862,7 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
     private static string Canonicalize(JsonElement root) => JsonSerializer.Serialize(root, new JsonSerializerOptions { WriteIndented = false });
     private static string Hash(string? value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value ?? string.Empty)));
     private static string Version(byte[]? value) => value is { Length: > 0 } ? Convert.ToBase64String(value) : string.Empty;
-    private static string AppointmentVersion(long id, long doctorId, long patientId, long slotId, DateOnly date, TimeOnly startTime, TimeOnly endTime, string? reason, AppointmentStatus status) => Hash($"{id}|{doctorId}|{patientId}|{slotId}|{date:yyyy-MM-dd}|{startTime:HH:mm:ss}|{endTime:HH:mm:ss}|{reason?.Trim()}|{status}");
+    private static string AppointmentVersion(long id, long doctorId, long patientId, long facilityId, long slotId, DateOnly date, TimeOnly startTime, TimeOnly endTime, string? reason, AppointmentStatus status) => Hash($"{id}|{doctorId}|{patientId}|{facilityId}|{slotId}|{date:yyyy-MM-dd}|{startTime:HH:mm:ss}|{endTime:HH:mm:ss}|{reason?.Trim()}|{status}");
     private static string CreateConfirmationToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     private static bool IsConfirmationToken(string? token) => !string.IsNullOrWhiteSpace(token) && token.Length == 43 && token.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_');
     private static string ConfirmationBindingHash(AiPendingToolAction action, string token) => Hash(string.Join('|', new[]
@@ -880,7 +882,12 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
         action.ResourceVersion ?? string.Empty,
         Hash(action.NormalizedArgumentsJson),
         action.SourceAiActionId?.ToString("N") ?? string.Empty,
-        action.IdempotencyKeyHash ?? string.Empty
+        action.IdempotencyKeyHash ?? string.Empty,
+        // EF providers do not consistently round-trip DateTime.Kind. The
+        // persisted value is an instant stored in UTC, so preserve its ticks
+        // rather than applying the local machine offset to an Unspecified
+        // value during confirmation.
+        new DateTimeOffset(DateTime.SpecifyKind(action.ExpiresAtUtc, DateTimeKind.Utc)).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)
     }));
     private static bool VerifyConfirmationToken(AiPendingToolAction action, string? supplied) =>
         !string.IsNullOrWhiteSpace(action.ConfirmationTokenHash) &&
