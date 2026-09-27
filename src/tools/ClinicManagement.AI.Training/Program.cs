@@ -68,6 +68,39 @@ public class Program
             Console.WriteLine(PatientCopilotBenchmarkRunner.Evaluate(benchmarkPath));
             return 0;
         }
+        else if (command == "--generate-phase4-dataset")
+        {
+            var path = PositionalOrDefault(args, Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "phase4_independent_cases.json"));
+            Console.WriteLine(Phase4BenchmarkRunner.Generate(path));
+            return 0;
+        }
+        else if (command == "--validate-phase4")
+        {
+            var path = PositionalOrDefault(args, Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "phase4_independent_cases.json"));
+            var trainPath = OptionOrDefault(args, "--train", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "vietnamese_intent_dataset.json"));
+            var json = Phase4BenchmarkRunner.ValidateOnly(path, trainPath);
+            Console.WriteLine(json);
+            var report = JsonSerializer.Deserialize<Phase4ValidationReport>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return report?.IsValid == true ? 0 : 1;
+        }
+        else if (command == "--phase4-self-test")
+        {
+            var passed = Phase4BenchmarkRunner.SelfTest(out var detail);
+            Console.WriteLine(JsonSerializer.Serialize(new { passed, detail }, new JsonSerializerOptions { WriteIndented = true }));
+            return passed ? 0 : 1;
+        }
+        else if (command == "--benchmark-phase4")
+        {
+            var path = PositionalOrDefault(args, Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "phase4_independent_cases.json"));
+            var trainPath = OptionOrDefault(args, "--train", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "vietnamese_intent_dataset.json"));
+            var reportPath = OptionOrDefault(args, "--report", Path.Combine("docs", "ai", "PHASE_4_BENCHMARK_REPORT.json"));
+            var json = Phase4BenchmarkRunner.Evaluate(path, trainPath, Environment.GetEnvironmentVariable("GITHUB_SHA") ?? "local-unprovided");
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
+            File.WriteAllText(reportPath, json);
+            Console.WriteLine(json);
+            var report = JsonSerializer.Deserialize<Phase4BenchmarkReport>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return report?.Dataset.IsValid == true && report.SelfTestPassed ? 0 : 1;
+        }
         else
         {
             Console.ForegroundColor = ConsoleColor.Red;
@@ -86,6 +119,23 @@ public class Program
         Console.WriteLine("  ClinicManagement.AI.Training --train-intent [--data datasetPath] [--out outputDir]");
         Console.WriteLine("  ClinicManagement.AI.Training --eval-intent [--data datasetPath]");
         Console.WriteLine("  ClinicManagement.AI.Training --evaluate-copilot [benchmarkPath]");
+        Console.WriteLine("  ClinicManagement.AI.Training --generate-phase4-dataset [datasetPath]");
+        Console.WriteLine("  ClinicManagement.AI.Training --validate-phase4 [datasetPath] [--train trainDatasetPath]");
+        Console.WriteLine("  ClinicManagement.AI.Training --phase4-self-test");
+        Console.WriteLine("  ClinicManagement.AI.Training --benchmark-phase4 [datasetPath] [--train trainDatasetPath] [--report reportPath]");
+    }
+
+    private static string PositionalOrDefault(string[] args, string fallback) =>
+        args.Length > 1 && !args[1].StartsWith("--", StringComparison.Ordinal) ? args[1] : fallback;
+
+    private static string OptionOrDefault(string[] args, string option, string fallback)
+    {
+        for (var index = 1; index < args.Length - 1; index++)
+        {
+            if (string.Equals(args[index], option, StringComparison.OrdinalIgnoreCase))
+                return args[index + 1];
+        }
+        return fallback;
     }
 
     private static int RunValidate(string dataPath)

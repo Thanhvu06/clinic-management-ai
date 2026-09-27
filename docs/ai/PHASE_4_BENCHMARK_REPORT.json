@@ -1,0 +1,1881 @@
+{
+  "Benchmark": "ClinicCare AI Phase 4 independent benchmark",
+  "EvaluatorVersion": "phase4-independent-v1",
+  "TimestampUtc": "2026-09-27T08:34:29.577924+00:00",
+  "Head": "local-unprovided",
+  "LiveGeminiExecuted": false,
+  "EvaluationMode": "deterministic safety/rule/planner \u002B offline ML.NET; HTTP/persistence layers explicitly not evaluated",
+  "Dataset": {
+    "IsValid": true,
+    "TotalCases": 240,
+    "ByActor": {
+      "Patient": 120,
+      "Receptionist": 30,
+      "Doctor": 30,
+      "DiagnosticTechnician": 20,
+      "Pharmacist": 20,
+      "Admin": 20
+    },
+    "BySafety": {
+      "none": 215,
+      "emergency": 12,
+      "prompt_injection": 13
+    },
+    "ByIntent": {
+      "Greeting": 6,
+      "ProvideReason": 12,
+      "StartBooking": 116,
+      "SpecialtyRecommendation": 6,
+      "FindDoctorForSymptom": 6,
+      "FindEarliestAvailableSlot": 6,
+      "PricingInquiry": 6,
+      "FacilityInquiry": 26,
+      "ViewAppointments": 6,
+      "ModifyDraft": 12,
+      "ReviewDraft": 6,
+      "ConfirmBooking": 6,
+      "CancelDraft": 6,
+      "UnclearOrOutOfScope": 12,
+      "PharmacyInventory": 4,
+      "AdminMetrics": 4
+    },
+    "Split": {
+      "holdout": 240
+    },
+    "ExactTrainLeakage": 0,
+    "NearTrainLeakage": 0,
+    "NearLeakageExamples": [],
+    "ExistingSplitExactLeakage": 0,
+    "ExistingSplitNearLeakage": 0,
+    "ExistingSplitLeakageExamples": [],
+    "Errors": [],
+    "Warnings": [],
+    "DatasetVersion": "phase4-synthetic-holdout-v1",
+    "Seed": 42024,
+    "DatasetSha256": "3079e747e99bd91378cebe3db23dad584aab5571a3e7ca3ac11472b9788f5d8e"
+  },
+  "Safety": {
+    "Name": "safety",
+    "Numerator": 240,
+    "Denominator": 240,
+    "Rate": 1,
+    "Status": "pass",
+    "FailureCount": 0,
+    "Detail": null,
+    "MacroPrecision": null,
+    "MacroRecall": null,
+    "MacroF1": null,
+    "PerIntent": {},
+    "ConfusionMatrix": {
+      "Classes": [],
+      "Matrix": []
+    }
+  },
+  "IntentRuleBaseline": {
+    "Name": "intent_rule",
+    "Numerator": 171,
+    "Denominator": 240,
+    "Rate": 0.7125,
+    "Status": "fail",
+    "FailureCount": 69,
+    "Detail": null,
+    "MacroPrecision": 0.6872016485406578,
+    "MacroRecall": 0.7357012599469496,
+    "MacroF1": 0.6780012206879393,
+    "PerIntent": {
+      "AdminMetrics": {
+        "Support": 4,
+        "Precision": 0,
+        "Recall": 0,
+        "F1": 0
+      },
+      "CancelDraft": {
+        "Support": 6,
+        "Precision": 0.3157894736842105,
+        "Recall": 1,
+        "F1": 0.4799999999999999
+      },
+      "ConfirmBooking": {
+        "Support": 6,
+        "Precision": 0.6,
+        "Recall": 1,
+        "F1": 0.7499999999999999
+      },
+      "FacilityInquiry": {
+        "Support": 26,
+        "Precision": 1,
+        "Recall": 0.5384615384615384,
+        "F1": 0.7000000000000001
+      },
+      "FindDoctorForSymptom": {
+        "Support": 6,
+        "Precision": 1,
+        "Recall": 1,
+        "F1": 1
+      },
+      "FindEarliestAvailableSlot": {
+        "Support": 6,
+        "Precision": 1,
+        "Recall": 1,
+        "F1": 1
+      },
+      "Greeting": {
+        "Support": 6,
+        "Precision": 1,
+        "Recall": 1,
+        "F1": 1
+      },
+      "ModifyDraft": {
+        "Support": 12,
+        "Precision": 1,
+        "Recall": 0.5,
+        "F1": 0.6666666666666666
+      },
+      "PharmacyInventory": {
+        "Support": 4,
+        "Precision": 0,
+        "Recall": 0,
+        "F1": 0
+      },
+      "PricingInquiry": {
+        "Support": 6,
+        "Precision": 1,
+        "Recall": 1,
+        "F1": 1
+      },
+      "ProvideReason": {
+        "Support": 12,
+        "Precision": 1,
+        "Recall": 1,
+        "F1": 1
+      },
+      "ReviewDraft": {
+        "Support": 6,
+        "Precision": 1,
+        "Recall": 1,
+        "F1": 1
+      },
+      "SpecialtyRecommendation": {
+        "Support": 6,
+        "Precision": 1,
+        "Recall": 1,
+        "F1": 1
+      },
+      "StartBooking": {
+        "Support": 116,
+        "Precision": 0.7264957264957265,
+        "Recall": 0.7327586206896551,
+        "F1": 0.7296137339055794
+      },
+      "UnclearOrOutOfScope": {
+        "Support": 12,
+        "Precision": 0,
+        "Recall": 0,
+        "F1": 0
+      },
+      "ViewAppointments": {
+        "Support": 6,
+        "Precision": 0.35294117647058826,
+        "Recall": 1,
+        "F1": 0.5217391304347826
+      }
+    },
+    "ConfusionMatrix": {
+      "Classes": [
+        "AdminMetrics",
+        "CancelDraft",
+        "ConfirmBooking",
+        "FacilityInquiry",
+        "FindDoctorForSymptom",
+        "FindEarliestAvailableSlot",
+        "Greeting",
+        "ModifyDraft",
+        "PharmacyInventory",
+        "PricingInquiry",
+        "ProvideReason",
+        "ReviewDraft",
+        "SpecialtyRecommendation",
+        "StartBooking",
+        "UnclearOrOutOfScope",
+        "ViewAppointments"
+      ],
+      "Matrix": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          4,
+          0,
+          0
+        ],
+        [
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          14,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          12,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          4,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          13,
+          4,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          85,
+          0,
+          11
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          12,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6
+        ]
+      ]
+    }
+  },
+  "PlannerRouting": {
+    "Name": "planner_routing",
+    "Numerator": 206,
+    "Denominator": 240,
+    "Rate": 0.8583333333333333,
+    "Status": "fail",
+    "FailureCount": 34,
+    "Detail": null,
+    "MacroPrecision": null,
+    "MacroRecall": null,
+    "MacroF1": null,
+    "PerIntent": {},
+    "ConfusionMatrix": {
+      "Classes": [],
+      "Matrix": []
+    }
+  },
+  "Grounding": {
+    "Name": "grounding",
+    "Numerator": 0,
+    "Denominator": 0,
+    "Rate": null,
+    "Status": "not_evaluated_http_required",
+    "FailureCount": 0,
+    "Detail": "Requires HTTP/tool response fixtures and persisted source records.",
+    "MacroPrecision": null,
+    "MacroRecall": null,
+    "MacroF1": null,
+    "PerIntent": {},
+    "ConfusionMatrix": {
+      "Classes": [],
+      "Matrix": []
+    }
+  },
+  "Authorization": {
+    "Name": "authorization",
+    "Numerator": 0,
+    "Denominator": 0,
+    "Rate": null,
+    "Status": "not_evaluated_http_required",
+    "FailureCount": 0,
+    "Detail": "Requires HTTP gateway plus persisted user/session/facility/resource fixtures.",
+    "MacroPrecision": null,
+    "MacroRecall": null,
+    "MacroF1": null,
+    "PerIntent": {},
+    "ConfusionMatrix": {
+      "Classes": [],
+      "Matrix": []
+    }
+  },
+  "Outcome": {
+    "Name": "outcome",
+    "Numerator": 0,
+    "Denominator": 0,
+    "Rate": null,
+    "Status": "not_evaluated_http_required",
+    "FailureCount": 0,
+    "Detail": "Requires HTTP confirmation and persistence side-effect assertions.",
+    "MacroPrecision": null,
+    "MacroRecall": null,
+    "MacroF1": null,
+    "PerIntent": {},
+    "ConfusionMatrix": {
+      "Classes": [],
+      "Matrix": []
+    }
+  },
+  "MustNotContain": {
+    "Name": "must_not_contain",
+    "Numerator": 240,
+    "Denominator": 240,
+    "Rate": 1,
+    "Status": "pass",
+    "FailureCount": 0,
+    "Detail": null,
+    "MacroPrecision": null,
+    "MacroRecall": null,
+    "MacroF1": null,
+    "PerIntent": {},
+    "ConfusionMatrix": {
+      "Classes": [],
+      "Matrix": []
+    }
+  },
+  "MlNet": {
+    "Status": "completed",
+    "Detail": "",
+    "ScoreSemantics": "SdcaMaximumEntropy probability scores; no second softmax applied",
+    "TrainSamples": 118,
+    "ValidationSamples": 30,
+    "HoldoutSamples": 240,
+    "LockedThreshold": 0.15,
+    "ValidationMacroF1AtThreshold": 0.6035087719298244,
+    "Correct": 94,
+    "RawModelCorrect": 94,
+    "Accuracy": 0.39166666666666666,
+    "MacroPrecision": 0.43384586858142227,
+    "MacroRecall": 0.4946251570570991,
+    "MacroF1": 0.40407581340559534,
+    "LogLoss": 3.606055996653856,
+    "ExpectedCalibrationError": 0.38932350277900696,
+    "PerIntent": {
+      "AdminMetrics": {
+        "Support": 4,
+        "Precision": 0,
+        "Recall": 0,
+        "F1": 0
+      },
+      "CancelDraft": {
+        "Support": 6,
+        "Precision": 0,
+        "Recall": 0,
+        "F1": 0
+      },
+      "ConfirmBooking": {
+        "Support": 6,
+        "Precision": 0.8571428571428571,
+        "Recall": 1,
+        "F1": 0.923076923076923
+      },
+      "DoctorSearch": {
+        "Support": 0,
+        "Precision": 0,
+        "Recall": 0,
+        "F1": 0
+      },
+      "FacilityInquiry": {
+        "Support": 26,
+        "Precision": 0.8148148148148148,
+        "Recall": 0.8461538461538461,
+        "F1": 0.830188679245283
+      },
+      "FindDoctorForSymptom": {
+        "Support": 6,
+        "Precision": 0,
+        "Recall": 0,
+        "F1": 0
+      },
+      "FindEarliestAvailableSlot": {
+        "Support": 6,
+        "Precision": 1,
+        "Recall": 1,
+        "F1": 1
+      },
+      "Greeting": {
+        "Support": 6,
+        "Precision": 1,
+        "Recall": 1,
+        "F1": 1
+      },
+      "ModifyDraft": {
+        "Support": 12,
+        "Precision": 0.631578947368421,
+        "Recall": 1,
+        "F1": 0.7741935483870968
+      },
+      "PharmacyInventory": {
+        "Support": 4,
+        "Precision": 0,
+        "Recall": 0,
+        "F1": 0
+      },
+      "PricingInquiry": {
+        "Support": 6,
+        "Precision": 1,
+        "Recall": 1,
+        "F1": 1
+      },
+      "ProvideReason": {
+        "Support": 12,
+        "Precision": 0.13333333333333333,
+        "Recall": 1,
+        "F1": 0.23529411764705882
+      },
+      "ReviewDraft": {
+        "Support": 6,
+        "Precision": 1,
+        "Recall": 1,
+        "F1": 1
+      },
+      "SelectDoctor": {
+        "Support": 0,
+        "Precision": 0,
+        "Recall": 0,
+        "F1": 0
+      },
+      "SelectSlot": {
+        "Support": 0,
+        "Precision": 0,
+        "Recall": 0,
+        "F1": 0
+      },
+      "SpecialtyRecommendation": {
+        "Support": 6,
+        "Precision": 0,
+        "Recall": 0,
+        "F1": 0
+      },
+      "StartBooking": {
+        "Support": 116,
+        "Precision": 1,
+        "Recall": 0.05172413793103448,
+        "F1": 0.09836065573770492
+      },
+      "UnclearOrOutOfScope": {
+        "Support": 12,
+        "Precision": 0.6666666666666666,
+        "Recall": 0.5,
+        "F1": 0.5714285714285715
+      },
+      "ViewAppointments": {
+        "Support": 6,
+        "Precision": 0.13953488372093023,
+        "Recall": 1,
+        "F1": 0.24489795918367346
+      }
+    },
+    "ConfusionMatrix": {
+      "Classes": [
+        "AdminMetrics",
+        "CancelDraft",
+        "ConfirmBooking",
+        "DoctorSearch",
+        "FacilityInquiry",
+        "FindDoctorForSymptom",
+        "FindEarliestAvailableSlot",
+        "Greeting",
+        "ModifyDraft",
+        "PharmacyInventory",
+        "PricingInquiry",
+        "ProvideReason",
+        "ReviewDraft",
+        "SelectDoctor",
+        "SelectSlot",
+        "SpecialtyRecommendation",
+        "StartBooking",
+        "UnclearOrOutOfScope",
+        "ViewAppointments"
+      ],
+      "Matrix": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          4
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6
+        ],
+        [
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          22,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          4,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          5,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          4
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          1,
+          2,
+          5,
+          0,
+          0,
+          0,
+          7,
+          0,
+          0,
+          68,
+          0,
+          1,
+          0,
+          0,
+          6,
+          3,
+          23
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          6,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6
+        ]
+      ]
+    },
+    "CoverageByThreshold": {
+      "0.15": 1,
+      "0.25": 0.9708333333333333,
+      "0.35": 0.8916666666666667,
+      "0.45": 0.725,
+      "0.55": 0.5791666666666667,
+      "0.65": 0.48333333333333334
+    },
+    "Latency": {
+      "Iterations": 240,
+      "WarmupIterations": 10,
+      "MinMs": 0.0074,
+      "MaxMs": 0.0777,
+      "AverageMs": 0.03135833333333333,
+      "P50Ms": 0.031,
+      "P95Ms": 0.0432,
+      "Environment": "Microsoft Windows NT 10.0.26200.0; 32 logical processors"
+    }
+  },
+  "Failures": [
+    {
+      "CaseId": "P4-PAT-003",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-010",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ViewAppointments",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-016",
+      "Layer": "intent_rule",
+      "Expected": "ModifyDraft",
+      "Actual": "SelectDoctor",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-017",
+      "Layer": "intent_rule",
+      "Expected": "UnclearOrOutOfScope",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PAT-018",
+      "Layer": "intent_rule",
+      "Expected": "UnclearOrOutOfScope",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PAT-023",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-030",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ViewAppointments",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-036",
+      "Layer": "intent_rule",
+      "Expected": "ModifyDraft",
+      "Actual": "SelectDoctor",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-037",
+      "Layer": "intent_rule",
+      "Expected": "UnclearOrOutOfScope",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PAT-038",
+      "Layer": "intent_rule",
+      "Expected": "UnclearOrOutOfScope",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PAT-043",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-050",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ViewAppointments",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-056",
+      "Layer": "intent_rule",
+      "Expected": "ModifyDraft",
+      "Actual": "SelectDoctor",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-057",
+      "Layer": "intent_rule",
+      "Expected": "UnclearOrOutOfScope",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PAT-058",
+      "Layer": "intent_rule",
+      "Expected": "UnclearOrOutOfScope",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PAT-063",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-070",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ViewAppointments",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-076",
+      "Layer": "intent_rule",
+      "Expected": "ModifyDraft",
+      "Actual": "SelectDoctor",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-077",
+      "Layer": "intent_rule",
+      "Expected": "UnclearOrOutOfScope",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PAT-078",
+      "Layer": "intent_rule",
+      "Expected": "UnclearOrOutOfScope",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PAT-083",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-090",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ViewAppointments",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-096",
+      "Layer": "intent_rule",
+      "Expected": "ModifyDraft",
+      "Actual": "SelectDoctor",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-097",
+      "Layer": "intent_rule",
+      "Expected": "UnclearOrOutOfScope",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PAT-098",
+      "Layer": "intent_rule",
+      "Expected": "UnclearOrOutOfScope",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PAT-103",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-110",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ViewAppointments",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-116",
+      "Layer": "intent_rule",
+      "Expected": "ModifyDraft",
+      "Actual": "SelectDoctor",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-117",
+      "Layer": "intent_rule",
+      "Expected": "UnclearOrOutOfScope",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PAT-118",
+      "Layer": "intent_rule",
+      "Expected": "UnclearOrOutOfScope",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-REC-003",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ViewAppointments",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-REC-009",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ViewAppointments",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-REC-015",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ViewAppointments",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-REC-021",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ViewAppointments",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-REC-027",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ViewAppointments",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-DOC-007",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "SelectDoctor",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-DOC-008",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-DOC-017",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "SelectDoctor",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-DOC-018",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-DOC-027",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "SelectDoctor",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-DOC-028",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-TEC-002",
+      "Layer": "intent_rule",
+      "Expected": "FacilityInquiry",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-TEC-005",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ConfirmBooking",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-TEC-007",
+      "Layer": "intent_rule",
+      "Expected": "FacilityInquiry",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-TEC-010",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ConfirmBooking",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-TEC-012",
+      "Layer": "intent_rule",
+      "Expected": "FacilityInquiry",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-TEC-015",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ConfirmBooking",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-TEC-017",
+      "Layer": "intent_rule",
+      "Expected": "FacilityInquiry",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-TEC-020",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "ConfirmBooking",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PHA-002",
+      "Layer": "intent_rule",
+      "Expected": "PharmacyInventory",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PHA-003",
+      "Layer": "intent_rule",
+      "Expected": "FacilityInquiry",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PHA-007",
+      "Layer": "intent_rule",
+      "Expected": "PharmacyInventory",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PHA-008",
+      "Layer": "intent_rule",
+      "Expected": "FacilityInquiry",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PHA-012",
+      "Layer": "intent_rule",
+      "Expected": "PharmacyInventory",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PHA-013",
+      "Layer": "intent_rule",
+      "Expected": "FacilityInquiry",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PHA-017",
+      "Layer": "intent_rule",
+      "Expected": "PharmacyInventory",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-PHA-018",
+      "Layer": "intent_rule",
+      "Expected": "FacilityInquiry",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-ADM-002",
+      "Layer": "intent_rule",
+      "Expected": "AdminMetrics",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-ADM-003",
+      "Layer": "intent_rule",
+      "Expected": "FacilityInquiry",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-ADM-004",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-ADM-007",
+      "Layer": "intent_rule",
+      "Expected": "AdminMetrics",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-ADM-008",
+      "Layer": "intent_rule",
+      "Expected": "FacilityInquiry",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-ADM-009",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-ADM-012",
+      "Layer": "intent_rule",
+      "Expected": "AdminMetrics",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-ADM-013",
+      "Layer": "intent_rule",
+      "Expected": "FacilityInquiry",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-ADM-014",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-ADM-017",
+      "Layer": "intent_rule",
+      "Expected": "AdminMetrics",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-ADM-018",
+      "Layer": "intent_rule",
+      "Expected": "FacilityInquiry",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P4-ADM-019",
+      "Layer": "intent_rule",
+      "Expected": "StartBooking",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-PAT-004",
+      "Layer": "planner",
+      "Expected": "none",
+      "Actual": "clinic.search_knowledge",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-PAT-024",
+      "Layer": "planner",
+      "Expected": "none",
+      "Actual": "clinic.search_knowledge",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-PAT-044",
+      "Layer": "planner",
+      "Expected": "none",
+      "Actual": "clinic.search_knowledge",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-PAT-064",
+      "Layer": "planner",
+      "Expected": "none",
+      "Actual": "clinic.search_knowledge",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-PAT-084",
+      "Layer": "planner",
+      "Expected": "none",
+      "Actual": "clinic.search_knowledge",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-PAT-104",
+      "Layer": "planner",
+      "Expected": "none",
+      "Actual": "clinic.search_knowledge",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-REC-004",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-REC-006",
+      "Layer": "planner",
+      "Expected": "reception.get_queue",
+      "Actual": "none",
+      "Detail": "blocked_by_authorization"
+    },
+    {
+      "CaseId": "P4-REC-010",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-REC-012",
+      "Layer": "planner",
+      "Expected": "reception.get_queue",
+      "Actual": "none",
+      "Detail": "blocked_by_authorization"
+    },
+    {
+      "CaseId": "P4-REC-016",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-REC-018",
+      "Layer": "planner",
+      "Expected": "reception.get_queue",
+      "Actual": "none",
+      "Detail": "blocked_by_authorization"
+    },
+    {
+      "CaseId": "P4-REC-022",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-REC-024",
+      "Layer": "planner",
+      "Expected": "reception.get_queue",
+      "Actual": "none",
+      "Detail": "blocked_by_authorization"
+    },
+    {
+      "CaseId": "P4-REC-028",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-REC-030",
+      "Layer": "planner",
+      "Expected": "reception.get_queue",
+      "Actual": "none",
+      "Detail": "blocked_by_authorization"
+    },
+    {
+      "CaseId": "P4-DOC-005",
+      "Layer": "planner",
+      "Expected": "none",
+      "Actual": "doctor.get_diagnostic_orders",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-DOC-009",
+      "Layer": "planner",
+      "Expected": "none",
+      "Actual": "doctor.get_my_queue",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-DOC-015",
+      "Layer": "planner",
+      "Expected": "none",
+      "Actual": "doctor.get_diagnostic_orders",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-DOC-019",
+      "Layer": "planner",
+      "Expected": "none",
+      "Actual": "doctor.get_my_queue",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-DOC-025",
+      "Layer": "planner",
+      "Expected": "none",
+      "Actual": "doctor.get_diagnostic_orders",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-DOC-029",
+      "Layer": "planner",
+      "Expected": "none",
+      "Actual": "doctor.get_my_queue",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-TEC-002",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-TEC-007",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-TEC-012",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-TEC-017",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-PHA-003",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-PHA-008",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-PHA-013",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-PHA-018",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-ADM-003",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-ADM-008",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-ADM-013",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-ADM-018",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    }
+  ],
+  "SelfTestPassed": true,
+  "SelfTestDetail": "invalid duplicate CaseId was rejected",
+  "Summary": "Independent holdout=240; rule intent=fail; ML.NET=completed; safety=pass; planner=fail; liveGeminiExecuted=False."
+}

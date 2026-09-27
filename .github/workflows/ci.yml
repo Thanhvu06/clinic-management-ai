@@ -41,6 +41,19 @@ jobs:
       - name: Build backend
         run: dotnet build src/backend/ClinicManagement.sln --no-restore --configuration Release
 
+      - name: Validate Phase 4 independent dataset and benchmark
+        shell: bash
+        run: |
+          dotnet run --project src/tools/ClinicManagement.AI.Training/ClinicManagement.AI.Training.csproj \
+            --no-build --configuration Release -- --validate-phase4 \
+            src/tools/ClinicManagement.AI.Training/data/phase4_independent_cases.json
+          dotnet run --project src/tools/ClinicManagement.AI.Training/ClinicManagement.AI.Training.csproj \
+            --no-build --configuration Release -- --phase4-self-test
+          dotnet run --project src/tools/ClinicManagement.AI.Training/ClinicManagement.AI.Training.csproj \
+            --no-build --configuration Release -- --benchmark-phase4 \
+            src/tools/ClinicManagement.AI.Training/data/phase4_independent_cases.json \
+            --report ./phase4-benchmark-report.json
+
       - name: Check for pending EF Core model changes
         run: dotnet ef migrations has-pending-model-changes --project src/backend/ClinicManagement.Infrastructure --startup-project src/backend/ClinicManagement.Api
 
