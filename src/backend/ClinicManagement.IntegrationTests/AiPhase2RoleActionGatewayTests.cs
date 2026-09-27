@@ -711,6 +711,13 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
         var body = await response.Content.ReadFromJsonAsync<AiToolExecutionResult>();
         Assert.NotNull(body);
         Assert.Equal("pending_confirmation", body!.Status);
+        Assert.NotNull(body.Preview);
+        Assert.Equal(toolName, body.Preview!.ToolName);
+        Assert.False(string.IsNullOrWhiteSpace(body.Preview.ResourceType));
+        Assert.False(string.IsNullOrWhiteSpace(body.Preview.ResourceId));
+        Assert.False(string.IsNullOrWhiteSpace(body.Preview.Consequence));
+        Assert.False(string.IsNullOrWhiteSpace(body.Preview.ConfirmationSummary));
+        Assert.NotEqual(default, body.Preview.ValidatedAtUtc);
         var data = Assert.IsType<JsonElement>(body.Data);
         return new PendingAction(
             data.GetProperty("actionId").GetGuid(),

@@ -94,7 +94,7 @@ describe('UnifiedCopilotPanel', () => {
             tools: [],
             actionTools: [{ name: 'technician.prepare_start_diagnostic_order', version: '1.0', description: 'Tiếp nhận phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' }]
         });
-        prepareActionMock.mockResolvedValue({ status: 'pending_confirmation', actionId: 'action-1', data: { confirmationToken: 'secret-token', expiresAtUtc: '2030-01-01T00:00:00Z' } });
+        prepareActionMock.mockResolvedValue({ status: 'pending_confirmation', actionId: 'action-1', data: { confirmationToken: 'secret-token', expiresAtUtc: '2030-01-01T00:00:00Z' }, preview: { toolName: 'technician.prepare_start_diagnostic_order', resourceType: 'DiagnosticOrder', resourceId: '42', consequence: 'Backend sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra quyền và resource.', validatedAtUtc: '2030-01-01T00:00:00Z' } });
         confirmActionMock.mockResolvedValue({ status: 'completed', displayText: 'Đã tiếp nhận phiếu.' });
 
         render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
@@ -109,6 +109,98 @@ describe('UnifiedCopilotPanel', () => {
         await waitFor(() => expect(screen.getByText('Đã tiếp nhận phiếu.')).toBeInTheDocument());
         expect(confirmActionMock).toHaveBeenCalledWith('action-1', expect.objectContaining({ sessionId: expect.any(String), concurrencyToken: 'secret-token' }), expect.anything());
         expect(screen.queryByRole('button', { name: /Xác nhận thao tác/i })).not.toBeInTheDocument();
+    });
+
+    it('retires an idempotency key after completion before preparing the same resource again', async () => {
+        mockUser = { userId: 'tech-1', fullName: 'Technician', role: 'DiagnosticTechnician' };
+        const tool = { name: 'technician.prepare_start_diagnostic_order', version: '1.0', description: 'Tiếp nhận phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        const pending = (actionId: string, token: string) => ({
+            status: 'pending_confirmation', actionId, data: { confirmationToken: token, expiresAtUtc: '2030-01-01T00:00:00Z' },
+            preview: { toolName: tool.name, resourceType: 'DiagnosticOrder', resourceId: '42', consequence: 'Backend sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra quyền và resource.', validatedAtUtc: '2030-01-01T00:00:00Z' }
+        });
+        prepareActionMock.mockResolvedValueOnce(pending('action-1', 'token-1')).mockResolvedValueOnce(pending('action-2', 'token-2'));
+        confirmActionMock.mockResolvedValueOnce({ status: 'completed', displayText: 'Đã tiếp nhận phiếu.' });
+
+        render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Kỹ thuật viên/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        await waitFor(() => expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Xác nhận thao tác/i }));
+        await waitFor(() => expect(screen.getByText('Đã tiếp nhận phiếu.')).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        await waitFor(() => expect(prepareActionMock).toHaveBeenCalledTimes(2));
+
+        const firstRequest = prepareActionMock.mock.calls[0][0] as { idempotencyKey: string };
+        const secondRequest = prepareActionMock.mock.calls[1][0] as { idempotencyKey: string };
+        expect(secondRequest.idempotencyKey).not.toBe(firstRequest.idempotencyKey);
+    });
+
+    it('reuses the same key only when a prepare response is lost', async () => {
+        mockUser = { userId: 'tech-1', fullName: 'Technician', role: 'DiagnosticTechnician' };
+        const tool = { name: 'technician.prepare_start_diagnostic_order', version: '1.0', description: 'Tiếp nhận phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        prepareActionMock.mockRejectedValueOnce(new Error('network interrupted')).mockResolvedValueOnce({
+            status: 'pending_confirmation', actionId: 'action-retry', data: { confirmationToken: 'retry-token', expiresAtUtc: '2030-01-01T00:00:00Z' },
+            preview: { toolName: tool.name, resourceType: 'DiagnosticOrder', resourceId: '42', consequence: 'Backend sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra quyền và resource.', validatedAtUtc: '2030-01-01T00:00:00Z' }
+        });
+
+        render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Kỹ thuật viên/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        await waitFor(() => expect(screen.getByText('network interrupted')).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        await waitFor(() => expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeInTheDocument());
+
+        expect(prepareActionMock.mock.calls[1][0]).toMatchObject({ idempotencyKey: prepareActionMock.mock.calls[0][0].idempotencyKey });
+    });
+
+    it('clears action A before preparing action B so a failed B cannot show A confirmation', async () => {
+        mockUser = { userId: 'tech-1', fullName: 'Technician', role: 'DiagnosticTechnician' };
+        const startTool = { name: 'technician.prepare_start_diagnostic_order', version: '1.0', description: 'Tiếp nhận phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        const completeTool = { name: 'technician.prepare_complete_diagnostic_order', version: '1.0', description: 'Hoàn tất phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [startTool, completeTool] });
+        prepareActionMock.mockResolvedValueOnce({
+            status: 'pending_confirmation', actionId: 'action-a', data: { confirmationToken: 'token-a', expiresAtUtc: '2030-01-01T00:00:00Z' },
+            preview: { toolName: startTool.name, resourceType: 'DiagnosticOrder', resourceId: '42', consequence: 'Hậu quả A', confirmationSummary: 'Đã kiểm tra A', validatedAtUtc: '2030-01-01T00:00:00Z' }
+        }).mockRejectedValueOnce(new Error('prepare B failed'));
+
+        render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Kỹ thuật viên/i }));
+        await waitFor(() => expect(screen.getAllByRole('button', { name: 'Xem trước' })).toHaveLength(2));
+        fireEvent.click(screen.getAllByRole('button', { name: 'Xem trước' })[0]);
+        await waitFor(() => expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeInTheDocument());
+        fireEvent.click(screen.getAllByRole('button', { name: 'Xem trước' })[1]);
+        await waitFor(() => expect(screen.getByText('prepare B failed')).toBeInTheDocument());
+        expect(screen.queryByRole('button', { name: /Xác nhận thao tác/i })).not.toBeInTheDocument();
+        expect(screen.queryByText('Hậu quả A')).not.toBeInTheDocument();
+    });
+
+    it('ignores a late prepare response after account and route change', async () => {
+        mockUser = { userId: 'tech-1', fullName: 'Technician', role: 'DiagnosticTechnician' };
+        let resolvePrepare!: (value: unknown) => void;
+        const tool = { name: 'technician.prepare_start_diagnostic_order', version: '1.0', description: 'Tiếp nhận phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        prepareActionMock.mockReturnValueOnce(new Promise(resolve => { resolvePrepare = resolve; }));
+        const view = render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Kỹ thuật viên/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+
+        mockUser = { userId: 'reception-1', fullName: 'Reception', role: 'Receptionist' };
+        mockIdentityVersion = 2;
+        view.rerender(<MemoryRouter initialEntries={['/reception']}><UnifiedCopilotPanel /></MemoryRouter>);
+        resolvePrepare({
+            status: 'pending_confirmation', actionId: 'late-action', data: { confirmationToken: 'late-token' },
+            preview: { toolName: tool.name, resourceType: 'DiagnosticOrder', resourceId: '42', consequence: 'Late consequence', confirmationSummary: 'Late preview', validatedAtUtc: '2030-01-01T00:00:00Z' }
+        });
+
+        await waitFor(() => expect(screen.getByText('Copilot Lễ tân')).toBeInTheDocument());
+        expect(screen.queryByRole('button', { name: /Xác nhận thao tác/i })).not.toBeInTheDocument();
+        expect(screen.queryByText('Late consequence')).not.toBeInTheDocument();
+        expect(screen.queryByText('late-token')).not.toBeInTheDocument();
     });
 
     it('rejects gibberish/question booking reasons and normalizes a trailing escape', () => {

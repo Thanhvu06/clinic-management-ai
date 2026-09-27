@@ -6,6 +6,8 @@ namespace ClinicManagement.AI.Training;
 public static class Phase4DatasetFactory
 {
     public const string Version = "phase5-synthetic-independent-holdout-v2";
+    public const int SourceTemplateCount = 51;
+    public const string Provenance = "generated_from_51_labeled_source_templates_with_deterministic_language_variants";
     public static IReadOnlyList<string> LabelRevisionNotes { get; } = new[]
     {
         "P4-PAT-010/P4-PAT-030/P4-PAT-050/P4-PAT-070/P4-PAT-090/P4-PAT-110: StartBooking -> ViewAppointments; 'Mở chi tiết lịch hẹn của tôi' is a persisted read, not a booking start. Holdout IDs and threshold were unchanged."
@@ -120,7 +122,8 @@ public static class Phase4DatasetFactory
                 Grounding = spec.Grounding,
                 Rationale = spec.Rationale,
                 Split = "holdout",
-                Synthetic = true
+                Synthetic = true,
+                Provenance = Provenance
             });
         }
     }

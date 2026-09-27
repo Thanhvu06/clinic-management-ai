@@ -63,7 +63,11 @@ export interface UnifiedActionState {
     expiresAtUtc?: string;
     resourceSummary: string;
     consequence: string;
+    confirmationSummary: string;
+    previewValidatedAtUtc: string;
     confirmationToken: string;
+    requestSignature: string;
+    idempotencyKey: string;
 }
 
 export interface ActionCapabilityState {
@@ -71,7 +75,6 @@ export interface ActionCapabilityState {
     enabled: boolean;
     reason?: string;
     arguments?: Record<string, unknown>;
-    consequence: string;
 }
 
 const asRecord = (value: unknown): Record<string, unknown> => value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -81,27 +84,27 @@ const actionCapability = (tool: AiCopilotTool, resource?: AiCopilotResourceConte
     const id = (value: number | undefined) => value !== undefined && Number.isSafeInteger(value) && value > 0;
     switch (tool.name) {
         case 'technician.prepare_start_diagnostic_order':
-            return { tool, enabled: id(context.diagnosticOrderId), reason: 'Mở một phiếu chỉ định thực tế để chọn đúng order.', arguments: id(context.diagnosticOrderId) ? { orderId: context.diagnosticOrderId } : undefined, consequence: 'Tiếp nhận phiếu chỉ định trong worklist.' };
+            return { tool, enabled: id(context.diagnosticOrderId), reason: 'Mở một phiếu chỉ định thực tế để chọn đúng order.', arguments: id(context.diagnosticOrderId) ? { orderId: context.diagnosticOrderId } : undefined };
         case 'technician.prepare_complete_diagnostic_order':
-            return { tool, enabled: id(context.diagnosticOrderId), reason: 'Mở một phiếu chỉ định thực tế để chọn đúng order.', arguments: id(context.diagnosticOrderId) ? { orderId: context.diagnosticOrderId } : undefined, consequence: 'Hoàn tất phiếu chỉ định sau khi dữ liệu đã đủ.' };
+            return { tool, enabled: id(context.diagnosticOrderId), reason: 'Mở một phiếu chỉ định thực tế để chọn đúng order.', arguments: id(context.diagnosticOrderId) ? { orderId: context.diagnosticOrderId } : undefined };
         case 'pharmacist.prepare_reserve_prescription':
-            return { tool, enabled: id(context.prescriptionId), reason: 'Mở một đơn thuốc thực tế để chọn đúng prescription.', arguments: id(context.prescriptionId) ? { prescriptionId: context.prescriptionId } : undefined, consequence: 'Giữ chỗ thuốc theo điều kiện domain hiện tại.' };
+            return { tool, enabled: id(context.prescriptionId), reason: 'Mở một đơn thuốc thực tế để chọn đúng prescription.', arguments: id(context.prescriptionId) ? { prescriptionId: context.prescriptionId } : undefined };
         case 'pharmacist.prepare_dispense_prescription':
-            return { tool, enabled: id(context.prescriptionId), reason: 'Mở một đơn thuốc thực tế để chọn đúng prescription.', arguments: id(context.prescriptionId) ? { prescriptionId: context.prescriptionId } : undefined, consequence: 'Cấp phát đơn thuốc sau khi backend kiểm tra đủ điều kiện.' };
+            return { tool, enabled: id(context.prescriptionId), reason: 'Mở một đơn thuốc thực tế để chọn đúng prescription.', arguments: id(context.prescriptionId) ? { prescriptionId: context.prescriptionId } : undefined };
         case 'reception.prepare_check_in_appointment': {
             const enabled = id(context.appointmentId) && id(context.departmentId);
-            return { tool, enabled, reason: 'Cần appointment và department đang được chọn từ dữ liệu thật.', arguments: enabled ? { appointmentId: context.appointmentId, departmentId: context.departmentId, ...(id(context.roomId) ? { roomId: context.roomId } : {}), ...(id(context.assignedDoctorId) ? { assignedDoctorId: context.assignedDoctorId } : {}) } : undefined, consequence: 'Chuẩn bị check-in lịch hẹn; trạng thái cuối cùng do backend xác nhận.' };
+            return { tool, enabled, reason: 'Cần appointment và department đang được chọn từ dữ liệu thật.', arguments: enabled ? { appointmentId: context.appointmentId, departmentId: context.departmentId, ...(id(context.roomId) ? { roomId: context.roomId } : {}), ...(id(context.assignedDoctorId) ? { assignedDoctorId: context.assignedDoctorId } : {}) } : undefined };
         }
         case 'reception.prepare_create_walk_in':
-            return { tool, enabled: false, reason: 'Chỉ hỗ trợ hồ sơ bệnh nhân đã tồn tại; cần chọn patient, department và lý do từ selector domain.', consequence: 'Không tạo bệnh nhân mới bằng Copilot.' };
+            return { tool, enabled: false, reason: 'Chỉ hỗ trợ hồ sơ bệnh nhân đã tồn tại; cần chọn patient, department và lý do từ selector domain.' };
         case 'doctor.prepare_diagnostic_order':
-            return { tool, enabled: Boolean(context.visitId && context.serviceIds?.length), reason: 'Cần visit được phân công và service IDs do domain selector cung cấp.', arguments: context.visitId && context.serviceIds?.length ? { visitId: context.visitId, serviceIds: context.serviceIds } : undefined, consequence: 'Tạo bản nháp phiếu chỉ định; không phát hành ngoài bước xác nhận.' };
+            return { tool, enabled: Boolean(context.visitId && context.serviceIds?.length), reason: 'Cần visit được phân công và service IDs do domain selector cung cấp.', arguments: context.visitId && context.serviceIds?.length ? { visitId: context.visitId, serviceIds: context.serviceIds } : undefined };
         case 'doctor.prepare_prescription_draft':
-            return { tool, enabled: false, reason: 'Cần các thuốc/liều lượng được chọn từ selector domain của visit; UI không tự đoán item.', consequence: 'Chỉ tạo bản nháp, không phát hành đơn thuốc.' };
+            return { tool, enabled: false, reason: 'Cần các thuốc/liều lượng được chọn từ selector domain của visit; UI không tự đoán item.' };
         case 'technician.prepare_record_diagnostic_result':
-            return { tool, enabled: false, reason: 'Cần item xét nghiệm và kết quả được chọn/nhập trong màn hình nghiệp vụ.', consequence: 'Ghi kết quả kỹ thuật sau khi backend kiểm tra order và item.' };
+            return { tool, enabled: false, reason: 'Cần item xét nghiệm và kết quả được chọn/nhập trong màn hình nghiệp vụ.' };
         default:
-            return { tool, enabled: false, reason: 'Thao tác này chưa có selector an toàn trong màn hình hiện tại.', consequence: 'Không thực hiện thao tác khi thiếu resource context.' };
+            return { tool, enabled: false, reason: 'Thao tác này chưa có selector an toàn trong màn hình hiện tại.' };
     }
 };
 
@@ -129,6 +132,8 @@ export const useUnifiedCopilot = () => {
     const actionControllerRef = useRef<AbortController | null>(null);
     const catalogControllerRef = useRef<AbortController | null>(null);
     const actionKeysRef = useRef(new Map<string, string>());
+    const actionRequestNumberRef = useRef(0);
+    const actionContextRef = useRef({ identityKey, routeKey });
     const requestNumberRef = useRef(0);
     const sessionIdRef = useRef(makeSession());
     const conversationIdRef = useRef(makeSession().replace(/^sess_/, 'conv_'));
@@ -140,6 +145,7 @@ export const useUnifiedCopilot = () => {
         controllerRef.current?.abort();
         actionControllerRef.current?.abort();
         requestNumberRef.current += 1;
+        actionRequestNumberRef.current += 1;
         retryTextRef.current = null;
         sessionIdRef.current = makeSession();
         conversationIdRef.current = makeSession().replace(/^sess_/, 'conv_');
@@ -158,8 +164,16 @@ export const useUnifiedCopilot = () => {
             previousRouteRef.current = routeKey;
             reset();
         }
-        return () => controllerRef.current?.abort();
+        return () => {
+            controllerRef.current?.abort();
+            actionControllerRef.current?.abort();
+            actionRequestNumberRef.current += 1;
+        };
     }, [identityKey, routeKey, reset]);
+
+    useEffect(() => {
+        actionContextRef.current = { identityKey, routeKey };
+    }, [identityKey, routeKey]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -220,6 +234,7 @@ export const useUnifiedCopilot = () => {
         controllerRef.current?.abort();
         actionControllerRef.current?.abort();
         requestNumberRef.current += 1;
+        actionRequestNumberRef.current += 1;
         setActionLoading(null);
         setLoading(false);
     }, []);
@@ -231,6 +246,9 @@ export const useUnifiedCopilot = () => {
 
     const prepareAction = useCallback(async (capability: ActionCapabilityState) => {
         if (!capability.enabled || !capability.arguments || actionLoading) return;
+        const requestId = ++actionRequestNumberRef.current;
+        const requestIdentityKey = identityKey;
+        const requestRouteKey = routeKey;
         const sessionId = sessionIdRef.current;
         const signature = `${capability.tool.name}:${JSON.stringify(capability.arguments)}`;
         const idempotencyKey = actionKeysRef.current.get(signature) ?? makeId('action');
@@ -238,8 +256,14 @@ export const useUnifiedCopilot = () => {
         actionControllerRef.current?.abort();
         const controller = new AbortController();
         actionControllerRef.current = controller;
+        setPendingAction(null);
         setActionLoading(capability.tool.name);
         setActionFeedback(null);
+        const isCurrentRequest = () => !controller.signal.aborted &&
+            actionRequestNumberRef.current === requestId &&
+            actionContextRef.current.identityKey === requestIdentityKey &&
+            actionContextRef.current.routeKey === requestRouteKey &&
+            sessionIdRef.current === sessionId;
         try {
             const result = await prepareRoleAction({
                 toolName: capability.tool.name,
@@ -250,53 +274,96 @@ export const useUnifiedCopilot = () => {
                 correlationId: makeId('correlation'),
                 idempotencyKey
             }, controller.signal);
-            if (controller.signal.aborted) return;
+            if (!isCurrentRequest()) return;
             const data = asRecord(result.data);
             const token = typeof data.confirmationToken === 'string' ? data.confirmationToken : '';
-            if (result.status === 'pending_confirmation' && result.actionId && token) {
+            const preview = result.preview;
+            const validPreview = Boolean(preview && preview.toolName === capability.tool.name &&
+                preview.resourceType && preview.resourceId && preview.consequence &&
+                preview.confirmationSummary && preview.validatedAtUtc);
+            if (result.status === 'pending_confirmation' && result.actionId && token && validPreview) {
                 setPendingAction({
                     toolName: capability.tool.name,
                     actionId: result.actionId,
                     status: result.status,
                     expiresAtUtc: typeof data.expiresAtUtc === 'string' ? data.expiresAtUtc : undefined,
-                    resourceSummary: Object.entries(capability.arguments).map(([key, value]) => `${key}=${String(value)}`).join(', '),
-                    consequence: capability.consequence,
-                    confirmationToken: token
+                    resourceSummary: `${preview!.resourceType} #${preview!.resourceId}`,
+                    consequence: preview!.consequence,
+                    confirmationSummary: preview!.confirmationSummary,
+                    previewValidatedAtUtc: preview!.validatedAtUtc,
+                    confirmationToken: token,
+                    requestSignature: signature,
+                    idempotencyKey
                 });
                 setActionFeedback({ status: 'pending_confirmation', message: 'Đã chuẩn bị. Hãy xem lại hậu quả rồi bấm xác nhận rõ ràng.' });
             } else {
-                setActionFeedback({ status: result.status || 'failed', message: result.error?.message || 'Backend không cấp được một thao tác chờ xác nhận hợp lệ.' });
+                if (result.status !== 'pending_confirmation' || result.error?.retryable === false)
+                    actionKeysRef.current.delete(signature);
+                setActionFeedback({ status: result.status || 'failed', message: result.error?.message || 'Backend không cấp được preview có cấu trúc để xác nhận.' });
             }
         } catch (error) {
-            if (!controller.signal.aborted) setActionFeedback({ status: 'failed', message: error instanceof Error ? error.message : 'Không thể chuẩn bị thao tác.' });
+            if (isCurrentRequest()) {
+                const errorRecord = asRecord(error);
+                const nestedError = asRecord(errorRecord.error);
+                const code = typeof nestedError.code === 'string' ? nestedError.code : '';
+                if (['ACTION_EXPIRED', 'ACTION_CANCELLED', 'ACTION_FAILED_TERMINAL', 'ACTION_ALREADY_COMPLETED'].includes(code))
+                    actionKeysRef.current.delete(signature);
+                setActionFeedback({ status: 'failed', message: typeof nestedError.message === 'string' ? nestedError.message : error instanceof Error ? error.message : 'Không thể chuẩn bị thao tác.' });
+            }
         } finally {
-            if (!controller.signal.aborted) setActionLoading(null);
+            if (isCurrentRequest()) setActionLoading(null);
         }
-    }, [actionLoading]);
+    }, [actionLoading, identityKey, routeKey]);
 
     const confirmAction = useCallback(async () => {
         const action = pendingAction;
         if (!action || actionLoading) return;
+        const requestId = ++actionRequestNumberRef.current;
+        const requestIdentityKey = identityKey;
+        const requestRouteKey = routeKey;
+        const sessionId = sessionIdRef.current;
         const controller = new AbortController();
         actionControllerRef.current?.abort();
         actionControllerRef.current = controller;
         setActionLoading(action.toolName);
+        const isCurrentRequest = () => !controller.signal.aborted &&
+            actionRequestNumberRef.current === requestId &&
+            actionContextRef.current.identityKey === requestIdentityKey &&
+            actionContextRef.current.routeKey === requestRouteKey &&
+            sessionIdRef.current === sessionId;
         try {
-            const result = await confirmRoleAction(action.actionId, { sessionId: sessionIdRef.current, concurrencyToken: action.confirmationToken }, controller.signal);
-            if (controller.signal.aborted) return;
+            const result = await confirmRoleAction(action.actionId, { sessionId, concurrencyToken: action.confirmationToken }, controller.signal);
+            if (!isCurrentRequest()) return;
             if (result.status === 'completed') {
                 setPendingAction(null);
+                actionKeysRef.current.delete(action.requestSignature);
                 setActionFeedback({ status: 'completed', message: result.displayText || 'Thao tác đã hoàn tất và được backend xác nhận.' });
             } else {
-                if (['expired', 'cancelled', 'failed_terminal'].includes((result.status || '').toLowerCase())) setPendingAction(null);
+                const status = (result.status || '').toLowerCase();
+                const terminal = ['expired', 'cancelled', 'failed_terminal'].includes(status) ||
+                    ['ACTION_EXPIRED', 'ACTION_CANCELLED', 'ACTION_FAILED_TERMINAL'].includes(result.error?.code || '');
+                if (terminal) {
+                    setPendingAction(null);
+                    actionKeysRef.current.delete(action.requestSignature);
+                }
                 setActionFeedback({ status: result.status || 'failed', message: result.error?.message || 'Thao tác chưa hoàn tất; dữ liệu vẫn do backend quyết định.' });
             }
         } catch (error) {
-            if (!controller.signal.aborted) setActionFeedback({ status: 'failed', message: error instanceof Error ? error.message : 'Không thể xác nhận thao tác.' });
+            if (isCurrentRequest()) {
+                const errorRecord = asRecord(error);
+                const nestedError = asRecord(errorRecord.error);
+                const code = typeof nestedError.code === 'string' ? nestedError.code : '';
+                const terminal = ['ACTION_EXPIRED', 'ACTION_CANCELLED', 'ACTION_FAILED_TERMINAL', 'ACTION_ALREADY_COMPLETED'].includes(code);
+                if (terminal) {
+                    setPendingAction(null);
+                    actionKeysRef.current.delete(action.requestSignature);
+                }
+                setActionFeedback({ status: 'failed', message: typeof nestedError.message === 'string' ? nestedError.message : error instanceof Error ? error.message : 'Không thể xác nhận thao tác.' });
+            }
         } finally {
-            if (!controller.signal.aborted) setActionLoading(null);
+            if (isCurrentRequest()) setActionLoading(null);
         }
-    }, [actionLoading, pendingAction]);
+    }, [actionLoading, identityKey, pendingAction, routeKey]);
 
     const retry = useCallback(() => {
         const value = retryTextRef.current;

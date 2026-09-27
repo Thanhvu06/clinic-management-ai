@@ -1,0 +1,17 @@
+{
+  "datasetVersion": "phase5-blind-holdout-v1",
+  "provenance": "independent_author_draft_2026-09-27; manually written outside Phase4DatasetFactory templates",
+  "labelingStatus": "partial_no_independent_human_annotators",
+  "frozen": true,
+  "frozenAtUtc": "2026-09-27T00:00:00Z",
+  "independentHumanAnnotators": 0,
+  "classifierPlannerTunedAfterFreeze": false,
+  "evaluationOnly": true,
+  "labelingProcedure": [
+    "Write fresh Vietnamese utterances without copying Phase4DatasetFactory source strings.",
+    "Assign actor, intent, safety, grounding, allowed tools, forbidden tools, and outcome before runtime scoring.",
+    "Freeze the JSON and manifest before any optional score review.",
+    "Do not change classifier or planner based on this holdout in the same run.",
+    "Obtain independent human annotation before treating this as a quality acceptance set."
+  ]
+}

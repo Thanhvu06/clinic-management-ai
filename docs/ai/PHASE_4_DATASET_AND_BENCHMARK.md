@@ -61,6 +61,14 @@ The 85% accuracy and 80% macro-F1 values are advisory targets, not acceptance th
 
 The holdout contains negative examples for cross-user, cross-session, cross-facility, missing-resource, stale/replayed action, prompt-injection, forbidden write-tool, and mixed read/write plan behavior. The existing HTTP/persistence tests remain the evidence for token, version, lease, concurrency, idempotency, and side-effect semantics; this benchmark does not replace those tests with mocks.
 
+## Phase 5 measurement corrections
+
+The generated regression set contains 51 labeled source templates expanded into 240 deterministic language/context variants. The 240 records are therefore not 240 independent semantic situations. The report records `SourceTemplateCount=51`, `GeneratedVariantCount=240`, and the template-generation provenance explicitly. This synthetic set remains useful for deterministic regression protection, not for a claim of clinical or real-world language coverage.
+
+ML.NET predicts only the eligible patient holdout: 120 role records are excluded and 12 patient records whose labels are absent from the approved training split are excluded. Accuracy is now calculated over `HoldoutSamples=108`, not over all 240 records. The current report is `68/108 = 62.96%`; this is an offline intent-model metric and must not be interpreted as medical accuracy or clinical validation. Per-intent support, macro precision/recall/F1, confusion matrix, calibration, coverage, and latency use the same eligible prediction set.
+
+A separate manually written `phase5_blind_holdout.json` with `phase5_blind_holdout_manifest.json` is frozen as evaluation-only provenance. It contains 21 synthetic cases written outside `Phase4DatasetFactory` and is not used to tune the classifier or planner in this run. Because no independent human annotator has labeled it, the assessment status is `partial_no_independent_human_annotators`; it is not an acceptance score. Safety guard, intent, role routing, HTTP grounding, authorization, outcome, and live Gemini remain separate dimensions; a passing CI/build does not establish real-world AI quality.
+
 ## CI and limits
 
 CI runs dataset validation, evaluator self-test, and the deterministic benchmark before EF checks, and quotes every Bash \`dotnet test --filter\` expression containing \`|\`. CI also provisions an ephemeral SQL Server service, applies the official idempotent script twice, verifies schema/history, runs Release backend tests, publishes the API, and runs the frontend job. No real production database or patient data is used.

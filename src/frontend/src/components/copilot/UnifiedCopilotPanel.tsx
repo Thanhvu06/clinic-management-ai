@@ -143,6 +143,7 @@ export const UnifiedCopilotPanel: React.FC = () => {
                         <div className={styles.cardTitle}><span>Xem trước từ backend</span><span>{copilot.pendingAction.status}</span></div>
                         <div className={styles.previewLine}><strong>Resource đã chọn:</strong> {copilot.pendingAction.resourceSummary}</div>
                         <div className={styles.previewLine}><strong>Hậu quả:</strong> {copilot.pendingAction.consequence}</div>
+                        <div className={styles.previewLine}><strong>Kiểm tra backend:</strong> {copilot.pendingAction.confirmationSummary}</div>
                         <div className={styles.previewLine}><strong>Hết hạn:</strong> {copilot.pendingAction.expiresAtUtc ? new Date(copilot.pendingAction.expiresAtUtc).toLocaleString('vi-VN') : 'Backend không cung cấp'}</div>
                         <button type="button" className={styles.confirmButton} disabled={Boolean(copilot.actionLoading)} onClick={() => void copilot.confirmAction()}><CheckCircle2 size={14} /> Xác nhận thao tác</button>
                     </div>}

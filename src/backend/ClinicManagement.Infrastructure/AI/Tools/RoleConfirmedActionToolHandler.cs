@@ -828,8 +828,32 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
         ActionId = action.ActionId.ToString(),
         ResultType = "pending_action",
         DisplayText = message,
+        Preview = new AiToolActionPreview
+        {
+            ToolName = action.ToolName,
+            ResourceType = action.ResourceType,
+            ResourceId = action.ResourceId,
+            ResourceVersion = action.ResourceVersion,
+            Consequence = ConsequenceFor(action.ToolName),
+            ConfirmationSummary = "Backend đã kiểm tra quyền, cơ sở, resource và điều kiện hiện tại; xác nhận mới được phép ghi.",
+            ValidatedAtUtc = DateTimeOffset.UtcNow
+        },
         Data = new { actionId = action.ActionId, action.ToolName, action.ActorRole, action.ExpiresAtUtc, confirmationToken = token, confirmationEndpoint = $"/api/v1/ai/copilot/actions/{action.ActionId}/confirm" },
         DataSources = new[] { new AiToolDataSource("pending_action_store", "database") }
+    };
+
+    private static string ConsequenceFor(string toolName) => toolName switch
+    {
+        "reception.prepare_check_in_appointment" => "Sau khi xác nhận, backend có thể tạo lượt khám cho lịch hẹn đã chọn.",
+        "reception.prepare_create_walk_in" => "Sau khi xác nhận, backend có thể tạo lượt khám vãng lai cho bệnh nhân đã chọn.",
+        "doctor.prepare_diagnostic_order" => "Sau khi xác nhận, backend có thể tạo bản nháp phiếu chỉ định cho ca khám đã chọn.",
+        "doctor.prepare_prescription_draft" => "Sau khi xác nhận, backend có thể tạo bản nháp đơn thuốc cho ca khám đã chọn.",
+        "technician.prepare_start_diagnostic_order" => "Sau khi xác nhận, backend có thể tiếp nhận phiếu chỉ định vào worklist.",
+        "technician.prepare_record_diagnostic_result" => "Sau khi xác nhận, backend có thể ghi kết quả cho item xét nghiệm đã chọn.",
+        "technician.prepare_complete_diagnostic_order" => "Sau khi xác nhận, backend có thể hoàn tất phiếu chỉ định đã chọn.",
+        "pharmacist.prepare_reserve_prescription" => "Sau khi xác nhận, backend có thể giữ chỗ thuốc theo đơn đã chọn.",
+        "pharmacist.prepare_dispense_prescription" => "Sau khi xác nhận, backend có thể cấp phát đơn thuốc đã chọn.",
+        _ => "Sau khi xác nhận, backend mới xem xét ghi thay đổi cho resource đã chọn."
     };
 
     private static AiToolExecutionResult Completed(object data, string type, string message, bool isIdempotentReplay = false) => new()

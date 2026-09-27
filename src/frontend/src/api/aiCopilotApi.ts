@@ -94,7 +94,18 @@ export interface AiRoleActionResult {
     requiresConfirmation?: boolean;
     isIdempotentReplay?: boolean;
     actionId?: string | null;
+    preview?: AiActionPreview | null;
     retrievedAtUtc?: string;
+}
+
+export interface AiActionPreview {
+    toolName: string;
+    resourceType: string;
+    resourceId: string;
+    resourceVersion?: string | null;
+    consequence: string;
+    confirmationSummary: string;
+    validatedAtUtc: string;
 }
 
 export async function getRoleCopilotCatalog(signal?: AbortSignal): Promise<AiCopilotCatalog> {

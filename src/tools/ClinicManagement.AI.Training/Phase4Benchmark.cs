@@ -62,7 +62,8 @@ public static class Phase4BenchmarkRunner
             TimestampUtc = DateTimeOffset.UtcNow,
             Head = head,
             LiveGeminiExecuted = false,
-            Dataset = validation
+            Dataset = validation,
+            IndependentHoldout = AssessIndependentHoldout()
         };
 
         report.SelfTestPassed = SelfTest(out var selfTestDetail);
@@ -199,12 +200,37 @@ public static class Phase4BenchmarkRunner
         var full = cases.ToList();
         var patientCount = full.Count(item => item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase));
         var roleCount = full.Count - patientCount;
+        var trainPath = Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "vietnamese_intent_dataset.json");
+        var training = LoadIntentDataset(trainPath);
+        var trainedIntents = training
+            .Where(record => record.Approved && string.Equals(record.Split, "train", StringComparison.OrdinalIgnoreCase))
+            .Select(record => record.Intent)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var metricFixture = full.Where(item => !item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase)).Take(2)
+            .Concat(full.Where(item => item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase)
+                && trainedIntents.Contains(item.ExpectedIntent)).Take(1))
+            .Concat(full.Where(item => item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase)
+                && !trainedIntents.Contains(item.ExpectedIntent)).Take(1))
+            .ToList();
+        var metricReport = EvaluateMlNet(metricFixture, trainPath);
+        var expectedEligible = metricFixture.Count(item => item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase)
+            && trainedIntents.Contains(item.ExpectedIntent));
+        var metricDenominatorPassed = metricFixture.Any(item => !item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase))
+            && metricFixture.Any(item => item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase)
+                && !trainedIntents.Contains(item.ExpectedIntent))
+            && metricReport.ExcludedRoleSamples == metricFixture.Count(item => !item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase))
+            && metricReport.ExcludedUntrainedPatientSamples == metricFixture.Count(item => item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase)
+                && !trainedIntents.Contains(item.ExpectedIntent))
+            && metricReport.HoldoutSamples == expectedEligible
+            && metricReport.Correct <= metricReport.HoldoutSamples
+            && Math.Abs(metricReport.Accuracy - (double)metricReport.Correct / metricReport.HoldoutSamples) < 1e-12;
         var passed = !duplicateReport.IsValid && duplicateReport.Errors.Any(error => error.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
             && !wrongActorReport.IsValid && wrongActorReport.Errors.Any(error => error.Contains("not allowed", StringComparison.OrdinalIgnoreCase))
             && !wrongSchemaReport.IsValid && wrongSchemaReport.Errors.Any(error => error.Contains("ScenarioGroup", StringComparison.OrdinalIgnoreCase))
-            && patientCount == 120 && roleCount == 120 && patientCount != full.Count && roleCount != full.Count;
+            && patientCount == 120 && roleCount == 120 && patientCount != full.Count && roleCount != full.Count
+            && metricDenominatorPassed;
         detail = passed
-            ? "rejected duplicate input/id, wrong actor/tool, wrong schema, and verified patient-vs-role denominators"
+            ? $"rejected duplicate input/id, wrong actor/tool, wrong schema, verified patient-vs-role denominators, and ML.NET metric denominator ({metricReport.Correct}/{metricReport.HoldoutSamples})"
             : "self-test failed duplicate, actor, schema, or denominator guard";
         return passed;
     }
@@ -406,7 +432,10 @@ public static class Phase4BenchmarkRunner
             LabelRevisionNotes = Phase4DatasetFactory.LabelRevisionNotes.ToList(),
             DatasetSha256 = Sha256(rawJson),
             DatasetVersion = Phase4DatasetFactory.Version,
-            Seed = Seed
+            Seed = Seed,
+            SourceTemplateCount = Phase4DatasetFactory.SourceTemplateCount,
+            GeneratedVariantCount = cases.Count,
+            Provenance = Phase4DatasetFactory.Provenance
         };
     }
 
@@ -477,7 +506,7 @@ public static class Phase4BenchmarkRunner
             ValidationMacroF1AtThreshold = ValidationMacroF1(valPredictions, validationRecords, threshold, classes),
             Correct = correct,
             RawModelCorrect = rawCorrect,
-            Accuracy = (double)correct / holdout.Count,
+            Accuracy = (double)correct / eligibleHoldout.Count,
             MacroPrecision = perIntent.Count == 0 ? 0 : perIntent.Values.Average(value => value.Precision),
             MacroRecall = perIntent.Count == 0 ? 0 : perIntent.Values.Average(value => value.Recall),
             MacroF1 = perIntent.Count == 0 ? 0 : perIntent.Values.Average(value => value.F1),
@@ -683,9 +712,11 @@ public static class Phase4BenchmarkRunner
     };
 
     private static string BuildSummary(Phase4BenchmarkReport report) =>
-        $"Independent holdout={report.Dataset.TotalCases}; rule intent={report.IntentRuleBaseline.Status}; " +
-        $"ML.NET(patient-only)={report.MlNet.Status}; safety-guard-only={report.Safety.Status}; role-routing={report.RoleRouting.Status}; " +
-        $"liveGeminiExecuted={report.LiveGeminiExecuted}.";
+        $"Synthetic regression={report.Dataset.TotalCases} variants from {report.Dataset.SourceTemplateCount} source templates; " +
+        $"rule intent={report.IntentRuleBaseline.Status}; " +
+        $"ML.NET(patient-only)={report.MlNet.Status} {report.MlNet.Correct}/{report.MlNet.HoldoutSamples} accuracy={report.MlNet.Accuracy:P2}; " +
+        $"safety-guard-only={report.Safety.Status}; role-routing={report.RoleRouting.Status}; " +
+        $"independentHoldout={report.IndependentHoldout.Status}; liveGeminiExecuted={report.LiveGeminiExecuted}.";
 
     private static Phase4Failure Failure(Phase4BenchmarkCase item, string layer, string expected, string actual, string detail) => new()
     {
@@ -703,6 +734,41 @@ public static class Phase4BenchmarkRunner
         DatasetVersion = Phase4DatasetFactory.Version,
         Seed = Seed
     };
+
+    private static Phase5IndependentHoldoutAssessment AssessIndependentHoldout()
+    {
+        const string holdoutPath = "src/tools/ClinicManagement.AI.Training/data/phase5_blind_holdout.json";
+        const string manifestPath = "src/tools/ClinicManagement.AI.Training/data/phase5_blind_holdout_manifest.json";
+        if (!File.Exists(holdoutPath) || !File.Exists(manifestPath))
+        {
+            return new Phase5IndependentHoldoutAssessment
+            {
+                Status = "not_available",
+                Detail = "Frozen independent holdout or manifest is missing.",
+                HoldoutPath = holdoutPath,
+                ManifestPath = manifestPath
+            };
+        }
+
+        var holdoutRaw = File.ReadAllText(holdoutPath);
+        var manifestRaw = File.ReadAllText(manifestPath);
+        var holdout = JsonSerializer.Deserialize<List<Phase4BenchmarkCase>>(holdoutRaw, JsonOptions) ?? new();
+        var manifest = JsonSerializer.Deserialize<Phase5HoldoutManifest>(manifestRaw, JsonOptions) ?? new();
+        return new Phase5IndependentHoldoutAssessment
+        {
+            Status = manifest.LabelingStatus,
+            Detail = "Frozen evaluation-only holdout is catalogued but not used to tune the classifier/planner in this run.",
+            HoldoutPath = holdoutPath,
+            ManifestPath = manifestPath,
+            Cases = holdout.Count,
+            Provenance = manifest.Provenance,
+            Frozen = manifest.Frozen,
+            IndependentHumanAnnotators = manifest.IndependentHumanAnnotators,
+            ClassifierPlannerTunedAfterFreeze = manifest.ClassifierPlannerTunedAfterFreeze,
+            HoldoutSha256 = Sha256(holdoutRaw),
+            ManifestSha256 = Sha256(manifestRaw)
+        };
+    }
 
     private static List<Phase4BenchmarkCase> LoadCases(string path) =>
         JsonSerializer.Deserialize<List<Phase4BenchmarkCase>>(File.ReadAllText(path), JsonOptions) ?? new();
@@ -793,6 +859,7 @@ public sealed class Phase4BenchmarkCase
     public string Rationale { get; set; } = string.Empty;
     public string Split { get; set; } = "holdout";
     public bool Synthetic { get; set; } = true;
+    public string Provenance { get; set; } = "generated_template_variant";
 }
 
 public sealed class Phase4ValidationReport
@@ -816,6 +883,9 @@ public sealed class Phase4ValidationReport
     public string DatasetVersion { get; init; } = string.Empty;
     public int Seed { get; init; }
     public string DatasetSha256 { get; init; } = string.Empty;
+    public int SourceTemplateCount { get; init; }
+    public int GeneratedVariantCount { get; init; }
+    public string Provenance { get; init; } = string.Empty;
 }
 
 public sealed class Phase4BenchmarkReport
@@ -827,6 +897,7 @@ public sealed class Phase4BenchmarkReport
     public bool LiveGeminiExecuted { get; init; }
     public string EvaluationMode { get; init; } = "deterministic safety/rule/planner + offline ML.NET; HTTP/persistence layers explicitly not evaluated";
     public Phase4ValidationReport Dataset { get; init; } = new();
+    public Phase5IndependentHoldoutAssessment IndependentHoldout { get; init; } = new();
     public Phase4Metric Safety { get; set; } = new();
     public Phase4Metric IntentRuleBaseline { get; set; } = new();
     public Phase4Metric PlannerRouting { get; set; } = new();
@@ -840,6 +911,34 @@ public sealed class Phase4BenchmarkReport
     public bool SelfTestPassed { get; set; }
     public string SelfTestDetail { get; set; } = string.Empty;
     public string Summary { get; set; } = string.Empty;
+}
+
+public sealed class Phase5IndependentHoldoutAssessment
+{
+    public string Status { get; init; } = string.Empty;
+    public string Detail { get; init; } = string.Empty;
+    public string HoldoutPath { get; init; } = string.Empty;
+    public string ManifestPath { get; init; } = string.Empty;
+    public int Cases { get; init; }
+    public string Provenance { get; init; } = string.Empty;
+    public bool Frozen { get; init; }
+    public int IndependentHumanAnnotators { get; init; }
+    public bool ClassifierPlannerTunedAfterFreeze { get; init; }
+    public string HoldoutSha256 { get; init; } = string.Empty;
+    public string ManifestSha256 { get; init; } = string.Empty;
+}
+
+public sealed class Phase5HoldoutManifest
+{
+    public string DatasetVersion { get; set; } = string.Empty;
+    public string Provenance { get; set; } = string.Empty;
+    public string LabelingStatus { get; set; } = "partial_no_independent_human_annotators";
+    public bool Frozen { get; set; }
+    public DateTimeOffset FrozenAtUtc { get; set; }
+    public int IndependentHumanAnnotators { get; set; }
+    public bool ClassifierPlannerTunedAfterFreeze { get; set; }
+    public bool EvaluationOnly { get; set; }
+    public string[] LabelingProcedure { get; set; } = Array.Empty<string>();
 }
 
 public sealed class Phase4Metric

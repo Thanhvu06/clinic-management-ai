@@ -130,6 +130,7 @@ public sealed class AiToolExecutionResult
     public bool RequiresConfirmation { get; init; }
     public bool IsIdempotentReplay { get; init; }
     public string? ActionId { get; init; }
+    public AiToolActionPreview? Preview { get; init; }
     public IReadOnlyList<AiToolDataSource> DataSources { get; init; } = Array.Empty<AiToolDataSource>();
     public DateTimeOffset RetrievedAtUtc { get; init; } = DateTimeOffset.UtcNow;
 
@@ -138,6 +139,17 @@ public sealed class AiToolExecutionResult
         Status = "failed",
         Error = new AiToolError { Code = code, Message = message, Retryable = retryable }
     };
+}
+
+public sealed class AiToolActionPreview
+{
+    public string ToolName { get; init; } = string.Empty;
+    public string ResourceType { get; init; } = string.Empty;
+    public string ResourceId { get; init; } = string.Empty;
+    public string? ResourceVersion { get; init; }
+    public string Consequence { get; init; } = string.Empty;
+    public string ConfirmationSummary { get; init; } = string.Empty;
+    public DateTimeOffset ValidatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
 }
 
 public interface IAiToolHandler
