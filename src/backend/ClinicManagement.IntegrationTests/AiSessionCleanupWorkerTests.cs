@@ -163,18 +163,31 @@ public class AiSessionCleanupWorkerTests
             {
                 if (Interlocked.Increment(ref delayCount) == 1) return Task.CompletedTask;
                 return Task.Delay(Timeout.InfiniteTimeSpan, token);
-            });
+        });
 
         await worker.StartAsync(stopping.Token);
+        var cleanupCompleted = false;
         for (var attempt = 0; attempt < 50; attempt++)
         {
             await Task.Delay(20);
             using var pollScope = services.CreateScope();
             var pollDb = pollScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            if (await pollDb.AiPendingToolActions.AnyAsync(x => x.State == AiPendingToolActionState.FailedRetryable))
+            cleanupCompleted =
+                await pollDb.AiPendingToolActions.AnyAsync(x =>
+                    x.ResourceId == "stale-executing" &&
+                    x.State == AiPendingToolActionState.FailedRetryable) &&
+                await pollDb.AiPendingToolActions.AnyAsync(x =>
+                    x.ResourceId == "expired-pending" &&
+                    x.State == AiPendingToolActionState.Expired) &&
+                !await pollDb.AiPendingToolActions.AnyAsync(x =>
+                    x.ResourceId == "old-completed" ||
+                    x.ResourceId == "old-terminal-failure");
+
+            if (cleanupCompleted)
                 break;
         }
 
+        Assert.True(cleanupCompleted, "The worker did not finish its complete cleanup cycle within the test timeout.");
         stopping.Cancel();
         await worker.StopAsync(CancellationToken.None);
 
