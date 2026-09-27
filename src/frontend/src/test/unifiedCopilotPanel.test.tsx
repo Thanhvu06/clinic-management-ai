@@ -66,6 +66,41 @@ describe('UnifiedCopilotPanel', () => {
         expect(request).not.toHaveProperty('facilityId');
     });
 
+    it('renders the versioned public catalog envelope without treating metadata as a result row', async () => {
+        mockUser = { userId: 'patient-1', fullName: 'Patient', role: 'Patient' };
+        sendMock.mockResolvedValueOnce(response({
+            cards: [{
+                type: 'clinic_knowledge',
+                title: 'Dữ liệu đã kiểm chứng',
+                description: 'Đã tìm thấy dữ liệu công khai.',
+                data: {
+                    status: 'matched',
+                    sourceType: 'specialty',
+                    items: [{
+                        sourceType: 'specialty',
+                        sourceId: 'specialty:42',
+                        title: 'Tim mạch',
+                        publishedPrice: 250000,
+                        details: { specialtyCode: 'SP06' }
+                    }],
+                    retrievedAtUtc: '2030-01-01T00:00:00Z'
+                },
+                sources: [{ name: 'clinic_public_catalog', kind: 'approved_database' }]
+            }]
+        }));
+
+        render(<MemoryRouter initialEntries={['/patient']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: /Mở (?:Copilot|Trợ lý) Bệnh nhân/i }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'Có khám tim mạch không?' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
+
+        await waitFor(() => expect(screen.getByText('Tim mạch')).toBeInTheDocument());
+        expect(screen.getByText('250.000 ₫')).toBeInTheDocument();
+        expect(screen.getByText('SP06')).toBeInTheDocument();
+        expect(screen.getByText('clinic_public_catalog · approved_database')).toBeInTheDocument();
+        expect(screen.queryByText(/items:/i)).not.toBeInTheDocument();
+    });
+
     it('resets on identity switch and ignores a late response from the previous identity', async () => {
         let resolveOld!: (value: unknown) => void;
         sendMock.mockReturnValueOnce(new Promise(resolve => { resolveOld = resolve; }));

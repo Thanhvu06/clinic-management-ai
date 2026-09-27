@@ -9,7 +9,9 @@ const LABELS: Record<string, string> = {
     facilityName: 'Cơ sở', facility: 'Cơ sở', room: 'Phòng', appointmentCode: 'Mã lịch hẹn',
     status: 'Trạng thái', slotDate: 'Ngày', date: 'Ngày', startTime: 'Bắt đầu', endTime: 'Kết thúc',
     openingHours: 'Giờ làm việc', address: 'Địa chỉ', phone: 'Điện thoại', code: 'Mã',
-    sourceType: 'Nguồn dữ liệu', updatedAtUtc: 'Cập nhật'
+    sourceType: 'Nguồn dữ liệu', sourceEntity: 'Loại nguồn', specialtyCode: 'Mã chuyên khoa',
+    priceType: 'Loại giá', currency: 'Đơn vị tiền', publishedPrice: 'Giá công bố', updatedAtUtc: 'Cập nhật',
+    retrievedAtUtc: 'Đọc lúc'
 };
 
 const safeRoute = (route?: string | null): route is string => Boolean(route && route.startsWith('/') && !route.startsWith('//') && !route.includes('://') && !route.includes('..') && !route.includes('\\'));
@@ -26,8 +28,23 @@ const formatValue = (key: string, value: unknown): string => {
 };
 
 const displayRows = (data: unknown): Array<Record<string, unknown>> => {
-    if (Array.isArray(data)) return data.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object')).slice(0, 6);
-    return data && typeof data === 'object' ? [data as Record<string, unknown>] : [];
+    const flattenDetails = (item: Record<string, unknown>): Record<string, unknown> => {
+        const details = item.details;
+        if (!details || typeof details !== 'object' || Array.isArray(details)) return item;
+        const { details: _details, ...rest } = item;
+        return { ...rest, ...(details as Record<string, unknown>) };
+    };
+    if (Array.isArray(data)) return data
+        .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+        .map(flattenDetails)
+        .slice(0, 6);
+    if (!data || typeof data !== 'object') return [];
+    const record = data as Record<string, unknown>;
+    if (Array.isArray(record.items)) return record.items
+        .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+        .map(flattenDetails)
+        .slice(0, 6);
+    return [record];
 };
 
 const visibleFields = (row: Record<string, unknown>) => Object.entries(row)

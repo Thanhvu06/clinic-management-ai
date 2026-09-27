@@ -10,6 +10,7 @@ using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.AI;
+using ClinicManagement.Infrastructure.Identity;
 using ClinicManagement.Infrastructure.AI.Planning;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -143,7 +144,11 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
             (Role: AiActorRole.DiagnosticTechnician, Text: "Các phiếu xét nghiệm nào đang đợi xử lý?", Tool: "technician.get_worklist", Resource: new AiResolvedResourceContext()),
             (Role: AiActorRole.Pharmacist, Text: "Đơn nào đang xếp hàng chờ nhà thuốc xử lý?", Tool: "pharmacist.get_prescription_queue", Resource: new AiResolvedResourceContext()),
             (Role: AiActorRole.Pharmacist, Text: "Kiểm tra số lượng thuốc còn trong kho.", Tool: "pharmacist.get_inventory_status", Resource: new AiResolvedResourceContext()),
-            (Role: AiActorRole.Admin, Text: "Tổng hợp chỉ số vận hành hôm nay.", Tool: "admin.get_dashboard_metrics", Resource: new AiResolvedResourceContext())
+            (Role: AiActorRole.Admin, Text: "Tổng hợp chỉ số vận hành hôm nay.", Tool: "admin.get_dashboard_metrics", Resource: new AiResolvedResourceContext()),
+            (Role: AiActorRole.Patient, Text: "Có khám chuyên khoa tim mạch không?", Tool: "clinic.search_knowledge", Resource: new AiResolvedResourceContext()),
+            (Role: AiActorRole.Receptionist, Text: "Bác sĩ nào khám chuyên khoa nội tổng quát ở cơ sở trung tâm?", Tool: "clinic.search_knowledge", Resource: new AiResolvedResourceContext()),
+            (Role: AiActorRole.Patient, Text: "Dịch vụ siêu âm bụng giá bao nhiêu?", Tool: "clinic.search_knowledge", Resource: new AiResolvedResourceContext()),
+            (Role: AiActorRole.Patient, Text: "Chủ nhật cơ sở có mở không?", Tool: "clinic.search_knowledge", Resource: new AiResolvedResourceContext())
         };
 
         foreach (var item in cases)
@@ -158,6 +163,24 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
             Assert.True(decision.ToolCalls.Count > 0, $"{item.Text}: {decision.SubIntent} / {decision.Clarification}");
             Assert.Equal(item.Tool, Assert.Single(decision.ToolCalls).Name);
         }
+
+        var catalogCalls = new[]
+        {
+            planner.Plan(new AiCopilotPlanningContext
+            {
+                Role = AiActorRole.Patient,
+                NormalizedMessage = "Có khám chuyên khoa tim mạch không?",
+                Analysis = new AiConversationAnalysis { NormalizedText = "Có khám chuyên khoa tim mạch không?" }
+            }),
+            planner.Plan(new AiCopilotPlanningContext
+            {
+                Role = AiActorRole.Patient,
+                NormalizedMessage = "Dịch vụ siêu âm bụng giá bao nhiêu?",
+                Analysis = new AiConversationAnalysis { NormalizedText = "Dịch vụ siêu âm bụng giá bao nhiêu?" }
+            })
+        };
+        Assert.Equal("specialty", catalogCalls[0].ToolCalls.Single().Arguments.GetProperty("entity").GetString());
+        Assert.Equal("price", catalogCalls[1].ToolCalls.Single().Arguments.GetProperty("entity").GetString());
 
         var mixed = planner.Plan(new AiCopilotPlanningContext
         {
@@ -186,12 +209,216 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         var data = document.RootElement.GetProperty("data");
         var card = Assert.Single(data.GetProperty("cards").EnumerateArray());
         Assert.Equal("clinic_knowledge", card.GetProperty("type").GetString());
-        Assert.NotEqual(0, card.GetProperty("data").GetArrayLength());
+        var catalog = card.GetProperty("data");
+        Assert.True(catalog.GetProperty("status").GetString() == "matched", document.RootElement.GetRawText());
+        Assert.NotEqual(0, catalog.GetProperty("items").GetArrayLength());
+        Assert.False(string.IsNullOrWhiteSpace(catalog.GetProperty("retrievedAtUtc").GetString()));
         Assert.Contains(card.GetProperty("sources").EnumerateArray(), source =>
-            source.GetProperty("name").GetString() == "clinic_knowledge_allowlist" &&
+            source.GetProperty("name").GetString() == "clinic_public_catalog" &&
             source.GetProperty("kind").GetString() == "approved_database");
         Assert.DoesNotContain(data.GetProperty("availableTools").EnumerateArray(), tool => tool.GetProperty("name").GetString() == "patient.execute_confirmed_action");
     }
+
+    [Fact]
+    public async Task Public_catalog_queries_live_active_data_without_random_fallback_or_cross_entity_price_pairing()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        await using (var setupScope = Factory.Services.CreateAsyncScope())
+        {
+            var db = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Specialties.Add(new Specialty
+            {
+                SpecialtyCode = $"CAT-{suffix}",
+                Name = $"Tim mạch Công khai {suffix}",
+                Description = "Danh mục tổng hợp công khai cho test.",
+                IsActive = true,
+                AiEnabled = true,
+                ConsultationFee = 333000m
+            });
+            db.DiagnosticServices.AddRange(
+                new DiagnosticService
+                {
+                    Code = $"CAT-US-{suffix}",
+                    Name = $"Siêu âm bụng Công khai {suffix}",
+                    Category = DiagnosticCategory.Ultrasound,
+                    Price = 123000m,
+                    IsActive = true
+                },
+                new DiagnosticService
+                {
+                    Code = $"CAT-OTHER-{suffix}",
+                    Name = $"Siêu âm tim Khác {suffix}",
+                    Category = DiagnosticCategory.Ultrasound,
+                    Price = 999000m,
+                    IsActive = true
+                },
+                new DiagnosticService
+                {
+                    Code = $"CAT-INACTIVE-{suffix}",
+                    Name = $"Nhổ răng khôn Không công khai {suffix}",
+                    Category = DiagnosticCategory.Other,
+                    Price = 777000m,
+                    IsActive = false
+                });
+            db.ClinicLocations.Add(new ClinicLocation
+            {
+                Code = $"CAT-LOC-{suffix}",
+                Name = $"Cơ sở Chủ Nhật {suffix}",
+                Address = $"Địa chỉ danh mục {suffix}",
+                City = "Hồ Chí Minh",
+                Phone = "02839990000",
+                OpeningHours = "07:30 - 17:00 (Thứ 2 - Thứ 7)",
+                IsActive = true
+            });
+            var inactiveUser = new ApplicationUser
+            {
+                Id = Guid.NewGuid(),
+                UserName = $"catalog-inactive-{suffix}@test.com",
+                Email = $"catalog-inactive-{suffix}@test.com",
+                FullName = $"Bác sĩ Ẩn {suffix}",
+                PhoneNumber = $"099{suffix}",
+                IsActive = false
+            };
+            var userManager = setupScope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
+            var userResult = await userManager.CreateAsync(inactiveUser, "Pass@123");
+            Assert.True(userResult.Succeeded, string.Join("; ", userResult.Errors.Select(x => x.Description)));
+            var activeSpecialty = await db.Specialties.FirstAsync(x => x.SpecialtyCode == $"CAT-{suffix}");
+            var activeFacility = await db.Facilities.FirstAsync(x => x.IsActive);
+            var inactiveDoctor = new Doctor { UserId = inactiveUser.Id, IsActive = true };
+            db.Doctors.Add(inactiveDoctor);
+            await db.SaveChangesAsync();
+            db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = inactiveDoctor.Id, SpecialtyId = activeSpecialty.Id, IsPrimary = true });
+            db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+            {
+                UserId = inactiveUser.Id,
+                FacilityId = activeFacility.Id,
+                Role = "Doctor",
+                IsPrimary = true,
+                IsActive = true,
+                AssignedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var client = await CreateAuthenticatedClientAsync("pat1@test.com");
+        using var accented = await PostCatalogAsync(client, $"Có khám chuyên khoa Tim mạch Công khai {suffix} không?", "accented");
+        var accentedCatalog = GetCatalog(accented);
+        Assert.True(accentedCatalog.GetProperty("status").GetString() == "matched", accented.RootElement.GetRawText());
+        Assert.Contains(accentedCatalog.GetProperty("items").EnumerateArray(), item =>
+            item.GetProperty("sourceType").GetString() == "specialty" &&
+            item.GetProperty("title").GetString()!.Contains(suffix, StringComparison.Ordinal));
+
+        using var unaccented = await PostCatalogAsync(client, $"co kham chuyen khoa Tim mach Cong khai {suffix} khong?", "unaccented");
+        var unaccentedCatalog = GetCatalog(unaccented);
+        Assert.True(unaccentedCatalog.GetProperty("status").GetString() == "matched", unaccented.RootElement.GetRawText());
+        Assert.Contains(unaccentedCatalog.GetProperty("items").EnumerateArray(), item =>
+            item.GetProperty("sourceType").GetString() == "specialty" &&
+            item.GetProperty("title").GetString()!.Contains(suffix, StringComparison.Ordinal));
+
+        using var priced = await PostCatalogAsync(client, $"Dịch vụ Siêu âm bụng Công khai {suffix} giá bao nhiêu?", "price-before");
+        var pricedItems = GetCatalog(priced).GetProperty("items").EnumerateArray().ToArray();
+        var pricedItem = Assert.Single(pricedItems, item => item.GetProperty("title").GetString()!.Contains("Siêu âm bụng", StringComparison.Ordinal));
+        Assert.Equal(123000m, pricedItem.GetProperty("publishedPrice").GetDecimal());
+        Assert.DoesNotContain(pricedItems, item => item.GetProperty("title").GetString()!.Contains("Siêu âm tim Khác", StringComparison.Ordinal));
+
+        await using (var updateScope = Factory.Services.CreateAsyncScope())
+        {
+            var db = updateScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var service = await db.DiagnosticServices.SingleAsync(x => x.Code == $"CAT-US-{suffix}");
+            service.Price = 456000m;
+            await db.SaveChangesAsync();
+        }
+
+        using var pricedAfterUpdate = await PostCatalogAsync(client, $"Dich vu Sieu am bung Cong khai {suffix} gia bao nhieu?", "price-after");
+        var updatedItem = Assert.Single(GetCatalog(pricedAfterUpdate).GetProperty("items").EnumerateArray());
+        Assert.Equal(456000m, updatedItem.GetProperty("publishedPrice").GetDecimal());
+
+        using var inactive = await PostCatalogAsync(client, $"Dịch vụ Nhổ răng khôn Không công khai {suffix}", "inactive");
+        var inactiveCatalog = GetCatalog(inactive);
+        Assert.Equal("not_found", inactiveCatalog.GetProperty("status").GetString());
+        Assert.Empty(inactiveCatalog.GetProperty("items").EnumerateArray());
+        Assert.DoesNotContain("Siêu âm", inactive.RootElement.GetProperty("data").GetProperty("cards").ToString(), StringComparison.OrdinalIgnoreCase);
+
+        using var doctor = await PostCatalogAsync(client, "Bác sĩ Doctor 1 khám chuyên khoa Nội tổng quát", "doctor");
+        var doctorItems = GetCatalog(doctor).GetProperty("items").EnumerateArray().ToArray();
+        Assert.Contains(doctorItems, item => item.GetProperty("sourceType").GetString() == "doctor" && item.GetProperty("title").GetString() == "Doctor 1");
+        var doctorJson = doctor.RootElement.GetProperty("data").GetProperty("cards").ToString();
+        Assert.DoesNotContain("0123456782", doctorJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("@test.com", doctorJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("MedicalRecord", doctorJson, StringComparison.OrdinalIgnoreCase);
+
+        using var inactiveDoctorResponse = await PostCatalogAsync(client, $"Bác sĩ Ẩn {suffix} khám chuyên khoa Tim mạch", "inactive-doctor");
+        Assert.Equal("not_found", GetCatalog(inactiveDoctorResponse).GetProperty("status").GetString());
+        Assert.Empty(GetCatalog(inactiveDoctorResponse).GetProperty("items").EnumerateArray());
+
+        using var location = await PostCatalogAsync(client, $"Cơ sở Chủ Nhật {suffix} ở đâu?", "location");
+        var locationItem = Assert.Single(GetCatalog(location).GetProperty("items").EnumerateArray());
+        Assert.Equal("clinic_location", locationItem.GetProperty("sourceType").GetString());
+        Assert.Equal("07:30 - 17:00 (Thứ 2 - Thứ 7)", locationItem.GetProperty("openingHours").GetString());
+        Assert.DoesNotContain("Chủ nhật mở", location.RootElement.GetProperty("data").GetProperty("cards").ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Public_catalog_rejects_unknown_schema_fields_and_never_accepts_authority_overrides()
+    {
+        var client = await CreateAuthenticatedClientAsync("pat1@test.com");
+        var unknownResponse = await client.PostAsJsonAsync("/api/v1/ai/tools/execute", new
+        {
+            toolName = "clinic.search_knowledge",
+            toolVersion = "1.0",
+            argumentsJson = "{\"query\":\"nhổ răng khôn\",\"table\":\"DiagnosticServices\"}",
+            sessionId = $"catalog-schema-{Guid.NewGuid():N}"
+        });
+
+        var unknownResult = await unknownResponse.Content.ReadFromJsonAsync<AiToolExecutionResult>();
+        Assert.Equal("UNKNOWN_TOOL_ARGUMENT", unknownResult?.Error?.Code);
+
+        var authorityResponse = await client.PostAsJsonAsync("/api/v1/ai/tools/execute", new
+        {
+            toolName = "clinic.search_knowledge",
+            toolVersion = "1.0",
+            argumentsJson = "{\"query\":\"nhổ răng khôn\",\"facilityId\":1}",
+            sessionId = $"catalog-authority-{Guid.NewGuid():N}"
+        });
+
+        var authorityResult = await authorityResponse.Content.ReadFromJsonAsync<AiToolExecutionResult>();
+        Assert.Equal("FORBIDDEN_TOOL_ARGUMENT", authorityResult?.Error?.Code);
+
+        async Task<string?> ExecuteErrorAsync(string arguments)
+        {
+            var response = await client.PostAsJsonAsync("/api/v1/ai/tools/execute", new
+            {
+                toolName = "clinic.search_knowledge",
+                toolVersion = "1.0",
+                argumentsJson = arguments,
+                sessionId = $"catalog-schema-{Guid.NewGuid():N}"
+            });
+            var result = await response.Content.ReadFromJsonAsync<AiToolExecutionResult>();
+            return result?.Error?.Code;
+        }
+
+        Assert.Equal("INVALID_ENTITY", await ExecuteErrorAsync("{\"query\":\"tim mach\",\"entity\":\"sql\"}"));
+        Assert.Equal("UNKNOWN_TOOL_ARGUMENT", await ExecuteErrorAsync("{\"query\":\"tim mach\",\"column\":\"Name\"}"));
+        Assert.Equal("FORBIDDEN_TOOL_ARGUMENT", await ExecuteErrorAsync("{\"query\":\"tim mach\",\"userId\":\"other\"}"));
+        Assert.Equal("FORBIDDEN_TOOL_ARGUMENT", await ExecuteErrorAsync("{\"query\":\"tim mach\",\"role\":\"Admin\"}"));
+        Assert.Equal("INVALID_TOOL_ARGUMENTS", await ExecuteErrorAsync("{\"query\":\"tim mach\",\"facilityQuery\":{\"facilityId\":1}}"));
+    }
+
+    private async Task<JsonDocument> PostCatalogAsync(HttpClient client, string message, string label)
+    {
+        var response = await client.PostAsJsonAsync("/api/v1/ai/copilot/chat", new
+        {
+            message,
+            sessionId = $"catalog-{label}-{Guid.NewGuid():N}",
+            currentRoute = "/locations"
+        });
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, json);
+        return JsonDocument.Parse(json);
+    }
+
+    private static JsonElement GetCatalog(JsonDocument document) =>
+        document.RootElement.GetProperty("data").GetProperty("cards").EnumerateArray().Single().GetProperty("data");
 
     [Theory]
     [InlineData("ngất xỉu")]

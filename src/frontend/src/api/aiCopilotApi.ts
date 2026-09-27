@@ -9,6 +9,27 @@ export interface AiCopilotCard {
     sources?: Array<{ name: string; kind: string; status?: string }>;
 }
 
+export interface AiCopilotCatalogItem {
+    sourceType: string;
+    sourceId: string;
+    title: string;
+    description?: string | null;
+    publishedPrice?: number | null;
+    priceType?: string | null;
+    currency?: string | null;
+    address?: string | null;
+    phone?: string | null;
+    openingHours?: string | null;
+    details?: Record<string, string | null>;
+}
+
+export interface AiCopilotCatalogData {
+    status: 'matched' | 'not_found' | string;
+    sourceType: string;
+    items: AiCopilotCatalogItem[];
+    retrievedAtUtc: string;
+}
+
 export interface AiCopilotTool {
     name: string;
     version: string;

@@ -23,7 +23,7 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         if (string.IsNullOrWhiteSpace(text))
             return Clarify("Bạn muốn tôi hỗ trợ tra cứu nội dung nào trong workspace hiện tại?", "EmptyInput");
 
-        var knowledgeRequest = Regex.IsMatch(text, @"\b(?:gio lam viec|ngay nghi|chu nhat|gia|chi phi|dich vu|co so|phong kham|huong dan|truoc kham|chuan bi xet nghiem|chuyen khoa|tom tat|tom luoc|tong hop)\b", RegexOptions.CultureInvariant);
+        var knowledgeRequest = Regex.IsMatch(text, @"\b(?:bac si|bsi|doctor|gio lam viec|ngay nghi|chu nhat|gia|chi phi|dich vu|co so|phong kham|huong dan|truoc kham|chuan bi xet nghiem|chuyen khoa|tom tat|tom luoc|tong hop)\b", RegexOptions.CultureInvariant);
 
         if (Greeting.IsMatch(text) || context.Analysis.Intent.Intent == AiChatIntentTypes.Greeting)
         {
@@ -59,7 +59,12 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         };
 
         if (knowledgeRequest && roleDecision.ToolCalls.Count == 0 && roleDecision.Clarification is null)
-            return Tool(AiChatIntentTypes.FacilityInquiry, "ClinicKnowledge", "clinic.search_knowledge", new { query = context.NormalizedMessage }, "/locations");
+            return Tool(AiChatIntentTypes.FacilityInquiry, "ClinicKnowledge", "clinic.search_knowledge", new
+            {
+                entity = InferKnowledgeEntity(text),
+                query = context.NormalizedMessage,
+                limit = 10
+            }, "/locations");
 
         return roleDecision;
     }
@@ -162,6 +167,21 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         NavigationRoute = route,
         ToolCalls = new[] { Call(name, arguments) }
     };
+
+    private static string InferKnowledgeEntity(string text)
+    {
+        if (Regex.IsMatch(text, @"\b(?:gia|phi|chi phi|bao nhieu tien|vien phi)\b", RegexOptions.CultureInvariant))
+            return "price";
+        if (Regex.IsMatch(text, @"\b(?:bac si|bsi|doctor|nguoi nao kham)\b", RegexOptions.CultureInvariant))
+            return "doctor";
+        if (Regex.IsMatch(text, @"\b(?:chuyen khoa|khoa)\b", RegexOptions.CultureInvariant))
+            return "specialty";
+        if (Regex.IsMatch(text, @"\b(?:dich vu|xet nghiem|sieu am|noi soi|chup)\b", RegexOptions.CultureInvariant))
+            return "diagnostic_service";
+        if (Regex.IsMatch(text, @"\b(?:co so|phong kham|dia chi|gio lam viec|ngay nghi|chu nhat|mo cua)\b", RegexOptions.CultureInvariant))
+            return "facility";
+        return "all";
+    }
 
     private static AiPlannerToolCall Call(string name, object arguments) => new()
     {
