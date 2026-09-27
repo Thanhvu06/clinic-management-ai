@@ -26,17 +26,33 @@ public sealed class AiCopilotContextResolver : IAiCopilotContextResolver
         if (!actorId.HasValue || actorId == Guid.Empty)
             return AiContextResolutionResult.Invalid("AUTHENTICATION_REQUIRED", "Cần đăng nhập lại để xác minh phạm vi dữ liệu.");
 
+        var currentRoute = NormalizeRoute(request.CurrentRoute);
+        if (!string.IsNullOrWhiteSpace(request.CurrentRoute) && currentRoute is null)
+            return AiContextResolutionResult.Invalid("RESOURCE_CONTEXT_NOT_ALLOWED", "Route hiện tại không hợp lệ.");
+
         var hinted = request.ResourceContext;
         var candidate = hinted is null
-            ? memory?.CurrentResource ?? new AiResolvedResourceContext()
+            ? memory?.CurrentResource ?? new AiResolvedResourceContext { CurrentRoute = currentRoute }
             : new AiResolvedResourceContext
             {
+                CurrentRoute = currentRoute,
                 AppointmentId = hinted.AppointmentId,
                 VisitId = hinted.VisitId,
                 EncounterId = hinted.EncounterId,
                 DiagnosticOrderId = hinted.DiagnosticOrderId,
                 PrescriptionId = hinted.PrescriptionId,
                 ResourceVersion = request.ResourceVersion
+            };
+        if (hinted is null && currentRoute is not null)
+            candidate = new AiResolvedResourceContext
+            {
+                CurrentRoute = currentRoute,
+                AppointmentId = candidate.AppointmentId,
+                VisitId = candidate.VisitId,
+                EncounterId = candidate.EncounterId,
+                DiagnosticOrderId = candidate.DiagnosticOrderId,
+                PrescriptionId = candidate.PrescriptionId,
+                ResourceVersion = request.ResourceVersion ?? candidate.ResourceVersion
             };
 
         if (role == AiActorRole.Admin && HasAnyResource(candidate))
@@ -132,6 +148,15 @@ public sealed class AiCopilotContextResolver : IAiCopilotContextResolver
         _db.StaffFacilityAssignments.AsNoTracking().AnyAsync(x => x.UserId == userId && x.IsActive && x.Role == role.ToString() && x.FacilityId == facilityId && (!departmentId.HasValue || !x.DepartmentId.HasValue || x.DepartmentId == departmentId), ct);
 
     private static bool HasAnyResource(AiResolvedResourceContext x) => x.AppointmentId.HasValue || x.VisitId.HasValue || x.EncounterId.HasValue || x.DiagnosticOrderId.HasValue || x.PrescriptionId.HasValue;
+    private static string? NormalizeRoute(string? route)
+    {
+        if (string.IsNullOrWhiteSpace(route)) return null;
+        var value = route.Trim();
+        return value.StartsWith("/", StringComparison.Ordinal) && !value.StartsWith("//", StringComparison.Ordinal) &&
+               value.Length <= 256 && !value.Contains("://", StringComparison.Ordinal) && !value.Contains('\\') && !value.Contains("..", StringComparison.Ordinal)
+            ? value
+            : null;
+    }
     private static bool VersionMatches(string? requested, byte[]? actual) => string.IsNullOrWhiteSpace(requested) || actual is not null && FixedEquals(requested, Convert.ToBase64String(actual));
     private static bool FixedEquals(string left, string right)
     {

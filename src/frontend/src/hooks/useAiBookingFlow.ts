@@ -806,10 +806,11 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 const endTime = action.payload.endTime || activeDraft?.endTime;
                 const specName = action.payload.specialtyName || activeDraft?.specialtyName;
                 const docName = action.payload.doctorName || activeDraft?.doctorName;
-                const reason = action.payload.reason?.trim() || activeDraft?.reason?.trim() || "";
+                const reason = normalizeBookingReason(action.payload.reason || activeDraft?.reason);
                 const currentVersion = activeDraft?.version ?? 1;
 
                 if (!specId || !docId || !slotId || !slotDate || !startTime || !endTime || !isValidBookingReason(reason)) {
+                    window.dispatchEvent(new CustomEvent("cliniccare:focus-booking-reason"));
                     setMessages(prev => [...prev, {
                         role: "model",
                         content: "Thông tin đặt lịch chưa đầy đủ (thiếu chuyên khoa, bác sĩ, khung giờ hoặc lý do khám). Vui lòng chọn đầy đủ thông tin trước khi xác nhận.",
@@ -891,10 +892,11 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     return;
                 }
 
-                const actionReason = (action.payload.reason || "").trim();
-                const draftReason = (activeDraft?.reason || "").trim();
+                const actionReason = normalizeBookingReason(action.payload.reason);
+                const draftReason = normalizeBookingReason(activeDraft?.reason);
 
                 if (!isValidBookingReason(actionReason)) {
+                    window.dispatchEvent(new CustomEvent("cliniccare:focus-booking-reason"));
                     setMessages(prev => [...prev, {
                         role: "model",
                         content: "Lý do khám phải từ 10 đến 500 ký tự. Vui lòng nhập lý do khám hoặc mô tả triệu chứng trước khi xác nhận đặt lịch.",
@@ -1365,11 +1367,15 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 };
 
 export const isValidBookingReason = (reason?: string): boolean => {
-    const normalized = reason?.trim() ?? "";
+    const normalized = normalizeBookingReason(reason);
     if (normalized.length < 10 || normalized.length > 500) return false;
     const lower = normalized.toLowerCase();
     if (lower === "ok" || lower === "chốt" || lower.startsWith("chốt ") || lower.startsWith("đồng ý") || lower.startsWith("tôi chọn")) {
         return false;
     }
+    if (/^(.)\1{5,}$/su.test(normalized) || /^[?!.,\s]+$/u.test(normalized) || normalized.endsWith("?")) return false;
     return true;
 };
+
+export const normalizeBookingReason = (reason?: string): string =>
+    (reason ?? "").trim().replace(/\\+$/u, "").trim();

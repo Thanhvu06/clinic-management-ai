@@ -6,6 +6,7 @@ namespace ClinicManagement.Application.AI.Planning;
 
 public sealed class AiResolvedResourceContext
 {
+    public string? CurrentRoute { get; init; }
     public long? AppointmentId { get; init; }
     public long? VisitId { get; init; }
     public long? EncounterId { get; init; }

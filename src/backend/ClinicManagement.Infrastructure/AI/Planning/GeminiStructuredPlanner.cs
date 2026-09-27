@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using ClinicManagement.Application.AI;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
@@ -51,7 +52,7 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
 
         try
         {
-            var providerResult = await _provider.ChatWithAiAsync(request.Message, context, new List<WhitelistItemDto>(), policyContext, cancellationToken);
+            var providerResult = await _provider.ChatWithAiAsync(SanitizeForProvider(request.Message), context, new List<WhitelistItemDto>(), policyContext, cancellationToken);
             var providerState = AiProviderStatusContract.FromProviderResult(providerResult.Status, true);
             if (!providerResult.IsSuccess)
             {
@@ -148,4 +149,15 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
 
     private static bool HasResource(AiResolvedResourceContext x) => x.AppointmentId.HasValue || x.VisitId.HasValue || x.DiagnosticOrderId.HasValue || x.PrescriptionId.HasValue;
     private static string? Limit(string? value, int length) => string.IsNullOrWhiteSpace(value) ? null : value.Trim()[..Math.Min(length, value.Trim().Length)];
+
+    private static string SanitizeForProvider(string value)
+    {
+        var sanitized = value.Trim();
+        sanitized = Regex.Replace(sanitized, @"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", "[email]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        sanitized = Regex.Replace(sanitized, @"(?<!\d)(?:\+?84|0)[1-9]\d{7,9}(?!\d)", "[phone]", RegexOptions.CultureInvariant);
+        sanitized = Regex.Replace(sanitized, @"\b(?:cccd|cmnd|căn cước|mrn|mã hồ sơ|mã bệnh nhân)\s*[:#=]?\s*[A-Za-z0-9-]+", "[identifier]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        sanitized = Regex.Replace(sanitized, @"\b[0-9a-f]{8}-[0-9a-f-]{27,}\b", "[internal-id]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        sanitized = Regex.Replace(sanitized, @"\b(?:appointment|visit|encounter|order|prescription|patient|doctor)\s*id\s*[:#=]?\s*\d+\b", "[internal-id]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return sanitized.Length > 500 ? sanitized[..500] : sanitized;
+    }
 }

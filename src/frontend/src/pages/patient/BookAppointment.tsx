@@ -19,6 +19,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { Breadcrumb } from "../../components/Breadcrumb";
 import { Button, FormField, TextInput, Textarea, FormError } from "../../components/forms";
 import { formatDoctorName, getNextWorkingDateString, isSundayDateString } from "../../utils/doctorNameHelper";
+import { isValidBookingReason, normalizeBookingReason } from "../../hooks/useAiBookingFlow";
 
 interface Specialty {
     id: number;
@@ -131,6 +132,12 @@ export const BookAppointment: React.FC = () => {
 
     const currentPayloadFingerprint = `${revisitRequestId ?? "std"}_${specialtyId}_${doctorId}_${slotDate}_${slotId}_${reason.trim()}`;
     const currentPayloadFingerprintRef = useRef(currentPayloadFingerprint);
+
+    useEffect(() => {
+        const focusReason = () => document.getElementById("reason")?.focus();
+        window.addEventListener("cliniccare:focus-booking-reason", focusReason);
+        return () => window.removeEventListener("cliniccare:focus-booking-reason", focusReason);
+    }, []);
 
     useEffect(() => {
         isMountedRef.current = true;
@@ -472,8 +479,8 @@ export const BookAppointment: React.FC = () => {
                 slotDate: slot.slotDate,
                 startTime: slot.startTime.substring(0, 5),
                 endTime: slot.endTime.substring(0, 5),
-                reason,
-                isComplete: reason.trim().length >= 10 && reason.trim().length <= 500,
+                reason: normalizeBookingReason(reason),
+                isComplete: isValidBookingReason(reason),
                 version: previous?.version !== undefined ? (unchangedSlot ? previous.version : previous.version + 1) : undefined,
                 confirmationId: unchangedSlot ? previous?.confirmationId : undefined
             };
@@ -496,20 +503,19 @@ export const BookAppointment: React.FC = () => {
     };
 
     const handleReasonChange = (nextReason: string) => {
-        setPageReason(nextReason);
-        const normalizedLength = nextReason.trim().length;
+        const normalizedReason = normalizeBookingReason(nextReason);
+        setPageReason(normalizedReason);
         setActiveDraft(previous => {
             if (!previous) return previous;
-            const unchangedReason = (previous.reason ?? "").trim() === nextReason.trim();
+            const unchangedReason = normalizeBookingReason(previous.reason) === normalizedReason;
             return {
                 ...previous,
-                reason: nextReason,
+                reason: normalizedReason,
                 isComplete: Boolean(
                     previous.specialtyId &&
                     previous.doctorId &&
                     previous.slotId &&
-                    normalizedLength >= 10 &&
-                    normalizedLength <= 500
+                    isValidBookingReason(normalizedReason)
                 ),
                 version: previous.version !== undefined ? (unchangedReason ? previous.version : previous.version + 1) : undefined,
                 confirmationId: unchangedReason ? previous.confirmationId : undefined
@@ -537,9 +543,10 @@ export const BookAppointment: React.FC = () => {
     // Confirm booking submit
     const handleConfirm = async () => {
         if (submitting || isSubmittingRef.current || !specialtyId || !doctorId || !slotId) return;
-        const normalizedReason = reason.trim();
-        if (normalizedReason.length < 10 || normalizedReason.length > 500) {
-            showAlert("Lý do khám phải từ 10 đến 500 ký tự.", "Thông báo", "error");
+        const normalizedReason = normalizeBookingReason(reason);
+        if (!isValidBookingReason(normalizedReason)) {
+            window.dispatchEvent(new CustomEvent("cliniccare:focus-booking-reason"));
+            showAlert("Lý do khám phải từ 10 đến 500 ký tự và cần mô tả triệu chứng cụ thể.", "Thông báo", "error");
             return;
         }
 

@@ -19,10 +19,12 @@ public static class AiRoleToolCatalog
         RoleTool("pharmacist.get_prescription_queue", "Xem đơn thuốc đủ điều kiện xử lý", AiActorRole.Pharmacist, AiActorCapability.ReadPharmacyWorkspace),
         RoleTool("pharmacist.get_inventory_status", "Xem tồn kho toàn hệ thống (mô hình hiện tại chưa phân tách theo cơ sở; vẫn yêu cầu phân công Pharmacist hợp lệ)", AiActorRole.Pharmacist, AiActorCapability.ReadPharmacyWorkspace),
         RoleTool("admin.get_dashboard_metrics", "Xem chỉ số tổng hợp không chứa dữ liệu lâm sàng", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics),
-        RoleTool("admin.get_ai_health", "Xem chỉ số hoạt động AI đã được khử định danh", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics)
+        RoleTool("admin.get_ai_health", "Xem chỉ số hoạt động AI đã được khử định danh", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics),
+        RoleTool("clinic.search_knowledge", "Tra cứu kiến thức phòng khám đã được phê duyệt và có nguồn", AiActorRole.Patient, AiActorCapability.ReadClinicCatalog,
+            AiActorRole.Receptionist, AiActorRole.Doctor, AiActorRole.DiagnosticTechnician, AiActorRole.Pharmacist, AiActorRole.Admin)
     };
 
-    private static AiToolDefinition RoleTool(string name, string description, AiActorRole role, AiActorCapability capability) => new()
+    private static AiToolDefinition RoleTool(string name, string description, AiActorRole role, AiActorCapability capability, params AiActorRole[] additionalRoles) => new()
     {
         Name = name,
         Version = "1.0",
@@ -30,7 +32,7 @@ public static class AiRoleToolCatalog
         AccessMode = AiToolAccessMode.RoleRestricted,
         RiskLevel = AiToolRiskLevel.Low,
         Confirmation = AiToolConfirmationRequirement.None,
-        AllowedRoles = new HashSet<AiActorRole> { role },
+        AllowedRoles = new HashSet<AiActorRole>(new[] { role }.Concat(additionalRoles)),
         Capabilities = new HashSet<AiActorCapability> { capability },
         DataSources = new[] { new AiToolDataSource("ClinicCare domain database", "database") }
     };

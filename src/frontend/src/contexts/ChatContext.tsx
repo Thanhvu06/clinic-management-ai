@@ -458,13 +458,14 @@ const AccountBoundChatProvider: React.FC<{
 };
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { user } = useAuth();
+    const { user, identityVersion } = useAuth();
     const accountKey = user
         ? (user.userId || (user.id !== undefined ? String(user.id) : null))
         : null;
+    const providerKey = user ? `${accountKey ?? "unknown"}:${user.role}:${identityVersion}` : "anonymous";
 
     return (
-        <AccountBoundChatProvider key={accountKey ?? "anonymous"} accountKey={accountKey}>
+        <AccountBoundChatProvider key={providerKey} accountKey={accountKey}>
             {children}
         </AccountBoundChatProvider>
     );

@@ -33,6 +33,9 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             return Local(AiChatIntentTypes.Help, "RoleHelp", "Bạn có thể dùng các gợi ý bên dưới hoặc mô tả rõ dữ liệu cần tra cứu. Tôi sẽ không thực hiện thao tác ghi trong cuộc hội thoại này.", .99m);
         }
 
+        if (Regex.IsMatch(text, @"\b(?:gio lam viec|ngay nghi|chu nhat|gia|chi phi|dich vu|co so|phong kham|huong dan|truoc kham|chuan bi xet nghiem|chuyen khoa)\b", RegexOptions.CultureInvariant))
+            return Tool(AiChatIntentTypes.FacilityInquiry, "ClinicKnowledge", "clinic.search_knowledge", new { query = context.NormalizedMessage }, "/locations");
+
         return context.Role switch
         {
             AiActorRole.Receptionist => PlanReception(text),

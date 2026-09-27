@@ -8,16 +8,19 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
 {
     private static readonly string[] EmergencyPhrases =
     {
-        "đau ngực", "đau thắt ngực", "khó thở nặng", "khó thở", "không thở được", "ngất xỉu", "bất tỉnh",
+        "đau ngực", "đau thắt ngực", "khó thở nặng", "khó thở", "không thở được", "ngất xỉu", "ngất", "bất tỉnh",
         "dấu hiệu đột quỵ", "méo miệng", "yếu liệt nửa người", "co giật", "chảy máu không cầm",
         "chảy máu nhiều", "sốc phản vệ", "dị ứng nặng", "tự tử", "muốn tự sát", "cấp cứu thai", "thai kỳ khẩn cấp",
-        "trẻ tím tái", "trẻ khó thở", "tím tái", "trẻ co giật"
+        "trẻ tím tái", "trẻ khó thở", "tím tái", "trẻ co giật", "uống quá liều thuốc", "quá liều thuốc",
+        "có ý định tự làm hại bản thân", "muốn tự làm hại bản thân"
     };
 
     private static readonly string[] InjectionPhrases =
     {
         "bỏ qua quy tắc", "bỏ qua hướng dẫn", "ignore previous", "ignore all instructions",
-        "system prompt", "developer mode", "xuất toàn bộ dữ liệu", "đóng vai bác sĩ", "kê thuốc"
+        "system prompt", "developer mode", "xuất toàn bộ dữ liệu", "đóng vai bác sĩ", "kê thuốc",
+        "giả làm admin", "in hồ sơ bệnh nhân khác", "gọi execute_confirmed_action", "đổi role",
+        "dùng facility khác", "thực thi không xác nhận"
     };
 
     public AiSafetyGuardResult Inspect(string? message)
@@ -53,9 +56,9 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
             start--;
 
         var prefix = text[start..phraseIndex].Trim();
-        var conjunction = prefix.LastIndexOf(" nhung ", StringComparison.Ordinal);
+        var conjunction = prefix.LastIndexOf(" nhung", StringComparison.Ordinal);
         if (conjunction >= 0)
-            prefix = prefix[(conjunction + " nhung ".Length)..].Trim();
+            prefix = prefix[(conjunction + " nhung".Length)..].Trim();
 
         // The cue must govern the phrase in the current clause. A distant
         // occurrence of "không" in a previous clause must not suppress a new

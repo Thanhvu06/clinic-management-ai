@@ -41,6 +41,9 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
                 if (property.Name is "userId" or "actorId" or "role" or "facilityId" or "facilityAuthorization")
                     return AiToolArgumentValidationResult.Invalid("FORBIDDEN_TOOL_ARGUMENT", "Phạm vi quyền chỉ do server xác định.");
             }
+            if (invocation.ToolName.Equals("clinic.search_knowledge", StringComparison.OrdinalIgnoreCase) &&
+                (!document.RootElement.TryGetProperty("query", out var query) || query.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(query.GetString())))
+                return AiToolArgumentValidationResult.Invalid("MISSING_TOOL_ARGUMENT", "Cần nội dung cần tra cứu trong kho kiến thức phòng khám.");
             if (invocation.ToolName.Equals("reception.lookup_appointment", StringComparison.OrdinalIgnoreCase) &&
                 (!document.RootElement.TryGetProperty("appointmentCode", out var code) || code.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(code.GetString())))
                 return AiToolArgumentValidationResult.Invalid("MISSING_TOOL_ARGUMENT", "Cần mã lịch hẹn để tra cứu.");
@@ -55,6 +58,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
     public Task<AiToolExecutionResult> ExecuteAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken = default) =>
         invocation.ToolName.Trim().ToLowerInvariant() switch
         {
+            "clinic.search_knowledge" => SearchKnowledgeAsync(invocation.ArgumentsJson, cancellationToken),
             "reception.get_today_appointments" => GetReceptionAppointmentsAsync(context, cancellationToken),
             "reception.get_queue" => GetReceptionQueueAsync(context, cancellationToken),
             "reception.lookup_appointment" => LookupAppointmentAsync(context, invocation.ArgumentsJson, cancellationToken),
@@ -68,6 +72,95 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
             "admin.get_ai_health" => GetAiHealthAsync(context, cancellationToken),
             _ => Task.FromResult(AiToolExecutionResult.Failed("UNKNOWN_TOOL", "Công cụ workspace không được hỗ trợ."))
         };
+
+    private async Task<AiToolExecutionResult> SearchKnowledgeAsync(string json, CancellationToken cancellationToken)
+    {
+        using var document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty("query", out var queryValue) || queryValue.ValueKind != JsonValueKind.String)
+            return AiToolExecutionResult.Failed("MISSING_TOOL_ARGUMENT", "Cần nội dung cần tra cứu trong kho kiến thức phòng khám.");
+
+        var term = queryValue.GetString()?.Trim();
+        if (string.IsNullOrWhiteSpace(term))
+            return AiToolExecutionResult.Failed("MISSING_TOOL_ARGUMENT", "Cần nội dung cần tra cứu trong kho kiến thức phòng khám.");
+        term = term.Length > 160 ? term[..160] : term;
+        term = term.Replace("%", string.Empty).Replace("_", string.Empty).Replace("[", string.Empty);
+        if (string.IsNullOrWhiteSpace(term))
+            return AiToolExecutionResult.Failed("INVALID_TOOL_ARGUMENTS", "Nội dung tra cứu không hợp lệ.");
+        var pattern = $"%{term}%";
+        var results = new List<KnowledgeHit>();
+
+        results.AddRange(await _db.Specialties.AsNoTracking()
+            .Where(x => x.IsActive && (EF.Functions.Like(x.Name, pattern) || EF.Functions.Like(x.SpecialtyCode, pattern) || (x.Description != null && EF.Functions.Like(x.Description, pattern))))
+            .OrderBy(x => x.Name).Take(20)
+            .Select(x => new KnowledgeHit("specialty", x.Id.ToString(), x.Name, x.Description, x.ConsultationFee, null, null, null))
+            .ToListAsync(cancellationToken));
+
+        results.AddRange(await _db.DiagnosticServices.AsNoTracking()
+            .Where(x => x.IsActive && (EF.Functions.Like(x.Name, pattern) || EF.Functions.Like(x.Code, pattern) || (x.PreparationInstructions != null && EF.Functions.Like(x.PreparationInstructions, pattern))))
+            .OrderBy(x => x.Name).Take(20)
+            .Select(x => new KnowledgeHit("diagnostic_service", x.Id.ToString(), x.Name, x.PreparationInstructions, x.Price, x.Code, null, null))
+            .ToListAsync(cancellationToken));
+
+        results.AddRange(await _db.Facilities.AsNoTracking()
+            .Where(x => x.IsActive && (EF.Functions.Like(x.Name, pattern) || EF.Functions.Like(x.Code, pattern) || EF.Functions.Like(x.Address, pattern) || EF.Functions.Like(x.City, pattern)))
+            .OrderBy(x => x.Name).Take(20)
+            .Select(x => new KnowledgeHit("facility", x.Id.ToString(), x.Name, x.Description, null, x.Code, x.Address, x.Phone))
+            .ToListAsync(cancellationToken));
+
+        results.AddRange(await _db.ClinicLocations.AsNoTracking()
+            .Where(x => x.IsActive && (EF.Functions.Like(x.Name, pattern) || EF.Functions.Like(x.Code, pattern) || EF.Functions.Like(x.Address, pattern) || EF.Functions.Like(x.City, pattern) || (x.Description != null && EF.Functions.Like(x.Description, pattern))))
+            .OrderBy(x => x.Name).Take(20)
+            .Select(x => new KnowledgeHit("clinic_location", x.Id.ToString(), x.Name, x.Description, null, x.Code, x.Address, x.Phone, x.OpeningHours))
+            .ToListAsync(cancellationToken));
+
+        if (results.Count == 0)
+        {
+            // General clinic questions (opening hours, holidays and pre-exam guidance)
+            // are still served from the approved clinic index when the query is not
+            // a literal entity name. No patient or staff record is included here.
+            results.AddRange(await _db.Specialties.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).Take(5)
+                .Select(x => new KnowledgeHit("specialty", x.Id.ToString(), x.Name, x.Description, x.ConsultationFee, null, null, null)).ToListAsync(cancellationToken));
+            results.AddRange(await _db.DiagnosticServices.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).Take(5)
+                .Select(x => new KnowledgeHit("diagnostic_service", x.Id.ToString(), x.Name, x.PreparationInstructions, x.Price, x.Code, null, null)).ToListAsync(cancellationToken));
+            results.AddRange(await _db.Facilities.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).Take(5)
+                .Select(x => new KnowledgeHit("facility", x.Id.ToString(), x.Name, x.Description, null, x.Code, x.Address, x.Phone)).ToListAsync(cancellationToken));
+            results.AddRange(await _db.ClinicLocations.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).Take(5)
+                .Select(x => new KnowledgeHit("clinic_location", x.Id.ToString(), x.Name, x.Description, null, x.Code, x.Address, x.Phone, x.OpeningHours)).ToListAsync(cancellationToken));
+        }
+
+        var limited = results.Take(20).Select(x => new
+        {
+            sourceType = x.SourceType,
+            sourceId = x.SourceId,
+            title = x.Title,
+            snippet = x.Snippet,
+            code = x.Code,
+            address = x.Address,
+            phone = x.Phone,
+            openingHours = x.OpeningHours,
+            publishedPrice = x.PublishedPrice,
+            updatedAtUtc = DateTime.UtcNow
+        }).ToArray();
+        return new AiToolExecutionResult
+        {
+            Status = "completed",
+            ResultType = "clinic_knowledge",
+            DisplayText = limited.Length == 0 ? "Không tìm thấy nội dung phù hợp trong kho kiến thức đã được phê duyệt." : $"Đã tìm thấy {limited.Length} mục từ kho kiến thức phòng khám.",
+            Data = limited,
+            DataSources = new[] { new AiToolDataSource("clinic_knowledge_allowlist", "approved_database") }
+        };
+    }
+
+    private sealed record KnowledgeHit(
+        string SourceType,
+        string SourceId,
+        string Title,
+        string? Snippet,
+        decimal? PublishedPrice,
+        string? Code,
+        string? Address,
+        string? Phone,
+        string? OpeningHours = null);
 
     private async Task<HashSet<long>> ResolveFacilityScopeAsync(AiToolExecutionContext context, string role, CancellationToken cancellationToken)
     {

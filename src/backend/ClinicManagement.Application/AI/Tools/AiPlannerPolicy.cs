@@ -10,6 +10,7 @@ public static class AiPlannerPolicy
 {
     public static IReadOnlySet<string> AllowedToolNames { get; } = new[]
     {
+        "clinic.search_knowledge",
         "clinic.search_specialties",
         "clinic.search_doctors",
         "clinic.get_available_slots",

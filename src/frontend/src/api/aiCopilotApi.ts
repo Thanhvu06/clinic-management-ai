@@ -20,19 +20,46 @@ export interface AiCopilotTool {
 
 export interface AiCopilotResponse {
     role: string;
-    assistantStatus: 'Online' | 'Degraded' | 'Unavailable' | 'SafetyBlocked';
+    assistantStatus: 'Ready' | 'Clarifying' | 'Online' | 'Degraded' | 'Unavailable' | 'SafetyBlocked';
     providerStatus: 'NotCalled' | 'Online' | 'Degraded' | 'Unavailable' | 'SafetyBlocked';
+    assistantMode?: 'Ready' | 'Clarifying' | 'Degraded' | 'Unavailable' | 'SafetyBlocked' | string;
+    plannerMode?: string;
+    conversationId?: string;
+    turnId?: string;
     intent: string;
     message: string;
+    clarification?: string | null;
     safetyNotice?: string | null;
     navigationRoute?: string | null;
     suggestedPrompts: string[];
     cards: AiCopilotCard[];
     availableTools: AiCopilotTool[];
+    sources?: Array<{ name: string; kind: string; status?: string }>;
 }
 
-export async function sendRoleCopilotMessage(message: string): Promise<AiCopilotResponse> {
-    const response = await axiosClient.post<unknown, ApiResponse<AiCopilotResponse>>('/ai/copilot/chat', { message });
+export interface AiCopilotResourceContext {
+    appointmentId?: number;
+    visitId?: number;
+    encounterId?: number;
+    diagnosticOrderId?: number;
+    prescriptionId?: number;
+}
+
+export interface AiCopilotRequest {
+    message: string;
+    conversationId?: string;
+    sessionId?: string;
+    currentRoute?: string;
+    resourceContext?: AiCopilotResourceContext;
+    resourceVersion?: string;
+    clientTurnId?: string;
+    locale?: string;
+    timezone?: string;
+}
+
+export async function sendRoleCopilotMessage(request: AiCopilotRequest | string, signal?: AbortSignal): Promise<AiCopilotResponse> {
+    const body: AiCopilotRequest = typeof request === 'string' ? { message: request } : request;
+    const response = await axiosClient.post<AiCopilotRequest, ApiResponse<AiCopilotResponse>>('/ai/copilot/chat', body, { signal });
     if (!response.success || !response.data) throw new Error(response.message || 'Không thể kết nối Copilot.');
     return response.data;
 }
