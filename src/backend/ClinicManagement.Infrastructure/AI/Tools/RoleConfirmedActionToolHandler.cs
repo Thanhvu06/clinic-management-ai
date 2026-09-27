@@ -132,30 +132,38 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
             var normalizedArguments = Canonicalize(document.RootElement);
             var requestHash = Hash($"{tool}|{role}|{preparation.ResourceType}|{preparation.ResourceId}|{normalizedArguments}");
             var idempotencyHash = string.IsNullOrWhiteSpace(invocation.IdempotencyKey) ? null : Hash(invocation.IdempotencyKey);
+            var toolVersion = invocation.ToolVersion?.Trim() ?? "1.0";
 
             if (!string.IsNullOrWhiteSpace(idempotencyHash))
             {
                 var existingByKey = await _db.AiPendingToolActions.FirstOrDefaultAsync(x =>
-                    x.UserId == context.ActorId.Value && x.SessionId == context.SessionId && x.IdempotencyKeyHash == idempotencyHash &&
-                x.State != AiPendingToolActionState.Cancelled && x.State != AiPendingToolActionState.Expired, ct);
+                    x.UserId == context.ActorId.Value && x.SessionId == context.SessionId && x.IdempotencyKeyHash == idempotencyHash, ct);
                 if (existingByKey != null)
                 {
                     if (!string.Equals(existingByKey.RequestHash, requestHash, StringComparison.Ordinal))
                         return AiToolExecutionResult.Failed("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "Idempotency key đã được dùng với dữ liệu khác.");
-                    return Pending(existingByKey, "Thao tác đang chờ xác nhận.");
+                    if (!MatchesRecoveryBinding(existingByKey, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, preparation, tool, toolVersion, requestHash))
+                        return AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Thao tác đã tồn tại nhưng không khớp đầy đủ phạm vi phiên, vai trò hoặc cơ sở.");
+                    return await RecoverExistingActionAsync(existingByKey, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, tool, toolVersion, requestHash, "Thao tác đang chờ xác nhận.", now, ct);
                 }
             }
 
             var active = await _db.AiPendingToolActions.FirstOrDefaultAsync(x =>
-                x.UserId == context.ActorId.Value && x.ResourceType == preparation.ResourceType && x.ResourceId == preparation.ResourceId &&
+                x.ResourceType == preparation.ResourceType && x.ResourceId == preparation.ResourceId &&
                 (x.State == AiPendingToolActionState.PendingConfirmation ||
                  x.State == AiPendingToolActionState.Executing ||
                  x.State == AiPendingToolActionState.FailedRetryable), ct);
             if (active != null)
             {
+                if (active.UserId != context.ActorId.Value)
+                    return AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Đã có thao tác đang được xử lý trên tài nguyên này.");
+                if (!string.Equals(active.SessionId, context.SessionId, StringComparison.Ordinal))
+                    return AiToolExecutionResult.Failed("SESSION_MISMATCH", "Thao tác thuộc phiên copilot khác.");
                 if (!string.Equals(active.RequestHash, requestHash, StringComparison.Ordinal))
                     return AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Đã có thao tác đang chờ xác nhận trên tài nguyên này.");
-                return Pending(active, "Thao tác đang chờ xác nhận.");
+                if (!MatchesRecoveryBinding(active, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, preparation, tool, toolVersion, requestHash))
+                    return AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Thao tác đang chờ xác nhận nhưng không khớp đầy đủ phạm vi thực thi.");
+                return await RecoverExistingActionAsync(active, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, tool, toolVersion, requestHash, "Thao tác đang chờ xác nhận.", now, ct);
             }
 
             var actionId = Guid.NewGuid();
@@ -170,7 +178,7 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
                 ConversationId = NormalizeId(invocation.ConversationId),
                 FacilityId = preparation.FacilityId,
                 ToolName = tool,
-                ToolVersion = invocation.ToolVersion?.Trim() ?? "1.0",
+                ToolVersion = toolVersion,
                 RequestHash = requestHash,
                 ResourceType = preparation.ResourceType,
                 ResourceId = preparation.ResourceId,
@@ -192,13 +200,21 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
             {
                 _db.ChangeTracker.Clear();
                 var concurrent = await _db.AiPendingToolActions.FirstOrDefaultAsync(x =>
-                    x.UserId == context.ActorId.Value && x.ResourceType == preparation.ResourceType && x.ResourceId == preparation.ResourceId &&
+                    x.ResourceType == preparation.ResourceType && x.ResourceId == preparation.ResourceId &&
                     (x.State == AiPendingToolActionState.PendingConfirmation ||
                      x.State == AiPendingToolActionState.Executing ||
                      x.State == AiPendingToolActionState.FailedRetryable), ct);
-                return concurrent != null && string.Equals(concurrent.RequestHash, requestHash, StringComparison.Ordinal)
-                    ? Pending(concurrent, "Thao tác đang chờ xác nhận.")
-                    : AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Không thể tạo thêm thao tác đồng thời trên tài nguyên này.", true);
+                if (concurrent == null)
+                    return AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Không thể tạo thêm thao tác đồng thời trên tài nguyên này.", true);
+                if (concurrent.UserId != context.ActorId.Value)
+                    return AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Đã có thao tác đang được xử lý trên tài nguyên này.");
+                if (!string.Equals(concurrent.SessionId, context.SessionId, StringComparison.Ordinal))
+                    return AiToolExecutionResult.Failed("SESSION_MISMATCH", "Thao tác thuộc phiên copilot khác.");
+                if (!string.Equals(concurrent.RequestHash, requestHash, StringComparison.Ordinal))
+                    return AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Đã có thao tác đang chờ xác nhận trên tài nguyên này.");
+                if (!MatchesRecoveryBinding(concurrent, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, preparation, tool, toolVersion, requestHash))
+                    return AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Thao tác đang chờ xác nhận nhưng không khớp đầy đủ phạm vi thực thi.");
+                return await RecoverExistingActionAsync(concurrent, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, tool, toolVersion, requestHash, "Thao tác đang chờ xác nhận.", now, ct);
             }
         }
     }
@@ -682,6 +698,117 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
     private Task<bool> HasDoctorAtFacilityAsync(Guid doctorUserId, long facilityId, CancellationToken ct) =>
         _db.StaffFacilityAssignments.AsNoTracking().AnyAsync(x => x.UserId == doctorUserId && x.IsActive && x.Role == nameof(AiActorRole.Doctor) && x.FacilityId == facilityId, ct);
 
+    private static bool MatchesRecoveryBinding(
+        AiPendingToolAction action,
+        Guid userId,
+        AiActorRole role,
+        string sessionId,
+        long? facilityId,
+        Preparation preparation,
+        string tool,
+        string toolVersion,
+        string requestHash) =>
+        action.UserId == userId &&
+        string.Equals(action.ActorRole, role.ToString(), StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(action.SessionId, sessionId, StringComparison.Ordinal) &&
+        action.FacilityId == facilityId &&
+        string.Equals(action.ToolName, tool, StringComparison.Ordinal) &&
+        string.Equals(action.ToolVersion, toolVersion, StringComparison.Ordinal) &&
+        string.Equals(action.RequestHash, requestHash, StringComparison.Ordinal) &&
+        string.Equals(action.ResourceType, preparation.ResourceType, StringComparison.Ordinal) &&
+        string.Equals(action.ResourceId, preparation.ResourceId, StringComparison.Ordinal);
+
+    private async Task<AiToolExecutionResult> RecoverExistingActionAsync(
+        AiPendingToolAction action,
+        Guid userId,
+        AiActorRole role,
+        string sessionId,
+        long? facilityId,
+        string tool,
+        string toolVersion,
+        string requestHash,
+        string message,
+        DateTime now,
+        CancellationToken ct)
+    {
+        if (action.CancelledAtUtc.HasValue || action.State == AiPendingToolActionState.Cancelled)
+            return AiToolExecutionResult.Failed("ACTION_CANCELLED", "Thao tác đã bị hủy.");
+        if (action.State == AiPendingToolActionState.Expired)
+            return AiToolExecutionResult.Failed("ACTION_EXPIRED", "Thao tác đã hết hạn.");
+        if (action.State == AiPendingToolActionState.Completed || action.ExecutedAtUtc.HasValue)
+            return AiToolExecutionResult.Failed("ACTION_ALREADY_COMPLETED", "Thao tác đã hoàn tất và không thể cấp lại mã xác nhận.");
+        if (action.State == AiPendingToolActionState.FailedTerminal)
+            return AiToolExecutionResult.Failed("ACTION_FAILED_TERMINAL", "Thao tác đã kết thúc lỗi và không thể cấp lại mã xác nhận.");
+        if (action.State == AiPendingToolActionState.Executing)
+            return AiToolExecutionResult.Failed("ACTION_IN_PROGRESS", "Thao tác đang được xử lý; không cấp lại mã xác nhận.", true);
+        if (action.ExpiresAtUtc <= now)
+        {
+            await _db.AiPendingToolActions
+                .Where(x => x.ActionId == action.ActionId &&
+                    (x.State == AiPendingToolActionState.PendingConfirmation || x.State == AiPendingToolActionState.FailedRetryable) &&
+                    x.ExpiresAtUtc <= now)
+                .ExecuteUpdateAsync(x => x
+                    .SetProperty(a => a.State, AiPendingToolActionState.Expired)
+                    .SetProperty(a => a.ExecutionLeaseId, (Guid?)null)
+                    .SetProperty(a => a.ExecutionLeaseExpiresAtUtc, (DateTime?)null), ct);
+            return AiToolExecutionResult.Failed("ACTION_EXPIRED", "Thao tác đã hết hạn.");
+        }
+
+        if (action.State is not (AiPendingToolActionState.PendingConfirmation or AiPendingToolActionState.FailedRetryable))
+            return AiToolExecutionResult.Failed("ACTION_NOT_RETRYABLE", "Trạng thái thao tác không cho phép cấp lại mã xác nhận.");
+
+        var observedTokenHash = action.ConfirmationTokenHash;
+        var roleName = role.ToString();
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            var replacementToken = CreateConfirmationToken();
+            var replacementHash = ConfirmationBindingHash(action, replacementToken);
+            var update = _db.AiPendingToolActions
+                .Where(x => x.ActionId == action.ActionId &&
+                    x.UserId == userId &&
+                    x.ActorRole == roleName &&
+                    x.SessionId == sessionId &&
+                    x.FacilityId == facilityId &&
+                    x.ToolName == tool &&
+                    x.ToolVersion == toolVersion &&
+                    x.RequestHash == requestHash &&
+                    x.ResourceType == action.ResourceType &&
+                    x.ResourceId == action.ResourceId &&
+                    x.ExpiresAtUtc > now &&
+                    (x.State == AiPendingToolActionState.PendingConfirmation || x.State == AiPendingToolActionState.FailedRetryable));
+            update = observedTokenHash is null
+                ? update.Where(x => x.ConfirmationTokenHash == null)
+                : update.Where(x => x.ConfirmationTokenHash == observedTokenHash);
+
+            if (await update.ExecuteUpdateAsync(x => x.SetProperty(a => a.ConfirmationTokenHash, replacementHash), ct) == 1)
+            {
+                action.ConfirmationTokenHash = replacementHash;
+                return Pending(action, message, replacementToken);
+            }
+
+            _db.ChangeTracker.Clear();
+            var refreshed = await _db.AiPendingToolActions.AsNoTracking().SingleOrDefaultAsync(x => x.ActionId == action.ActionId, ct);
+            if (refreshed == null)
+                return AiToolExecutionResult.Failed("ACTION_NOT_FOUND", "Thao tác không tồn tại hoặc đã bị xóa.");
+            action = refreshed;
+            if (action.CancelledAtUtc.HasValue || action.State == AiPendingToolActionState.Cancelled)
+                return AiToolExecutionResult.Failed("ACTION_CANCELLED", "Thao tác đã bị hủy.");
+            if (action.State == AiPendingToolActionState.Expired || action.ExpiresAtUtc <= now)
+                return AiToolExecutionResult.Failed("ACTION_EXPIRED", "Thao tác đã hết hạn.");
+            if (action.State == AiPendingToolActionState.Completed || action.ExecutedAtUtc.HasValue)
+                return AiToolExecutionResult.Failed("ACTION_ALREADY_COMPLETED", "Thao tác đã hoàn tất và không thể cấp lại mã xác nhận.");
+            if (action.State == AiPendingToolActionState.Executing)
+                return AiToolExecutionResult.Failed("ACTION_IN_PROGRESS", "Thao tác đang được xử lý; không cấp lại mã xác nhận.", true);
+            if (action.State == AiPendingToolActionState.FailedTerminal)
+                return AiToolExecutionResult.Failed("ACTION_FAILED_TERMINAL", "Thao tác đã kết thúc lỗi và không thể cấp lại mã xác nhận.");
+            if (action.State is not (AiPendingToolActionState.PendingConfirmation or AiPendingToolActionState.FailedRetryable))
+                return AiToolExecutionResult.Failed("ACTION_NOT_RETRYABLE", "Trạng thái thao tác không cho phép cấp lại mã xác nhận.");
+            observedTokenHash = action.ConfirmationTokenHash;
+        }
+
+        return AiToolExecutionResult.Failed("ACTION_TOKEN_REFRESH_CONFLICT", "Thao tác đang được khôi phục đồng thời; hãy thử lại.", true);
+    }
+
     private async Task ExpireActiveActionsAsync(Guid userId, DateTime now, CancellationToken ct) =>
         await _db.AiPendingToolActions.Where(x => x.UserId == userId && x.ExpiresAtUtc <= now &&
                 (x.State == AiPendingToolActionState.PendingConfirmation || x.State == AiPendingToolActionState.Executing || x.State == AiPendingToolActionState.FailedRetryable))
@@ -694,7 +821,7 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
         await query.ExecuteUpdateAsync(x => x.SetProperty(a => a.State, state).SetProperty(a => a.LastErrorCode, code).SetProperty(a => a.ExecutionLeaseId, (Guid?)null).SetProperty(a => a.ExecutionLeaseExpiresAtUtc, (DateTime?)null), ct);
     }
 
-    private static AiToolExecutionResult Pending(AiPendingToolAction action, string message, string? token = null) => new()
+    private static AiToolExecutionResult Pending(AiPendingToolAction action, string message, string token) => new()
     {
         Status = "pending_confirmation",
         RequiresConfirmation = true,

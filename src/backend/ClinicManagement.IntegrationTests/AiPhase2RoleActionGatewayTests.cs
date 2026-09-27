@@ -155,6 +155,154 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Role_prepare_retry_recovers_only_the_latest_token_and_keeps_confirmation_side_effects_single()
+    {
+        var receptionist = await CreateAuthenticatedClientAsync("rec@test.com");
+        var appointment = await CreateAppointmentAsync();
+        var sessionId = Session("lost-response");
+        var idempotencyKey = $"idem-recovery-{Guid.NewGuid():N}";
+        var arguments = new { appointmentId = appointment.AppointmentId, departmentId = appointment.DepartmentId };
+
+        // The first response represents the response lost by the client.
+        var first = await PrepareAsync(receptionist, "reception.prepare_check_in_appointment", arguments, "lost-response", idempotencyKey, sessionId);
+        var recovered = await PrepareAsync(receptionist, "reception.prepare_check_in_appointment", arguments, "lost-response", idempotencyKey, sessionId);
+        Assert.Equal(first.ActionId, recovered.ActionId);
+        Assert.NotEqual(first.Token, recovered.Token);
+
+        var wrongSession = await receptionist.PostAsJsonAsync("/api/v1/ai/copilot/actions/prepare", new
+        {
+            toolName = "reception.prepare_check_in_appointment",
+            toolVersion = "1.0",
+            argumentsJson = JsonSerializer.Serialize(arguments),
+            sessionId = Session("wrong-recovery-session"),
+            conversationId = $"conv_{Guid.NewGuid():N}",
+            idempotencyKey
+        });
+        Assert.Equal(HttpStatusCode.NotFound, wrongSession.StatusCode);
+
+        var wrongPayload = await receptionist.PostAsJsonAsync("/api/v1/ai/copilot/actions/prepare", new
+        {
+            toolName = "reception.prepare_check_in_appointment",
+            toolVersion = "1.0",
+            argumentsJson = $"{{\"departmentId\":{appointment.DepartmentId},\"appointmentId\":{appointment.AppointmentId}}}",
+            sessionId,
+            conversationId = $"conv_{Guid.NewGuid():N}",
+            idempotencyKey
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, wrongPayload.StatusCode);
+        Assert.Equal("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", (await wrongPayload.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Error?.Code);
+
+        var oldTokenResponse = await ConfirmAsync(receptionist, first);
+        Assert.Equal(HttpStatusCode.Conflict, oldTokenResponse.StatusCode);
+        Assert.Equal("CONCURRENCY_CONFLICT", (await oldTokenResponse.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Error?.Code);
+        Assert.Equal(HttpStatusCode.OK, (await ConfirmAsync(receptionist, recovered)).StatusCode);
+        await AssertSingleVisitAsync(appointment.AppointmentId);
+
+        var completedRetry = await receptionist.PostAsJsonAsync("/api/v1/ai/copilot/actions/prepare", new
+        {
+            toolName = "reception.prepare_check_in_appointment",
+            toolVersion = "1.0",
+            argumentsJson = JsonSerializer.Serialize(arguments),
+            sessionId,
+            conversationId = $"conv_{Guid.NewGuid():N}",
+            idempotencyKey
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, completedRetry.StatusCode);
+        Assert.Equal("ACTION_ALREADY_COMPLETED", (await completedRetry.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Error?.Code);
+
+        var concurrentAppointment = await CreateAppointmentAsync();
+        var concurrentSession = Session("concurrent-recovery");
+        var concurrentKey = $"idem-concurrent-{Guid.NewGuid():N}";
+        var seed = await PrepareAsync(receptionist, "reception.prepare_check_in_appointment",
+            new { appointmentId = concurrentAppointment.AppointmentId, departmentId = concurrentAppointment.DepartmentId },
+            "concurrent-recovery", concurrentKey, concurrentSession);
+        var clientA = await CreateAuthenticatedClientAsync("rec@test.com");
+        var clientB = await CreateAuthenticatedClientAsync("rec@test.com");
+        var retries = await Task.WhenAll(
+            Task.Run(() => PrepareAsync(clientA, "reception.prepare_check_in_appointment",
+                new { appointmentId = concurrentAppointment.AppointmentId, departmentId = concurrentAppointment.DepartmentId },
+                "concurrent-recovery", concurrentKey, concurrentSession)),
+            Task.Run(() => PrepareAsync(clientB, "reception.prepare_check_in_appointment",
+                new { appointmentId = concurrentAppointment.AppointmentId, departmentId = concurrentAppointment.DepartmentId },
+                "concurrent-recovery", concurrentKey, concurrentSession)));
+        Assert.All(retries, retry => Assert.Equal(seed.ActionId, retry.ActionId));
+        Assert.Equal(2, retries.Select(x => x.Token).Distinct(StringComparer.Ordinal).Count());
+
+        var concurrentConfirmations = await Task.WhenAll(
+            ConfirmAsync(clientA, retries[0]),
+            ConfirmAsync(clientB, retries[1]));
+        Assert.Contains(concurrentConfirmations, response => response.StatusCode == HttpStatusCode.OK);
+        Assert.Contains(concurrentConfirmations, response => response.StatusCode == HttpStatusCode.Conflict);
+        await AssertSingleVisitAsync(concurrentAppointment.AppointmentId);
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.AppointmentHistories.CountAsync(x => x.AppointmentId == concurrentAppointment.AppointmentId && x.Action == AppointmentHistoryAction.CheckedIn));
+            Assert.Equal(1, await db.Notifications.CountAsync(x => x.DedupeKey == $"checkin_appointment_{concurrentAppointment.AppointmentId}"));
+            Assert.Equal(1, await db.Notifications.CountAsync(x => x.DedupeKey == $"appt_checkin_doc_{concurrentAppointment.AppointmentId}_{DoctorId}"));
+            Assert.Equal(1, await db.AiAuditLogs.CountAsync(x => x.ActionType == "Tool:role.execute_confirmed_action" && x.SessionId == concurrentSession && x.Outcome == "completed"));
+        }
+
+        var wrongUser = await (await CreateAuthenticatedClientAsync("doc@test.com")).PostAsJsonAsync("/api/v1/ai/copilot/actions/prepare", new
+        {
+            toolName = "reception.prepare_check_in_appointment",
+            toolVersion = "1.0",
+            argumentsJson = JsonSerializer.Serialize(arguments),
+            sessionId,
+            conversationId = $"conv_{Guid.NewGuid():N}",
+            idempotencyKey = $"wrong-user-{Guid.NewGuid():N}"
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, wrongUser.StatusCode);
+    }
+
+    [Fact]
+    public async Task Role_prepare_retry_does_not_return_a_null_token_for_terminal_or_executing_actions()
+    {
+        var receptionist = await CreateAuthenticatedClientAsync("rec@test.com");
+        var cases = new[]
+        {
+            ("expired", AiPendingToolActionState.Expired, HttpStatusCode.Gone, "ACTION_EXPIRED"),
+            ("cancelled", AiPendingToolActionState.Cancelled, HttpStatusCode.Gone, "ACTION_CANCELLED"),
+            ("executing", AiPendingToolActionState.Executing, HttpStatusCode.Conflict, "ACTION_IN_PROGRESS"),
+            ("failed-terminal", AiPendingToolActionState.FailedTerminal, HttpStatusCode.BadRequest, "ACTION_FAILED_TERMINAL")
+        };
+
+        foreach (var testCase in cases)
+        {
+            var appointment = await CreateAppointmentAsync();
+            var sessionId = Session($"retry-state-{testCase.Item1}");
+            var idempotencyKey = $"idem-retry-state-{testCase.Item1}-{Guid.NewGuid():N}";
+            var arguments = new { appointmentId = appointment.AppointmentId, departmentId = appointment.DepartmentId };
+            var pending = await PrepareAsync(receptionist, "reception.prepare_check_in_appointment", arguments, testCase.Item1, idempotencyKey, sessionId);
+            await MutateActionAsync(pending.ActionId, action =>
+            {
+                action.State = testCase.Item2;
+                if (testCase.Item2 == AiPendingToolActionState.Cancelled)
+                    action.CancelledAtUtc = DateTime.UtcNow;
+                if (testCase.Item2 == AiPendingToolActionState.Executing)
+                {
+                    action.ExecutionLeaseId = Guid.NewGuid();
+                    action.ExecutionLeaseExpiresAtUtc = DateTime.UtcNow.AddMinutes(2);
+                }
+            });
+
+            var response = await receptionist.PostAsJsonAsync("/api/v1/ai/copilot/actions/prepare", new
+            {
+                toolName = "reception.prepare_check_in_appointment",
+                toolVersion = "1.0",
+                argumentsJson = JsonSerializer.Serialize(arguments),
+                sessionId,
+                conversationId = $"conv_{Guid.NewGuid():N}",
+                idempotencyKey
+            });
+            Assert.Equal(testCase.Item3, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<AiToolExecutionResult>();
+            Assert.Equal(testCase.Item4, body?.Error?.Code);
+            Assert.NotEqual("pending_confirmation", body?.Status);
+        }
+    }
+
+    [Fact]
     public async Task Role_pending_state_machine_handles_expired_cancelled_lease_retry_and_corrupt_payload_fail_closed()
     {
         var receptionist = await CreateAuthenticatedClientAsync("rec@test.com");
@@ -547,9 +695,9 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
         return (appointment, pending);
     }
 
-    private async Task<PendingAction> PrepareAsync(HttpClient client, string toolName, object arguments, string suffix)
+    private async Task<PendingAction> PrepareAsync(HttpClient client, string toolName, object arguments, string suffix, string? idempotencyKey = null, string? sessionId = null)
     {
-        var sessionId = Session(suffix);
+        sessionId ??= Session(suffix);
         var response = await client.PostAsJsonAsync("/api/v1/ai/copilot/actions/prepare", new
         {
             toolName,
@@ -557,7 +705,7 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
             argumentsJson = JsonSerializer.Serialize(arguments),
             sessionId,
             conversationId = $"conv_{Guid.NewGuid():N}",
-            idempotencyKey = $"idem_{Guid.NewGuid():N}"
+            idempotencyKey = idempotencyKey ?? $"idem_{Guid.NewGuid():N}"
         });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<AiToolExecutionResult>();
