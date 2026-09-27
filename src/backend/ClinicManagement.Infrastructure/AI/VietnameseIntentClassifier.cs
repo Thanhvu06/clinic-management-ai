@@ -81,6 +81,13 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         "tim mạch", "tai mũi họng", "da liễu", "nhi khoa", "sản phụ khoa", "răng hàm mặt", "nội khoa", "ngoại khoa"
     };
 
+    private static readonly string[] ExplicitOutOfScopeTerms =
+    {
+        "xổ số", "xo so", "lô đề", "lo de", "dự báo thời tiết", "du bao thoi tiet", "bóng đá", "bong da", "kết quả trận", "phim ảnh", "ca nhạc",
+        "bitcoin", "chứng khoán", "đầu tư", "mua bán nhà", "đặt taxi", "đặt đồ ăn", "mật khẩu",
+        "hack", "mã nguồn", "chính trị", "tin đồn", "trò chơi điện tử"
+    };
+
     public VietnameseIntentClassifier(
         IntentClassificationMode mode = IntentClassificationMode.Shadow,
         string? customModelPath = null,
@@ -153,8 +160,20 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return result;
         }
 
+        // Do not let an ordinary-language fallback turn unrelated requests into
+        // StartBooking. The explicit allow-list below is intentionally narrow;
+        // anything else remains eligible for clarification/provider handling.
+        if (ExplicitOutOfScopeTerms.Any(term => lower.Contains(term, StringComparison.OrdinalIgnoreCase)))
+        {
+            result.Intent = AiChatIntentTypes.UnclearOrOutOfScope;
+            result.IsClear = false;
+            result.ClarificationPrompt = "ClinicCare chỉ hỗ trợ thông tin sức khỏe, lịch khám và hoạt động của phòng khám trong phạm vi quyền của bạn.";
+            result.Method = "ExplicitOutOfScopeGuard";
+            return result;
+        }
+
         // 2. Cancellation Intent ("hủy", "không đặt nữa")
-        if (CancelWords.Any(w => lower == w || lower.StartsWith(w + " ") || lower.EndsWith(" " + w)))
+        if (!LooksLikePromptInjection(lower) && CancelWords.Any(w => ContainsPhrase(lower, w)))
         {
             result.Intent = AiChatIntentTypes.CancelDraft;
             return result;
@@ -172,7 +191,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         {
             // Do not confirm, let subsequent pricing or inquiry handlers evaluate
         }
-        else if (ConfirmationWords.Any(w => lower == w || lower.StartsWith(w + " ") || lower.EndsWith(" " + w)))
+        else if (ConfirmationWords.Any(w => ContainsPhrase(lower, w)))
         {
             result.Intent = AiChatIntentTypes.ConfirmBooking;
             return result;
@@ -191,7 +210,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         }
 
         // 5. Review Draft Intent ("xem lại", "tóm tắt")
-        if (ReviewWords.Any(w => lower == w || lower.StartsWith(w + " ") || lower.EndsWith(" " + w)))
+        if (ReviewWords.Any(w => ContainsPhrase(lower, w)))
         {
             result.Intent = AiChatIntentTypes.ReviewDraft;
             return result;
@@ -202,7 +221,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         // empty; the service will ground recommendations against real data.
         if (TryExtractSpecialtyRecommendation(trimmed, out var recommendationReason))
         {
-            result.Intent = Regex.IsMatch(lower, @"\bbác(?:\s+sĩ)?\s+nào\s+(?:khám|chữa|điều\s+trị)\b|\bgặp\s+ai\b", RegexOptions.IgnoreCase)
+            result.Intent = Regex.IsMatch(lower, @"\b(?:bác(?:\s+sĩ)?|bs\.?)\s+nào\s+(?:khám|chữa|điều\s+trị)\b|\bgặp\s+ai\b", RegexOptions.IgnoreCase)
                 ? AiChatIntentTypes.FindDoctorForSymptom
                 : AiChatIntentTypes.SpecialtyRecommendation;
             result.ExtractedReason = recommendationReason;
@@ -236,6 +255,16 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             lower.Contains("lịch sử đặt khám"))
         {
             result.Intent = AiChatIntentTypes.ViewAppointments;
+            return result;
+        }
+
+        // Corrections must win over the generic doctor-name extractor.
+        if (lower.StartsWith("đổi ngày", StringComparison.Ordinal) || lower.StartsWith("đổi bác sĩ", StringComparison.Ordinal) ||
+            lower.StartsWith("đổi giờ", StringComparison.Ordinal) || lower.StartsWith("đổi khung giờ", StringComparison.Ordinal) ||
+            lower.StartsWith("chọn lại", StringComparison.Ordinal))
+        {
+            result.Intent = AiChatIntentTypes.ModifyDraft;
+            result.IsCorrection = true;
             return result;
         }
 
@@ -313,7 +342,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         }
 
         // 12. Operational: Find Earliest Available Slot
-        if (lower.Contains("sớm nhất") || lower.Contains("lúc nào sớm nhất") || lower.Contains("tìm lịch sớm nhất") || lower.Contains("giờ nào sớm nhất"))
+        if (lower.Contains("sớm nhất") || lower.Contains("sớm nhứt") || lower.Contains("lúc nào sớm nhất") || lower.Contains("tìm lịch sớm nhất") || lower.Contains("tìm lịch sớm nhứt") || lower.Contains("giờ nào sớm nhất"))
         {
             result.Intent = AiChatIntentTypes.FindEarliestAvailableSlot;
             return result;
@@ -342,7 +371,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 
         // 15. Greetings ("xin chào", "hello", "hi")
         // Mixed utterance: "chào bạn, tôi đau đầu hai ngày nay" -> ProvideReason!
-        if (ExactGreetings.Contains(lower) || lower.StartsWith("chào ") || lower.StartsWith("xin chào"))
+        if (ExactGreetings.Contains(lower) || Regex.IsMatch(lower, @"^(?:chào|xin chào)(?:\b|\s|[;,.!?])", RegexOptions.IgnoreCase))
         {
             if (ContainsClinicalEvidence(lower, out var symptomPart))
             {
@@ -615,14 +644,14 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         var lower = normalized.ToLowerInvariant();
         var recommendationQuestion = Regex.IsMatch(
             lower,
-            @"(?:bác(?:\s+sĩ)?\s+nào|nên\s+chọn\s+bác\s+sĩ|khám\s+ai|gặp\s+ai|chuyên\s+khoa\s+(?:nào|gì)|khoa\s+(?:nào|gì))",
+            @"(?:bác(?:\s+sĩ)?\s+nào|bs\.?\s+nào|nên\s+chọn\s+bác\s+sĩ|khám\s+ai|gặp\s+ai|chuyên\s+khoa\s+(?:nào|gì)|khoa\s+(?:nào|gì))",
             RegexOptions.IgnoreCase);
         if (!recommendationQuestion)
             return false;
 
         var doctorQuestion = Regex.Match(
             normalized,
-            @"(?:có\s+)?bác(?:\s+sĩ)?\s+nào\s+(?:khám|chữa|điều\s+trị)\s+(?:bệnh\s+)?(?<reason>.+?)(?:\s+không)?$",
+            @"(?:có\s+)?(?:bác(?:\s+sĩ)?|bs\.?)\s+nào\s+(?:khám|chữa|điều\s+trị)\s+(?:bệnh\s+)?(?<reason>.+?)(?:\s+không)?$",
             RegexOptions.IgnoreCase);
         var extracted = string.Empty;
         if (doctorQuestion.Success)
@@ -715,6 +744,10 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         }
 
         var words = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var leadingClause = normalized.Split(new[] { ';', ':', '—' }, 2)[0];
+        var leadingWords = leadingClause.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (leadingWords.Length >= 2 && leadingWords.Count(word => word.Length >= 3 && !Regex.IsMatch(word, @"[aeiouy]", RegexOptions.IgnoreCase)) >= 2)
+            return true;
         if (words.Length > 0 && words.All(w => w.Length > 3 && !Regex.IsMatch(w, @"[aeiouy]")))
         {
             return true;
@@ -722,6 +755,16 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 
         return false;
     }
+
+    private static bool ContainsPhrase(string text, string phrase) =>
+        Regex.IsMatch(text, $@"(?<!\w){Regex.Escape(phrase)}(?!\w)", RegexOptions.IgnoreCase);
+
+    private static bool LooksLikePromptInjection(string text) =>
+        text.Contains("execute_confirmed_action", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("bỏ qua quy tắc", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("bo qua quy tac", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("bỏ qua hướng dẫn", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("bo qua huong dan", StringComparison.OrdinalIgnoreCase);
 
     public static string? ExtractDateTokenFromText(string text)
     {

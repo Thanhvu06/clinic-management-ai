@@ -43,6 +43,12 @@ export interface AiCopilotResourceContext {
     encounterId?: number;
     diagnosticOrderId?: number;
     prescriptionId?: number;
+    departmentId?: number;
+    roomId?: number;
+    assignedDoctorId?: number;
+    existingPatientId?: number;
+    itemId?: number;
+    serviceIds?: number[];
 }
 
 export interface AiCopilotRequest {
@@ -62,4 +68,45 @@ export async function sendRoleCopilotMessage(request: AiCopilotRequest | string,
     const response = await axiosClient.post<AiCopilotRequest, ApiResponse<AiCopilotResponse>>('/ai/copilot/chat', body, { signal });
     if (!response.success || !response.data) throw new Error(response.message || 'Không thể kết nối Copilot.');
     return response.data;
+}
+
+export interface AiCopilotCatalog {
+    tools: AiCopilotTool[];
+    actionTools: AiCopilotTool[];
+}
+
+export interface AiToolInvocationRequest {
+    toolName: string;
+    toolVersion: string;
+    argumentsJson: string;
+    sessionId: string;
+    conversationId?: string;
+    correlationId?: string;
+    idempotencyKey: string;
+}
+
+export interface AiRoleActionResult {
+    status: string;
+    data?: unknown;
+    resultType?: string | null;
+    displayText?: string | null;
+    error?: { code?: string; message?: string; retryable?: boolean } | null;
+    requiresConfirmation?: boolean;
+    isIdempotentReplay?: boolean;
+    actionId?: string | null;
+    retrievedAtUtc?: string;
+}
+
+export async function getRoleCopilotCatalog(signal?: AbortSignal): Promise<AiCopilotCatalog> {
+    const response = await axiosClient.get<unknown, ApiResponse<AiCopilotCatalog>>('/ai/copilot/catalog', { signal });
+    if (!response.success || !response.data) throw new Error(response.message || 'Không thể tải danh mục thao tác.');
+    return response.data;
+}
+
+export async function prepareRoleAction(request: AiToolInvocationRequest, signal?: AbortSignal): Promise<AiRoleActionResult> {
+    return axiosClient.post<AiToolInvocationRequest, AiRoleActionResult>('/ai/copilot/actions/prepare', request, { signal });
+}
+
+export async function confirmRoleAction(actionId: string, request: { sessionId: string; concurrencyToken: string }, signal?: AbortSignal): Promise<AiRoleActionResult> {
+    return axiosClient.post<typeof request, AiRoleActionResult>(`/ai/copilot/actions/${encodeURIComponent(actionId)}/confirm`, request, { signal });
 }

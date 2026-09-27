@@ -23,20 +23,32 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         if (string.IsNullOrWhiteSpace(text))
             return Clarify("Bạn muốn tôi hỗ trợ tra cứu nội dung nào trong workspace hiện tại?", "EmptyInput");
 
+        var knowledgeRequest = Regex.IsMatch(text, @"\b(?:gio lam viec|ngay nghi|chu nhat|gia|chi phi|dich vu|co so|phong kham|huong dan|truoc kham|chuan bi xet nghiem|chuyen khoa)\b", RegexOptions.CultureInvariant);
+
         if (Greeting.IsMatch(text) || context.Analysis.Intent.Intent == AiChatIntentTypes.Greeting)
         {
             return Local(AiChatIntentTypes.Greeting, "Greeting", "Xin chào. Tôi có thể hỗ trợ tra cứu dữ liệu trong phạm vi công việc và quyền hiện tại của bạn.", 1m);
         }
 
-        if (Help.IsMatch(text))
+        if (Help.IsMatch(text) && !knowledgeRequest)
         {
             return Local(AiChatIntentTypes.Help, "RoleHelp", "Bạn có thể dùng các gợi ý bên dưới hoặc mô tả rõ dữ liệu cần tra cứu. Tôi sẽ không thực hiện thao tác ghi trong cuộc hội thoại này.", .99m);
         }
 
-        if (Regex.IsMatch(text, @"\b(?:gio lam viec|ngay nghi|chu nhat|gia|chi phi|dich vu|co so|phong kham|huong dan|truoc kham|chuan bi xet nghiem|chuyen khoa)\b", RegexOptions.CultureInvariant))
-            return Tool(AiChatIntentTypes.FacilityInquiry, "ClinicKnowledge", "clinic.search_knowledge", new { query = context.NormalizedMessage }, "/locations");
+        var containsReadRequest = Regex.IsMatch(text,
+            @"\b(?:xem|tra cuu|tim|kiem tra|tom tat|tong hop|danh sach|hang doi|lich|thong tin|doc)\b",
+            RegexOptions.CultureInvariant);
+        var containsWriteRequest = Regex.IsMatch(text,
+            @"\b(?:tao|dat|check in|ghi|luu|hoan tat|cap phat|giu cho|ke (?:don|thuoc)|chuan bi (?:phieu|ban nhap|don)|thuc hien|lam luon|xuat|phat hanh)\b",
+            RegexOptions.CultureInvariant);
+        if (containsReadRequest && containsWriteRequest)
+        {
+            return Clarify(
+                "Tôi không thể trộn tra cứu với thao tác ghi trong cùng một kế hoạch. Hãy chọn một việc và xác nhận thao tác ghi qua màn hình hành động.",
+                "MixedReadWritePlan");
+        }
 
-        return context.Role switch
+        var roleDecision = context.Role switch
         {
             AiActorRole.Receptionist => PlanReception(text),
             AiActorRole.Doctor => PlanDoctor(text, context.Resource),
@@ -45,11 +57,19 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             AiActorRole.Admin => PlanAdmin(text),
             _ => ProviderRequired(context.Analysis.Intent.Intent)
         };
+
+        if (knowledgeRequest && roleDecision.ToolCalls.Count == 0 && roleDecision.Clarification is null)
+            return Tool(AiChatIntentTypes.FacilityInquiry, "ClinicKnowledge", "clinic.search_knowledge", new { query = context.NormalizedMessage }, "/locations");
+
+        return roleDecision;
     }
 
     private static AiPlannerDecision PlanReception(string text)
     {
-        if (Regex.IsMatch(text, @"\b(?:tra cuu|tim|kiem tra)\b.*\b(?:ma )?(?:lich hen|cuoc hen)\b", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:chuan bi check[- ]?in|check[- ]?in lich hen|tiep nhan lich hen)\b", RegexOptions.CultureInvariant))
+            return Clarify("Check-in phải đi qua action gateway và bước xác nhận rõ ràng; tôi không tự thực hiện thao tác ghi từ cuộc hội thoại.", "WriteRequiresExplicitActionConfirmation");
+
+        if (Regex.IsMatch(text, @"\b(?:tra cuu|tim|kiem tra)\b.*\b(?:ma )?(?:lich hen|cuoc hen|lh)\b", RegexOptions.CultureInvariant))
         {
             var code = Regex.Match(text, @"\b[a-z]{2,}-?\d{3,}\b", RegexOptions.CultureInvariant).Value;
             if (string.IsNullOrWhiteSpace(code))
@@ -57,17 +77,20 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             return Tool(AiChatIntentTypes.ViewAppointments, "LookupAppointment", "reception.lookup_appointment", new { appointmentCode = code.ToUpperInvariant() }, "/reception/appointments");
         }
 
+        if (Regex.IsMatch(text, @"\b(?:lich hen|cuoc hen|lh)\b.*\b(?:hom nay|trong ngay)\b|\b(?:hom nay|trong ngay)\b.*\b(?:lich hen|cuoc hen|lh)\b", RegexOptions.CultureInvariant))
+            return Tool(AiChatIntentTypes.ViewAppointments, "TodayAppointments", "reception.get_today_appointments", new { }, "/reception/appointments");
+
         if (Regex.IsMatch(text, @"\b(?:hang doi|cho tiep nhan|dang cho|queue)\b", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.QueueLookup, "ReceptionQueue", "reception.get_queue", new { }, "/reception");
-
-        if (Regex.IsMatch(text, @"\b(?:lich hen|cuoc hen)\b.*\b(?:hom nay|trong ngay)\b|\b(?:hom nay|trong ngay)\b.*\b(?:lich hen|cuoc hen)\b", RegexOptions.CultureInvariant))
-            return Tool(AiChatIntentTypes.ViewAppointments, "TodayAppointments", "reception.get_today_appointments", new { }, "/reception/appointments");
 
         return ProviderRequired(AiChatIntentTypes.UnclearOrOutOfScope);
     }
 
     private static AiPlannerDecision PlanDoctor(string text, AiResolvedResourceContext resource)
     {
+        if (Regex.IsMatch(text, @"\b(?:chuan bi (?:phieu|ban nhap|don)|ke (?:don|thuoc)|phat hanh|tao (?:phieu|don))\b", RegexOptions.CultureInvariant))
+            return Clarify("Thao tác ghi của bác sĩ phải đi qua action gateway và bước xác nhận rõ ràng; cuộc hội thoại không tự tạo hoặc phát hành dữ liệu.", "WriteRequiresExplicitActionConfirmation");
+
         var asksSummary = Regex.IsMatch(text, @"\b(?:tom tat|tong hop)\b.*\b(?:benh nhan|ca kham|ho so|hien tai)\b", RegexOptions.CultureInvariant);
         var asksOrders = Regex.IsMatch(text, @"\b(?:chi dinh|can lam sang|xet nghiem|chan doan hinh anh)\b", RegexOptions.CultureInvariant);
 
@@ -100,13 +123,19 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
 
     private static AiPlannerDecision PlanTechnician(string text)
     {
-        if (Regex.IsMatch(text, @"\b(?:worklist|danh sach chi dinh|chi dinh dang cho|cong viec dang cho|qua han)\b", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:chuan bi tiep nhan phieu|ghi ket qua|hoan tat order)\b", RegexOptions.CultureInvariant))
+            return Clarify("Thao tác kỹ thuật phải đi qua action gateway và bước xác nhận rõ ràng; cuộc hội thoại không tự ghi kết quả.", "WriteRequiresExplicitActionConfirmation");
+
+        if (Regex.IsMatch(text, @"\b(?:worklist|wl|danh sach chi dinh|chi dinh dang cho|cong viec dang cho|qua han)\b", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.DiagnosticLookup, "TechnicianWorklist", "technician.get_worklist", new { }, "/diagnostics");
         return ProviderRequired(AiChatIntentTypes.UnclearOrOutOfScope);
     }
 
     private static AiPlannerDecision PlanPharmacist(string text)
     {
+        if (Regex.IsMatch(text, @"\b(?:chuan bi giu cho|giu cho thuoc|cap phat don thuoc)\b", RegexOptions.CultureInvariant))
+            return Clarify("Giữ chỗ hoặc cấp phát thuốc phải đi qua action gateway và bước xác nhận rõ ràng.", "WriteRequiresExplicitActionConfirmation");
+
         if (Regex.IsMatch(text, @"\b(?:ton kho|kho thuoc|sap het|thieu thuoc)\b", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.PharmacyInventory, "InventoryStatus", "pharmacist.get_inventory_status", new { }, "/pharmacy/inventory");
         if (Regex.IsMatch(text, @"\b(?:don thuoc|hang doi cap thuoc|cho cap|cho phat)\b", RegexOptions.CultureInvariant))

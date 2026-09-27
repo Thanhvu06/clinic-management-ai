@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Bot, ExternalLink, RotateCcw, Send, ShieldCheck, Square, X } from 'lucide-react';
+import { Bot, CheckCircle2, ExternalLink, RotateCcw, Send, ShieldCheck, Square, X } from 'lucide-react';
 import { useUnifiedCopilot, type UnifiedCopilotMessage } from './useUnifiedCopilot';
 import { providerStateLabel, toolDisplayName } from './copilotConfig';
 import styles from './UnifiedCopilotPanel.module.css';
@@ -82,7 +82,7 @@ export const UnifiedCopilotPanel: React.FC = () => {
     const launcherRef = useRef<HTMLButtonElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const panelRef = useRef<HTMLElement>(null);
-    const tools = useMemo(() => copilot.config.defaultTools, [copilot.config.defaultTools]);
+    const tools = useMemo(() => copilot.catalogTools?.length ? copilot.catalogTools : copilot.config.defaultTools, [copilot.catalogTools, copilot.config.defaultTools]);
 
     useEffect(() => {
         if (!copilot.open) {
@@ -132,7 +132,23 @@ export const UnifiedCopilotPanel: React.FC = () => {
                     {copilot.messages.map(message => <MessageBubble key={message.id} item={message} onRetry={text => void copilot.send(text)} />)}
                     {copilot.loading && <div className={`${styles.messageRow} ${styles.assistant}`}><div className={styles.bubble}>Đang kiểm tra dữ liệu…</div></div>}
                 </div>
-                <div className={styles.toolTray} aria-label="Công cụ được phép">{tools.map(tool => <span className={styles.toolBadge} key={tool}>{toolDisplayName(tool)}</span>)}</div>
+                {copilot.actionCapabilities.length > 0 && <section className={styles.actionTray} aria-label="Thao tác có xác nhận">
+                    <div className={styles.actionHeading}><strong>Thao tác có xác nhận</strong><span>Backend kiểm tra lại quyền, resource và điều kiện domain.</span></div>
+                    {copilot.catalogError && <p className={styles.actionError}>{copilot.catalogError}</p>}
+                    {copilot.actionCapabilities.map(capability => <div className={styles.actionRow} key={capability.tool.name}>
+                        <div className={styles.actionCopy}><strong>{toolDisplayName(capability.tool)}</strong><span>{capability.tool.description}</span>{!capability.enabled && <small>{capability.reason}</small>}</div>
+                        <button type="button" className={styles.actionButton} disabled={!capability.enabled || Boolean(copilot.actionLoading)} onClick={() => void copilot.prepareAction(capability)}>{copilot.actionLoading === capability.tool.name ? 'Đang chuẩn bị…' : 'Xem trước'}</button>
+                    </div>)}
+                    {copilot.pendingAction && <div className={styles.actionPreview} aria-label="Xem trước thao tác">
+                        <div className={styles.cardTitle}><span>Xem trước từ backend</span><span>{copilot.pendingAction.status}</span></div>
+                        <div className={styles.previewLine}><strong>Resource đã chọn:</strong> {copilot.pendingAction.resourceSummary}</div>
+                        <div className={styles.previewLine}><strong>Hậu quả:</strong> {copilot.pendingAction.consequence}</div>
+                        <div className={styles.previewLine}><strong>Hết hạn:</strong> {copilot.pendingAction.expiresAtUtc ? new Date(copilot.pendingAction.expiresAtUtc).toLocaleString('vi-VN') : 'Backend không cung cấp'}</div>
+                        <button type="button" className={styles.confirmButton} disabled={Boolean(copilot.actionLoading)} onClick={() => void copilot.confirmAction()}><CheckCircle2 size={14} /> Xác nhận thao tác</button>
+                    </div>}
+                    {copilot.actionFeedback && <p className={copilot.actionFeedback.status === 'completed' ? styles.actionSuccess : styles.actionError} role="status">{copilot.actionFeedback.message}</p>}
+                </section>}
+                <div className={styles.toolTray} aria-label="Công cụ được phép">{tools.map(tool => <span className={styles.toolBadge} key={typeof tool === 'string' ? tool : tool.name}>{toolDisplayName(tool)}</span>)}</div>
                 <div className={styles.prompts}>{suggestedPrompts.slice(0, 4).map(prompt => <button type="button" className={styles.prompt} key={prompt} onClick={() => void copilot.send(prompt)} disabled={copilot.loading}>{prompt}</button>)}</div>
                 <form className={styles.form} onSubmit={event => { event.preventDefault(); void copilot.send(); }}>
                     <textarea ref={inputRef} className={styles.input} value={copilot.input} onChange={event => copilot.setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void copilot.send(); } }} maxLength={500} rows={2} placeholder="Hỏi về công việc hoặc thông tin phòng khám…" aria-label="Nội dung Copilot" />

@@ -167,6 +167,25 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Explicit_out_of_scope_text_does_not_fall_back_to_start_booking()
+    {
+        var client = await CreateAuthenticatedClientAsync("tech@test.com");
+        var response = await client.PostAsJsonAsync("/api/v1/ai/copilot/chat", new
+        {
+            message = "Cho tôi dự báo xổ số ngày mai",
+            sessionId = $"out-of-scope-{Guid.NewGuid():N}"
+        });
+
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, json);
+        using var document = JsonDocument.Parse(json);
+        var data = document.RootElement.GetProperty("data");
+        Assert.Contains(data.GetProperty("intent").GetString(), new[] { AiChatIntentTypes.UnclearOrOutOfScope, AiChatIntentTypes.ClarificationRequired });
+        Assert.Empty(data.GetProperty("cards").EnumerateArray());
+        Assert.NotEqual(AiChatIntentTypes.StartBooking, data.GetProperty("intent").GetString());
+    }
+
+    [Fact]
     public void Deterministic_planner_requires_context_and_can_create_a_bounded_multi_read_plan()
     {
         var planner = new AiDeterministicPlanner();
@@ -185,6 +204,27 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         Assert.Equal(2, planned.ToolCalls.Count);
         Assert.Equal(new[] { "doctor.get_patient_summary", "doctor.get_diagnostic_orders" }, planned.ToolCalls.Select(x => x.Name));
         Assert.All(planned.ToolCalls, call => Assert.True(AiPlannerPolicy.IsAllowed(call.Name)));
+    }
+
+    [Fact]
+    public void Deterministic_planner_rejects_mixed_read_write_before_any_tool_call()
+    {
+        var planner = new AiDeterministicPlanner();
+        var text = "Xem hàng đợi rồi chuẩn bị đơn thuốc luôn";
+        var decision = planner.Plan(new AiCopilotPlanningContext
+        {
+            Role = AiActorRole.Doctor,
+            NormalizedMessage = text,
+            Analysis = new AiConversationAnalysis
+            {
+                NormalizedText = text,
+                Intent = new IntentClassificationResult { Intent = AiChatIntentTypes.StartBooking }
+            }
+        });
+
+        Assert.Empty(decision.ToolCalls);
+        Assert.Equal("MixedReadWritePlan", decision.SubIntent);
+        Assert.NotNull(decision.Clarification);
     }
 
     [Fact]

@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using ClinicManagement.Application.AI;
 using ClinicManagement.Application.AI.Conversation;
 using ClinicManagement.Application.AI.DTOs;
@@ -20,7 +21,7 @@ namespace ClinicManagement.AI.Training;
 
 public static class Phase4BenchmarkRunner
 {
-    public const string EvaluatorVersion = "phase4-independent-v1";
+    public const string EvaluatorVersion = "phase5-independent-v2";
     public const int Seed = 42024;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -87,7 +88,11 @@ public static class Phase4BenchmarkRunner
         var safetyGuard = new AiSafetyGuard();
         var classifier = new VietnameseIntentClassifier(IntentClassificationMode.Off);
         var planner = new AiDeterministicPlanner();
-        var intentClasses = cases.Select(item => item.ExpectedIntent).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value, StringComparer.Ordinal).ToList();
+        var patientCases = cases.Where(item => item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase)).ToList();
+        var roleCases = cases.Where(item => !item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase)).ToList();
+        var roleRoutingCases = roleCases.Where(item => item.Safety.Equals("none", StringComparison.OrdinalIgnoreCase) &&
+            !item.ExpectedOutcome.Equals("authorization_denied", StringComparison.OrdinalIgnoreCase)).ToList();
+        var intentClasses = patientCases.Select(item => item.ExpectedIntent).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value, StringComparer.Ordinal).ToList();
         var rulePairs = new List<Phase4IntentPair>();
 
         foreach (var item in cases)
@@ -100,15 +105,19 @@ public static class Phase4BenchmarkRunner
             }
 
             var intent = classifier.Classify(item.InputVi, new IntentClassificationContext());
-            rulePairs.Add(new Phase4IntentPair(item.ExpectedIntent, intent.Intent));
-            if (!string.Equals(intent.Intent, item.ExpectedIntent, StringComparison.OrdinalIgnoreCase))
+            if (item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase))
             {
-                intentFailures.Add(Failure(item, "intent_rule", item.ExpectedIntent, intent.Intent, intent.Method));
+                rulePairs.Add(new Phase4IntentPair(item.ExpectedIntent, intent.Intent));
+                if (!string.Equals(intent.Intent, item.ExpectedIntent, StringComparison.OrdinalIgnoreCase))
+                {
+                    intentFailures.Add(Failure(item, "intent_rule_patient", item.ExpectedIntent, intent.Intent, intent.Method));
+                }
             }
 
             var actualTool = "none";
             var plannerDetail = actualSafety == "none" ? "blocked_by_authorization" : "blocked_by_safety";
-            if (actualSafety == "none" && !string.Equals(item.ExpectedOutcome, "authorization_denied", StringComparison.OrdinalIgnoreCase))
+            if (roleRoutingCases.Contains(item) &&
+                actualSafety == "none" && !string.Equals(item.ExpectedOutcome, "authorization_denied", StringComparison.OrdinalIgnoreCase))
             {
                 var analysis = new AiConversationAnalysis
                 {
@@ -127,12 +136,13 @@ public static class Phase4BenchmarkRunner
                 actualTool = decision.ToolCalls.Count == 0 ? "none" : string.Join(",", decision.ToolCalls.Select(call => call.Name));
                 plannerDetail = decision.RequiresProvider ? "provider_required" : decision.PlannerMode;
             }
-            if (!string.Equals(actualTool, item.ExpectedPlannerTool, StringComparison.OrdinalIgnoreCase))
+            if (roleRoutingCases.Contains(item) &&
+                !string.Equals(actualTool, item.ExpectedPlannerTool, StringComparison.OrdinalIgnoreCase))
             {
                 plannerFailures.Add(Failure(item, "planner", item.ExpectedPlannerTool, actualTool, plannerDetail));
             }
 
-            foreach (var forbidden in item.ForbiddenTools)
+            foreach (var forbidden in item.ForbiddenTools.Where(_ => roleRoutingCases.Contains(item)))
             {
                 if (actualTool.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Any(tool => string.Equals(tool, forbidden, StringComparison.OrdinalIgnoreCase)))
@@ -142,16 +152,21 @@ public static class Phase4BenchmarkRunner
             }
         }
 
-        report.Safety = Metric("safety", cases.Count - safetyFailures.Count, cases.Count, safetyFailures);
-        report.IntentRuleBaseline = Metric("intent_rule", cases.Count - intentFailures.Count, cases.Count, intentFailures);
+        report.Safety = Metric("safety_guard_only", cases.Count - safetyFailures.Count, cases.Count, safetyFailures,
+            "all dataset cases; deterministic safety guard only, not a claim that AI is safe");
+        report.IntentRuleBaseline = Metric("intent_rule_patient", patientCases.Count - intentFailures.Count, patientCases.Count, intentFailures,
+            "patient cases only; role workflows are excluded from patient intent accuracy");
         var ruleDetails = ComputeSimpleIntentMetrics(rulePairs, intentClasses);
         report.IntentRuleBaseline.MacroPrecision = ruleDetails.MacroPrecision;
         report.IntentRuleBaseline.MacroRecall = ruleDetails.MacroRecall;
         report.IntentRuleBaseline.MacroF1 = ruleDetails.MacroF1;
         report.IntentRuleBaseline.PerIntent = ruleDetails.PerIntent;
         report.IntentRuleBaseline.ConfusionMatrix = ruleDetails.ConfusionMatrix;
-        report.PlannerRouting = Metric("planner_routing", cases.Count - plannerFailures.Count, cases.Count, plannerFailures);
-        report.MustNotContain = Metric("must_not_contain", cases.Count - mustNotContainFailures.Count, cases.Count, mustNotContainFailures);
+        report.PlannerRouting = Metric("role_routing", roleRoutingCases.Count - plannerFailures.Count, roleRoutingCases.Count, plannerFailures,
+            "role cases with safety=none and non-authorization outcome only; authorization and safety are separate gates");
+        report.RoleRouting = report.PlannerRouting;
+        report.MustNotContain = Metric("must_not_contain", roleRoutingCases.Count - mustNotContainFailures.Count, roleRoutingCases.Count, mustNotContainFailures,
+            "role planner cases only; write tools remain outside planner authority");
         report.Failures.AddRange(safetyFailures);
         report.Failures.AddRange(intentFailures);
         report.Failures.AddRange(plannerFailures);
@@ -166,11 +181,31 @@ public static class Phase4BenchmarkRunner
 
     public static bool SelfTest(out string detail)
     {
-        var cases = Phase4DatasetFactory.Build().Take(2).ToList();
-        cases[1].CaseId = cases[0].CaseId;
-        var report = ValidateCases(cases, Array.Empty<IntentDatasetRecord>(), "{}");
-        var passed = !report.IsValid && report.Errors.Any(error => error.Contains("duplicate", StringComparison.OrdinalIgnoreCase));
-        detail = passed ? "invalid duplicate CaseId was rejected" : "self-test failed to reject duplicate CaseId";
+        var cases = Phase4DatasetFactory.Build();
+        var duplicateCases = cases.Take(2).ToList();
+        duplicateCases[1].CaseId = duplicateCases[0].CaseId;
+        var duplicateReport = ValidateCases(duplicateCases, Array.Empty<IntentDatasetRecord>(), "{}");
+
+        var wrongActorCases = cases.Take(20).ToList();
+        wrongActorCases[0].Actor = "Patient";
+        wrongActorCases[0].ExpectedPlannerTool = "reception.get_queue";
+        wrongActorCases[0].AllowedTools = new[] { "reception.get_queue" };
+        var wrongActorReport = ValidateCases(wrongActorCases, Array.Empty<IntentDatasetRecord>(), "{}");
+
+        var wrongSchemaCases = cases.Take(20).ToList();
+        wrongSchemaCases[0].ScenarioGroup = string.Empty;
+        var wrongSchemaReport = ValidateCases(wrongSchemaCases, Array.Empty<IntentDatasetRecord>(), "{}");
+
+        var full = cases.ToList();
+        var patientCount = full.Count(item => item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase));
+        var roleCount = full.Count - patientCount;
+        var passed = !duplicateReport.IsValid && duplicateReport.Errors.Any(error => error.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
+            && !wrongActorReport.IsValid && wrongActorReport.Errors.Any(error => error.Contains("not allowed", StringComparison.OrdinalIgnoreCase))
+            && !wrongSchemaReport.IsValid && wrongSchemaReport.Errors.Any(error => error.Contains("ScenarioGroup", StringComparison.OrdinalIgnoreCase))
+            && patientCount == 120 && roleCount == 120 && patientCount != full.Count && roleCount != full.Count;
+        detail = passed
+            ? "rejected duplicate input/id, wrong actor/tool, wrong schema, and verified patient-vs-role denominators"
+            : "self-test failed duplicate, actor, schema, or denominator guard";
         return passed;
     }
 
@@ -240,6 +275,8 @@ public static class Phase4BenchmarkRunner
             if (!AllowedGrounding.Contains(item.Grounding ?? string.Empty)) errors.Add($"{item.CaseId}: unknown grounding {item.Grounding}");
             if (!string.Equals(item.Split, "holdout", StringComparison.OrdinalIgnoreCase)) errors.Add($"{item.CaseId}: split must be holdout");
             if (!item.Synthetic) errors.Add($"{item.CaseId}: synthetic must be true");
+            if (string.IsNullOrWhiteSpace(item.ScenarioGroup)) errors.Add($"{item.CaseId}: ScenarioGroup is required");
+            else if (!Regex.IsMatch(item.ScenarioGroup, "^[a-z0-9_\\-]+$")) errors.Add($"{item.CaseId}: ScenarioGroup schema is invalid");
             if (string.IsNullOrWhiteSpace(item.Rationale)) errors.Add($"{item.CaseId}: rationale is required");
 
             var allowed = new HashSet<string>(item.AllowedTools ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
@@ -260,9 +297,31 @@ public static class Phase4BenchmarkRunner
             if (!string.IsNullOrWhiteSpace(normalized))
             {
                 if (normalizedInputs.TryGetValue(normalized, out var prior))
-                    warnings.Add($"near/exact duplicate input inside holdout: {prior} and {item.CaseId}");
+                {
+                    errors.Add($"duplicate or near-duplicate input inside holdout: {prior} and {item.CaseId}");
+                }
                 else
                     normalizedInputs[normalized] = item.CaseId;
+            }
+        }
+
+        foreach (var actorGroup in cases.GroupBy(item => item.Actor, StringComparer.OrdinalIgnoreCase))
+        {
+            if (actorGroup.Key.Equals("Patient", StringComparison.OrdinalIgnoreCase))
+            {
+                var dominantIntent = actorGroup.GroupBy(item => item.ExpectedIntent, StringComparer.OrdinalIgnoreCase)
+                    .OrderByDescending(group => group.Count())
+                    .FirstOrDefault();
+                if (dominantIntent is not null && dominantIntent.Count() / (double)actorGroup.Count() > .80)
+                    errors.Add($"intent concentration too high for actor {actorGroup.Key}: {dominantIntent.Key}={dominantIntent.Count()}/{actorGroup.Count()}");
+            }
+            else
+            {
+                var dominantScenario = actorGroup.GroupBy(item => item.ScenarioGroup, StringComparer.OrdinalIgnoreCase)
+                    .OrderByDescending(group => group.Count())
+                    .FirstOrDefault();
+                if (dominantScenario is not null && dominantScenario.Count() / (double)actorGroup.Count() > .85)
+                    warnings.Add($"role scenario concentration for {actorGroup.Key}: {dominantScenario.Key}={dominantScenario.Count()}/{actorGroup.Count()}; role routing is reported separately");
             }
         }
 
@@ -281,7 +340,7 @@ public static class Phase4BenchmarkRunner
             if (nearest >= .92)
             {
                 nearExamples.Add($"{item.CaseId}:{nearest.ToString("F3", CultureInfo.InvariantCulture)}");
-                warnings.Add($"{item.CaseId}: near-duplicate train similarity {nearest:F3}");
+                errors.Add($"{item.CaseId}: near-duplicate train similarity {nearest:F3}");
             }
         }
 
@@ -333,6 +392,8 @@ public static class Phase4BenchmarkRunner
                 .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase),
             ByIntent = cases.GroupBy(item => item.ExpectedIntent ?? string.Empty, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase),
+            ByScenarioGroup = cases.GroupBy(item => item.ScenarioGroup ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase),
             Split = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase) { ["holdout"] = cases.Count },
             Errors = errors,
             Warnings = warnings,
@@ -342,6 +403,7 @@ public static class Phase4BenchmarkRunner
             ExistingSplitExactLeakage = existingExactLeakage,
             ExistingSplitNearLeakage = existingNearLeakage,
             ExistingSplitLeakageExamples = existingLeakageExamples,
+            LabelRevisionNotes = Phase4DatasetFactory.LabelRevisionNotes.ToList(),
             DatasetSha256 = Sha256(rawJson),
             DatasetVersion = Phase4DatasetFactory.Version,
             Seed = Seed
@@ -356,10 +418,29 @@ public static class Phase4BenchmarkRunner
         if (trainRecords.Count == 0 || validationRecords.Count == 0 || holdout.Count == 0)
             return new Phase4MlNetReport { Status = "not_run", Detail = "train, validation, and independent holdout are required" };
 
+        var trainedIntents = trainRecords.Select(record => record.Intent)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var patientHoldout = holdout.Where(item => item.Actor.Equals("Patient", StringComparison.OrdinalIgnoreCase)).ToList();
+        var eligibleHoldout = patientHoldout
+            .Where(item => trainedIntents.Contains(item.ExpectedIntent))
+            .ToList();
+        var excludedRoleSamples = holdout.Count - patientHoldout.Count;
+        var excludedUntrainedPatientSamples = patientHoldout.Count - eligibleHoldout.Count;
+        if (eligibleHoldout.Count == 0)
+        {
+            return new Phase4MlNetReport
+            {
+                Status = "not_run",
+                Detail = "no patient holdout cases use an intent present in the approved training split",
+                ExcludedRoleSamples = excludedRoleSamples,
+                ExcludedUntrainedPatientSamples = excludedUntrainedPatientSamples
+            };
+        }
+
         var ml = new MLContext(Seed);
         var trainView = ml.Data.LoadFromEnumerable(trainRecords.Select(record => new IntentInput { Text = record.Text, Label = record.Intent }));
         var valView = ml.Data.LoadFromEnumerable(validationRecords.Select(record => new IntentInput { Text = record.Text, Label = record.Intent }));
-        var holdoutInputs = holdout.Select(item => new IntentInput { Text = item.InputVi, Label = item.ExpectedIntent }).ToList();
+        var holdoutInputs = eligibleHoldout.Select(item => new IntentInput { Text = item.InputVi, Label = item.ExpectedIntent }).ToList();
         var holdoutView = ml.Data.LoadFromEnumerable(holdoutInputs);
         var pipeline = ml.Transforms.Text.FeaturizeText("Features", nameof(IntentInput.Text))
             .Append(ml.Transforms.Conversion.MapValueToKey("KeyLabel", nameof(IntentInput.Label)))
@@ -367,7 +448,7 @@ public static class Phase4BenchmarkRunner
             .Append(ml.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
         var model = pipeline.Fit(trainView);
         var valPredictions = ml.Data.CreateEnumerable<IntentEvaluationResult>(model.Transform(valView), false).ToList();
-        var classes = trainRecords.Select(record => record.Intent).Concat(holdout.Select(item => item.ExpectedIntent))
+        var classes = trainRecords.Select(record => record.Intent).Concat(eligibleHoldout.Select(item => item.ExpectedIntent))
             .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value, StringComparer.Ordinal).ToList();
         var threshold = SelectThreshold(valPredictions);
         var transformed = model.Transform(holdoutView);
@@ -382,14 +463,16 @@ public static class Phase4BenchmarkRunner
         var probabilities = predictions.Select((prediction, index) => ProbabilityFor(prediction, holdoutInputs[index].Label, scoreLabels)).ToList();
         var logLoss = probabilities.Count == 0 ? 0 : -probabilities.Select(value => Math.Log(Math.Max(value, 1e-7))).Average();
         var ece = ComputeEce(predictions, holdoutInputs, threshold);
-        var latency = MeasureLatency(model, ml, holdout.Select(item => item.InputVi).ToList());
+        var latency = MeasureLatency(model, ml, eligibleHoldout.Select(item => item.InputVi).ToList());
         return new Phase4MlNetReport
         {
             Status = "completed",
             ScoreSemantics = "SdcaMaximumEntropy probability scores; no second softmax applied",
             TrainSamples = trainRecords.Count,
             ValidationSamples = validationRecords.Count,
-            HoldoutSamples = holdout.Count,
+            HoldoutSamples = eligibleHoldout.Count,
+            ExcludedRoleSamples = excludedRoleSamples,
+            ExcludedUntrainedPatientSamples = excludedUntrainedPatientSamples,
             LockedThreshold = threshold,
             ValidationMacroF1AtThreshold = ValidationMacroF1(valPredictions, validationRecords, threshold, classes),
             Correct = correct,
@@ -542,14 +625,15 @@ public static class Phase4BenchmarkRunner
     private static double Coverage(IReadOnlyList<IntentEvaluationResult> predictions, double threshold) =>
         predictions.Count == 0 ? 0 : predictions.Count(item => item.Score?.Length > 0 && item.Score.Max() >= threshold) / (double)predictions.Count;
 
-    private static Phase4Metric Metric(string name, int numerator, int denominator, IReadOnlyList<Phase4Failure> failures) => new()
+    private static Phase4Metric Metric(string name, int numerator, int denominator, IReadOnlyList<Phase4Failure> failures, string detail) => new()
     {
         Name = name,
         Numerator = numerator,
         Denominator = denominator,
         Rate = denominator == 0 ? 0 : (double)numerator / denominator,
         Status = failures.Count == 0 ? "pass" : "fail",
-        FailureCount = failures.Count
+        FailureCount = failures.Count,
+        Detail = detail
     };
 
     private static Phase4IntentDetails ComputeSimpleIntentMetrics(
@@ -600,7 +684,7 @@ public static class Phase4BenchmarkRunner
 
     private static string BuildSummary(Phase4BenchmarkReport report) =>
         $"Independent holdout={report.Dataset.TotalCases}; rule intent={report.IntentRuleBaseline.Status}; " +
-        $"ML.NET={report.MlNet.Status}; safety={report.Safety.Status}; planner={report.PlannerRouting.Status}; " +
+        $"ML.NET(patient-only)={report.MlNet.Status}; safety-guard-only={report.Safety.Status}; role-routing={report.RoleRouting.Status}; " +
         $"liveGeminiExecuted={report.LiveGeminiExecuted}.";
 
     private static Phase4Failure Failure(Phase4BenchmarkCase item, string layer, string expected, string actual, string detail) => new()
@@ -698,6 +782,7 @@ public sealed class Phase4BenchmarkCase
     public string Actor { get; set; } = string.Empty;
     public string InputVi { get; set; } = string.Empty;
     public Dictionary<string, string> Context { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public string ScenarioGroup { get; set; } = string.Empty;
     public string ExpectedIntent { get; set; } = string.Empty;
     public string ExpectedOutcome { get; set; } = string.Empty;
     public string ExpectedPlannerTool { get; set; } = "none";
@@ -717,6 +802,7 @@ public sealed class Phase4ValidationReport
     public Dictionary<string, int> ByActor { get; init; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, int> BySafety { get; init; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, int> ByIntent { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, int> ByScenarioGroup { get; init; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, int> Split { get; init; } = new(StringComparer.OrdinalIgnoreCase);
     public int ExactTrainLeakage { get; init; }
     public int NearTrainLeakage { get; init; }
@@ -724,6 +810,7 @@ public sealed class Phase4ValidationReport
     public int ExistingSplitExactLeakage { get; init; }
     public int ExistingSplitNearLeakage { get; init; }
     public List<string> ExistingSplitLeakageExamples { get; init; } = new();
+    public List<string> LabelRevisionNotes { get; init; } = new();
     public List<string> Errors { get; init; } = new();
     public List<string> Warnings { get; init; } = new();
     public string DatasetVersion { get; init; } = string.Empty;
@@ -733,7 +820,7 @@ public sealed class Phase4ValidationReport
 
 public sealed class Phase4BenchmarkReport
 {
-    public string Benchmark { get; init; } = "ClinicCare AI Phase 4 independent benchmark";
+    public string Benchmark { get; init; } = "ClinicCare AI Phase 5 independent benchmark";
     public string EvaluatorVersion { get; init; } = string.Empty;
     public DateTimeOffset TimestampUtc { get; init; }
     public string Head { get; init; } = string.Empty;
@@ -743,6 +830,7 @@ public sealed class Phase4BenchmarkReport
     public Phase4Metric Safety { get; set; } = new();
     public Phase4Metric IntentRuleBaseline { get; set; } = new();
     public Phase4Metric PlannerRouting { get; set; } = new();
+    public Phase4Metric RoleRouting { get; set; } = new();
     public Phase4Metric Grounding { get; set; } = new();
     public Phase4Metric Authorization { get; set; } = new();
     public Phase4Metric Outcome { get; set; } = new();
@@ -798,6 +886,8 @@ public sealed class Phase4MlNetReport
     public int TrainSamples { get; init; }
     public int ValidationSamples { get; init; }
     public int HoldoutSamples { get; init; }
+    public int ExcludedRoleSamples { get; init; }
+    public int ExcludedUntrainedPatientSamples { get; init; }
     public double LockedThreshold { get; init; }
     public double ValidationMacroF1AtThreshold { get; init; }
     public int Correct { get; init; }
