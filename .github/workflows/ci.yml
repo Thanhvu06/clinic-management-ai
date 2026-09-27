@@ -121,8 +121,13 @@ jobs:
             ':r /tmp/ai-ef-idempotent.sql' > ./ai-ef-apply.sql
           docker cp ./ai-ef-idempotent.sql "$SQLSERVER_CONTAINER:/tmp/ai-ef-idempotent.sql"
           docker cp ./ai-ef-apply.sql "$SQLSERVER_CONTAINER:/tmp/ai-ef-apply.sql"
-          docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
-            -d ClinicManagement_CiMigration -b -i /tmp/ai-ef-apply.sql
+          if ! migration_output="$(docker exec "$SQLSERVER_CONTAINER" /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P 'Your_password123!' -C \
+            -d ClinicManagement_CiMigration -b -i /tmp/ai-ef-apply.sql 2>&1)"; then
+            printf '%s\n' "$migration_output"
+            printf '::error title=SQL Server migration apply failed::%s\n' \
+              "$(printf '%s' "$migration_output" | tr '\r\n' ' ' | cut -c1-1500)"
+            exit 1
+          fi
 
       - name: Reapply official migration script for idempotence
         shell: bash
