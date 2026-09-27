@@ -22,6 +22,7 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
             // Ambiguous rows intentionally remain NULL and the runtime fails
             // their cross-facility actions closed.
             migrationBuilder.Sql("""
+                EXEC sp_executesql N'
                 UPDATE appointment
                 SET FacilityId = visit.FacilityId
                 FROM Appointments AS appointment
@@ -36,7 +37,7 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     INNER JOIN StaffFacilityAssignments AS assignment
                         ON assignment.UserId = doctor.UserId
                         AND assignment.IsActive = CAST(1 AS bit)
-                        AND assignment.Role = N'Doctor'
+                        AND assignment.Role = N''Doctor''
                     INNER JOIN Departments AS department
                         ON department.FacilityId = assignment.FacilityId
                         AND department.IsActive = CAST(1 AS bit)
@@ -60,19 +61,15 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                 FROM Appointments AS appointment
                 INNER JOIN UniqueFacilities AS uniqueFacility ON uniqueFacility.Id = appointment.Id
                 WHERE appointment.FacilityId IS NULL;
+
+                CREATE INDEX [IX_Appointments_FacilityId_AppointmentDate]
+                    ON [Appointments] ([FacilityId], [AppointmentDate]);
+
+                ALTER TABLE [Appointments]
+                    ADD CONSTRAINT [FK_Appointments_Facilities_FacilityId]
+                    FOREIGN KEY ([FacilityId]) REFERENCES [Facilities] ([Id]);
+                ';
                 """);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Appointments_FacilityId_AppointmentDate",
-                table: "Appointments",
-                columns: new[] { "FacilityId", "AppointmentDate" });
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Appointments_Facilities_FacilityId",
-                table: "Appointments",
-                column: "FacilityId",
-                principalTable: "Facilities",
-                principalColumn: "Id");
         }
 
         /// <inheritdoc />
