@@ -126,6 +126,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         // removes accents/formatting only; negation, time and subject words
         // remain available to the rules.
         var normalized = AiTextNormalizer.NormalizeForComparison(trimmed);
+        var hasNewBookingCue = HasExplicitNewBookingCue(normalized);
 
         // In Shadow or Active mode: Run ML model to collect telemetry (and use for fallback in Active mode)
         if (_mode == IntentClassificationMode.Shadow || _mode == IntentClassificationMode.Active)
@@ -226,7 +227,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         }
 
         // 5. Review Draft Intent ("xem lại", "tóm tắt")
-        if (ReviewWords.Any(w => ContainsPhrase(lower, w)))
+        if (!hasNewBookingCue && ReviewWords.Any(w => ContainsPhrase(lower, w)))
         {
             result.Intent = AiChatIntentTypes.ReviewDraft;
             return result;
@@ -244,12 +245,10 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return result;
         }
 
-        // 6. Pricing Inquiry ("giá bao nhiêu", "chi phí khám")
-        if (lower.Contains("bảng giá") || lower.Contains("chi phí khám") || lower.Contains("giá khám") ||
-            lower.Contains("bao nhiêu tiền") || lower.Contains("hết bao nhiêu tiền") || lower.Contains("tiền khám") ||
-            lower.Contains("phí khám") || lower.Contains("giá dịch vụ") || lower.Contains("viện phí") ||
-            lower.Contains("giá bao nhiêu") || lower.Contains("phí ") || lower.Contains("giá ") ||
-            normalized.Contains("phi ", StringComparison.Ordinal) || normalized.Contains("gia ", StringComparison.Ordinal))
+        // 6. Pricing Inquiry ("giá bao nhiêu", "chi phí khám"). Do not use
+        // bare "giá/gia" or "phí/phi" substrings: "đánh giá triệu chứng"
+        // and "đánh giá ca khám" are not price questions.
+        if (HasPricingEvidence(lower, normalized))
         {
             result.Intent = AiChatIntentTypes.PricingInquiry;
             return result;
@@ -276,13 +275,22 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return result;
         }
 
-        // 8. View Appointments
-        if (lower.Contains("lịch hẹn của tôi") || lower.Contains("lịch đã đặt") || lower.Contains("xem lịch hẹn") ||
-            lower.Contains("danh sách lịch hẹn") || lower.Contains("các lịch khám của tôi") || lower.Contains("tra cứu lịch hẹn") ||
-            lower.Contains("lịch sử đặt khám") ||
-            Regex.IsMatch(lower, @"\b(?:cuộc hẹn|lịch khám|lịch hẹn)\b.*\b(?:sắp tới|đã đặt|gắn với tài khoản|của tôi)\b", RegexOptions.IgnoreCase) ||
-            (!lower.Contains("bác sĩ") && !lower.Contains("bac si") &&
-             Regex.IsMatch(lower, @"\b(?:danh sách|xem|mở|kiểm tra)\b.*\b(?:cuộc hẹn|lịch khám|lịch hẹn)\b", RegexOptions.IgnoreCase)))
+        // 8. View Appointments. Evaluate each clause separately so a booking
+        // clause cannot borrow "sắp tới/của tôi" from an unrelated context
+        // clause. A new-booking cue wins unless the message clearly contains
+        // a second, independent appointment-read request; that combination is
+        // ambiguous and must be clarified instead of executing a write.
+        var hasExistingAppointmentReadCue = HasExistingAppointmentReadCue(normalized);
+        if (hasNewBookingCue && hasExistingAppointmentReadCue)
+        {
+            result.Intent = AiChatIntentTypes.UnclearOrOutOfScope;
+            result.IsClear = false;
+            result.Method = "AmbiguousBookingAndAppointmentRead";
+            result.ClarificationPrompt = "Bạn muốn đặt lịch mới hay xem lịch đã đặt? Vui lòng chọn một yêu cầu để tôi không thực hiện nhầm thao tác.";
+            return result;
+        }
+
+        if (!hasNewBookingCue && hasExistingAppointmentReadCue)
         {
             result.Intent = AiChatIntentTypes.ViewAppointments;
             return result;
@@ -344,7 +352,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             var delimiterMatch = Regex.Match(rawName, @"^(.*?)(?:\s+(?:vào|từ|lúc|ngày|khoa|chuyên khoa|sáng|chiều|tối)\b|[,\.\?!])", RegexOptions.IgnoreCase);
             var candidateName = (delimiterMatch.Success ? delimiterMatch.Groups[1].Value : rawName).Trim();
 
-            if (Regex.IsMatch(candidateName, @"\b(?:nào|ai|người nào|vị nào|bác sĩ gì|ở đâu)\b", RegexOptions.IgnoreCase) ||
+            if (Regex.IsMatch(candidateName, @"\b(?:nào|ai|người nào|vị nào|bác sĩ gì|ở đâu|của|cua|cho|giúp|giup)\b", RegexOptions.IgnoreCase) ||
                 Regex.IsMatch(lower, @"(?:có|nên chọn)\s+bác sĩ\s+nào", RegexOptions.IgnoreCase))
             {
                 candidateName = string.Empty;
@@ -423,7 +431,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         }
 
         // 17. Start Booking Intent
-        if (lower.StartsWith("tôi muốn đặt") || lower.StartsWith("muốn đặt lịch") || lower.StartsWith("đặt lịch") ||
+        if (hasNewBookingCue || lower.StartsWith("tôi muốn đặt") || lower.StartsWith("muốn đặt lịch") || lower.StartsWith("đặt lịch") ||
             lower.StartsWith("đặt khám") || lower.StartsWith("đăng ký khám") || lower.StartsWith("muốn khám") ||
             lower.StartsWith("tôi muốn khám") || lower.StartsWith("tôi muốn hẹn") || lower.StartsWith("hẹn khám") ||
             lower.Contains("tư vấn giúp tôi") || lower.Contains("tư vấn cho tôi") || lower == "tư vấn" ||
@@ -796,6 +804,67 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 
     private static bool ContainsPhrase(string text, string phrase) =>
         Regex.IsMatch(text, $@"(?<!\w){Regex.Escape(phrase)}(?!\w)", RegexOptions.IgnoreCase);
+
+    private static bool HasExplicitNewBookingCue(string normalized)
+    {
+        return SplitClauses(normalized).Any(clause =>
+        {
+            // "đã/đang/từng đặt lịch" describes an existing booking, not a
+            // new one. Mask that sequence before checking the generic cue.
+            var bookingClause = Regex.Replace(clause, @"\b(?:da|dang|tung)\s+dat\b", "booked", RegexOptions.CultureInvariant);
+            return Regex.IsMatch(
+                bookingClause,
+                @"\b(?:toi|em|minh)\s+muon\s+(?:dat|dang\s+ky|hen)\s+(?:mot\s+)?(?:lich|lich\s+hen|buoi\s+kham|cuoc\s+hen|kham)\b|\b(?:dat|dang\s+ky|hen|book)\s+(?:mot\s+)?(?:lich|lich\s+hen|buoi\s+kham|cuoc\s+hen|kham)\b",
+                RegexOptions.CultureInvariant);
+        });
+    }
+
+    private static bool HasExistingAppointmentReadCue(string normalized)
+    {
+        return SplitClauses(normalized).Any(clause =>
+        {
+            if (Regex.IsMatch(clause, @"\b(?:bac|bac si|bs)\b", RegexOptions.CultureInvariant))
+                return false;
+
+            var explicitRead = Regex.IsMatch(
+                clause,
+                @"\b(?:xem|mo|tra cuu|kiem tra|danh sach|liet ke)\b.*\b(?:lich hen|cuoc hen|lich kham|lich)\b",
+                RegexOptions.CultureInvariant);
+            var persistedAppointment = Regex.IsMatch(
+                clause,
+                @"\b(?:lich hen|cuoc hen|lich kham|lich)\b.*\b(?:da dat|gan voi tai khoan|cua toi|cua minh|cua em)\b",
+                RegexOptions.CultureInvariant);
+            var historicalAppointment = Regex.IsMatch(
+                clause,
+                @"\b(?:lich|lich hen|cuoc hen)\b.*\b(?:da dat|lich cu|lich su)\b",
+                RegexOptions.CultureInvariant);
+
+            return explicitRead || persistedAppointment || historicalAppointment;
+        });
+    }
+
+    private static IEnumerable<string> SplitClauses(string normalized) =>
+        Regex.Split(normalized, @"(?:[.!?;:]|\b(?:va|roi|sau do|dong thoi)\b)")
+            .Select(clause => clause.Trim())
+            .Where(clause => clause.Length > 0);
+
+    private static bool HasPricingEvidence(string lower, string normalized)
+    {
+        if (lower.Contains("bảng giá") || lower.Contains("chi phí khám") || lower.Contains("giá khám") ||
+            lower.Contains("bao nhiêu tiền") || lower.Contains("hết bao nhiêu tiền") || lower.Contains("tiền khám") ||
+            lower.Contains("phí khám") || lower.Contains("giá dịch vụ") || lower.Contains("viện phí") ||
+            lower.Contains("giá bao nhiêu"))
+            return true;
+
+        // Remove the non-price compound "đánh giá" before looking for a
+        // standalone price token. Keep genuine phrases such as "đánh giá chi
+        // phí" price-positive through the explicit/compound checks above.
+        var priceText = Regex.Replace(normalized, @"\bdanh\s+gia\b", " ", RegexOptions.CultureInvariant);
+        return Regex.IsMatch(
+            priceText,
+            @"\b(?:gia|phi|chi\s+phi)\b[^.!?]{0,60}\b(?:kham|dich\s+vu|goi|thuoc|sieu\s+am|noi\s+soi|chup|xet\s+nghiem|bao\s+nhieu|tien|chi\s+phi)\b|\b(?:kham|dich\s+vu|goi|thuoc|sieu\s+am|noi\s+soi|chup|xet\s+nghiem|bao\s+nhieu|tien)\b[^.!?]{0,60}\b(?:gia|phi)\b",
+            RegexOptions.CultureInvariant);
+    }
 
     private static bool LooksLikePromptInjection(string text) =>
         text.Contains("execute_confirmed_action", StringComparison.OrdinalIgnoreCase) ||

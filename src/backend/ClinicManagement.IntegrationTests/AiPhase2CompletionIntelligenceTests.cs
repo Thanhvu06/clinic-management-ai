@@ -6,6 +6,7 @@ using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.AI.Planning;
 using ClinicManagement.Application.AI.Tools;
+using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.AI;
@@ -57,16 +58,59 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         var cases = new[]
         {
             ("Mở các cuộc hẹn sắp tới gắn với tài khoản của tôi.", AiChatIntentTypes.ViewAppointments),
+            ("Lịch hẹn sắp tới của mình có những gì?", AiChatIntentTypes.ViewAppointments),
             ("Mức phí cho gói kiểm tra tổng quát là bao nhiêu?", AiChatIntentTypes.PricingInquiry),
+            ("Gia dich vu kham tong quat the nao?", AiChatIntentTypes.PricingInquiry),
+            ("Đánh giá triệu chứng giúp tôi.", AiChatIntentTypes.UnclearOrOutOfScope),
+            ("danh gia ca kham hom nay", AiChatIntentTypes.UnclearOrOutOfScope),
             ("Tôi muốn thay đổi giờ của lịch khám đã tạo.", AiChatIntentTypes.ModifyDraft),
             ("Da tôi nổi mẩn, nhờ gợi ý bác sĩ phù hợp.", AiChatIntentTypes.FindDoctorForSymptom),
             ("Đau khớp gối kéo dài thì nên khám khoa gì?", AiChatIntentTypes.SpecialtyRecommendation),
             ("Tôi cần đăng ký một buổi khám tuần sau.", AiChatIntentTypes.StartBooking),
+            ("Toi muon dat lich kham tuan toi, hay kiem tra thong tin tai khoan.", AiChatIntentTypes.StartBooking),
+            ("Tôi muốn đặt lịch mới rồi xem lịch đã đặt.", AiChatIntentTypes.UnclearOrOutOfScope),
+            ("Xem lịch khám của bác sĩ giúp tôi.", AiChatIntentTypes.StartBooking),
             ("Tình hình hôm nay thế nào vậy?", AiChatIntentTypes.UnclearOrOutOfScope)
         };
 
         foreach (var item in cases)
-            Assert.Equal(item.Item2, classifier.Classify(item.Item1).Intent);
+        {
+            var details = classifier.Classify(item.Item1);
+            Assert.True(item.Item2 == details.Intent, $"{item.Item1}: expected {item.Item2}, actual {details.Intent}, method {details.Method}, prompt {details.ClarificationPrompt}");
+        }
+    }
+
+    [Fact]
+    public async Task Patient_chat_clarifies_mixed_new_booking_and_existing_read_without_side_effects()
+    {
+        await AuthenticateAsync("pat1@test.com");
+        await using var beforeScope = Factory.Services.CreateAsyncScope();
+        var beforeDb = beforeScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var beforeAppointments = await beforeDb.Appointments.CountAsync(x => x.PatientId == Patient1EntityId);
+        var beforePendingWrites = await beforeDb.AiPendingToolActions.CountAsync(x => x.UserId == Patient1Id);
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Tôi muốn đặt lịch mới rồi xem lịch đã đặt.",
+            PendingSpecialtyId = SpecialtyEntityId,
+            Reason = "Tái khám kiểm tra sức khỏe"
+        });
+
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.NotNull(result?.Data);
+        Assert.Equal(AiChatIntentTypes.UnclearOrOutOfScope, result.Data.PrimaryIntent);
+        Assert.Equal("UnclearInput", result.Data.DialogueOutcome);
+        Assert.Contains("đặt lịch mới hay xem lịch đã đặt", result.Data.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(result.Data.BookingDraft);
+        Assert.Equal("Tái khám kiểm tra sức khỏe", result.Data.BookingDraft.Reason);
+        Assert.DoesNotContain(result.Data.Actions, action =>
+            action.Type is AiActionTypes.ConfirmBooking or AiActionTypes.ReviewBooking);
+
+        await using var afterScope = Factory.Services.CreateAsyncScope();
+        var afterDb = afterScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(beforeAppointments, await afterDb.Appointments.CountAsync(x => x.PatientId == Patient1EntityId));
+        Assert.Equal(beforePendingWrites, await afterDb.AiPendingToolActions.CountAsync(x => x.UserId == Patient1Id));
     }
 
     [Fact]
