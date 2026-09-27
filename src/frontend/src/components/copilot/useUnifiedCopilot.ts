@@ -129,6 +129,7 @@ export const useUnifiedCopilot = () => {
     const [catalogError, setCatalogError] = useState<string | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [pendingAction, setPendingAction] = useState<UnifiedActionState | null>(null);
+    const [actionClockMs, setActionClockMs] = useState(() => Date.now());
     const [actionFeedback, setActionFeedback] = useState<{ status: string; message: string } | null>(null);
     const controllerRef = useRef<AbortController | null>(null);
     const actionControllerRef = useRef<AbortController | null>(null);
@@ -176,6 +177,40 @@ export const useUnifiedCopilot = () => {
     useEffect(() => {
         actionContextRef.current = { identityKey, routeKey };
     }, [identityKey, routeKey]);
+
+    // The expiry is part of the safety boundary, not just display metadata.
+    // Wake the UI at the exact boundary, clear the in-memory token, and force
+    // a fresh prepare key so an expired action cannot be confirmed or replayed.
+    useEffect(() => {
+        if (!pendingAction?.expiresAtUtc) return;
+        const expiryMs = Date.parse(pendingAction.expiresAtUtc);
+        if (!Number.isFinite(expiryMs)) return;
+        const actionId = pendingAction.actionId;
+        const maxTimerDelay = 2_147_483_647;
+        let timer: number;
+        const onExpiry = () => {
+            const remainingMs = expiryMs - Date.now();
+            if (remainingMs > 0) {
+                timer = window.setTimeout(onExpiry, Math.min(remainingMs + 1, maxTimerDelay));
+                return;
+            }
+            setActionClockMs(Date.now());
+            setPendingAction(current => {
+                if (!current || current.actionId !== actionId) return current;
+                actionKeysRef.current.delete(current.requestSignature);
+                setActionFeedback({ status: 'expired', message: 'Preview đã hết hạn. Hãy chuẩn bị lại trước khi xác nhận.' });
+                return { ...current, status: 'expired', confirmationToken: '' };
+            });
+        };
+        timer = window.setTimeout(onExpiry, Math.min(Math.max(0, expiryMs - Date.now()) + 1, maxTimerDelay));
+        return () => window.clearTimeout(timer);
+    }, [pendingAction?.actionId, pendingAction?.expiresAtUtc]);
+
+    const pendingActionExpired = useMemo(() => {
+        if (!pendingAction?.expiresAtUtc) return false;
+        const expiryMs = Date.parse(pendingAction.expiresAtUtc);
+        return !Number.isFinite(expiryMs) || expiryMs <= actionClockMs;
+    }, [actionClockMs, pendingAction]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -259,6 +294,7 @@ export const useUnifiedCopilot = () => {
         const controller = new AbortController();
         actionControllerRef.current = controller;
         setPendingAction(null);
+        setActionClockMs(Date.now());
         setActionLoading(capability.tool.name);
         setActionFeedback(null);
         const isCurrentRequest = () => !controller.signal.aborted &&
@@ -307,6 +343,7 @@ export const useUnifiedCopilot = () => {
                     requestSignature: signature,
                     idempotencyKey
                 });
+                setActionClockMs(Date.now());
                 setActionFeedback({ status: 'pending_confirmation', message: 'Đã chuẩn bị. Hãy xem lại hậu quả rồi bấm xác nhận rõ ràng.' });
             } else {
                 if (result.status !== 'pending_confirmation' || result.error?.retryable === false)
@@ -330,6 +367,16 @@ export const useUnifiedCopilot = () => {
     const confirmAction = useCallback(async () => {
         const action = pendingAction;
         if (!action || actionLoading) return;
+        const expiresAtMs = action.expiresAtUtc ? Date.parse(action.expiresAtUtc) : NaN;
+        if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now() || !action.confirmationToken) {
+            actionKeysRef.current.delete(action.requestSignature);
+            setActionClockMs(Date.now());
+            setPendingAction(current => current?.actionId === action.actionId
+                ? { ...current, status: 'expired', confirmationToken: '' }
+                : current);
+            setActionFeedback({ status: 'expired', message: 'Preview đã hết hạn hoặc không còn token hợp lệ. Hãy chuẩn bị lại.' });
+            return;
+        }
         const requestId = ++actionRequestNumberRef.current;
         const requestIdentityKey = identityKey;
         const requestRouteKey = routeKey;
@@ -385,6 +432,6 @@ export const useUnifiedCopilot = () => {
     return {
         user, role, config, open, setOpen, input, setInput, loading, messages, send, reset, abort, retry,
         resourceContext: getResourceContext(location.pathname, location.search), catalogTools: catalog.tools, actionCapabilities, actionLoading,
-        pendingAction, actionFeedback, catalogError, prepareAction, confirmAction
+        pendingAction, pendingActionExpired, actionFeedback, catalogError, prepareAction, confirmAction
     };
 };

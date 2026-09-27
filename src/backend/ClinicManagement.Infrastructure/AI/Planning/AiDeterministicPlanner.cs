@@ -23,7 +23,7 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         if (string.IsNullOrWhiteSpace(text))
             return Clarify("Bạn muốn tôi hỗ trợ tra cứu nội dung nào trong workspace hiện tại?", "EmptyInput");
 
-        var knowledgeRequest = Regex.IsMatch(text, @"\b(?:gio lam viec|ngay nghi|chu nhat|gia|chi phi|dich vu|co so|phong kham|huong dan|truoc kham|chuan bi xet nghiem|chuyen khoa)\b", RegexOptions.CultureInvariant);
+        var knowledgeRequest = Regex.IsMatch(text, @"\b(?:gio lam viec|ngay nghi|chu nhat|gia|chi phi|dich vu|co so|phong kham|huong dan|truoc kham|chuan bi xet nghiem|chuyen khoa|tom tat|tom luoc|tong hop)\b", RegexOptions.CultureInvariant);
 
         if (Greeting.IsMatch(text) || context.Analysis.Intent.Intent == AiChatIntentTypes.Greeting)
         {
@@ -36,10 +36,10 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         }
 
         var containsReadRequest = Regex.IsMatch(text,
-            @"\b(?:xem|tra cuu|tim|kiem tra|tom tat|tong hop|danh sach|hang doi|lich|thong tin|doc)\b",
+            @"\b(?:xem|tra cuu|tim|kiem tra|tom tat|tom luoc|tong hop|danh sach|hang doi|lich|thong tin|doc)\b",
             RegexOptions.CultureInvariant);
         var containsWriteRequest = Regex.IsMatch(text,
-            @"\b(?:tao|dat|check in|ghi|luu|hoan tat|cap phat|giu cho|ke (?:don|thuoc)|chuan bi (?:phieu|ban nhap|don)|thuc hien|lam luon|xuat|phat hanh)\b",
+            @"\b(?:tao|(?<!da\s)dat\s+(?:lich|hen|cho)|check in|ghi|luu|hoan tat|cap phat|giu cho|ke (?:don|thuoc)|chuan bi (?:phieu|ban nhap|don)|thuc hien|lam luon|xuat|phat hanh)\b",
             RegexOptions.CultureInvariant);
         if (containsReadRequest && containsWriteRequest)
         {
@@ -77,10 +77,10 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             return Tool(AiChatIntentTypes.ViewAppointments, "LookupAppointment", "reception.lookup_appointment", new { appointmentCode = code.ToUpperInvariant() }, "/reception/appointments");
         }
 
-        if (Regex.IsMatch(text, @"\b(?:lich hen|cuoc hen|lh)\b.*\b(?:hom nay|trong ngay)\b|\b(?:hom nay|trong ngay)\b.*\b(?:lich hen|cuoc hen|lh)\b", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:lich hen|cuoc hen|lh)\b.*\b(?:hom nay|trong ngay|sang nay)\b|\b(?:hom nay|trong ngay|sang nay)\b.*\b(?:lich hen|cuoc hen|lh)\b|\b(?:danh sach|so luong)\b.*\b(?:nguoi|cuoc hen|lich)\b.*\b(?:dat|hen)\b", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.ViewAppointments, "TodayAppointments", "reception.get_today_appointments", new { }, "/reception/appointments");
 
-        if (Regex.IsMatch(text, @"\b(?:hang doi|cho tiep nhan|dang cho|queue)\b", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:hang doi|xep hang|cho tiep nhan|quay tiep nhan|dang cho|queue)\b", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.QueueLookup, "ReceptionQueue", "reception.get_queue", new { }, "/reception");
 
         return ProviderRequired(AiChatIntentTypes.UnclearOrOutOfScope);
@@ -91,7 +91,8 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         if (Regex.IsMatch(text, @"\b(?:chuan bi (?:phieu|ban nhap|don)|ke (?:don|thuoc)|phat hanh|tao (?:phieu|don))\b", RegexOptions.CultureInvariant))
             return Clarify("Thao tác ghi của bác sĩ phải đi qua action gateway và bước xác nhận rõ ràng; cuộc hội thoại không tự tạo hoặc phát hành dữ liệu.", "WriteRequiresExplicitActionConfirmation");
 
-        var asksSummary = Regex.IsMatch(text, @"\b(?:tom tat|tong hop)\b.*\b(?:benh nhan|ca kham|ho so|hien tai)\b", RegexOptions.CultureInvariant);
+        var asksSummary = Regex.IsMatch(text, @"\b(?:tom tat|tom luoc|tong hop|mo)\b.*\b(?:benh nhan|ca kham|ca|ho so|hien tai|luot)\b", RegexOptions.CultureInvariant) &&
+            Regex.IsMatch(text, @"\b(?:tom tat|tom luoc|tong hop|ho so|ca kham|benh nhan)\b", RegexOptions.CultureInvariant);
         var asksOrders = Regex.IsMatch(text, @"\b(?:chi dinh|can lam sang|xet nghiem|chan doan hinh anh)\b", RegexOptions.CultureInvariant);
 
         if (asksSummary && !resource.AppointmentId.HasValue)
@@ -115,7 +116,7 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             };
         }
 
-        if (Regex.IsMatch(text, @"\b(?:hang doi|benh nhan tiep theo|danh sach cho|queue cua toi)\b", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:hang doi|benh nhan tiep theo|danh sach cho|queue cua toi|danh sach .*\b(?:benh nhan|nguoi benh)\b.*\b(?:hom nay|tiep theo)\b|(?:benh nhan|nguoi benh)\b.*\bdanh sach\b.*\b(?:hom nay|tiep theo)\b)", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.QueueLookup, "DoctorQueue", "doctor.get_my_queue", new { }, "/doctor/queue");
 
         return ProviderRequired(AiChatIntentTypes.UnclearOrOutOfScope);
@@ -123,10 +124,10 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
 
     private static AiPlannerDecision PlanTechnician(string text)
     {
-        if (Regex.IsMatch(text, @"\b(?:chuan bi tiep nhan phieu|ghi ket qua|hoan tat order)\b", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:chuan bi tiep nhan phieu|tiep nhan phieu|nhan phieu|ghi ket qua|hoan tat order)\b", RegexOptions.CultureInvariant))
             return Clarify("Thao tác kỹ thuật phải đi qua action gateway và bước xác nhận rõ ràng; cuộc hội thoại không tự ghi kết quả.", "WriteRequiresExplicitActionConfirmation");
 
-        if (Regex.IsMatch(text, @"\b(?:worklist|wl|danh sach chi dinh|chi dinh dang cho|cong viec dang cho|qua han)\b", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:worklist|wl|danh sach chi dinh|chi dinh dang cho|cong viec dang cho|qua han|phieu xet nghiem|chi dinh .*\b(?:doi|cho xu ly|chua xu ly)\b)", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.DiagnosticLookup, "TechnicianWorklist", "technician.get_worklist", new { }, "/diagnostics");
         return ProviderRequired(AiChatIntentTypes.UnclearOrOutOfScope);
     }
@@ -136,16 +137,16 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         if (Regex.IsMatch(text, @"\b(?:chuan bi giu cho|giu cho thuoc|cap phat don thuoc)\b", RegexOptions.CultureInvariant))
             return Clarify("Giữ chỗ hoặc cấp phát thuốc phải đi qua action gateway và bước xác nhận rõ ràng.", "WriteRequiresExplicitActionConfirmation");
 
-        if (Regex.IsMatch(text, @"\b(?:ton kho|kho thuoc|sap het|thieu thuoc)\b", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:ton kho|kho thuoc|sap het|thieu thuoc|so luong .*thuoc.*kho|thuoc.*trong kho|kho .*thuoc|thuoc .*duoi nguong)\b", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.PharmacyInventory, "InventoryStatus", "pharmacist.get_inventory_status", new { }, "/pharmacy/inventory");
-        if (Regex.IsMatch(text, @"\b(?:don thuoc|hang doi cap thuoc|cho cap|cho phat)\b", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:don thuoc|hang doi cap thuoc|cho cap|cho phat|don .*\b(?:xep hang|dang cho)\b|xep hang .*\bdon\b)", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.PrescriptionLookup, "PrescriptionQueue", "pharmacist.get_prescription_queue", new { }, "/pharmacy/prescriptions");
         return ProviderRequired(AiChatIntentTypes.UnclearOrOutOfScope);
     }
 
     private static AiPlannerDecision PlanAdmin(string text)
     {
-        if (Regex.IsMatch(text, @"\b(?:tinh trang ai|suc khoe ai|provider|tool execution|audit ai)\b", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:tinh trang ai|suc khoe ai|he thong ai .*khoe|ai .*khoe|dich vu ai|provider|tool execution|audit ai)\b", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.AdminMetrics, "AiHealth", "admin.get_ai_health", new { }, "/admin/audit-logs");
         if (Regex.IsMatch(text, @"\b(?:thong ke|dashboard|chi so|bao cao tong hop)\b", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.AdminMetrics, "DashboardMetrics", "admin.get_dashboard_metrics", new { }, "/admin");

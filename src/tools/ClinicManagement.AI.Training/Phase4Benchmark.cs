@@ -63,7 +63,8 @@ public static class Phase4BenchmarkRunner
             Head = head,
             LiveGeminiExecuted = false,
             Dataset = validation,
-            IndependentHoldout = AssessIndependentHoldout(trainPath)
+            IndependentHoldout = AssessIndependentHoldout(trainPath),
+            DevelopmentSet = AssessDevelopmentSet(trainPath)
         };
 
         report.SelfTestPassed = SelfTest(out var selfTestDetail);
@@ -83,6 +84,17 @@ public static class Phase4BenchmarkRunner
         {
             report.Failures.AddRange(report.IndependentHoldout.Evaluation?.Failures ?? new List<Phase4Failure>());
         }
+        if (report.DevelopmentSet.ValidationPassed)
+            report.Failures.AddRange(report.DevelopmentSet.Evaluation?.Failures ?? new List<Phase4Failure>());
+        else
+            report.Failures.AddRange(report.DevelopmentSet.ValidationErrors.Select(error => new Phase4Failure
+            {
+                CaseId = "phase5_development",
+                Layer = "development_validation",
+                Expected = "development_schema_and_leakage_valid",
+                Actual = "invalid",
+                Detail = error
+            }));
         if (!validation.IsValid)
         {
             report.Failures.AddRange(validation.Errors.Select(error => new Phase4Failure
@@ -731,7 +743,7 @@ public static class Phase4BenchmarkRunner
         $"rule intent={report.IntentRuleBaseline.Status}; " +
         $"ML.NET(patient-only)={report.MlNet.Status} {report.MlNet.Correct}/{report.MlNet.HoldoutSamples} accuracy={report.MlNet.Accuracy:P2}; " +
         $"safety-guard-only={report.Safety.Status}; role-routing={report.RoleRouting.Status}; " +
-        $"independentHoldout={report.IndependentHoldout.Status}; liveGeminiExecuted={report.LiveGeminiExecuted}.";
+        $"development={report.DevelopmentSet.Status}; independentHoldout={report.IndependentHoldout.Status}; liveGeminiExecuted={report.LiveGeminiExecuted}.";
 
     private static Phase4Failure Failure(Phase4BenchmarkCase item, string layer, string expected, string actual, string detail) => new()
     {
@@ -804,8 +816,8 @@ public static class Phase4BenchmarkRunner
         var repeatable = false;
         if (validationErrors.Count == 0)
         {
-            var first = EvaluateIndependentHoldout(holdout);
-            var second = EvaluateIndependentHoldout(holdout);
+            var first = EvaluateIndependentHoldout(holdout, "holdout");
+            var second = EvaluateIndependentHoldout(holdout, "holdout");
             repeatable = string.Equals(JsonSerializer.Serialize(first, JsonOptions), JsonSerializer.Serialize(second, JsonOptions), StringComparison.Ordinal);
             if (!repeatable) validationErrors.Add("independent holdout evaluator was not repeatable across identical runs.");
             evaluation = first;
@@ -913,7 +925,110 @@ public static class Phase4BenchmarkRunner
         return errors;
     }
 
-    private static Phase5HoldoutEvaluation EvaluateIndependentHoldout(IReadOnlyList<Phase4BenchmarkCase> cases)
+    private static Phase5DevelopmentSetAssessment AssessDevelopmentSet(string trainPath)
+    {
+        const string resolvedDevelopmentPath = "src/tools/ClinicManagement.AI.Training/data/phase5_development_cases.json";
+        if (!File.Exists(resolvedDevelopmentPath))
+        {
+            return new Phase5DevelopmentSetAssessment
+            {
+                Status = "not_available",
+                Detail = "Development set is missing.",
+                DevelopmentPath = resolvedDevelopmentPath,
+                ValidationErrors = new[] { "Development set is missing." }
+            };
+        }
+
+        var raw = File.ReadAllText(resolvedDevelopmentPath);
+        List<Phase4BenchmarkCase> cases;
+        var errors = new List<string>();
+        try
+        {
+            cases = JsonSerializer.Deserialize<List<Phase4BenchmarkCase>>(raw, JsonOptions) ?? new();
+        }
+        catch (Exception ex)
+        {
+            return new Phase5DevelopmentSetAssessment
+            {
+                Status = "validation_failed",
+                Detail = "Development set JSON is invalid.",
+                DevelopmentPath = resolvedDevelopmentPath,
+                ValidationErrors = new[] { ex.Message },
+                DevelopmentSha256 = Sha256(raw)
+            };
+        }
+
+        var train = LoadIntentDataset(trainPath);
+        var canonicalIntents = new HashSet<string>(AiChatIntentTypes.All, StringComparer.OrdinalIgnoreCase);
+        var definitions = PatientCopilotToolHandler.Definitions()
+            .Concat(AiRoleToolCatalog.Definitions)
+            .Concat(AiRoleActionCatalog.Definitions)
+            .GroupBy(definition => definition.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToDictionary(definition => definition.Name, StringComparer.OrdinalIgnoreCase);
+        var actorNames = Enum.GetNames<AiActorRole>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var normalizedInputs = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var item in cases)
+        {
+            if (string.IsNullOrWhiteSpace(item.CaseId) || !ids.Add(item.CaseId)) errors.Add($"{item.CaseId}: duplicate or empty caseId.");
+            if (!actorNames.Contains(item.Actor ?? string.Empty)) errors.Add($"{item.CaseId}: unknown actor {item.Actor}.");
+            if (!canonicalIntents.Contains(item.ExpectedIntent ?? string.Empty)) errors.Add($"{item.CaseId}: unknown intent {item.ExpectedIntent}.");
+            if (!AllowedOutcomes.Contains(item.ExpectedOutcome ?? string.Empty) || !AllowedSafety.Contains(item.Safety ?? string.Empty) || !AllowedGrounding.Contains(item.Grounding ?? string.Empty)) errors.Add($"{item.CaseId}: outcome, safety or grounding label is invalid.");
+            if (!string.Equals(item.Split, "development", StringComparison.OrdinalIgnoreCase)) errors.Add($"{item.CaseId}: split must be development.");
+            if (!item.Synthetic || string.IsNullOrWhiteSpace(item.Provenance)) errors.Add($"{item.CaseId}: synthetic and provenance are required.");
+            if (!item.Context.TryGetValue("datasetVersion", out var version) || version != "phase5-development-v1") errors.Add($"{item.CaseId}: datasetVersion must be phase5-development-v1.");
+            if (!item.Context.TryGetValue("provenance", out var provenance) || provenance != item.Provenance) errors.Add($"{item.CaseId}: context provenance does not match the case provenance.");
+            if (string.IsNullOrWhiteSpace(item.Rationale)) errors.Add($"{item.CaseId}: rationale is required.");
+
+            var allowed = new HashSet<string>(item.AllowedTools ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+            var forbidden = new HashSet<string>(item.ForbiddenTools ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+            if (allowed.Overlaps(forbidden)) errors.Add($"{item.CaseId}: allowed and forbidden tools overlap.");
+            foreach (var tool in allowed.Concat(forbidden).Append(item.ExpectedPlannerTool).Where(tool => !string.IsNullOrWhiteSpace(tool) && tool != "none"))
+                if (!definitions.ContainsKey(tool)) errors.Add($"{item.CaseId}: unknown tool {tool}.");
+            foreach (var tool in allowed.Append(item.ExpectedPlannerTool).Where(tool => !string.IsNullOrWhiteSpace(tool) && tool != "none"))
+                if (definitions.TryGetValue(tool, out var definition) && !IsRoleAllowed(definition, ParseRole(item.Actor))) errors.Add($"{item.CaseId}: actor {item.Actor} is not allowed to use {tool}.");
+
+            var normalized = NormalizeForLeakage(item.InputVi);
+            if (!string.IsNullOrWhiteSpace(normalized) && !normalizedInputs.TryAdd(normalized, item.CaseId)) errors.Add($"{item.CaseId}: duplicate input inside development set.");
+        }
+
+        var trainTexts = train.Where(record => record.Approved && string.Equals(record.Split, "train", StringComparison.OrdinalIgnoreCase))
+            .Select(record => NormalizeForLeakage(record.Text)).Where(text => !string.IsNullOrWhiteSpace(text)).ToList();
+        const string blindPath = "src/tools/ClinicManagement.AI.Training/data/phase5_blind_holdout.json";
+        var blindTexts = File.Exists(blindPath)
+            ? LoadCases(blindPath).Select(item => NormalizeForLeakage(item.InputVi)).Where(text => !string.IsNullOrWhiteSpace(text)).ToList()
+            : new List<string>();
+        var exactTrainLeakage = cases.Count(item => trainTexts.Contains(NormalizeForLeakage(item.InputVi), StringComparer.Ordinal));
+        var nearTrainLeakage = cases.Count(item => trainTexts.Select(text => Jaccard(Tokenize(item.InputVi), Tokenize(text))).DefaultIfEmpty(0).Max() >= .92);
+        var exactBlindLeakage = cases.Count(item => blindTexts.Contains(NormalizeForLeakage(item.InputVi), StringComparer.Ordinal));
+        var nearBlindLeakage = cases.Count(item => blindTexts.Select(text => Jaccard(Tokenize(item.InputVi), Tokenize(text))).DefaultIfEmpty(0).Max() >= .92);
+        if (exactTrainLeakage > 0) errors.Add($"exact train/development leakage detected: {exactTrainLeakage} case(s).");
+        if (nearTrainLeakage > 0) errors.Add($"near-duplicate train/development inputs detected: {nearTrainLeakage} case(s).");
+        if (exactBlindLeakage > 0) errors.Add($"exact frozen-blind/development leakage detected: {exactBlindLeakage} case(s).");
+        if (nearBlindLeakage > 0) errors.Add($"near-duplicate frozen-blind/development inputs detected: {nearBlindLeakage} case(s).");
+
+        Phase5HoldoutEvaluation? evaluation = errors.Count == 0 ? EvaluateIndependentHoldout(cases, "development") : null;
+        return new Phase5DevelopmentSetAssessment
+        {
+            Status = errors.Count == 0 ? "development_evaluated" : "validation_failed",
+            Detail = errors.Count == 0 ? "Development-only cases were authored separately and scored without entering train/validation or frozen-blind content." : "Development set validation failed; development score is not reported.",
+            DevelopmentPath = resolvedDevelopmentPath,
+            Cases = cases.Count,
+            Provenance = cases.Select(item => item.Provenance).Distinct(StringComparer.Ordinal).SingleOrDefault() ?? string.Empty,
+            DevelopmentSha256 = Sha256(raw),
+            ValidationPassed = errors.Count == 0,
+            ExactTrainLeakage = exactTrainLeakage,
+            NearTrainLeakage = nearTrainLeakage,
+            ExactFrozenBlindLeakage = exactBlindLeakage,
+            NearFrozenBlindLeakage = nearBlindLeakage,
+            ValidationErrors = errors.ToArray(),
+            Evaluation = evaluation
+        };
+    }
+
+    private static Phase5HoldoutEvaluation EvaluateIndependentHoldout(IReadOnlyList<Phase4BenchmarkCase> cases, string metricPrefix)
     {
         var safetyFailures = new List<Phase4Failure>();
         var intentFailures = new List<Phase4Failure>();
@@ -932,14 +1047,14 @@ public static class Phase4BenchmarkRunner
             var safety = safetyGuard.Inspect(item.InputVi);
             var actualSafety = safety.IsEmergency ? "emergency" : safety.IsPromptInjection ? "prompt_injection" : "none";
             if (!string.Equals(actualSafety, item.Safety, StringComparison.OrdinalIgnoreCase))
-                safetyFailures.Add(Failure(item, "holdout_safety", item.Safety, actualSafety, safety.MatchedCategory ?? "no-match"));
+                safetyFailures.Add(Failure(item, $"{metricPrefix}_safety", item.Safety, actualSafety, safety.MatchedCategory ?? "no-match"));
 
             var intent = classifier.Classify(item.InputVi, new IntentClassificationContext());
             if (item.Actor.Equals(nameof(AiActorRole.Patient), StringComparison.OrdinalIgnoreCase))
             {
                 patientPairs.Add(new Phase4IntentPair(item.ExpectedIntent, intent.Intent));
                 if (!string.Equals(intent.Intent, item.ExpectedIntent, StringComparison.OrdinalIgnoreCase))
-                    intentFailures.Add(Failure(item, "holdout_patient_intent", item.ExpectedIntent, intent.Intent, intent.Method));
+                    intentFailures.Add(Failure(item, $"{metricPrefix}_patient_intent", item.ExpectedIntent, intent.Intent, intent.Method));
             }
 
             var actualTool = "none";
@@ -962,18 +1077,18 @@ public static class Phase4BenchmarkRunner
                 actualTool = decision.ToolCalls.Count == 0 ? "none" : string.Join(",", decision.ToolCalls.Select(call => call.Name));
             }
             if (routingCases.Contains(item) && !string.Equals(actualTool, item.ExpectedPlannerTool, StringComparison.OrdinalIgnoreCase))
-                routingFailures.Add(Failure(item, "holdout_role_routing", item.ExpectedPlannerTool, actualTool, "deterministic planner output"));
+                routingFailures.Add(Failure(item, $"{metricPrefix}_role_routing", item.ExpectedPlannerTool, actualTool, "deterministic planner output"));
             foreach (var forbidden in item.ForbiddenTools ?? Array.Empty<string>())
             {
                 if (actualTool.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Any(tool => string.Equals(tool, forbidden, StringComparison.OrdinalIgnoreCase)))
-                    writeFailures.Add(Failure(item, "holdout_planner_write_exclusion", "forbidden tool absent", forbidden, "planner output contained a forbidden tool"));
+                    writeFailures.Add(Failure(item, $"{metricPrefix}_planner_write_exclusion", "forbidden tool absent", forbidden, "planner output contained a forbidden tool"));
             }
         }
 
         var intentDetails = ComputeSimpleIntentMetrics(patientPairs, patientCases.Select(item => item.ExpectedIntent).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value, StringComparer.Ordinal).ToList());
-        var roleRouting = Metric("holdout_role_routing", routingCases.Count - routingFailures.Count, routingCases.Count, routingFailures, "deterministic role routing only; HTTP and persistence are separate.");
-        var writeExclusion = Metric("holdout_planner_write_exclusion", roleCases.Count - writeFailures.Count, roleCases.Count, writeFailures, "planner output must not contain direct write/confirmation tools.");
-        var patientIntent = Metric("holdout_patient_intent_rule", patientCases.Count - intentFailures.Count, patientCases.Count, intentFailures, "patient rule intent only; not clinical accuracy.");
+        var roleRouting = Metric($"{metricPrefix}_role_routing", routingCases.Count - routingFailures.Count, routingCases.Count, routingFailures, "deterministic role routing only; HTTP and persistence are separate.");
+        var writeExclusion = Metric($"{metricPrefix}_planner_write_exclusion", roleCases.Count - writeFailures.Count, roleCases.Count, writeFailures, "planner output must not contain direct write/confirmation tools.");
+        var patientIntent = Metric($"{metricPrefix}_patient_intent_rule", patientCases.Count - intentFailures.Count, patientCases.Count, intentFailures, "patient rule intent only; not clinical accuracy.");
         patientIntent.MacroPrecision = intentDetails.MacroPrecision;
         patientIntent.MacroRecall = intentDetails.MacroRecall;
         patientIntent.MacroF1 = intentDetails.MacroF1;
@@ -981,13 +1096,13 @@ public static class Phase4BenchmarkRunner
         patientIntent.ConfusionMatrix = intentDetails.ConfusionMatrix;
         return new Phase5HoldoutEvaluation
         {
-            SafetyGuard = Metric("holdout_safety_guard", cases.Count - safetyFailures.Count, cases.Count, safetyFailures, "safety guard only; not a clinical safety claim."),
+            SafetyGuard = Metric($"{metricPrefix}_safety_guard", cases.Count - safetyFailures.Count, cases.Count, safetyFailures, "safety guard only; not a clinical safety claim."),
             PatientIntentRule = patientIntent,
             RolePlannerRouting = roleRouting,
             PlannerWriteExclusion = writeExclusion,
-            Grounding = NotEvaluated("holdout_grounding", "Requires persisted resource and HTTP fixtures."),
-            Authorization = NotEvaluated("holdout_authorization", "Requires authenticated HTTP scope fixtures."),
-            Outcome = NotEvaluated("holdout_outcome", "Requires confirmed persistence side-effect fixtures."),
+            Grounding = NotEvaluated($"{metricPrefix}_grounding", "Requires persisted resource and HTTP fixtures."),
+            Authorization = NotEvaluated($"{metricPrefix}_authorization", "Requires authenticated HTTP scope fixtures."),
+            Outcome = NotEvaluated($"{metricPrefix}_outcome", "Requires confirmed persistence side-effect fixtures."),
             Failures = safetyFailures.Concat(intentFailures).Concat(routingFailures).Concat(writeFailures).ToList()
         };
     }
@@ -1119,6 +1234,7 @@ public sealed class Phase4BenchmarkReport
     public bool LiveGeminiExecuted { get; init; }
     public string EvaluationMode { get; init; } = "deterministic safety/rule/planner + offline ML.NET; HTTP/persistence layers explicitly not evaluated";
     public Phase4ValidationReport Dataset { get; init; } = new();
+    public Phase5DevelopmentSetAssessment DevelopmentSet { get; init; } = new();
     public Phase5IndependentHoldoutAssessment IndependentHoldout { get; init; } = new();
     public Phase4Metric Safety { get; set; } = new();
     public Phase4Metric IntentRuleBaseline { get; set; } = new();
@@ -1151,6 +1267,23 @@ public sealed class Phase5IndependentHoldoutAssessment
     public bool ChecksumValid { get; init; }
     public bool ValidationPassed { get; init; }
     public bool Repeatable { get; init; }
+    public string[] ValidationErrors { get; init; } = Array.Empty<string>();
+    public Phase5HoldoutEvaluation? Evaluation { get; init; }
+}
+
+public sealed class Phase5DevelopmentSetAssessment
+{
+    public string Status { get; init; } = string.Empty;
+    public string Detail { get; init; } = string.Empty;
+    public string DevelopmentPath { get; init; } = string.Empty;
+    public int Cases { get; init; }
+    public string Provenance { get; init; } = string.Empty;
+    public string DevelopmentSha256 { get; init; } = string.Empty;
+    public bool ValidationPassed { get; init; }
+    public int ExactTrainLeakage { get; init; }
+    public int NearTrainLeakage { get; init; }
+    public int ExactFrozenBlindLeakage { get; init; }
+    public int NearFrozenBlindLeakage { get; init; }
     public string[] ValidationErrors { get; init; } = Array.Empty<string>();
     public Phase5HoldoutEvaluation? Evaluation { get; init; }
 }

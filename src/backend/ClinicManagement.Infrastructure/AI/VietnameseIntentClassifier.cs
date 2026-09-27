@@ -76,6 +76,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         "tiêu chảy", "táo bón", "mất ngủ", "sụt cân", "nổi mẩn", "mẩn ngứa", "hắt hơi",
         "sổ mũi", "viêm họng", "đau bụng", "đau lưng", "đau đầu", "đau dạ dày", "huyết áp",
         "tiểu đường", "tim đập nhanh", "khó nuốt", "rát họng", "chấn thương", "mỏi cơ",
+        "tê", "tê bì", "tê tay", "run tay",
         "khám tổng quát", "khám sức khỏe", "khám định kỳ", "tái khám", "kiểm tra sức khỏe",
         "tầm soát", "khám thai", "khám mắt", "khám răng", "khám tai mũi họng",
         "tim mạch", "tai mũi họng", "da liễu", "nhi khoa", "sản phụ khoa", "răng hàm mặt", "nội khoa", "ngoại khoa"
@@ -121,7 +122,10 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 
         var trimmed = AiTextNormalizer.Normalize(message);
         var lower = trimmed.ToLowerInvariant();
-        var normalized = NormalizeText(trimmed);
+        // Use the same comparison form as planner, safety and evaluator. This
+        // removes accents/formatting only; negation, time and subject words
+        // remain available to the rules.
+        var normalized = AiTextNormalizer.NormalizeForComparison(trimmed);
 
         // In Shadow or Active mode: Run ML model to collect telemetry (and use for fallback in Active mode)
         if (_mode == IntentClassificationMode.Shadow || _mode == IntentClassificationMode.Active)
@@ -169,6 +173,18 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             result.IsClear = false;
             result.ClarificationPrompt = "ClinicCare chỉ hỗ trợ thông tin sức khỏe, lịch khám và hoạt động của phòng khám trong phạm vi quyền của bạn.";
             result.Method = "ExplicitOutOfScopeGuard";
+            return result;
+        }
+
+        // Safety-sensitive instruction-bypass language must not be reclassified
+        // as confirmation/cancellation merely because it contains "xác nhận"
+        // or "bỏ qua".
+        if (LooksLikePromptInjection(lower))
+        {
+            result.Intent = AiChatIntentTypes.UnclearOrOutOfScope;
+            result.IsClear = false;
+            result.Method = "PromptInjectionGuard";
+            result.ClarificationPrompt = "ClinicCare không thể bỏ qua quyền, kiểm soát hoặc bước xác nhận bắt buộc.";
             return result;
         }
 
@@ -221,7 +237,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         // empty; the service will ground recommendations against real data.
         if (TryExtractSpecialtyRecommendation(trimmed, out var recommendationReason))
         {
-            result.Intent = Regex.IsMatch(lower, @"\b(?:bác(?:\s+sĩ)?|bs\.?)\s+nào\s+(?:khám|chữa|điều\s+trị)\b|\bgặp\s+ai\b", RegexOptions.IgnoreCase)
+            result.Intent = Regex.IsMatch(lower, @"\b(?:bác(?:\s+sĩ)?|bs\.?)\s+nào\s+(?:khám|chữa|điều\s+trị|phù hợp)\b|\b(?:bác(?:\s+sĩ)?|bs\.?)\s+phù\s+hợp\b|\bgặp\s+ai\b|\bnên\s+(?:gặp|tìm)\s+(?:bác(?:\s+sĩ)?|bs\.?)\b", RegexOptions.IgnoreCase)
                 ? AiChatIntentTypes.FindDoctorForSymptom
                 : AiChatIntentTypes.SpecialtyRecommendation;
             result.ExtractedReason = recommendationReason;
@@ -232,7 +248,8 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         if (lower.Contains("bảng giá") || lower.Contains("chi phí khám") || lower.Contains("giá khám") ||
             lower.Contains("bao nhiêu tiền") || lower.Contains("hết bao nhiêu tiền") || lower.Contains("tiền khám") ||
             lower.Contains("phí khám") || lower.Contains("giá dịch vụ") || lower.Contains("viện phí") ||
-            lower.Contains("giá bao nhiêu"))
+            lower.Contains("giá bao nhiêu") || lower.Contains("phí ") || lower.Contains("giá ") ||
+            normalized.Contains("phi ", StringComparison.Ordinal) || normalized.Contains("gia ", StringComparison.Ordinal))
         {
             result.Intent = AiChatIntentTypes.PricingInquiry;
             return result;
@@ -243,16 +260,29 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             lower.Contains("hotline") || lower.Contains("số điện thoại") || lower.Contains("sđt") ||
             lower.Contains("địa chỉ") || lower.Contains("ở đâu") || lower.Contains("giờ mở cửa") ||
             lower.Contains("giờ làm việc") || lower.Contains("mấy giờ làm việc") || lower.Contains("liên hệ phòng khám") ||
+            lower.Contains("nhận khách") || lower.Contains("mở đến") || lower.Contains("mở cửa") || Regex.IsMatch(lower, @"\b(?:mấy|sau|trước)\s+\d+\s+giờ\b", RegexOptions.IgnoreCase) ||
             lower.Contains("chủ nhật có khám") || lower.Contains("có khám chủ nhật") || lower.Contains("phòng khám ở đâu"))
         {
             result.Intent = AiChatIntentTypes.FacilityInquiry;
             return result;
         }
 
+        // A reschedule/edit request is not a new booking. Preserve the draft
+        // intent even when the user does not use the imperative "đổi ngày".
+        if (Regex.IsMatch(lower, @"\b(?:đổi|sửa|thay đổi|cập nhật|dời|chuyển)\b.*\b(?:lịch|lịch hẹn|cuộc hẹn|ngày|giờ|bác sĩ|khung giờ)\b", RegexOptions.IgnoreCase))
+        {
+            result.Intent = AiChatIntentTypes.ModifyDraft;
+            result.IsCorrection = true;
+            return result;
+        }
+
         // 8. View Appointments
         if (lower.Contains("lịch hẹn của tôi") || lower.Contains("lịch đã đặt") || lower.Contains("xem lịch hẹn") ||
             lower.Contains("danh sách lịch hẹn") || lower.Contains("các lịch khám của tôi") || lower.Contains("tra cứu lịch hẹn") ||
-            lower.Contains("lịch sử đặt khám"))
+            lower.Contains("lịch sử đặt khám") ||
+            Regex.IsMatch(lower, @"\b(?:cuộc hẹn|lịch khám|lịch hẹn)\b.*\b(?:sắp tới|đã đặt|gắn với tài khoản|của tôi)\b", RegexOptions.IgnoreCase) ||
+            (!lower.Contains("bác sĩ") && !lower.Contains("bac si") &&
+             Regex.IsMatch(lower, @"\b(?:danh sách|xem|mở|kiểm tra)\b.*\b(?:cuộc hẹn|lịch khám|lịch hẹn)\b", RegexOptions.IgnoreCase)))
         {
             result.Intent = AiChatIntentTypes.ViewAppointments;
             return result;
@@ -350,7 +380,8 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 
         // 13. Slot / Date Selection ("mai", "sáng mai", "09:30", "chọn khung giờ", "chọn giờ")
         if (lower == "mai" || lower == "ngày mai" || lower == "sáng mai" || lower == "chiều mai" ||
-            lower.StartsWith("chọn khung giờ") || lower.StartsWith("chọn giờ") || lower.StartsWith("chọn ngày") ||
+            lower.StartsWith("chọn khung giờ") || lower.StartsWith("tôi chọn khung giờ") ||
+            lower.StartsWith("chọn giờ") || lower.StartsWith("tôi chọn giờ") || lower.StartsWith("chọn ngày") ||
             Regex.IsMatch(lower, @"^\d{1,2}:\d{2}$") || Regex.IsMatch(lower, @"^\d{4}-\d{2}-\d{2}$"))
         {
             result.Intent = AiChatIntentTypes.SelectSlot;
@@ -437,8 +468,10 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             }
         }
 
-        // Fallback: Default to StartBooking for conversational non-gibberish Vietnamese sentences
-        if (!IsGibberish(trimmed, lower, normalized) && trimmed.Length >= 2)
+        // An arbitrary Vietnamese sentence must not become a booking. Require
+        // an explicit scheduling cue; otherwise ask for clarification.
+        if (!IsGibberish(trimmed, lower, normalized) && trimmed.Length >= 2 &&
+            Regex.IsMatch(lower, @"\b(?:đặt|đăng ký|book)\b.*\b(?:lịch|hẹn|khám)\b", RegexOptions.IgnoreCase))
         {
             result.Intent = AiChatIntentTypes.StartBooking;
             result.IsClear = true;
@@ -644,7 +677,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         var lower = normalized.ToLowerInvariant();
         var recommendationQuestion = Regex.IsMatch(
             lower,
-            @"(?:bác(?:\s+sĩ)?\s+nào|bs\.?\s+nào|nên\s+chọn\s+bác\s+sĩ|khám\s+ai|gặp\s+ai|chuyên\s+khoa\s+(?:nào|gì)|khoa\s+(?:nào|gì))",
+            @"(?:bác(?:\s+sĩ)?\s+nào|bs\.?\s+nào|bác(?:\s+sĩ)?\s+phù\s+hợp|nên\s+chọn\s+bác\s+sĩ|khám\s+ai|gặp\s+ai|chuyên\s+khoa\s+(?:nào|gì)|khoa\s+(?:nào|gì))",
             RegexOptions.IgnoreCase);
         if (!recommendationQuestion)
             return false;
@@ -676,10 +709,12 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         if (negationMatch.Success)
         {
             extractedSymptom = negationMatch.Groups[2].Value.Trim();
-            if (!string.IsNullOrWhiteSpace(extractedSymptom))
+            if (!string.IsNullOrWhiteSpace(extractedSymptom) && ContainsPositiveClinicalKeyword(extractedSymptom))
             {
                 return true;
             }
+            extractedSymptom = string.Empty;
+            return false;
         }
 
         // Check each clinical keyword with word boundaries (\bkeyword\b)
@@ -698,6 +733,9 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 
         return false;
     }
+
+    private static bool ContainsPositiveClinicalKeyword(string text) =>
+        ClinicalKeywordTerms.Any(keyword => Regex.IsMatch(text, $@"\b{Regex.Escape(keyword)}\b", RegexOptions.IgnoreCase));
 
     public static string MergeReasons(string? existingReason, string? newReason)
     {
@@ -761,10 +799,13 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 
     private static bool LooksLikePromptInjection(string text) =>
         text.Contains("execute_confirmed_action", StringComparison.OrdinalIgnoreCase) ||
-        text.Contains("bỏ qua quy tắc", StringComparison.OrdinalIgnoreCase) ||
-        text.Contains("bo qua quy tac", StringComparison.OrdinalIgnoreCase) ||
-        text.Contains("bỏ qua hướng dẫn", StringComparison.OrdinalIgnoreCase) ||
-        text.Contains("bo qua huong dan", StringComparison.OrdinalIgnoreCase);
+        Regex.IsMatch(text,
+            @"\b(?:bỏ qua|bo qua|vô hiệu hóa|vo hieu hoa|phớt lờ|phot lo)\b(?:\s+[\p{L}]+){0,3}\s+\b(?:quy tắc|quy tac|hướng dẫn|huong dan|kiểm soát|kiem soat|giới hạn|gioi han|quyền|quyen)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
+        Regex.IsMatch(text,
+            @"\b(?:bất chấp|bat chap|vượt qua|vuot qua)\b(?:\s+[\p{L}]+){0,3}\s+\b(?:quyền|quyen|giới hạn|gioi han|kiểm soát|kiem soat)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
+        Regex.IsMatch(text, @"\b(?:gọi|goi|chạy|chay|thực thi|thuc thi)\s+(?:tool|công cụ|cong cu)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     public static string? ExtractDateTokenFromText(string text)
     {

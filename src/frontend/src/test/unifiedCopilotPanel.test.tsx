@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UnifiedCopilotPanel } from '../components/copilot/UnifiedCopilotPanel';
 import { COPILOT_ROLE_CONFIG, providerStateLabel } from '../components/copilot/copilotConfig';
 import { isValidBookingReason, normalizeBookingReason } from '../hooks/useAiBookingFlow';
@@ -31,6 +31,10 @@ const response = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('UnifiedCopilotPanel', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
     beforeEach(() => {
         sendMock.mockReset();
         catalogMock.mockReset().mockResolvedValue({ tools: [], actionTools: [] });
@@ -99,9 +103,11 @@ describe('UnifiedCopilotPanel', () => {
 
         render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
         fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Kỹ thuật viên/i }));
-        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument());
+        await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+        expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
-        await waitFor(() => expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeInTheDocument());
+        await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+        expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeInTheDocument();
         expect(screen.queryByText('secret-token')).not.toBeInTheDocument();
         expect(confirmActionMock).not.toHaveBeenCalled();
 
@@ -124,9 +130,11 @@ describe('UnifiedCopilotPanel', () => {
 
         render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
         fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Kỹ thuật viên/i }));
-        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument());
+        await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+        expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
-        await waitFor(() => expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeInTheDocument());
+        await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+        expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: /Xác nhận thao tác/i }));
         await waitFor(() => expect(screen.getByText('Đã tiếp nhận phiếu.')).toBeInTheDocument());
         fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
@@ -201,6 +209,49 @@ describe('UnifiedCopilotPanel', () => {
         expect(screen.queryByRole('button', { name: /Xác nhận thao tác/i })).not.toBeInTheDocument();
         expect(screen.queryByText('Late consequence')).not.toBeInTheDocument();
         expect(screen.queryByText('late-token')).not.toBeInTheDocument();
+    });
+
+    it('disables confirmation at preview expiry, never sends the old token, and allows a fresh prepare', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
+        mockUser = { userId: 'tech-1', fullName: 'Technician', role: 'DiagnosticTechnician' };
+        const tool = { name: 'technician.prepare_start_diagnostic_order', version: '1.0', description: 'Tiếp nhận phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        const preview = (expiresAtUtc: string, token: string) => ({
+            status: 'pending_confirmation',
+            actionId: token === 'token-1' ? 'action-1' : 'action-2',
+            data: { confirmationToken: token, expiresAtUtc },
+            preview: {
+                toolName: tool.name, status: 'pending_confirmation', resourceType: 'DiagnosticOrder', resourceId: '42',
+                resource: { identity: 'Phiếu chỉ định LAB-42', facility: 'FAC-TEST — Cơ sở test', department: 'DEP-TEST — Khoa test', subject: 'Bệnh nhân mã #42', encounter: 'DiagnosticOrder #42', currentStatus: 'Ordered' },
+                changes: [{ kind: 'diagnostic_start', summary: 'Tiếp nhận phiếu vào worklist', items: [{ label: 'Phiếu', value: 'LAB-42' }] }],
+                consequence: 'Backend sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra quyền và resource.', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc,
+                sources: [{ name: 'diagnostic_orders', kind: 'database' }]
+            }
+        });
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        prepareActionMock.mockResolvedValueOnce(preview('2030-01-01T00:00:10Z', 'token-1')).mockResolvedValueOnce(preview('2030-01-01T00:00:20Z', 'token-2'));
+        confirmActionMock.mockResolvedValue({ status: 'completed', displayText: 'Đã tiếp nhận phiếu.' });
+
+        render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Kỹ thuật viên/i }));
+        await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+        expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+        expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeInTheDocument();
+        const confirm = screen.getByRole('button', { name: /Xác nhận thao tác/i });
+        expect(confirm).not.toBeDisabled();
+
+        await act(async () => { vi.advanceTimersByTime(10001); });
+        expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeDisabled();
+        expect(screen.getByRole('alert')).toHaveTextContent('Preview đã hết hạn');
+        fireEvent.click(screen.getByRole('button', { name: /Xác nhận thao tác/i }));
+        expect(confirmActionMock).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Chuẩn bị lại xem trước' }));
+        await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+        expect(prepareActionMock).toHaveBeenCalledTimes(2);
+        expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).not.toBeDisabled();
     });
 
     it('rejects gibberish/question booking reasons and normalizes a trailing escape', () => {

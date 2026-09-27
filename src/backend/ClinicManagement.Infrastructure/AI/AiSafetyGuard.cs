@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using ClinicManagement.Application.AI.Tools;
 
 namespace ClinicManagement.Infrastructure.AI;
@@ -23,6 +24,10 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
         "dùng facility khác", "thực thi không xác nhận"
     };
 
+    private static readonly Regex InjectionSequence = new(
+        @"\b(?:bo qua|vo hieu hoa|phot lo|bat chap|vuot qua)\b(?:\s+[\p{L}]+){0,3}\s+\b(?:kiem soat|quy tac|huong dan|gioi han|quyen|quyen truy cap|kiem tra|xac nhan)\b|\b(?:goi|chay|thuc thi)\s+(?:tool|cong cu)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
     public AiSafetyGuardResult Inspect(string? message)
     {
         var normalized = Normalize(message);
@@ -42,7 +47,8 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
             }
         }
 
-        if (InjectionPhrases.Any(x => normalized.Contains(Normalize(x), StringComparison.Ordinal)))
+        if (InjectionPhrases.Any(x => ContainsUnnegated(normalized, Normalize(x))) ||
+            InjectionSequence.Matches(normalized).Cast<Match>().Any(match => !IsNegated(normalized, match.Index)))
             return new AiSafetyGuardResult { IsPromptInjection = true, MatchedCategory = "prompt_injection" };
 
         return new AiSafetyGuardResult();
@@ -63,10 +69,25 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
         // The cue must govern the phrase in the current clause. A distant
         // occurrence of "không" in a previous clause must not suppress a new
         // positive emergency report.
-        return System.Text.RegularExpressions.Regex.IsMatch(
+        return Regex.IsMatch(
             prefix,
             @"(?:^|\s)(?:khong|chua|khong bi|khong phai|khong nghi)(?:\s+[\p{L}]+){0,4}\s*$",
-            System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+            RegexOptions.CultureInvariant);
+    }
+
+    private static bool ContainsUnnegated(string text, string phrase)
+    {
+        if (string.IsNullOrWhiteSpace(phrase)) return false;
+        var searchFrom = 0;
+        while (searchFrom < text.Length)
+        {
+            var index = text.IndexOf(phrase, searchFrom, StringComparison.Ordinal);
+            if (index < 0) return false;
+            if (!IsNegated(text, index)) return true;
+            searchFrom = index + phrase.Length;
+        }
+
+        return false;
     }
 
     private static string Normalize(string? value)

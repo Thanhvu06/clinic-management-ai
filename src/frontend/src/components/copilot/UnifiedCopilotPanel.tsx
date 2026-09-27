@@ -114,6 +114,9 @@ export const UnifiedCopilotPanel: React.FC = () => {
     const providerStatus = copilot.messages.slice().reverse().find(message => message.response)?.response?.providerStatus ?? 'NotCalled';
     const latestResponse = copilot.messages.slice().reverse().find(message => message.response)?.response;
     const suggestedPrompts = latestResponse?.suggestedPrompts?.length ? latestResponse.suggestedPrompts : copilot.config.prompts;
+    const pendingCapability = copilot.pendingAction
+        ? copilot.actionCapabilities.find(capability => capability.tool.name === copilot.pendingAction?.toolName)
+        : undefined;
 
     return (
         <div className={styles.shell}>
@@ -140,7 +143,7 @@ export const UnifiedCopilotPanel: React.FC = () => {
                         <button type="button" className={styles.actionButton} disabled={!capability.enabled || Boolean(copilot.actionLoading)} onClick={() => void copilot.prepareAction(capability)}>{copilot.actionLoading === capability.tool.name ? 'Đang chuẩn bị…' : 'Xem trước'}</button>
                     </div>)}
                     {copilot.pendingAction && <div className={styles.actionPreview} aria-label="Xem trước thao tác">
-                        <div className={styles.cardTitle}><span>Xem trước từ backend</span><span>{copilot.pendingAction.status}</span></div>
+                        <div className={styles.cardTitle}><span>Xem trước từ backend</span><span>{copilot.pendingActionExpired ? 'expired' : copilot.pendingAction.status}</span></div>
                         <div className={styles.previewLine}><strong>Resource đã chọn:</strong> {copilot.pendingAction.preview.resource.identity}</div>
                         {copilot.pendingAction.preview.resource.facility && <div className={styles.previewLine}><strong>Cơ sở:</strong> {copilot.pendingAction.preview.resource.facility}</div>}
                         {copilot.pendingAction.preview.resource.department && <div className={styles.previewLine}><strong>Khoa:</strong> {copilot.pendingAction.preview.resource.department}</div>}
@@ -153,7 +156,9 @@ export const UnifiedCopilotPanel: React.FC = () => {
                         <div className={styles.previewLine}><strong>Kiểm tra backend:</strong> {copilot.pendingAction.preview.confirmationSummary}</div>
                         <div className={styles.previewLine}><strong>Dữ liệu kiểm tra lúc:</strong> {new Date(copilot.pendingAction.preview.validatedAtUtc).toLocaleString('vi-VN')}</div>
                         <div className={styles.previewLine}><strong>Hết hạn:</strong> {new Date(copilot.pendingAction.preview.expiresAtUtc).toLocaleString('vi-VN')}</div>
-                        <button type="button" className={styles.confirmButton} disabled={Boolean(copilot.actionLoading)} onClick={() => void copilot.confirmAction()}><CheckCircle2 size={14} /> Xác nhận thao tác</button>
+                        {copilot.pendingActionExpired && <p className={styles.actionError} role="alert">Preview đã hết hạn; backend sẽ từ chối token cũ. Hãy chuẩn bị lại để nhận dữ liệu kiểm tra mới.</p>}
+                        <button type="button" className={styles.confirmButton} disabled={Boolean(copilot.actionLoading) || copilot.pendingActionExpired} onClick={() => void copilot.confirmAction()}><CheckCircle2 size={14} /> Xác nhận thao tác</button>
+                        {copilot.pendingActionExpired && pendingCapability?.enabled && <button type="button" className={styles.actionButton} disabled={Boolean(copilot.actionLoading)} onClick={() => void copilot.prepareAction(pendingCapability)}>Chuẩn bị lại xem trước</button>}
                     </div>}
                     {copilot.actionFeedback && <p className={copilot.actionFeedback.status === 'completed' ? styles.actionSuccess : styles.actionError} role="status">{copilot.actionFeedback.message}</p>}
                 </section>}

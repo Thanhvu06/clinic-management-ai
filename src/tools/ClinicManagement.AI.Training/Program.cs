@@ -101,6 +101,7 @@ public class Program
             var report = JsonSerializer.Deserialize<Phase4BenchmarkReport>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             return report?.Dataset.IsValid == true
                 && report.SelfTestPassed
+                && report.DevelopmentSet.ValidationPassed
                 && report.IndependentHoldout.ValidationPassed
                 ? 0
                 : 1;
