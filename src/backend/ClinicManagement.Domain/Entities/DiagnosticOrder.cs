@@ -15,6 +15,7 @@ public class DiagnosticOrder
     public long OrderingDoctorId { get; set; }
     public long? FacilityId { get; set; }
     public long? PerformingDepartmentId { get; set; }
+    public Guid? SourceAiActionId { get; set; }
 
     public string ClinicalIndication { get; set; } = string.Empty;
     public string? Note { get; set; }

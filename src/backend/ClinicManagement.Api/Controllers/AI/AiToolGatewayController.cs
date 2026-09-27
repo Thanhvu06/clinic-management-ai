@@ -68,6 +68,47 @@ public sealed class AiToolGatewayController : ControllerBase
             return BadRequest(result);
         return Ok(result);
     }
+
+    [HttpPost("/api/v1/ai/copilot/actions/prepare")]
+    [Authorize]
+    public async Task<IActionResult> PrepareRoleAction([FromBody] AiToolInvocation invocation, CancellationToken cancellationToken)
+    {
+        var result = await _executor.ExecuteDirectPreparationAsync(invocation, cancellationToken);
+        return ToRoleActionResponse(result);
+    }
+
+    [HttpPost("/api/v1/ai/copilot/actions/{actionId:guid}/confirm")]
+    [Authorize]
+    public async Task<IActionResult> ConfirmRoleAction(
+        Guid actionId,
+        [FromBody] ConfirmAiToolActionRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.SessionId))
+            return BadRequest(AiToolExecutionResult.Failed("SESSION_REQUIRED", "Cần phiên hội thoại hợp lệ để xác nhận thao tác."));
+        if (string.IsNullOrWhiteSpace(request.ConcurrencyToken))
+            return BadRequest(AiToolExecutionResult.Failed("CONCURRENCY_TOKEN_REQUIRED", "Cần mã xác nhận do hệ thống cấp để thực hiện thao tác."));
+
+        var result = await _executor.ExecuteRoleActionConfirmationAsync(
+            actionId,
+            request.SessionId.Trim(),
+            request.ConcurrencyToken,
+            cancellationToken);
+        return ToRoleActionResponse(result);
+    }
+
+    private IActionResult ToRoleActionResponse(AiToolExecutionResult result)
+    {
+        if (result.Error?.Code is "AUTHENTICATION_REQUIRED") return Unauthorized(result);
+        if (result.Error?.Code is "FORBIDDEN_TOOL" or "FORBIDDEN_CAPABILITY" or "ROLE_MISMATCH" or "FACILITY_SCOPE_DENIED" or "RESOURCE_SCOPE_DENIED")
+            return Forbid();
+        if (result.Error?.Code is "ACTION_NOT_FOUND" or "SESSION_MISMATCH") return NotFound(result);
+        if (result.Error?.Code is "ACTION_EXPIRED" or "ACTION_CANCELLED") return StatusCode(StatusCodes.Status410Gone, result);
+        if (result.Error?.Code is "CONCURRENCY_CONFLICT" or "ACTION_IN_PROGRESS" or "RESOURCE_VERSION_CHANGED" or "ACTIVE_ACTION_EXISTS")
+            return Conflict(result);
+        if (result.Error != null) return BadRequest(result);
+        return Ok(result);
+    }
 }
 
 public sealed class ConfirmAiToolActionRequest

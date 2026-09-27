@@ -589,9 +589,12 @@ public class PatientVisitService : IPatientVisitService
                 Title = "Tiếp nhận khám thành công",
                 Message = $"Bạn đã được tiếp nhận khám tại {department.Name}. Số thứ tự của bạn là {queueNumber}. Mã lượt khám: {visitCode}.",
                 Route = "/patient/appointments",
-                RelatedEntityType = "PatientVisit",
-                RelatedEntityId = visit.Id.ToString(),
-                DedupeKey = $"checkin_visit_{visit.Id}",
+                // The visit uses a database-generated key and has not been
+                // saved yet. Bind the transactional notification to the
+                // stable appointment instead of the temporary visit key.
+                RelatedEntityType = "Appointment",
+                RelatedEntityId = appointment.Id.ToString(),
+                DedupeKey = $"checkin_appointment_{appointment.Id}",
                 IsRead = false,
                 CreatedAtUtc = _dateTimeProvider.UtcNow
             });

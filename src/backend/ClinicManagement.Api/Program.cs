@@ -137,6 +137,7 @@ builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiConversat
 builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiGroundedResponseComposer, ClinicManagement.Infrastructure.AI.Planning.AiGroundedResponseComposer>();
 builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.Tools.PatientCopilotToolHandler>();
 builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.Tools.RoleCopilotToolHandler>();
+builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.Tools.RoleConfirmedActionToolHandler>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Conversation.IAiConversationPipeline, ClinicManagement.Infrastructure.AI.AiConversationPipeline>();
 foreach (var toolDefinition in ClinicManagement.Infrastructure.AI.Tools.PatientCopilotToolHandler.Definitions())
 {
@@ -151,6 +152,13 @@ foreach (var toolDefinition in ClinicManagement.Application.AI.Tools.AiRoleToolC
     builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolHandler>(sp =>
         new ClinicManagement.Infrastructure.AI.Tools.AiToolHandlerAdapter(
             sp.GetRequiredService<ClinicManagement.Infrastructure.AI.Tools.RoleCopilotToolHandler>(), registeredDefinition));
+}
+foreach (var toolDefinition in ClinicManagement.Application.AI.Tools.AiRoleActionCatalog.Definitions)
+{
+    var registeredDefinition = toolDefinition;
+    builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolHandler>(sp =>
+        new ClinicManagement.Infrastructure.AI.Tools.AiToolHandlerAdapter(
+            sp.GetRequiredService<ClinicManagement.Infrastructure.AI.Tools.RoleConfirmedActionToolHandler>(), registeredDefinition));
 }
 builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolRegistry, ClinicManagement.Infrastructure.AI.Tools.AiToolRegistry>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiCapabilityResolver, ClinicManagement.Infrastructure.AI.Tools.AiCapabilityResolver>();

@@ -188,10 +188,20 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         };
     }
 
-    public async Task<DiagnosticOrderDto> CreateOrderForDoctorAsync(long appointmentId, CreateDiagnosticOrderRequest request)
+    public async Task<DiagnosticOrderDto> CreateOrderForDoctorAsync(long appointmentId, CreateDiagnosticOrderRequest request, Guid? sourceAiActionId = null, long? facilityId = null)
     {
         var doctor = await GetCurrentDoctorAsync();
         var userId = GetUserId();
+
+        if (sourceAiActionId.HasValue)
+        {
+            var existingOrderId = await _dbContext.DiagnosticOrders.AsNoTracking()
+                .Where(x => x.SourceAiActionId == sourceAiActionId.Value)
+                .Select(x => (long?)x.Id)
+                .FirstOrDefaultAsync();
+            if (existingOrderId.HasValue)
+                return (await GetOrderDtoByIdAsync(existingOrderId.Value))!;
+        }
 
         var appointment = await _dbContext.Appointments
             .Include(a => a.Patient)
@@ -202,6 +212,10 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         if (appointment.Status != AppointmentStatus.InConsultation)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể tạo phiếu chỉ định cận lâm sàng khi lịch hẹn đang trong phiên khám (InConsultation).");
+
+        if (facilityId.HasValue && !await _dbContext.StaffFacilityAssignments.AsNoTracking().AnyAsync(x =>
+                x.UserId == doctor.UserId && x.IsActive && x.Role == RoleNames.Doctor && x.FacilityId == facilityId.Value))
+            throw new BusinessException("FACILITY_SCOPE_DENIED", "Bác sĩ không được phân quyền tại cơ sở chỉ định.");
 
         if (string.IsNullOrWhiteSpace(request.ClinicalIndication))
             throw new BusinessException("VALIDATION_ERROR", "Chỉ định lâm sàng không được để trống.");
@@ -229,6 +243,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 {
                     OrderCode = orderCode,
                     AppointmentId = appointment.Id,
+                    FacilityId = facilityId,
+                    SourceAiActionId = sourceAiActionId,
                     PatientId = appointment.PatientId,
                     OrderingDoctorId = doctor.Id,
                     ClinicalIndication = request.ClinicalIndication.Trim(),
@@ -271,7 +287,10 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                         .ToListAsync();
 
                     var activeTechUsers = await _dbContext.Users
-                        .Where(u => techUserIds.Contains(u.Id) && u.IsActive)
+                        .Where(u => techUserIds.Contains(u.Id) && u.IsActive &&
+                            (!order.FacilityId.HasValue || _dbContext.StaffFacilityAssignments.Any(a =>
+                                a.UserId == u.Id && a.IsActive &&
+                                a.Role == RoleNames.DiagnosticTechnician && a.FacilityId == order.FacilityId.Value)))
                         .Select(u => u.Id)
                         .ToListAsync();
 
@@ -325,6 +344,16 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 await transaction.RollbackAsync();
                 _dbContext.ChangeTracker.Clear();
 
+                if (sourceAiActionId.HasValue)
+                {
+                    var recoveredOrderId = await _dbContext.DiagnosticOrders.AsNoTracking()
+                        .Where(x => x.SourceAiActionId == sourceAiActionId.Value)
+                        .Select(x => (long?)x.Id)
+                        .FirstOrDefaultAsync();
+                    if (recoveredOrderId.HasValue)
+                        return (await GetOrderDtoByIdAsync(recoveredOrderId.Value))!;
+                }
+
                 if (!IsOrderCodeUniqueViolation(ex))
                 {
                     // Not an OrderCode collision — rethrow the original error unchanged.
@@ -353,10 +382,20 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         throw new ConflictException("ORDER_CREATION_FAILED", "Không thể tạo phiếu chỉ định cận lâm sàng. Vui lòng thử lại.");
     }
 
-    public async Task<DiagnosticOrderDto> CreateOrderForVisitDoctorAsync(long visitId, CreateDiagnosticOrderRequest request)
+    public async Task<DiagnosticOrderDto> CreateOrderForVisitDoctorAsync(long visitId, CreateDiagnosticOrderRequest request, Guid? sourceAiActionId = null, long? facilityId = null)
     {
         var doctor = await GetCurrentDoctorAsync();
         var userId = GetUserId();
+
+        if (sourceAiActionId.HasValue)
+        {
+            var existingOrderId = await _dbContext.DiagnosticOrders.AsNoTracking()
+                .Where(x => x.SourceAiActionId == sourceAiActionId.Value)
+                .Select(x => (long?)x.Id)
+                .FirstOrDefaultAsync();
+            if (existingOrderId.HasValue)
+                return (await GetOrderDtoByIdAsync(existingOrderId.Value))!;
+        }
 
         var visit = await _dbContext.PatientVisits
             .Include(v => v.Patient)
@@ -367,6 +406,9 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         if (visit.Status != VisitStatus.InConsultation && visit.Status != VisitStatus.WaitingForDoctor && visit.Status != VisitStatus.WaitingForDiagnostics)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể tạo phiếu chỉ định cận lâm sàng khi lượt khám đang trong phiên khám.");
+
+        if (facilityId.HasValue && facilityId.Value != visit.FacilityId)
+            throw new BusinessException("FACILITY_SCOPE_DENIED", "Lượt khám không thuộc cơ sở chỉ định.");
 
         if (string.IsNullOrWhiteSpace(request.ClinicalIndication))
             throw new BusinessException("VALIDATION_ERROR", "Chỉ định lâm sàng không được để trống.");
@@ -396,6 +438,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                     PatientVisitId = visit.Id,
                     AppointmentId = visit.AppointmentId,
                     FacilityId = visit.FacilityId,
+                    SourceAiActionId = sourceAiActionId,
                     PatientId = visit.PatientId,
                     OrderingDoctorId = doctor.Id,
                     ClinicalIndication = request.ClinicalIndication.Trim(),
@@ -443,7 +486,10 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                         .ToListAsync();
 
                     var activeTechUsers = await _dbContext.Users
-                        .Where(u => techUserIds.Contains(u.Id) && u.IsActive)
+                        .Where(u => techUserIds.Contains(u.Id) && u.IsActive &&
+                            (!order.FacilityId.HasValue || _dbContext.StaffFacilityAssignments.Any(a =>
+                                a.UserId == u.Id && a.IsActive &&
+                                a.Role == RoleNames.DiagnosticTechnician && a.FacilityId == order.FacilityId.Value)))
                         .Select(u => u.Id)
                         .ToListAsync();
 
@@ -491,6 +537,16 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             {
                 await transaction.RollbackAsync();
                 _dbContext.ChangeTracker.Clear();
+
+                if (sourceAiActionId.HasValue)
+                {
+                    var recoveredOrderId = await _dbContext.DiagnosticOrders.AsNoTracking()
+                        .Where(x => x.SourceAiActionId == sourceAiActionId.Value)
+                        .Select(x => (long?)x.Id)
+                        .FirstOrDefaultAsync();
+                    if (recoveredOrderId.HasValue)
+                        return (await GetOrderDtoByIdAsync(recoveredOrderId.Value))!;
+                }
 
                 if (!IsOrderCodeUniqueViolation(ex)) throw;
 
@@ -586,6 +642,9 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         if (order.Status != DiagnosticOrderStatus.Completed)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể xác nhận đã xem kết quả khi phiếu chỉ định đã hoàn tất.");
 
+        if (order.ReviewedAtUtc.HasValue)
+            return (await GetOrderDtoByIdAsync(orderId))!;
+
         if (request?.RowVersion != null)
         {
             ValidateRowVersion(order.RowVersion, request.RowVersion);
@@ -604,6 +663,27 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             Description = $"Bác sĩ xác nhận đã xem kết quả phiếu chỉ định #{order.OrderCode}.",
             CreatedAt = DateTime.UtcNow
         });
+
+        var patientUser = await (from p in _dbContext.Patients
+                                 join u in _dbContext.Users on p.UserId equals u.Id
+                                 where p.Id == order.PatientId
+                                 select u).FirstOrDefaultAsync();
+        if (patientUser != null)
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = patientUser.Id,
+                Type = NotificationType.Diagnostic,
+                Title = "Kết quả cận lâm sàng đã được bác sĩ xem",
+                Message = $"Phiếu chỉ định #{order.OrderCode} đã được bác sĩ xác nhận. Bạn có thể xem kết quả trực tuyến.",
+                Route = "/patient/diagnostic-results",
+                RelatedEntityType = "DiagnosticOrder",
+                RelatedEntityId = order.Id.ToString(),
+                DedupeKey = $"diag_reviewed_pat_{order.Id}",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
 
         try
         {
@@ -956,29 +1036,6 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             });
         }
 
-        // Notify patient
-        var patientUser = await (from p in _dbContext.Patients
-                                 join u in _dbContext.Users on p.UserId equals u.Id
-                                 where p.Id == order.PatientId
-                                 select u).FirstOrDefaultAsync();
-
-        if (patientUser != null)
-        {
-            _dbContext.Notifications.Add(new Notification
-            {
-                UserId = patientUser.Id,
-                Type = NotificationType.Diagnostic,
-                Title = "Kết quả cận lâm sàng đã sẵn sàng",
-                Message = $"Phiếu chỉ định #{order.OrderCode} đã có kết quả. Bạn có thể xem kết quả trực tuyến.",
-                Route = "/patient/diagnostic-results",
-                RelatedEntityType = "DiagnosticOrder",
-                RelatedEntityId = order.Id.ToString(),
-                DedupeKey = $"diag_completed_pat_{order.Id}",
-                IsRead = false,
-                CreatedAtUtc = DateTime.UtcNow
-            });
-        }
-
         // Update visit status to ResultsReady if connected to a PatientVisit
         PatientVisit? visit = null;
         if (order.PatientVisitId.HasValue)
@@ -1045,7 +1102,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         foreach (var id in orderIds)
         {
             var dto = await GetOrderDtoByIdAsync(id);
-            if (dto != null) items.Add(dto);
+            if (dto != null) items.Add(RedactUnpublishedResultsForPatient(dto));
         }
 
         return new PagedResult<DiagnosticOrderDto>(items, totalItems, page, pageSize);
@@ -1065,7 +1122,17 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         if (order == null)
             throw new NotFoundException("Phiếu chỉ định không tồn tại hoặc không thuộc quyền xem của bạn.");
 
-        return (await GetOrderDtoByIdAsync(orderId))!;
+        return RedactUnpublishedResultsForPatient((await GetOrderDtoByIdAsync(orderId))!);
+    }
+
+    private static DiagnosticOrderDto RedactUnpublishedResultsForPatient(DiagnosticOrderDto order)
+    {
+        if (order.Status == DiagnosticOrderStatus.Completed.ToString() && order.ReviewedAtUtc.HasValue)
+            return order;
+
+        foreach (var item in order.Items)
+            item.Result = null;
+        return order;
     }
 
     private async Task<DiagnosticOrderDto?> GetOrderDtoByIdAsync(long orderId)

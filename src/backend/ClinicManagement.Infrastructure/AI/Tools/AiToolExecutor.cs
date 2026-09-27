@@ -37,6 +37,16 @@ public sealed class AiToolExecutor : IAiToolExecutor
     public Task<AiToolExecutionResult> ExecuteAsync(AiToolInvocation invocation, CancellationToken cancellationToken = default) =>
         ExecuteCoreAsync(invocation, AiToolInvocationChannel.Planner, cancellationToken);
 
+    /// <summary>
+    /// Invoked only by the authenticated, server-owned prepare endpoint.  The
+    /// browser may supply a tool name and arguments, but never the invocation
+    /// channel itself.
+    /// </summary>
+    public Task<AiToolExecutionResult> ExecuteDirectPreparationAsync(
+        AiToolInvocation invocation,
+        CancellationToken cancellationToken = default) =>
+        ExecuteCoreAsync(invocation, AiToolInvocationChannel.DirectHumanPreparation, cancellationToken);
+
     public async Task<IReadOnlyList<AiToolExecutionResult>> ExecutePlannerPlanAsync(
         IReadOnlyList<AiPlannerToolCall> plannedCalls,
         string? sessionId,
@@ -100,6 +110,27 @@ public sealed class AiToolExecutor : IAiToolExecutor
         }, AiToolInvocationChannel.DirectHumanConfirmation, cancellationToken);
     }
 
+    public Task<AiToolExecutionResult> ExecuteRoleActionConfirmationAsync(
+        Guid actionId,
+        string sessionId,
+        string? confirmationToken,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+            return Task.FromResult(AiToolExecutionResult.Failed("SESSION_REQUIRED", "Cần phiên hội thoại hợp lệ để xác nhận thao tác."));
+
+        var arguments = JsonSerializer.Serialize(
+            new { actionId, confirm = true, concurrencyToken = confirmationToken },
+            new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+        return ExecuteCoreAsync(new AiToolInvocation
+        {
+            ToolName = "role.execute_confirmed_action",
+            ToolVersion = "1.0",
+            ArgumentsJson = arguments,
+            SessionId = sessionId
+        }, AiToolInvocationChannel.DirectHumanConfirmation, cancellationToken);
+    }
+
     private async Task<AiToolExecutionResult> ExecuteCoreAsync(
         AiToolInvocation invocation,
         AiToolInvocationChannel channel,
@@ -130,7 +161,8 @@ public sealed class AiToolExecutor : IAiToolExecutor
         }
 
         var isIdempotentConfirmationReplay = channel == AiToolInvocationChannel.DirectHumanConfirmation &&
-            (string.Equals(result.ResultType, "idempotent_replay", StringComparison.Ordinal) ||
+            (result.IsIdempotentReplay ||
+             string.Equals(result.ResultType, "idempotent_replay", StringComparison.Ordinal) ||
              string.Equals(result.Error?.Code, "ACTION_IN_PROGRESS", StringComparison.Ordinal));
         if (!isIdempotentConfirmationReplay)
         {
@@ -177,9 +209,18 @@ public sealed class AiToolExecutor : IAiToolExecutor
             return AiToolExecutionResult.Failed("PLANNER_TOOL_NOT_ALLOWED", "Kế hoạch công cụ không nằm trong allowlist.");
         if (!IsSafeArguments(invocation.ArgumentsJson))
             return AiToolExecutionResult.Failed("INVALID_TOOL_ARGUMENTS", "Tham số công cụ không hợp lệ.");
-        if (definition.Name.Equals("patient.execute_confirmed_action", StringComparison.OrdinalIgnoreCase) &&
+        if ((definition.Name.Equals("patient.execute_confirmed_action", StringComparison.OrdinalIgnoreCase) ||
+             definition.Name.Equals("role.execute_confirmed_action", StringComparison.OrdinalIgnoreCase)) &&
             context.InvocationChannel != AiToolInvocationChannel.DirectHumanConfirmation)
             return AiToolExecutionResult.Failed("DIRECT_CONFIRMATION_REQUIRED", "Thao tác này chỉ được thực hiện qua endpoint xác nhận trực tiếp.");
+        if (definition.Name.StartsWith("reception.prepare_", StringComparison.OrdinalIgnoreCase) ||
+            definition.Name.StartsWith("doctor.prepare_", StringComparison.OrdinalIgnoreCase) ||
+            definition.Name.StartsWith("technician.prepare_", StringComparison.OrdinalIgnoreCase) ||
+            definition.Name.StartsWith("pharmacist.prepare_", StringComparison.OrdinalIgnoreCase))
+        {
+            if (context.InvocationChannel != AiToolInvocationChannel.DirectHumanPreparation)
+                return AiToolExecutionResult.Failed("DIRECT_PREPARATION_REQUIRED", "Prepare-write chỉ được gọi qua endpoint thao tác trực tiếp đã xác thực.");
+        }
 
         var capabilities = await _capabilityResolver.ResolveAsync(context, cancellationToken);
         if (definition.Capabilities.Any(required => !capabilities.Contains(required)))

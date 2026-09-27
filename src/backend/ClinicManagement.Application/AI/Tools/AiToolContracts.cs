@@ -26,6 +26,7 @@ public enum AiToolConfirmationRequirement
 public enum AiToolInvocationChannel
 {
     Planner,
+    DirectHumanPreparation,
     DirectHumanConfirmation,
     InternalSystem
 }
@@ -37,6 +38,11 @@ public enum AiActorCapability
     PrepareBooking,
     PrepareAppointmentChange,
     ExecuteConfirmedPatientAction,
+    PrepareReceptionAction,
+    PrepareDoctorAction,
+    PrepareDiagnosticAction,
+    PreparePharmacyAction,
+    ExecuteConfirmedRoleAction,
     ReadReceptionWorkspace,
     ReadDoctorWorkspace,
     ReadDiagnosticWorkspace,
@@ -76,6 +82,7 @@ public sealed class AiToolInvocation
     public string ToolVersion { get; init; } = "1.0";
     public string ArgumentsJson { get; init; } = "{}";
     public string? SessionId { get; init; }
+    public string? ConversationId { get; init; }
     public string? CorrelationId { get; init; }
     public string? IdempotencyKey { get; init; }
 }
@@ -121,6 +128,7 @@ public sealed class AiToolExecutionResult
     public string? DisplayText { get; init; }
     public AiToolError? Error { get; init; }
     public bool RequiresConfirmation { get; init; }
+    public bool IsIdempotentReplay { get; init; }
     public string? ActionId { get; init; }
     public IReadOnlyList<AiToolDataSource> DataSources { get; init; } = Array.Empty<AiToolDataSource>();
     public DateTimeOffset RetrievedAtUtc { get; init; } = DateTimeOffset.UtcNow;
@@ -149,8 +157,10 @@ public interface IAiToolRegistry
 public interface IAiToolExecutor
 {
     Task<AiToolExecutionResult> ExecuteAsync(AiToolInvocation invocation, CancellationToken cancellationToken = default);
+    Task<AiToolExecutionResult> ExecuteDirectPreparationAsync(AiToolInvocation invocation, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AiToolExecutionResult>> ExecutePlannerPlanAsync(IReadOnlyList<AiPlannerToolCall> plannedCalls, string? sessionId, CancellationToken cancellationToken = default);
     Task<AiToolExecutionResult> ExecuteHumanConfirmationAsync(Guid actionId, string sessionId, string? concurrencyToken, CancellationToken cancellationToken = default);
+    Task<AiToolExecutionResult> ExecuteRoleActionConfirmationAsync(Guid actionId, string sessionId, string? confirmationToken, CancellationToken cancellationToken = default);
 }
 
 public sealed class AiSafetyGuardResult

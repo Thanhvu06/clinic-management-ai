@@ -65,6 +65,9 @@ public class DiagnosticOrderConfiguration : IEntityTypeConfiguration<DiagnosticO
         builder.HasIndex(o => new { o.OrderingDoctorId, o.Status });
         builder.HasIndex(o => new { o.Status, o.OrderedAtUtc });
         builder.HasIndex(o => new { o.FacilityId, o.PerformingDepartmentId, o.Status });
+        builder.HasIndex(o => o.SourceAiActionId)
+            .IsUnique()
+            .HasFilter("[SourceAiActionId] IS NOT NULL");
 
         builder.Property(o => o.RowVersion).IsRowVersion();
     }

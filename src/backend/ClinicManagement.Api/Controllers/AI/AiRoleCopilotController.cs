@@ -16,7 +16,11 @@ public sealed class AiRoleCopilotController : ControllerBase
     public AiRoleCopilotController(IAiRoleCopilotService service) => _service = service;
 
     [HttpGet("catalog")]
-    public IActionResult Catalog() => Ok(ApiResponse<object>.Ok(new { tools = _service.GetToolsForCurrentRole() }));
+    public IActionResult Catalog() => Ok(ApiResponse<object>.Ok(new
+    {
+        tools = _service.GetToolsForCurrentRole(),
+        actionTools = _service.GetActionToolsForCurrentRole()
+    }));
 
     [HttpPost("chat")]
     public async Task<IActionResult> Chat([FromBody] AiCopilotRequestDto request, CancellationToken cancellationToken)

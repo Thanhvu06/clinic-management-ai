@@ -6,4 +6,5 @@ public interface IAiRoleCopilotService
 {
     Task<AiCopilotResponseDto> ChatAsync(AiCopilotRequestDto request, CancellationToken cancellationToken = default);
     IReadOnlyList<ClinicManagement.Application.AI.Tools.AiToolDefinition> GetToolsForCurrentRole();
+    IReadOnlyList<ClinicManagement.Application.AI.Tools.AiToolDefinition> GetActionToolsForCurrentRole();
 }

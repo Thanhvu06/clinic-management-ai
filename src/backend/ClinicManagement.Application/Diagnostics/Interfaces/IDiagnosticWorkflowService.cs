@@ -15,8 +15,8 @@ public interface IDiagnosticWorkflowService
     Task<DiagnosticServiceDto> UpdateServicePriceAsync(long serviceId, decimal price, System.Threading.CancellationToken cancellationToken = default);
 
     // Doctor operations
-    Task<DiagnosticOrderDto> CreateOrderForDoctorAsync(long appointmentId, CreateDiagnosticOrderRequest request);
-    Task<DiagnosticOrderDto> CreateOrderForVisitDoctorAsync(long visitId, CreateDiagnosticOrderRequest request);
+    Task<DiagnosticOrderDto> CreateOrderForDoctorAsync(long appointmentId, CreateDiagnosticOrderRequest request, Guid? sourceAiActionId = null, long? facilityId = null);
+    Task<DiagnosticOrderDto> CreateOrderForVisitDoctorAsync(long visitId, CreateDiagnosticOrderRequest request, Guid? sourceAiActionId = null, long? facilityId = null);
     Task<List<DiagnosticOrderDto>> GetOrdersByAppointmentForDoctorAsync(long appointmentId);
     Task<List<DiagnosticOrderDto>> GetOrdersByVisitForDoctorAsync(long visitId);
     Task<DiagnosticOrderDto> GetOrderByIdForDoctorAsync(long orderId);

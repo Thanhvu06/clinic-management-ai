@@ -27,19 +27,38 @@ public sealed class AiCapabilityResolver : IAiCapabilityResolver
 
         if (context.Roles.Contains(AiActorRole.Receptionist) &&
             await HasFacilityAssignmentAsync(context, nameof(AiActorRole.Receptionist), cancellationToken))
+        {
             capabilities.Add(AiActorCapability.ReadReceptionWorkspace);
+            capabilities.Add(AiActorCapability.PrepareReceptionAction);
+            capabilities.Add(AiActorCapability.ExecuteConfirmedRoleAction);
+        }
 
         if (context.Roles.Contains(AiActorRole.Doctor) &&
             await _db.Doctors.AsNoTracking().AnyAsync(x => x.UserId == context.ActorId.Value && x.IsActive, cancellationToken))
+        {
             capabilities.Add(AiActorCapability.ReadDoctorWorkspace);
+            if (await HasFacilityAssignmentAsync(context, nameof(AiActorRole.Doctor), cancellationToken))
+            {
+                capabilities.Add(AiActorCapability.PrepareDoctorAction);
+                capabilities.Add(AiActorCapability.ExecuteConfirmedRoleAction);
+            }
+        }
 
         if (context.Roles.Contains(AiActorRole.DiagnosticTechnician) &&
             await HasFacilityAssignmentAsync(context, nameof(AiActorRole.DiagnosticTechnician), cancellationToken))
+        {
             capabilities.Add(AiActorCapability.ReadDiagnosticWorkspace);
+            capabilities.Add(AiActorCapability.PrepareDiagnosticAction);
+            capabilities.Add(AiActorCapability.ExecuteConfirmedRoleAction);
+        }
 
         if (context.Roles.Contains(AiActorRole.Pharmacist) &&
             await HasFacilityAssignmentAsync(context, nameof(AiActorRole.Pharmacist), cancellationToken))
+        {
             capabilities.Add(AiActorCapability.ReadPharmacyWorkspace);
+            capabilities.Add(AiActorCapability.PreparePharmacyAction);
+            capabilities.Add(AiActorCapability.ExecuteConfirmedRoleAction);
+        }
 
         if (context.Roles.Contains(AiActorRole.Admin))
             capabilities.Add(AiActorCapability.ReadAdminMetrics);

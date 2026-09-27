@@ -58,6 +58,14 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         return AiRoleToolCatalog.Definitions.Where(x => x.AllowedRoles.Contains(role)).ToArray();
     }
 
+    public IReadOnlyList<AiToolDefinition> GetActionToolsForCurrentRole()
+    {
+        var role = ResolveRole();
+        return AiRoleActionCatalog.Definitions
+            .Where(x => x.AllowedRoles.Contains(role) && !x.Name.Equals("role.execute_confirmed_action", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+    }
+
     public async Task<AiCopilotResponseDto> ChatAsync(AiCopilotRequestDto request, CancellationToken cancellationToken = default)
     {
         var role = ResolveRole();

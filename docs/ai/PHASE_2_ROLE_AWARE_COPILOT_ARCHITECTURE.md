@@ -4,8 +4,9 @@
 
 Phase 2 adds one conversation and policy foundation for all actors. Patient
 booking remains backed by the Phase 1.2 session/snapshot/pending-action state
-machine. Professional workspaces use the same gateway and a read-only copilot
-surface in this phase.
+machine. Professional workspaces use the same gateway for scoped reads and a
+separate server-owned prepare/confirm surface for role actions backed by an
+existing domain service.
 
 ```text
 raw message
@@ -49,10 +50,26 @@ Role`. Resource hints and versions are revalidated on every turn.
 - Planner allowlist contains read tools only. Unknown tools, write tools and
   invalid mixed plans are rejected before the first call.
 - Patient write operations produce a server-bound `AiPendingToolAction`; only
-  the dedicated confirmation endpoint can execute it.
-- Role copilot writes are intentionally absent. Check-in, clinical drafts,
-  diagnostic results, prescriptions and dispense remain domain endpoints with
-  their existing human workflow.
+  the dedicated patient confirmation endpoint can execute them.
+- Professional prepare-write operations use the same pending-action entity.
+  They are available only through `POST /api/v1/ai/copilot/actions/prepare`;
+  the model/planner channel cannot reach them. Execution is available only
+  through `POST /api/v1/ai/copilot/actions/{actionId}/confirm`.
+- A pending role action binds actor, role, session/conversation, facility,
+  resource/version, normalized arguments, request hash, tool version,
+  confirmation-token hash, expiry, source action id and idempotency identity.
+  Confirmation rechecks assignment, facility, ownership, state,
+  schedule/leave/conflict, resource version and domain state before claiming a
+  short lease.
+- Implemented role actions call existing domain services for appointment
+  check-in, verified-patient walk-in intake, diagnostic-order creation,
+  prescription draft, technician start/result/complete, pharmacy reservation
+  and eligible dispense. They cannot issue a prescription, publish a
+  technician result, or change roles/permissions.
+- Diagnostic-order side effects use `SourceAiActionId` for crash-window replay;
+  pending-action and domain uniqueness/notification dedupe prevent duplicate
+  downstream records. Patient diagnostic result text remains redacted until a
+  doctor review publishes it.
 - No frontend-provided user ID, role, facility ID or raw entity snapshot is an
   authorization input.
 
