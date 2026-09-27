@@ -7,6 +7,7 @@ export interface AiCopilotCard {
     description?: string | null;
     data?: unknown;
     sources?: Array<{ name: string; kind: string; status?: string }>;
+    retrievedAtUtc?: string;
 }
 
 export interface AiCopilotCatalogItem {

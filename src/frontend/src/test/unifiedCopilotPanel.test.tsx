@@ -26,7 +26,7 @@ vi.mock('../api/aiCopilotApi', () => ({
 const response = (overrides: Record<string, unknown> = {}) => ({
     role: 'Doctor', assistantStatus: 'Ready', providerStatus: 'Online', assistantMode: 'Ready', plannerMode: 'ProviderStructured',
     conversationId: 'conv-1', turnId: 'turn-1', intent: 'PatientSummary', message: 'Đây là dữ liệu đã kiểm chứng.',
-    suggestedPrompts: [], cards: [{ type: 'doctor_summary', title: 'Ca được phân công', description: 'Dữ liệu hiện tại', data: [{ doctorName: 'Doctor 1', status: 'scheduled', patientId: 'must-not-render' }], sources: [{ name: 'appointments', kind: 'database' }] }],
+    suggestedPrompts: [], cards: [{ type: 'doctor_summary', title: 'Ca được phân công', description: 'Dữ liệu hiện tại', retrievedAtUtc: '2030-01-01T00:00:00Z', data: [{ doctorName: 'Doctor 1', status: 'scheduled', patientId: 'must-not-render', appointmentId: 42 }], sources: [{ name: 'appointments', kind: 'database' }] }],
     availableTools: [], sources: [{ name: 'appointments', kind: 'database' }], ...overrides
 });
 
@@ -58,6 +58,8 @@ describe('UnifiedCopilotPanel', () => {
         expect(screen.getByText('Doctor 1')).toBeInTheDocument();
         expect(screen.getAllByText(/appointments · database/)).toHaveLength(1);
         expect(screen.queryByText('must-not-render')).not.toBeInTheDocument();
+        expect(screen.queryByText('42')).not.toBeInTheDocument();
+        expect(screen.getByText(/Dữ liệu đọc lúc:/)).toBeInTheDocument();
         const request = sendMock.mock.calls[0][0] as Record<string, unknown>;
         expect(request).toMatchObject({ message: 'Tóm tắt ca này', currentRoute: '/doctor/appointments/42' });
         expect(request.resourceContext).toEqual({ appointmentId: 42 });

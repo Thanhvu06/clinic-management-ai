@@ -58,6 +58,7 @@ public sealed class AiCopilotDataCardDto
     public string? Description { get; init; }
     public object? Data { get; init; }
     public IReadOnlyList<AiToolDataSource> Sources { get; init; } = Array.Empty<AiToolDataSource>();
+    public DateTimeOffset RetrievedAtUtc { get; init; }
 }
 
 public sealed class AiCopilotResponseDto

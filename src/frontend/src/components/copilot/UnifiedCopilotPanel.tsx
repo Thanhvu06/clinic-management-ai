@@ -20,6 +20,7 @@ const formatValue = (key: string, value: unknown): string => {
     if (value === null || value === undefined || value === '') return '';
     if (typeof value === 'boolean') return value ? 'Có' : 'Không';
     if (typeof value === 'number') return key.toLowerCase().includes('price') ? `${value.toLocaleString('vi-VN')} ₫` : String(value);
+    if (typeof value === 'object') return Array.isArray(value) ? `${value.length} mục` : 'Dữ liệu chi tiết có cấu trúc';
     if (typeof value === 'string' && key.toLowerCase().includes('utc')) {
         const parsed = new Date(value);
         if (!Number.isNaN(parsed.valueOf())) return parsed.toLocaleString('vi-VN');
@@ -48,7 +49,7 @@ const displayRows = (data: unknown): Array<Record<string, unknown>> => {
 };
 
 const visibleFields = (row: Record<string, unknown>) => Object.entries(row)
-    .filter(([key, value]) => !['sourceId', 'id', 'patientId', 'userId', 'facilityId', 'token'].includes(key) && value !== null && value !== undefined && value !== '')
+    .filter(([key, value]) => !['sourceId', 'id', 'token'].includes(key) && !key.toLowerCase().endsWith('id') && value !== null && value !== undefined && value !== '')
     .slice(0, 8);
 
 const pendingStatus = (row: Record<string, unknown>): string | null => {
@@ -76,6 +77,7 @@ const MessageBubble: React.FC<{ item: UnifiedCopilotMessage; onRetry: (text: str
                         <article className={styles.card} key={`${card.type}-${index}`}>
                             <div className={styles.cardTitle}><span>{card.title}</span>{pendingStatus(rows[0] ?? {}) && <span>{pendingStatus(rows[0] ?? {})}</span>}</div>
                             {card.description && <p className={styles.cardDescription}>{card.description}</p>}
+                            {card.retrievedAtUtc && <p className={styles.cardDescription}>Dữ liệu đọc lúc: {formatValue('retrievedAtUtc', card.retrievedAtUtc)}</p>}
                             {rows.map((row, rowIndex) => (
                                 <ul className={styles.dataList} key={`${card.type}-${rowIndex}`}>
                                     {pendingStatus(row) && <li aria-label="Trạng thái thao tác">Trạng thái thao tác: {pendingStatus(row)}</li>}

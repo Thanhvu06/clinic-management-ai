@@ -79,6 +79,10 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
             ["clinic.get_pricing"] = (Array.Empty<string>(), Array.Empty<string>()),
             ["patient.get_my_appointments"] = (new[] { "status", "page", "pageSize" }, Array.Empty<string>()),
             ["patient.get_appointment_detail"] = (new[] { "appointmentId" }, new[] { "appointmentId" }),
+            ["patient.get_my_visits"] = (new[] { "page", "pageSize" }, Array.Empty<string>()),
+            ["patient.get_my_diagnostic_results"] = (new[] { "page", "pageSize" }, Array.Empty<string>()),
+            ["patient.get_my_prescriptions"] = (new[] { "page", "pageSize" }, Array.Empty<string>()),
+            ["patient.get_my_bills"] = (new[] { "page", "pageSize" }, Array.Empty<string>()),
             ["patient.prepare_booking"] = (new[] { "specialtyId", "doctorId", "slotId", "reason" }, new[] { "specialtyId", "doctorId", "slotId" }),
             ["patient.prepare_cancel_appointment"] = (new[] { "appointmentId", "reason" }, new[] { "appointmentId", "reason" }),
             ["patient.prepare_reschedule_appointment"] = (new[] { "appointmentId", "requestedSlotId", "reason" }, new[] { "appointmentId", "requestedSlotId", "reason" }),
@@ -126,6 +130,10 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
             "clinic.get_pricing" => GetPricingAsync(cancellationToken),
             "patient.get_my_appointments" => GetMyAppointmentsAsync(invocation, cancellationToken),
             "patient.get_appointment_detail" => GetAppointmentDetailAsync(invocation, cancellationToken),
+            "patient.get_my_visits" => GetMyVisitsAsync(invocation, context, cancellationToken),
+            "patient.get_my_diagnostic_results" => GetMyDiagnosticResultsAsync(invocation, context, cancellationToken),
+            "patient.get_my_prescriptions" => GetMyPrescriptionsAsync(invocation, context, cancellationToken),
+            "patient.get_my_bills" => GetMyBillsAsync(invocation, context, cancellationToken),
             "patient.prepare_booking" => PrepareBookingAsync(invocation, context, cancellationToken),
             "patient.prepare_cancel_appointment" => PrepareChangeAsync("cancel", invocation, context, cancellationToken),
             "patient.prepare_reschedule_appointment" => PrepareChangeAsync("reschedule", invocation, context, cancellationToken),
@@ -285,6 +293,95 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
         if (!appointmentId.HasValue || appointmentId <= 0) return AiToolExecutionResult.Failed("INVALID_APPOINTMENT_ID", "Mã lịch hẹn không hợp lệ.");
         var result = await _appointments.GetPatientAppointmentByIdAsync(appointmentId.Value);
         return Completed(result, "appointment_detail", "Đây là chi tiết lịch hẹn được lấy từ hệ thống ClinicCare.");
+    }
+
+    private async Task<AiToolExecutionResult> GetMyVisitsAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken)
+    {
+        var patientId = await ResolvePatientIdAsync(context.ActorId, cancellationToken);
+        if (!patientId.HasValue) return AiToolExecutionResult.Failed("PATIENT_SCOPE_REQUIRED", "Không xác định được tài khoản bệnh nhân hiện tại.");
+        var args = Parse(invocation.ArgumentsJson);
+        var page = Math.Clamp(GetInt(args, "page") ?? 1, 1, 100);
+        var pageSize = Math.Clamp(GetInt(args, "pageSize") ?? 20, 1, 50);
+        var items = await _db.PatientVisits.AsNoTracking()
+            .Where(v => v.PatientId == patientId.Value)
+            .OrderByDescending(v => v.VisitDate).ThenByDescending(v => v.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(v => new
+            {
+                v.Id, v.VisitCode, v.VisitDate, arrivalType = v.ArrivalType.ToString(), status = v.Status.ToString(),
+                v.ChiefComplaint, v.AppointmentId,
+                summary = v.VisitSummary == null ? null : new
+                {
+                    v.VisitSummary.Summary, v.VisitSummary.Diagnosis,
+                    v.VisitSummary.TreatmentPlan, v.VisitSummary.CompletedAtUtc
+                }
+            }).ToListAsync(cancellationToken);
+        return Completed(items, "patient_visits", items.Count == 0 ? "Bạn chưa có lượt khám nào." : $"Có {items.Count} lượt khám của bạn trong trang này.");
+    }
+
+    private async Task<AiToolExecutionResult> GetMyDiagnosticResultsAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken)
+    {
+        var patientId = await ResolvePatientIdAsync(context.ActorId, cancellationToken);
+        if (!patientId.HasValue) return AiToolExecutionResult.Failed("PATIENT_SCOPE_REQUIRED", "Không xác định được tài khoản bệnh nhân hiện tại.");
+        var args = Parse(invocation.ArgumentsJson);
+        var page = Math.Clamp(GetInt(args, "page") ?? 1, 1, 100);
+        var pageSize = Math.Clamp(GetInt(args, "pageSize") ?? 20, 1, 50);
+        var items = await _db.DiagnosticOrderItems.AsNoTracking()
+            .Where(i => i.DiagnosticOrder.PatientId == patientId.Value && i.Status != DiagnosticItemStatus.Cancelled)
+            .OrderByDescending(i => i.DiagnosticOrder.OrderedAtUtc).ThenBy(i => i.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(i => new
+            {
+                orderCode = i.DiagnosticOrder.OrderCode,
+                service = i.DiagnosticService.Name,
+                status = i.Status.ToString(),
+                orderedAtUtc = i.DiagnosticOrder.OrderedAtUtc,
+                result = i.Result == null ? null : new
+                {
+                    i.Result.ResultText, i.Result.Conclusion,
+                    i.Result.ReferenceRange, i.Result.Unit, i.Result.ResultedAtUtc
+                }
+            }).ToListAsync(cancellationToken);
+        return Completed(items, "patient_diagnostic_results", items.Count == 0 ? "Bạn chưa có kết quả cận lâm sàng." : $"Có {items.Count} chỉ định/kết quả của bạn.");
+    }
+
+    private async Task<AiToolExecutionResult> GetMyPrescriptionsAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken)
+    {
+        var patientId = await ResolvePatientIdAsync(context.ActorId, cancellationToken);
+        if (!patientId.HasValue) return AiToolExecutionResult.Failed("PATIENT_SCOPE_REQUIRED", "Không xác định được tài khoản bệnh nhân hiện tại.");
+        var args = Parse(invocation.ArgumentsJson);
+        var page = Math.Clamp(GetInt(args, "page") ?? 1, 1, 100);
+        var pageSize = Math.Clamp(GetInt(args, "pageSize") ?? 20, 1, 50);
+        var items = await _db.Prescriptions.AsNoTracking()
+            .Where(p => p.PatientId == patientId.Value && p.Status != PrescriptionStatus.Draft && p.Status != PrescriptionStatus.Cancelled)
+            .OrderByDescending(p => p.CreatedAt).ThenByDescending(p => p.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(p => new
+            {
+                p.Id, status = p.Status.ToString(), p.CreatedAt, p.DispensedAt, p.Notes,
+                items = p.Items.Select(i => new { medicine = i.Medicine!.Name, i.Dosage, i.Frequency, i.DurationDays, i.Instructions }).ToList()
+            }).ToListAsync(cancellationToken);
+        return Completed(items, "patient_prescriptions", items.Count == 0 ? "Bạn chưa có đơn thuốc đã phát hành." : $"Có {items.Count} đơn thuốc của bạn.");
+    }
+
+    private async Task<AiToolExecutionResult> GetMyBillsAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken)
+    {
+        var patientId = await ResolvePatientIdAsync(context.ActorId, cancellationToken);
+        if (!patientId.HasValue) return AiToolExecutionResult.Failed("PATIENT_SCOPE_REQUIRED", "Không xác định được tài khoản bệnh nhân hiện tại.");
+        var args = Parse(invocation.ArgumentsJson);
+        var page = Math.Clamp(GetInt(args, "page") ?? 1, 1, 100);
+        var pageSize = Math.Clamp(GetInt(args, "pageSize") ?? 20, 1, 50);
+        var items = await _db.Invoices.AsNoTracking()
+            .Where(i => i.PatientId == patientId.Value)
+            .OrderByDescending(i => i.CreatedAtUtc).ThenByDescending(i => i.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(i => new
+            {
+                i.Id, i.InvoiceCode, status = i.Status.ToString(), i.Subtotal, i.TotalAmount,
+                i.CreatedAtUtc, i.PaidAtUtc,
+                items = i.Items.Where(x => !x.IsCancelled).Select(x => new { x.Description, x.Quantity, x.LineTotal }).ToList()
+            }).ToListAsync(cancellationToken);
+        return Completed(items, "patient_bills", items.Count == 0 ? "Bạn chưa có hóa đơn nào." : $"Có {items.Count} hóa đơn của bạn.");
     }
 
     private async Task<AiToolExecutionResult> PrepareBookingAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken)
@@ -604,6 +701,10 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
         Def("clinic.get_pricing", AiToolAccessMode.Public, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc bảng giá đã công bố", new[] { AiActorCapability.ReadClinicCatalog }),
         Def("patient.get_my_appointments", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc lịch hẹn của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly),
         Def("patient.get_appointment_detail", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc chi tiết lịch hẹn của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly),
+        Def("patient.get_my_visits", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc lượt khám của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly),
+        Def("patient.get_my_diagnostic_results", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc kết quả cận lâm sàng của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly),
+        Def("patient.get_my_prescriptions", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc đơn thuốc của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly),
+        Def("patient.get_my_bills", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc hóa đơn của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly),
         Def("patient.prepare_booking", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Medium, AiToolConfirmationRequirement.ExistingBookingConfirmation, "Kiểm tra và chuẩn bị bản nháp đặt lịch", new[] { AiActorCapability.PrepareBooking }, PatientOnly),
         Def("patient.prepare_cancel_appointment", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.High, AiToolConfirmationRequirement.ExplicitUserConfirmation, "Tạo pending action yêu cầu hủy lịch", new[] { AiActorCapability.PrepareAppointmentChange }, PatientOnly),
         Def("patient.prepare_reschedule_appointment", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.High, AiToolConfirmationRequirement.ExplicitUserConfirmation, "Tạo pending action yêu cầu đổi lịch", new[] { AiActorCapability.PrepareAppointmentChange }, PatientOnly),

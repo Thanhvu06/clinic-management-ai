@@ -22,7 +22,8 @@ public sealed class AiGroundedResponseComposer : IAiGroundedResponseComposer
             Title = result.Status == "completed" ? "Dữ liệu đã kiểm chứng" : "Không thể truy cập dữ liệu",
             Description = result.DisplayText ?? result.Error?.Message,
             Data = result.Status == "completed" ? result.Data : null,
-            Sources = result.DataSources
+            Sources = result.DataSources,
+            RetrievedAtUtc = result.RetrievedAtUtc
         }).ToArray();
         var failed = results.FirstOrDefault(x => x.Status != "completed");
         return new AiGroundedResponse

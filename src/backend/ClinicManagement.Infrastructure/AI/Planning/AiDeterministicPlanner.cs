@@ -55,6 +55,7 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             AiActorRole.DiagnosticTechnician => PlanTechnician(text),
             AiActorRole.Pharmacist => PlanPharmacist(text),
             AiActorRole.Admin => PlanAdmin(text),
+            AiActorRole.Patient => PlanPatient(text),
             _ => ProviderRequired(context.Analysis.Intent.Intent)
         };
 
@@ -99,25 +100,37 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         if (Regex.IsMatch(text, @"\b(?:chuan bi (?:phieu|ban nhap|don)|ke (?:don|thuoc)|phat hanh|tao (?:phieu|don))\b", RegexOptions.CultureInvariant))
             return Clarify("Thao tác ghi của bác sĩ phải đi qua action gateway và bước xác nhận rõ ràng; cuộc hội thoại không tự tạo hoặc phát hành dữ liệu.", "WriteRequiresExplicitActionConfirmation");
 
-        var asksSummary = Regex.IsMatch(text, @"\b(?:tom tat|tom luoc|tong hop|mo)\b.*\b(?:benh nhan|ca kham|ca|ho so|hien tai|luot)\b", RegexOptions.CultureInvariant) &&
-            Regex.IsMatch(text, @"\b(?:tom tat|tom luoc|tong hop|ho so|ca kham|benh nhan)\b", RegexOptions.CultureInvariant);
+        var asksSummary = (Regex.IsMatch(text, @"\b(?:tom tat|tom luoc|tong hop|mo)\b.*\b(?:benh nhan|ca kham|ca|ho so|hien tai|luot)\b", RegexOptions.CultureInvariant) &&
+            Regex.IsMatch(text, @"\b(?:tom tat|tom luoc|tong hop|ho so|ca kham|benh nhan)\b", RegexOptions.CultureInvariant)) ||
+            (Regex.IsMatch(text, @"\b(?:trieu chung|dau hieu sinh ton|sinh hieu|chief complaint)\b", RegexOptions.CultureInvariant) &&
+             Regex.IsMatch(text, @"\b(?:benh nhan|ca|luot|walk in|walk-in)\b", RegexOptions.CultureInvariant));
         var asksOrders = Regex.IsMatch(text, @"\b(?:chi dinh|can lam sang|xet nghiem|chan doan hinh anh)\b", RegexOptions.CultureInvariant);
+        var asksPrescription = Regex.IsMatch(text, @"\b(?:don thuoc|toa thuoc|trang thai .*thuoc|thuoc cua ca)\b", RegexOptions.CultureInvariant);
 
-        if (asksSummary && !resource.AppointmentId.HasValue)
-            return Clarify("Hãy mở một lịch hẹn được phân công hoặc cung cấp appointment context hợp lệ để tôi tóm tắt đúng bệnh nhân.", "MissingAssignedAppointment", AiChatIntentTypes.PatientSummary, "/doctor/appointments");
+        var hasCaseContext = resource.AppointmentId.HasValue || resource.VisitId.HasValue;
+        if ((asksSummary || asksOrders || asksPrescription) && !hasCaseContext)
+            return Clarify("Hãy mở một ca khám được phân công hoặc chọn một lượt trong hàng đợi của bạn để tôi đọc đúng bệnh nhân.", "MissingAssignedCase", AiChatIntentTypes.PatientSummary, "/doctor/appointments");
 
-        if (asksSummary || asksOrders)
+        if (asksSummary || asksOrders || asksPrescription)
         {
             var calls = new List<AiPlannerToolCall>();
             if (asksSummary)
-                calls.Add(Call("doctor.get_patient_summary", new { appointmentId = resource.AppointmentId!.Value }));
+                calls.Add(resource.VisitId.HasValue
+                    ? Call("doctor.get_patient_summary", new { visitId = resource.VisitId.Value })
+                    : Call("doctor.get_patient_summary", new { appointmentId = resource.AppointmentId!.Value }));
             if (asksOrders)
-                calls.Add(Call("doctor.get_diagnostic_orders", new { }));
+                calls.Add(resource.VisitId.HasValue
+                    ? Call("doctor.get_diagnostic_orders", new { visitId = resource.VisitId.Value })
+                    : Call("doctor.get_diagnostic_orders", new { appointmentId = resource.AppointmentId!.Value }));
+            if (asksPrescription)
+                calls.Add(resource.VisitId.HasValue
+                    ? Call("doctor.get_prescription_status", new { visitId = resource.VisitId.Value })
+                    : Call("doctor.get_prescription_status", new { appointmentId = resource.AppointmentId!.Value }));
             return new AiPlannerDecision
             {
                 PlannerMode = AiPlannerModes.Deterministic,
-                Intent = asksSummary ? AiChatIntentTypes.PatientSummary : AiChatIntentTypes.DiagnosticLookup,
-                SubIntent = asksSummary && asksOrders ? "PatientSummaryAndDiagnosticOrders" : asksSummary ? "AssignedPatientSummary" : "MyDiagnosticOrders",
+                Intent = asksSummary ? AiChatIntentTypes.PatientSummary : asksPrescription ? AiChatIntentTypes.PrescriptionLookup : AiChatIntentTypes.DiagnosticLookup,
+                SubIntent = asksSummary && asksOrders ? "PatientSummaryAndDiagnosticOrders" : asksSummary && asksPrescription ? "PatientSummaryAndPrescription" : asksSummary ? "AssignedPatientSummary" : asksPrescription ? "AssignedPrescriptionStatus" : "AssignedDiagnosticOrders",
                 Confidence = .99m,
                 NavigationRoute = "/doctor/appointments",
                 ToolCalls = calls
@@ -126,6 +139,9 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
 
         if (Regex.IsMatch(text, @"\b(?:hang doi|benh nhan tiep theo|danh sach cho|queue cua toi|ca benh .*\b(?:cho|dang cho)\b|danh sach .*\b(?:benh nhan|nguoi benh)\b.*\b(?:hom nay|tiep theo)\b|(?:benh nhan|nguoi benh)\b.*\bdanh sach\b.*\b(?:hom nay|tiep theo)\b)", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.QueueLookup, "DoctorQueue", "doctor.get_my_queue", new { }, "/doctor/queue");
+
+        if (Regex.IsMatch(text, @"\b(?:benh nhan|ca kham|luot kham|trieu chung|sinh hieu|chan doan|chi tiet ho so|don thuoc|chi dinh|ket qua)\b", RegexOptions.CultureInvariant))
+            return Clarify("Hãy mở hoặc chọn một ca khám được phân công từ hàng đợi của bạn; tôi không gửi hồ sơ lâm sàng sang nhà cung cấp AI để đoán tài nguyên.", "MissingAssignedCase", AiChatIntentTypes.PatientSummary, "/doctor/appointments");
 
         return ProviderRequired(AiChatIntentTypes.UnclearOrOutOfScope);
     }
@@ -158,6 +174,23 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             return Tool(AiChatIntentTypes.AdminMetrics, "AiHealth", "admin.get_ai_health", new { }, "/admin/audit-logs");
         if (Regex.IsMatch(text, @"\b(?:thong ke|dashboard|chi so|bao cao tong hop)\b", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.AdminMetrics, "DashboardMetrics", "admin.get_dashboard_metrics", new { }, "/admin");
+        return ProviderRequired(AiChatIntentTypes.UnclearOrOutOfScope);
+    }
+
+    private static AiPlannerDecision PlanPatient(string text)
+    {
+        if (Regex.IsMatch(text, @"\b(?:ket qua|ket qua xet nghiem|xet nghiem cua toi|chi dinh cua toi|ket qua can lam sang|kq xet nghiem)\b", RegexOptions.CultureInvariant))
+            return Tool(AiChatIntentTypes.DiagnosticLookup, "MyDiagnosticResults", "patient.get_my_diagnostic_results", new { page = 1, pageSize = 20 }, "/patient/diagnostic-results");
+        if (Regex.IsMatch(text, @"\b(?:don thuoc|thuoc cua toi|thuoc dang|ke don|phat thuoc|toa thuoc)\b", RegexOptions.CultureInvariant))
+            return Tool(AiChatIntentTypes.PrescriptionLookup, "MyPrescriptions", "patient.get_my_prescriptions", new { page = 1, pageSize = 20 }, "/patient/prescriptions");
+        if (Regex.IsMatch(text, @"\b(?:hoa don|thanh toan|vien phi|chi phi da|chi phi kham|bien lai)\b", RegexOptions.CultureInvariant))
+            return Tool(AiChatIntentTypes.ViewAppointments, "MyBills", "patient.get_my_bills", new { page = 1, pageSize = 20 }, "/patient/invoices");
+        if (Regex.IsMatch(text, @"\b(?:luot kham|lan kham|lich su kham|tom tat ca kham|chan doan cua toi|trieu chung cua toi)\b", RegexOptions.CultureInvariant))
+            return Tool(AiChatIntentTypes.ViewAppointments, "MyVisits", "patient.get_my_visits", new { page = 1, pageSize = 20 }, "/patient/appointments");
+        if (Regex.IsMatch(text, @"\b(?:lich hen|cuoc hen|hen sap toi|lich cua toi|lich kham cua toi)\b", RegexOptions.CultureInvariant))
+            return Tool(AiChatIntentTypes.ViewAppointments, "MyAppointments", "patient.get_my_appointments", new { page = 1, pageSize = 20 }, "/patient/appointments");
+        if (Regex.IsMatch(text, @"\b(?:benh an|ho so|luot kham|chan doan|trieu chung|ket qua|don thuoc|hoa don)\b", RegexOptions.CultureInvariant))
+            return Clarify("Bạn hãy nêu rõ muốn xem lịch hẹn, lượt khám, kết quả, đơn thuốc hay hóa đơn của chính tài khoản này.", "AmbiguousPatientRead", AiChatIntentTypes.ClarificationRequired, "/patient");
         return ProviderRequired(AiChatIntentTypes.UnclearOrOutOfScope);
     }
 

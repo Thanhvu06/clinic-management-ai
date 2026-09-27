@@ -93,6 +93,13 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
             if (invocation.ToolName.Equals("reception.lookup_appointment", StringComparison.OrdinalIgnoreCase) &&
                 (!document.RootElement.TryGetProperty("appointmentCode", out var code) || code.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(code.GetString())))
                 return AiToolArgumentValidationResult.Invalid("MISSING_TOOL_ARGUMENT", "Cần mã lịch hẹn để tra cứu.");
+            if (invocation.ToolName.Equals("doctor.get_patient_summary", StringComparison.OrdinalIgnoreCase) && !HasExactlyOneResourceId(document.RootElement, "appointmentId", "visitId"))
+                return AiToolArgumentValidationResult.Invalid("MISSING_TOOL_ARGUMENT", "Cần đúng một appointmentId hoặc visitId thuộc ca được phân công.");
+            if (invocation.ToolName.Equals("doctor.get_prescription_status", StringComparison.OrdinalIgnoreCase) && !HasExactlyOneResourceId(document.RootElement, "appointmentId", "visitId"))
+                return AiToolArgumentValidationResult.Invalid("MISSING_TOOL_ARGUMENT", "Cần đúng một appointmentId hoặc visitId thuộc ca được phân công.");
+            if (invocation.ToolName.Equals("doctor.get_diagnostic_orders", StringComparison.OrdinalIgnoreCase) &&
+                !HasAtMostOnePositiveResourceId(document.RootElement, "appointmentId", "visitId"))
+                return AiToolArgumentValidationResult.Invalid("INVALID_TOOL_ARGUMENTS", "Chỉ hỗ trợ tối đa một appointmentId hoặc visitId hợp lệ cho truy vấn chỉ định.");
             return AiToolArgumentValidationResult.Valid();
         }
         catch (JsonException)
@@ -110,7 +117,8 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
             "reception.lookup_appointment" => LookupAppointmentAsync(context, invocation.ArgumentsJson, cancellationToken),
             "doctor.get_my_queue" => GetDoctorQueueAsync(context, cancellationToken),
             "doctor.get_patient_summary" => GetDoctorPatientSummaryAsync(context, invocation.ArgumentsJson, cancellationToken),
-            "doctor.get_diagnostic_orders" => GetDoctorOrdersAsync(context, cancellationToken),
+            "doctor.get_diagnostic_orders" => GetDoctorOrdersAsync(context, invocation.ArgumentsJson, cancellationToken),
+            "doctor.get_prescription_status" => GetDoctorPrescriptionStatusAsync(context, invocation.ArgumentsJson, cancellationToken),
             "technician.get_worklist" => GetTechnicianWorklistAsync(context, cancellationToken),
             "pharmacist.get_prescription_queue" => GetPharmacyQueueAsync(context, cancellationToken),
             "pharmacist.get_inventory_status" => GetInventoryAsync(context, cancellationToken),
@@ -681,7 +689,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         var appointments = await _db.Appointments.AsNoTracking()
             .Where(a => a.AppointmentDate == today && a.FacilityId.HasValue && facilities.Contains(a.FacilityId.Value))
             .OrderBy(a => a.StartTime).Take(100)
-            .Select(a => new { a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.EndTime, a.Status, patientName = a.Patient.FullName, a.Patient.MedicalRecordNumber, doctorName = _db.Users.Where(u => u.Id == a.Doctor.UserId).Select(u => u.FullName).FirstOrDefault() ?? "Bác sĩ", specialtyId = a.SpecialtyId })
+            .Select(a => new { a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName, doctorName = _db.Users.Where(u => u.Id == a.Doctor.UserId).Select(u => u.FullName).FirstOrDefault() ?? "Bác sĩ", specialtyId = a.SpecialtyId })
             .ToListAsync(cancellationToken);
         return Completed(appointments, "reception_appointments", $"Có {appointments.Count} lịch hẹn trong ngày hôm nay.");
     }
@@ -693,7 +701,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         var queue = await _db.PatientVisits.AsNoTracking()
             .Where(v => facilities.Contains(v.FacilityId) && v.VisitDate == _clock.VietnamToday && v.Status != VisitStatus.Cancelled && v.Status != VisitStatus.Completed)
             .OrderBy(v => v.QueueNumber).Take(100)
-            .Select(v => new { v.Id, v.VisitCode, v.QueueNumber, v.Status, patientName = v.Patient.FullName, v.Patient.MedicalRecordNumber, v.AssignedDoctorId, v.DepartmentId })
+            .Select(v => new { v.Id, v.VisitCode, v.QueueNumber, status = v.Status.ToString(), patientName = v.Patient.FullName, v.AssignedDoctorId, v.DepartmentId })
             .ToListAsync(cancellationToken);
         return Completed(queue, "reception_queue", $"Hàng đợi hiện có {queue.Count} lượt.");
     }
@@ -706,7 +714,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         var code = document.RootElement.GetProperty("appointmentCode").GetString()!.Trim();
         var appointment = await _db.Appointments.AsNoTracking()
             .Where(a => a.AppointmentCode == code && a.FacilityId.HasValue && facilities.Contains(a.FacilityId.Value))
-            .Select(a => new { a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.EndTime, a.Status, patientName = a.Patient.FullName, a.Patient.MedicalRecordNumber })
+            .Select(a => new { a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName })
             .SingleOrDefaultAsync(cancellationToken);
         return appointment is null ? AiToolExecutionResult.Failed("NOT_FOUND", "Không tìm thấy lịch hẹn trong phạm vi cơ sở được phân quyền.") : Completed(appointment, "appointment_lookup", "Đã tra cứu lịch hẹn từ hệ thống.");
     }
@@ -720,43 +728,107 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         var items = await _db.PatientVisits.AsNoTracking()
             .Where(v => v.AssignedDoctorId == doctorId && facilities.Contains(v.FacilityId) && v.VisitDate == _clock.VietnamToday && v.Status != VisitStatus.Cancelled && v.Status != VisitStatus.Completed)
             .OrderBy(v => v.QueueNumber).Take(100)
-            .Select(v => new { v.Id, v.VisitCode, v.QueueNumber, v.Status, patientName = v.Patient.FullName, v.Patient.MedicalRecordNumber, v.ChiefComplaint, v.AppointmentId })
+            .Select(v => new { v.Id, v.VisitCode, v.QueueNumber, status = v.Status.ToString(), patientName = v.Patient.FullName, v.ChiefComplaint, v.AppointmentId })
             .ToListAsync(cancellationToken);
         return Completed(items, "doctor_queue", $"Hàng đợi của bạn có {items.Count} lượt.");
     }
 
     private async Task<AiToolExecutionResult> GetDoctorPatientSummaryAsync(AiToolExecutionContext context, string json, CancellationToken cancellationToken)
     {
-        if (!TryGetLong(json, "appointmentId", out var appointmentId)) return AiToolExecutionResult.Failed("MISSING_TOOL_ARGUMENT", "Cần appointmentId hợp lệ.");
+        if (!TryGetExactlyOneLong(json, "appointmentId", "visitId", out var appointmentId, out var visitId))
+            return AiToolExecutionResult.Failed("MISSING_TOOL_ARGUMENT", "Cần đúng một appointmentId hoặc visitId hợp lệ.");
         var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Doctor), cancellationToken);
         if (facilities.Count == 0) return ScopeDenied();
-        var summary = await _db.Appointments.AsNoTracking()
-            .Where(a => a.Id == appointmentId && a.Doctor.UserId == context.ActorId && a.FacilityId.HasValue && facilities.Contains(a.FacilityId.Value))
-            .Select(a => new { a.Id, a.AppointmentCode, a.AppointmentDate, a.Status, patientName = a.Patient.FullName, a.Patient.MedicalRecordNumber, a.Reason, a.SpecialtyId })
-            .SingleOrDefaultAsync(cancellationToken);
-        return summary is null ? AiToolExecutionResult.Failed("NOT_FOUND", "Ca khám không thuộc bác sĩ hiện tại.") : Completed(summary, "doctor_patient_summary", "Tóm tắt được giới hạn trong ca khám được phân công.");
+        if (visitId.HasValue)
+        {
+            var visit = await _db.PatientVisits.AsNoTracking()
+                .Where(v => v.Id == visitId.Value && v.FacilityId > 0 && facilities.Contains(v.FacilityId) && v.AssignedDoctor != null && v.AssignedDoctor.UserId == context.ActorId)
+                .Select(v => new
+                {
+                    caseType = v.AppointmentId.HasValue ? "scheduled_visit" : "walk_in_visit",
+                    v.Id, v.VisitCode, v.AppointmentId, v.VisitDate, arrivalType = v.ArrivalType.ToString(), status = v.Status.ToString(),
+                    patientName = v.Patient.FullName, v.ChiefComplaint,
+                    summary = v.VisitSummary == null ? null : new { v.VisitSummary.Summary, v.VisitSummary.ClinicalFindings, v.VisitSummary.Diagnosis, v.VisitSummary.TreatmentPlan, v.VisitSummary.FollowUpInstruction, v.VisitSummary.CompletedAtUtc },
+                    vitals = v.VitalSigns == null ? null : new { v.VitalSigns.Temperature, v.VitalSigns.BloodPressureSystolic, v.VitalSigns.BloodPressureDiastolic, v.VitalSigns.HeartRate, v.VitalSigns.RespiratoryRate, v.VitalSigns.SpO2, v.VitalSigns.Weight, v.VitalSigns.Height, v.VitalSigns.Bmi, v.VitalSigns.RecordedAtUtc }
+                }).SingleOrDefaultAsync(cancellationToken);
+            return visit is null ? AiToolExecutionResult.Failed("NOT_FOUND", "Ca khám không thuộc bác sĩ hiện tại.") : Completed(visit, "doctor_patient_summary", "Tóm tắt ca khám, triệu chứng và sinh hiệu được đọc từ hồ sơ được phân công.");
+        }
+
+        var appointment = await _db.Appointments.AsNoTracking()
+            .Where(a => a.Id == appointmentId!.Value && a.Doctor.UserId == context.ActorId && a.FacilityId.HasValue && facilities.Contains(a.FacilityId.Value))
+            .Select(a => new
+            {
+                caseType = "appointment",
+                a.Id, a.AppointmentCode, a.AppointmentDate, a.Status, patientName = a.Patient.FullName,
+                a.Reason, a.SpecialtyId, patientVisitId = a.PatientVisit == null ? (long?)null : a.PatientVisit.Id,
+                summary = a.VisitSummary == null ? (a.PatientVisit == null || a.PatientVisit.VisitSummary == null ? null : new { a.PatientVisit.VisitSummary.Summary, a.PatientVisit.VisitSummary.ClinicalFindings, a.PatientVisit.VisitSummary.Diagnosis, a.PatientVisit.VisitSummary.TreatmentPlan, a.PatientVisit.VisitSummary.FollowUpInstruction, a.PatientVisit.VisitSummary.CompletedAtUtc }) : new { a.VisitSummary.Summary, a.VisitSummary.ClinicalFindings, a.VisitSummary.Diagnosis, a.VisitSummary.TreatmentPlan, a.VisitSummary.FollowUpInstruction, a.VisitSummary.CompletedAtUtc },
+                vitals = a.VitalSigns == null ? (a.PatientVisit == null || a.PatientVisit.VitalSigns == null ? null : new { a.PatientVisit.VitalSigns.Temperature, a.PatientVisit.VitalSigns.BloodPressureSystolic, a.PatientVisit.VitalSigns.BloodPressureDiastolic, a.PatientVisit.VitalSigns.HeartRate, a.PatientVisit.VitalSigns.RespiratoryRate, a.PatientVisit.VitalSigns.SpO2, a.PatientVisit.VitalSigns.Weight, a.PatientVisit.VitalSigns.Height, a.PatientVisit.VitalSigns.Bmi, a.PatientVisit.VitalSigns.RecordedAtUtc }) : new { a.VitalSigns.Temperature, a.VitalSigns.BloodPressureSystolic, a.VitalSigns.BloodPressureDiastolic, a.VitalSigns.HeartRate, a.VitalSigns.RespiratoryRate, a.VitalSigns.SpO2, a.VitalSigns.Weight, a.VitalSigns.Height, a.VitalSigns.Bmi, a.VitalSigns.RecordedAtUtc }
+            }).SingleOrDefaultAsync(cancellationToken);
+        return appointment is null ? AiToolExecutionResult.Failed("NOT_FOUND", "Ca khám không thuộc bác sĩ hiện tại.") : Completed(appointment, "doctor_patient_summary", "Tóm tắt ca khám được giới hạn trong lịch hẹn được phân công.");
     }
 
-    private async Task<AiToolExecutionResult> GetDoctorOrdersAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
+    private async Task<AiToolExecutionResult> GetDoctorOrdersAsync(AiToolExecutionContext context, string json, CancellationToken cancellationToken)
     {
         var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Doctor), cancellationToken);
         if (facilities.Count == 0) return ScopeDenied();
-        var items = await _db.DiagnosticOrders.AsNoTracking()
+        var visitId = TryGetLong(json, "visitId", out var requestedVisitId) ? requestedVisitId : (long?)null;
+        var appointmentId = TryGetLong(json, "appointmentId", out var requestedAppointmentId) ? requestedAppointmentId : (long?)null;
+        var query = _db.DiagnosticOrders.AsNoTracking()
             .Where(o => o.OrderingDoctor.UserId == context.ActorId && o.FacilityId.HasValue && facilities.Contains(o.FacilityId.Value) && o.Status != DiagnosticOrderStatus.Cancelled)
-            .OrderByDescending(o => o.OrderedAtUtc).Take(100)
-            .Select(o => new { o.Id, o.OrderCode, o.PatientId, o.Status, o.ClinicalIndication, o.OrderedAtUtc, o.FacilityId })
+            .Where(o => !visitId.HasValue || (o.PatientVisitId == visitId.Value && o.PatientVisit != null && o.PatientVisit.AssignedDoctor != null && o.PatientVisit.AssignedDoctor.UserId == context.ActorId))
+            .Where(o => !appointmentId.HasValue || (o.AppointmentId == appointmentId.Value && o.Appointment != null && o.Appointment.Doctor.UserId == context.ActorId) || (o.PatientVisit != null && o.PatientVisit.AppointmentId == appointmentId.Value && o.PatientVisit.AssignedDoctor != null && o.PatientVisit.AssignedDoctor.UserId == context.ActorId));
+        var items = await query.OrderByDescending(o => o.OrderedAtUtc).Take(100)
+            .Select(o => new
+            {
+                o.Id, o.OrderCode, status = o.Status.ToString(), o.ClinicalIndication, o.OrderedAtUtc,
+                items = o.Items.OrderBy(i => i.Id).Select(i => new
+                {
+                    service = i.DiagnosticService.Name,
+                    status = i.Status.ToString(),
+                    result = i.Result == null ? null : new { i.Result.ResultText, i.Result.Conclusion, i.Result.ReferenceRange, i.Result.Unit, i.Result.ResultedAtUtc }
+                }).ToList()
+            })
             .ToListAsync(cancellationToken);
-        return Completed(items, "doctor_diagnostic_orders", $"Có {items.Count} chỉ định liên quan.");
+        var hasPendingResult = items.Any(order => order.items.Any(item => item.result is null));
+        return Completed(items, "doctor_diagnostic_orders", items.Count == 0 ? "Chưa có chỉ định trong ca này." : hasPendingResult ? $"Có {items.Count} chỉ định; một số chỉ định chưa có kết quả." : $"Có {items.Count} chỉ định và đã có kết quả tương ứng.");
+    }
+
+    private async Task<AiToolExecutionResult> GetDoctorPrescriptionStatusAsync(AiToolExecutionContext context, string json, CancellationToken cancellationToken)
+    {
+        if (!TryGetExactlyOneLong(json, "appointmentId", "visitId", out var appointmentId, out var visitId))
+            return AiToolExecutionResult.Failed("MISSING_TOOL_ARGUMENT", "Cần đúng một appointmentId hoặc visitId hợp lệ.");
+        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Doctor), cancellationToken);
+        if (facilities.Count == 0) return ScopeDenied();
+        var items = await _db.Prescriptions.AsNoTracking()
+            .Where(p => p.Doctor != null && p.Doctor.UserId == context.ActorId &&
+                        ((p.PatientVisit != null && facilities.Contains(p.PatientVisit.FacilityId)) ||
+                         (p.PatientVisit == null && p.Appointment != null && p.Appointment.FacilityId.HasValue && facilities.Contains(p.Appointment.FacilityId.Value))))
+            .Where(p => !visitId.HasValue || (p.PatientVisitId == visitId.Value && p.PatientVisit != null && p.PatientVisit.AssignedDoctor != null && p.PatientVisit.AssignedDoctor.UserId == context.ActorId))
+            .Where(p => !appointmentId.HasValue || (p.AppointmentId == appointmentId.Value && p.Appointment != null && p.Appointment.Doctor.UserId == context.ActorId) || (p.PatientVisit != null && p.PatientVisit.AppointmentId == appointmentId.Value && p.PatientVisit.AssignedDoctor != null && p.PatientVisit.AssignedDoctor.UserId == context.ActorId))
+            .OrderByDescending(p => p.CreatedAt).Take(20)
+            .Select(p => new
+            {
+                p.Id, status = p.Status.ToString(), p.CreatedAt, p.DispensedAt, p.Notes,
+                items = p.Items.Select(i => new { medicine = i.Medicine!.Name, i.Dosage, i.Frequency, i.DurationDays, i.Instructions }).ToList()
+            }).ToListAsync(cancellationToken);
+        return Completed(items, "doctor_prescription_status", items.Count == 0 ? "Ca khám chưa có đơn thuốc." : $"Có {items.Count} đơn thuốc của ca khám.");
     }
 
     private async Task<AiToolExecutionResult> GetTechnicianWorklistAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
     {
-        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.DiagnosticTechnician), cancellationToken);
-        if (facilities.Count == 0) return ScopeDenied();
+        if (!context.ActorId.HasValue || context.ActorId == Guid.Empty) return ScopeDenied();
         var items = await _db.DiagnosticOrders.AsNoTracking()
-            .Where(o => o.FacilityId.HasValue && facilities.Contains(o.FacilityId.Value) && (o.Status == DiagnosticOrderStatus.Ordered || o.Status == DiagnosticOrderStatus.InProgress))
+            .Where(o => o.FacilityId.HasValue && o.PerformingDepartmentId.HasValue &&
+                        _db.StaffFacilityAssignments.Any(a => a.UserId == context.ActorId.Value && a.IsActive && a.Role == nameof(AiActorRole.DiagnosticTechnician) &&
+                            a.FacilityId == o.FacilityId.Value && a.DepartmentId == o.PerformingDepartmentId.Value) &&
+                        (!context.FacilityId.HasValue || o.FacilityId == context.FacilityId.Value) &&
+                        (o.Status == DiagnosticOrderStatus.Ordered || o.Status == DiagnosticOrderStatus.InProgress))
             .OrderBy(o => o.OrderedAtUtc).Take(100)
-            .Select(o => new { o.Id, o.OrderCode, o.PatientId, o.Status, o.ClinicalIndication, o.OrderedAtUtc, o.PerformingDepartmentId })
+            .Select(o => new
+            {
+                o.Id, o.OrderCode, status = o.Status.ToString(), o.ClinicalIndication, o.OrderedAtUtc, o.PerformingDepartmentId,
+                items = o.Items.OrderBy(i => i.Id).Select(i => new { service = i.DiagnosticService.Name, status = i.Status.ToString() }).ToList()
+            })
             .ToListAsync(cancellationToken);
         return Completed(items, "technician_worklist", $"Có {items.Count} chỉ định đang chờ xử lý.");
     }
@@ -770,7 +842,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
                         ((p.PatientVisit != null && facilities.Contains(p.PatientVisit.FacilityId)) ||
                          (p.PatientVisit == null && p.Appointment != null && p.Appointment.FacilityId.HasValue && facilities.Contains(p.Appointment.FacilityId.Value))))
             .OrderBy(p => p.CreatedAt).Take(100)
-            .Select(p => new { p.Id, p.PatientId, patientName = p.Patient!.FullName, p.Status, p.CreatedAt, p.PatientVisitId })
+            .Select(p => new { p.Id, status = p.Status.ToString(), p.CreatedAt, p.PatientVisitId, paid = p.PatientVisit != null && p.PatientVisit.Invoices.Any(i => i.Status == InvoiceStatus.Paid) })
             .ToListAsync(cancellationToken);
         return Completed(items, "pharmacist_prescription_queue", $"Có {items.Count} đơn thuốc trong hàng đợi.");
     }
@@ -812,6 +884,48 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         value = 0;
         try { using var document = JsonDocument.Parse(json); return document.RootElement.TryGetProperty(name, out var property) && property.TryGetInt64(out value) && value > 0; }
         catch (JsonException) { return false; }
+    }
+
+    private static bool HasExactlyOneResourceId(JsonElement root, string firstName, string secondName)
+    {
+        if (root.EnumerateObject().Any(x => !x.Name.Equals(firstName, StringComparison.OrdinalIgnoreCase) && !x.Name.Equals(secondName, StringComparison.OrdinalIgnoreCase)))
+            return false;
+        var first = root.TryGetProperty(firstName, out var firstValue) && firstValue.ValueKind == JsonValueKind.Number && firstValue.TryGetInt64(out var firstId) && firstId > 0;
+        var second = root.TryGetProperty(secondName, out var secondValue) && secondValue.ValueKind == JsonValueKind.Number && secondValue.TryGetInt64(out var secondId) && secondId > 0;
+        return first ^ second;
+    }
+
+    private static bool HasAtMostOnePositiveResourceId(JsonElement root, string firstName, string secondName)
+    {
+        var count = 0;
+        foreach (var property in root.EnumerateObject())
+        {
+            if (!property.Name.Equals(firstName, StringComparison.OrdinalIgnoreCase) && !property.Name.Equals(secondName, StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (property.Value.ValueKind != JsonValueKind.Number || !property.Value.TryGetInt64(out var id) || id <= 0)
+                return false;
+            count++;
+        }
+        return count <= 1;
+    }
+
+    private static bool TryGetExactlyOneLong(string json, string firstName, string secondName, out long? first, out long? second)
+    {
+        first = null;
+        second = null;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.TryGetProperty(firstName, out var firstValue) && firstValue.TryGetInt64(out var firstId) && firstId > 0)
+                first = firstId;
+            if (document.RootElement.TryGetProperty(secondName, out var secondValue) && secondValue.TryGetInt64(out var secondId) && secondId > 0)
+                second = secondId;
+            return first.HasValue ^ second.HasValue;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static AiToolExecutionResult ScopeDenied() => AiToolExecutionResult.Failed("FACILITY_SCOPE_REQUIRED", "Không xác định được phạm vi cơ sở được phân quyền; dữ liệu không được trả về.");
