@@ -75,6 +75,7 @@ describe('UnifiedCopilotPanel', () => {
                 description: 'Đã tìm thấy dữ liệu công khai.',
                 data: {
                     status: 'matched',
+                    mode: 'search',
                     sourceType: 'specialty',
                     items: [{
                         sourceType: 'specialty',

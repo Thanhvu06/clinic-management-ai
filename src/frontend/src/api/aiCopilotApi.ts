@@ -25,6 +25,7 @@ export interface AiCopilotCatalogItem {
 
 export interface AiCopilotCatalogData {
     status: 'matched' | 'not_found' | string;
+    mode?: 'search' | 'list' | string;
     sourceType: string;
     items: AiCopilotCatalogItem[];
     retrievedAtUtc: string;

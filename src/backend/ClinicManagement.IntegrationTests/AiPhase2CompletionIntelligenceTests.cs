@@ -198,7 +198,7 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         var client = await CreateAuthenticatedClientAsync("rec@test.com");
         var response = await client.PostAsJsonAsync("/api/v1/ai/copilot/chat", new
         {
-            message = "Tra cứu thông tin phòng khám",
+            message = "Danh sách danh mục công khai",
             sessionId = $"knowledge-{Guid.NewGuid():N}",
             currentRoute = "/reception"
         });
@@ -359,6 +359,168 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Public_catalog_filters_before_limit_and_keeps_doctor_relationship_filters_independent()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var targetDiagnosticName = $"ZZZ Siêu âm MụcTiêu {suffix}";
+        var targetDoctorName = $"Bác sĩ MụcTiêu {suffix}";
+        var specialtyName = $"Nội khoa Bộ lọc {suffix}";
+        var otherSpecialtyName = $"Ngoại khoa Bộ lọc {suffix}";
+        var facilityXName = $"Cơ sở X Bộ lọc {suffix}";
+        var facilityYName = $"Cơ sở Y Bộ lọc {suffix}";
+        Guid targetDoctorUserId;
+        Guid doctorAUserId;
+        long facilityXId;
+        long facilityYId;
+
+        await using (var setupScope = Factory.Services.CreateAsyncScope())
+        {
+            var db = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var facilityX = new Facility
+            {
+                Code = $"CAT-FX-{suffix}", Name = facilityXName, Address = $"Địa chỉ X {suffix}", City = "Hồ Chí Minh", Phone = "02830000001", IsActive = true
+            };
+            var facilityY = new Facility
+            {
+                Code = $"CAT-FY-{suffix}", Name = facilityYName, Address = $"Địa chỉ Y {suffix}", City = "Hồ Chí Minh", Phone = "02830000002", IsActive = true
+            };
+            var specialty = new Specialty
+            {
+                SpecialtyCode = $"CAT-FILTER-{suffix}", Name = specialtyName, Description = "Chuyên khoa lọc quan hệ.", IsActive = true, AiEnabled = true
+            };
+            var otherSpecialty = new Specialty
+            {
+                SpecialtyCode = $"CAT-OTHER-FILTER-{suffix}", Name = otherSpecialtyName, Description = "Chuyên khoa khác.", IsActive = true, AiEnabled = true
+            };
+            db.Facilities.AddRange(facilityX, facilityY);
+            db.Specialties.AddRange(specialty, otherSpecialty);
+            db.DiagnosticServices.AddRange(Enumerable.Range(0, 205).Select(index => new DiagnosticService
+            {
+                Code = $"CAT-BULK-{suffix}-{index:000}",
+                Name = $"A Dịch vụ Nhiễu {suffix} {index:000}",
+                Category = DiagnosticCategory.Ultrasound,
+                Price = 100000m + index,
+                IsActive = true
+            }).Append(new DiagnosticService
+            {
+                Code = $"CAT-TARGET-{suffix}", Name = targetDiagnosticName, Category = DiagnosticCategory.Ultrasound, Price = 765000m, IsActive = true
+            }));
+            await db.SaveChangesAsync();
+            facilityXId = facilityX.Id;
+            facilityYId = facilityY.Id;
+
+            targetDoctorUserId = Guid.NewGuid();
+            doctorAUserId = Guid.NewGuid();
+            var doctorBUserId = Guid.NewGuid();
+            var noiseUsers = Enumerable.Range(0, 205).Select(index => new ApplicationUser
+            {
+                Id = Guid.NewGuid(), UserName = $"catalog-noise-{suffix}-{index}@test.com", Email = $"catalog-noise-{suffix}-{index}@test.com",
+                FullName = $"Bác sĩ Nhiễu {suffix} {index:000}", PhoneNumber = $"09{suffix}{index:000}", IsActive = true
+            }).ToArray();
+            var targetUser = new ApplicationUser { Id = targetDoctorUserId, UserName = $"catalog-target-{suffix}@test.com", Email = $"catalog-target-{suffix}@test.com", FullName = targetDoctorName, PhoneNumber = $"098{suffix}001", IsActive = true };
+            var doctorAUser = new ApplicationUser { Id = doctorAUserId, UserName = $"catalog-a-{suffix}@test.com", Email = $"catalog-a-{suffix}@test.com", FullName = $"Bác sĩ A {suffix}", PhoneNumber = $"098{suffix}002", IsActive = true };
+            var doctorBUser = new ApplicationUser { Id = doctorBUserId, UserName = $"catalog-b-{suffix}@test.com", Email = $"catalog-b-{suffix}@test.com", FullName = $"Bác sĩ B {suffix}", PhoneNumber = $"098{suffix}003", IsActive = true };
+            db.Users.AddRange(noiseUsers.Append(targetUser).Append(doctorAUser).Append(doctorBUser));
+
+            var noiseDoctors = noiseUsers.Select(user => new Doctor { UserId = user.Id, IsActive = true }).ToArray();
+            var targetDoctor = new Doctor { UserId = targetDoctorUserId, IsActive = true };
+            var doctorA = new Doctor { UserId = doctorAUserId, IsActive = true };
+            var doctorB = new Doctor { UserId = doctorBUserId, IsActive = true };
+            db.Doctors.AddRange(noiseDoctors.Append(targetDoctor).Append(doctorA).Append(doctorB));
+            await db.SaveChangesAsync();
+
+            db.DoctorSpecialties.AddRange(
+                noiseDoctors.Select(doctor => new DoctorSpecialty { DoctorId = doctor.Id, SpecialtyId = specialty.Id, IsPrimary = true })
+                    .Append(new DoctorSpecialty { DoctorId = targetDoctor.Id, SpecialtyId = specialty.Id, IsPrimary = true })
+                    .Append(new DoctorSpecialty { DoctorId = doctorA.Id, SpecialtyId = specialty.Id, IsPrimary = true })
+                    .Append(new DoctorSpecialty { DoctorId = doctorA.Id, SpecialtyId = otherSpecialty.Id, IsPrimary = false })
+                    .Append(new DoctorSpecialty { DoctorId = doctorB.Id, SpecialtyId = specialty.Id, IsPrimary = true }));
+            db.StaffFacilityAssignments.AddRange(
+                noiseDoctors.Select(doctor => new StaffFacilityAssignment { UserId = doctor.UserId, FacilityId = facilityYId, Role = "Doctor", IsActive = true })
+                    .Append(new StaffFacilityAssignment { UserId = targetDoctorUserId, FacilityId = facilityYId, Role = "Doctor", IsActive = true })
+                    .Append(new StaffFacilityAssignment { UserId = doctorAUserId, FacilityId = facilityXId, Role = "Doctor", IsActive = true })
+                    .Append(new StaffFacilityAssignment { UserId = doctorAUserId, FacilityId = facilityYId, Role = "Doctor", IsActive = true })
+                    .Append(new StaffFacilityAssignment { UserId = doctorBUserId, FacilityId = facilityYId, Role = "Doctor", IsActive = true }));
+            await db.SaveChangesAsync();
+        }
+
+        var client = await CreateAuthenticatedClientAsync("pat1@test.com");
+        using var accentedService = await PostCatalogAsync(client, $"Dịch vụ Siêu âm MụcTiêu {suffix} giá bao nhiêu?", "bulk-accented");
+        var accentedServiceItem = Assert.Single(GetCatalog(accentedService).GetProperty("items").EnumerateArray());
+        Assert.Equal(targetDiagnosticName, accentedServiceItem.GetProperty("title").GetString());
+        Assert.Equal(765000m, accentedServiceItem.GetProperty("publishedPrice").GetDecimal());
+
+        using var unaccentedService = await PostCatalogAsync(client, $"Dich vu Sieu am MucTieu {suffix} gia bao nhieu?", "bulk-unaccented");
+        var unaccentedServiceItem = Assert.Single(GetCatalog(unaccentedService).GetProperty("items").EnumerateArray());
+        Assert.Equal(targetDiagnosticName, unaccentedServiceItem.GetProperty("title").GetString());
+
+        using var targetDoctorResponse = await PostCatalogAsync(client, $"Bác sĩ MụcTiêu {suffix}", "bulk-doctor");
+        var targetDoctorItems = GetCatalog(targetDoctorResponse).GetProperty("items").EnumerateArray().ToArray();
+        Assert.True(targetDoctorItems.Any(item => item.GetProperty("title").GetString() == targetDoctorName), targetDoctorResponse.RootElement.GetRawText());
+
+        using var directTargetDoctorResponse = await ExecuteCatalogAsync(client, new
+        {
+            entity = "doctor",
+            query = targetDoctorName,
+            limit = 20
+        }, "bulk-doctor-direct");
+        var directTargetDoctorItems = GetDirectCatalog(directTargetDoctorResponse).GetProperty("items").EnumerateArray().ToArray();
+        Assert.Single(directTargetDoctorItems, item => item.GetProperty("title").GetString() == targetDoctorName);
+
+        using var filteredResponse = await ExecuteCatalogAsync(client, new
+        {
+            entity = "doctor",
+            query = "Bác sĩ",
+            specialtyQuery = specialtyName,
+            facilityQuery = facilityXName,
+            limit = 20
+        }, "doctor-filter");
+        var filteredCatalog = GetDirectCatalog(filteredResponse);
+        var filteredItems = filteredCatalog.GetProperty("items").EnumerateArray().ToArray();
+        var filteredDoctor = Assert.Single(filteredItems, item => item.GetProperty("title").GetString() == $"Bác sĩ A {suffix}");
+        Assert.DoesNotContain(filteredItems, item => item.GetProperty("title").GetString() == $"Bác sĩ B {suffix}");
+        var filteredDetails = filteredDoctor.GetProperty("details");
+        Assert.Equal(specialtyName, filteredDetails.GetProperty("specialties").GetString());
+        Assert.Contains(facilityXName, filteredDetails.GetProperty("facilities").GetString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(facilityYName, filteredDetails.GetProperty("facilities").GetString(), StringComparison.Ordinal);
+
+        await using (var updateScope = Factory.Services.CreateAsyncScope())
+        {
+            var db = updateScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var assignment = await db.StaffFacilityAssignments.SingleAsync(x => x.UserId == doctorAUserId && x.FacilityId == facilityXId);
+            assignment.IsActive = false;
+            await db.SaveChangesAsync();
+        }
+
+        using var afterAssignmentChange = await ExecuteCatalogAsync(client, new
+        {
+            entity = "doctor", query = "Bác sĩ", specialtyQuery = specialtyName, facilityQuery = facilityXName, limit = 20
+        }, "doctor-filter-after-assignment-change");
+        Assert.Equal("not_found", GetDirectCatalog(afterAssignmentChange).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Public_catalog_requires_explicit_list_or_meaningful_query_before_returning_rows()
+    {
+        var client = await CreateAuthenticatedClientAsync("pat1@test.com");
+
+        using var ambiguous = await PostCatalogAsync(client, "Có bác sĩ nào?", "ambiguous-doctor");
+        var ambiguousData = ambiguous.RootElement.GetProperty("data");
+        Assert.NotNull(ambiguousData.GetProperty("clarification").GetString());
+        Assert.Empty(ambiguousData.GetProperty("cards").EnumerateArray());
+
+        using var list = await PostCatalogAsync(client, "Danh sách bác sĩ", "list-doctors");
+        var listCatalog = GetCatalog(list);
+        Assert.Equal("matched", listCatalog.GetProperty("status").GetString());
+        Assert.Equal("list", listCatalog.GetProperty("mode").GetString());
+        Assert.NotEmpty(listCatalog.GetProperty("items").EnumerateArray());
+
+        using var punctuation = await ExecuteCatalogAsync(client, new { entity = "all", query = "?!", limit = 20 }, "punctuation");
+        var punctuationResult = punctuation.RootElement.GetProperty("error");
+        Assert.Equal("AMBIGUOUS_CATALOG_QUERY", punctuationResult.GetProperty("code").GetString());
+    }
+
+    [Fact]
     public async Task Public_catalog_rejects_unknown_schema_fields_and_never_accepts_authority_overrides()
     {
         var client = await CreateAuthenticatedClientAsync("pat1@test.com");
@@ -417,8 +579,24 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         return JsonDocument.Parse(json);
     }
 
+    private async Task<JsonDocument> ExecuteCatalogAsync(HttpClient client, object arguments, string label)
+    {
+        var response = await client.PostAsJsonAsync("/api/v1/ai/tools/execute", new
+        {
+            toolName = "clinic.search_knowledge",
+            toolVersion = "1.0",
+            argumentsJson = JsonSerializer.Serialize(arguments),
+            sessionId = $"catalog-direct-{label}-{Guid.NewGuid():N}"
+        });
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, json);
+        return JsonDocument.Parse(json);
+    }
+
     private static JsonElement GetCatalog(JsonDocument document) =>
         document.RootElement.GetProperty("data").GetProperty("cards").EnumerateArray().Single().GetProperty("data");
+
+    private static JsonElement GetDirectCatalog(JsonDocument document) => document.RootElement.GetProperty("data");
 
     [Theory]
     [InlineData("ngất xỉu")]

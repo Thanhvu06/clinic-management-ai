@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Linq.Expressions;
+using System.Reflection;
 using ClinicManagement.Application.AI.Conversation;
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Application.Authentication.Interfaces;
@@ -16,9 +18,31 @@ namespace ClinicManagement.Infrastructure.AI.Tools;
 /// </summary>
 public sealed class RoleCopilotToolHandler : IAiToolHandler
 {
-    private const int CatalogCandidateLimit = 200;
     private const int CatalogDefaultResultLimit = 10;
     private const int CatalogMaxResultLimit = 20;
+
+    private static readonly MethodInfo StringToLowerMethod = typeof(string).GetMethod(nameof(string.ToLower), Type.EmptyTypes)!;
+    private static readonly MethodInfo StringReplaceMethod = typeof(string).GetMethod(nameof(string.Replace), new[] { typeof(string), typeof(string) })!;
+    private static readonly MethodInfo LikeMethod = typeof(DbFunctionsExtensions).GetMethod(
+        nameof(DbFunctionsExtensions.Like),
+        new[] { typeof(DbFunctions), typeof(string), typeof(string) })!;
+
+    private static readonly (string From, string To)[] VietnameseFolding =
+    {
+        ("á", "a"), ("à", "a"), ("ả", "a"), ("ã", "a"), ("ạ", "a"),
+        ("ă", "a"), ("ắ", "a"), ("ằ", "a"), ("ẳ", "a"), ("ẵ", "a"), ("ặ", "a"),
+        ("â", "a"), ("ấ", "a"), ("ầ", "a"), ("ẩ", "a"), ("ẫ", "a"), ("ậ", "a"),
+        ("é", "e"), ("è", "e"), ("ẻ", "e"), ("ẽ", "e"), ("ẹ", "e"),
+        ("ê", "e"), ("ế", "e"), ("ề", "e"), ("ể", "e"), ("ễ", "e"), ("ệ", "e"),
+        ("í", "i"), ("ì", "i"), ("ỉ", "i"), ("ĩ", "i"), ("ị", "i"),
+        ("ó", "o"), ("ò", "o"), ("ỏ", "o"), ("õ", "o"), ("ọ", "o"),
+        ("ô", "o"), ("ố", "o"), ("ồ", "o"), ("ổ", "o"), ("ỗ", "o"), ("ộ", "o"),
+        ("ơ", "o"), ("ớ", "o"), ("ờ", "o"), ("ở", "o"), ("ỡ", "o"), ("ợ", "o"),
+        ("ú", "u"), ("ù", "u"), ("ủ", "u"), ("ũ", "u"), ("ụ", "u"),
+        ("ư", "u"), ("ứ", "u"), ("ừ", "u"), ("ử", "u"), ("ữ", "u"), ("ự", "u"),
+        ("ý", "y"), ("ỳ", "y"), ("ỷ", "y"), ("ỹ", "y"), ("ỵ", "y"),
+        ("đ", "d")
+    };
 
     private static readonly IReadOnlySet<string> CatalogEntities = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -32,9 +56,9 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
 
     private static readonly IReadOnlySet<string> CatalogStopWords = new HashSet<string>(StringComparer.Ordinal)
     {
-        "ai", "bao", "biet", "chi", "cho", "co", "cua", "cuu", "dich", "duoc", "gia", "gi", "giup",
-        "bac", "bsi", "dau", "doctor", "hay", "hien", "hoi", "kham", "khong", "khoa", "chuyen", "lich", "mo", "mot", "nao", "nhieu", "nguoi", "o", "phong", "si",
-        "so", "tai", "the", "thong", "tin", "toi", "tra", "va", "ve", "voi", "vu", "xem"
+        "ai", "bao", "bang", "bac", "biet", "cac", "ca", "chi", "cho", "co", "cua", "cuu", "danh", "dich", "doctor", "duoc", "gia", "gi", "giup",
+        "bsi", "dau", "hay", "hien", "hoi", "kham", "ke", "khong", "khoa", "chuyen", "lich", "liet", "mo", "mot", "muc", "nao", "nhieu", "nguoi", "o", "phong", "sach", "si",
+        "a", "e", "i", "o", "u", "y", "so", "tai", "tat", "the", "thong", "tin", "toi", "tra", "va", "ve", "voi", "vu", "xem"
     };
 
     private readonly AppDbContext _db;
@@ -100,36 +124,38 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         if (!TryReadCatalogRequest(json, out var request, out var error))
             return error!;
 
-        var terms = BuildSearchTerms(request.Query, request.SpecialtyQuery, request.FacilityQuery);
-        var broadRequest = terms.Count == 0 &&
-            (request.Entity.Equals("all", StringComparison.OrdinalIgnoreCase) ||
-             request.Entity.Equals("facility", StringComparison.OrdinalIgnoreCase) ||
-             request.Entity.Equals("price", StringComparison.OrdinalIgnoreCase));
+        var queryTerms = BuildSearchTerms(request.Query);
+        var specialtyTerms = BuildSearchTerms(request.SpecialtyQuery);
+        var facilityTerms = BuildSearchTerms(request.FacilityQuery);
+        var isListRequest = IsExplicitListRequest(request.Query);
+        if (!isListRequest && queryTerms.Count == 0 && specialtyTerms.Count == 0 && facilityTerms.Count == 0)
+            return AiToolExecutionResult.Failed("AMBIGUOUS_CATALOG_QUERY", "Vui lòng nêu rõ tên chuyên khoa, bác sĩ, dịch vụ hoặc cơ sở; hoặc yêu cầu một danh sách công khai cụ thể.");
+
         var hits = new List<ClinicKnowledgeItem>();
 
         switch (request.Entity)
         {
             case "all":
-                hits.AddRange(await SearchSpecialtiesAsync(terms, broadRequest, cancellationToken));
-                hits.AddRange(await SearchDoctorsAsync(terms, broadRequest, cancellationToken));
-                hits.AddRange(await SearchDiagnosticServicesAsync(terms, broadRequest, cancellationToken));
-                hits.AddRange(await SearchFacilitiesAsync(terms, broadRequest, cancellationToken));
-                hits.AddRange(await SearchPublishedPricesAsync(terms, broadRequest, cancellationToken));
+                hits.AddRange(await SearchSpecialtiesAsync(queryTerms, isListRequest, cancellationToken));
+                hits.AddRange(await SearchDoctorsAsync(queryTerms, specialtyTerms, facilityTerms, isListRequest, cancellationToken));
+                hits.AddRange(await SearchDiagnosticServicesAsync(queryTerms, isListRequest, cancellationToken));
+                hits.AddRange(await SearchFacilitiesAsync(queryTerms, isListRequest, cancellationToken));
+                hits.AddRange(await SearchPublishedPricesAsync(queryTerms, isListRequest, cancellationToken));
                 break;
             case "specialty":
-                hits.AddRange(await SearchSpecialtiesAsync(terms, false, cancellationToken));
+                hits.AddRange(await SearchSpecialtiesAsync(queryTerms, isListRequest, cancellationToken));
                 break;
             case "doctor":
-                hits.AddRange(await SearchDoctorsAsync(terms, false, cancellationToken));
+                hits.AddRange(await SearchDoctorsAsync(queryTerms, specialtyTerms, facilityTerms, isListRequest, cancellationToken));
                 break;
             case "diagnostic_service":
-                hits.AddRange(await SearchDiagnosticServicesAsync(terms, false, cancellationToken));
+                hits.AddRange(await SearchDiagnosticServicesAsync(queryTerms, isListRequest, cancellationToken));
                 break;
             case "facility":
-                hits.AddRange(await SearchFacilitiesAsync(terms, broadRequest, cancellationToken));
+                hits.AddRange(await SearchFacilitiesAsync(queryTerms, isListRequest, cancellationToken));
                 break;
             case "price":
-                hits.AddRange(await SearchPublishedPricesAsync(terms, terms.Count == 0, cancellationToken));
+                hits.AddRange(await SearchPublishedPricesAsync(queryTerms, isListRequest, cancellationToken));
                 break;
         }
 
@@ -138,6 +164,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
             .Select(x => x.First())
             .OrderBy(x => x.SourceType, StringComparer.Ordinal)
             .ThenBy(x => x.Title, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.SourceId, StringComparer.Ordinal)
             .Take(request.Limit)
             .ToArray();
         var retrievedAtUtc = new DateTimeOffset(DateTime.SpecifyKind(_clock.UtcNow, DateTimeKind.Utc));
@@ -149,11 +176,14 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
             Status = "completed",
             ResultType = "clinic_knowledge",
             DisplayText = matched
-                ? $"Đã tìm thấy {limited.Length} mục phù hợp từ danh mục công khai hiện hành."
+                ? isListRequest
+                    ? $"Danh sách công khai hiện hành gồm {limited.Length} mục phù hợp."
+                    : $"Đã tìm thấy {limited.Length} mục phù hợp từ danh mục công khai hiện hành."
                 : "Không tìm thấy dữ liệu công khai phù hợp; vui lòng hỏi lễ tân để được kiểm tra thêm.",
             Data = new ClinicKnowledgeEnvelope
             {
                 Status = matched ? "matched" : "not_found",
+                Mode = isListRequest ? "list" : "search",
                 SourceType = sourceType,
                 Items = limited,
                 RetrievedAtUtc = retrievedAtUtc
@@ -168,15 +198,18 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         bool broadRequest,
         CancellationToken cancellationToken)
     {
-        var candidates = await _db.Specialties.AsNoTracking()
-            .Where(x => x.IsActive)
+        var query = _db.Specialties.AsNoTracking()
+            .Where(x => x.IsActive);
+        if (!broadRequest)
+            query = WhereCatalogMatch(query, terms, x => x.Name, x => x.SpecialtyCode, x => x.Description);
+
+        var candidates = await query
             .OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Take(CatalogCandidateLimit)
+            .Take(CatalogMaxResultLimit)
             .Select(x => new { x.Id, x.SpecialtyCode, x.Name, x.Description, x.ConsultationFee })
             .ToListAsync(cancellationToken);
 
         return candidates
-            .Where(x => broadRequest || Matches(terms, x.Name, x.SpecialtyCode, x.Description))
             .Select(x => new ClinicKnowledgeItem
             {
                 SourceType = "specialty",
@@ -192,32 +225,55 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
     }
 
     private async Task<IReadOnlyList<ClinicKnowledgeItem>> SearchDoctorsAsync(
-        IReadOnlySet<string> terms,
+        IReadOnlySet<string> queryTerms,
+        IReadOnlySet<string> specialtyTerms,
+        IReadOnlySet<string> facilityTerms,
         bool broadRequest,
         CancellationToken cancellationToken)
     {
-        var candidates = await (from d in _db.Doctors.AsNoTracking()
-                                join u in _db.Users.AsNoTracking() on d.UserId equals u.Id
-                                join ds in _db.DoctorSpecialties.AsNoTracking() on d.Id equals ds.DoctorId
-                                join s in _db.Specialties.AsNoTracking() on ds.SpecialtyId equals s.Id
-                                join assignment in _db.StaffFacilityAssignments.AsNoTracking() on d.UserId equals assignment.UserId
-                                join facility in _db.Facilities.AsNoTracking() on assignment.FacilityId equals facility.Id
-                                where d.IsActive && u.IsActive && s.IsActive && assignment.IsActive &&
-                                      assignment.Role == nameof(AiActorRole.Doctor) && facility.IsActive
-                                orderby d.Id, facility.Id, s.Name
-                                select new
-                                {
-                                    DoctorId = d.Id,
-                                    u.FullName,
-                                    d.AcademicTitle,
-                                    d.ExperienceYears,
-                                    d.Description,
-                                    SpecialtyName = s.Name,
-                                    FacilityName = facility.Name,
-                                    FacilityAddress = facility.Address,
-                                    FacilityCity = facility.City
-                                })
-            .Take(CatalogCandidateLimit)
+        var query = from d in _db.Doctors.AsNoTracking()
+                    join u in _db.Users.AsNoTracking() on d.UserId equals u.Id
+                    join ds in _db.DoctorSpecialties.AsNoTracking() on d.Id equals ds.DoctorId
+                    join s in _db.Specialties.AsNoTracking() on ds.SpecialtyId equals s.Id
+                    join assignment in _db.StaffFacilityAssignments.AsNoTracking() on d.UserId equals assignment.UserId
+                    join facility in _db.Facilities.AsNoTracking() on assignment.FacilityId equals facility.Id
+                    where d.IsActive && u.IsActive && s.IsActive && assignment.IsActive &&
+                          assignment.Role == nameof(AiActorRole.Doctor) && facility.IsActive
+                    select new
+                    {
+                        DoctorId = d.Id,
+                        u.FullName,
+                        d.AcademicTitle,
+                        d.ExperienceYears,
+                        d.Description,
+                        SpecialtyName = s.Name,
+                        SpecialtyCode = s.SpecialtyCode,
+                        SpecialtyDescription = s.Description,
+                        FacilityCode = facility.Code,
+                        FacilityName = facility.Name,
+                        FacilityAddress = facility.Address,
+                        FacilityCity = facility.City
+                    };
+
+        if (!broadRequest && queryTerms.Count > 0)
+            query = WhereCatalogMatch(query, queryTerms, x => x.FullName, x => x.AcademicTitle, x => x.Description, x => x.SpecialtyName, x => x.SpecialtyCode, x => x.FacilityCode, x => x.FacilityName, x => x.FacilityAddress, x => x.FacilityCity);
+        if (specialtyTerms.Count > 0)
+            query = WhereCatalogMatch(query, specialtyTerms, x => x.SpecialtyName, x => x.SpecialtyCode, x => x.SpecialtyDescription);
+        if (facilityTerms.Count > 0)
+            query = WhereCatalogMatch(query, facilityTerms, x => x.FacilityCode, x => x.FacilityName, x => x.FacilityAddress, x => x.FacilityCity);
+
+        var doctorIds = await query
+            .Select(x => x.DoctorId)
+            .Distinct()
+            .OrderBy(x => x)
+            .Take(CatalogMaxResultLimit)
+            .ToListAsync(cancellationToken);
+        if (doctorIds.Count == 0)
+            return Array.Empty<ClinicKnowledgeItem>();
+
+        var candidates = await query
+            .Where(x => doctorIds.Contains(x.DoctorId))
+            .OrderBy(x => x.DoctorId).ThenBy(x => x.FacilityCode).ThenBy(x => x.SpecialtyCode)
             .ToListAsync(cancellationToken);
 
         return candidates
@@ -225,12 +281,8 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
             .Select(group =>
             {
                 var first = group.First();
-                var searchableFacilities = group.Select(x => $"{x.FacilityName} {x.FacilityAddress} {x.FacilityCity}");
-                var searchable = new[] { first.FullName, first.AcademicTitle, first.Description, first.SpecialtyName }
-                    .Concat(searchableFacilities);
-                return new { first, group, IsMatch = broadRequest || Matches(terms, searchable.ToArray()) };
+                return new { first, group };
             })
-            .Where(x => x.IsMatch)
             .Select(x => new ClinicKnowledgeItem
             {
                 SourceType = "doctor",
@@ -253,15 +305,18 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         bool broadRequest,
         CancellationToken cancellationToken)
     {
-        var candidates = await _db.DiagnosticServices.AsNoTracking()
-            .Where(x => x.IsActive)
+        var query = _db.DiagnosticServices.AsNoTracking()
+            .Where(x => x.IsActive);
+        if (!broadRequest)
+            query = WhereCatalogMatch(query, terms, x => x.Name, x => x.Code, x => x.PreparationInstructions);
+
+        var candidates = await query
             .OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Take(CatalogCandidateLimit)
+            .Take(CatalogMaxResultLimit)
             .Select(x => new { x.Id, x.Code, x.Name, x.Category, x.PreparationInstructions, x.Price })
             .ToListAsync(cancellationToken);
 
         return candidates
-            .Where(x => broadRequest || Matches(terms, x.Name, x.Code, x.PreparationInstructions, x.Category.ToString()))
             .Select(x => new ClinicKnowledgeItem
             {
                 SourceType = "diagnostic_service",
@@ -281,21 +336,29 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         bool broadRequest,
         CancellationToken cancellationToken)
     {
-        var facilities = await _db.Facilities.AsNoTracking()
-            .Where(x => x.IsActive)
+        var facilityQuery = _db.Facilities.AsNoTracking()
+            .Where(x => x.IsActive);
+        if (!broadRequest)
+            facilityQuery = WhereCatalogMatch(facilityQuery, terms, x => x.Code, x => x.Name, x => x.Address, x => x.City, x => x.Description);
+
+        var facilities = await facilityQuery
             .OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Take(CatalogCandidateLimit)
+            .Take(CatalogMaxResultLimit)
             .Select(x => new { x.Id, x.Code, x.Name, x.Address, x.City, x.Phone, x.Description })
             .ToListAsync(cancellationToken);
-        var locations = await _db.ClinicLocations.AsNoTracking()
-            .Where(x => x.IsActive)
+
+        var locationQuery = _db.ClinicLocations.AsNoTracking()
+            .Where(x => x.IsActive);
+        if (!broadRequest)
+            locationQuery = WhereCatalogMatch(locationQuery, terms, x => x.Code, x => x.Name, x => x.Address, x => x.City, x => x.Description, x => x.OpeningHours);
+
+        var locations = await locationQuery
             .OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Take(CatalogCandidateLimit)
+            .Take(CatalogMaxResultLimit)
             .Select(x => new { x.Id, x.Code, x.Name, x.Address, x.City, x.Phone, x.Description, x.OpeningHours })
             .ToListAsync(cancellationToken);
 
         var facilityHits = facilities
-            .Where(x => broadRequest || Matches(terms, x.Code, x.Name, x.Address, x.City, x.Description))
             .Select(x => new ClinicKnowledgeItem
             {
                 SourceType = "facility",
@@ -307,7 +370,6 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
                 Details = new Dictionary<string, string?> { ["code"] = x.Code, ["city"] = x.City }
             });
         var locationHits = locations
-            .Where(x => broadRequest || Matches(terms, x.Code, x.Name, x.Address, x.City, x.Description, x.OpeningHours))
             .Select(x => new ClinicKnowledgeItem
             {
                 SourceType = "clinic_location",
@@ -328,27 +390,40 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         bool broadRequest,
         CancellationToken cancellationToken)
     {
-        var specialties = await _db.Specialties.AsNoTracking()
-            .Where(x => x.IsActive && x.ConsultationFee > 0)
+        var specialtyQuery = _db.Specialties.AsNoTracking()
+            .Where(x => x.IsActive && x.ConsultationFee > 0);
+        if (!broadRequest)
+            specialtyQuery = WhereCatalogMatch(specialtyQuery, terms, x => x.Name, x => x.SpecialtyCode, x => x.Description);
+
+        var specialties = await specialtyQuery
             .OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Take(CatalogCandidateLimit)
+            .Take(CatalogMaxResultLimit)
             .Select(x => new { x.Id, x.Name, x.Description, x.SpecialtyCode, x.ConsultationFee })
             .ToListAsync(cancellationToken);
-        var diagnostics = await _db.DiagnosticServices.AsNoTracking()
-            .Where(x => x.IsActive && x.Price.HasValue && x.Price.Value > 0)
+
+        var diagnosticQuery = _db.DiagnosticServices.AsNoTracking()
+            .Where(x => x.IsActive && x.Price.HasValue && x.Price.Value > 0);
+        if (!broadRequest)
+            diagnosticQuery = WhereCatalogMatch(diagnosticQuery, terms, x => x.Name, x => x.Code, x => x.PreparationInstructions);
+
+        var diagnostics = await diagnosticQuery
             .OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Take(CatalogCandidateLimit)
+            .Take(CatalogMaxResultLimit)
             .Select(x => new { x.Id, x.Name, x.PreparationInstructions, x.Code, Price = x.Price!.Value, x.Category })
             .ToListAsync(cancellationToken);
-        var packages = await _db.HealthPackages.AsNoTracking()
-            .Where(x => x.IsActive && x.Price > 0)
+
+        var packageQuery = _db.HealthPackages.AsNoTracking()
+            .Where(x => x.IsActive && x.Price > 0);
+        if (!broadRequest)
+            packageQuery = WhereCatalogMatch(packageQuery, terms, x => x.Name, x => x.Code, x => x.Description);
+
+        var packages = await packageQuery
             .OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Take(CatalogCandidateLimit)
+            .Take(CatalogMaxResultLimit)
             .Select(x => new { x.Id, x.Name, x.Description, x.Code, x.Price })
             .ToListAsync(cancellationToken);
 
         var specialtyHits = specialties
-            .Where(x => broadRequest || Matches(terms, x.Name, x.SpecialtyCode, x.Description))
             .Select(x => new ClinicKnowledgeItem
             {
                 SourceType = "published_price",
@@ -361,7 +436,6 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
                 Details = new Dictionary<string, string?> { ["sourceEntity"] = "specialty", ["specialtyCode"] = x.SpecialtyCode }
             });
         var diagnosticHits = diagnostics
-            .Where(x => broadRequest || Matches(terms, x.Name, x.Code, x.PreparationInstructions, x.Category.ToString()))
             .Select(x => new ClinicKnowledgeItem
             {
                 SourceType = "published_price",
@@ -374,7 +448,6 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
                 Details = new Dictionary<string, string?> { ["sourceEntity"] = "diagnostic_service", ["code"] = x.Code, ["category"] = x.Category.ToString() }
             });
         var packageHits = packages
-            .Where(x => broadRequest || Matches(terms, x.Name, x.Code, x.Description))
             .Select(x => new ClinicKnowledgeItem
             {
                 SourceType = "published_price",
@@ -408,17 +481,30 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         if ((query.GetString()?.Trim().Length ?? 0) > 160)
             return AiToolArgumentValidationResult.Invalid("INVALID_QUERY", "Query danh mục tối đa 160 ký tự.");
 
+        var entityName = "all";
         if (root.TryGetProperty("entity", out var entity))
         {
-            if (entity.ValueKind != JsonValueKind.String || !CatalogEntities.Contains(entity.GetString()?.Trim() ?? string.Empty))
+            entityName = entity.ValueKind == JsonValueKind.String ? entity.GetString()?.Trim().ToLowerInvariant() ?? string.Empty : string.Empty;
+            if (!CatalogEntities.Contains(entityName))
                 return AiToolArgumentValidationResult.Invalid("INVALID_ENTITY", "Loại danh mục không được hỗ trợ.");
         }
 
+        var hasSpecialtyFilter = false;
+        var hasFacilityFilter = false;
         foreach (var name in new[] { "specialtyQuery", "facilityQuery" })
         {
-            if (root.TryGetProperty(name, out var filter) && (filter.ValueKind != JsonValueKind.String || (filter.GetString()?.Trim().Length ?? 0) > 120))
+            if (!root.TryGetProperty(name, out var filter))
+                continue;
+            if (filter.ValueKind != JsonValueKind.String || (filter.GetString()?.Trim().Length ?? 0) > 120)
                 return AiToolArgumentValidationResult.Invalid("INVALID_FILTER", "Bộ lọc danh mục không hợp lệ.");
+            if (name.Equals("specialtyQuery", StringComparison.OrdinalIgnoreCase))
+                hasSpecialtyFilter = !string.IsNullOrWhiteSpace(filter.GetString());
+            else
+                hasFacilityFilter = !string.IsNullOrWhiteSpace(filter.GetString());
         }
+
+        if ((hasSpecialtyFilter || hasFacilityFilter) && entityName is not ("doctor" or "all"))
+            return AiToolArgumentValidationResult.Invalid("INVALID_FILTER", "Bộ lọc chuyên khoa/cơ sở chỉ áp dụng cho hồ sơ bác sĩ công khai.");
 
         if (root.TryGetProperty("limit", out var limit) && (!limit.TryGetInt32(out var parsedLimit) || parsedLimit is < 1 or > CatalogMaxResultLimit))
             return AiToolArgumentValidationResult.Invalid("INVALID_LIMIT", $"Giới hạn danh mục phải từ 1 đến {CatalogMaxResultLimit}.");
@@ -462,7 +548,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
     private static IReadOnlySet<string> BuildSearchTerms(params string?[] values)
     {
         var normalized = AiTextNormalizer.NormalizeForComparison(string.Join(" ", values.Where(x => !string.IsNullOrWhiteSpace(x))));
-        var terms = Regex.Matches(normalized, @"[a-z0-9]{2,}", RegexOptions.CultureInvariant)
+        var terms = Regex.Matches(normalized, @"[a-z0-9]+", RegexOptions.CultureInvariant)
             .Select(x => x.Value)
             .Where(x => !CatalogStopWords.Contains(x))
             .Distinct(StringComparer.Ordinal)
@@ -471,13 +557,60 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         return terms;
     }
 
-    private static bool Matches(IReadOnlySet<string> terms, params string?[] values)
+    private static bool IsExplicitListRequest(string query)
     {
-        var searchable = AiTextNormalizer.NormalizeForComparison(string.Join(" ", values.Where(x => !string.IsNullOrWhiteSpace(x))));
-        var searchableTerms = Regex.Matches(searchable, @"[a-z0-9]{2,}", RegexOptions.CultureInvariant)
-            .Select(x => x.Value)
-            .ToHashSet(StringComparer.Ordinal);
-        return terms.Count > 0 && terms.All(searchableTerms.Contains);
+        var normalized = AiTextNormalizer.NormalizeForComparison(query);
+        if (Regex.IsMatch(normalized, @"\b(?:danh sach|liet ke|tat ca|danh muc|tong hop)\b", RegexOptions.CultureInvariant))
+            return true;
+        if (Regex.IsMatch(normalized, @"\b(?:bang gia|muc gia)\b", RegexOptions.CultureInvariant))
+            return true;
+        return Regex.IsMatch(normalized, @"\bcac\s+(?:co so|bac si|dich vu|chuyen khoa)\b", RegexOptions.CultureInvariant);
+    }
+
+    private static IQueryable<T> WhereCatalogMatch<T>(
+        IQueryable<T> source,
+        IReadOnlySet<string> terms,
+        params Expression<Func<T, string?>>[] selectors)
+    {
+        if (terms.Count == 0)
+            return source.Where(_ => false);
+
+        var parameter = Expression.Parameter(typeof(T), "catalogRow");
+        Expression? allTerms = null;
+        foreach (var term in terms)
+        {
+            Expression? anyField = null;
+            foreach (var selector in selectors)
+            {
+                var field = new ReplaceParameterVisitor(selector.Parameters[0], parameter).Visit(selector.Body)!;
+                var normalizedField = NormalizeCatalogField(field);
+                var like = Expression.Call(
+                    LikeMethod,
+                    Expression.Property(null, typeof(EF), nameof(EF.Functions)),
+                    normalizedField,
+                    Expression.Constant($"%{term}%"));
+                anyField = anyField is null ? like : Expression.OrElse(anyField, like);
+            }
+
+            allTerms = allTerms is null ? anyField : Expression.AndAlso(allTerms, anyField!);
+        }
+
+        return source.Where(Expression.Lambda<Func<T, bool>>(allTerms!, parameter));
+    }
+
+    private static Expression NormalizeCatalogField(Expression field)
+    {
+        var normalized = Expression.Call(field, StringToLowerMethod);
+        foreach (var (from, to) in VietnameseFolding)
+        {
+            normalized = Expression.Call(
+                normalized,
+                StringReplaceMethod,
+                Expression.Constant(from),
+                Expression.Constant(to));
+        }
+
+        return normalized;
     }
 
     private static bool IsAuthorityProperty(string propertyName) =>
@@ -492,6 +625,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
     private sealed class ClinicKnowledgeEnvelope
     {
         public string Status { get; init; } = "not_found";
+        public string Mode { get; init; } = "search";
         public string SourceType { get; init; } = "clinic_catalog";
         public IReadOnlyList<ClinicKnowledgeItem> Items { get; init; } = Array.Empty<ClinicKnowledgeItem>();
         public DateTimeOffset RetrievedAtUtc { get; init; }
@@ -510,6 +644,21 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         public string? Phone { get; init; }
         public string? OpeningHours { get; init; }
         public IReadOnlyDictionary<string, string?> Details { get; init; } = new Dictionary<string, string?>();
+    }
+
+    private sealed class ReplaceParameterVisitor : ExpressionVisitor
+    {
+        private readonly ParameterExpression _from;
+        private readonly ParameterExpression _to;
+
+        public ReplaceParameterVisitor(ParameterExpression from, ParameterExpression to)
+        {
+            _from = from;
+            _to = to;
+        }
+
+        protected override Expression VisitParameter(ParameterExpression node) =>
+            node == _from ? _to : base.VisitParameter(node);
     }
 
     private async Task<HashSet<long>> ResolveFacilityScopeAsync(AiToolExecutionContext context, string role, CancellationToken cancellationToken)
