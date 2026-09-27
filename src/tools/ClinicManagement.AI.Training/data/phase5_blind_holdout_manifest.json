@@ -7,6 +7,7 @@
   "independentHumanAnnotators": 0,
   "classifierPlannerTunedAfterFreeze": false,
   "evaluationOnly": true,
+  "holdoutSha256": "B7243E2EDEDC704B54F325ED1F453D4779E3E05444AF1A5B882936E5B24779C0",
   "labelingProcedure": [
     "Write fresh Vietnamese utterances without copying Phase4DatasetFactory source strings.",
     "Assign actor, intent, safety, grounding, allowed tools, forbidden tools, and outcome before runtime scoring.",

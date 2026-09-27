@@ -141,10 +141,18 @@ export const UnifiedCopilotPanel: React.FC = () => {
                     </div>)}
                     {copilot.pendingAction && <div className={styles.actionPreview} aria-label="Xem trước thao tác">
                         <div className={styles.cardTitle}><span>Xem trước từ backend</span><span>{copilot.pendingAction.status}</span></div>
-                        <div className={styles.previewLine}><strong>Resource đã chọn:</strong> {copilot.pendingAction.resourceSummary}</div>
-                        <div className={styles.previewLine}><strong>Hậu quả:</strong> {copilot.pendingAction.consequence}</div>
-                        <div className={styles.previewLine}><strong>Kiểm tra backend:</strong> {copilot.pendingAction.confirmationSummary}</div>
-                        <div className={styles.previewLine}><strong>Hết hạn:</strong> {copilot.pendingAction.expiresAtUtc ? new Date(copilot.pendingAction.expiresAtUtc).toLocaleString('vi-VN') : 'Backend không cung cấp'}</div>
+                        <div className={styles.previewLine}><strong>Resource đã chọn:</strong> {copilot.pendingAction.preview.resource.identity}</div>
+                        {copilot.pendingAction.preview.resource.facility && <div className={styles.previewLine}><strong>Cơ sở:</strong> {copilot.pendingAction.preview.resource.facility}</div>}
+                        {copilot.pendingAction.preview.resource.department && <div className={styles.previewLine}><strong>Khoa:</strong> {copilot.pendingAction.preview.resource.department}</div>}
+                        {copilot.pendingAction.preview.resource.subject && <div className={styles.previewLine}><strong>Đối tượng:</strong> {copilot.pendingAction.preview.resource.subject}</div>}
+                        {copilot.pendingAction.preview.resource.encounter && <div className={styles.previewLine}><strong>Ca khám:</strong> {copilot.pendingAction.preview.resource.encounter}</div>}
+                        {copilot.pendingAction.preview.resource.currentStatus && <div className={styles.previewLine}><strong>Trạng thái hiện tại:</strong> {copilot.pendingAction.preview.resource.currentStatus}</div>}
+                        <div className={styles.previewLine}><strong>Thay đổi sau xác nhận:</strong></div>
+                        {copilot.pendingAction.preview.changes.map(change => <div className={styles.previewLine} key={change.kind}><strong>{change.summary}</strong>{change.items.map(item => <div key={`${change.kind}-${item.label}-${item.value}`}>&nbsp;{item.label}: {item.value}{item.quantity !== null && item.quantity !== undefined ? ` · SL ${item.quantity}${item.unit ? ` ${item.unit}` : ''}` : ''}</div>)}</div>)}
+                        <div className={styles.previewLine}><strong>Hậu quả:</strong> {copilot.pendingAction.preview.consequence}</div>
+                        <div className={styles.previewLine}><strong>Kiểm tra backend:</strong> {copilot.pendingAction.preview.confirmationSummary}</div>
+                        <div className={styles.previewLine}><strong>Dữ liệu kiểm tra lúc:</strong> {new Date(copilot.pendingAction.preview.validatedAtUtc).toLocaleString('vi-VN')}</div>
+                        <div className={styles.previewLine}><strong>Hết hạn:</strong> {new Date(copilot.pendingAction.preview.expiresAtUtc).toLocaleString('vi-VN')}</div>
                         <button type="button" className={styles.confirmButton} disabled={Boolean(copilot.actionLoading)} onClick={() => void copilot.confirmAction()}><CheckCircle2 size={14} /> Xác nhận thao tác</button>
                     </div>}
                     {copilot.actionFeedback && <p className={copilot.actionFeedback.status === 'completed' ? styles.actionSuccess : styles.actionError} role="status">{copilot.actionFeedback.message}</p>}

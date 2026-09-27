@@ -100,12 +100,32 @@ export interface AiRoleActionResult {
 
 export interface AiActionPreview {
     toolName: string;
+    status: 'pending_confirmation' | string;
     resourceType: string;
     resourceId: string;
+    resource: AiActionPreviewResource;
+    changes: AiActionPreviewChange[];
     resourceVersion?: string | null;
     consequence: string;
     confirmationSummary: string;
     validatedAtUtc: string;
+    expiresAtUtc: string;
+    sources: Array<{ name: string; kind: string; status?: string }>;
+}
+
+export interface AiActionPreviewResource {
+    identity: string;
+    facility?: string | null;
+    department?: string | null;
+    subject?: string | null;
+    encounter?: string | null;
+    currentStatus?: string | null;
+}
+
+export interface AiActionPreviewChange {
+    kind: string;
+    summary: string;
+    items: Array<{ label: string; value: string; quantity?: number | null; unit?: string | null }>;
 }
 
 export async function getRoleCopilotCatalog(signal?: AbortSignal): Promise<AiCopilotCatalog> {

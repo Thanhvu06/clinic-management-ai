@@ -67,6 +67,133 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Walk_in_and_prescription_previews_are_grounded_in_persisted_scope_and_changes()
+    {
+        var receptionist = await CreateAuthenticatedClientAsync("rec@test.com");
+        long departmentId;
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            departmentId = await db.Departments.Where(x => x.IsActive && x.SpecialtyId == SpecialtyEntityId).Select(x => x.Id).FirstAsync();
+        }
+
+        var walkIn = await PrepareAsync(receptionist, "reception.prepare_create_walk_in", new
+        {
+            existingPatientId = Patient2EntityId,
+            departmentId,
+            chiefComplaint = "Triệu chứng tổng hợp chỉ dùng trong fixture, không được đưa vào preview",
+            priority = "Normal"
+        }, "walk-in-preview");
+        Assert.Contains("walk_in_intake", walkIn.Preview.Changes.Select(change => change.Kind));
+        Assert.Contains($"Bệnh nhân mã #{Patient2EntityId}", walkIn.Preview.Resource.Subject);
+        Assert.DoesNotContain("Triệu chứng tổng hợp", JsonSerializer.Serialize(walkIn.Preview), StringComparison.Ordinal);
+        await MutateActionAsync(walkIn.ActionId, action => action.State = AiPendingToolActionState.Cancelled);
+
+        var visit = await CreateVisitAsync(VisitStatus.WaitingForDoctor);
+        var doctor = await CreateAuthenticatedClientAsync("doc@test.com");
+        var prescription = await PrepareAsync(doctor, "doctor.prepare_prescription_draft", new
+        {
+            visitId = visit.VisitId,
+            notes = "Bản nháp synthetic cho acceptance preview",
+            items = new[] { new { medicineId = MedicineEntityId, quantity = 2, dosage = "500mg", frequency = "Ngày 2 lần" } }
+        }, "prescription-preview");
+        Assert.Contains("prescription_draft", prescription.Preview.Changes.Select(change => change.Kind));
+        var prescriptionItem = Assert.Single(prescription.Preview.Changes.SelectMany(change => change.Items), item => item.Label.StartsWith("Thuốc ", StringComparison.Ordinal));
+        Assert.Equal(2, prescriptionItem.Quantity);
+        Assert.Contains("Bệnh nhân mã #", prescription.Preview.Resource.Subject);
+        Assert.Equal(HttpStatusCode.OK, (await ConfirmAsync(doctor, prescription)).StatusCode);
+
+        await using var verifyScope = Factory.Services.CreateAsyncScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(1, await verifyDb.Prescriptions.CountAsync(x => x.PatientVisitId == visit.VisitId));
+    }
+
+    [Fact]
+    public async Task Cross_actor_schedule_reception_doctor_technician_pharmacist_admin_uses_the_real_workflow_boundary()
+    {
+        var appointment = await CreateAppointmentAsync();
+        var receptionist = await CreateAuthenticatedClientAsync("rec@test.com");
+        var checkIn = await PrepareAsync(receptionist, "reception.prepare_check_in_appointment", new
+        {
+            appointmentId = appointment.AppointmentId,
+            departmentId = appointment.DepartmentId
+        }, "cross-actor-checkin");
+        Assert.True((await ConfirmAsync(receptionist, checkIn)).IsSuccessStatusCode);
+
+        long visitId;
+        long diagnosticServiceId;
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            visitId = await db.PatientVisits.Where(x => x.AppointmentId == appointment.AppointmentId).Select(x => x.Id).SingleAsync();
+            diagnosticServiceId = await db.DiagnosticServices.Where(x => x.IsActive).Select(x => x.Id).FirstAsync();
+        }
+
+        var doctor = await CreateAuthenticatedClientAsync("doc@test.com");
+        var doctorOrder = await PrepareAsync(doctor, "doctor.prepare_diagnostic_order", new
+        {
+            visitId,
+            clinicalIndication = "Chỉ định cận lâm sàng trong workflow liên actor synthetic",
+            serviceIds = new[] { diagnosticServiceId }
+        }, "cross-actor-doctor");
+        Assert.True((await ConfirmAsync(doctor, doctorOrder)).IsSuccessStatusCode);
+
+        long orderId;
+        long itemId;
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var order = await db.DiagnosticOrders.Include(x => x.Items).SingleAsync(x => x.SourceAiActionId == doctorOrder.ActionId);
+            orderId = order.Id;
+            itemId = Assert.Single(order.Items).Id;
+        }
+
+        var technician = await CreateAuthenticatedClientAsync("tech@test.com");
+        var start = await PrepareAsync(technician, "technician.prepare_start_diagnostic_order", new { orderId }, "cross-actor-start");
+        Assert.True((await ConfirmAsync(technician, start)).IsSuccessStatusCode);
+        var result = await PrepareAsync(technician, "technician.prepare_record_diagnostic_result", new
+        {
+            orderId,
+            itemId,
+            resultText = "Kết quả synthetic của fixture workflow",
+            conclusion = "Đã hoàn tất để bác sĩ review"
+        }, "cross-actor-result");
+        Assert.True((await ConfirmAsync(technician, result)).IsSuccessStatusCode);
+        var complete = await PrepareAsync(technician, "technician.prepare_complete_diagnostic_order", new { orderId }, "cross-actor-complete");
+        Assert.True((await ConfirmAsync(technician, complete)).IsSuccessStatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await doctor.PostAsJsonAsync($"/api/v1/doctor/diagnostic-orders/{orderId}/review", new { })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, (await doctor.PostAsJsonAsync($"/api/v1/doctor/visits/{visitId}/start-consultation", new { })).StatusCode);
+        var consultation = await doctor.PostAsJsonAsync($"/api/v1/doctor/visits/{visitId}/complete", new
+        {
+            clinicalFindings = "Fixture clinical findings for integration workflow",
+            diagnosis = "Fixture diagnosis for integration workflow",
+            summary = "Fixture consultation completed through the domain workflow",
+            issuePrescription = true,
+            prescriptionNotes = "Prescription issued by the real consultation completion path",
+            prescriptionItems = new[] { new { medicineId = MedicineEntityId, quantity = 1, dosage = "500mg", frequency = "Ngày 1 lần" } }
+        });
+        Assert.Equal(HttpStatusCode.OK, consultation.StatusCode);
+
+        long prescriptionId;
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            prescriptionId = await db.Prescriptions.Where(x => x.PatientVisitId == visitId).Select(x => x.Id).SingleAsync();
+            Assert.Equal(PrescriptionStatus.Issued, await db.Prescriptions.Where(x => x.Id == prescriptionId).Select(x => x.Status).SingleAsync());
+        }
+
+        var pharmacist = await CreateAuthenticatedClientAsync("pharm@test.com");
+        var reserve = await PrepareAsync(pharmacist, "pharmacist.prepare_reserve_prescription", new { prescriptionId }, "cross-actor-pharmacy");
+        Assert.Equal(HttpStatusCode.OK, (await ConfirmAsync(pharmacist, reserve)).StatusCode);
+
+        var admin = await CreateAuthenticatedClientAsync("admin@test.com");
+        var metrics = await ExecuteReadAsync(admin, "admin.get_dashboard_metrics", new { }, "cross-actor-admin");
+        Assert.Equal(HttpStatusCode.OK, metrics.StatusCode);
+        Assert.Equal("completed", (await metrics.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Status);
+    }
+
+    [Fact]
     public async Task Reception_prepare_then_confirm_creates_one_visit_and_one_cross_actor_history_notification_and_audit()
     {
         var appointment = await CreateAppointmentAsync();
@@ -76,6 +203,8 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
             appointmentId = appointment.AppointmentId,
             departmentId = appointment.DepartmentId
         }, "reception-success");
+        Assert.Contains(appointment.AppointmentCode, pending.Preview.Resource.Identity);
+        Assert.Contains("check_in", pending.Preview.Changes.Select(change => change.Kind));
 
         await AssertNoVisitAsync(appointment.AppointmentId);
 
@@ -543,6 +672,8 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
             clinicalIndication = "Chỉ định xét nghiệm theo workflow AI có xác nhận",
             serviceIds = new[] { visit.DiagnosticServiceId }
         }, "doctor-order");
+        Assert.Contains("Dịch vụ", string.Join("|", pending.Preview.Changes.SelectMany(change => change.Items).Select(item => item.Label)), StringComparison.Ordinal);
+        Assert.Contains("diagnostic_order", pending.Preview.Changes.Select(change => change.Kind));
         Assert.Equal(HttpStatusCode.OK, (await ConfirmAsync(doctor, pending)).StatusCode);
 
         long orderId;
@@ -603,6 +734,7 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
 
         var technician = await CreateAuthenticatedClientAsync("tech@test.com");
         var start = await PrepareAsync(technician, "technician.prepare_start_diagnostic_order", new { orderId }, "tech-start");
+        Assert.Contains("diagnostic_start", start.Preview.Changes.Select(change => change.Kind));
         Assert.Equal(HttpStatusCode.OK, (await ConfirmAsync(technician, start)).StatusCode);
         var result = await PrepareAsync(technician, "technician.prepare_record_diagnostic_result", new
         {
@@ -611,6 +743,8 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
             resultText = "KẾT_QUẢ_NHÁP_CHỈ_KỸ_THUẬT_VIÊN_VÀ_BÁC_SĨ_THẤY",
             conclusion = "Đang chờ bác sĩ review"
         }, "tech-result");
+        Assert.Contains("diagnostic_result", result.Preview.Changes.Select(change => change.Kind));
+        Assert.Contains("KẾT_QUẢ_NHÁP", string.Join("|", result.Preview.Changes.SelectMany(change => change.Items).Select(item => item.Value)), StringComparison.Ordinal);
         Assert.Equal(HttpStatusCode.OK, (await ConfirmAsync(technician, result)).StatusCode);
 
         var patient = await CreateAuthenticatedClientAsync("pat1@test.com");
@@ -619,6 +753,7 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
         Assert.DoesNotContain("KẾT_QUẢ_NHÁP_CHỈ_KỸ_THUẬT_VIÊN_VÀ_BÁC_SĨ_THẤY", await draftVisibility.Content.ReadAsStringAsync(), StringComparison.Ordinal);
 
         var complete = await PrepareAsync(technician, "technician.prepare_complete_diagnostic_order", new { orderId }, "tech-complete");
+        Assert.Contains("diagnostic_complete", complete.Preview.Changes.Select(change => change.Kind));
         Assert.Equal(HttpStatusCode.OK, (await ConfirmAsync(technician, complete)).StatusCode);
         var completedButUnreviewed = await patient.GetAsync($"/api/v1/patients/me/diagnostic-orders/{orderId}");
         Assert.DoesNotContain("KẾT_QUẢ_NHÁP_CHỈ_KỸ_THUẬT_VIÊN_VÀ_BÁC_SĨ_THẤY", await completedButUnreviewed.Content.ReadAsStringAsync(), StringComparison.Ordinal);
@@ -670,10 +805,13 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
 
         var pharmacist = await CreateAuthenticatedClientAsync("pharm@test.com");
         var reserve = await PrepareAsync(pharmacist, "pharmacist.prepare_reserve_prescription", new { prescriptionId }, "pharmacy-reserve");
+        Assert.Contains("prescription_reservation", reserve.Preview.Changes.Select(change => change.Kind));
+        Assert.Contains(2, reserve.Preview.Changes.SelectMany(change => change.Items).Select(item => item.Quantity));
         Assert.Equal(HttpStatusCode.OK, (await ConfirmAsync(pharmacist, reserve)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ConfirmAsync(pharmacist, reserve)).StatusCode);
 
         var dispense = await PrepareAsync(pharmacist, "pharmacist.prepare_dispense_prescription", new { prescriptionId }, "pharmacy-dispense");
+        Assert.Contains("prescription_dispense", dispense.Preview.Changes.Select(change => change.Kind));
         var unpaid = await ConfirmAsync(pharmacist, dispense);
         Assert.Equal(HttpStatusCode.BadRequest, unpaid.StatusCode);
         Assert.Equal("PRESCRIPTION_NOT_PAID", (await unpaid.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Error?.Code);
@@ -707,22 +845,39 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
             conversationId = $"conv_{Guid.NewGuid():N}",
             idempotencyKey = idempotencyKey ?? $"idem_{Guid.NewGuid():N}"
         });
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        if (response.StatusCode != HttpStatusCode.OK)
+            throw new Xunit.Sdk.XunitException($"Prepare {toolName} returned {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
         var body = await response.Content.ReadFromJsonAsync<AiToolExecutionResult>();
         Assert.NotNull(body);
         Assert.Equal("pending_confirmation", body!.Status);
         Assert.NotNull(body.Preview);
         Assert.Equal(toolName, body.Preview!.ToolName);
+        Assert.Equal("pending_confirmation", body.Preview.Status);
         Assert.False(string.IsNullOrWhiteSpace(body.Preview.ResourceType));
         Assert.False(string.IsNullOrWhiteSpace(body.Preview.ResourceId));
+        Assert.False(string.IsNullOrWhiteSpace(body.Preview.Resource.Identity));
+        Assert.NotEmpty(body.Preview.Changes);
+        Assert.All(body.Preview.Changes, change =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(change.Kind));
+            Assert.False(string.IsNullOrWhiteSpace(change.Summary));
+            Assert.NotEmpty(change.Items);
+            Assert.All(change.Items, item => Assert.False(string.IsNullOrWhiteSpace(item.Value)));
+        });
         Assert.False(string.IsNullOrWhiteSpace(body.Preview.Consequence));
         Assert.False(string.IsNullOrWhiteSpace(body.Preview.ConfirmationSummary));
         Assert.NotEqual(default, body.Preview.ValidatedAtUtc);
+        Assert.True(body.Preview.ExpiresAtUtc > body.Preview.ValidatedAtUtc);
+        Assert.NotEmpty(body.Preview.Sources);
+        var previewJson = JsonSerializer.Serialize(body.Preview);
+        Assert.DoesNotContain("confirmationToken", previewJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Patient 1", previewJson, StringComparison.Ordinal);
         var data = Assert.IsType<JsonElement>(body.Data);
         return new PendingAction(
             data.GetProperty("actionId").GetGuid(),
             data.GetProperty("confirmationToken").GetString()!,
-            sessionId);
+            sessionId,
+            body.Preview);
     }
 
     private static Task<HttpResponseMessage> ConfirmAsync(HttpClient client, PendingAction action) =>
@@ -883,7 +1038,7 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
 
     private static string Session(string suffix) => $"sess_role_{suffix}_{Guid.NewGuid():N}";
 
-    private sealed record PendingAction(Guid ActionId, string Token, string SessionId);
+    private sealed record PendingAction(Guid ActionId, string Token, string SessionId, AiToolActionPreview Preview);
     private sealed record RoleAppointment(long AppointmentId, string AppointmentCode, long DepartmentId, long FacilityId);
     private sealed record RoleVisit(long VisitId, long FacilityId, long DiagnosticServiceId);
     private sealed record IsolatedClinicalData(string OrderCode, long PrescriptionId);

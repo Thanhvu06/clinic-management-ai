@@ -63,11 +63,26 @@ public static class Phase4BenchmarkRunner
             Head = head,
             LiveGeminiExecuted = false,
             Dataset = validation,
-            IndependentHoldout = AssessIndependentHoldout()
+            IndependentHoldout = AssessIndependentHoldout(trainPath)
         };
 
         report.SelfTestPassed = SelfTest(out var selfTestDetail);
         report.SelfTestDetail = selfTestDetail;
+        if (!report.IndependentHoldout.ValidationPassed)
+        {
+            report.Failures.AddRange(report.IndependentHoldout.ValidationErrors.Select(error => new Phase4Failure
+            {
+                CaseId = "phase5_blind_holdout",
+                Layer = "holdout_validation",
+                Expected = "frozen_checksum_and_schema_valid",
+                Actual = "invalid",
+                Detail = error
+            }));
+        }
+        else
+        {
+            report.Failures.AddRange(report.IndependentHoldout.Evaluation?.Failures ?? new List<Phase4Failure>());
+        }
         if (!validation.IsValid)
         {
             report.Failures.AddRange(validation.Errors.Select(error => new Phase4Failure
@@ -735,7 +750,7 @@ public static class Phase4BenchmarkRunner
         Seed = Seed
     };
 
-    private static Phase5IndependentHoldoutAssessment AssessIndependentHoldout()
+    private static Phase5IndependentHoldoutAssessment AssessIndependentHoldout(string trainPath)
     {
         const string holdoutPath = "src/tools/ClinicManagement.AI.Training/data/phase5_blind_holdout.json";
         const string manifestPath = "src/tools/ClinicManagement.AI.Training/data/phase5_blind_holdout_manifest.json";
@@ -746,18 +761,62 @@ public static class Phase4BenchmarkRunner
                 Status = "not_available",
                 Detail = "Frozen independent holdout or manifest is missing.",
                 HoldoutPath = holdoutPath,
-                ManifestPath = manifestPath
+                ManifestPath = manifestPath,
+                ValidationErrors = new[] { "Frozen independent holdout or manifest is missing." }
             };
         }
 
         var holdoutRaw = File.ReadAllText(holdoutPath);
         var manifestRaw = File.ReadAllText(manifestPath);
-        var holdout = JsonSerializer.Deserialize<List<Phase4BenchmarkCase>>(holdoutRaw, JsonOptions) ?? new();
-        var manifest = JsonSerializer.Deserialize<Phase5HoldoutManifest>(manifestRaw, JsonOptions) ?? new();
+        List<Phase4BenchmarkCase> holdout;
+        Phase5HoldoutManifest manifest;
+        var validationErrors = new List<string>();
+        try
+        {
+            holdout = JsonSerializer.Deserialize<List<Phase4BenchmarkCase>>(holdoutRaw, JsonOptions) ?? new();
+            manifest = JsonSerializer.Deserialize<Phase5HoldoutManifest>(manifestRaw, JsonOptions) ?? new();
+        }
+        catch (Exception ex)
+        {
+            return new Phase5IndependentHoldoutAssessment
+            {
+                Status = "validation_failed",
+                Detail = "Frozen holdout hoặc manifest không phải JSON hợp lệ.",
+                HoldoutPath = holdoutPath,
+                ManifestPath = manifestPath,
+                ValidationErrors = new[] { $"JSON parse failed: {ex.Message}" },
+                HoldoutSha256 = Sha256(holdoutRaw),
+                ManifestSha256 = Sha256(manifestRaw)
+            };
+        }
+
+        var holdoutSha256 = Sha256(holdoutRaw);
+        if (string.IsNullOrWhiteSpace(manifest.HoldoutSha256))
+            validationErrors.Add("manifest.HoldoutSha256 is required; the evaluator never self-updates a frozen checksum.");
+        else if (!string.Equals(manifest.HoldoutSha256, holdoutSha256, StringComparison.OrdinalIgnoreCase))
+            validationErrors.Add($"holdout checksum mismatch: manifest={manifest.HoldoutSha256}, actual={holdoutSha256}");
+        if (!manifest.Frozen) validationErrors.Add("manifest.frozen must be true.");
+        if (!manifest.EvaluationOnly) validationErrors.Add("manifest.evaluationOnly must be true.");
+        if (manifest.ClassifierPlannerTunedAfterFreeze) validationErrors.Add("holdout is marked as tuned after freeze.");
+
+        validationErrors.AddRange(ValidateIndependentHoldoutCases(holdout, LoadIntentDataset(trainPath), manifest.DatasetVersion));
+        Phase5HoldoutEvaluation? evaluation = null;
+        var repeatable = false;
+        if (validationErrors.Count == 0)
+        {
+            var first = EvaluateIndependentHoldout(holdout);
+            var second = EvaluateIndependentHoldout(holdout);
+            repeatable = string.Equals(JsonSerializer.Serialize(first, JsonOptions), JsonSerializer.Serialize(second, JsonOptions), StringComparison.Ordinal);
+            if (!repeatable) validationErrors.Add("independent holdout evaluator was not repeatable across identical runs.");
+            evaluation = first;
+        }
+
         return new Phase5IndependentHoldoutAssessment
         {
-            Status = manifest.LabelingStatus,
-            Detail = "Frozen evaluation-only holdout is catalogued but not used to tune the classifier/planner in this run.",
+            Status = validationErrors.Count == 0 ? manifest.LabelingStatus : "validation_failed",
+            Detail = validationErrors.Count == 0
+                ? "Frozen evaluation-only holdout was schema/checksum validated and scored without tuning the classifier/planner."
+                : "Frozen holdout validation failed; no acceptance score is reported.",
             HoldoutPath = holdoutPath,
             ManifestPath = manifestPath,
             Cases = holdout.Count,
@@ -765,8 +824,171 @@ public static class Phase4BenchmarkRunner
             Frozen = manifest.Frozen,
             IndependentHumanAnnotators = manifest.IndependentHumanAnnotators,
             ClassifierPlannerTunedAfterFreeze = manifest.ClassifierPlannerTunedAfterFreeze,
-            HoldoutSha256 = Sha256(holdoutRaw),
-            ManifestSha256 = Sha256(manifestRaw)
+            HoldoutSha256 = holdoutSha256,
+            ManifestSha256 = Sha256(manifestRaw),
+            ChecksumValid = string.Equals(manifest.HoldoutSha256, holdoutSha256, StringComparison.OrdinalIgnoreCase),
+            ValidationPassed = validationErrors.Count == 0,
+            ValidationErrors = validationErrors.ToArray(),
+            Repeatable = repeatable,
+            Evaluation = evaluation
+        };
+    }
+
+    private static List<string> ValidateIndependentHoldoutCases(
+        IReadOnlyList<Phase4BenchmarkCase> cases,
+        IReadOnlyList<IntentDatasetRecord> train,
+        string datasetVersion)
+    {
+        var errors = new List<string>();
+        var canonicalIntents = new HashSet<string>(AiChatIntentTypes.All, StringComparer.OrdinalIgnoreCase);
+        var definitions = PatientCopilotToolHandler.Definitions()
+            .Concat(AiRoleToolCatalog.Definitions)
+            .Concat(AiRoleActionCatalog.Definitions)
+            .GroupBy(definition => definition.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToDictionary(definition => definition.Name, StringComparer.OrdinalIgnoreCase);
+        var actorNames = Enum.GetNames<AiActorRole>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var normalizedInputs = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var item in cases)
+        {
+            if (string.IsNullOrWhiteSpace(item.CaseId) || !ids.Add(item.CaseId))
+                errors.Add($"{item.CaseId}: duplicate or empty caseId.");
+            if (!actorNames.Contains(item.Actor ?? string.Empty))
+                errors.Add($"{item.CaseId}: unknown actor {item.Actor}.");
+            if (!canonicalIntents.Contains(item.ExpectedIntent ?? string.Empty))
+                errors.Add($"{item.CaseId}: unknown intent {item.ExpectedIntent}.");
+            if (!AllowedOutcomes.Contains(item.ExpectedOutcome ?? string.Empty) ||
+                !AllowedSafety.Contains(item.Safety ?? string.Empty) ||
+                !AllowedGrounding.Contains(item.Grounding ?? string.Empty))
+                errors.Add($"{item.CaseId}: outcome, safety or grounding label is invalid.");
+            if (!string.Equals(item.Split, "frozen_blind_holdout", StringComparison.OrdinalIgnoreCase))
+                errors.Add($"{item.CaseId}: split must be frozen_blind_holdout.");
+            if (!item.Synthetic || string.IsNullOrWhiteSpace(item.Provenance))
+                errors.Add($"{item.CaseId}: synthetic and provenance are required.");
+            if (!item.Context.TryGetValue("datasetVersion", out var caseVersion) || !string.Equals(caseVersion, datasetVersion, StringComparison.Ordinal))
+                errors.Add($"{item.CaseId}: context datasetVersion does not match the frozen manifest.");
+            if (!item.Context.TryGetValue("provenance", out var caseProvenance) || !string.Equals(caseProvenance, item.Provenance, StringComparison.Ordinal))
+                errors.Add($"{item.CaseId}: context provenance does not match the case provenance.");
+            if (string.IsNullOrWhiteSpace(item.Rationale))
+                errors.Add($"{item.CaseId}: rationale is required.");
+
+            var allowed = new HashSet<string>(item.AllowedTools ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+            var forbidden = new HashSet<string>(item.ForbiddenTools ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+            foreach (var tool in allowed.Concat(forbidden).Append(item.ExpectedPlannerTool).Where(tool => !string.IsNullOrWhiteSpace(tool) && tool != "none"))
+            {
+                if (!definitions.ContainsKey(tool))
+                    errors.Add($"{item.CaseId}: unknown tool {tool}.");
+            }
+            foreach (var tool in allowed.Append(item.ExpectedPlannerTool).Where(tool => !string.IsNullOrWhiteSpace(tool) && tool != "none"))
+            {
+                if (definitions.TryGetValue(tool, out var definition) && !IsRoleAllowed(definition, ParseRole(item.Actor)))
+                    errors.Add($"{item.CaseId}: actor {item.Actor} is not allowed to use {tool}.");
+            }
+            var normalized = NormalizeForLeakage(item.InputVi);
+            if (!string.IsNullOrWhiteSpace(normalized))
+            {
+                if (!normalizedInputs.TryAdd(normalized, item.CaseId))
+                    errors.Add($"{item.CaseId}: duplicate input inside frozen holdout.");
+            }
+        }
+
+        var actorDistribution = cases.GroupBy(item => item.Actor, StringComparer.OrdinalIgnoreCase).ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+        foreach (var actor in actorNames)
+            if (!actorDistribution.ContainsKey(actor))
+                errors.Add($"frozen holdout has no case for actor {actor}.");
+
+        var trainTexts = train.Where(record => record.Approved && string.Equals(record.Split, "train", StringComparison.OrdinalIgnoreCase))
+            .Select(record => NormalizeForLeakage(record.Text)).Where(text => !string.IsNullOrWhiteSpace(text)).ToList();
+        foreach (var item in cases)
+        {
+            var normalized = NormalizeForLeakage(item.InputVi);
+            if (trainTexts.Contains(normalized, StringComparer.Ordinal))
+                errors.Add($"{item.CaseId}: exact train/holdout leakage detected.");
+            var nearest = trainTexts.Select(text => Jaccard(Tokenize(normalized), Tokenize(text))).DefaultIfEmpty(0).Max();
+            if (nearest >= .92)
+                errors.Add($"{item.CaseId}: near-duplicate train similarity {nearest:F3}.");
+        }
+        return errors;
+    }
+
+    private static Phase5HoldoutEvaluation EvaluateIndependentHoldout(IReadOnlyList<Phase4BenchmarkCase> cases)
+    {
+        var safetyFailures = new List<Phase4Failure>();
+        var intentFailures = new List<Phase4Failure>();
+        var routingFailures = new List<Phase4Failure>();
+        var writeFailures = new List<Phase4Failure>();
+        var safetyGuard = new AiSafetyGuard();
+        var classifier = new VietnameseIntentClassifier(IntentClassificationMode.Off);
+        var planner = new AiDeterministicPlanner();
+        var patientPairs = new List<Phase4IntentPair>();
+        var patientCases = cases.Where(item => item.Actor.Equals(nameof(AiActorRole.Patient), StringComparison.OrdinalIgnoreCase)).ToList();
+        var roleCases = cases.Where(item => !item.Actor.Equals(nameof(AiActorRole.Patient), StringComparison.OrdinalIgnoreCase)).ToList();
+        var routingCases = roleCases.Where(item => item.Safety.Equals("none", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        foreach (var item in cases)
+        {
+            var safety = safetyGuard.Inspect(item.InputVi);
+            var actualSafety = safety.IsEmergency ? "emergency" : safety.IsPromptInjection ? "prompt_injection" : "none";
+            if (!string.Equals(actualSafety, item.Safety, StringComparison.OrdinalIgnoreCase))
+                safetyFailures.Add(Failure(item, "holdout_safety", item.Safety, actualSafety, safety.MatchedCategory ?? "no-match"));
+
+            var intent = classifier.Classify(item.InputVi, new IntentClassificationContext());
+            if (item.Actor.Equals(nameof(AiActorRole.Patient), StringComparison.OrdinalIgnoreCase))
+            {
+                patientPairs.Add(new Phase4IntentPair(item.ExpectedIntent, intent.Intent));
+                if (!string.Equals(intent.Intent, item.ExpectedIntent, StringComparison.OrdinalIgnoreCase))
+                    intentFailures.Add(Failure(item, "holdout_patient_intent", item.ExpectedIntent, intent.Intent, intent.Method));
+            }
+
+            var actualTool = "none";
+            if (item.Actor != nameof(AiActorRole.Patient) && actualSafety == "none")
+            {
+                var analysis = new AiConversationAnalysis
+                {
+                    NormalizedText = item.InputVi,
+                    Intent = intent,
+                    Safety = safety,
+                    ProviderStatus = "NotCalled"
+                };
+                var decision = planner.Plan(new AiCopilotPlanningContext
+                {
+                    Role = ParseRole(item.Actor),
+                    NormalizedMessage = item.InputVi,
+                    Analysis = analysis,
+                    Resource = ToResource(item.Context)
+                });
+                actualTool = decision.ToolCalls.Count == 0 ? "none" : string.Join(",", decision.ToolCalls.Select(call => call.Name));
+            }
+            if (routingCases.Contains(item) && !string.Equals(actualTool, item.ExpectedPlannerTool, StringComparison.OrdinalIgnoreCase))
+                routingFailures.Add(Failure(item, "holdout_role_routing", item.ExpectedPlannerTool, actualTool, "deterministic planner output"));
+            foreach (var forbidden in item.ForbiddenTools ?? Array.Empty<string>())
+            {
+                if (actualTool.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Any(tool => string.Equals(tool, forbidden, StringComparison.OrdinalIgnoreCase)))
+                    writeFailures.Add(Failure(item, "holdout_planner_write_exclusion", "forbidden tool absent", forbidden, "planner output contained a forbidden tool"));
+            }
+        }
+
+        var intentDetails = ComputeSimpleIntentMetrics(patientPairs, patientCases.Select(item => item.ExpectedIntent).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value, StringComparer.Ordinal).ToList());
+        var roleRouting = Metric("holdout_role_routing", routingCases.Count - routingFailures.Count, routingCases.Count, routingFailures, "deterministic role routing only; HTTP and persistence are separate.");
+        var writeExclusion = Metric("holdout_planner_write_exclusion", roleCases.Count - writeFailures.Count, roleCases.Count, writeFailures, "planner output must not contain direct write/confirmation tools.");
+        var patientIntent = Metric("holdout_patient_intent_rule", patientCases.Count - intentFailures.Count, patientCases.Count, intentFailures, "patient rule intent only; not clinical accuracy.");
+        patientIntent.MacroPrecision = intentDetails.MacroPrecision;
+        patientIntent.MacroRecall = intentDetails.MacroRecall;
+        patientIntent.MacroF1 = intentDetails.MacroF1;
+        patientIntent.PerIntent = intentDetails.PerIntent;
+        patientIntent.ConfusionMatrix = intentDetails.ConfusionMatrix;
+        return new Phase5HoldoutEvaluation
+        {
+            SafetyGuard = Metric("holdout_safety_guard", cases.Count - safetyFailures.Count, cases.Count, safetyFailures, "safety guard only; not a clinical safety claim."),
+            PatientIntentRule = patientIntent,
+            RolePlannerRouting = roleRouting,
+            PlannerWriteExclusion = writeExclusion,
+            Grounding = NotEvaluated("holdout_grounding", "Requires persisted resource and HTTP fixtures."),
+            Authorization = NotEvaluated("holdout_authorization", "Requires authenticated HTTP scope fixtures."),
+            Outcome = NotEvaluated("holdout_outcome", "Requires confirmed persistence side-effect fixtures."),
+            Failures = safetyFailures.Concat(intentFailures).Concat(routingFailures).Concat(writeFailures).ToList()
         };
     }
 
@@ -926,6 +1148,11 @@ public sealed class Phase5IndependentHoldoutAssessment
     public bool ClassifierPlannerTunedAfterFreeze { get; init; }
     public string HoldoutSha256 { get; init; } = string.Empty;
     public string ManifestSha256 { get; init; } = string.Empty;
+    public bool ChecksumValid { get; init; }
+    public bool ValidationPassed { get; init; }
+    public bool Repeatable { get; init; }
+    public string[] ValidationErrors { get; init; } = Array.Empty<string>();
+    public Phase5HoldoutEvaluation? Evaluation { get; init; }
 }
 
 public sealed class Phase5HoldoutManifest
@@ -938,7 +1165,20 @@ public sealed class Phase5HoldoutManifest
     public int IndependentHumanAnnotators { get; set; }
     public bool ClassifierPlannerTunedAfterFreeze { get; set; }
     public bool EvaluationOnly { get; set; }
+    public string HoldoutSha256 { get; set; } = string.Empty;
     public string[] LabelingProcedure { get; set; } = Array.Empty<string>();
+}
+
+public sealed class Phase5HoldoutEvaluation
+{
+    public Phase4Metric SafetyGuard { get; init; } = new();
+    public Phase4Metric PatientIntentRule { get; init; } = new();
+    public Phase4Metric RolePlannerRouting { get; init; } = new();
+    public Phase4Metric PlannerWriteExclusion { get; init; } = new();
+    public Phase4Metric Grounding { get; init; } = new();
+    public Phase4Metric Authorization { get; init; } = new();
+    public Phase4Metric Outcome { get; init; } = new();
+    public List<Phase4Failure> Failures { get; init; } = new();
 }
 
 public sealed class Phase4Metric

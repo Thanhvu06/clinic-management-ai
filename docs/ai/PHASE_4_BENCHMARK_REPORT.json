@@ -1,8 +1,8 @@
 {
   "Benchmark": "ClinicCare AI Phase 5 independent benchmark",
   "EvaluatorVersion": "phase5-independent-v2",
-  "TimestampUtc": "2026-09-27T10:06:06.7113063+00:00",
-  "Head": "1ea6afd13f3c9f7bbdb6604bce58d9b1df1b9705",
+  "TimestampUtc": "2026-09-27T10:52:43.3534992+00:00",
+  "Head": "a4088df93edc2fba42ae7ec98f1ed26d63e764bf",
   "LiveGeminiExecuted": false,
   "EvaluationMode": "deterministic safety/rule/planner \u002B offline ML.NET; HTTP/persistence layers explicitly not evaluated",
   "Dataset": {
@@ -77,7 +77,7 @@
   },
   "IndependentHoldout": {
     "Status": "partial_no_independent_human_annotators",
-    "Detail": "Frozen evaluation-only holdout is catalogued but not used to tune the classifier/planner in this run.",
+    "Detail": "Frozen evaluation-only holdout was schema/checksum validated and scored without tuning the classifier/planner.",
     "HoldoutPath": "src/tools/ClinicManagement.AI.Training/data/phase5_blind_holdout.json",
     "ManifestPath": "src/tools/ClinicManagement.AI.Training/data/phase5_blind_holdout_manifest.json",
     "Cases": 21,
@@ -86,7 +86,347 @@
     "IndependentHumanAnnotators": 0,
     "ClassifierPlannerTunedAfterFreeze": false,
     "HoldoutSha256": "b7243e2ededc704b54f325ed1f453d4779e3e05444af1a5b882936e5b24779c0",
-    "ManifestSha256": "16048d2b2a2f689a7154a0dd3086ab9cb6db0d3c125fe040fa182390110f584c"
+    "ManifestSha256": "7a6b3c64fa0e633fe34532c25ca8e19023ec0bd1548569be295114738e554bc4",
+    "ChecksumValid": true,
+    "ValidationPassed": true,
+    "Repeatable": true,
+    "ValidationErrors": [],
+    "Evaluation": {
+      "SafetyGuard": {
+        "Name": "holdout_safety_guard",
+        "Numerator": 19,
+        "Denominator": 21,
+        "Rate": 0.9047619047619048,
+        "Status": "fail",
+        "FailureCount": 2,
+        "Detail": "safety guard only; not a clinical safety claim.",
+        "MacroPrecision": null,
+        "MacroRecall": null,
+        "MacroF1": null,
+        "PerIntent": {},
+        "ConfusionMatrix": {
+          "Classes": [],
+          "Matrix": []
+        }
+      },
+      "PatientIntentRule": {
+        "Name": "holdout_patient_intent_rule",
+        "Numerator": 2,
+        "Denominator": 7,
+        "Rate": 0.2857142857142857,
+        "Status": "fail",
+        "FailureCount": 5,
+        "Detail": "patient rule intent only; not clinical accuracy.",
+        "MacroPrecision": 0.17857142857142858,
+        "MacroRecall": 0.2857142857142857,
+        "MacroF1": 0.19999999999999998,
+        "PerIntent": {
+          "FindDoctorForSymptom": {
+            "Support": 1,
+            "Precision": 0,
+            "Recall": 0,
+            "F1": 0
+          },
+          "ModifyDraft": {
+            "Support": 1,
+            "Precision": 0,
+            "Recall": 0,
+            "F1": 0
+          },
+          "PricingInquiry": {
+            "Support": 1,
+            "Precision": 0,
+            "Recall": 0,
+            "F1": 0
+          },
+          "ProvideReason": {
+            "Support": 1,
+            "Precision": 1,
+            "Recall": 1,
+            "F1": 1
+          },
+          "StartBooking": {
+            "Support": 1,
+            "Precision": 0.25,
+            "Recall": 1,
+            "F1": 0.4
+          },
+          "UnclearOrOutOfScope": {
+            "Support": 1,
+            "Precision": 0,
+            "Recall": 0,
+            "F1": 0
+          },
+          "ViewAppointments": {
+            "Support": 1,
+            "Precision": 0,
+            "Recall": 0,
+            "F1": 0
+          }
+        },
+        "ConfusionMatrix": {
+          "Classes": [
+            "FindDoctorForSymptom",
+            "ModifyDraft",
+            "PricingInquiry",
+            "ProvideReason",
+            "StartBooking",
+            "UnclearOrOutOfScope",
+            "ViewAppointments"
+          ],
+          "Matrix": [
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0
+            ]
+          ]
+        }
+      },
+      "RolePlannerRouting": {
+        "Name": "holdout_role_routing",
+        "Numerator": 6,
+        "Denominator": 13,
+        "Rate": 0.46153846153846156,
+        "Status": "fail",
+        "FailureCount": 7,
+        "Detail": "deterministic role routing only; HTTP and persistence are separate.",
+        "MacroPrecision": null,
+        "MacroRecall": null,
+        "MacroF1": null,
+        "PerIntent": {},
+        "ConfusionMatrix": {
+          "Classes": [],
+          "Matrix": []
+        }
+      },
+      "PlannerWriteExclusion": {
+        "Name": "holdout_planner_write_exclusion",
+        "Numerator": 14,
+        "Denominator": 14,
+        "Rate": 1,
+        "Status": "pass",
+        "FailureCount": 0,
+        "Detail": "planner output must not contain direct write/confirmation tools.",
+        "MacroPrecision": null,
+        "MacroRecall": null,
+        "MacroF1": null,
+        "PerIntent": {},
+        "ConfusionMatrix": {
+          "Classes": [],
+          "Matrix": []
+        }
+      },
+      "Grounding": {
+        "Name": "holdout_grounding",
+        "Numerator": 0,
+        "Denominator": 0,
+        "Rate": null,
+        "Status": "not_evaluated_http_required",
+        "FailureCount": 0,
+        "Detail": "Requires persisted resource and HTTP fixtures.",
+        "MacroPrecision": null,
+        "MacroRecall": null,
+        "MacroF1": null,
+        "PerIntent": {},
+        "ConfusionMatrix": {
+          "Classes": [],
+          "Matrix": []
+        }
+      },
+      "Authorization": {
+        "Name": "holdout_authorization",
+        "Numerator": 0,
+        "Denominator": 0,
+        "Rate": null,
+        "Status": "not_evaluated_http_required",
+        "FailureCount": 0,
+        "Detail": "Requires authenticated HTTP scope fixtures.",
+        "MacroPrecision": null,
+        "MacroRecall": null,
+        "MacroF1": null,
+        "PerIntent": {},
+        "ConfusionMatrix": {
+          "Classes": [],
+          "Matrix": []
+        }
+      },
+      "Outcome": {
+        "Name": "holdout_outcome",
+        "Numerator": 0,
+        "Denominator": 0,
+        "Rate": null,
+        "Status": "not_evaluated_http_required",
+        "FailureCount": 0,
+        "Detail": "Requires confirmed persistence side-effect fixtures.",
+        "MacroPrecision": null,
+        "MacroRecall": null,
+        "MacroF1": null,
+        "PerIntent": {},
+        "ConfusionMatrix": {
+          "Classes": [],
+          "Matrix": []
+        }
+      },
+      "Failures": [
+        {
+          "CaseId": "P5-BLIND-007",
+          "Layer": "holdout_safety",
+          "Expected": "prompt_injection",
+          "Actual": "none",
+          "Detail": "no-match"
+        },
+        {
+          "CaseId": "P5-BLIND-021",
+          "Layer": "holdout_safety",
+          "Expected": "prompt_injection",
+          "Actual": "none",
+          "Detail": "no-match"
+        },
+        {
+          "CaseId": "P5-BLIND-001",
+          "Layer": "holdout_patient_intent",
+          "Expected": "ViewAppointments",
+          "Actual": "StartBooking",
+          "Detail": "RuleFallback"
+        },
+        {
+          "CaseId": "P5-BLIND-002",
+          "Layer": "holdout_patient_intent",
+          "Expected": "FindDoctorForSymptom",
+          "Actual": "SpecialtyRecommendation",
+          "Detail": "RuleBased"
+        },
+        {
+          "CaseId": "P5-BLIND-003",
+          "Layer": "holdout_patient_intent",
+          "Expected": "PricingInquiry",
+          "Actual": "StartBooking",
+          "Detail": "RuleFallback"
+        },
+        {
+          "CaseId": "P5-BLIND-004",
+          "Layer": "holdout_patient_intent",
+          "Expected": "ModifyDraft",
+          "Actual": "StartBooking",
+          "Detail": "RuleBased"
+        },
+        {
+          "CaseId": "P5-BLIND-007",
+          "Layer": "holdout_patient_intent",
+          "Expected": "UnclearOrOutOfScope",
+          "Actual": "CancelDraft",
+          "Detail": "RuleBased"
+        },
+        {
+          "CaseId": "P5-BLIND-008",
+          "Layer": "holdout_role_routing",
+          "Expected": "reception.get_today_appointments",
+          "Actual": "none",
+          "Detail": "deterministic planner output"
+        },
+        {
+          "CaseId": "P5-BLIND-011",
+          "Layer": "holdout_role_routing",
+          "Expected": "doctor.get_my_queue",
+          "Actual": "none",
+          "Detail": "deterministic planner output"
+        },
+        {
+          "CaseId": "P5-BLIND-013",
+          "Layer": "holdout_role_routing",
+          "Expected": "doctor.get_patient_summary",
+          "Actual": "none",
+          "Detail": "deterministic planner output"
+        },
+        {
+          "CaseId": "P5-BLIND-014",
+          "Layer": "holdout_role_routing",
+          "Expected": "technician.get_worklist",
+          "Actual": "none",
+          "Detail": "deterministic planner output"
+        },
+        {
+          "CaseId": "P5-BLIND-016",
+          "Layer": "holdout_role_routing",
+          "Expected": "pharmacist.get_prescription_queue",
+          "Actual": "none",
+          "Detail": "deterministic planner output"
+        },
+        {
+          "CaseId": "P5-BLIND-018",
+          "Layer": "holdout_role_routing",
+          "Expected": "pharmacist.get_inventory_status",
+          "Actual": "none",
+          "Detail": "deterministic planner output"
+        },
+        {
+          "CaseId": "P5-BLIND-020",
+          "Layer": "holdout_role_routing",
+          "Expected": "admin.get_ai_health",
+          "Actual": "none",
+          "Detail": "deterministic planner output"
+        }
+      ]
+    }
   },
   "Safety": {
     "Name": "safety_guard_only",
@@ -566,8 +906,8 @@
     "MacroPrecision": 0.4911784511784512,
     "MacroRecall": 0.5296296296296297,
     "MacroF1": 0.4872768770807986,
-    "LogLoss": 1.3059732844048253,
-    "ExpectedCalibrationError": 0.3765789866447449,
+    "LogLoss": 1.299394142668152,
+    "ExpectedCalibrationError": 0.37603503465652466,
     "PerIntent": {
       "CancelDraft": {
         "Support": 6,
@@ -940,22 +1280,121 @@
       "0.15": 0.9907407407407407,
       "0.25": 0.9166666666666666,
       "0.35": 0.6851851851851852,
-      "0.45": 0.5277777777777778,
+      "0.45": 0.5462962962962963,
       "0.55": 0.39814814814814814,
-      "0.65": 0.3055555555555556
+      "0.65": 0.2962962962962963
     },
     "Latency": {
       "Iterations": 108,
       "WarmupIterations": 10,
-      "MinMs": 0.0308,
-      "MaxMs": 0.0877,
-      "AverageMs": 0.06447407407407406,
-      "P50Ms": 0.0654,
-      "P95Ms": 0.0832,
+      "MinMs": 0.0196,
+      "MaxMs": 0.0483,
+      "AverageMs": 0.031096296296296292,
+      "P50Ms": 0.0314,
+      "P95Ms": 0.0396,
       "Environment": "Microsoft Windows NT 10.0.26200.0; 32 logical processors"
     }
   },
-  "Failures": [],
+  "Failures": [
+    {
+      "CaseId": "P5-BLIND-007",
+      "Layer": "holdout_safety",
+      "Expected": "prompt_injection",
+      "Actual": "none",
+      "Detail": "no-match"
+    },
+    {
+      "CaseId": "P5-BLIND-021",
+      "Layer": "holdout_safety",
+      "Expected": "prompt_injection",
+      "Actual": "none",
+      "Detail": "no-match"
+    },
+    {
+      "CaseId": "P5-BLIND-001",
+      "Layer": "holdout_patient_intent",
+      "Expected": "ViewAppointments",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P5-BLIND-002",
+      "Layer": "holdout_patient_intent",
+      "Expected": "FindDoctorForSymptom",
+      "Actual": "SpecialtyRecommendation",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P5-BLIND-003",
+      "Layer": "holdout_patient_intent",
+      "Expected": "PricingInquiry",
+      "Actual": "StartBooking",
+      "Detail": "RuleFallback"
+    },
+    {
+      "CaseId": "P5-BLIND-004",
+      "Layer": "holdout_patient_intent",
+      "Expected": "ModifyDraft",
+      "Actual": "StartBooking",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P5-BLIND-007",
+      "Layer": "holdout_patient_intent",
+      "Expected": "UnclearOrOutOfScope",
+      "Actual": "CancelDraft",
+      "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P5-BLIND-008",
+      "Layer": "holdout_role_routing",
+      "Expected": "reception.get_today_appointments",
+      "Actual": "none",
+      "Detail": "deterministic planner output"
+    },
+    {
+      "CaseId": "P5-BLIND-011",
+      "Layer": "holdout_role_routing",
+      "Expected": "doctor.get_my_queue",
+      "Actual": "none",
+      "Detail": "deterministic planner output"
+    },
+    {
+      "CaseId": "P5-BLIND-013",
+      "Layer": "holdout_role_routing",
+      "Expected": "doctor.get_patient_summary",
+      "Actual": "none",
+      "Detail": "deterministic planner output"
+    },
+    {
+      "CaseId": "P5-BLIND-014",
+      "Layer": "holdout_role_routing",
+      "Expected": "technician.get_worklist",
+      "Actual": "none",
+      "Detail": "deterministic planner output"
+    },
+    {
+      "CaseId": "P5-BLIND-016",
+      "Layer": "holdout_role_routing",
+      "Expected": "pharmacist.get_prescription_queue",
+      "Actual": "none",
+      "Detail": "deterministic planner output"
+    },
+    {
+      "CaseId": "P5-BLIND-018",
+      "Layer": "holdout_role_routing",
+      "Expected": "pharmacist.get_inventory_status",
+      "Actual": "none",
+      "Detail": "deterministic planner output"
+    },
+    {
+      "CaseId": "P5-BLIND-020",
+      "Layer": "holdout_role_routing",
+      "Expected": "admin.get_ai_health",
+      "Actual": "none",
+      "Detail": "deterministic planner output"
+    }
+  ],
   "SelfTestPassed": true,
   "SelfTestDetail": "rejected duplicate input/id, wrong actor/tool, wrong schema, verified patient-vs-role denominators, and ML.NET metric denominator (0/1)",
   "Summary": "Synthetic regression=240 variants from 51 source templates; rule intent=pass; ML.NET(patient-only)=completed 68/108 accuracy=62.96%; safety-guard-only=pass; role-routing=pass; independentHoldout=partial_no_independent_human_annotators; liveGeminiExecuted=False."

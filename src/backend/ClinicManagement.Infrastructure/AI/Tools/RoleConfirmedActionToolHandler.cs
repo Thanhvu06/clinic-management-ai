@@ -144,7 +144,7 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
                         return AiToolExecutionResult.Failed("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "Idempotency key đã được dùng với dữ liệu khác.");
                     if (!MatchesRecoveryBinding(existingByKey, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, preparation, tool, toolVersion, requestHash))
                         return AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Thao tác đã tồn tại nhưng không khớp đầy đủ phạm vi phiên, vai trò hoặc cơ sở.");
-                    return await RecoverExistingActionAsync(existingByKey, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, tool, toolVersion, requestHash, "Thao tác đang chờ xác nhận.", now, ct);
+                    return await RecoverExistingActionAsync(existingByKey, context, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, tool, toolVersion, requestHash, "Thao tác đang chờ xác nhận.", now, ct);
                 }
             }
 
@@ -163,7 +163,7 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
                     return AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Đã có thao tác đang chờ xác nhận trên tài nguyên này.");
                 if (!MatchesRecoveryBinding(active, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, preparation, tool, toolVersion, requestHash))
                     return AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Thao tác đang chờ xác nhận nhưng không khớp đầy đủ phạm vi thực thi.");
-                return await RecoverExistingActionAsync(active, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, tool, toolVersion, requestHash, "Thao tác đang chờ xác nhận.", now, ct);
+                return await RecoverExistingActionAsync(active, context, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, tool, toolVersion, requestHash, "Thao tác đang chờ xác nhận.", now, ct);
             }
 
             var actionId = Guid.NewGuid();
@@ -190,11 +190,14 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
                 State = AiPendingToolActionState.PendingConfirmation
             };
             action.ConfirmationTokenHash = ConfirmationBindingHash(action, token);
+            var previewResult = await BuildPreviewAsync(action, context, ct);
+            if (!previewResult.IsValid)
+                return AiToolExecutionResult.Failed(previewResult.ErrorCode!, previewResult.ErrorMessage!);
             _db.AiPendingToolActions.Add(action);
             try
             {
                 await _db.SaveChangesAsync(ct);
-                return Pending(action, "Thao tác đã được kiểm tra trước; hãy xác nhận để thực hiện.", token);
+                return Pending(action, previewResult.Preview!, "Thao tác đã được kiểm tra trước; hãy xác nhận để thực hiện.", token);
             }
             catch (DbUpdateException)
             {
@@ -214,7 +217,7 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
                     return AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Đã có thao tác đang chờ xác nhận trên tài nguyên này.");
                 if (!MatchesRecoveryBinding(concurrent, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, preparation, tool, toolVersion, requestHash))
                     return AiToolExecutionResult.Failed("ACTIVE_ACTION_EXISTS", "Thao tác đang chờ xác nhận nhưng không khớp đầy đủ phạm vi thực thi.");
-                return await RecoverExistingActionAsync(concurrent, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, tool, toolVersion, requestHash, "Thao tác đang chờ xác nhận.", now, ct);
+                return await RecoverExistingActionAsync(concurrent, context, context.ActorId.Value, role, context.SessionId!, preparation.FacilityId, tool, toolVersion, requestHash, "Thao tác đang chờ xác nhận.", now, ct);
             }
         }
     }
@@ -634,7 +637,15 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
         }
         if (prescription == null || !facilityId.HasValue || !await HasFacilityRoleAsync(actorId, AiActorRole.Pharmacist, facilityId.Value, null, ct))
             return Preparation.Invalid("FACILITY_SCOPE_DENIED", "Đơn thuốc không thuộc phạm vi dược hiện tại.");
-        return new Preparation("prescription", prescription.Id.ToString(), facilityId.Value, Version(prescription.RowVersion), null, null, null, null, null, prescription.Id, prescription.Status, prescription.DispensedByUserId);
+        var items = await _db.PrescriptionItems.AsNoTracking()
+            .Where(x => x.PrescriptionId == prescription.Id)
+            .OrderBy(x => x.MedicineId)
+            .Select(x => new { x.MedicineId, x.Quantity, x.Dosage, x.Frequency, x.DurationDays, x.Instructions })
+            .ToListAsync(ct);
+        var itemVersion = string.Join("|", items.Select(x =>
+            $"{x.MedicineId}:{x.Quantity}:{x.Dosage}:{x.Frequency}:{x.DurationDays}:{x.Instructions}"));
+        return new Preparation("prescription", prescription.Id.ToString(), facilityId.Value,
+            Hash($"{Version(prescription.RowVersion)}|{itemVersion}"), null, null, null, null, null, prescription.Id, prescription.Status, prescription.DispensedByUserId);
     }
 
     private static void EnsureVersion(AiPendingToolAction action, string current)
@@ -720,6 +731,7 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
 
     private async Task<AiToolExecutionResult> RecoverExistingActionAsync(
         AiPendingToolAction action,
+        AiToolExecutionContext context,
         Guid userId,
         AiActorRole role,
         string sessionId,
@@ -757,6 +769,10 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
         if (action.State is not (AiPendingToolActionState.PendingConfirmation or AiPendingToolActionState.FailedRetryable))
             return AiToolExecutionResult.Failed("ACTION_NOT_RETRYABLE", "Trạng thái thao tác không cho phép cấp lại mã xác nhận.");
 
+        var previewResult = await BuildPreviewAsync(action, context, ct);
+        if (!previewResult.IsValid)
+            return AiToolExecutionResult.Failed(previewResult.ErrorCode!, previewResult.ErrorMessage!);
+
         var observedTokenHash = action.ConfirmationTokenHash;
         var roleName = role.ToString();
         for (var attempt = 0; attempt < 8; attempt++)
@@ -783,7 +799,7 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
             if (await update.ExecuteUpdateAsync(x => x.SetProperty(a => a.ConfirmationTokenHash, replacementHash), ct) == 1)
             {
                 action.ConfirmationTokenHash = replacementHash;
-                return Pending(action, message, replacementToken);
+                return Pending(action, previewResult.Preview!, message, replacementToken);
             }
 
             _db.ChangeTracker.Clear();
@@ -821,7 +837,444 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
         await query.ExecuteUpdateAsync(x => x.SetProperty(a => a.State, state).SetProperty(a => a.LastErrorCode, code).SetProperty(a => a.ExecutionLeaseId, (Guid?)null).SetProperty(a => a.ExecutionLeaseExpiresAtUtc, (DateTime?)null), ct);
     }
 
-    private static AiToolExecutionResult Pending(AiPendingToolAction action, string message, string token) => new()
+    private async Task<PreviewBuildResult> BuildPreviewAsync(AiPendingToolAction action, AiToolExecutionContext context, CancellationToken ct)
+    {
+        if (!context.ActorId.HasValue || !TryGetActionRole(action.ToolName, out var role) || !context.Roles.Contains(role))
+            return PreviewBuildResult.Invalid("FORBIDDEN_TOOL", "Không thể tạo preview ngoài phạm vi vai trò hiện tại.");
+
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(action.NormalizedArgumentsJson);
+        }
+        catch (JsonException)
+        {
+            return PreviewBuildResult.Invalid("INVALID_PENDING_ACTION", "Dữ liệu pending action không thể tạo preview an toàn.");
+        }
+
+        using (document)
+        {
+            var preparation = await ResolvePreparationAsync(action.ToolName, role, context.ActorId.Value, document.RootElement, ct);
+            if (!preparation.IsValid)
+                return PreviewBuildResult.Invalid(preparation.ErrorCode!, preparation.ErrorMessage!);
+            if (context.FacilityId.HasValue && context.FacilityId != preparation.FacilityId)
+                return PreviewBuildResult.Invalid("FACILITY_SCOPE_DENIED", "Preview không thuộc cơ sở hiện tại.");
+            if (!string.Equals(action.ResourceType, preparation.ResourceType, StringComparison.Ordinal) ||
+                !string.Equals(action.ResourceId, preparation.ResourceId, StringComparison.Ordinal) ||
+                !string.Equals(action.ResourceVersion, preparation.Version, StringComparison.Ordinal))
+                return PreviewBuildResult.Invalid("RESOURCE_VERSION_CHANGED", "Dữ liệu resource đã thay đổi sau khi chuẩn bị thao tác.");
+
+            var facility = preparation.FacilityId.HasValue
+                ? await _db.Facilities.AsNoTracking().Where(x => x.Id == preparation.FacilityId.Value && x.IsActive)
+                    .Select(x => new { x.Id, x.Code, x.Name }).FirstOrDefaultAsync(ct)
+                : null;
+            if (facility == null || string.IsNullOrWhiteSpace(facility.Code) || string.IsNullOrWhiteSpace(facility.Name))
+                return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không đủ dữ liệu cơ sở đã được kiểm tra để hiển thị preview.");
+
+            var validatedAt = ToUtcOffset(_clock.UtcNow);
+            var expiresAt = ToUtcOffset(action.ExpiresAtUtc);
+            var facilityLabel = FormatCodeName(facility.Code, facility.Name);
+            return action.ToolName switch
+            {
+                "reception.prepare_check_in_appointment" => await BuildReceptionAppointmentPreviewAsync(action, document.RootElement, facilityLabel, validatedAt, expiresAt, ct),
+                "reception.prepare_create_walk_in" => await BuildWalkInPreviewAsync(action, document.RootElement, facilityLabel, validatedAt, expiresAt, ct),
+                "doctor.prepare_diagnostic_order" => await BuildDoctorClinicalPreviewAsync(action, document.RootElement, facilityLabel, validatedAt, expiresAt, false, ct),
+                "doctor.prepare_prescription_draft" => await BuildDoctorClinicalPreviewAsync(action, document.RootElement, facilityLabel, validatedAt, expiresAt, true, ct),
+                "technician.prepare_start_diagnostic_order" => await BuildTechnicianOrderPreviewAsync(action, document.RootElement, facilityLabel, validatedAt, expiresAt, "start", ct),
+                "technician.prepare_complete_diagnostic_order" => await BuildTechnicianOrderPreviewAsync(action, document.RootElement, facilityLabel, validatedAt, expiresAt, "complete", ct),
+                "technician.prepare_record_diagnostic_result" => await BuildTechnicianResultPreviewAsync(action, document.RootElement, facilityLabel, validatedAt, expiresAt, ct),
+                "pharmacist.prepare_reserve_prescription" => await BuildPharmacyPreviewAsync(action, document.RootElement, facilityLabel, validatedAt, expiresAt, "reserve", ct),
+                "pharmacist.prepare_dispense_prescription" => await BuildPharmacyPreviewAsync(action, document.RootElement, facilityLabel, validatedAt, expiresAt, "dispense", ct),
+                _ => PreviewBuildResult.Invalid("UNKNOWN_TOOL", "Prepare action không được hỗ trợ.")
+            };
+        }
+    }
+
+    private async Task<PreviewBuildResult> BuildReceptionAppointmentPreviewAsync(
+        AiPendingToolAction action,
+        JsonElement args,
+        string facilityLabel,
+        DateTimeOffset validatedAt,
+        DateTimeOffset expiresAt,
+        CancellationToken ct)
+    {
+        var appointmentId = GetLong(args, "appointmentId")!.Value;
+        var departmentId = GetLong(args, "departmentId")!.Value;
+        var appointment = await _db.Appointments.AsNoTracking().Where(x => x.Id == appointmentId)
+            .Select(x => new { x.Id, x.AppointmentCode, x.PatientId, x.FacilityId, x.Status, x.DoctorId })
+            .FirstOrDefaultAsync(ct);
+        var department = await PreviewDepartmentAsync(departmentId, action.FacilityId, ct);
+        if (appointment == null || appointment.FacilityId != action.FacilityId || department == null || string.IsNullOrWhiteSpace(appointment.AppointmentCode))
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không đủ dữ liệu lịch hẹn, khoa hoặc cơ sở để hiển thị preview.");
+
+        var roomId = GetLong(args, "roomId");
+        var room = await PreviewRoomAsync(roomId, departmentId, ct);
+        if (roomId.HasValue && room == null)
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Phòng tiếp nhận không còn là phòng hoạt động của khoa đã chọn.");
+        var assignedDoctorId = GetLong(args, "assignedDoctorId") ?? appointment.DoctorId;
+        var doctorExists = await _db.Doctors.AsNoTracking().AnyAsync(x => x.Id == assignedDoctorId && x.IsActive, ct);
+        if (!doctorExists)
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Bác sĩ được phân công không còn tồn tại hoặc không hoạt động.");
+
+        var resource = new AiToolActionPreviewResource
+        {
+            Identity = $"Lịch hẹn {appointment.AppointmentCode}",
+            Facility = facilityLabel,
+            Department = department.Label,
+            Subject = PatientLabel(appointment.PatientId),
+            Encounter = $"Appointment #{appointment.Id}",
+            CurrentStatus = appointment.Status.ToString()
+        };
+        var items = new List<AiToolActionPreviewItem>
+        {
+            Item("Loại thao tác", "Check-in lịch hẹn"),
+            Item("Bệnh nhân", PatientLabel(appointment.PatientId)),
+            Item("Khoa", department.Label),
+            Item("Bác sĩ", $"Bác sĩ #{assignedDoctorId}")
+        };
+        if (room != null) items.Add(Item("Phòng", room.Label));
+        return PreviewBuildResult.Valid(CreatePreview(action, resource,
+            "Sau khi xác nhận, backend sẽ tạo lượt khám cho lịch hẹn này theo workflow check-in.",
+            "Backend đã tải lịch hẹn, cơ sở, khoa, phòng và phân công từ database; quyền và điều kiện sẽ được kiểm tra lại khi xác nhận.",
+            new[] { new AiToolActionPreviewChange { Kind = "check_in", Summary = "Tạo lượt khám từ lịch hẹn đã chọn", Items = items } },
+            validatedAt, expiresAt,
+            new[] { new AiToolDataSource("appointments", "database"), new AiToolDataSource("facilities_departments", "database") }));
+    }
+
+    private async Task<PreviewBuildResult> BuildWalkInPreviewAsync(
+        AiPendingToolAction action,
+        JsonElement args,
+        string facilityLabel,
+        DateTimeOffset validatedAt,
+        DateTimeOffset expiresAt,
+        CancellationToken ct)
+    {
+        var patientId = GetLong(args, "existingPatientId")!.Value;
+        var departmentId = GetLong(args, "departmentId")!.Value;
+        var patientExists = await _db.Patients.AsNoTracking().AnyAsync(x => x.Id == patientId, ct);
+        var department = await PreviewDepartmentAsync(departmentId, action.FacilityId, ct);
+        if (!patientExists || department == null)
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không đủ dữ liệu bệnh nhân, khoa hoặc cơ sở để hiển thị preview.");
+        var roomId = GetLong(args, "roomId");
+        var room = await PreviewRoomAsync(roomId, departmentId, ct);
+        if (roomId.HasValue && room == null)
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Phòng tiếp nhận không còn là phòng hoạt động của khoa đã chọn.");
+        var assignedDoctorId = GetLong(args, "assignedDoctorId");
+        if (assignedDoctorId.HasValue && !await _db.Doctors.AsNoTracking().AnyAsync(x => x.Id == assignedDoctorId.Value && x.IsActive, ct))
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Bác sĩ được phân công không còn tồn tại hoặc không hoạt động.");
+
+        var resource = new AiToolActionPreviewResource
+        {
+            Identity = $"Tiếp nhận bệnh nhân mã #{patientId}",
+            Facility = facilityLabel,
+            Department = department.Label,
+            Subject = PatientLabel(patientId),
+            CurrentStatus = "Chưa tạo lượt khám vãng lai"
+        };
+        var items = new List<AiToolActionPreviewItem>
+        {
+            Item("Loại thao tác", "Tạo lượt khám vãng lai"),
+            Item("Bệnh nhân", PatientLabel(patientId)),
+            Item("Khoa", department.Label),
+            Item("Mức ưu tiên", GetPriority(args).ToString())
+        };
+        if (room != null) items.Add(Item("Phòng", room.Label));
+        if (assignedDoctorId.HasValue) items.Add(Item("Bác sĩ", $"Bác sĩ #{assignedDoctorId.Value}"));
+        return PreviewBuildResult.Valid(CreatePreview(action, resource,
+            "Sau khi xác nhận, backend sẽ tạo lượt khám vãng lai cho hồ sơ đã chọn.",
+            "Backend chỉ hiển thị mã bệnh nhân tối thiểu; nội dung triệu chứng không được đưa vào preview hoặc log.",
+            new[] { new AiToolActionPreviewChange { Kind = "walk_in_intake", Summary = "Tạo lượt khám vãng lai", Items = items } },
+            validatedAt, expiresAt,
+            new[] { new AiToolDataSource("patients", "database"), new AiToolDataSource("facilities_departments", "database") }));
+    }
+
+    private async Task<PreviewBuildResult> BuildDoctorClinicalPreviewAsync(
+        AiPendingToolAction action,
+        JsonElement args,
+        string facilityLabel,
+        DateTimeOffset validatedAt,
+        DateTimeOffset expiresAt,
+        bool prescription,
+        CancellationToken ct)
+    {
+        var target = await LoadDoctorPreviewTargetAsync(args, action.FacilityId, ct);
+        if (target == null)
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không đủ dữ liệu ca khám, khoa hoặc cơ sở để hiển thị preview.");
+        var department = await PreviewDepartmentAsync(target.DepartmentId, action.FacilityId, ct);
+        if (department == null)
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Khoa của ca khám không còn hoạt động hoặc không thuộc cơ sở.");
+
+        var items = new List<AiToolActionPreviewItem>();
+        if (prescription)
+        {
+            var prescriptionItems = ParsePrescriptionPreviewItems(args);
+            if (prescriptionItems.Count == 0)
+                return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không có dòng thuốc hợp lệ để hiển thị preview.");
+            var medicineIds = prescriptionItems.Select(x => x.MedicineId).Distinct().ToArray();
+            var medicines = await _db.Medicines.AsNoTracking().Where(x => medicineIds.Contains(x.Id) && x.IsActive)
+                .Select(x => new { x.Id, x.Code, x.Name, x.Unit }).ToListAsync(ct);
+            if (medicines.Count != medicineIds.Length || medicines.Any(x => string.IsNullOrWhiteSpace(x.Code) || string.IsNullOrWhiteSpace(x.Name) || string.IsNullOrWhiteSpace(x.Unit)))
+                return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không đủ dữ liệu thuốc đang hoạt động để hiển thị preview.");
+            var medicineMap = medicines.ToDictionary(x => x.Id);
+            foreach (var line in prescriptionItems)
+            {
+                var medicine = medicineMap[line.MedicineId];
+                items.Add(Item($"Thuốc {medicine.Code}", medicine.Name, line.Quantity, medicine.Unit));
+            }
+        }
+        else
+        {
+            var serviceIds = GetLongArray(args, "serviceIds");
+            var services = await _db.DiagnosticServices.AsNoTracking().Where(x => serviceIds.Contains(x.Id) && x.IsActive)
+                .Select(x => new { x.Id, x.Code, x.Name }).ToListAsync(ct);
+            if (services.Count != serviceIds.Count || services.Any(x => string.IsNullOrWhiteSpace(x.Code) || string.IsNullOrWhiteSpace(x.Name)))
+                return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không đủ dữ liệu dịch vụ xét nghiệm đang hoạt động để hiển thị preview.");
+            var serviceMap = services.ToDictionary(x => x.Id);
+            foreach (var serviceId in serviceIds)
+            {
+                var service = serviceMap[serviceId];
+                items.Add(Item($"Dịch vụ {service.Code}", service.Name, 1, "lần"));
+            }
+        }
+
+        var kind = prescription ? "prescription_draft" : "diagnostic_order";
+        var summary = prescription ? "Lưu bản nháp đơn thuốc; đơn chưa phát hành" : "Tạo phiếu chỉ định cận lâm sàng";
+        var consequence = prescription
+            ? "Sau khi xác nhận, backend sẽ lưu bản nháp đơn thuốc cho ca khám; chưa phát hành và chưa cấp phát."
+            : "Sau khi xác nhận, backend sẽ tạo phiếu chỉ định với đúng các dịch vụ đang hiển thị.";
+        var resource = new AiToolActionPreviewResource
+        {
+            Identity = target.Identity,
+            Facility = facilityLabel,
+            Department = department.Label,
+            Subject = PatientLabel(target.PatientId),
+            Encounter = target.Encounter,
+            CurrentStatus = target.CurrentStatus
+        };
+        items.Insert(0, Item("Bệnh nhân", PatientLabel(target.PatientId)));
+        items.Insert(1, Item("Khoa", department.Label));
+        return PreviewBuildResult.Valid(CreatePreview(action, resource, consequence,
+            "Backend đã tải ca khám, cơ sở, khoa và danh mục thay đổi từ database; dữ liệu quyền, resource/version và điều kiện nghiệp vụ sẽ được kiểm tra lại khi xác nhận.",
+            new[] { new AiToolActionPreviewChange { Kind = kind, Summary = summary, Items = items } },
+            validatedAt, expiresAt,
+            new[] { new AiToolDataSource("appointments_patient_visits", "database"), new AiToolDataSource(prescription ? "medicines" : "diagnostic_services", "database") }));
+    }
+
+    private async Task<PreviewBuildResult> BuildTechnicianOrderPreviewAsync(
+        AiPendingToolAction action,
+        JsonElement args,
+        string facilityLabel,
+        DateTimeOffset validatedAt,
+        DateTimeOffset expiresAt,
+        string operation,
+        CancellationToken ct)
+    {
+        var orderId = GetLong(args, "orderId")!.Value;
+        var order = await _db.DiagnosticOrders.AsNoTracking().Where(x => x.Id == orderId)
+            .Select(x => new { x.Id, x.OrderCode, x.PatientId, x.FacilityId, x.PatientVisitId, x.PerformingDepartmentId, x.Status })
+            .FirstOrDefaultAsync(ct);
+        if (order == null || order.FacilityId != action.FacilityId || string.IsNullOrWhiteSpace(order.OrderCode))
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không đủ dữ liệu phiếu chỉ định, khoa hoặc cơ sở để hiển thị preview.");
+        var departmentId = order.PerformingDepartmentId ?? (order.PatientVisitId.HasValue
+            ? await _db.PatientVisits.AsNoTracking().Where(x => x.Id == order.PatientVisitId.Value).Select(x => (long?)x.DepartmentId).FirstOrDefaultAsync(ct)
+            : null);
+        if (!departmentId.HasValue)
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không xác minh được khoa thực hiện của phiếu chỉ định.");
+        var department = await PreviewDepartmentAsync(departmentId.Value, action.FacilityId, ct);
+        if (department == null)
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Khoa thực hiện phiếu chỉ định không còn hoạt động hoặc không thuộc cơ sở.");
+        var statusLabel = operation == "start" ? "Tiếp nhận phiếu vào worklist" : "Hoàn tất phiếu chỉ định";
+        var resource = new AiToolActionPreviewResource
+        {
+            Identity = $"Phiếu chỉ định {order.OrderCode}",
+            Facility = facilityLabel,
+            Department = department.Label,
+            Subject = PatientLabel(order.PatientId),
+            Encounter = $"DiagnosticOrder #{order.Id}",
+            CurrentStatus = order.Status.ToString()
+        };
+        return PreviewBuildResult.Valid(CreatePreview(action, resource,
+            $"Sau khi xác nhận, backend sẽ {statusLabel.ToLowerInvariant()} theo workflow kỹ thuật.",
+            "Backend đã tải phiếu, ca bệnh tối thiểu, khoa và cơ sở từ database; trạng thái và quyền sẽ được kiểm tra lại khi xác nhận.",
+            new[] { new AiToolActionPreviewChange { Kind = operation == "start" ? "diagnostic_start" : "diagnostic_complete", Summary = statusLabel, Items = new[]
+            {
+                Item("Phiếu", order.OrderCode), Item("Bệnh nhân", PatientLabel(order.PatientId)), Item("Khoa", department.Label), Item("Trạng thái hiện tại", order.Status.ToString())
+            } } }, validatedAt, expiresAt,
+            new[] { new AiToolDataSource("diagnostic_orders", "database"), new AiToolDataSource("facilities_departments", "database") }));
+    }
+
+    private async Task<PreviewBuildResult> BuildTechnicianResultPreviewAsync(
+        AiPendingToolAction action,
+        JsonElement args,
+        string facilityLabel,
+        DateTimeOffset validatedAt,
+        DateTimeOffset expiresAt,
+        CancellationToken ct)
+    {
+        var orderId = GetLong(args, "orderId")!.Value;
+        var itemId = GetLong(args, "itemId")!.Value;
+        var item = await _db.DiagnosticOrderItems.AsNoTracking().Where(x => x.Id == itemId && x.DiagnosticOrderId == orderId)
+            .Select(x => new { x.Id, x.Status, x.DiagnosticOrderId, x.DiagnosticServiceId, OrderCode = x.DiagnosticOrder.OrderCode, PatientId = x.DiagnosticOrder.PatientId, FacilityId = x.DiagnosticOrder.FacilityId, PatientVisitId = x.DiagnosticOrder.PatientVisitId, DepartmentId = x.DiagnosticOrder.PerformingDepartmentId })
+            .FirstOrDefaultAsync(ct);
+        if (item == null || item.FacilityId != action.FacilityId || string.IsNullOrWhiteSpace(item.OrderCode))
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không đủ dữ liệu item kỹ thuật, phiếu, khoa hoặc cơ sở để hiển thị preview.");
+        var service = await _db.DiagnosticServices.AsNoTracking().Where(x => x.Id == item.DiagnosticServiceId && x.IsActive).Select(x => new { x.Code, x.Name }).FirstOrDefaultAsync(ct);
+        var departmentId = item.DepartmentId ?? (item.PatientVisitId.HasValue
+            ? await _db.PatientVisits.AsNoTracking().Where(x => x.Id == item.PatientVisitId.Value).Select(x => (long?)x.DepartmentId).FirstOrDefaultAsync(ct)
+            : null);
+        var department = departmentId.HasValue ? await PreviewDepartmentAsync(departmentId.Value, action.FacilityId, ct) : null;
+        var resultText = GetString(args, "resultText");
+        if (service == null || department == null || string.IsNullOrWhiteSpace(service.Code) || string.IsNullOrWhiteSpace(service.Name) || string.IsNullOrWhiteSpace(resultText))
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không đủ dữ liệu dịch vụ hoặc kết quả kỹ thuật để hiển thị preview.");
+        var resource = new AiToolActionPreviewResource
+        {
+            Identity = $"Kết quả item {service.Code} của phiếu {item.OrderCode}",
+            Facility = facilityLabel,
+            Department = department.Label,
+            Subject = PatientLabel(item.PatientId),
+            Encounter = $"DiagnosticOrderItem #{item.Id}",
+            CurrentStatus = item.Status.ToString()
+        };
+        return PreviewBuildResult.Valid(CreatePreview(action, resource,
+            "Sau khi xác nhận, backend sẽ ghi kết quả kỹ thuật cho đúng item đang hiển thị.",
+            "Backend đã tải phiếu, item, dịch vụ, khoa và cơ sở từ database; kết quả sẽ được kiểm tra lại theo quyền và version trước khi ghi.",
+            new[] { new AiToolActionPreviewChange { Kind = "diagnostic_result", Summary = "Ghi kết quả kỹ thuật", Items = new[]
+            {
+                Item("Phiếu", item.OrderCode), Item("Dịch vụ", $"{service.Code} — {service.Name}"), Item("Kết quả sẽ ghi", resultText)
+            } } }, validatedAt, expiresAt,
+            new[] { new AiToolDataSource("diagnostic_orders_items", "database"), new AiToolDataSource("diagnostic_services", "database") }));
+    }
+
+    private async Task<PreviewBuildResult> BuildPharmacyPreviewAsync(
+        AiPendingToolAction action,
+        JsonElement args,
+        string facilityLabel,
+        DateTimeOffset validatedAt,
+        DateTimeOffset expiresAt,
+        string operation,
+        CancellationToken ct)
+    {
+        var prescriptionId = GetLong(args, "prescriptionId")!.Value;
+        var prescription = await _db.Prescriptions.AsNoTracking().Where(x => x.Id == prescriptionId)
+            .Select(x => new { x.Id, x.PatientId, x.PatientVisitId, x.AppointmentId, x.Status })
+            .FirstOrDefaultAsync(ct);
+        if (prescription == null)
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Đơn thuốc không còn tồn tại để hiển thị preview.");
+        var encounter = prescription.PatientVisitId.HasValue
+            ? await _db.PatientVisits.AsNoTracking().Where(x => x.Id == prescription.PatientVisitId.Value).Select(x => new { x.VisitCode, x.FacilityId, x.DepartmentId }).FirstOrDefaultAsync(ct)
+            : null;
+        var appointment = prescription.AppointmentId.HasValue
+            ? await _db.Appointments.AsNoTracking().Where(x => x.Id == prescription.AppointmentId.Value).Select(x => new { x.AppointmentCode, x.FacilityId }).FirstOrDefaultAsync(ct)
+            : null;
+        var currentFacilityId = encounter?.FacilityId ?? appointment?.FacilityId;
+        if (!currentFacilityId.HasValue || currentFacilityId != action.FacilityId)
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không xác minh được cơ sở của đơn thuốc.");
+        var department = encounter?.DepartmentId is long departmentId ? await PreviewDepartmentAsync(departmentId, action.FacilityId, ct) : null;
+        var lines = await _db.PrescriptionItems.AsNoTracking().Where(x => x.PrescriptionId == prescriptionId)
+            .Select(x => new { x.MedicineId, x.Quantity, MedicineCode = x.Medicine!.Code, MedicineName = x.Medicine.Name, Unit = x.Medicine.Unit, MedicineActive = x.Medicine.IsActive }).ToListAsync(ct);
+        if (lines.Count == 0 || lines.Any(x => !x.MedicineActive || string.IsNullOrWhiteSpace(x.MedicineCode) || string.IsNullOrWhiteSpace(x.MedicineName) || string.IsNullOrWhiteSpace(x.Unit)))
+            return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không đủ dữ liệu thuốc đang hoạt động để hiển thị preview.");
+        var resource = new AiToolActionPreviewResource
+        {
+            Identity = $"Đơn thuốc #{prescription.Id}",
+            Facility = facilityLabel,
+            Department = department?.Label,
+            Subject = PatientLabel(prescription.PatientId),
+            Encounter = encounter?.VisitCode ?? appointment?.AppointmentCode,
+            CurrentStatus = prescription.Status.ToString()
+        };
+        var operationLabel = operation == "reserve" ? "Giữ chỗ thuốc theo đơn" : "Cấp phát đơn thuốc";
+        return PreviewBuildResult.Valid(CreatePreview(action, resource,
+            $"Sau khi xác nhận, backend sẽ thực hiện {operationLabel.ToLowerInvariant()} theo điều kiện thanh toán và tồn kho hiện tại.",
+            "Backend đã tải đơn thuốc, các dòng thuốc, ca khám và cơ sở từ database; trạng thái thanh toán, tồn kho, quyền và version sẽ được kiểm tra lại khi xác nhận.",
+            new[] { new AiToolActionPreviewChange { Kind = operation == "reserve" ? "prescription_reservation" : "prescription_dispense", Summary = operationLabel, Items = lines.Select(x => Item($"Thuốc {x.MedicineCode}", x.MedicineName, x.Quantity, x.Unit)).ToList() } },
+            validatedAt, expiresAt,
+            new[] { new AiToolDataSource("prescriptions", "database"), new AiToolDataSource("medicines", "database"), new AiToolDataSource("patient_visits", "database") }));
+    }
+
+    private async Task<ClinicalPreviewTarget?> LoadDoctorPreviewTargetAsync(JsonElement args, long? facilityId, CancellationToken ct)
+    {
+        if (GetLong(args, "visitId") is long visitId)
+        {
+            return await _db.PatientVisits.AsNoTracking().Where(x => x.Id == visitId && x.FacilityId == facilityId)
+                .Select(x => new ClinicalPreviewTarget("visit", x.Id.ToString(), $"Lượt khám {x.VisitCode}", $"PatientVisit #{x.Id}", x.PatientId, x.DepartmentId, x.Status.ToString()))
+                .FirstOrDefaultAsync(ct);
+        }
+        if (GetLong(args, "appointmentId") is long appointmentId)
+        {
+            var departmentId = GetLong(args, "departmentId");
+            if (!departmentId.HasValue) return null;
+            return await _db.Appointments.AsNoTracking().Where(x => x.Id == appointmentId && x.FacilityId == facilityId)
+                .Select(x => new ClinicalPreviewTarget("appointment", x.Id.ToString(), $"Lịch hẹn {x.AppointmentCode}", $"Appointment #{x.Id}", x.PatientId, departmentId.Value, x.Status.ToString()))
+                .FirstOrDefaultAsync(ct);
+        }
+        return null;
+    }
+
+    private async Task<PreviewDepartment?> PreviewDepartmentAsync(long departmentId, long? facilityId, CancellationToken ct) =>
+        await _db.Departments.AsNoTracking().Where(x => x.Id == departmentId && x.FacilityId == facilityId && x.IsActive)
+            .Select(x => new PreviewDepartment(x.Id, FormatCodeName(x.Code, x.Name))).FirstOrDefaultAsync(ct);
+
+    private async Task<PreviewRoom?> PreviewRoomAsync(long? roomId, long departmentId, CancellationToken ct) =>
+        roomId.HasValue
+            ? await _db.Rooms.AsNoTracking().Where(x => x.Id == roomId.Value && x.DepartmentId == departmentId && x.IsActive)
+                .Select(x => new PreviewRoom(x.Id, string.IsNullOrWhiteSpace(x.RoomNumber) ? x.Name : $"Phòng {x.RoomNumber} — {x.Name}")).FirstOrDefaultAsync(ct)
+            : null;
+
+    private static AiToolActionPreview CreatePreview(
+        AiPendingToolAction action,
+        AiToolActionPreviewResource resource,
+        string consequence,
+        string confirmationSummary,
+        IReadOnlyList<AiToolActionPreviewChange> changes,
+        DateTimeOffset validatedAt,
+        DateTimeOffset expiresAt,
+        IReadOnlyList<AiToolDataSource> sources) => new()
+    {
+        ToolName = action.ToolName,
+        Status = "pending_confirmation",
+        ResourceType = action.ResourceType,
+        ResourceId = action.ResourceId,
+        Resource = resource,
+        Changes = changes,
+        ResourceVersion = action.ResourceVersion,
+        Consequence = consequence,
+        ConfirmationSummary = confirmationSummary,
+        ValidatedAtUtc = validatedAt,
+        ExpiresAtUtc = expiresAt,
+        Sources = sources
+    };
+
+    private static AiToolActionPreviewItem Item(string label, string value, int? quantity = null, string? unit = null) => new()
+    {
+        Label = label, Value = value, Quantity = quantity, Unit = unit
+    };
+
+    private static string FormatCodeName(string code, string name) =>
+        string.IsNullOrWhiteSpace(code) ? name : string.IsNullOrWhiteSpace(name) ? code : $"{code} — {name}";
+
+    private static string PatientLabel(long patientId) => $"Bệnh nhân mã #{patientId}";
+    private static DateTimeOffset ToUtcOffset(DateTime value) => new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
+
+    private static List<PrescriptionPreviewItem> ParsePrescriptionPreviewItems(JsonElement root) =>
+        root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array
+            ? items.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Object && x.TryGetProperty("medicineId", out var medicineId) && medicineId.TryGetInt64(out var id) && id > 0 && x.TryGetProperty("quantity", out var quantity) && quantity.TryGetInt32(out var count) && count > 0)
+                .Select(x => new PrescriptionPreviewItem(x.GetProperty("medicineId").GetInt64(), x.GetProperty("quantity").GetInt32())).ToList()
+            : new();
+
+    private sealed record PreviewBuildResult(AiToolActionPreview? Preview, string? ErrorCode, string? ErrorMessage)
+    {
+        public bool IsValid => Preview is not null && ErrorCode is null;
+        public static PreviewBuildResult Valid(AiToolActionPreview preview) => new(preview, null, null);
+        public static PreviewBuildResult Invalid(string code, string message) => new(null, code, message);
+    }
+
+    private sealed record PreviewDepartment(long Id, string Label);
+    private sealed record PreviewRoom(long Id, string Label);
+    private sealed record ClinicalPreviewTarget(string ResourceType, string ResourceId, string Identity, string Encounter, long PatientId, long DepartmentId, string CurrentStatus);
+    private sealed record PrescriptionPreviewItem(long MedicineId, int Quantity);
+
+    private static AiToolExecutionResult Pending(AiPendingToolAction action, AiToolActionPreview preview, string message, string token) => new()
     {
         Status = "pending_confirmation",
         RequiresConfirmation = true,
@@ -830,30 +1283,21 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
         DisplayText = message,
         Preview = new AiToolActionPreview
         {
-            ToolName = action.ToolName,
-            ResourceType = action.ResourceType,
-            ResourceId = action.ResourceId,
-            ResourceVersion = action.ResourceVersion,
-            Consequence = ConsequenceFor(action.ToolName),
-            ConfirmationSummary = "Backend đã kiểm tra quyền, cơ sở, resource và điều kiện hiện tại; xác nhận mới được phép ghi.",
-            ValidatedAtUtc = DateTimeOffset.UtcNow
+            ToolName = preview.ToolName,
+            Status = preview.Status,
+            ResourceType = preview.ResourceType,
+            ResourceId = preview.ResourceId,
+            Resource = preview.Resource,
+            Changes = preview.Changes,
+            ResourceVersion = preview.ResourceVersion,
+            Consequence = preview.Consequence,
+            ConfirmationSummary = preview.ConfirmationSummary,
+            ValidatedAtUtc = preview.ValidatedAtUtc,
+            ExpiresAtUtc = preview.ExpiresAtUtc,
+            Sources = preview.Sources
         },
         Data = new { actionId = action.ActionId, action.ToolName, action.ActorRole, action.ExpiresAtUtc, confirmationToken = token, confirmationEndpoint = $"/api/v1/ai/copilot/actions/{action.ActionId}/confirm" },
         DataSources = new[] { new AiToolDataSource("pending_action_store", "database") }
-    };
-
-    private static string ConsequenceFor(string toolName) => toolName switch
-    {
-        "reception.prepare_check_in_appointment" => "Sau khi xác nhận, backend có thể tạo lượt khám cho lịch hẹn đã chọn.",
-        "reception.prepare_create_walk_in" => "Sau khi xác nhận, backend có thể tạo lượt khám vãng lai cho bệnh nhân đã chọn.",
-        "doctor.prepare_diagnostic_order" => "Sau khi xác nhận, backend có thể tạo bản nháp phiếu chỉ định cho ca khám đã chọn.",
-        "doctor.prepare_prescription_draft" => "Sau khi xác nhận, backend có thể tạo bản nháp đơn thuốc cho ca khám đã chọn.",
-        "technician.prepare_start_diagnostic_order" => "Sau khi xác nhận, backend có thể tiếp nhận phiếu chỉ định vào worklist.",
-        "technician.prepare_record_diagnostic_result" => "Sau khi xác nhận, backend có thể ghi kết quả cho item xét nghiệm đã chọn.",
-        "technician.prepare_complete_diagnostic_order" => "Sau khi xác nhận, backend có thể hoàn tất phiếu chỉ định đã chọn.",
-        "pharmacist.prepare_reserve_prescription" => "Sau khi xác nhận, backend có thể giữ chỗ thuốc theo đơn đã chọn.",
-        "pharmacist.prepare_dispense_prescription" => "Sau khi xác nhận, backend có thể cấp phát đơn thuốc đã chọn.",
-        _ => "Sau khi xác nhận, backend mới xem xét ghi thay đổi cho resource đã chọn."
     };
 
     private static AiToolExecutionResult Completed(object data, string type, string message, bool isIdempotentReplay = false) => new()

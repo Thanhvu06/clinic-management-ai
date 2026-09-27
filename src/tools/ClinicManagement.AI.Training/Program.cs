@@ -99,7 +99,11 @@ public class Program
             File.WriteAllText(reportPath, json);
             Console.WriteLine(json);
             var report = JsonSerializer.Deserialize<Phase4BenchmarkReport>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            return report?.Dataset.IsValid == true && report.SelfTestPassed ? 0 : 1;
+            return report?.Dataset.IsValid == true
+                && report.SelfTestPassed
+                && report.IndependentHoldout.ValidationPassed
+                ? 0
+                : 1;
         }
         else
         {

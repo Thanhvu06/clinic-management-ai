@@ -10,7 +10,8 @@ import {
     type AiCopilotRequest,
     type AiCopilotResponse,
     type AiCopilotResourceContext,
-    type AiCopilotTool
+    type AiCopilotTool,
+    type AiActionPreview
 } from '../../api/aiCopilotApi';
 import { getCopilotRoleConfig, type CopilotRole } from './copilotConfig';
 
@@ -65,6 +66,7 @@ export interface UnifiedActionState {
     consequence: string;
     confirmationSummary: string;
     previewValidatedAtUtc: string;
+    preview: AiActionPreview;
     confirmationToken: string;
     requestSignature: string;
     idempotencyKey: string;
@@ -278,19 +280,29 @@ export const useUnifiedCopilot = () => {
             const data = asRecord(result.data);
             const token = typeof data.confirmationToken === 'string' ? data.confirmationToken : '';
             const preview = result.preview;
-            const validPreview = Boolean(preview && preview.toolName === capability.tool.name &&
-                preview.resourceType && preview.resourceId && preview.consequence &&
-                preview.confirmationSummary && preview.validatedAtUtc);
+            const expiresAt = preview?.expiresAtUtc ? new Date(preview.expiresAtUtc).getTime() : NaN;
+            const validPreview = Boolean(preview && preview.status === 'pending_confirmation' &&
+                preview.toolName === capability.tool.name &&
+                preview.resourceType && preview.resourceId &&
+                preview.resource?.identity &&
+                Array.isArray(preview.changes) && preview.changes.length > 0 &&
+                preview.changes.every(change => change.kind && change.summary && Array.isArray(change.items) && change.items.length > 0 &&
+                    change.items.every(item => item.label && item.value)) &&
+                Array.isArray(preview.sources) && preview.sources.length > 0 &&
+                preview.sources.every(source => source.name && source.kind) &&
+                preview.consequence && preview.confirmationSummary && preview.validatedAtUtc &&
+                Number.isFinite(expiresAt) && expiresAt > Date.now());
             if (result.status === 'pending_confirmation' && result.actionId && token && validPreview) {
                 setPendingAction({
                     toolName: capability.tool.name,
                     actionId: result.actionId,
                     status: result.status,
-                    expiresAtUtc: typeof data.expiresAtUtc === 'string' ? data.expiresAtUtc : undefined,
-                    resourceSummary: `${preview!.resourceType} #${preview!.resourceId}`,
+                    expiresAtUtc: preview!.expiresAtUtc,
+                    resourceSummary: preview!.resource.identity,
                     consequence: preview!.consequence,
                     confirmationSummary: preview!.confirmationSummary,
                     previewValidatedAtUtc: preview!.validatedAtUtc,
+                    preview: preview!,
                     confirmationToken: token,
                     requestSignature: signature,
                     idempotencyKey

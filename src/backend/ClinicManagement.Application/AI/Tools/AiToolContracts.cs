@@ -144,12 +144,42 @@ public sealed class AiToolExecutionResult
 public sealed class AiToolActionPreview
 {
     public string ToolName { get; init; } = string.Empty;
+    public string Status { get; init; } = "pending_confirmation";
     public string ResourceType { get; init; } = string.Empty;
     public string ResourceId { get; init; } = string.Empty;
+    public AiToolActionPreviewResource Resource { get; init; } = new();
+    public IReadOnlyList<AiToolActionPreviewChange> Changes { get; init; } = Array.Empty<AiToolActionPreviewChange>();
     public string? ResourceVersion { get; init; }
     public string Consequence { get; init; } = string.Empty;
     public string ConfirmationSummary { get; init; } = string.Empty;
     public DateTimeOffset ValidatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset ExpiresAtUtc { get; init; }
+    public IReadOnlyList<AiToolDataSource> Sources { get; init; } = Array.Empty<AiToolDataSource>();
+}
+
+public sealed class AiToolActionPreviewResource
+{
+    public string Identity { get; init; } = string.Empty;
+    public string? Facility { get; init; }
+    public string? Department { get; init; }
+    public string? Subject { get; init; }
+    public string? Encounter { get; init; }
+    public string? CurrentStatus { get; init; }
+}
+
+public sealed class AiToolActionPreviewChange
+{
+    public string Kind { get; init; } = string.Empty;
+    public string Summary { get; init; } = string.Empty;
+    public IReadOnlyList<AiToolActionPreviewItem> Items { get; init; } = Array.Empty<AiToolActionPreviewItem>();
+}
+
+public sealed class AiToolActionPreviewItem
+{
+    public string Label { get; init; } = string.Empty;
+    public string Value { get; init; } = string.Empty;
+    public int? Quantity { get; init; }
+    public string? Unit { get; init; }
 }
 
 public interface IAiToolHandler

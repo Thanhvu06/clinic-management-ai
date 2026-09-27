@@ -94,7 +94,7 @@ describe('UnifiedCopilotPanel', () => {
             tools: [],
             actionTools: [{ name: 'technician.prepare_start_diagnostic_order', version: '1.0', description: 'Tiếp nhận phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' }]
         });
-        prepareActionMock.mockResolvedValue({ status: 'pending_confirmation', actionId: 'action-1', data: { confirmationToken: 'secret-token', expiresAtUtc: '2030-01-01T00:00:00Z' }, preview: { toolName: 'technician.prepare_start_diagnostic_order', resourceType: 'DiagnosticOrder', resourceId: '42', consequence: 'Backend sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra quyền và resource.', validatedAtUtc: '2030-01-01T00:00:00Z' } });
+        prepareActionMock.mockResolvedValue({ status: 'pending_confirmation', actionId: 'action-1', data: { confirmationToken: 'secret-token', expiresAtUtc: '2030-01-01T00:00:00Z' }, preview: { toolName: 'technician.prepare_start_diagnostic_order', status: 'pending_confirmation', resourceType: 'DiagnosticOrder', resourceId: '42', resource: { identity: 'Phiếu chỉ định LAB-42', facility: 'FAC-TEST — Cơ sở test', department: 'DEP-TEST — Khoa test', subject: 'Bệnh nhân mã #42', encounter: 'DiagnosticOrder #42', currentStatus: 'Ordered' }, changes: [{ kind: 'diagnostic_start', summary: 'Tiếp nhận phiếu vào worklist', items: [{ label: 'Phiếu', value: 'LAB-42' }] }], consequence: 'Backend sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra quyền và resource.', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:00Z', sources: [{ name: 'diagnostic_orders', kind: 'database' }] } });
         confirmActionMock.mockResolvedValue({ status: 'completed', displayText: 'Đã tiếp nhận phiếu.' });
 
         render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
@@ -117,7 +117,7 @@ describe('UnifiedCopilotPanel', () => {
         catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
         const pending = (actionId: string, token: string) => ({
             status: 'pending_confirmation', actionId, data: { confirmationToken: token, expiresAtUtc: '2030-01-01T00:00:00Z' },
-            preview: { toolName: tool.name, resourceType: 'DiagnosticOrder', resourceId: '42', consequence: 'Backend sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra quyền và resource.', validatedAtUtc: '2030-01-01T00:00:00Z' }
+            preview: { toolName: tool.name, status: 'pending_confirmation', resourceType: 'DiagnosticOrder', resourceId: '42', resource: { identity: 'Phiếu chỉ định LAB-42', facility: 'FAC-TEST — Cơ sở test', department: 'DEP-TEST — Khoa test', subject: 'Bệnh nhân mã #42', encounter: 'DiagnosticOrder #42', currentStatus: 'Ordered' }, changes: [{ kind: 'diagnostic_start', summary: 'Tiếp nhận phiếu vào worklist', items: [{ label: 'Phiếu', value: 'LAB-42' }] }], consequence: 'Backend sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra quyền và resource.', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:00Z', sources: [{ name: 'diagnostic_orders', kind: 'database' }] }
         });
         prepareActionMock.mockResolvedValueOnce(pending('action-1', 'token-1')).mockResolvedValueOnce(pending('action-2', 'token-2'));
         confirmActionMock.mockResolvedValueOnce({ status: 'completed', displayText: 'Đã tiếp nhận phiếu.' });
@@ -143,7 +143,7 @@ describe('UnifiedCopilotPanel', () => {
         catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
         prepareActionMock.mockRejectedValueOnce(new Error('network interrupted')).mockResolvedValueOnce({
             status: 'pending_confirmation', actionId: 'action-retry', data: { confirmationToken: 'retry-token', expiresAtUtc: '2030-01-01T00:00:00Z' },
-            preview: { toolName: tool.name, resourceType: 'DiagnosticOrder', resourceId: '42', consequence: 'Backend sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra quyền và resource.', validatedAtUtc: '2030-01-01T00:00:00Z' }
+            preview: { toolName: tool.name, status: 'pending_confirmation', resourceType: 'DiagnosticOrder', resourceId: '42', resource: { identity: 'Phiếu chỉ định LAB-42', facility: 'FAC-TEST — Cơ sở test', department: 'DEP-TEST — Khoa test', subject: 'Bệnh nhân mã #42', encounter: 'DiagnosticOrder #42', currentStatus: 'Ordered' }, changes: [{ kind: 'diagnostic_start', summary: 'Tiếp nhận phiếu vào worklist', items: [{ label: 'Phiếu', value: 'LAB-42' }] }], consequence: 'Backend sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra quyền và resource.', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:00Z', sources: [{ name: 'diagnostic_orders', kind: 'database' }] }
         });
 
         render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
@@ -164,7 +164,7 @@ describe('UnifiedCopilotPanel', () => {
         catalogMock.mockResolvedValue({ tools: [], actionTools: [startTool, completeTool] });
         prepareActionMock.mockResolvedValueOnce({
             status: 'pending_confirmation', actionId: 'action-a', data: { confirmationToken: 'token-a', expiresAtUtc: '2030-01-01T00:00:00Z' },
-            preview: { toolName: startTool.name, resourceType: 'DiagnosticOrder', resourceId: '42', consequence: 'Hậu quả A', confirmationSummary: 'Đã kiểm tra A', validatedAtUtc: '2030-01-01T00:00:00Z' }
+            preview: { toolName: startTool.name, status: 'pending_confirmation', resourceType: 'DiagnosticOrder', resourceId: '42', resource: { identity: 'Phiếu chỉ định LAB-42', facility: 'FAC-TEST — Cơ sở test', department: 'DEP-TEST — Khoa test', subject: 'Bệnh nhân mã #42', encounter: 'DiagnosticOrder #42', currentStatus: 'Ordered' }, changes: [{ kind: 'diagnostic_start', summary: 'Tiếp nhận phiếu vào worklist', items: [{ label: 'Phiếu', value: 'LAB-42' }] }], consequence: 'Hậu quả A', confirmationSummary: 'Đã kiểm tra A', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:00Z', sources: [{ name: 'diagnostic_orders', kind: 'database' }] }
         }).mockRejectedValueOnce(new Error('prepare B failed'));
 
         render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
@@ -194,7 +194,7 @@ describe('UnifiedCopilotPanel', () => {
         view.rerender(<MemoryRouter initialEntries={['/reception']}><UnifiedCopilotPanel /></MemoryRouter>);
         resolvePrepare({
             status: 'pending_confirmation', actionId: 'late-action', data: { confirmationToken: 'late-token' },
-            preview: { toolName: tool.name, resourceType: 'DiagnosticOrder', resourceId: '42', consequence: 'Late consequence', confirmationSummary: 'Late preview', validatedAtUtc: '2030-01-01T00:00:00Z' }
+            preview: { toolName: tool.name, status: 'pending_confirmation', resourceType: 'DiagnosticOrder', resourceId: '42', resource: { identity: 'Phiếu chỉ định LAB-42', facility: 'FAC-TEST — Cơ sở test', department: 'DEP-TEST — Khoa test', subject: 'Bệnh nhân mã #42', encounter: 'DiagnosticOrder #42', currentStatus: 'Ordered' }, changes: [{ kind: 'diagnostic_start', summary: 'Tiếp nhận phiếu vào worklist', items: [{ label: 'Phiếu', value: 'LAB-42' }] }], consequence: 'Late consequence', confirmationSummary: 'Late preview', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:00Z', sources: [{ name: 'diagnostic_orders', kind: 'database' }] }
         });
 
         await waitFor(() => expect(screen.getByText('Copilot Lễ tân')).toBeInTheDocument());
