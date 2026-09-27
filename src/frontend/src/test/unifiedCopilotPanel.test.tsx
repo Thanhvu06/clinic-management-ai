@@ -102,6 +102,51 @@ describe('UnifiedCopilotPanel', () => {
         expect(screen.queryByText(/items:/i)).not.toBeInTheDocument();
     });
 
+    it('renders a public catalog not_found response without inventing a result row', async () => {
+        mockUser = { userId: 'patient-1', fullName: 'Patient', role: 'Patient' };
+        sendMock.mockResolvedValueOnce(response({
+            message: 'Tra cứu đã hoàn tất.',
+            cards: [{
+                type: 'clinic_knowledge',
+                title: 'Dữ liệu công khai',
+                description: 'Không có cơ sở phù hợp với mã TEST-NOT-FOUND.',
+                data: {
+                    status: 'not_found',
+                    mode: 'search',
+                    sourceType: 'facility',
+                    items: [],
+                    retrievedAtUtc: '2030-01-01T00:00:00Z'
+                },
+                sources: [{ name: 'clinic_public_catalog', kind: 'approved_database' }]
+            }]
+        }));
+
+        render(<MemoryRouter initialEntries={['/patient']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: /Mở (?:Copilot|Trợ lý) Bệnh nhân/i }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'Tìm cơ sở TEST-NOT-FOUND' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
+
+        await waitFor(() => expect(screen.getByText('Không có cơ sở phù hợp với mã TEST-NOT-FOUND.')).toBeInTheDocument());
+        expect(screen.queryByText('Cơ sở không xác định')).not.toBeInTheDocument();
+    });
+
+    it('renders a catalog clarification without showing catalog rows', async () => {
+        mockUser = { userId: 'patient-1', fullName: 'Patient', role: 'Patient' };
+        sendMock.mockResolvedValueOnce(response({
+            message: 'Bạn muốn xem danh sách hay tra cứu tên cụ thể?',
+            clarification: 'Bạn muốn xem danh sách hay tra cứu tên cụ thể?',
+            cards: []
+        }));
+
+        render(<MemoryRouter initialEntries={['/patient']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: /Mở (?:Copilot|Trợ lý) Bệnh nhân/i }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'Có bác sĩ nào?' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
+
+        await waitFor(() => expect(screen.getAllByText('Bạn muốn xem danh sách hay tra cứu tên cụ thể?')).toHaveLength(2));
+        expect(screen.queryByText('Bác sĩ Nhiễu')).not.toBeInTheDocument();
+    });
+
     it('resets on identity switch and ignores a late response from the previous identity', async () => {
         let resolveOld!: (value: unknown) => void;
         sendMock.mockReturnValueOnce(new Promise(resolve => { resolveOld = resolve; }));

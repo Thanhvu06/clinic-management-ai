@@ -182,6 +182,26 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         Assert.Equal("specialty", catalogCalls[0].ToolCalls.Single().Arguments.GetProperty("entity").GetString());
         Assert.Equal("price", catalogCalls[1].ToolCalls.Single().Arguments.GetProperty("entity").GetString());
 
+        var conditionedListCalls = new[]
+        {
+            (Text: "Liệt kê bác sĩ tim mạch", Entity: "doctor"),
+            (Text: "Danh sách dịch vụ siêu âm bụng", Entity: "diagnostic_service"),
+            (Text: "Các cơ sở X", Entity: "facility")
+        };
+        foreach (var item in conditionedListCalls)
+        {
+            var decision = planner.Plan(new AiCopilotPlanningContext
+            {
+                Role = AiActorRole.Patient,
+                NormalizedMessage = item.Text,
+                Analysis = new AiConversationAnalysis { NormalizedText = item.Text }
+            });
+            var call = Assert.Single(decision.ToolCalls);
+            Assert.Equal("clinic.search_knowledge", call.Name);
+            Assert.Equal(item.Entity, call.Arguments.GetProperty("entity").GetString());
+            Assert.Equal(item.Text, call.Arguments.GetProperty("query").GetString());
+        }
+
         var mixed = planner.Plan(new AiCopilotPlanningContext
         {
             Role = AiActorRole.Receptionist,
@@ -454,6 +474,23 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         var unaccentedServiceItem = Assert.Single(GetCatalog(unaccentedService).GetProperty("items").EnumerateArray());
         Assert.Equal(targetDiagnosticName, unaccentedServiceItem.GetProperty("title").GetString());
 
+        using var conditionedDoctorList = await PostCatalogAsync(client, $"Liệt kê bác sĩ MụcTiêu {suffix}", "conditioned-doctor-list");
+        var conditionedDoctorCatalog = GetCatalog(conditionedDoctorList);
+        Assert.Equal("list", conditionedDoctorCatalog.GetProperty("mode").GetString());
+        Assert.Single(conditionedDoctorCatalog.GetProperty("items").EnumerateArray(), item => item.GetProperty("title").GetString() == targetDoctorName);
+
+        using var conditionedServiceList = await PostCatalogAsync(client, $"Danh sách dịch vụ Siêu âm MụcTiêu {suffix}", "conditioned-service-list");
+        var conditionedServiceCatalog = GetCatalog(conditionedServiceList);
+        Assert.Equal("list", conditionedServiceCatalog.GetProperty("mode").GetString());
+        Assert.Single(conditionedServiceCatalog.GetProperty("items").EnumerateArray(), item => item.GetProperty("title").GetString() == targetDiagnosticName);
+
+        using var conditionedFacilityList = await PostCatalogAsync(client, $"Các cơ sở X Bộ lọc {suffix}", "conditioned-facility-list");
+        var conditionedFacilityCatalog = GetCatalog(conditionedFacilityList);
+        Assert.Equal("list", conditionedFacilityCatalog.GetProperty("mode").GetString());
+        var conditionedFacilities = conditionedFacilityCatalog.GetProperty("items").EnumerateArray().ToArray();
+        Assert.Single(conditionedFacilities, item => item.GetProperty("title").GetString() == facilityXName);
+        Assert.DoesNotContain(conditionedFacilities, item => item.GetProperty("title").GetString() == facilityYName);
+
         using var targetDoctorResponse = await PostCatalogAsync(client, $"Bác sĩ MụcTiêu {suffix}", "bulk-doctor");
         var targetDoctorItems = GetCatalog(targetDoctorResponse).GetProperty("items").EnumerateArray().ToArray();
         Assert.True(targetDoctorItems.Any(item => item.GetProperty("title").GetString() == targetDoctorName), targetDoctorResponse.RootElement.GetRawText());
@@ -518,6 +555,16 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         using var punctuation = await ExecuteCatalogAsync(client, new { entity = "all", query = "?!", limit = 20 }, "punctuation");
         var punctuationResult = punctuation.RootElement.GetProperty("error");
         Assert.Equal("AMBIGUOUS_CATALOG_QUERY", punctuationResult.GetProperty("code").GetString());
+
+        using var allWithDoctorFilter = await ExecuteCatalogAsync(client, new
+        {
+            entity = "all",
+            query = "Danh sách danh mục",
+            specialtyQuery = "Tim mạch",
+            facilityQuery = "Cơ sở X",
+            limit = 20
+        }, "all-with-doctor-filters");
+        Assert.Equal("INVALID_FILTER_ENTITY", allWithDoctorFilter.RootElement.GetProperty("error").GetProperty("code").GetString());
     }
 
     [Fact]
@@ -564,6 +611,7 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         Assert.Equal("FORBIDDEN_TOOL_ARGUMENT", await ExecuteErrorAsync("{\"query\":\"tim mach\",\"userId\":\"other\"}"));
         Assert.Equal("FORBIDDEN_TOOL_ARGUMENT", await ExecuteErrorAsync("{\"query\":\"tim mach\",\"role\":\"Admin\"}"));
         Assert.Equal("INVALID_TOOL_ARGUMENTS", await ExecuteErrorAsync("{\"query\":\"tim mach\",\"facilityQuery\":{\"facilityId\":1}}"));
+        Assert.Equal("INVALID_FILTER_ENTITY", await ExecuteErrorAsync("{\"entity\":\"all\",\"query\":\"danh sach danh muc\",\"specialtyQuery\":\"tim mach\"}"));
     }
 
     private async Task<JsonDocument> PostCatalogAsync(HttpClient client, string message, string label)

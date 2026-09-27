@@ -56,9 +56,9 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
 
     private static readonly IReadOnlySet<string> CatalogStopWords = new HashSet<string>(StringComparer.Ordinal)
     {
-        "ai", "bao", "bang", "bac", "biet", "cac", "ca", "chi", "cho", "co", "cua", "cuu", "danh", "dich", "doctor", "duoc", "gia", "gi", "giup",
+        "ai", "bao", "bang", "bac", "biet", "cac", "ca", "chi", "cho", "co", "cong", "cua", "cuu", "danh", "dich", "doctor", "duoc", "gia", "gi", "giup",
         "bsi", "dau", "hay", "hien", "hoi", "kham", "ke", "khong", "khoa", "chuyen", "lich", "liet", "mo", "mot", "muc", "nao", "nhieu", "nguoi", "o", "phong", "sach", "si",
-        "a", "e", "i", "o", "u", "y", "so", "tai", "tat", "the", "thong", "tin", "toi", "tra", "va", "ve", "voi", "vu", "xem"
+        "a", "e", "i", "o", "u", "y", "khai", "so", "tai", "tat", "the", "thong", "tin", "toi", "tra", "va", "ve", "voi", "vu", "xem"
     };
 
     private readonly AppDbContext _db;
@@ -127,8 +127,10 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         var queryTerms = BuildSearchTerms(request.Query);
         var specialtyTerms = BuildSearchTerms(request.SpecialtyQuery);
         var facilityTerms = BuildSearchTerms(request.FacilityQuery);
-        var isListRequest = IsExplicitListRequest(request.Query);
-        if (!isListRequest && queryTerms.Count == 0 && specialtyTerms.Count == 0 && facilityTerms.Count == 0)
+        var requestedList = IsExplicitListRequest(request.Query);
+        var hasMeaningfulCriteria = queryTerms.Count > 0 || specialtyTerms.Count > 0 || facilityTerms.Count > 0;
+        var useBroadListing = requestedList && !hasMeaningfulCriteria;
+        if (!requestedList && !hasMeaningfulCriteria)
             return AiToolExecutionResult.Failed("AMBIGUOUS_CATALOG_QUERY", "Vui lòng nêu rõ tên chuyên khoa, bác sĩ, dịch vụ hoặc cơ sở; hoặc yêu cầu một danh sách công khai cụ thể.");
 
         var hits = new List<ClinicKnowledgeItem>();
@@ -136,26 +138,26 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         switch (request.Entity)
         {
             case "all":
-                hits.AddRange(await SearchSpecialtiesAsync(queryTerms, isListRequest, cancellationToken));
-                hits.AddRange(await SearchDoctorsAsync(queryTerms, specialtyTerms, facilityTerms, isListRequest, cancellationToken));
-                hits.AddRange(await SearchDiagnosticServicesAsync(queryTerms, isListRequest, cancellationToken));
-                hits.AddRange(await SearchFacilitiesAsync(queryTerms, isListRequest, cancellationToken));
-                hits.AddRange(await SearchPublishedPricesAsync(queryTerms, isListRequest, cancellationToken));
+                hits.AddRange(await SearchSpecialtiesAsync(queryTerms, useBroadListing, cancellationToken));
+                hits.AddRange(await SearchDoctorsAsync(queryTerms, specialtyTerms, facilityTerms, useBroadListing, cancellationToken));
+                hits.AddRange(await SearchDiagnosticServicesAsync(queryTerms, useBroadListing, cancellationToken));
+                hits.AddRange(await SearchFacilitiesAsync(queryTerms, useBroadListing, cancellationToken));
+                hits.AddRange(await SearchPublishedPricesAsync(queryTerms, useBroadListing, cancellationToken));
                 break;
             case "specialty":
-                hits.AddRange(await SearchSpecialtiesAsync(queryTerms, isListRequest, cancellationToken));
+                hits.AddRange(await SearchSpecialtiesAsync(queryTerms, useBroadListing, cancellationToken));
                 break;
             case "doctor":
-                hits.AddRange(await SearchDoctorsAsync(queryTerms, specialtyTerms, facilityTerms, isListRequest, cancellationToken));
+                hits.AddRange(await SearchDoctorsAsync(queryTerms, specialtyTerms, facilityTerms, useBroadListing, cancellationToken));
                 break;
             case "diagnostic_service":
-                hits.AddRange(await SearchDiagnosticServicesAsync(queryTerms, isListRequest, cancellationToken));
+                hits.AddRange(await SearchDiagnosticServicesAsync(queryTerms, useBroadListing, cancellationToken));
                 break;
             case "facility":
-                hits.AddRange(await SearchFacilitiesAsync(queryTerms, isListRequest, cancellationToken));
+                hits.AddRange(await SearchFacilitiesAsync(queryTerms, useBroadListing, cancellationToken));
                 break;
             case "price":
-                hits.AddRange(await SearchPublishedPricesAsync(queryTerms, isListRequest, cancellationToken));
+                hits.AddRange(await SearchPublishedPricesAsync(queryTerms, useBroadListing, cancellationToken));
                 break;
         }
 
@@ -176,14 +178,14 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
             Status = "completed",
             ResultType = "clinic_knowledge",
             DisplayText = matched
-                ? isListRequest
+                ? requestedList
                     ? $"Danh sách công khai hiện hành gồm {limited.Length} mục phù hợp."
                     : $"Đã tìm thấy {limited.Length} mục phù hợp từ danh mục công khai hiện hành."
                 : "Không tìm thấy dữ liệu công khai phù hợp; vui lòng hỏi lễ tân để được kiểm tra thêm.",
             Data = new ClinicKnowledgeEnvelope
             {
                 Status = matched ? "matched" : "not_found",
-                Mode = isListRequest ? "list" : "search",
+                Mode = requestedList ? "list" : "search",
                 SourceType = sourceType,
                 Items = limited,
                 RetrievedAtUtc = retrievedAtUtc
@@ -503,8 +505,8 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
                 hasFacilityFilter = !string.IsNullOrWhiteSpace(filter.GetString());
         }
 
-        if ((hasSpecialtyFilter || hasFacilityFilter) && entityName is not ("doctor" or "all"))
-            return AiToolArgumentValidationResult.Invalid("INVALID_FILTER", "Bộ lọc chuyên khoa/cơ sở chỉ áp dụng cho hồ sơ bác sĩ công khai.");
+        if ((hasSpecialtyFilter || hasFacilityFilter) && entityName is not "doctor")
+            return AiToolArgumentValidationResult.Invalid("INVALID_FILTER_ENTITY", "Bộ lọc chuyên khoa/cơ sở chỉ áp dụng khi entity=doctor; entity=all không được trộn bộ lọc quan hệ bác sĩ với các nguồn khác.");
 
         if (root.TryGetProperty("limit", out var limit) && (!limit.TryGetInt32(out var parsedLimit) || parsedLimit is < 1 or > CatalogMaxResultLimit))
             return AiToolArgumentValidationResult.Invalid("INVALID_LIMIT", $"Giới hạn danh mục phải từ 1 đến {CatalogMaxResultLimit}.");

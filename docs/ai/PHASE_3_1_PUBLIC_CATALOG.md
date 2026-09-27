@@ -22,7 +22,11 @@ The tool is versioned as `1.0` and accepts one closed JSON object:
 limited to 120 characters and `limit` is restricted to 1–20. Unknown fields,
 objects/arrays, invalid entities, and client-supplied authority fields such as
 `userId`, `role`, `facilityId`, and `facilityAuthorization` are rejected before
-query execution. Actor, role and facility permissions remain server-owned.
+query execution. `specialtyQuery` and `facilityQuery` are relationship filters
+for `entity=doctor`; sending either with `entity=all` is rejected with
+`INVALID_FILTER_ENTITY` instead of returning unrelated specialty, facility,
+service or price rows. Actor, role and facility permissions remain
+server-owned.
 
 ## Approved data sources and projection
 
@@ -71,6 +75,12 @@ source update timestamp. An explicit list request such as “danh sách bác sĩ
 active public rows. A punctuation-only, stop-word-only, or otherwise generic
 catalog request is rejected/clarified rather than returning arbitrary top
 records. A specific query with no match remains `not_found`.
+
+List wording does not erase search criteria. For example, “liệt kê bác sĩ tim
+mạch”, “danh sách dịch vụ siêu âm bụng”, and “các cơ sở X” retain the
+meaningful terms and apply the server-side predicate before the result limit.
+Only a general request such as “danh sách bác sĩ” uses the broad active-public
+listing path.
 
 ## Routing and grounding
 
