@@ -9,7 +9,10 @@ public sealed record AiExtractedEntity(
     string Source,
     decimal Confidence,
     bool IsValid,
-    string? RejectionReason = null);
+    string? RejectionReason = null)
+{
+    public string? NormalizedValue => Value;
+}
 
 public sealed class AiEntityExtractionResult
 {

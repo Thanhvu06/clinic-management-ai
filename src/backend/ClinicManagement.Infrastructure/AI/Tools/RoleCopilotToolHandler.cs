@@ -87,7 +87,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         var appointments = await _db.Appointments.AsNoTracking()
             .Where(a => a.AppointmentDate == today && _db.StaffFacilityAssignments.Any(s => s.IsActive && facilities.Contains(s.FacilityId) && s.UserId == a.Doctor.UserId))
             .OrderBy(a => a.StartTime).Take(100)
-            .Select(a => new { a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.EndTime, a.Status, patientName = a.Patient.FullName, a.Patient.MedicalRecordNumber, doctorName = a.Doctor.UserId.ToString(), specialtyId = a.SpecialtyId })
+            .Select(a => new { a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.EndTime, a.Status, patientName = a.Patient.FullName, a.Patient.MedicalRecordNumber, doctorName = _db.Users.Where(u => u.Id == a.Doctor.UserId).Select(u => u.FullName).FirstOrDefault() ?? "Bác sĩ", specialtyId = a.SpecialtyId })
             .ToListAsync(cancellationToken);
         return Completed(appointments, "reception_appointments", $"Có {appointments.Count} lịch hẹn trong ngày hôm nay.");
     }
@@ -175,9 +175,11 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
 
     private async Task<AiToolExecutionResult> GetInventoryAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
     {
+        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Pharmacist), cancellationToken);
+        if (facilities.Count == 0) return ScopeDenied();
         var medicines = await _db.Medicines.AsNoTracking().Where(m => m.IsActive).OrderBy(m => m.Name).Take(200)
             .Select(m => new { m.Id, m.Code, m.Name, m.Unit, m.StockQuantity, reorderLevel = m.ReorderLevel }).ToListAsync(cancellationToken);
-        return Completed(medicines, "pharmacy_inventory", "Tồn kho được lấy từ danh mục thuốc hiện tại.");
+        return Completed(medicines, "pharmacy_inventory", "Tồn kho toàn hệ thống được lấy từ danh mục thuốc hiện tại; mô hình dữ liệu chưa phân tách tồn kho theo cơ sở.");
     }
 
     private async Task<AiToolExecutionResult> GetAdminMetricsAsync(AiToolExecutionContext context, CancellationToken cancellationToken)

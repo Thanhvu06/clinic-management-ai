@@ -66,7 +66,8 @@ PATIENT SYMPTOM DESCRIPTION:
             generationConfig = new
             {
                 temperature = 0.2,
-                responseMimeType = "application/json"
+                responseMimeType = "application/json",
+                maxOutputTokens = Math.Clamp(_options.MaxOutputTokens, 256, 2048)
             }
         };
 
@@ -198,6 +199,8 @@ QUY TẮC HIỂU NGỮ CẢNH & TRÍCH XUẤT THỰC THỂ:
 
 FORMAT ĐẦU RA (BẮT BUỘC JSON object thuần túy):
 {
+  "plannerSchemaVersion": "1.0",
+  "plannerConfidence": 0.0,
   "reply": "Câu trả lời thân thiện, lịch sự bằng tiếng Việt.",
   "responseMode": "answer|tool_result|clarify|safety|pending|completed",
   "toolCalls": [],
@@ -248,7 +251,8 @@ TOOL PLANNER CONTRACT:
             generationConfig = new
             {
                 temperature = 0.2,
-                responseMimeType = "application/json"
+                responseMimeType = "application/json",
+                maxOutputTokens = Math.Clamp(_options.MaxOutputTokens, 256, 2048)
             }
         };
 

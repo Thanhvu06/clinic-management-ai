@@ -10,6 +10,8 @@ public class AiSession
     public string? ActiveDraftId { get; set; }
     public int? ActiveDraftVersion { get; set; }
     public long? FacilityId { get; set; }
+    public string? ConversationStateJson { get; set; }
+    public int ConversationVersion { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime LastActiveAtUtc { get; set; }
     public DateTime ExpiresAtUtc { get; set; }

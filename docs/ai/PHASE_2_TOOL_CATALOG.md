@@ -25,7 +25,7 @@ results with a source label; no tool accepts authorization fields from a model.
 | `doctor.get_diagnostic_orders` | Doctor | Read | Ordering doctor | No | Diagnostic orders |
 | `technician.get_worklist` | Technician | Read | Assigned facility | No | Diagnostic orders |
 | `pharmacist.get_prescription_queue` | Pharmacist | Read | Assigned facility | No | Issued prescriptions + visit |
-| `pharmacist.get_inventory_status` | Pharmacist | Read | Pharmacy workspace | No | Medicine catalog |
+| `pharmacist.get_inventory_status` | Pharmacist | Read | Active pharmacist facility assignment required; result is global because Medicine has no facility key | No | Medicine catalog |
 | `admin.get_dashboard_metrics` | Admin | Read | Admin role | No | Aggregate domain counts |
 | `admin.get_ai_health` | Admin | Read | Admin role | No | Aggregate AI audit metrics |
 

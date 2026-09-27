@@ -11,18 +11,36 @@ surface in this phase.
 raw message
   -> AiTextNormalizer (NFC, controls, whitespace, trailing escape)
   -> AiSafetyGuard (emergency / prompt injection)
+  -> RoleAwareCopilotOrchestrator
   -> AiConversationPipeline
        -> server-owned intent classifier
        -> typed entity extraction
-  -> role/facility capability resolution from authenticated claims + DB
-  -> immutable tool allowlist and schema validation
-  -> grounded read result OR pending write action
-  -> deterministic response and safe audit event
+  -> AiCopilotContextResolver (actor/role/facility/resource/version)
+  -> AiDeterministicPlanner for explicit high-confidence commands
+  -> GeminiStructuredPlanner only for ambiguous/complex language
+  -> immutable role tool allowlist and whole-plan schema validation
+  -> AiToolExecutor preflight (all calls before the first execution)
+  -> AiGroundedResponseComposer (local composition of DB-backed results)
+  -> sanitized memory projection and safe audit event
 ```
 
 `AiConversationPipeline` is shared by the patient service and role copilot.
 Gemini and ML.NET are untrusted enrichers. They cannot select a user, role,
 facility, entity ownership, or confirmation channel.
+Gemini calls retain the bounded provider timeout/retry policy, cap structured
+output tokens, and pass through a process-wide three-failure circuit breaker.
+Provider health state contains counters only and never request content.
+
+## Conversation memory
+
+`EfAiConversationMemoryStore` reuses `AiSessions`; it does not introduce an
+in-memory or parallel session authority. The stored JSON contains only bounded
+intent/sub-intent metadata, safe entity keys, pending clarification and a
+server-validated resource reference. It never stores the raw user message or
+tool result. The existing 24-hour session TTL and cleanup worker cover restart
+and multi-instance behavior. `RowVersion` plus `ConversationVersion` provides
+optimistic concurrency, while every load is bound to `SessionId + UserId +
+Role`. Resource hints and versions are revalidated on every turn.
 
 ## Boundaries
 
@@ -40,8 +58,9 @@ facility, entity ownership, or confirmation channel.
 
 ## Provider state
 
-`ProviderState` is the stable client contract: `NotCalled`, `Online`,
+`AssistantMode` reports `Ready`, `Clarifying`, `Processing`, `Degraded`,
+`Unavailable`, or `SafetyBlocked`. `ProviderState` separately reports `NotCalled`, `Online`,
 `Degraded`, `Unavailable`, and `SafetyBlocked`. `NotCalled` explicitly means
 the turn was handled by deterministic internal logic; it is not displayed as
-Gemini being online. The legacy `ProviderStatus` detail is retained for
-backward compatibility with existing clients and diagnostics.
+Gemini being online. Legacy `AssistantStatus` and `ProviderStatus` aliases are
+retained for backward compatibility.

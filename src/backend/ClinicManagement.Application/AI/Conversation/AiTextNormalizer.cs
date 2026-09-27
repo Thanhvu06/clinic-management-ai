@@ -48,6 +48,7 @@ public static class AiTextNormalizer
         reason = Regex.Replace(reason, @"^(?:tôi|em|mình|cháu)\s+(?:đang\s+|bị\s+|có\s+)?", string.Empty, RegexOptions.IgnoreCase);
         reason = Regex.Replace(reason, @"\s+(?:thì\s+)?(?:nên|muốn|cho\s+tôi|hãy)\s+(?:chọn|tìm|xem)\s+(?:bác\s+sĩ|bs\.?|khoa|chuyên\s+khoa).*$", string.Empty, RegexOptions.IgnoreCase);
         reason = Regex.Replace(reason, @"\s+(?:bác\s+sĩ|bs\.?)\s+(?:nào|ai|gì|ở\s+đâu)\s*(?:không)?\s*$", string.Empty, RegexOptions.IgnoreCase);
+        reason = Regex.Replace(reason, @"\s+(?:thì\s+)?(?:khám\s+)?(?:khoa\s+gì|gặp\s+ai)\s*(?:không)?\s*$", string.Empty, RegexOptions.IgnoreCase);
         reason = Regex.Replace(reason, @"[\s,;:]+$", string.Empty).Trim();
 
         if (reason.Length == 0)

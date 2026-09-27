@@ -9,4 +9,5 @@ public class AiProviderOptions
     public string ApiKey { get; set; } = string.Empty;
     public string ModelName { get; set; } = "gemini-3.6-flash";
     public int TimeoutSeconds { get; set; } = 10;
+    public int MaxOutputTokens { get; set; } = 1024;
 }

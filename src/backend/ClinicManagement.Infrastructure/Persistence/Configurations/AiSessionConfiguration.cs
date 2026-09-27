@@ -20,6 +20,13 @@ public class AiSessionConfiguration : IEntityTypeConfiguration<AiSession>
         builder.Property(s => s.ActiveDraftId)
             .HasMaxLength(128);
 
+        builder.Property(s => s.ConversationStateJson)
+            .HasMaxLength(4000);
+
+        builder.Property(s => s.ConversationVersion)
+            .IsRequired()
+            .HasDefaultValue(0);
+
         builder.Property(s => s.CreatedAtUtc)
             .IsRequired();
 

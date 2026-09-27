@@ -129,6 +129,15 @@ public static class AiChatIntentTypes
     public const string FindDoctorForSymptom = "FindDoctorForSymptom";
     public const string EmergencyEscalation = "EmergencyEscalation";
     public const string PromptInjection = "PromptInjection";
+    public const string Chitchat = "Chitchat";
+    public const string Help = "Help";
+    public const string ClarificationRequired = "ClarificationRequired";
+    public const string QueueLookup = "QueueLookup";
+    public const string PatientSummary = "PatientSummary";
+    public const string DiagnosticLookup = "DiagnosticLookup";
+    public const string PrescriptionLookup = "PrescriptionLookup";
+    public const string PharmacyInventory = "PharmacyInventory";
+    public const string AdminMetrics = "AdminMetrics";
 
     private static readonly HashSet<string> AllAllowed = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -150,7 +159,16 @@ public static class AiChatIntentTypes
         SpecialtyRecommendation,
         FindDoctorForSymptom,
         EmergencyEscalation,
-        PromptInjection
+        PromptInjection,
+        Chitchat,
+        Help,
+        ClarificationRequired,
+        QueueLookup,
+        PatientSummary,
+        DiagnosticLookup,
+        PrescriptionLookup,
+        PharmacyInventory,
+        AdminMetrics
     };
 
     public static IReadOnlyCollection<string> All => AllAllowed;
@@ -650,6 +668,8 @@ public class AiChatResponseDto
 
 public class AiChatProviderResult
 {
+    public string? PlannerSchemaVersion { get; set; }
+    public decimal? PlannerConfidence { get; set; }
     public bool IsSuccess { get; set; } = true;
     public string Status { get; set; } = "Success"; // Success, Disabled, AuthFailure, RateLimited, Timeout, NetworkError, InvalidResponse, Cancelled
     public string? ErrorMessage { get; set; }

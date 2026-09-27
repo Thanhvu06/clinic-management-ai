@@ -19,7 +19,7 @@ public sealed class AiPhase2ConversationIntelligenceTests : IntegrationTestBase
         var classifier = new VietnameseIntentClassifier(IntentClassificationMode.Off);
 
         var doctorQuestion = classifier.Classify("có bác sĩ nào khám bệnh ho không");
-        Assert.Equal(AiChatIntentTypes.SpecialtyRecommendation, doctorQuestion.Intent);
+        Assert.Equal(AiChatIntentTypes.FindDoctorForSymptom, doctorQuestion.Intent);
         Assert.Null(doctorQuestion.ExtractedDoctorName);
         Assert.Equal("Ho", doctorQuestion.ExtractedReason);
 

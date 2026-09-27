@@ -46,7 +46,7 @@ public sealed class AiConversationPipeline : IAiConversationPipeline
         var entities = new List<AiExtractedEntity>();
         var reason = intent.ExtractedReason;
         if (string.IsNullOrWhiteSpace(reason) &&
-            (intent.Intent == AiChatIntentTypes.ProvideReason || intent.Intent == AiChatIntentTypes.SpecialtyRecommendation))
+            (intent.Intent == AiChatIntentTypes.ProvideReason || intent.Intent == AiChatIntentTypes.SpecialtyRecommendation || intent.Intent == AiChatIntentTypes.FindDoctorForSymptom))
         {
             reason = ExtractClinicalReason(message);
         }

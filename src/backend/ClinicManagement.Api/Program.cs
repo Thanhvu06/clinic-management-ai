@@ -126,9 +126,15 @@ builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSession
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiAuditService, ClinicManagement.Infrastructure.AI.Persistence.EfAiAuditService>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiBookingConfirmationStore, ClinicManagement.Infrastructure.AI.Persistence.EfAiBookingConfirmationStore>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSpecialtyService, ClinicManagement.Infrastructure.AI.AiSpecialtyService>();
-builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiRoleCopilotService, ClinicManagement.Infrastructure.AI.AiRoleCopilotService>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiRoleCopilotService, ClinicManagement.Infrastructure.AI.RoleAwareCopilotOrchestrator>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IClinicAiContextService, ClinicManagement.Infrastructure.AI.ClinicAiContextService>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiSafetyGuard, ClinicManagement.Infrastructure.AI.AiSafetyGuard>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiDeterministicPlanner, ClinicManagement.Infrastructure.AI.Planning.AiDeterministicPlanner>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiStructuredPlanner, ClinicManagement.Infrastructure.AI.Planning.GeminiStructuredPlanner>();
+builder.Services.AddSingleton<ClinicManagement.Application.AI.Planning.IAiProviderHealth, ClinicManagement.Infrastructure.AI.Planning.AiProviderHealth>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiCopilotContextResolver, ClinicManagement.Infrastructure.AI.Planning.AiCopilotContextResolver>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiConversationMemoryStore, ClinicManagement.Infrastructure.AI.Persistence.EfAiConversationMemoryStore>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiGroundedResponseComposer, ClinicManagement.Infrastructure.AI.Planning.AiGroundedResponseComposer>();
 builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.Tools.PatientCopilotToolHandler>();
 builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.Tools.RoleCopilotToolHandler>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Conversation.IAiConversationPipeline, ClinicManagement.Infrastructure.AI.AiConversationPipeline>();

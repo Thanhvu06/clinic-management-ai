@@ -202,7 +202,9 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         // empty; the service will ground recommendations against real data.
         if (TryExtractSpecialtyRecommendation(trimmed, out var recommendationReason))
         {
-            result.Intent = AiChatIntentTypes.SpecialtyRecommendation;
+            result.Intent = Regex.IsMatch(lower, @"\bbác(?:\s+sĩ)?\s+nào\s+(?:khám|chữa|điều\s+trị)\b|\bgặp\s+ai\b", RegexOptions.IgnoreCase)
+                ? AiChatIntentTypes.FindDoctorForSymptom
+                : AiChatIntentTypes.SpecialtyRecommendation;
             result.ExtractedReason = recommendationReason;
             return result;
         }
@@ -275,6 +277,8 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 
         // 11. Doctor Selection / Search with explicit doctor mention
         var doctorMatch = Regex.Match(trimmed, @"(?:chọn\s+)?(?:bác sĩ|bac si|bs\.|bs|bác sỹ|bac sy)\s+([A-Za-z0-9À-ỹ\s]+)", RegexOptions.IgnoreCase);
+        if (!doctorMatch.Success)
+            doctorMatch = Regex.Match(trimmed, @"(?:tìm|xem\s+lịch)\s+bác\s+([A-Za-zÀ-ỹ][A-Za-zÀ-ỹ\s]+?)(?:\s+giúp\s+(?:tôi|mình|em))?[\.!?]*$", RegexOptions.IgnoreCase);
         if (doctorMatch.Success)
         {
             var rawName = doctorMatch.Groups[1].Value;
@@ -290,7 +294,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             if (!string.IsNullOrWhiteSpace(candidateName) && candidateName.Length >= 2)
             {
                 result.ExtractedDoctorName = candidateName;
-                if (lower.Contains("có khám không") || lower.Contains("thông tin") || lower.Contains("tìm bác sĩ") || lower.Contains("xem bác sĩ"))
+                if (lower.Contains("có khám không") || lower.Contains("thông tin") || lower.Contains("tìm bác sĩ") || lower.Contains("xem bác sĩ") || lower.StartsWith("tìm bác ") || lower.StartsWith("xem lịch bác "))
                 {
                     result.Intent = AiChatIntentTypes.DoctorSearch;
                 }
@@ -611,14 +615,14 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         var lower = normalized.ToLowerInvariant();
         var recommendationQuestion = Regex.IsMatch(
             lower,
-            @"(?:bác\s+sĩ\s+nào|nên\s+chọn\s+bác\s+sĩ|khám\s+ai|chuyên\s+khoa\s+nào|khoa\s+nào)",
+            @"(?:bác(?:\s+sĩ)?\s+nào|nên\s+chọn\s+bác\s+sĩ|khám\s+ai|gặp\s+ai|chuyên\s+khoa\s+(?:nào|gì)|khoa\s+(?:nào|gì))",
             RegexOptions.IgnoreCase);
         if (!recommendationQuestion)
             return false;
 
         var doctorQuestion = Regex.Match(
             normalized,
-            @"(?:có\s+)?bác\s+sĩ\s+nào\s+(?:khám|chữa|điều\s+trị)\s+(?:bệnh\s+)?(?<reason>.+?)(?:\s+không)?$",
+            @"(?:có\s+)?bác(?:\s+sĩ)?\s+nào\s+(?:khám|chữa|điều\s+trị)\s+(?:bệnh\s+)?(?<reason>.+?)(?:\s+không)?$",
             RegexOptions.IgnoreCase);
         var extracted = string.Empty;
         if (doctorQuestion.Success)

@@ -19,7 +19,7 @@ revalidated by the domain service.
 
 ## Reason extraction rules
 
-- `có bác sĩ nào khám bệnh ho không` → specialty recommendation, reason `Ho`,
+- `có bác sĩ nào khám bệnh ho không` → find-doctor-for-symptom, reason `Ho`,
   no doctor name.
 - `tôi bị đau bụng thì nên chọn bác sĩ nào\` → specialty recommendation,
   reason `Đau bụng`, no trailing escape and no doctor name.
@@ -31,3 +31,9 @@ revalidated by the domain service.
 
 Normalization is repeated on the backend even when the frontend already
 normalized display text.
+
+Conversation responses now expose separate `AssistantMode`, `ProviderState`
+and `PlannerMode` fields. The provider is not called for deterministic commands
+or safety blocks; ambiguous turns use a validated Gemini plan when configured,
+otherwise they return a truthful unavailable/degraded clarification without
+executing a default tool.
