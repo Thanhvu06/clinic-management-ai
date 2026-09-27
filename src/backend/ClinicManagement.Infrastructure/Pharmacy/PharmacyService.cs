@@ -21,12 +21,20 @@ public class PharmacyService : IPharmacyService
 {
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IPrescriptionPaymentEligibilityService _paymentEligibility;
 
-    public PharmacyService(AppDbContext dbContext, ICurrentUserService currentUserService)
+    public PharmacyService(
+        AppDbContext dbContext,
+        ICurrentUserService currentUserService,
+        IPrescriptionPaymentEligibilityService paymentEligibility)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _paymentEligibility = paymentEligibility;
     }
+
+    public Task<PrescriptionPaymentEligibilityDto> EvaluatePrescriptionPaymentAsync(long prescriptionId, CancellationToken cancellationToken = default) =>
+        _paymentEligibility.EvaluateAsync(prescriptionId, cancellationToken);
 
     public async Task<PharmacyDashboardDto> GetDashboardStatsAsync()
     {
@@ -303,47 +311,15 @@ public class PharmacyService : IPharmacyService
                 if (prescription.Items == null || prescription.Items.Count == 0)
                     throw new BusinessException("EMPTY_PRESCRIPTION", "Đơn thuốc không có danh mục thuốc để cấp.");
 
-                // Guard: Prescription must be paid before dispensing
-                // Item-level check: Every medicine in prescription.Items must be billed in an active invoice item with Status == InvoiceStatus.Paid
-                // and paid quantity must be greater than or equal to prescription item quantity.
-                var minModern = prescription.Id * 4294967296L;
-                var maxModern = (prescription.Id + 1) * 4294967296L - 1;
-                var minLegacy = prescription.Id * 100000L;
-                var maxLegacy = (prescription.Id + 1) * 100000L - 1;
-
-                var paidInvoiceItems = await _dbContext.InvoiceItems
-                    .Where(ii => !ii.IsCancelled && ii.Invoice.Status == InvoiceStatus.Paid)
-                    .Where(ii => ii.Invoice.PatientId == prescription.PatientId &&
-                                 (ii.Invoice.PatientVisitId == prescription.PatientVisitId ||
-                                  (prescription.AppointmentId.HasValue && ii.Invoice.AppointmentId == prescription.AppointmentId.Value)))
-                    .Where(ii => (ii.ReferenceType == PrescriptionItemBillingReference.ModernReferenceType &&
-                                  ii.ReferenceId >= minModern && ii.ReferenceId <= maxModern) ||
-                                 (ii.ReferenceType == PrescriptionItemBillingReference.LegacyReferenceType &&
-                                  ii.ReferenceId >= minLegacy && ii.ReferenceId <= maxLegacy))
-                    .Select(ii => new { ii.ReferenceType, ii.ReferenceId, ii.Quantity })
-                    .ToListAsync();
-
-                var paidQtyByMedId = new Dictionary<long, int>();
-                foreach (var ii in paidInvoiceItems)
+                var paymentEligibility = await _paymentEligibility.EvaluateAsync(prescription.Id);
+                foreach (var item in paymentEligibility.Items.Where(item => !item.IsPaidInFull))
                 {
-                    if (PrescriptionItemBillingReference.TryDecodeMedicineId(ii.ReferenceType, ii.ReferenceId, prescription.Id, out var medId))
+                    if (item.PaidQuantity == 0)
                     {
-                        paidQtyByMedId[medId] = paidQtyByMedId.GetValueOrDefault(medId) + ii.Quantity;
+                        throw new BusinessException("PRESCRIPTION_NOT_PAID", $"Thuốc '{item.MedicineName}' trong đơn chưa được thanh toán tại quầy thu ngân.");
                     }
-                }
 
-                foreach (var item in prescription.Items)
-                {
-                    paidQtyByMedId.TryGetValue(item.MedicineId, out var paidQty);
-                    if (paidQty < item.Quantity)
-                    {
-                        var medName = item.Medicine?.Name ?? $"ID #{item.MedicineId}";
-                        if (paidQty == 0)
-                        {
-                            throw new BusinessException("PRESCRIPTION_NOT_PAID", $"Thuốc '{medName}' trong đơn chưa được thanh toán tại quầy thu ngân.");
-                        }
-                        throw new BusinessException("PRESCRIPTION_NOT_PAID", $"Thuốc '{medName}' chưa được thanh toán đủ số lượng (Đã thanh toán: {paidQty}, Cần cấp: {item.Quantity}).");
-                    }
+                    throw new BusinessException("PRESCRIPTION_NOT_PAID", $"Thuốc '{item.MedicineName}' chưa được thanh toán đủ số lượng (Đã thanh toán: {item.PaidQuantity}, Cần cấp: {item.RequiredQuantity}).");
                 }
 
                 var wasReserved = prescription.Status == PrescriptionStatus.ReservedForPurchase ||

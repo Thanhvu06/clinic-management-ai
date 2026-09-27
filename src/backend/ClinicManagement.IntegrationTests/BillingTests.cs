@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Billing.DTOs;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
@@ -449,6 +450,27 @@ public class BillingTests : IntegrationTestBase
         decimal succeededAmount = 300000m;
         var aptId = await CreateTestAppointmentAsync(Patient1EntityId, AppointmentStatus.Completed);
         var invId = await CreateTestInvoiceAsync(Patient1EntityId, aptId, succeededAmount, InvoiceStatus.Paid);
+        DateTime succeededReceivedAtUtc;
+        DateTime voidedReceivedAtUtc;
+        DateOnly queryDate;
+        DateTime startUtc;
+        DateTime endUtc;
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var clock = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>();
+            succeededReceivedAtUtc = clock.UtcNow;
+            voidedReceivedAtUtc = clock.UtcNow;
+            queryDate = DateOnly.FromDateTime(clock.ConvertUtcToVietnam(succeededReceivedAtUtc));
+            startUtc = clock.ConvertVietnamToUtc(queryDate.ToDateTime(TimeOnly.MinValue));
+            endUtc = clock.ConvertVietnamToUtc(queryDate.ToDateTime(TimeOnly.MaxValue));
+        }
+
+        var today = queryDate.ToString("yyyy-MM-dd");
+        var baselineResponse = await Client.GetAsync($"/api/v1/admin/billing/revenue?fromDate={today}&toDate={today}");
+        Assert.Equal(HttpStatusCode.OK, baselineResponse.StatusCode);
+        var baselineDoc = JsonDocument.Parse(await baselineResponse.Content.ReadAsStringAsync());
+        var baselineRevenue = baselineDoc.RootElement.GetProperty("data").GetProperty("totalRevenue").GetDecimal();
 
         using (var scope = Factory.Services.CreateScope())
         {
@@ -460,7 +482,7 @@ public class BillingTests : IntegrationTestBase
                 Amount = succeededAmount,
                 Method = PaymentMethod.Cash,
                 ReceivedByUserId = ReceptionistId,
-                ReceivedAtUtc = DateTime.UtcNow,
+                ReceivedAtUtc = succeededReceivedAtUtc,
                 Status = PaymentStatus.Succeeded
             };
             var p2 = new Payment
@@ -470,19 +492,29 @@ public class BillingTests : IntegrationTestBase
                 Amount = 500000m,
                 Method = PaymentMethod.Cash,
                 ReceivedByUserId = ReceptionistId,
-                ReceivedAtUtc = DateTime.UtcNow,
+                ReceivedAtUtc = voidedReceivedAtUtc,
                 Status = PaymentStatus.Voided // Voided should NOT be counted in revenue
             };
             db.Payments.AddRange(p1, p2);
             await db.SaveChangesAsync();
         }
 
-        var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var clock = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>();
+            var queryRuntimeUtc = clock.UtcNow;
+            Console.WriteLine(
+                $"[BillingDiagnostics] runtimeUtc={queryRuntimeUtc:O}; succeededReceivedAtUtc={succeededReceivedAtUtc:O}; " +
+                $"voidedReceivedAtUtc={voidedReceivedAtUtc:O}; succeededVietnamDate={clock.ConvertUtcToVietnam(succeededReceivedAtUtc):yyyy-MM-dd}; " +
+                $"queryDate={today}; startUtc={startUtc:O}; endUtc={endUtc:O}");
+        }
+
         var res = await Client.GetAsync($"/api/v1/admin/billing/revenue?fromDate={today}&toDate={today}");
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
 
         var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
         var totalRev = doc.RootElement.GetProperty("data").GetProperty("totalRevenue").GetDecimal();
-        Assert.True(totalRev >= succeededAmount);
+        Console.WriteLine($"[BillingDiagnostics] responseRuntimeUtc={DateTime.UtcNow:O}; baselineRevenue={baselineRevenue}; totalRevenue={totalRev}; delta={totalRev - baselineRevenue}");
+        Assert.Equal(succeededAmount, totalRev - baselineRevenue);
     }
 }

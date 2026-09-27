@@ -13,6 +13,7 @@ using ClinicManagement.Application.Diagnostics.Interfaces;
 using ClinicManagement.Application.Doctors.Interfaces;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
+using ClinicManagement.Domain.Policies;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -1127,7 +1128,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
     private static DiagnosticOrderDto RedactUnpublishedResultsForPatient(DiagnosticOrderDto order)
     {
-        if (order.Status == DiagnosticOrderStatus.Completed.ToString() && order.ReviewedAtUtc.HasValue)
+        if (Enum.TryParse<DiagnosticOrderStatus>(order.Status, out var status) &&
+            DiagnosticResultPublicationPolicy.IsPublishedToPatient(status, order.ReviewedAtUtc))
             return order;
 
         foreach (var item in order.Items)

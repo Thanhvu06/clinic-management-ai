@@ -14,6 +14,7 @@ using ClinicManagement.Application.Organization.Interfaces;
 using ClinicManagement.Application.Specialties.Interfaces;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
+using ClinicManagement.Domain.Policies;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -326,23 +327,38 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
         var args = Parse(invocation.ArgumentsJson);
         var page = Math.Clamp(GetInt(args, "page") ?? 1, 1, 100);
         var pageSize = Math.Clamp(GetInt(args, "pageSize") ?? 20, 1, 50);
-        var items = await _db.DiagnosticOrderItems.AsNoTracking()
-            .Where(i => i.DiagnosticOrder.PatientId == patientId.Value && i.Status != DiagnosticItemStatus.Cancelled)
-            .OrderByDescending(i => i.DiagnosticOrder.OrderedAtUtc).ThenBy(i => i.Id)
-            .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(i => new
+        // Reuse the patient API projection/redaction instead of maintaining a second
+        // publication rule in the copilot. This guarantees that an unpublished result
+        // never reaches the card, conversation memory, audit payload or provider prompt.
+        var patientOrders = await _diagnostics.GetPatientOrdersAsync(page, pageSize);
+        var items = patientOrders.Items.Select(order =>
+        {
+            var published = Enum.TryParse<DiagnosticOrderStatus>(order.Status, out var status) &&
+                            DiagnosticResultPublicationPolicy.IsPublishedToPatient(status, order.ReviewedAtUtc);
+            return new
             {
-                orderCode = i.DiagnosticOrder.OrderCode,
-                service = i.DiagnosticService.Name,
-                status = i.Status.ToString(),
-                orderedAtUtc = i.DiagnosticOrder.OrderedAtUtc,
-                result = i.Result == null ? null : new
+                orderCode = order.OrderCode,
+                orderStatus = order.Status,
+                reviewedAtUtc = order.ReviewedAtUtc,
+                publishedToPatient = published,
+                items = order.Items.Select(item => new
                 {
-                    i.Result.ResultText, i.Result.Conclusion,
-                    i.Result.ReferenceRange, i.Result.Unit, i.Result.ResultedAtUtc
-                }
-            }).ToListAsync(cancellationToken);
-        return Completed(items, "patient_diagnostic_results", items.Count == 0 ? "Bạn chưa có kết quả cận lâm sàng." : $"Có {items.Count} chỉ định/kết quả của bạn.");
+                    service = item.ServiceName,
+                    status = item.Status,
+                    result = published && item.Result != null ? new
+                    {
+                        item.Result.ResultText, item.Result.Conclusion,
+                        item.Result.ReferenceRange, item.Result.Unit, item.Result.ResultedAtUtc
+                    } : null
+                }).ToList()
+            };
+        }).ToList();
+        var hasUnpublished = items.Any(order => !order.publishedToPatient || order.items.Any(item => item.result is null));
+        return Completed(items, "patient_diagnostic_results", items.Count == 0
+            ? "Bạn chưa có chỉ định cận lâm sàng."
+            : hasUnpublished
+                ? "Một số chỉ định đang xử lý hoặc chưa được bác sĩ duyệt; kết quả chi tiết chưa được công bố."
+                : $"Có {items.Count} chỉ định/kết quả đã được bác sĩ duyệt của bạn.");
     }
 
     private async Task<AiToolExecutionResult> GetMyPrescriptionsAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken)

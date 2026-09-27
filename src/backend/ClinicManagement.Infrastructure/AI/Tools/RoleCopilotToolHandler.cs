@@ -6,6 +6,7 @@ using ClinicManagement.Application.AI.Conversation;
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Interfaces;
+using ClinicManagement.Application.Pharmacy.Interfaces;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -64,12 +65,18 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _clock;
+    private readonly IPharmacyService _pharmacy;
 
-    public RoleCopilotToolHandler(AppDbContext db, ICurrentUserService currentUser, IDateTimeProvider clock)
+    public RoleCopilotToolHandler(
+        AppDbContext db,
+        ICurrentUserService currentUser,
+        IDateTimeProvider clock,
+        IPharmacyService pharmacy)
     {
         _db = db;
         _currentUser = currentUser;
         _clock = clock;
+        _pharmacy = pharmacy;
     }
 
     public AiToolDefinition Definition { get; } = new() { Name = "role.copilot.dispatch", Version = "1.0" };
@@ -761,10 +768,35 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
                 caseType = "appointment",
                 a.Id, a.AppointmentCode, a.AppointmentDate, a.Status, patientName = a.Patient.FullName,
                 a.Reason, a.SpecialtyId, patientVisitId = a.PatientVisit == null ? (long?)null : a.PatientVisit.Id,
+                patientVisitAssignedDoctorUserId = a.PatientVisit == null || a.PatientVisit.AssignedDoctor == null ? (Guid?)null : a.PatientVisit.AssignedDoctor.UserId,
                 summary = a.VisitSummary == null ? (a.PatientVisit == null || a.PatientVisit.VisitSummary == null ? null : new { a.PatientVisit.VisitSummary.Summary, a.PatientVisit.VisitSummary.ClinicalFindings, a.PatientVisit.VisitSummary.Diagnosis, a.PatientVisit.VisitSummary.TreatmentPlan, a.PatientVisit.VisitSummary.FollowUpInstruction, a.PatientVisit.VisitSummary.CompletedAtUtc }) : new { a.VisitSummary.Summary, a.VisitSummary.ClinicalFindings, a.VisitSummary.Diagnosis, a.VisitSummary.TreatmentPlan, a.VisitSummary.FollowUpInstruction, a.VisitSummary.CompletedAtUtc },
                 vitals = a.VitalSigns == null ? (a.PatientVisit == null || a.PatientVisit.VitalSigns == null ? null : new { a.PatientVisit.VitalSigns.Temperature, a.PatientVisit.VitalSigns.BloodPressureSystolic, a.PatientVisit.VitalSigns.BloodPressureDiastolic, a.PatientVisit.VitalSigns.HeartRate, a.PatientVisit.VitalSigns.RespiratoryRate, a.PatientVisit.VitalSigns.SpO2, a.PatientVisit.VitalSigns.Weight, a.PatientVisit.VitalSigns.Height, a.PatientVisit.VitalSigns.Bmi, a.PatientVisit.VitalSigns.RecordedAtUtc }) : new { a.VitalSigns.Temperature, a.VitalSigns.BloodPressureSystolic, a.VitalSigns.BloodPressureDiastolic, a.VitalSigns.HeartRate, a.VitalSigns.RespiratoryRate, a.VitalSigns.SpO2, a.VitalSigns.Weight, a.VitalSigns.Height, a.VitalSigns.Bmi, a.VitalSigns.RecordedAtUtc }
             }).SingleOrDefaultAsync(cancellationToken);
-        return appointment is null ? AiToolExecutionResult.Failed("NOT_FOUND", "Ca khám không thuộc bác sĩ hiện tại.") : Completed(appointment, "doctor_patient_summary", "Tóm tắt ca khám được giới hạn trong lịch hẹn được phân công.");
+        if (appointment is null)
+            return AiToolExecutionResult.Failed("NOT_FOUND", "Ca khám không thuộc bác sĩ hiện tại.");
+
+        // An appointment can remain historically owned by doctor A after its visit
+        // is reassigned to doctor B. Appointment metadata remains readable by A,
+        // but visit clinical data must follow the current visit assignment.
+        var canReadLinkedVisitClinical = !appointment.patientVisitId.HasValue || appointment.patientVisitAssignedDoctorUserId == context.ActorId;
+        var projection = new
+        {
+            appointment.caseType,
+            appointment.Id,
+            appointment.AppointmentCode,
+            appointment.AppointmentDate,
+            appointment.Status,
+            appointment.patientName,
+            appointment.Reason,
+            appointment.SpecialtyId,
+            appointment.patientVisitId,
+            clinicalDataStatus = canReadLinkedVisitClinical ? "available" : "visit_reassigned",
+            summary = canReadLinkedVisitClinical ? appointment.summary : null,
+            vitals = canReadLinkedVisitClinical ? appointment.vitals : null
+        };
+        return Completed(projection, "doctor_patient_summary", canReadLinkedVisitClinical
+            ? "Tóm tắt ca khám được giới hạn trong lịch hẹn được phân công."
+            : "Lịch hẹn vẫn được xác minh, nhưng dữ liệu lâm sàng của lượt khám đã chuyển sang bác sĩ được phân công hiện tại.");
     }
 
     private async Task<AiToolExecutionResult> GetDoctorOrdersAsync(AiToolExecutionContext context, string json, CancellationToken cancellationToken)
@@ -776,7 +808,10 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         var query = _db.DiagnosticOrders.AsNoTracking()
             .Where(o => o.OrderingDoctor.UserId == context.ActorId && o.FacilityId.HasValue && facilities.Contains(o.FacilityId.Value) && o.Status != DiagnosticOrderStatus.Cancelled)
             .Where(o => !visitId.HasValue || (o.PatientVisitId == visitId.Value && o.PatientVisit != null && o.PatientVisit.AssignedDoctor != null && o.PatientVisit.AssignedDoctor.UserId == context.ActorId))
-            .Where(o => !appointmentId.HasValue || (o.AppointmentId == appointmentId.Value && o.Appointment != null && o.Appointment.Doctor.UserId == context.ActorId) || (o.PatientVisit != null && o.PatientVisit.AppointmentId == appointmentId.Value && o.PatientVisit.AssignedDoctor != null && o.PatientVisit.AssignedDoctor.UserId == context.ActorId));
+            .Where(o => !appointmentId.HasValue ||
+                        (o.AppointmentId == appointmentId.Value && o.Appointment != null && o.Appointment.Doctor.UserId == context.ActorId &&
+                         (o.PatientVisit == null || o.PatientVisit.AssignedDoctor != null && o.PatientVisit.AssignedDoctor.UserId == context.ActorId)) ||
+                        (o.PatientVisit != null && o.PatientVisit.AppointmentId == appointmentId.Value && o.PatientVisit.AssignedDoctor != null && o.PatientVisit.AssignedDoctor.UserId == context.ActorId));
         var items = await query.OrderByDescending(o => o.OrderedAtUtc).Take(100)
             .Select(o => new
             {
@@ -789,7 +824,8 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
                 }).ToList()
             })
             .ToListAsync(cancellationToken);
-        var hasPendingResult = items.Any(order => order.items.Any(item => item.result is null));
+        var hasPendingResult = items.Any(order => order.items.Any(item =>
+            item.result is null || !string.Equals(item.status, DiagnosticItemStatus.Completed.ToString(), StringComparison.OrdinalIgnoreCase)));
         return Completed(items, "doctor_diagnostic_orders", items.Count == 0 ? "Chưa có chỉ định trong ca này." : hasPendingResult ? $"Có {items.Count} chỉ định; một số chỉ định chưa có kết quả." : $"Có {items.Count} chỉ định và đã có kết quả tương ứng.");
     }
 
@@ -804,7 +840,10 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
                         ((p.PatientVisit != null && facilities.Contains(p.PatientVisit.FacilityId)) ||
                          (p.PatientVisit == null && p.Appointment != null && p.Appointment.FacilityId.HasValue && facilities.Contains(p.Appointment.FacilityId.Value))))
             .Where(p => !visitId.HasValue || (p.PatientVisitId == visitId.Value && p.PatientVisit != null && p.PatientVisit.AssignedDoctor != null && p.PatientVisit.AssignedDoctor.UserId == context.ActorId))
-            .Where(p => !appointmentId.HasValue || (p.AppointmentId == appointmentId.Value && p.Appointment != null && p.Appointment.Doctor.UserId == context.ActorId) || (p.PatientVisit != null && p.PatientVisit.AppointmentId == appointmentId.Value && p.PatientVisit.AssignedDoctor != null && p.PatientVisit.AssignedDoctor.UserId == context.ActorId))
+            .Where(p => !appointmentId.HasValue ||
+                        (p.AppointmentId == appointmentId.Value && p.Appointment != null && p.Appointment.Doctor.UserId == context.ActorId &&
+                         (p.PatientVisit == null || p.PatientVisit.AssignedDoctor != null && p.PatientVisit.AssignedDoctor.UserId == context.ActorId)) ||
+                        (p.PatientVisit != null && p.PatientVisit.AppointmentId == appointmentId.Value && p.PatientVisit.AssignedDoctor != null && p.PatientVisit.AssignedDoctor.UserId == context.ActorId))
             .OrderByDescending(p => p.CreatedAt).Take(20)
             .Select(p => new
             {
@@ -837,13 +876,33 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
     {
         var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Pharmacist), cancellationToken);
         if (facilities.Count == 0) return ScopeDenied();
-        var items = await _db.Prescriptions.AsNoTracking()
+        var prescriptions = await _db.Prescriptions.AsNoTracking()
             .Where(p => (p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.ReservedForPurchase) &&
                         ((p.PatientVisit != null && facilities.Contains(p.PatientVisit.FacilityId)) ||
                          (p.PatientVisit == null && p.Appointment != null && p.Appointment.FacilityId.HasValue && facilities.Contains(p.Appointment.FacilityId.Value))))
             .OrderBy(p => p.CreatedAt).Take(100)
-            .Select(p => new { p.Id, status = p.Status.ToString(), p.CreatedAt, p.PatientVisitId, paid = p.PatientVisit != null && p.PatientVisit.Invoices.Any(i => i.Status == InvoiceStatus.Paid) })
+            .Select(p => new { p.Id, status = p.Status.ToString(), p.CreatedAt, p.PatientVisitId })
             .ToListAsync(cancellationToken);
+        var items = new List<object>(prescriptions.Count);
+        foreach (var prescription in prescriptions)
+        {
+            var payment = await _pharmacy.EvaluatePrescriptionPaymentAsync(prescription.Id, cancellationToken);
+            items.Add(new
+            {
+                prescription.Id,
+                prescription.status,
+                prescription.CreatedAt,
+                prescription.PatientVisitId,
+                paymentStatus = payment.PaymentStatus,
+                paymentItems = payment.Items.Select(item => new
+                {
+                    medicine = item.MedicineName,
+                    requiredQuantity = item.RequiredQuantity,
+                    paidQuantity = item.PaidQuantity,
+                    itemPaymentStatus = item.IsPaidInFull ? "paid_in_full" : item.PaidQuantity > 0 ? "partially_paid" : "unpaid"
+                }).ToList()
+            });
+        }
         return Completed(items, "pharmacist_prescription_queue", $"Có {items.Count} đơn thuốc trong hàng đợi.");
     }
 
