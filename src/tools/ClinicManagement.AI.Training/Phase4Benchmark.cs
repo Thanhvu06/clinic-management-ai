@@ -53,7 +53,7 @@ public static class Phase4BenchmarkRunner
         return JsonSerializer.Serialize(report, JsonOptions);
     }
 
-    public static string Evaluate(string path, string trainPath, string head)
+    public static string Evaluate(string path, string trainPath, string head, bool workingTreeDirty = false)
     {
         var validation = Validate(path, trainPath);
         var report = new Phase4BenchmarkReport
@@ -61,6 +61,8 @@ public static class Phase4BenchmarkRunner
             EvaluatorVersion = EvaluatorVersion,
             TimestampUtc = DateTimeOffset.UtcNow,
             Head = head,
+            SourceHeadAtGeneration = head,
+            WorkingTreeDirty = workingTreeDirty,
             LiveGeminiExecuted = false,
             Dataset = validation,
             IndependentHoldout = AssessIndependentHoldout(trainPath),
@@ -1239,6 +1241,8 @@ public sealed class Phase4BenchmarkReport
     public string EvaluatorVersion { get; init; } = string.Empty;
     public DateTimeOffset TimestampUtc { get; init; }
     public string Head { get; init; } = string.Empty;
+    public string SourceHeadAtGeneration { get; init; } = string.Empty;
+    public bool WorkingTreeDirty { get; init; }
     public bool LiveGeminiExecuted { get; init; }
     public string EvaluationMode { get; init; } = "deterministic safety/rule/planner + offline ML.NET; HTTP/persistence layers explicitly not evaluated";
     public Phase4ValidationReport Dataset { get; init; } = new();

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -94,7 +95,9 @@ public class Program
             var path = PositionalOrDefault(args, Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "phase4_independent_cases.json"));
             var trainPath = OptionOrDefault(args, "--train", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "vietnamese_intent_dataset.json"));
             var reportPath = OptionOrDefault(args, "--report", Path.Combine("docs", "ai", "PHASE_4_BENCHMARK_REPORT.json"));
-            var json = Phase4BenchmarkRunner.Evaluate(path, trainPath, Environment.GetEnvironmentVariable("GITHUB_SHA") ?? "local-unprovided");
+            var sourceHead = Environment.GetEnvironmentVariable("GITHUB_SHA") ?? ReadGitValue("rev-parse", "HEAD") ?? "local-unprovided";
+            var workingTreeDirty = !string.IsNullOrWhiteSpace(ReadGitValue("status", "--short"));
+            var json = Phase4BenchmarkRunner.Evaluate(path, trainPath, sourceHead, workingTreeDirty);
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
             File.WriteAllText(reportPath, json);
             Console.WriteLine(json);
@@ -105,6 +108,10 @@ public class Program
                 && report.IndependentHoldout.ValidationPassed
                 ? 0
                 : 1;
+        }
+        else if (command == "--gateb")
+        {
+            return RunGateB(args);
         }
         else
         {
@@ -128,6 +135,7 @@ public class Program
         Console.WriteLine("  ClinicManagement.AI.Training --validate-phase4 [datasetPath] [--train trainDatasetPath]");
         Console.WriteLine("  ClinicManagement.AI.Training --phase4-self-test");
         Console.WriteLine("  ClinicManagement.AI.Training --benchmark-phase4 [datasetPath] [--train trainDatasetPath] [--report reportPath]");
+        Console.WriteLine("  ClinicManagement.AI.Training --gateb [--report reportPath] [--promotion promotionPath]");
     }
 
     private static string PositionalOrDefault(string[] args, string fallback) =>
@@ -319,5 +327,69 @@ public class Program
         Console.WriteLine("=========================================================");
         Console.ResetColor();
         return 0;
+    }
+
+    private static int RunGateB(string[] args)
+    {
+        var legacyPath = OptionOrDefault(args, "--legacy", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "vietnamese_intent_dataset.json"));
+        var additionsPath = OptionOrDefault(args, "--additions", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "gateb_intent_registry_additions.json"));
+        var independentPath = OptionOrDefault(args, "--independent", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "phase4_independent_cases.json"));
+        var blindPath = OptionOrDefault(args, "--blind", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "phase5_blind_holdout.json"));
+        var manifestPath = OptionOrDefault(args, "--manifest", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "phase5_blind_holdout_manifest.json"));
+        var reportPath = OptionOrDefault(args, "--report", Path.Combine("docs", "ai", "GATE_B_MODEL_REPORT.json"));
+        var promotionPath = OptionOrDefault(args, "--promotion", Path.Combine("docs", "ai", "GATE_B_PROMOTION_DECISION.json"));
+        var productionModelPath = OptionOrDefault(args, "--production-model", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "models", "vietnamese_intent_classifier_v1.zip"));
+        var productionMetadataPath = OptionOrDefault(args, "--production-metadata", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "models", "intent_model_metadata.json"));
+
+        var report = GateBModelPipeline.Run(
+            legacyPath,
+            additionsPath,
+            independentPath,
+            blindPath,
+            manifestPath,
+            productionModelPath,
+            productionMetadataPath,
+            ReadGitValue("rev-parse", "HEAD") ?? "local-unprovided",
+            !string.IsNullOrWhiteSpace(ReadGitValue("status", "--short")));
+
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(promotionPath))!);
+        File.WriteAllText(reportPath, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(promotionPath, JsonSerializer.Serialize(report.Promotion, new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine(JsonSerializer.Serialize(new
+        {
+            report.Status,
+            report.Registry.IsValid,
+            report.SelectedCandidate,
+            report.Promotion.Decision,
+            report.Promotion.Reason,
+            candidates = report.Candidates.Select(candidate => new { candidate.Name, candidate.Status, candidate.Deterministic, developmentMacroF1 = candidate.Development.MacroF1, blindMacroF1 = candidate.FrozenBlind.MacroF1 })
+        }, new JsonSerializerOptions { WriteIndented = true }));
+        return report.Registry.IsValid ? 0 : 1;
+    }
+
+    private static string? ReadGitValue(params string[] arguments)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = string.Join(" ", arguments.Select(argument => argument.Contains(' ') ? $"\"{argument}\"" : argument)),
+                WorkingDirectory = Directory.GetCurrentDirectory(),
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+            if (process is null) return null;
+            var output = process.StandardOutput.ReadToEnd().Trim();
+            process.WaitForExit();
+            return process.ExitCode == 0 ? output : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

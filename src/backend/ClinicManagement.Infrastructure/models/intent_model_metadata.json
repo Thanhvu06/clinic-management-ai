@@ -3,6 +3,7 @@
   "TrainedAtUtc": "2026-09-22T15:12:32.2183379Z",
   "Algorithm": "SdcaMaximumEntropy",
   "DatasetHashSha256": "e5eb4839d98154f021dfb662ad5a67d9172237d119fbc149c4188ae85e0379a0",
+  "ArtifactSha256": "9b6be85dfed3c8a6a0fb8a86ad4e2d1c071e48311376e5bfa079210be72f23d4",
   "Provenance": "Synthetic Curated Vietnamese Healthcare Intent Dataset (178 samples)",
   "Splits": {
     "Train": 118,

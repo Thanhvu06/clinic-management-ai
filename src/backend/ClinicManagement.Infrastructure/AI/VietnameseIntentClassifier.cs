@@ -37,10 +37,13 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 
     private static readonly object _initLock = new();
     private static bool _modelLoadAttempted;
+    private static string? _attemptedModelPath;
     private static MLContext? _mlContext;
     private static ITransformer? _loadedModel;
     private static string? _loadedModelPath;
+    private static bool _metadataArtifactMatches = true;
     private static float _metadataOptimalThreshold = 0.35f;
+    private static float _metadataOptimalMargin;
     private static readonly ConcurrentBag<PredictionEngine<IntentInferenceInput, IntentInferenceOutput>> _enginePool = new();
 
     private static readonly HashSet<string> ExactGreetings = new(StringComparer.OrdinalIgnoreCase)
@@ -107,6 +110,8 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
     public IntentClassificationMode Mode => _mode;
     public string? LoadedModelPath => _loadedModelPath;
     public float OptimalThreshold => _optimalThreshold;
+    public float OptimalMargin => _metadataOptimalMargin;
+    public bool ArtifactMetadataMatches => _metadataArtifactMatches;
 
     public IntentClassificationResult Classify(string? message, IntentClassificationContext? context = null)
     {
@@ -138,10 +143,16 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
                 {
                     var mlPred = engine.Predict(new IntentInferenceInput { Text = trimmed });
                     float confidence = (mlPred.Score != null && mlPred.Score.Length > 0) ? mlPred.Score.Max() : 0.0f;
+                    var orderedScores = mlPred.Score?.OrderByDescending(score => score).ToArray() ?? Array.Empty<float>();
+                    float top2 = orderedScores.Length > 1 ? orderedScores[1] : 0.0f;
+                    float margin = confidence - top2;
                     if (!float.IsNaN(confidence) && !float.IsInfinity(confidence) && !string.IsNullOrWhiteSpace(mlPred.PredictedLabel))
                     {
                         result.ShadowIntent = mlPred.PredictedLabel;
                         result.ShadowConfidence = confidence;
+                        result.ShadowTop2Score = top2;
+                        result.ShadowMargin = margin;
+                        result.ShadowAbstained = confidence < _optimalThreshold || margin < _metadataOptimalMargin;
                         result.Method = "RuleOnly (Shadow ML)";
                     }
                 }
@@ -461,8 +472,11 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
                 {
                     var mlPred = engine.Predict(new IntentInferenceInput { Text = trimmed });
                     float confidence = (mlPred.Score != null && mlPred.Score.Length > 0) ? mlPred.Score.Max() : 0.0f;
+                    var orderedScores = mlPred.Score?.OrderByDescending(score => score).ToArray() ?? Array.Empty<float>();
+                    float top2 = orderedScores.Length > 1 ? orderedScores[1] : 0.0f;
+                    float margin = confidence - top2;
 
-                    if (!float.IsNaN(confidence) && !float.IsInfinity(confidence) && !string.IsNullOrWhiteSpace(mlPred.PredictedLabel) && confidence >= _optimalThreshold)
+                    if (!float.IsNaN(confidence) && !float.IsInfinity(confidence) && !string.IsNullOrWhiteSpace(mlPred.PredictedLabel) && confidence >= _optimalThreshold && margin >= _metadataOptimalMargin)
                     {
                         result.Intent = mlPred.PredictedLabel;
                         result.Confidence = confidence;
@@ -546,6 +560,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
     {
         lock (_initLock)
         {
+            _metadataArtifactMatches = true;
             var resolvedModel = GetCandidateModelPaths(customModelPath).FirstOrDefault(File.Exists);
             var metaCandidates = new List<string>();
             if (resolvedModel != null)
@@ -571,15 +586,34 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
                     {
                         _metadataOptimalThreshold = val;
                     }
+                    if (doc.RootElement.TryGetProperty("optimalMargin", out var marginProp) && marginProp.TryGetSingle(out var marginValue))
+                    {
+                        _metadataOptimalMargin = Math.Max(0, marginValue);
+                    }
+                    else if (doc.RootElement.TryGetProperty("OptimalMargin", out var marginPascal) && marginPascal.TryGetSingle(out var marginPascalValue))
+                    {
+                        _metadataOptimalMargin = Math.Max(0, marginPascalValue);
+                    }
                     else if (doc.RootElement.TryGetProperty("Benchmark", out var bProp) &&
                              bProp.TryGetProperty("optimalThreshold", out var optB) && optB.TryGetSingle(out var valB))
                     {
                         _metadataOptimalThreshold = valB;
                     }
+
+                    if (doc.RootElement.TryGetProperty("ArtifactSha256", out var artifactProp) && artifactProp.ValueKind == JsonValueKind.String)
+                    {
+                        var expectedHash = artifactProp.GetString();
+                        var actualHash = resolvedModel is null
+                            ? null
+                            : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(resolvedModel)));
+                        _metadataArtifactMatches = !string.IsNullOrWhiteSpace(expectedHash) &&
+                            string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase);
+                    }
                 }
                 catch
                 {
                     // Keep default fallback
+                    _metadataArtifactMatches = false;
                 }
             }
         }
@@ -587,28 +621,49 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
 
     private void EnsureModelLoaded()
     {
-        if (_modelLoadAttempted && (string.IsNullOrWhiteSpace(_customModelPath) || string.Equals(_loadedModelPath, _customModelPath, StringComparison.OrdinalIgnoreCase)))
+        var resolvedModel = GetCandidateModelPaths(_customModelPath).FirstOrDefault(File.Exists);
+        if (_modelLoadAttempted && string.Equals(_attemptedModelPath, resolvedModel, StringComparison.OrdinalIgnoreCase))
         {
+            if (!_metadataArtifactMatches)
+            {
+                _enginePool.Clear();
+                _loadedModel = null;
+                _loadedModelPath = null;
+            }
             return;
         }
 
         lock (_initLock)
         {
-            if (_modelLoadAttempted && (string.IsNullOrWhiteSpace(_customModelPath) || string.Equals(_loadedModelPath, _customModelPath, StringComparison.OrdinalIgnoreCase)))
+            resolvedModel = GetCandidateModelPaths(_customModelPath).FirstOrDefault(File.Exists);
+            if (_modelLoadAttempted && string.Equals(_attemptedModelPath, resolvedModel, StringComparison.OrdinalIgnoreCase))
             {
+                if (!_metadataArtifactMatches)
+                {
+                    _enginePool.Clear();
+                    _loadedModel = null;
+                    _loadedModelPath = null;
+                }
                 return;
             }
             _modelLoadAttempted = true;
+            _attemptedModelPath = resolvedModel;
+            _enginePool.Clear();
+
+            if (!_metadataArtifactMatches)
+            {
+                _loadedModel = null;
+                _loadedModelPath = null;
+                return;
+            }
 
             try
             {
-                var resolved = GetCandidateModelPaths(_customModelPath).FirstOrDefault(File.Exists);
-                if (resolved != null)
+                if (resolvedModel != null)
                 {
                     _mlContext = new MLContext(seed: 42);
-                    _loadedModel = _mlContext.Model.Load(resolved, out _);
-                    _loadedModelPath = resolved;
-                    EnsureMetadataLoaded(resolved);
+                    _loadedModel = _mlContext.Model.Load(resolvedModel, out _);
+                    _loadedModelPath = resolvedModel;
                 }
             }
             catch

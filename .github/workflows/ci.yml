@@ -54,6 +54,36 @@ jobs:
             src/tools/ClinicManagement.AI.Training/data/phase4_independent_cases.json \
             --report ./phase4-benchmark-report.json
 
+      - name: Run Gate B registry, candidates, and fail-closed promotion decision
+        shell: bash
+        run: |
+          dotnet run --project src/tools/ClinicManagement.AI.Training/ClinicManagement.AI.Training.csproj \
+            --no-build --configuration Release -- --gateb \
+            --report ./gateb-model-report.json \
+            --promotion ./gateb-promotion-decision.json
+          test -f ./gateb-model-report.json
+          test -f ./gateb-promotion-decision.json
+          python3 - <<'PY'
+          import json
+          report = json.load(open("gateb-model-report.json", encoding="utf-8"))
+          decision = json.load(open("gateb-promotion-decision.json", encoding="utf-8"))
+          assert report["Registry"]["IsValid"] is True
+          assert report["SelectionUsesBlindHoldout"] is False
+          assert report["BlindEvaluationWasAfterSelection"] is True
+          assert decision["Decision"] != "PROMOTED_TO_SHADOW", "CI must not auto-promote an artifact"
+          for candidate in report["Candidates"]:
+              if candidate["Status"] == "completed":
+                  assert candidate["ArtifactSha256"]
+                  assert candidate["Deterministic"] in (True, False)
+          print("Gate B registry/candidate/promotion checks passed; no artifact was promoted.")
+          PY
+          rm -f ./gateb-model-report.json ./gateb-promotion-decision.json
+
+      - name: Run focused Gate B registry and promotion tests
+        run: >-
+          dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
+          --no-build --configuration Release --filter "FullyQualifiedName~GateBModelPipelineTests"
+
       - name: Check for pending EF Core model changes
         run: dotnet ef migrations has-pending-model-changes --project src/backend/ClinicManagement.Infrastructure --startup-project src/backend/ClinicManagement.Api
 

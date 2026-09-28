@@ -73,4 +73,7 @@ public class IntentClassificationResult
     public string Method { get; set; } = "RuleBased";
     public string? ShadowIntent { get; set; }
     public float? ShadowConfidence { get; set; }
+    public float? ShadowTop2Score { get; set; }
+    public float? ShadowMargin { get; set; }
+    public bool? ShadowAbstained { get; set; }
 }

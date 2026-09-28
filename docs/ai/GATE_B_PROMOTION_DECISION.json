@@ -1,0 +1,17 @@
+{
+  "Decision": "NOT_PROMOTED",
+  "Reason": "One or more promotion checks failed; production artifact and mode remain unchanged.",
+  "Checks": {
+    "datasetValidation": true,
+    "leakageZero": true,
+    "determinism": true,
+    "meaningfulDevelopmentMacroF1Gain": true,
+    "criticalRecallNoSevereRegression": true,
+    "calibrationAndAbstentionWithinPolicy": true,
+    "independentMacroF1NoSevereRegression": false,
+    "independentCriticalRecallNoSevereRegression": true,
+    "artifactMetadataHash": true,
+    "fullRegression": false,
+    "explicitPromotionRequested": false
+  }
+}

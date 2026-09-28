@@ -1,8 +1,10 @@
 {
   "Benchmark": "ClinicCare AI Phase 5 independent benchmark",
   "EvaluatorVersion": "phase5-independent-v2",
-  "TimestampUtc": "2026-09-27T12:28:46.4180026+00:00",
-  "Head": "local-unprovided",
+  "TimestampUtc": "2026-09-28T10:29:45.6109451+00:00",
+  "Head": "35ce9d2c163cc1175e89a40c860ff856de0e6e94",
+  "SourceHeadAtGeneration": "35ce9d2c163cc1175e89a40c860ff856de0e6e94",
+  "WorkingTreeDirty": true,
   "LiveGeminiExecuted": false,
   "EvaluationMode": "deterministic safety/rule/planner \u002B offline ML.NET; HTTP/persistence layers explicitly not evaluated",
   "Dataset": {
@@ -629,9 +631,9 @@
     "Status": "fail",
     "FailureCount": 12,
     "Detail": "patient cases only; role workflows are excluded from patient intent accuracy",
-    "MacroPrecision": 0.9642857142857143,
+    "MacroPrecision": 0.9404761904761905,
     "MacroRecall": 0.9523809523809524,
-    "MacroF1": 0.9404761904761905,
+    "MacroF1": 0.9261904761904762,
     "PerIntent": {
       "CancelDraft": {
         "Support": 6,
@@ -647,9 +649,9 @@
       },
       "FacilityInquiry": {
         "Support": 6,
-        "Precision": 1,
+        "Precision": 0.5,
         "Recall": 1,
-        "F1": 1
+        "F1": 0.6666666666666666
       },
       "FindDoctorForSymptom": {
         "Support": 6,
@@ -707,9 +709,9 @@
       },
       "UnclearOrOutOfScope": {
         "Support": 12,
-        "Precision": 0.5,
+        "Precision": 0.6666666666666666,
         "Recall": 1,
-        "F1": 0.6666666666666666
+        "F1": 0.8
       },
       "ViewAppointments": {
         "Support": 12,
@@ -915,7 +917,7 @@
         [
           0,
           0,
-          0,
+          6,
           0,
           0,
           0,
@@ -925,7 +927,7 @@
           0,
           0,
           6,
-          12,
+          6,
           0
         ],
         [
@@ -965,11 +967,11 @@
   },
   "PlannerRouting": {
     "Name": "role_routing",
-    "Numerator": 93,
+    "Numerator": 89,
     "Denominator": 93,
-    "Rate": 1,
-    "Status": "pass",
-    "FailureCount": 0,
+    "Rate": 0.956989247311828,
+    "Status": "fail",
+    "FailureCount": 4,
     "Detail": "role cases with safety=none and non-authorization outcome only; authorization and safety are separate gates",
     "MacroPrecision": null,
     "MacroRecall": null,
@@ -982,11 +984,11 @@
   },
   "RoleRouting": {
     "Name": "role_routing",
-    "Numerator": 93,
+    "Numerator": 89,
     "Denominator": 93,
-    "Rate": 1,
-    "Status": "pass",
-    "FailureCount": 0,
+    "Rate": 0.956989247311828,
+    "Status": "fail",
+    "FailureCount": 4,
     "Detail": "role cases with safety=none and non-authorization outcome only; authorization and safety are separate gates",
     "MacroPrecision": null,
     "MacroRecall": null,
@@ -1074,16 +1076,16 @@
     "HoldoutSamples": 108,
     "ExcludedRoleSamples": 120,
     "ExcludedUntrainedPatientSamples": 12,
-    "LockedThreshold": 0.15,
-    "ValidationMacroF1AtThreshold": 0.7644444444444444,
-    "Correct": 70,
-    "RawModelCorrect": 69,
-    "Accuracy": 0.6481481481481481,
-    "MacroPrecision": 0.5033213083213082,
-    "MacroRecall": 0.5407407407407407,
-    "MacroF1": 0.5012196336706141,
-    "LogLoss": 1.3009542599032513,
-    "ExpectedCalibrationError": 0.38700371980667114,
+    "LockedThreshold": 0.2,
+    "ValidationMacroF1AtThreshold": 0.7133333333333333,
+    "Correct": 69,
+    "RawModelCorrect": 68,
+    "Accuracy": 0.6388888888888888,
+    "MacroPrecision": 0.4927657527657528,
+    "MacroRecall": 0.5351851851851852,
+    "MacroF1": 0.4963021111060327,
+    "LogLoss": 1.269247933404184,
+    "ExpectedCalibrationError": 0.3690866231918335,
     "PerIntent": {
       "CancelDraft": {
         "Support": 6,
@@ -1123,9 +1125,9 @@
       },
       "ModifyDraft": {
         "Support": 12,
-        "Precision": 0.625,
-        "Recall": 0.8333333333333334,
-        "F1": 0.7142857142857143
+        "Precision": 0.6,
+        "Recall": 0.75,
+        "F1": 0.6666666666666665
       },
       "PricingInquiry": {
         "Support": 6,
@@ -1165,9 +1167,9 @@
       },
       "UnclearOrOutOfScope": {
         "Support": 12,
-        "Precision": 0.8,
+        "Precision": 0.6666666666666666,
         "Recall": 0.3333333333333333,
-        "F1": 0.47058823529411764
+        "F1": 0.4444444444444444
       },
       "ViewAppointments": {
         "Support": 12,
@@ -1304,14 +1306,14 @@
           0,
           0,
           0,
-          10,
+          9,
           0,
           0,
           0,
           0,
           0,
           0,
-          0,
+          1,
           2
         ],
         [
@@ -1454,20 +1456,20 @@
     },
     "CoverageByThreshold": {
       "0.15": 0.9907407407407407,
-      "0.25": 0.9166666666666666,
-      "0.35": 0.6851851851851852,
-      "0.45": 0.5277777777777778,
-      "0.55": 0.3888888888888889,
-      "0.65": 0.3055555555555556
+      "0.25": 0.9074074074074074,
+      "0.35": 0.7222222222222222,
+      "0.45": 0.5555555555555556,
+      "0.55": 0.42592592592592593,
+      "0.65": 0.3611111111111111
     },
     "Latency": {
       "Iterations": 108,
       "WarmupIterations": 10,
-      "MinMs": 0.0297,
-      "MaxMs": 0.1124,
-      "AverageMs": 0.06136481481481484,
-      "P50Ms": 0.062,
-      "P95Ms": 0.0771,
+      "MinMs": 0.0062,
+      "MaxMs": 0.0176,
+      "AverageMs": 0.010038888888888887,
+      "P50Ms": 0.0099,
+      "P95Ms": 0.0127,
       "Environment": "Microsoft Windows NT 10.0.26200.0; 32 logical processors"
     }
   },
@@ -1483,7 +1485,7 @@
       "CaseId": "P4-PAT-020",
       "Layer": "intent_rule_patient",
       "Expected": "StartBooking",
-      "Actual": "UnclearOrOutOfScope",
+      "Actual": "FacilityInquiry",
       "Detail": "RuleBased"
     },
     {
@@ -1497,7 +1499,7 @@
       "CaseId": "P4-PAT-040",
       "Layer": "intent_rule_patient",
       "Expected": "StartBooking",
-      "Actual": "UnclearOrOutOfScope",
+      "Actual": "FacilityInquiry",
       "Detail": "RuleBased"
     },
     {
@@ -1511,7 +1513,7 @@
       "CaseId": "P4-PAT-060",
       "Layer": "intent_rule_patient",
       "Expected": "StartBooking",
-      "Actual": "UnclearOrOutOfScope",
+      "Actual": "FacilityInquiry",
       "Detail": "RuleBased"
     },
     {
@@ -1525,7 +1527,7 @@
       "CaseId": "P4-PAT-080",
       "Layer": "intent_rule_patient",
       "Expected": "StartBooking",
-      "Actual": "UnclearOrOutOfScope",
+      "Actual": "FacilityInquiry",
       "Detail": "RuleBased"
     },
     {
@@ -1539,7 +1541,7 @@
       "CaseId": "P4-PAT-100",
       "Layer": "intent_rule_patient",
       "Expected": "StartBooking",
-      "Actual": "UnclearOrOutOfScope",
+      "Actual": "FacilityInquiry",
       "Detail": "RuleBased"
     },
     {
@@ -1553,11 +1555,39 @@
       "CaseId": "P4-PAT-120",
       "Layer": "intent_rule_patient",
       "Expected": "StartBooking",
-      "Actual": "UnclearOrOutOfScope",
+      "Actual": "FacilityInquiry",
       "Detail": "RuleBased"
+    },
+    {
+      "CaseId": "P4-DOC-003",
+      "Layer": "planner",
+      "Expected": "doctor.get_diagnostic_orders",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-DOC-013",
+      "Layer": "planner",
+      "Expected": "doctor.get_diagnostic_orders",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-DOC-023",
+      "Layer": "planner",
+      "Expected": "doctor.get_diagnostic_orders",
+      "Actual": "none",
+      "Detail": "Deterministic"
+    },
+    {
+      "CaseId": "P4-DOC-024",
+      "Layer": "planner",
+      "Expected": "clinic.search_knowledge",
+      "Actual": "none",
+      "Detail": "Deterministic"
     }
   ],
   "SelfTestPassed": true,
   "SelfTestDetail": "rejected duplicate input/id, wrong actor/tool, wrong schema, verified patient-vs-role denominators, and ML.NET metric denominator (0/1)",
-  "Summary": "Synthetic regression=240 variants from 51 source templates; rule intent=fail; ML.NET(patient-only)=completed 70/108 accuracy=64.81%; safety-guard-only=pass; role-routing=pass; development=development_evaluated; independentHoldout=partial_no_independent_human_annotators; liveGeminiExecuted=False."
+  "Summary": "Synthetic regression=240 variants from 51 source templates; rule intent=fail; ML.NET(patient-only)=completed 69/108 accuracy=63.89%; safety-guard-only=pass; role-routing=fail; development=development_evaluated; independentHoldout=partial_no_independent_human_annotators; liveGeminiExecuted=False."
 }
