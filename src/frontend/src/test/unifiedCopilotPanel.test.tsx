@@ -37,6 +37,19 @@ const SelectedResourceButton: React.FC<{ context: Record<string, unknown>; sourc
     return <button type="button" onClick={() => setSelection({ context, source, actionArguments })}>Chọn resource từ dòng nghiệp vụ</button>;
 };
 
+const DoctorActionArgumentsButtons: React.FC = () => {
+    const { setSelection } = useCopilotResource();
+    const setIndication = (clinicalIndication: string) => setSelection({
+        context: { visitId: 42, serviceIds: [7] },
+        source: 'doctor-visit-form',
+        actionArguments: { clinicalIndication }
+    });
+    return <div>
+        <button type="button" onClick={() => setIndication('Đau ngực khi gắng sức')}>Chọn chỉ định A</button>
+        <button type="button" onClick={() => setIndication('Ho kéo dài')}>Chọn chỉ định B</button>
+    </div>;
+};
+
 describe('UnifiedCopilotPanel', () => {
     afterEach(() => {
         vi.useRealTimers();
@@ -222,6 +235,55 @@ describe('UnifiedCopilotPanel', () => {
         fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Lễ tân/i }));
         await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeDisabled());
         expect(screen.getByText('Cần appointment và department đang được chọn từ dữ liệu thật.')).toBeInTheDocument();
+    });
+
+    it('keeps the doctor conversation while form arguments change and retires the old preview/key', async () => {
+        mockUser = { userId: 'doctor-1', fullName: 'Doctor', role: 'Doctor' };
+        const tool = { name: 'doctor.prepare_diagnostic_order', version: '1.0', description: 'Tạo chỉ định', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        const pending = (actionId: string, token: string) => ({
+            status: 'pending_confirmation', actionId, data: { confirmationToken: token },
+            preview: { toolName: tool.name, status: 'pending_confirmation', resourceType: 'PatientVisit', resourceId: '42', resource: { identity: 'Ca khám đang mở', facility: 'Cơ sở', department: 'Khoa', subject: 'Người bệnh', encounter: 'V-42', currentStatus: 'InProgress' }, changes: [{ kind: 'diagnostic_order', summary: 'Tạo chỉ định', items: [{ label: 'Chỉ định', value: 'Đã kiểm tra' }] }], consequence: 'Tạo phiếu cận lâm sàng.', confirmationSummary: 'Đã kiểm tra quyền và dữ liệu.', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:00Z', sources: [{ name: 'visit', kind: 'database' }] }
+        });
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        prepareActionMock.mockResolvedValueOnce(pending('action-a', 'token-a')).mockResolvedValueOnce(pending('action-b', 'token-b'));
+
+        render(<MemoryRouter initialEntries={['/doctor/visits/42']}><CopilotResourceProvider><DoctorActionArgumentsButtons /><UnifiedCopilotPanel /></CopilotResourceProvider></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn chỉ định A' }));
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Bác sĩ/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        await waitFor(() => expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeInTheDocument());
+        fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'Tin nhắn đang gõ dở' } });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn chỉ định B' }));
+        await waitFor(() => expect(screen.queryByRole('button', { name: /Xác nhận thao tác/i })).not.toBeInTheDocument());
+        expect(screen.getByRole('textbox', { name: 'Nội dung Copilot' })).toHaveValue('Tin nhắn đang gõ dở');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        await waitFor(() => expect(prepareActionMock).toHaveBeenCalledTimes(2));
+        const firstRequest = prepareActionMock.mock.calls[0][0] as { argumentsJson: string; idempotencyKey: string };
+        const secondRequest = prepareActionMock.mock.calls[1][0] as { argumentsJson: string; idempotencyKey: string };
+        expect(JSON.parse(firstRequest.argumentsJson)).toMatchObject({ clinicalIndication: 'Đau ngực khi gắng sức' });
+        expect(JSON.parse(secondRequest.argumentsJson)).toMatchObject({ clinicalIndication: 'Ho kéo dài' });
+        expect(secondRequest.idempotencyKey).not.toBe(firstRequest.idempotencyKey);
+    });
+
+    it('ignores a late prepare response after the doctor changes the action input', async () => {
+        const tool = { name: 'doctor.prepare_diagnostic_order', version: '1.0', description: 'Tạo chỉ định', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        let resolvePrepare!: (value: unknown) => void;
+        mockUser = { userId: 'doctor-1', fullName: 'Doctor', role: 'Doctor' };
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        prepareActionMock.mockReturnValueOnce(new Promise(resolve => { resolvePrepare = resolve; }));
+        render(<MemoryRouter initialEntries={['/doctor/visits/42']}><CopilotResourceProvider><DoctorActionArgumentsButtons /><UnifiedCopilotPanel /></CopilotResourceProvider></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn chỉ định A' }));
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Bác sĩ/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn chỉ định B' }));
+        resolvePrepare({ status: 'pending_confirmation', actionId: 'late-action', data: { confirmationToken: 'late-token' }, preview: { toolName: tool.name, status: 'pending_confirmation', resourceType: 'PatientVisit', resourceId: '42', resource: { identity: 'Ca A' }, changes: [{ kind: 'write', summary: 'A', items: [{ label: 'x', value: 'y' }] }], consequence: 'A', confirmationSummary: 'A', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:00Z', sources: [{ name: 'db', kind: 'database' }] } });
+        await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+        expect(screen.queryByRole('button', { name: /Xác nhận thao tác/i })).not.toBeInTheDocument();
+        expect(screen.queryByText('late-token')).not.toBeInTheDocument();
     });
 
     it('resets on identity switch and ignores a late response from the previous identity', async () => {

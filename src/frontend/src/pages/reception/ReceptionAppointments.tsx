@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import { patientVisitApi } from '../../api/patientVisitApi';
+import { organizationApi, type DepartmentDto } from '../../api/organizationApi';
 import type { ApiResponse, CheckInTicketDto } from '../../types';
 import { Search, CalendarDays, Eye, X, Clock, RefreshCw, UserCheck } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
@@ -22,6 +23,8 @@ interface ReceptionAppointment {
     endTime: string;
     reason: string | null;
     status: string;
+    facilityId?: number | null;
+    facilityName?: string | null;
 }
 
 export const ReceptionAppointments: React.FC = () => {
@@ -39,6 +42,9 @@ export const ReceptionAppointments: React.FC = () => {
     const [history, setHistory] = useState<any[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
     const [historyError, setHistoryError] = useState('');
+    const [departments, setDepartments] = useState<DepartmentDto[]>([]);
+    const [departmentsLoading, setDepartmentsLoading] = useState(false);
+    const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null);
 
     // Check-in Ticket Modal state
     const [ticketModalOpen, setTicketModalOpen] = useState(false);
@@ -105,6 +111,8 @@ export const ReceptionAppointments: React.FC = () => {
     };
 
     const openDetail = (apt: ReceptionAppointment) => {
+        setSelectedDepartmentId(null);
+        setDepartments([]);
         setSelection({
             context: { appointmentId: apt.id },
             source: 'reception-appointments',
@@ -112,7 +120,43 @@ export const ReceptionAppointments: React.FC = () => {
         });
         setModal({ isOpen: true, apt });
         fetchHistory(apt.id);
+        if (apt.facilityId && apt.facilityId > 0) {
+            setDepartmentsLoading(true);
+            void organizationApi.getDepartments(apt.facilityId)
+                .then(result => {
+                    if (result.success && result.data) {
+                        setDepartments(result.data.filter(department => department.isActive && department.facilityId === apt.facilityId));
+                    }
+                })
+                .catch(() => setDepartments([]))
+                .finally(() => setDepartmentsLoading(false));
+        }
     };
+
+    const closeDetail = () => {
+        setSelection(null);
+        setSelectedDepartmentId(null);
+        setDepartments([]);
+        setModal({ isOpen: false, apt: null });
+    };
+
+    useEffect(() => {
+        if (!modal.isOpen || !modal.apt || !selectedDepartmentId) return;
+        const department = departments.find(item => item.id === selectedDepartmentId);
+        if (!department || department.facilityId !== modal.apt.facilityId) {
+            setSelection({
+                context: { appointmentId: modal.apt.id },
+                source: 'reception-appointments',
+                label: `Lịch hẹn ${modal.apt.appointmentCode}`
+            });
+            return;
+        }
+        setSelection({
+            context: { appointmentId: modal.apt.id, departmentId: department.id },
+            source: 'reception-appointments',
+            label: `Lịch hẹn ${modal.apt.appointmentCode} · ${department.name}`
+        });
+    }, [departments, modal.apt, modal.isOpen, selectedDepartmentId, setSelection]);
 
     const { showAlert, showConfirm } = useDialog();
 
@@ -348,7 +392,7 @@ export const ReceptionAppointments: React.FC = () => {
                             <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 Chi tiết lịch hẹn <span style={{ color: 'var(--c-teal)' }}>#{modal.apt.appointmentCode}</span>
                             </h3>
-                            <button onClick={() => setModal({ isOpen: false, apt: null })} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
+                            <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
@@ -376,6 +420,25 @@ export const ReceptionAppointments: React.FC = () => {
                             <div style={{ background: 'var(--c-bg)', padding: '12px', borderRadius: '6px', fontSize: '0.95rem' }}>
                                 {modal.apt.reason || <span style={{ color: 'var(--c-muted)' }}>Không có ghi chú</span>}
                             </div>
+                        </div>
+
+                        <div style={{ marginBottom: '24px', padding: '14px', border: '1px solid var(--c-border)', borderRadius: '8px' }}>
+                            <label htmlFor="copilot-checkin-department" style={{ display: 'block', fontWeight: 600, marginBottom: '8px' }}>
+                                Khoa tiếp nhận cho Copilot *
+                            </label>
+                            <select
+                                id="copilot-checkin-department"
+                                className="form-select"
+                                value={selectedDepartmentId ?? ''}
+                                onChange={event => setSelectedDepartmentId(event.target.value ? Number(event.target.value) : null)}
+                                disabled={!modal.apt.facilityId || departmentsLoading}
+                            >
+                                <option value="">{departmentsLoading ? 'Đang tải khoa theo cơ sở…' : 'Chọn khoa từ cơ sở của lịch hẹn'}</option>
+                                {departments.map(department => <option key={department.id} value={department.id}>{department.name} ({department.code})</option>)}
+                            </select>
+                            <small style={{ display: 'block', color: 'var(--c-muted)', marginTop: '8px' }}>
+                                Danh sách lấy từ API khoa của cơ sở {modal.apt.facilityName ? `“${modal.apt.facilityName}”` : 'đang gắn với lịch hẹn'}. Không tự chọn khoa; backend sẽ kiểm tra lại cơ sở, quyền và lịch hẹn khi chuẩn bị/xác nhận.
+                            </small>
                         </div>
 
                         <div style={{ marginBottom: '24px' }}>
@@ -406,7 +469,7 @@ export const ReceptionAppointments: React.FC = () => {
 
                         {modal.apt.status === 'Pending' && (
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid var(--c-border)' }}>
-                                <button className="btn-secondary" onClick={() => setModal({ isOpen: false, apt: null })}>Đóng</button>
+                                <button className="btn-secondary" onClick={closeDetail}>Đóng</button>
                                 <button 
                                     className="btn-primary" 
                                     onClick={handleConfirm}
@@ -418,7 +481,7 @@ export const ReceptionAppointments: React.FC = () => {
                         )}
                         {modal.apt.status === 'Confirmed' && (
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid var(--c-border)' }}>
-                                <button className="btn-secondary" onClick={() => setModal({ isOpen: false, apt: null })}>Đóng</button>
+                                <button className="btn-secondary" onClick={closeDetail}>Đóng</button>
                                 <button 
                                     className="btn-primary" 
                                     style={{ backgroundColor: '#059669', borderColor: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}
@@ -432,7 +495,7 @@ export const ReceptionAppointments: React.FC = () => {
                         )}
                         {modal.apt.status !== 'Pending' && modal.apt.status !== 'Confirmed' && (
                             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                <button className="btn-secondary" onClick={() => setModal({ isOpen: false, apt: null })}>Đóng</button>
+                                <button className="btn-secondary" onClick={closeDetail}>Đóng</button>
                             </div>
                         )}
                     </div>

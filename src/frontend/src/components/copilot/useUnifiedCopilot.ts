@@ -171,12 +171,33 @@ export const useUnifiedCopilot = () => {
     const routeResourceContext = useMemo(() => getResourceContext(location.pathname), [location.pathname]);
     const resourceContext = resourceSelection?.context ?? routeResourceContext;
     const resourceVersion = resourceSelection?.resourceVersion ?? undefined;
+    const resourceIdentityContext = useMemo(() => {
+        if (!resourceContext) return null;
+        const actionKeys = new Set(['serviceIds', 'departmentId', 'roomId', 'assignedDoctorId']);
+        return Object.fromEntries(Object.entries(resourceContext).filter(([key]) => !actionKeys.has(key)));
+    }, [resourceContext]);
+    const actionResourceContext = useMemo(() => {
+        if (!resourceContext) return null;
+        return {
+            serviceIds: resourceContext.serviceIds ?? null,
+            departmentId: resourceContext.departmentId ?? null,
+            roomId: resourceContext.roomId ?? null,
+            assignedDoctorId: resourceContext.assignedDoctorId ?? null
+        };
+    }, [resourceContext]);
+    // A selected resource is the conversation's privacy/ownership boundary.
+    // Service/department/room/assigned-doctor inputs and the server row version
+    // are a narrower action boundary: changing them must invalidate a
+    // preview, but must not erase the conversation while a doctor is typing.
     const resourceKey = useMemo(() => JSON.stringify({
         source: resourceSelection?.source ?? 'route',
-        context: resourceContext ?? null,
+        context: resourceIdentityContext
+    }), [resourceSelection?.source, resourceIdentityContext]);
+    const actionInputKey = useMemo(() => JSON.stringify({
+        resource: actionResourceContext,
         actionArguments: resourceSelection?.actionArguments ?? null,
         resourceVersion: resourceVersion ?? null
-    }), [resourceSelection, resourceContext, resourceVersion]);
+    }), [actionResourceContext, resourceSelection?.actionArguments, resourceVersion]);
     const identityKey = `${user?.userId ?? 'anonymous'}:${role}:${identityVersion}`;
     const routeKey = `${location.pathname}${location.search}`;
     const [open, setOpen] = useState(false);
@@ -194,14 +215,16 @@ export const useUnifiedCopilot = () => {
     const catalogControllerRef = useRef<AbortController | null>(null);
     const actionKeysRef = useRef(new Map<string, string>());
     const actionRequestNumberRef = useRef(0);
-    const actionContextRef = useRef({ identityKey, routeKey, resourceKey });
+    const actionContextRef = useRef({ identityKey, routeKey, resourceKey, actionInputKey });
     const requestNumberRef = useRef(0);
     const sessionIdRef = useRef(makeSession());
     const conversationIdRef = useRef(makeSession().replace(/^sess_/, 'conv_'));
     const previousIdentityRef = useRef(identityKey);
     const previousRouteRef = useRef(routeKey);
     const previousResourceRef = useRef(resourceKey);
+    const previousActionInputRef = useRef(actionInputKey);
     const retryTextRef = useRef<string | null>(null);
+    const actionBusyRef = useRef(false);
 
     const reset = useCallback(() => {
         controllerRef.current?.abort();
@@ -218,6 +241,7 @@ export const useUnifiedCopilot = () => {
         setActionFeedback(null);
         setActionLoading(null);
         actionKeysRef.current.clear();
+        actionBusyRef.current = false;
     }, [config]);
 
     useEffect(() => {
@@ -235,8 +259,24 @@ export const useUnifiedCopilot = () => {
     }, [identityKey, resourceKey, routeKey, reset]);
 
     useEffect(() => {
-        actionContextRef.current = { identityKey, routeKey, resourceKey };
-    }, [identityKey, routeKey, resourceKey]);
+        actionContextRef.current = { identityKey, routeKey, resourceKey, actionInputKey };
+    }, [identityKey, routeKey, resourceKey, actionInputKey]);
+
+    useEffect(() => {
+        if (previousActionInputRef.current === actionInputKey) return;
+        previousActionInputRef.current = actionInputKey;
+        // A changed indication, note, selected service or row version cannot
+        // reuse a preview/token prepared for the previous payload. Keep chat
+        // messages, input and session; only invalidate the action transaction.
+        actionControllerRef.current?.abort();
+        actionRequestNumberRef.current += 1;
+        actionBusyRef.current = false;
+        actionKeysRef.current.clear();
+        setActionLoading(null);
+        setPendingAction(null);
+        setActionFeedback(null);
+        setActionClockMs(Date.now());
+    }, [actionInputKey]);
 
     // The expiry is part of the safety boundary, not just display metadata.
     // Wake the UI at the exact boundary, clear the in-memory token, and force
@@ -333,6 +373,7 @@ export const useUnifiedCopilot = () => {
         actionControllerRef.current?.abort();
         requestNumberRef.current += 1;
         actionRequestNumberRef.current += 1;
+        actionBusyRef.current = false;
         setActionLoading(null);
         setLoading(false);
     }, []);
@@ -343,11 +384,13 @@ export const useUnifiedCopilot = () => {
     );
 
     const prepareAction = useCallback(async (capability: ActionCapabilityState) => {
-        if (!capability.enabled || !capability.arguments || actionLoading) return;
+        if (!capability.enabled || !capability.arguments || actionLoading || actionBusyRef.current) return;
+        actionBusyRef.current = true;
         const requestId = ++actionRequestNumberRef.current;
         const requestIdentityKey = identityKey;
         const requestRouteKey = routeKey;
         const requestResourceKey = resourceKey;
+        const requestActionInputKey = actionInputKey;
         const sessionId = sessionIdRef.current;
         const signature = `${capability.tool.name}:${JSON.stringify(capability.arguments)}`;
         const idempotencyKey = actionKeysRef.current.get(signature) ?? makeId('action');
@@ -364,6 +407,7 @@ export const useUnifiedCopilot = () => {
             actionContextRef.current.identityKey === requestIdentityKey &&
             actionContextRef.current.routeKey === requestRouteKey &&
             actionContextRef.current.resourceKey === requestResourceKey &&
+            actionContextRef.current.actionInputKey === requestActionInputKey &&
             sessionIdRef.current === sessionId;
         try {
             const result = await prepareRoleAction({
@@ -421,13 +465,16 @@ export const useUnifiedCopilot = () => {
                 setActionFeedback({ status: 'failed', message: actionErrorMessage(details, error instanceof Error ? error.message : 'Không thể chuẩn bị thao tác.') });
             }
         } finally {
-            if (isCurrentRequest()) setActionLoading(null);
+            if (isCurrentRequest()) {
+                setActionLoading(null);
+                actionBusyRef.current = false;
+            }
         }
-    }, [actionLoading, identityKey, resourceKey, routeKey]);
+    }, [actionInputKey, actionLoading, identityKey, resourceKey, routeKey]);
 
     const confirmAction = useCallback(async () => {
         const action = pendingAction;
-        if (!action || actionLoading) return;
+        if (!action || actionLoading || actionBusyRef.current) return;
         const expiresAtMs = action.expiresAtUtc ? Date.parse(action.expiresAtUtc) : NaN;
         if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now() || !action.confirmationToken) {
             actionKeysRef.current.delete(action.requestSignature);
@@ -438,10 +485,12 @@ export const useUnifiedCopilot = () => {
             setActionFeedback({ status: 'expired', message: 'Preview đã hết hạn hoặc không còn token hợp lệ. Hãy chuẩn bị lại.' });
             return;
         }
+        actionBusyRef.current = true;
         const requestId = ++actionRequestNumberRef.current;
         const requestIdentityKey = identityKey;
         const requestRouteKey = routeKey;
         const requestResourceKey = resourceKey;
+        const requestActionInputKey = actionInputKey;
         const sessionId = sessionIdRef.current;
         const controller = new AbortController();
         actionControllerRef.current?.abort();
@@ -452,6 +501,7 @@ export const useUnifiedCopilot = () => {
             actionContextRef.current.identityKey === requestIdentityKey &&
             actionContextRef.current.routeKey === requestRouteKey &&
             actionContextRef.current.resourceKey === requestResourceKey &&
+            actionContextRef.current.actionInputKey === requestActionInputKey &&
             sessionIdRef.current === sessionId;
         try {
             const result = await confirmRoleAction(action.actionId, { sessionId, concurrencyToken: action.confirmationToken }, controller.signal);
@@ -481,9 +531,12 @@ export const useUnifiedCopilot = () => {
                 setActionFeedback({ status: 'failed', message: actionErrorMessage(details, error instanceof Error ? error.message : 'Không thể xác nhận thao tác.') });
             }
         } finally {
-            if (isCurrentRequest()) setActionLoading(null);
+            if (isCurrentRequest()) {
+                setActionLoading(null);
+                actionBusyRef.current = false;
+            }
         }
-    }, [actionLoading, identityKey, pendingAction, resourceKey, routeKey]);
+    }, [actionInputKey, actionLoading, identityKey, pendingAction, resourceKey, routeKey]);
 
     const retry = useCallback(() => {
         const value = retryTextRef.current;
