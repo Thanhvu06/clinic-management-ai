@@ -27,6 +27,9 @@ jobs:
       AiProvider__IsEnabled: "true"
       AiProvider__ApiKey: ${{ secrets.GEMINI_API_KEY }}
       AiProvider__ModelName: ${{ inputs.model_name }}
+      # Six actor HTTP cases x two provider attempts keeps the total Gemini
+      # request budget at or below twelve, including one bounded retry.
+      AiProvider__MaxAttempts: "2"
       LIVE_GEMINI_MAX_CALLS: ${{ inputs.max_calls }}
       DOTNET_ENVIRONMENT: Development
     steps:

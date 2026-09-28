@@ -51,10 +51,29 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         return currentUserId.Value;
     }
 
+    private async Task EnsureTechnicianFacilityScopeAsync(long? facilityId)
+    {
+        var userId = GetUserId();
+        if (!facilityId.HasValue || !await _dbContext.StaffFacilityAssignments.AnyAsync(x =>
+                x.UserId == userId && x.IsActive && x.Role == RoleNames.DiagnosticTechnician &&
+                x.FacilityId == facilityId.Value))
+        {
+            throw new NotFoundException("Phiếu chỉ định không tồn tại.");
+        }
+    }
+
     private Task<Doctor> GetCurrentDoctorAsync()
     {
         return _doctorContextService.GetCurrentActiveDoctorAsync();
     }
+
+    private Task<long?> ResolveDoctorFacilityAsync(Guid doctorUserId) => _dbContext.StaffFacilityAssignments
+        .AsNoTracking()
+        .Where(x => x.UserId == doctorUserId && x.IsActive && x.Role == RoleNames.Doctor)
+        .OrderByDescending(x => x.IsPrimary)
+        .ThenBy(x => x.FacilityId)
+        .Select(x => (long?)x.FacilityId)
+        .FirstOrDefaultAsync();
 
     private static void ValidateRowVersion(byte[]? entityVersion, string? clientVersion)
     {
@@ -214,6 +233,10 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         if (appointment.Status != AppointmentStatus.InConsultation)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể tạo phiếu chỉ định cận lâm sàng khi lịch hẹn đang trong phiên khám (InConsultation).");
 
+        var resolvedFacilityId = facilityId ?? appointment.FacilityId ?? await ResolveDoctorFacilityAsync(doctor.UserId);
+        if (!resolvedFacilityId.HasValue)
+            throw new BusinessException("FACILITY_SCOPE_DENIED", "Không xác định được cơ sở của lịch hẹn.");
+
         if (facilityId.HasValue && !await _dbContext.StaffFacilityAssignments.AsNoTracking().AnyAsync(x =>
                 x.UserId == doctor.UserId && x.IsActive && x.Role == RoleNames.Doctor && x.FacilityId == facilityId.Value))
             throw new BusinessException("FACILITY_SCOPE_DENIED", "Bác sĩ không được phân quyền tại cơ sở chỉ định.");
@@ -244,7 +267,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 {
                     OrderCode = orderCode,
                     AppointmentId = appointment.Id,
-                    FacilityId = facilityId,
+                    FacilityId = resolvedFacilityId,
                     SourceAiActionId = sourceAiActionId,
                     PatientId = appointment.PatientId,
                     OrderingDoctorId = doctor.Id,
@@ -759,11 +782,20 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
     public async Task<PagedResult<DiagnosticOrderDto>> GetTechnicianOrdersAsync(DiagnosticOrderStatus? status, DateOnly? date, string? search, int page, int pageSize)
     {
+        var userId = GetUserId();
+        var facilityIds = await _dbContext.StaffFacilityAssignments
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.IsActive && x.Role == RoleNames.DiagnosticTechnician)
+            .Select(x => x.FacilityId)
+            .Distinct()
+            .ToListAsync();
+
         page = page < 1 ? 1 : page;
         pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
 
         var query = _dbContext.DiagnosticOrders
             .AsNoTracking()
+            .Where(o => o.FacilityId.HasValue && facilityIds.Contains(o.FacilityId.Value))
             .Include(o => o.Appointment)
             .Include(o => o.PatientVisit)
             .Include(o => o.Patient)
@@ -812,6 +844,13 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
     public async Task<DiagnosticOrderDto> GetTechnicianOrderByIdAsync(long orderId)
     {
+        var facilityId = await _dbContext.DiagnosticOrders
+            .AsNoTracking()
+            .Where(x => x.Id == orderId)
+            .Select(x => x.FacilityId)
+            .SingleOrDefaultAsync();
+        await EnsureTechnicianFacilityScopeAsync(facilityId);
+
         var dto = await GetOrderDtoByIdAsync(orderId);
         if (dto == null)
             throw new NotFoundException("Phiếu chỉ định không tồn tại.");
@@ -820,11 +859,20 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
     public async Task<TechnicianDiagnosticStatsDto> GetTechnicianStatsAsync()
     {
+        var userId = GetUserId();
+        var facilityIds = await _dbContext.StaffFacilityAssignments
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.IsActive && x.Role == RoleNames.DiagnosticTechnician)
+            .Select(x => x.FacilityId)
+            .Distinct()
+            .ToListAsync();
+        var scopedOrders = _dbContext.DiagnosticOrders
+            .Where(o => o.FacilityId.HasValue && facilityIds.Contains(o.FacilityId.Value));
         var today = _dateTimeProvider.VietnamToday;
-        var orderedCount = await _dbContext.DiagnosticOrders.CountAsync(o => o.Status == DiagnosticOrderStatus.Ordered);
-        var inProgressCount = await _dbContext.DiagnosticOrders.CountAsync(o => o.Status == DiagnosticOrderStatus.InProgress);
+        var orderedCount = await scopedOrders.CountAsync(o => o.Status == DiagnosticOrderStatus.Ordered);
+        var inProgressCount = await scopedOrders.CountAsync(o => o.Status == DiagnosticOrderStatus.InProgress);
 
-        var completedTodayCount = await _dbContext.DiagnosticOrders
+        var completedTodayCount = await scopedOrders
             .CountAsync(o => o.Status == DiagnosticOrderStatus.Completed &&
                              o.CompletedAtUtc.HasValue &&
                              DateOnly.FromDateTime(o.CompletedAtUtc.Value.AddHours(7)) == today);
@@ -847,6 +895,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         if (order == null)
             throw new NotFoundException("Phiếu chỉ định không tồn tại.");
+
+        await EnsureTechnicianFacilityScopeAsync(order.FacilityId);
 
         if (order.Status != DiagnosticOrderStatus.Ordered)
             throw new BusinessException("INVALID_STATE_TRANSITION", "Chỉ có thể tiếp nhận thực hiện phiếu chỉ định đang ở trạng thái Ordered.");
@@ -900,6 +950,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         if (order == null)
             throw new NotFoundException("Phiếu chỉ định không tồn tại.");
+
+        await EnsureTechnicianFacilityScopeAsync(order.FacilityId);
 
         if (order.Status != DiagnosticOrderStatus.InProgress)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể nhập kết quả khi phiếu chỉ định đang trong trạng thái InProgress.");
@@ -982,6 +1034,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         if (order == null)
             throw new NotFoundException("Phiếu chỉ định không tồn tại.");
+
+        await EnsureTechnicianFacilityScopeAsync(order.FacilityId);
 
         if (order.Status != DiagnosticOrderStatus.InProgress)
             throw new BusinessException("INVALID_STATE_TRANSITION", "Chỉ có thể hoàn tất phiếu chỉ định đang ở trạng thái InProgress.");

@@ -30,6 +30,7 @@ internal static class Program
             CommitSha = ReadCommitSha(),
             ModelName = snapshot.ModelName,
             ProviderEnabled = snapshot.IsEnabled,
+            KeyConfigured = snapshot.KeyConfigured,
             Configuration = snapshot
         };
 
@@ -45,6 +46,19 @@ internal static class Program
             return await FinishAsync(report with { LiveGeminiExecuted = false, SkipReason = "AiProvider model name is empty." }, reportPath, requireLive ? 2 : 0);
         if (maxCalls == 0)
             return await FinishAsync(report with { LiveGeminiExecuted = false, SkipReason = "LIVE_GEMINI_MAX_CALLS must be between 1 and 12." }, reportPath, requireLive ? 2 : 0);
+
+        if (!args.Contains("--planner-only", StringComparer.OrdinalIgnoreCase))
+        {
+            if (snapshot.MaxAttempts > 2)
+                return await FinishAsync(report with
+                {
+                    LiveGeminiExecuted = false,
+                    SkipReason = "FullStackHttp requires AiProvider:MaxAttempts <= 2 so six actor cases stay within the 12-call Gemini budget."
+                }, reportPath, requireLive ? 2 : 0);
+
+            var fullStackReport = await new FullStackHttpCanary().RunAsync(report, maxCalls);
+            return await FinishAsync(fullStackReport, reportPath, fullStackReport.SafetyPolicyViolationCount == 0 && fullStackReport.DatabaseUnchanged ? 0 : 3);
+        }
 
         var cases = Cases().Take(maxCalls).ToArray();
         using var httpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
@@ -130,6 +144,8 @@ internal static class Program
         var latencies = results.Select(x => x.LatencyMilliseconds).OrderBy(x => x).ToArray();
         var completedReport = report with
         {
+            CanaryLayer = "PlannerOnly",
+            CanaryLayers = new[] { "PlannerOnly" },
             LiveGeminiExecuted = true,
             CallsPlanned = cases.Length,
             CallsExecuted = results.Count(x => x.ProviderCalled),
@@ -255,8 +271,13 @@ internal sealed record LiveCanaryCaseResult
     public bool ProviderCalled { get; init; }
     public bool SchemaValid { get; init; }
     public int AllowedTools { get; init; }
+    public int ToolExecutions { get; init; }
+    public bool GroundedResponse { get; init; }
     public bool Clarification { get; init; }
     public bool PolicyViolation { get; init; }
+    public bool ProviderPlanRejected { get; init; }
+    public bool AuthorizationDenied { get; init; }
+    public string? ExecutionMode { get; init; }
     public long LatencyMilliseconds { get; init; }
 }
 
@@ -264,17 +285,30 @@ internal sealed record LiveCanaryReport
 {
     public DateTimeOffset TimestampUtc { get; init; }
     public string CommitSha { get; init; } = string.Empty;
+    public string CanaryVersion { get; init; } = "gate-d-v1";
+    public string CanaryLayer { get; init; } = "NotRun";
+    public IReadOnlyList<string> CanaryLayers { get; init; } = Array.Empty<string>();
     public string ModelName { get; init; } = string.Empty;
     public bool ProviderEnabled { get; init; }
+    public bool KeyConfigured { get; init; }
     public bool LiveGeminiExecuted { get; init; }
     public string? SkipReason { get; init; }
+    public int CallsBudget { get; init; }
     public int CallsPlanned { get; init; }
+    public int CallsAttempted { get; init; }
     public int CallsExecuted { get; init; }
+    public int ProviderCallsExecuted { get; init; }
+    public int HttpCanaryRequests { get; init; }
     public int HttpSuccessCount { get; init; }
     public int StructuredSchemaValidCount { get; init; }
+    public int PlannerSchemaValidCount { get; init; }
     public int AllowedToolCount { get; init; }
+    public int AllowedToolExecutionCount { get; init; }
+    public int GroundedResponseCount { get; init; }
     public int ClarificationCount { get; init; }
     public int DeterministicFallbackCount { get; init; }
+    public int ProviderPlanRejectedCount { get; init; }
+    public int ApplicationAuthorizationDenialCount { get; init; }
     public int RateLimitCount { get; init; }
     public int TimeoutCount { get; init; }
     public int ServerFailureCount { get; init; }
@@ -283,6 +317,10 @@ internal sealed record LiveCanaryReport
     public int SafetyPolicyViolationCount { get; init; }
     public long? P50LatencyMilliseconds { get; init; }
     public long? P95LatencyMilliseconds { get; init; }
+    public string? DatabaseFingerprintBefore { get; init; }
+    public string? DatabaseFingerprintAfter { get; init; }
+    public bool DatabaseUnchanged { get; init; }
+    public bool BrowserE2EExecuted { get; init; }
     public AiProviderConfigurationSnapshot? Configuration { get; init; }
     public IReadOnlyList<LiveCanaryCaseResult> Cases { get; init; } = Array.Empty<LiveCanaryCaseResult>();
 }

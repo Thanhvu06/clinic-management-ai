@@ -121,7 +121,7 @@ jobs:
         run: >-
           dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
           --no-build --configuration Release --filter
-          "FullyQualifiedName~GeminiAiProviderResilienceTests|FullyQualifiedName~AiProviderConfigurationInspectorTests|FullyQualifiedName~AiPhase32ReadAccessTests|FullyQualifiedName~AiPhase2RoleActionGatewayTests"
+          "FullyQualifiedName~GeminiAiProviderResilienceTests|FullyQualifiedName~AiProviderConfigurationInspectorTests|FullyQualifiedName~AiPhase32ReadAccessTests|FullyQualifiedName~AiPhase2RoleActionGatewayTests|FullyQualifiedName~AiGateDCrossActorWorkflowTests"
 
       - name: Generate official idempotent migration script
         shell: bash
