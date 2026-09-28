@@ -7,6 +7,7 @@ import { DialogProvider } from '../contexts/DialogContext';
 import { doctorApi } from '../api/doctorApi';
 import { diagnosticApi } from '../api/diagnosticApi';
 import type { ApiResponse, PatientClinicalContextDto, DiagnosticOrderDto } from '../types';
+import { CopilotResourceProvider, useCopilotResource } from '../components/copilot/copilotResourceContext';
 
 let testNavigate: (path: string) => void = () => {};
 function NavigationListener() {
@@ -159,6 +160,11 @@ function ok<T>(data: T): ApiResponse<T> {
     return { success: true, message: 'Success', data };
 }
 
+function CopilotSelectionProbe() {
+    const { selection } = useCopilotResource();
+    return <output data-testid="copilot-selection">{selection?.context.visitId ?? ''}</output>;
+}
+
 describe('DoctorExaminationWorkspace Controlled Async & Race Condition Tests', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -168,6 +174,25 @@ describe('DoctorExaminationWorkspace Controlled Async & Race Condition Tests', (
 
     afterEach(() => {
         vi.useRealTimers();
+    });
+
+    it('binds the Copilot resource to the visit currently opened by the doctor', async () => {
+        vi.mocked(doctorApi.getVisitPatientClinicalContext).mockResolvedValue(ok(createMockContext(101, 'Bệnh nhân 101')));
+        vi.mocked(diagnosticApi.getDoctorOrdersByVisit).mockResolvedValue(ok([]));
+
+        render(
+            <MemoryRouter initialEntries={['/doctor/visits/101']}>
+                <DialogProvider>
+                    <CopilotResourceProvider>
+                        <CopilotSelectionProbe />
+                        <Routes><Route path="/doctor/visits/:visitId" element={<DoctorExaminationWorkspace />} /></Routes>
+                    </CopilotResourceProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        await waitFor(() => expect(screen.getByText('Bệnh nhân 101')).toBeInTheDocument());
+        expect(screen.getByTestId('copilot-selection')).toHaveTextContent('101');
     });
 
     // 1. Manual load in-flight when background polling arrives

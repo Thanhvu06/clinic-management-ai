@@ -2,61 +2,10 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Bot, CheckCircle2, ExternalLink, RotateCcw, Send, ShieldCheck, Square, X } from 'lucide-react';
 import { useUnifiedCopilot, type UnifiedCopilotMessage } from './useUnifiedCopilot';
 import { providerStateLabel, toolDisplayName } from './copilotConfig';
+import { renderCopilotCardData } from './copilotDataRenderers';
 import styles from './UnifiedCopilotPanel.module.css';
 
-const LABELS: Record<string, string> = {
-    doctorName: 'Bác sĩ', doctor: 'Bác sĩ', specialtyName: 'Chuyên khoa', specialty: 'Chuyên khoa',
-    facilityName: 'Cơ sở', facility: 'Cơ sở', room: 'Phòng', appointmentCode: 'Mã lịch hẹn',
-    status: 'Trạng thái', slotDate: 'Ngày', date: 'Ngày', startTime: 'Bắt đầu', endTime: 'Kết thúc',
-    openingHours: 'Giờ làm việc', address: 'Địa chỉ', phone: 'Điện thoại', code: 'Mã',
-    sourceType: 'Nguồn dữ liệu', sourceEntity: 'Loại nguồn', specialtyCode: 'Mã chuyên khoa',
-    priceType: 'Loại giá', currency: 'Đơn vị tiền', publishedPrice: 'Giá công bố', updatedAtUtc: 'Cập nhật',
-    retrievedAtUtc: 'Đọc lúc'
-};
-
 const safeRoute = (route?: string | null): route is string => Boolean(route && route.startsWith('/') && !route.startsWith('//') && !route.includes('://') && !route.includes('..') && !route.includes('\\'));
-
-const formatValue = (key: string, value: unknown): string => {
-    if (value === null || value === undefined || value === '') return '';
-    if (typeof value === 'boolean') return value ? 'Có' : 'Không';
-    if (typeof value === 'number') return key.toLowerCase().includes('price') ? `${value.toLocaleString('vi-VN')} ₫` : String(value);
-    if (typeof value === 'object') return Array.isArray(value) ? `${value.length} mục` : 'Dữ liệu chi tiết có cấu trúc';
-    if (typeof value === 'string' && key.toLowerCase().includes('utc')) {
-        const parsed = new Date(value);
-        if (!Number.isNaN(parsed.valueOf())) return parsed.toLocaleString('vi-VN');
-    }
-    return String(value);
-};
-
-const displayRows = (data: unknown): Array<Record<string, unknown>> => {
-    const flattenDetails = (item: Record<string, unknown>): Record<string, unknown> => {
-        const details = item.details;
-        if (!details || typeof details !== 'object' || Array.isArray(details)) return item;
-        const { details: _details, ...rest } = item;
-        return { ...rest, ...(details as Record<string, unknown>) };
-    };
-    if (Array.isArray(data)) return data
-        .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
-        .map(flattenDetails)
-        .slice(0, 6);
-    if (!data || typeof data !== 'object') return [];
-    const record = data as Record<string, unknown>;
-    if (Array.isArray(record.items)) return record.items
-        .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
-        .map(flattenDetails)
-        .slice(0, 6);
-    return [record];
-};
-
-const visibleFields = (row: Record<string, unknown>) => Object.entries(row)
-    .filter(([key, value]) => !['sourceId', 'id', 'token'].includes(key) && !key.toLowerCase().endsWith('id') && value !== null && value !== undefined && value !== '')
-    .slice(0, 8);
-
-const pendingStatus = (row: Record<string, unknown>): string | null => {
-    const value = row.status;
-    if (typeof value !== 'string') return null;
-    return ['pending_confirmation', 'expired', 'stale', 'completed', 'failed', 'failed_terminal'].includes(value.toLowerCase()) ? value : null;
-};
 
 const MessageBubble: React.FC<{ item: UnifiedCopilotMessage; onRetry: (text: string) => void }> = ({ item, onRetry }) => {
     const response = item.response;
@@ -68,24 +17,18 @@ const MessageBubble: React.FC<{ item: UnifiedCopilotMessage; onRetry: (text: str
                 {response?.clarification && <div className={styles.clarification}>{response.clarification}</div>}
                 {response?.safetyNotice && <div className={styles.clarification}>{response.safetyNotice}</div>}
                 {cards.map((card, index) => {
-                    const rows = displayRows(card.data);
                     const sources = Array.from(new Map(
                         [...(card.sources ?? []), ...(index === 0 ? (response?.sources ?? []) : [])]
                             .map(source => [`${source.name}:${source.kind}`, source] as const)
                     ).values());
                     return (
                         <article className={styles.card} key={`${card.type}-${index}`}>
-                            <div className={styles.cardTitle}><span>{card.title}</span>{pendingStatus(rows[0] ?? {}) && <span>{pendingStatus(rows[0] ?? {})}</span>}</div>
+                            <div className={styles.cardTitle}><span>{card.title}</span></div>
                             {card.description && <p className={styles.cardDescription}>{card.description}</p>}
-                            {card.retrievedAtUtc && <p className={styles.cardDescription}>Dữ liệu đọc lúc: {formatValue('retrievedAtUtc', card.retrievedAtUtc)}</p>}
-                            {rows.map((row, rowIndex) => (
-                                <ul className={styles.dataList} key={`${card.type}-${rowIndex}`}>
-                                    {pendingStatus(row) && <li aria-label="Trạng thái thao tác">Trạng thái thao tác: {pendingStatus(row)}</li>}
-                                    {visibleFields(row).map(([key, value]) => <li key={key}><strong>{LABELS[key] ?? key}:</strong> {formatValue(key, value)}</li>)}
-                                </ul>
-                            ))}
+                            {card.retrievedAtUtc && <p className={styles.cardDescription}>Dữ liệu đọc lúc: {new Date(card.retrievedAtUtc).toLocaleString('vi-VN')}</p>}
+                            {renderCopilotCardData(card)}
                             {sources.length > 0 && <div className={styles.sources} aria-label="Nguồn dữ liệu">
-                                {sources.slice(0, 5).map((source, sourceIndex) => <span className={styles.source} key={`${source.name}-${sourceIndex}`}>{source.name}{source.kind ? ` · ${source.kind}` : ''}</span>)}
+                                {sources.slice(0, 5).map((source, sourceIndex) => <span className={styles.source} key={`${source.name}-${sourceIndex}`}>{source.name}{source.kind ? ` · ${source.kind}` : ''}{source.status ? ` · ${source.status}` : ''}</span>)}
                             </div>}
                         </article>
                     );
@@ -156,6 +99,7 @@ export const UnifiedCopilotPanel: React.FC = () => {
                 </div>
                 {copilot.actionCapabilities.length > 0 && <section className={styles.actionTray} aria-label="Thao tác có xác nhận">
                     <div className={styles.actionHeading}><strong>Thao tác có xác nhận</strong><span>Backend kiểm tra lại quyền, resource và điều kiện domain.</span></div>
+                    {copilot.resourceSelection && <p className={styles.cardDescription}>Resource nghiệp vụ: {copilot.resourceSelection.label ?? copilot.resourceSelection.source}</p>}
                     {copilot.catalogError && <p className={styles.actionError}>{copilot.catalogError}</p>}
                     {copilot.actionCapabilities.map(capability => <div className={styles.actionRow} key={capability.tool.name}>
                         <div className={styles.actionCopy}><strong>{toolDisplayName(capability.tool)}</strong><span>{capability.tool.description}</span>{!capability.enabled && <small>{capability.reason}</small>}</div>
@@ -174,6 +118,7 @@ export const UnifiedCopilotPanel: React.FC = () => {
                         <div className={styles.previewLine}><strong>Hậu quả:</strong> {copilot.pendingAction.preview.consequence}</div>
                         <div className={styles.previewLine}><strong>Kiểm tra backend:</strong> {copilot.pendingAction.preview.confirmationSummary}</div>
                         <div className={styles.previewLine}><strong>Dữ liệu kiểm tra lúc:</strong> {new Date(copilot.pendingAction.preview.validatedAtUtc).toLocaleString('vi-VN')}</div>
+                        <div className={styles.previewLine}><strong>Nguồn kiểm tra:</strong> {copilot.pendingAction.preview.sources.map(source => `${source.name} · ${source.kind}${source.status ? ` · ${source.status}` : ''}`).join('; ')}</div>
                         <div className={styles.previewLine}><strong>Hết hạn:</strong> {new Date(copilot.pendingAction.preview.expiresAtUtc).toLocaleString('vi-VN')}</div>
                         {copilot.pendingActionExpired && <p className={styles.actionError} role="alert">Preview đã hết hạn; backend sẽ từ chối token cũ. Hãy chuẩn bị lại để nhận dữ liệu kiểm tra mới.</p>}
                         <button type="button" className={styles.confirmButton} disabled={Boolean(copilot.actionLoading) || copilot.pendingActionExpired} onClick={() => void copilot.confirmAction()}><CheckCircle2 size={14} /> Xác nhận thao tác</button>

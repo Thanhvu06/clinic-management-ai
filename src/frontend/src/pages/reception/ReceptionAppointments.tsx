@@ -5,6 +5,7 @@ import type { ApiResponse, CheckInTicketDto } from '../../types';
 import { Search, CalendarDays, Eye, X, Clock, RefreshCw, UserCheck } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
 import { CheckInTicketModal } from '../../components/CheckInTicketModal';
+import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 
 interface ReceptionAppointment {
     id: number;
@@ -24,6 +25,7 @@ interface ReceptionAppointment {
 }
 
 export const ReceptionAppointments: React.FC = () => {
+    const { setSelection } = useCopilotResource();
     const [appointments, setAppointments] = useState<ReceptionAppointment[]>([]);
     const [loading, setLoading] = useState(true);
     const [totalItems, setTotalItems] = useState(0);
@@ -69,6 +71,16 @@ export const ReceptionAppointments: React.FC = () => {
         fetchAppointments();
     }, [page, statusFilter]);
 
+    useEffect(() => {
+        setSelection(null);
+    }, [page, statusFilter, search, setSelection]);
+
+    useEffect(() => {
+        const refresh = () => { void fetchAppointments(); };
+        window.addEventListener('cliniccare:copilot-action-completed', refresh);
+        return () => window.removeEventListener('cliniccare:copilot-action-completed', refresh);
+    }, [page, statusFilter, search]);
+
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setPage(1);
@@ -93,6 +105,11 @@ export const ReceptionAppointments: React.FC = () => {
     };
 
     const openDetail = (apt: ReceptionAppointment) => {
+        setSelection({
+            context: { appointmentId: apt.id },
+            source: 'reception-appointments',
+            label: `Lịch hẹn ${apt.appointmentCode}`
+        });
         setModal({ isOpen: true, apt });
         fetchHistory(apt.id);
     };
@@ -129,6 +146,11 @@ export const ReceptionAppointments: React.FC = () => {
     };
 
     const handleCheckIn = async (apt: ReceptionAppointment) => {
+        setSelection({
+            context: { appointmentId: apt.id },
+            source: 'reception-appointments',
+            label: `Lịch hẹn ${apt.appointmentCode}`
+        });
         setCheckingInId(apt.id);
         try {
             const res = await patientVisitApi.receptionCheckInAppointment(apt.id);

@@ -7,6 +7,7 @@ import { organizationApi } from '../api/organizationApi';
 import { patientVisitApi } from '../api/patientVisitApi';
 import axiosClient from '../api/axiosClient';
 import { DialogProvider } from '../contexts/DialogContext';
+import { CopilotResourceProvider, useCopilotResource } from '../components/copilot/copilotResourceContext';
 
 vi.mock('../api/organizationApi', () => ({
     organizationApi: {
@@ -84,6 +85,11 @@ const mockAppointments = [
         status: 'Completed',
     }
 ];
+
+function CopilotSelectionProbe() {
+    const { selection } = useCopilotResource();
+    return <output data-testid="copilot-selection">{selection?.context.appointmentId ?? ''}</output>;
+}
 
 describe('Reception Workspace Rebuild', () => {
     beforeEach(() => {
@@ -184,6 +190,23 @@ describe('Reception Workspace Rebuild', () => {
             expect(screen.getByText('Trần Thị Bình')).toBeInTheDocument();
             expect(screen.getByText(/BN-2026-000001/)).toBeInTheDocument();
         });
+    });
+
+    it('selects the appointment from the rendered worklist row for Copilot', async () => {
+        render(
+            <MemoryRouter>
+                <DialogProvider>
+                    <CopilotResourceProvider>
+                        <CopilotSelectionProbe />
+                        <ReceptionWorkspace />
+                    </CopilotResourceProvider>
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        await waitFor(() => expect(screen.getAllByRole('button', { name: 'Chọn Copilot' }).length).toBe(2));
+        fireEvent.click(screen.getAllByRole('button', { name: 'Chọn Copilot' })[0]);
+        expect(screen.getByTestId('copilot-selection')).toHaveTextContent('101');
     });
 
     it('filters worklist by appointment tabs', async () => {
@@ -370,4 +393,3 @@ describe('Reception Workspace Rebuild', () => {
         });
     });
 });
-

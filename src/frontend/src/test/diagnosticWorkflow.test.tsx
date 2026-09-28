@@ -1,23 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { TechnicianDashboard } from '../pages/technician/TechnicianDashboard';
+import { TechnicianOrderDetail } from '../pages/technician/TechnicianOrderDetail';
 import { DiagnosticOrderPrint } from '../pages/doctor/DiagnosticOrderPrint';
 import { PatientDiagnosticResults } from '../pages/patient/PatientDiagnosticResults';
 import { DialogProvider } from '../contexts/DialogContext';
 import { diagnosticApi } from '../api/diagnosticApi';
 import type { DiagnosticOrderDto, TechnicianDiagnosticStatsDto } from '../types';
+import { CopilotResourceProvider, useCopilotResource } from '../components/copilot/copilotResourceContext';
 
 // Mock diagnosticApi
 vi.mock('../api/diagnosticApi', () => ({
     diagnosticApi: {
         getTechnicianOrders: vi.fn(),
         getTechnicianStats: vi.fn(),
+        getTechnicianOrderById: vi.fn(),
         getDoctorOrderById: vi.fn(),
         getPatientOrders: vi.fn(),
         getPatientVitals: vi.fn(),
     }
 }));
+
+function CopilotSelectionProbe() {
+    const { selection } = useCopilotResource();
+    return <output data-testid="copilot-selection">{selection?.context.diagnosticOrderId ?? ''}</output>;
+}
 
 const mockStats: TechnicianDiagnosticStatsDto = {
     orderedCount: 3,
@@ -121,6 +129,24 @@ describe('Diagnostic Workflow Frontend Tests', () => {
         expect(screen.getByText('DX-20260907-0001')).toBeInTheDocument();
         expect(screen.getByText('Nguyễn Văn An')).toBeInTheDocument();
         expect(screen.getByText('Tổng phân tích tế bào máu (CBC)')).toBeInTheDocument();
+    });
+
+    it('selects the loaded diagnostic order detail for Copilot', async () => {
+        vi.mocked(diagnosticApi.getTechnicianOrderById).mockResolvedValue({ success: true, message: 'Success', data: mockOrder } as any);
+
+        render(
+            <CopilotResourceProvider>
+                <CopilotSelectionProbe />
+                <DialogProvider>
+                    <MemoryRouter initialEntries={['/diagnostics/orders/1']}>
+                        <Routes><Route path="/diagnostics/orders/:id" element={<TechnicianOrderDetail />} /></Routes>
+                    </MemoryRouter>
+                </DialogProvider>
+            </CopilotResourceProvider>
+        );
+
+        await waitFor(() => expect(screen.getByText('PHIẾU CHỈ ĐỊNH CẬN LÂM SÀNG')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('copilot-selection')).toHaveTextContent('1'));
     });
 
     it('DiagnosticOrderPrint renders printable slip correctly', async () => {
@@ -240,5 +266,3 @@ describe('Diagnostic Workflow Frontend Tests', () => {
         expect(await screen.findByText(/Network error or order not found/i)).toBeInTheDocument();
     });
 });
-
-

@@ -6,12 +6,14 @@ import {
 import { diagnosticApi } from '../../api/diagnosticApi';
 import type { DiagnosticOrderDto, RecordDiagnosticResultRequest } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
+import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 
 export const TechnicianOrderDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const orderId = Number(id);
     const navigate = useNavigate();
     const { showAlert, showToast, showConfirm } = useDialog();
+    const { setSelection } = useCopilotResource();
 
     const [order, setOrder] = useState<DiagnosticOrderDto | null>(null);
     const [loading, setLoading] = useState(true);
@@ -25,6 +27,19 @@ export const TechnicianOrderDetail: React.FC = () => {
         unit: string;
     }>>({});
     const [savingItemId, setSavingItemId] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (!order) {
+            setSelection(null);
+            return;
+        }
+        setSelection({
+            context: { diagnosticOrderId: order.id },
+            source: 'technician-order-detail',
+            label: 'Phiếu cận lâm sàng đang mở',
+            resourceVersion: order.rowVersion ?? null
+        });
+    }, [order?.id, order?.rowVersion, setSelection]);
 
     const loadOrder = useCallback(async () => {
         if (!orderId) return;
@@ -79,6 +94,12 @@ export const TechnicianOrderDetail: React.FC = () => {
             });
         return () => { isMounted = false; };
     }, [orderId, showAlert]);
+
+    useEffect(() => {
+        const refresh = () => { void loadOrder(); };
+        window.addEventListener('cliniccare:copilot-action-completed', refresh);
+        return () => window.removeEventListener('cliniccare:copilot-action-completed', refresh);
+    }, [loadOrder]);
 
     const handleStartOrder = async () => {
         if (!order) return;

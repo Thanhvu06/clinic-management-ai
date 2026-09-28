@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { NotificationBell } from '../components/common/NotificationBell';
 import { RoleCopilotPanel } from '../components/RoleCopilotPanel';
+import { CopilotResourceProvider } from '../components/copilot/copilotResourceContext';
 
 export const MainLayout: React.FC = () => {
     const { user, logout } = useAuth();
@@ -254,11 +255,13 @@ export const MainLayout: React.FC = () => {
                 </header>
 
                 {/* Page Outlet */}
-                <div className={styles.content}>
-                    <Outlet />
-                </div>
+                <CopilotResourceProvider key={`${location.pathname}${location.search}`}>
+                    <div className={styles.content}>
+                        <Outlet />
+                    </div>
+                    <RoleCopilotPanel />
+                </CopilotResourceProvider>
             </main>
-            <RoleCopilotPanel />
         </div>
     );
 };

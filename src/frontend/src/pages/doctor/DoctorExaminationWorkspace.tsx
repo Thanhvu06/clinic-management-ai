@@ -18,6 +18,7 @@ import type {
     DiagnosticOrderDto
 } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
+import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 
 interface ActiveMedicine {
     id: number;
@@ -34,6 +35,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const appointmentId = isVisit ? 0 : Number(id);
     const navigate = useNavigate();
     const { showAlert, showToast } = useDialog();
+    const { setSelection } = useCopilotResource();
 
     const [context, setContext] = useState<PatientClinicalContextDto | null>(null);
     const [loading, setLoading] = useState(true);
@@ -275,6 +277,32 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             isMounted = false;
         };
     }, [loadContext]);
+
+    useEffect(() => {
+        const refresh = () => { void loadContext(); };
+        window.addEventListener('cliniccare:copilot-action-completed', refresh);
+        return () => window.removeEventListener('cliniccare:copilot-action-completed', refresh);
+    }, [loadContext]);
+
+    useEffect(() => {
+        if (!currentId) {
+            setSelection(null);
+            return;
+        }
+        setSelection({
+            context: {
+                ...(isVisit ? { visitId: currentId } : { appointmentId: currentId }),
+                serviceIds: selectedServiceIds
+            },
+            source: isVisit ? 'doctor-visit-examination' : 'doctor-appointment-examination',
+            label: 'Ca khám đang mở',
+            resourceVersion: encounterRowVersion,
+            actionArguments: {
+                clinicalIndication: clinicalIndication.trim(),
+                note: orderNotes.trim() || undefined
+            }
+        });
+    }, [currentId, isVisit, selectedServiceIds, clinicalIndication, orderNotes, encounterRowVersion, setSelection]);
 
     // Background polling for diagnostic orders (every 20s) to reflect lab/imaging results in real-time
     useEffect(() => {

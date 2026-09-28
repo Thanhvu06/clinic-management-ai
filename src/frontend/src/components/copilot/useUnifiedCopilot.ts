@@ -14,6 +14,7 @@ import {
     type AiActionPreview
 } from '../../api/aiCopilotApi';
 import { getCopilotRoleConfig, type CopilotRole } from './copilotConfig';
+import { useCopilotResource, type CopilotResourceSelection } from './copilotResourceContext';
 
 export interface UnifiedCopilotMessage {
     id: string;
@@ -27,33 +28,19 @@ export interface UnifiedCopilotMessage {
 const makeId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 const makeSession = () => `sess_${makeId('copilot').replace(/[^A-Za-z0-9_-]/g, '')}`.slice(0, 128);
 
-const getResourceContext = (pathname: string, search: string): AiCopilotResourceContext | undefined => {
-    const params = new URLSearchParams(search);
-    const queryId = (name: string): number | undefined => {
-        const value = params.get(name);
-        const number = value ? Number(value) : NaN;
-        return Number.isSafeInteger(number) && number > 0 ? number : undefined;
-    };
-    const routeId = (pattern: RegExp, queryName: string): number | undefined => {
+const getResourceContext = (pathname: string): AiCopilotResourceContext | undefined => {
+    const routeId = (pattern: RegExp): number | undefined => {
         const match = pathname.match(pattern);
-        const value = match?.[1] ?? params.get(queryName);
+        const value = match?.[1];
         const number = value ? Number(value) : NaN;
         return Number.isSafeInteger(number) && number > 0 ? number : undefined;
     };
     const context: AiCopilotResourceContext = {};
-    if (pathname.includes('/appointments/')) context.appointmentId = routeId(/\/appointments\/(\d+)/, 'appointmentId');
-    if (pathname.includes('/visits/')) context.visitId = routeId(/\/visits\/(\d+)/, 'visitId');
-    if (pathname.includes('/diagnostic-orders/')) context.diagnosticOrderId = routeId(/\/diagnostic-orders\/(\d+)/, 'diagnosticOrderId');
-    if (pathname.includes('/diagnostics/orders/')) context.diagnosticOrderId = routeId(/\/diagnostics\/orders\/(\d+)/, 'diagnosticOrderId');
-    if (pathname.includes('/prescriptions/')) context.prescriptionId = routeId(/\/prescriptions\/(\d+)/, 'prescriptionId');
-    context.encounterId = queryId('encounterId');
-    context.departmentId = queryId('departmentId');
-    context.roomId = queryId('roomId');
-    context.assignedDoctorId = queryId('assignedDoctorId');
-    context.existingPatientId = queryId('existingPatientId');
-    context.itemId = queryId('itemId');
-    const serviceIds = (params.get('serviceIds') ?? '').split(',').map(Number).filter(value => Number.isSafeInteger(value) && value > 0);
-    if (serviceIds.length > 0) context.serviceIds = serviceIds;
+    if (pathname.includes('/appointments/')) context.appointmentId = routeId(/\/appointments\/(\d+)/);
+    if (pathname.includes('/visits/')) context.visitId = routeId(/\/visits\/(\d+)/);
+    if (pathname.includes('/diagnostic-orders/')) context.diagnosticOrderId = routeId(/\/diagnostic-orders\/(\d+)/);
+    if (pathname.includes('/diagnostics/orders/')) context.diagnosticOrderId = routeId(/\/diagnostics\/orders\/(\d+)/);
+    if (pathname.includes('/prescriptions/')) context.prescriptionId = routeId(/\/prescriptions\/(\d+)/);
     return Object.values(context).some(value => value !== undefined) ? context : undefined;
 };
 
@@ -81,8 +68,42 @@ export interface ActionCapabilityState {
 
 const asRecord = (value: unknown): Record<string, unknown> => value && typeof value === 'object' ? value as Record<string, unknown> : {};
 
-const actionCapability = (tool: AiCopilotTool, resource?: AiCopilotResourceContext): ActionCapabilityState => {
+const actionErrorDetails = (error: unknown) => {
+    const root = asRecord(error);
+    const nested = asRecord(root.error);
+    const response = asRecord(root.response);
+    const responseData = asRecord(response.data);
+    const code = [nested.code, root.errorCode, responseData.errorCode, root.code]
+        .find(value => typeof value === 'string') as string | undefined;
+    const status = [root.status, response.status]
+        .find(value => typeof value === 'number') as number | undefined;
+    const message = [nested.message, root.message, responseData.message]
+        .find(value => typeof value === 'string') as string | undefined;
+    return { code, status, message };
+};
+
+const terminalActionError = (code?: string, status?: number) =>
+    status === 403 || status === 409 || [
+        'ACTION_EXPIRED', 'ACTION_CANCELLED', 'ACTION_FAILED_TERMINAL', 'ACTION_ALREADY_COMPLETED',
+        'CONCURRENCY_CONFLICT', 'RESOURCE_VERSION_CHANGED', 'ACTION_TOKEN_REFRESH_CONFLICT', 'ACTIVE_ACTION_EXISTS',
+        'FORBIDDEN_TOOL', 'FORBIDDEN_CAPABILITY', 'ROLE_MISMATCH', 'FACILITY_SCOPE_DENIED', 'RESOURCE_SCOPE_DENIED'
+    ].includes(code ?? '');
+
+const actionErrorMessage = (details: ReturnType<typeof actionErrorDetails>, fallback: string) => {
+    if (details.status === 403 || ['FORBIDDEN_TOOL', 'FORBIDDEN_CAPABILITY', 'ROLE_MISMATCH', 'FACILITY_SCOPE_DENIED', 'RESOURCE_SCOPE_DENIED'].includes(details.code ?? ''))
+        return 'Bạn không còn quyền hoặc phạm vi cơ sở cho tài nguyên này. Preview đã bị hủy.';
+    if (details.status === 409 || ['CONCURRENCY_CONFLICT', 'RESOURCE_VERSION_CHANGED', 'ACTIVE_ACTION_EXISTS', 'ACTION_TOKEN_REFRESH_CONFLICT'].includes(details.code ?? ''))
+        return 'Dữ liệu hoặc mã xác nhận đã thay đổi. Preview cũ đã bị hủy; hãy chuẩn bị lại từ dữ liệu mới nhất.';
+    return details.message || fallback;
+};
+
+const actionCapability = (
+    tool: AiCopilotTool,
+    resource?: AiCopilotResourceContext,
+    selection?: CopilotResourceSelection | null
+): ActionCapabilityState => {
     const context = resource ?? {};
+    const extraArguments = selection?.actionArguments ?? {};
     const id = (value: number | undefined) => value !== undefined && Number.isSafeInteger(value) && value > 0;
     switch (tool.name) {
         case 'technician.prepare_start_diagnostic_order':
@@ -100,7 +121,34 @@ const actionCapability = (tool: AiCopilotTool, resource?: AiCopilotResourceConte
         case 'reception.prepare_create_walk_in':
             return { tool, enabled: false, reason: 'Chỉ hỗ trợ hồ sơ bệnh nhân đã tồn tại; cần chọn patient, department và lý do từ selector domain.' };
         case 'doctor.prepare_diagnostic_order':
-            return { tool, enabled: Boolean(context.visitId && context.serviceIds?.length), reason: 'Cần visit được phân công và service IDs do domain selector cung cấp.', arguments: context.visitId && context.serviceIds?.length ? { visitId: context.visitId, serviceIds: context.serviceIds } : undefined };
+            {
+                const hasExactlyOneResource = id(context.visitId) !== id(context.appointmentId);
+                const appointmentNeedsDepartment = id(context.appointmentId) && !id(context.departmentId);
+                const clinicalIndication = typeof extraArguments.clinicalIndication === 'string' ? extraArguments.clinicalIndication.trim() : '';
+                const serviceIds = context.serviceIds?.filter(value => id(value)) ?? [];
+                const enabled = hasExactlyOneResource && !appointmentNeedsDepartment && serviceIds.length > 0 && clinicalIndication.length > 0;
+                return {
+                    tool,
+                    enabled,
+                    reason: !hasExactlyOneResource
+                        ? 'Cần đúng một visit hoặc lịch hẹn đang mở từ hồ sơ bác sĩ.'
+                        : appointmentNeedsDepartment
+                            ? 'Cần khoa của lịch hẹn từ dữ liệu nghiệp vụ; không tự đoán khoa.'
+                        : serviceIds.length === 0
+                            ? 'Cần chọn ít nhất một dịch vụ cận lâm sàng trong form chỉ định.'
+                            : 'Cần nhập chỉ định lâm sàng trong form trước khi xem preview.',
+                    arguments: enabled
+                        ? {
+                            ...(id(context.visitId)
+                                ? { visitId: context.visitId }
+                                : { appointmentId: context.appointmentId, ...(id(context.departmentId) ? { departmentId: context.departmentId } : {}) }),
+                            clinicalIndication,
+                            serviceIds,
+                            ...(typeof extraArguments.note === 'string' && extraArguments.note.trim() ? { note: extraArguments.note.trim() } : {})
+                        }
+                        : undefined
+                };
+            }
         case 'doctor.prepare_prescription_draft':
             return { tool, enabled: false, reason: 'Cần các thuốc/liều lượng được chọn từ selector domain của visit; UI không tự đoán item.' };
         case 'technician.prepare_record_diagnostic_result':
@@ -119,6 +167,16 @@ export const useUnifiedCopilot = () => {
     const location = useLocation();
     const role = (user?.role || 'Patient') as CopilotRole;
     const config = useMemo(() => getCopilotRoleConfig(role), [role]);
+    const resourceSelection = useCopilotResource().selection;
+    const routeResourceContext = useMemo(() => getResourceContext(location.pathname), [location.pathname]);
+    const resourceContext = resourceSelection?.context ?? routeResourceContext;
+    const resourceVersion = resourceSelection?.resourceVersion ?? undefined;
+    const resourceKey = useMemo(() => JSON.stringify({
+        source: resourceSelection?.source ?? 'route',
+        context: resourceContext ?? null,
+        actionArguments: resourceSelection?.actionArguments ?? null,
+        resourceVersion: resourceVersion ?? null
+    }), [resourceSelection, resourceContext, resourceVersion]);
     const identityKey = `${user?.userId ?? 'anonymous'}:${role}:${identityVersion}`;
     const routeKey = `${location.pathname}${location.search}`;
     const [open, setOpen] = useState(false);
@@ -136,12 +194,13 @@ export const useUnifiedCopilot = () => {
     const catalogControllerRef = useRef<AbortController | null>(null);
     const actionKeysRef = useRef(new Map<string, string>());
     const actionRequestNumberRef = useRef(0);
-    const actionContextRef = useRef({ identityKey, routeKey });
+    const actionContextRef = useRef({ identityKey, routeKey, resourceKey });
     const requestNumberRef = useRef(0);
     const sessionIdRef = useRef(makeSession());
     const conversationIdRef = useRef(makeSession().replace(/^sess_/, 'conv_'));
     const previousIdentityRef = useRef(identityKey);
     const previousRouteRef = useRef(routeKey);
+    const previousResourceRef = useRef(resourceKey);
     const retryTextRef = useRef<string | null>(null);
 
     const reset = useCallback(() => {
@@ -162,9 +221,10 @@ export const useUnifiedCopilot = () => {
     }, [config]);
 
     useEffect(() => {
-        if (previousIdentityRef.current !== identityKey || previousRouteRef.current !== routeKey) {
+        if (previousIdentityRef.current !== identityKey || previousRouteRef.current !== routeKey || previousResourceRef.current !== resourceKey) {
             previousIdentityRef.current = identityKey;
             previousRouteRef.current = routeKey;
+            previousResourceRef.current = resourceKey;
             reset();
         }
         return () => {
@@ -172,11 +232,11 @@ export const useUnifiedCopilot = () => {
             actionControllerRef.current?.abort();
             actionRequestNumberRef.current += 1;
         };
-    }, [identityKey, routeKey, reset]);
+    }, [identityKey, resourceKey, routeKey, reset]);
 
     useEffect(() => {
-        actionContextRef.current = { identityKey, routeKey };
-    }, [identityKey, routeKey]);
+        actionContextRef.current = { identityKey, routeKey, resourceKey };
+    }, [identityKey, routeKey, resourceKey]);
 
     // The expiry is part of the safety boundary, not just display metadata.
     // Wake the UI at the exact boundary, clear the in-memory token, and force
@@ -245,7 +305,8 @@ export const useUnifiedCopilot = () => {
             conversationId: conversationIdRef.current,
             sessionId: sessionIdRef.current,
             currentRoute: location.pathname,
-            resourceContext: getResourceContext(location.pathname, location.search),
+            resourceContext,
+            resourceVersion,
             clientTurnId: makeId('turn'),
             locale: 'vi-VN',
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -265,7 +326,7 @@ export const useUnifiedCopilot = () => {
         } finally {
             if (requestNumber === requestNumberRef.current) setLoading(false);
         }
-    }, [input, loading, location.pathname, location.search]);
+    }, [input, loading, location.pathname, resourceContext, resourceVersion]);
 
     const abort = useCallback(() => {
         controllerRef.current?.abort();
@@ -277,8 +338,8 @@ export const useUnifiedCopilot = () => {
     }, []);
 
     const actionCapabilities = useMemo(
-        () => catalog.actionTools.map(tool => actionCapability(tool, getResourceContext(location.pathname, location.search))),
-        [catalog.actionTools, location.pathname, location.search]
+        () => catalog.actionTools.map(tool => actionCapability(tool, resourceContext, resourceSelection)),
+        [catalog.actionTools, resourceContext, resourceSelection]
     );
 
     const prepareAction = useCallback(async (capability: ActionCapabilityState) => {
@@ -286,6 +347,7 @@ export const useUnifiedCopilot = () => {
         const requestId = ++actionRequestNumberRef.current;
         const requestIdentityKey = identityKey;
         const requestRouteKey = routeKey;
+        const requestResourceKey = resourceKey;
         const sessionId = sessionIdRef.current;
         const signature = `${capability.tool.name}:${JSON.stringify(capability.arguments)}`;
         const idempotencyKey = actionKeysRef.current.get(signature) ?? makeId('action');
@@ -301,6 +363,7 @@ export const useUnifiedCopilot = () => {
             actionRequestNumberRef.current === requestId &&
             actionContextRef.current.identityKey === requestIdentityKey &&
             actionContextRef.current.routeKey === requestRouteKey &&
+            actionContextRef.current.resourceKey === requestResourceKey &&
             sessionIdRef.current === sessionId;
         try {
             const result = await prepareRoleAction({
@@ -352,17 +415,15 @@ export const useUnifiedCopilot = () => {
             }
         } catch (error) {
             if (isCurrentRequest()) {
-                const errorRecord = asRecord(error);
-                const nestedError = asRecord(errorRecord.error);
-                const code = typeof nestedError.code === 'string' ? nestedError.code : '';
-                if (['ACTION_EXPIRED', 'ACTION_CANCELLED', 'ACTION_FAILED_TERMINAL', 'ACTION_ALREADY_COMPLETED'].includes(code))
+                const details = actionErrorDetails(error);
+                if (terminalActionError(details.code, details.status))
                     actionKeysRef.current.delete(signature);
-                setActionFeedback({ status: 'failed', message: typeof nestedError.message === 'string' ? nestedError.message : error instanceof Error ? error.message : 'Không thể chuẩn bị thao tác.' });
+                setActionFeedback({ status: 'failed', message: actionErrorMessage(details, error instanceof Error ? error.message : 'Không thể chuẩn bị thao tác.') });
             }
         } finally {
             if (isCurrentRequest()) setActionLoading(null);
         }
-    }, [actionLoading, identityKey, routeKey]);
+    }, [actionLoading, identityKey, resourceKey, routeKey]);
 
     const confirmAction = useCallback(async () => {
         const action = pendingAction;
@@ -380,6 +441,7 @@ export const useUnifiedCopilot = () => {
         const requestId = ++actionRequestNumberRef.current;
         const requestIdentityKey = identityKey;
         const requestRouteKey = routeKey;
+        const requestResourceKey = resourceKey;
         const sessionId = sessionIdRef.current;
         const controller = new AbortController();
         actionControllerRef.current?.abort();
@@ -389,6 +451,7 @@ export const useUnifiedCopilot = () => {
             actionRequestNumberRef.current === requestId &&
             actionContextRef.current.identityKey === requestIdentityKey &&
             actionContextRef.current.routeKey === requestRouteKey &&
+            actionContextRef.current.resourceKey === requestResourceKey &&
             sessionIdRef.current === sessionId;
         try {
             const result = await confirmRoleAction(action.actionId, { sessionId, concurrencyToken: action.confirmationToken }, controller.signal);
@@ -396,33 +459,31 @@ export const useUnifiedCopilot = () => {
             if (result.status === 'completed') {
                 setPendingAction(null);
                 actionKeysRef.current.delete(action.requestSignature);
+                window.dispatchEvent(new Event('cliniccare:copilot-action-completed'));
                 setActionFeedback({ status: 'completed', message: result.displayText || 'Thao tác đã hoàn tất và được backend xác nhận.' });
             } else {
                 const status = (result.status || '').toLowerCase();
-                const terminal = ['expired', 'cancelled', 'failed_terminal'].includes(status) ||
-                    ['ACTION_EXPIRED', 'ACTION_CANCELLED', 'ACTION_FAILED_TERMINAL'].includes(result.error?.code || '');
+                const terminal = ['expired', 'cancelled', 'failed_terminal'].includes(status) || terminalActionError(result.error?.code);
                 if (terminal) {
                     setPendingAction(null);
                     actionKeysRef.current.delete(action.requestSignature);
                 }
-                setActionFeedback({ status: result.status || 'failed', message: result.error?.message || 'Thao tác chưa hoàn tất; dữ liệu vẫn do backend quyết định.' });
+                setActionFeedback({ status: result.status || 'failed', message: terminal && result.error ? actionErrorMessage({ code: result.error.code, status: undefined, message: result.error.message }, result.error.message || 'Preview không còn hợp lệ.') : result.error?.message || 'Thao tác chưa hoàn tất; dữ liệu vẫn do backend quyết định.' });
             }
         } catch (error) {
             if (isCurrentRequest()) {
-                const errorRecord = asRecord(error);
-                const nestedError = asRecord(errorRecord.error);
-                const code = typeof nestedError.code === 'string' ? nestedError.code : '';
-                const terminal = ['ACTION_EXPIRED', 'ACTION_CANCELLED', 'ACTION_FAILED_TERMINAL', 'ACTION_ALREADY_COMPLETED'].includes(code);
+                const details = actionErrorDetails(error);
+                const terminal = terminalActionError(details.code, details.status);
                 if (terminal) {
                     setPendingAction(null);
                     actionKeysRef.current.delete(action.requestSignature);
                 }
-                setActionFeedback({ status: 'failed', message: typeof nestedError.message === 'string' ? nestedError.message : error instanceof Error ? error.message : 'Không thể xác nhận thao tác.' });
+                setActionFeedback({ status: 'failed', message: actionErrorMessage(details, error instanceof Error ? error.message : 'Không thể xác nhận thao tác.') });
             }
         } finally {
             if (isCurrentRequest()) setActionLoading(null);
         }
-    }, [actionLoading, identityKey, pendingAction, routeKey]);
+    }, [actionLoading, identityKey, pendingAction, resourceKey, routeKey]);
 
     const retry = useCallback(() => {
         const value = retryTextRef.current;
@@ -431,7 +492,7 @@ export const useUnifiedCopilot = () => {
 
     return {
         user, role, config, open, setOpen, input, setInput, loading, messages, send, reset, abort, retry,
-        resourceContext: getResourceContext(location.pathname, location.search), catalogTools: catalog.tools, actionCapabilities, actionLoading,
+        resourceContext, resourceSelection, catalogTools: catalog.tools, actionCapabilities, actionLoading,
         pendingAction, pendingActionExpired, actionFeedback, catalogError, prepareAction, confirmAction
     };
 };

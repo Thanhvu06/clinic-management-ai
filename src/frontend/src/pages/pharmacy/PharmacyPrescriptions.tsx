@@ -3,6 +3,7 @@ import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { Search, Pill, CheckCircle2, Clock, Eye, X, AlertCircle, Printer } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
+import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 
 interface PrescriptionListItem {
     id: number;
@@ -51,6 +52,7 @@ interface PrescriptionItemDetail {
 
 export const PharmacyPrescriptions: React.FC = () => {
     const { showAlert, showConfirm } = useDialog();
+    const { setSelection } = useCopilotResource();
     const [prescriptions, setPrescriptions] = useState<PrescriptionListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [totalItems, setTotalItems] = useState(0);
@@ -65,6 +67,18 @@ export const PharmacyPrescriptions: React.FC = () => {
     const [detailModalOpen, setDetailModalOpen] = useState(false);
     const [detailLoading, setDetailLoading] = useState(false);
     const [dispenseLoading, setDispenseLoading] = useState(false);
+
+    useEffect(() => {
+        if (!selectedPrescription) {
+            setSelection(null);
+            return;
+        }
+        setSelection({
+            context: { prescriptionId: selectedPrescription.id },
+            source: 'pharmacy-prescription-detail',
+            label: 'Đơn thuốc đang mở'
+        });
+    }, [selectedPrescription, setSelection]);
 
     const fetchIdRef = React.useRef(0);
 
@@ -96,6 +110,16 @@ export const PharmacyPrescriptions: React.FC = () => {
 
     useEffect(() => {
         fetchPrescriptions();
+    }, [fetchPrescriptions]);
+
+    useEffect(() => {
+        setSelection(null);
+    }, [page, search, statusFilter, setSelection]);
+
+    useEffect(() => {
+        const refresh = () => { void fetchPrescriptions(true); };
+        window.addEventListener('cliniccare:copilot-action-completed', refresh);
+        return () => window.removeEventListener('cliniccare:copilot-action-completed', refresh);
     }, [fetchPrescriptions]);
 
     // Background polling (every 25s)

@@ -12,6 +12,7 @@ import type { ApiResponse, CheckInTicketDto } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { MpiPatientSearchModal } from './MpiPatientSearchModal';
 import { CheckInTicketModal } from '../../components/CheckInTicketModal';
+import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 import styles from './ReceptionWorkspace.module.css';
 
 interface AppointmentItem {
@@ -37,6 +38,7 @@ interface AppointmentItem {
 export const ReceptionWorkspace: React.FC = () => {
     const navigate = useNavigate();
     const { showAlert } = useDialog();
+    const { setSelection } = useCopilotResource();
 
     // Facilities
     const [facilities, setFacilities] = useState<FacilityDto[]>([]);
@@ -76,6 +78,14 @@ export const ReceptionWorkspace: React.FC = () => {
     const [ticketModalOpen, setTicketModalOpen] = useState(false);
     const [currentTicket, setCurrentTicket] = useState<CheckInTicketDto | null>(null);
     const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+
+    const selectAppointmentForCopilot = useCallback((item: AppointmentItem) => {
+        setSelection({
+            context: { appointmentId: item.id },
+            source: 'reception-worklist',
+            label: `Lịch hẹn ${item.appointmentCode}`
+        });
+    }, [setSelection]);
 
     // Stale request tracking
     const fetchIdRef = useRef(0);
@@ -119,6 +129,11 @@ export const ReceptionWorkspace: React.FC = () => {
     useEffect(() => {
         loadFacilities();
     }, [loadFacilities]);
+
+    useEffect(() => {
+        // A facility switch invalidates the currently selected appointment context.
+        setSelection(null);
+    }, [selectedFacilityId, activeTab, page, searchTerm, setSelection]);
 
     const fetchStats = useCallback(async (facId?: number) => {
         const currentFetchId = ++statsFetchIdRef.current;
@@ -206,15 +221,21 @@ export const ReceptionWorkspace: React.FC = () => {
         fetchWorklist();
     };
 
-    const handleRefreshAll = () => {
+    const handleRefreshAll = useCallback(() => {
         setWorklistError(null);
         setIsStale(false);
         if (selectedFacilityId) fetchStats(selectedFacilityId);
         fetchWorklist(false);
-    };
+    }, [selectedFacilityId, fetchStats, fetchWorklist]);
+
+    useEffect(() => {
+        window.addEventListener('cliniccare:copilot-action-completed', handleRefreshAll);
+        return () => window.removeEventListener('cliniccare:copilot-action-completed', handleRefreshAll);
+    }, [handleRefreshAll]);
 
     // Fast check-in action from appointment
     const handleFastCheckIn = async (item: AppointmentItem) => {
+        selectAppointmentForCopilot(item);
         setActionLoadingId(item.id);
         try {
             const res = await patientVisitApi.receptionCheckInAppointment(item.id);
@@ -590,6 +611,16 @@ export const ReceptionWorkspace: React.FC = () => {
                                                             Tiếp nhận
                                                         </button>
                                                     )}
+
+                                                    <button
+                                                        type="button"
+                                                        className="btn-secondary"
+                                                        style={{ padding: '5px 10px', fontSize: '0.82rem' }}
+                                                        onClick={() => selectAppointmentForCopilot(item)}
+                                                        title="Chọn đúng lịch hẹn này cho Copilot"
+                                                    >
+                                                        Chọn Copilot
+                                                    </button>
 
                                                     {item.patientVisitId && (
                                                         <button

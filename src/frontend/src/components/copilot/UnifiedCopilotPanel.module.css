@@ -28,6 +28,12 @@
 .cardDescription { margin: 4px 0 0; color: #52706e; font-size: .8rem; }
 .dataList { display: grid; gap: 5px; margin: 8px 0 0; padding: 0; list-style: none; color: #315654; font-size: .78rem; }
 .dataList li { padding: 5px 7px; border-radius: 6px; background: #fff; border: 1px solid #e1eeee; }
+.typedList { display: grid; gap: 7px; margin-top: 8px; }
+.typedItem { display: grid; gap: 3px; padding: 7px; border: 1px solid #e1eeee; border-radius: 7px; background: #fff; color: #315654; font-size: .76rem; }
+.typedLine { overflow-wrap: anywhere; }
+.typedLine strong { color: #174b48; }
+.typedSubsection { display: grid; gap: 3px; margin-top: 4px; padding: 6px; border-left: 2px solid #acd5d1; background: #f5fbfa; }
+.typedNotice { margin: 8px 0 0; padding: 7px; border-radius: 7px; background: #fff9ed; color: #79521b; font-size: .76rem; }
 .sources { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; color: #5a7774; font-size: .68rem; }
 .source { border-radius: 999px; padding: 3px 6px; background: #e9f4f2; }
 .route { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; color: #08756d; font-weight: 700; font-size: .78rem; }

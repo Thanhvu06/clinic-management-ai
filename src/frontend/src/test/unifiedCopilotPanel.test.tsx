@@ -1,8 +1,10 @@
+import type React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UnifiedCopilotPanel } from '../components/copilot/UnifiedCopilotPanel';
 import { COPILOT_ROLE_CONFIG, providerStateLabel } from '../components/copilot/copilotConfig';
+import { CopilotResourceProvider, useCopilotResource } from '../components/copilot/copilotResourceContext';
 import { isValidBookingReason, normalizeBookingReason } from '../hooks/useAiBookingFlow';
 
 let mockUser: { userId: string; fullName: string; role: string } | null = { userId: 'doctor-1', fullName: 'Doctor', role: 'Doctor' };
@@ -29,6 +31,11 @@ const response = (overrides: Record<string, unknown> = {}) => ({
     suggestedPrompts: [], cards: [{ type: 'doctor_summary', title: 'Ca được phân công', description: 'Dữ liệu hiện tại', retrievedAtUtc: '2030-01-01T00:00:00Z', data: [{ doctorName: 'Doctor 1', status: 'scheduled', patientId: 'must-not-render', appointmentId: 42 }], sources: [{ name: 'appointments', kind: 'database' }] }],
     availableTools: [], sources: [{ name: 'appointments', kind: 'database' }], ...overrides
 });
+
+const SelectedResourceButton: React.FC<{ context: Record<string, unknown>; source?: string; actionArguments?: Record<string, unknown> }> = ({ context, source = 'test-domain-row', actionArguments }) => {
+    const { setSelection } = useCopilotResource();
+    return <button type="button" onClick={() => setSelection({ context, source, actionArguments })}>Chọn resource từ dòng nghiệp vụ</button>;
+};
 
 describe('UnifiedCopilotPanel', () => {
     afterEach(() => {
@@ -147,6 +154,74 @@ describe('UnifiedCopilotPanel', () => {
 
         await waitFor(() => expect(screen.getAllByText('Bạn muốn xem danh sách hay tra cứu tên cụ thể?')).toHaveLength(2));
         expect(screen.queryByText('Bác sĩ Nhiễu')).not.toBeInTheDocument();
+    });
+
+    it('renders unpublished patient results as unavailable and never leaks the result text', async () => {
+        mockUser = { userId: 'patient-1', fullName: 'Patient', role: 'Patient' };
+        sendMock.mockResolvedValueOnce(response({
+            cards: [{
+                type: 'patient_diagnostic_results', title: 'Kết quả cận lâm sàng', description: 'Kết quả theo quyền hiện tại.',
+                retrievedAtUtc: '2030-01-01T00:00:00Z',
+                data: [{ publishedToPatient: false, reviewedAtUtc: null, items: [{ service: 'Siêu âm', status: 'Completed', result: { resultText: 'KẾT QUẢ CHƯA CÔNG BỐ' } }] }],
+                sources: [{ name: 'patient_results', kind: 'approved_database' }]
+            }]
+        }));
+        render(<MemoryRouter initialEntries={['/patient']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: /Mở (?:Copilot|Trợ lý) Bệnh nhân/i }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'Xem kết quả' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
+        await waitFor(() => expect(screen.getByText('Chưa công bố')).toBeInTheDocument());
+        expect(screen.getByText('Chưa được công bố')).toBeInTheDocument();
+        expect(screen.queryByText('KẾT QUẢ CHƯA CÔNG BỐ')).not.toBeInTheDocument();
+    });
+
+    it('renders pharmacy payment status and each payment item from the typed contract', async () => {
+        mockUser = { userId: 'pharmacist-1', fullName: 'Pharmacist', role: 'Pharmacist' };
+        sendMock.mockResolvedValueOnce(response({
+            role: 'Pharmacist',
+            cards: [{
+                type: 'pharmacist_prescription_queue', title: 'Đơn thuốc', description: 'Dữ liệu đơn thuốc.',
+                retrievedAtUtc: '2030-01-01T00:00:00Z',
+                data: [{ status: 'Issued', paymentStatus: 'PartiallyPaid', paymentItems: [{ medicine: 'Paracetamol', requiredQuantity: 2, paidQuantity: 1, itemPaymentStatus: 'PartiallyPaid' }] }],
+                sources: [{ name: 'pharmacy', kind: 'approved_database' }]
+            }]
+        }));
+        render(<MemoryRouter initialEntries={['/pharmacy/prescriptions']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Dược sĩ/i }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'Xem đơn thuốc' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
+        await waitFor(() => expect(screen.getAllByText('PartiallyPaid')).toHaveLength(2));
+        expect(screen.getByText('Paracetamol')).toBeInTheDocument();
+        expect(screen.getByText('2')).toBeInTheDocument();
+        expect(screen.getByText('1')).toBeInTheDocument();
+    });
+
+    it('uses the selected real domain row instead of a typed route query for action arguments', async () => {
+        mockUser = { userId: 'tech-1', fullName: 'Technician', role: 'DiagnosticTechnician' };
+        const tool = { name: 'technician.prepare_start_diagnostic_order', version: '1.0', description: 'Tiếp nhận phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        prepareActionMock.mockResolvedValue({
+            status: 'pending_confirmation', actionId: 'selected-action', data: { confirmationToken: 'selected-token' },
+            preview: { toolName: tool.name, status: 'pending_confirmation', resourceType: 'DiagnosticOrder', resourceId: '42', resource: { identity: 'Phiếu đã chọn', facility: 'Cơ sở', department: 'Khoa', subject: 'Bệnh nhân', encounter: 'Phiếu', currentStatus: 'Ordered' }, changes: [{ kind: 'start', summary: 'Tiếp nhận', items: [{ label: 'Phiếu', value: 'Đã chọn' }] }], consequence: 'Sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra.', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:10Z', sources: [{ name: 'diagnostic_orders', kind: 'database' }] }
+        });
+        render(<MemoryRouter initialEntries={['/diagnostics/orders/999?diagnosticOrderId=999']}><CopilotResourceProvider><SelectedResourceButton context={{ diagnosticOrderId: 42 }} /><UnifiedCopilotPanel /></CopilotResourceProvider></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn resource từ dòng nghiệp vụ' }));
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Kỹ thuật viên/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        await waitFor(() => expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeInTheDocument());
+        expect(prepareActionMock).toHaveBeenCalledWith(expect.objectContaining({ argumentsJson: JSON.stringify({ orderId: 42 }) }), expect.anything());
+    });
+
+    it('keeps reception Copilot check-in locked when the selected appointment lacks a real department selector', async () => {
+        mockUser = { userId: 'reception-1', fullName: 'Reception', role: 'Receptionist' };
+        const tool = { name: 'reception.prepare_check_in_appointment', version: '1.0', description: 'Tiếp nhận lịch hẹn', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        render(<MemoryRouter initialEntries={['/reception/appointments']}><CopilotResourceProvider><SelectedResourceButton context={{ appointmentId: 77 }} /><UnifiedCopilotPanel /></CopilotResourceProvider></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn resource từ dòng nghiệp vụ' }));
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Lễ tân/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeDisabled());
+        expect(screen.getByText('Cần appointment và department đang được chọn từ dữ liệu thật.')).toBeInTheDocument();
     });
 
     it('resets on identity switch and ignores a late response from the previous identity', async () => {
@@ -335,6 +410,27 @@ describe('UnifiedCopilotPanel', () => {
         await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
         expect(prepareActionMock).toHaveBeenCalledTimes(2);
         expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).not.toBeDisabled();
+    });
+
+    it('clears a pending preview after backend 409 so a stale token cannot be retried', async () => {
+        mockUser = { userId: 'tech-1', fullName: 'Technician', role: 'DiagnosticTechnician' };
+        const tool = { name: 'technician.prepare_start_diagnostic_order', version: '1.0', description: 'Tiếp nhận phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        prepareActionMock.mockResolvedValue({
+            status: 'pending_confirmation', actionId: 'conflict-action', data: { confirmationToken: 'conflict-token' },
+            preview: { toolName: tool.name, status: 'pending_confirmation', resourceType: 'DiagnosticOrder', resourceId: '42', resource: { identity: 'Phiếu đã chọn', facility: 'Cơ sở', department: 'Khoa', subject: 'Bệnh nhân', encounter: 'Phiếu', currentStatus: 'Ordered' }, changes: [{ kind: 'start', summary: 'Tiếp nhận', items: [{ label: 'Phiếu', value: 'Đã chọn' }] }], consequence: 'Sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra.', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:10Z', sources: [{ name: 'diagnostic_orders', kind: 'database' }] }
+        });
+        confirmActionMock.mockRejectedValue({ status: 409, message: 'RESOURCE_VERSION_CHANGED' });
+
+        render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Kỹ thuật viên/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        await waitFor(() => expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Xác nhận thao tác/i }));
+        await waitFor(() => expect(screen.getByText(/Dữ liệu hoặc mã xác nhận đã thay đổi/)).toBeInTheDocument());
+        expect(screen.queryByRole('button', { name: /Xác nhận thao tác/i })).not.toBeInTheDocument();
+        expect(screen.queryByText('conflict-token')).not.toBeInTheDocument();
     });
 
     it('rejects gibberish/question booking reasons and normalizes a trailing escape', () => {

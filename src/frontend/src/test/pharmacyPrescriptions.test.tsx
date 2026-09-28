@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PharmacyPrescriptions } from '../pages/pharmacy/PharmacyPrescriptions';
 import { DialogProvider } from '../contexts/DialogContext';
 import axiosClient from '../api/axiosClient';
+import { CopilotResourceProvider, useCopilotResource } from '../components/copilot/copilotResourceContext';
 
 vi.mock('../api/axiosClient', () => ({
     default: {
@@ -86,6 +87,11 @@ const mockDetailInactive = {
     ]
 };
 
+function CopilotSelectionProbe() {
+    const { selection } = useCopilotResource();
+    return <output data-testid="copilot-selection">{selection?.context.prescriptionId ?? ''}</output>;
+}
+
 describe('PharmacyPrescriptions Component', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -144,6 +150,24 @@ describe('PharmacyPrescriptions Component', () => {
 
         const confirmBtn = screen.getByText('Xác nhận cấp thuốc & Trừ kho');
         expect(confirmBtn).not.toBeDisabled();
+    });
+
+    it('selects the loaded prescription detail, not a typed list identifier, for Copilot', async () => {
+        vi.mocked(axiosClient.get)
+            .mockResolvedValueOnce({ success: true, data: { items: mockPrescriptions, totalItems: 1 } })
+            .mockResolvedValueOnce({ success: true, data: mockDetailValid });
+
+        render(
+            <CopilotResourceProvider>
+                <CopilotSelectionProbe />
+                <DialogProvider><PharmacyPrescriptions /></DialogProvider>
+            </CopilotResourceProvider>
+        );
+
+        await waitFor(() => expect(screen.getByText('Xem & Cấp phát')).toBeInTheDocument());
+        fireEvent.click(screen.getByText('Xem & Cấp phát'));
+        await waitFor(() => expect(screen.getByText('Chi tiết đơn thuốc #10')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('copilot-selection')).toHaveTextContent('10'));
     });
 
     it('disables dispense button when medicine has insufficient stock', async () => {
