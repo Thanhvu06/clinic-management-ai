@@ -73,8 +73,10 @@ export const UnifiedCopilotPanel: React.FC = () => {
     if (!copilot.user) return null;
     if (!copilot.open) return <div className={styles.shell}><button ref={launcherRef} type="button" className={styles.launcher} onClick={() => copilot.setOpen(true)} aria-label={`Mở ${copilot.config.label}`}><Bot size={18} /> {copilot.config.shortLabel}</button></div>;
 
-    const providerStatus = copilot.messages.slice().reverse().find(message => message.response)?.response?.providerStatus ?? 'NotCalled';
     const latestResponse = copilot.messages.slice().reverse().find(message => message.response)?.response;
+    // providerStatus is a legacy/raw detail (for example "Timeout"); the
+    // stable UI state is providerState (Degraded/Unavailable/etc.).
+    const providerStatus = latestResponse?.providerState ?? latestResponse?.providerStatus ?? 'NotCalled';
     const suggestedPrompts = latestResponse?.suggestedPrompts?.length ? latestResponse.suggestedPrompts : copilot.config.prompts;
     const pendingCapability = copilot.pendingAction
         ? copilot.actionCapabilities.find(capability => capability.tool.name === copilot.pendingAction?.toolName)

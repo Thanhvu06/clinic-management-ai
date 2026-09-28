@@ -56,7 +56,11 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
             var providerState = AiProviderStatusContract.FromProviderResult(providerResult.Status, true);
             if (!providerResult.IsSuccess)
             {
-                _health.RecordFailure();
+                if (string.Equals(providerResult.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) && cancellationToken.IsCancellationRequested)
+                    throw new OperationCanceledException(cancellationToken);
+
+                if (AiProviderStatusContract.IsCircuitFailure(providerResult.Status))
+                    _health.RecordFailure();
                 return Failed(providerState, providerResult.Status, true);
             }
 

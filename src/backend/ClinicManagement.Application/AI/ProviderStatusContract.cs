@@ -18,8 +18,19 @@ public static class AiProviderStatusContract
         return providerStatus?.Trim() switch
         {
             "Success" or "Healthy" => Online,
-            "Disabled" => Unavailable,
+            "Disabled" or "AuthFailure" or "InvalidModelOrEndpoint" or "ProviderCircuitOpen" => Unavailable,
             _ => Degraded
         };
     }
+
+    /// <summary>
+    /// Only provider reliability failures count toward the shared circuit. A
+    /// caller cancellation or a configuration/authentication error must not
+    /// make healthy traffic unavailable to other users.
+    /// </summary>
+    public static bool IsCircuitFailure(string? providerStatus) => providerStatus?.Trim() switch
+    {
+        "Timeout" or "NetworkError" or "RateLimited" or "ProviderServerError" or "InvalidResponse" => true,
+        _ => false
+    };
 }

@@ -97,6 +97,26 @@ describe('UnifiedCopilotPanel', () => {
         expect(request).not.toHaveProperty('facilityId');
     });
 
+    it('shows the provider degraded state and truthful fallback message without inventing a result', async () => {
+        sendMock.mockResolvedValueOnce(response({
+            assistantStatus: 'Degraded',
+            assistantMode: 'Degraded',
+            providerStatus: 'Timeout',
+            providerState: 'Degraded',
+            plannerMode: 'Fallback',
+            message: 'Dịch vụ AI phản hồi quá lâu; dữ liệu chưa được xác định.'
+        }));
+        render(<MemoryRouter initialEntries={['/doctor']}><UnifiedCopilotPanel /></MemoryRouter>);
+
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Bác sĩ/i }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'yêu cầu mơ hồ' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
+
+        await waitFor(() => expect(screen.getByText('Đang dùng chế độ dự phòng')).toBeInTheDocument());
+        expect(screen.getByText('Dịch vụ AI phản hồi quá lâu; dữ liệu chưa được xác định.')).toBeInTheDocument();
+        expect(screen.queryByText('Dữ liệu đã kiểm chứng.')).not.toBeInTheDocument();
+    });
+
     it('renders the versioned public catalog envelope without treating metadata as a result row', async () => {
         mockUser = { userId: 'patient-1', fullName: 'Patient', role: 'Patient' };
         sendMock.mockResolvedValueOnce(response({

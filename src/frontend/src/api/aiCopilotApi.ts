@@ -45,6 +45,7 @@ export interface AiCopilotResponse {
     role: string;
     assistantStatus: 'Ready' | 'Clarifying' | 'Online' | 'Degraded' | 'Unavailable' | 'SafetyBlocked';
     providerStatus: 'NotCalled' | 'Online' | 'Degraded' | 'Unavailable' | 'SafetyBlocked';
+    providerState?: 'NotCalled' | 'Online' | 'Degraded' | 'Unavailable' | 'SafetyBlocked';
     assistantMode?: 'Ready' | 'Clarifying' | 'Degraded' | 'Unavailable' | 'SafetyBlocked' | string;
     plannerMode?: string;
     conversationId?: string;

@@ -5,9 +5,18 @@ namespace ClinicManagement.Infrastructure.AI.Planning;
 /// <summary>Small process-wide circuit breaker; it stores no request or patient data.</summary>
 public sealed class AiProviderHealth : IAiProviderHealth
 {
+    private const int DefaultFailureThreshold = 3;
+    private readonly int _failureThreshold;
+    private readonly TimeSpan _openDuration;
     private readonly object _gate = new();
     private int _consecutiveFailures;
     private DateTimeOffset? _openUntil;
+
+    public AiProviderHealth(TimeSpan? openDuration = null, int failureThreshold = DefaultFailureThreshold)
+    {
+        _openDuration = openDuration ?? TimeSpan.FromSeconds(30);
+        _failureThreshold = Math.Max(1, failureThreshold);
+    }
 
     public string State
     {
@@ -44,8 +53,8 @@ public sealed class AiProviderHealth : IAiProviderHealth
         lock (_gate)
         {
             _consecutiveFailures++;
-            if (_consecutiveFailures >= 3)
-                _openUntil = DateTimeOffset.UtcNow.AddSeconds(30);
+            if (_consecutiveFailures >= _failureThreshold)
+                _openUntil = DateTimeOffset.UtcNow.Add(_openDuration);
         }
     }
 }

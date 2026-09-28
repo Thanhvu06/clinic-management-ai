@@ -11,6 +11,7 @@ using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI;
 using ClinicManagement.Application.AI.Conversation;
 using ClinicManagement.Application.AI.Interfaces;
+using ClinicManagement.Application.AI.Planning;
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Infrastructure.Persistence;
@@ -37,6 +38,7 @@ public class AiSpecialtyService : IAiSpecialtyService
     private readonly IAiSafetyGuard _safetyGuard;
     private readonly IAiToolExecutor? _toolExecutor;
     private readonly IAiConversationPipeline? _conversationPipeline;
+    private readonly IAiProviderHealth? _providerHealth;
 
     public AiSpecialtyService(
         AppDbContext dbContext,
@@ -53,7 +55,8 @@ public class AiSpecialtyService : IAiSpecialtyService
         IVietnameseIntentClassifier? intentClassifier = null,
         IAiSafetyGuard? safetyGuard = null,
         IAiToolExecutor? toolExecutor = null,
-        IAiConversationPipeline? conversationPipeline = null)
+        IAiConversationPipeline? conversationPipeline = null,
+        IAiProviderHealth? providerHealth = null)
     {
         _dbContext = dbContext;
         _aiProvider = aiProvider;
@@ -70,6 +73,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         _safetyGuard = safetyGuard ?? new AiSafetyGuard();
         _toolExecutor = toolExecutor;
         _conversationPipeline = conversationPipeline;
+        _providerHealth = providerHealth;
     }
 
     public async Task<AiSuggestionResponseDto> GetSuggestionsAsync(AiSuggestionRequestDto request, CancellationToken cancellationToken = default)
@@ -490,13 +494,28 @@ public class AiSpecialtyService : IAiSpecialtyService
         // 6. Call AI Provider for Intent & Information Extraction
         AiChatProviderResult? aiResult = null;
         bool providerActuallyFailed = false;
+        if (_providerHealth != null && !_providerHealth.CanAttempt())
+            return await BuildDegradedResponseAsync(request, cleanMessage, "ProviderCircuitOpen", cancellationToken);
+
         try
         {
             aiResult = await _aiProvider.ChatWithAiAsync(cleanMessage, cleanContext, whitelistData, clinicContextJson, cancellationToken);
+            if (string.Equals(aiResult.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) && cancellationToken.IsCancellationRequested)
+                throw new OperationCanceledException(cancellationToken);
+
+            if (aiResult.IsSuccess && !string.IsNullOrWhiteSpace(aiResult.Reply))
+                _providerHealth?.RecordSuccess();
+            else if (AiProviderStatusContract.IsCircuitFailure(aiResult.Status))
+                _providerHealth?.RecordFailure();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             providerActuallyFailed = true;
+            _providerHealth?.RecordFailure();
             _logger.LogError(ex, "AI Provider chat failed.");
             if (!localClassification.ExtractedRelativeDoctorIndex.HasValue && !localClassification.ExtractedRelativeSlotIndex.HasValue)
             {
@@ -3023,7 +3042,12 @@ public class AiSpecialtyService : IAiSpecialtyService
             "Disabled" => "Tính năng trợ lý AI hiện đang tạm bảo trì hoặc chưa được cấu hình. Hệ thống đã chuyển sang chế độ hỗ trợ cơ bản để bạn có thể tra cứu và đặt lịch trực tiếp.",
             "RateLimited" => "Dịch vụ AI đang nhận quá nhiều yêu cầu vào thời điểm này. Hệ thống đã chuyển sang chế độ hỗ trợ cơ bản để bạn có thể tiếp tục tra cứu và đặt lịch.",
             "AuthFailure" or "InvalidModelOrEndpoint" => "Dịch vụ AI đang gặp sự cố cấu hình xác thực. Hệ thống chuyển sang chế độ hỗ trợ cơ bản để bạn tra cứu và đặt lịch trực tiếp.",
-            _ => "Kết nối đến dịch vụ AI tạm thời bị gián đoạn. Hệ thống đã chuyển sang chế độ hỗ trợ cơ bản để bạn có thể tiếp tục tra cứu và đặt lịch trực tiếp."
+            "Timeout" => "Dịch vụ AI phản hồi quá lâu nên hệ thống đã dừng chờ và chuyển sang chế độ hỗ trợ cơ bản. Bản nháp đặt lịch của bạn vẫn được giữ nguyên.",
+            "InvalidResponse" => "Dịch vụ AI trả về dữ liệu không hợp lệ. Hệ thống không sử dụng dữ liệu đó và đã chuyển sang chế độ hỗ trợ cơ bản.",
+            "ProviderServerError" => "Dịch vụ AI đang tạm thời không khả dụng. Hệ thống đã chuyển sang chế độ hỗ trợ cơ bản để bạn tiếp tục tra cứu và đặt lịch.",
+            "ProviderCircuitOpen" => "Dịch vụ AI đang tạm thời bị tạm ngưng sau nhiều lỗi liên tiếp. Bạn vẫn có thể tra cứu dữ liệu đã xác định và đặt lịch trực tiếp.",
+            "Cancelled" => "Yêu cầu AI đã được dừng theo thao tác của bạn. Bản nháp đặt lịch vẫn được giữ nguyên.",
+            _ => "Không thể hoàn tất yêu cầu AI do lỗi mạng tạm thời. Hệ thống đã chuyển sang chế độ hỗ trợ cơ bản để bạn có thể tiếp tục tra cứu và đặt lịch trực tiếp."
         };
 
         var response = new AiChatResponseDto
@@ -3034,6 +3058,12 @@ public class AiSpecialtyService : IAiSpecialtyService
             ManualSelectionRequired = true,
             AssistantStatus = "Degraded",
             ProviderStatus = providerStatus,
+            ProviderState = string.Equals(providerStatus, "ProviderCircuitOpen", StringComparison.OrdinalIgnoreCase)
+                ? AiProviderStatusContract.Unavailable
+                : AiProviderStatusContract.FromProviderResult(providerStatus, called: true),
+            SessionId = request.SessionId,
+            DraftId = request.DraftId,
+            ContextSnapshotId = request.ContextSnapshotId,
             SpecialtySuggestions = new List<AiSpecialtySuggestionDto>()
         };
 
