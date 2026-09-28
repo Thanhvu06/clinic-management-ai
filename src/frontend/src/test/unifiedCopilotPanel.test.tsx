@@ -59,6 +59,27 @@ const ReceptionDepartmentButtons: React.FC = () => {
     </div>;
 };
 
+const DoctorPrescriptionArgumentsButton: React.FC = () => {
+    const { setSelection } = useCopilotResource();
+    return <button type="button" onClick={() => setSelection({
+        context: { visitId: 42 },
+        source: 'doctor-prescription-form',
+        actionArguments: {
+            notes: 'Uống sau ăn',
+            items: [{ medicineId: 7, quantity: 2, dosage: '500mg', frequency: 'Ngày 2 lần', durationDays: 3 }]
+        }
+    })}>Chọn thuốc cho Copilot</button>;
+};
+
+const TechnicianResultArgumentsButton: React.FC = () => {
+    const { setSelection } = useCopilotResource();
+    return <button type="button" onClick={() => setSelection({
+        context: { diagnosticOrderId: 42, itemId: 7 },
+        source: 'technician-result-form',
+        actionArguments: { resultText: 'Âm tính', conclusion: 'Không phát hiện bất thường', referenceRange: 'Âm tính', unit: '' }
+    })}>Chọn kết quả cho Copilot</button>;
+};
+
 describe('UnifiedCopilotPanel', () => {
     afterEach(() => {
         vi.useRealTimers();
@@ -295,6 +316,50 @@ describe('UnifiedCopilotPanel', () => {
         expect(JSON.parse(firstRequest.argumentsJson)).toMatchObject({ clinicalIndication: 'Đau ngực khi gắng sức' });
         expect(JSON.parse(secondRequest.argumentsJson)).toMatchObject({ clinicalIndication: 'Ho kéo dài' });
         expect(secondRequest.idempotencyKey).not.toBe(firstRequest.idempotencyKey);
+    });
+
+    it('sends only the selected doctor prescription items to the backend preview', async () => {
+        mockUser = { userId: 'doctor-1', fullName: 'Doctor', role: 'Doctor' };
+        const tool = { name: 'doctor.prepare_prescription_draft', version: '1.0', description: 'Chuẩn bị đơn thuốc', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        prepareActionMock.mockResolvedValue({ status: 'pending_confirmation', actionId: 'rx-action', data: { confirmationToken: 'rx-token' }, preview: { toolName: tool.name, status: 'pending_confirmation', resourceType: 'PatientVisit', resourceId: '42', resource: { identity: 'Ca khám' }, changes: [{ kind: 'prescription_draft', summary: 'Lưu nháp đơn thuốc', items: [{ label: 'Thuốc', value: 'Thuốc đã chọn' }] }], consequence: 'Lưu nháp đơn thuốc.', confirmationSummary: 'Đã kiểm tra.', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:00Z', sources: [{ name: 'visit', kind: 'database' }] } });
+
+        render(<MemoryRouter initialEntries={['/doctor/visits/42']}><CopilotResourceProvider><DoctorPrescriptionArgumentsButton /><UnifiedCopilotPanel /></CopilotResourceProvider></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn thuốc cho Copilot' }));
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Bác sĩ/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+
+        await waitFor(() => expect(prepareActionMock).toHaveBeenCalledTimes(1));
+        const request = prepareActionMock.mock.calls[0][0] as { argumentsJson: string };
+        expect(JSON.parse(request.argumentsJson)).toEqual({
+            visitId: 42,
+            notes: 'Uống sau ăn',
+            items: [{ medicineId: 7, quantity: 2, dosage: '500mg', frequency: 'Ngày 2 lần', durationDays: 3 }]
+        });
+    });
+
+    it('sends the selected technician result and item identity to the backend preview', async () => {
+        mockUser = { userId: 'tech-1', fullName: 'Technician', role: 'DiagnosticTechnician' };
+        const tool = { name: 'technician.prepare_record_diagnostic_result', version: '1.0', description: 'Ghi kết quả', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        prepareActionMock.mockResolvedValue({ status: 'pending_confirmation', actionId: 'result-action', data: { confirmationToken: 'result-token' }, preview: { toolName: tool.name, status: 'pending_confirmation', resourceType: 'DiagnosticOrderItem', resourceId: '7', resource: { identity: 'Item xét nghiệm' }, changes: [{ kind: 'diagnostic_result', summary: 'Ghi kết quả', items: [{ label: 'Kết quả', value: 'Âm tính' }] }], consequence: 'Ghi kết quả.', confirmationSummary: 'Đã kiểm tra.', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:00Z', sources: [{ name: 'diagnostic_order', kind: 'database' }] } });
+
+        render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><CopilotResourceProvider><TechnicianResultArgumentsButton /><UnifiedCopilotPanel /></CopilotResourceProvider></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn kết quả cho Copilot' }));
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Kỹ thuật viên/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+
+        await waitFor(() => expect(prepareActionMock).toHaveBeenCalledTimes(1));
+        const request = prepareActionMock.mock.calls[0][0] as { argumentsJson: string };
+        expect(JSON.parse(request.argumentsJson)).toEqual({
+            orderId: 42,
+            itemId: 7,
+            resultText: 'Âm tính',
+            conclusion: 'Không phát hiện bất thường',
+            referenceRange: 'Âm tính'
+        });
     });
 
     it('ignores a late prepare response after the doctor changes the action input', async () => {

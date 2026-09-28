@@ -26,20 +26,29 @@ export const TechnicianOrderDetail: React.FC = () => {
         referenceRange: string;
         unit: string;
     }>>({});
+    const [copilotItemId, setCopilotItemId] = useState<number | null>(null);
     const [savingItemId, setSavingItemId] = useState<number | null>(null);
 
     useEffect(() => {
-        if (!order) {
+        const selectedOrderId = order?.id;
+        const selectedOrderVersion = order?.rowVersion ?? null;
+        if (!selectedOrderId) {
             setSelection(null);
             return;
         }
         setSelection({
-            context: { diagnosticOrderId: order.id },
+            context: { diagnosticOrderId: selectedOrderId, ...(copilotItemId ? { itemId: copilotItemId } : {}) },
             source: 'technician-order-detail',
             label: 'Phiếu cận lâm sàng đang mở',
-            resourceVersion: order.rowVersion ?? null
+            resourceVersion: selectedOrderVersion,
+            actionArguments: copilotItemId ? {
+                resultText: itemResults[copilotItemId]?.resultText?.trim() || undefined,
+                conclusion: itemResults[copilotItemId]?.conclusion?.trim() || undefined,
+                referenceRange: itemResults[copilotItemId]?.referenceRange?.trim() || undefined,
+                unit: itemResults[copilotItemId]?.unit?.trim() || undefined
+            } : undefined
         });
-    }, [order?.id, order?.rowVersion, setSelection]);
+    }, [order?.id, order?.rowVersion, copilotItemId, itemResults, setSelection]);
 
     const loadOrder = useCallback(async () => {
         if (!orderId) return;
@@ -47,6 +56,12 @@ export const TechnicianOrderDetail: React.FC = () => {
             const res = await diagnosticApi.getTechnicianOrderById(orderId);
             if (res.success && res.data) {
                 setOrder(res.data);
+                setCopilotItemId(previous => {
+                    const incomplete = res.data!.items.filter(item => item.status !== 'Completed' && item.status !== 'Cancelled');
+                    return previous && incomplete.some(item => item.id === previous)
+                        ? previous
+                        : incomplete.length === 1 ? incomplete[0].id : null;
+                });
                 
                 // Prepopulate results
                 const initial: Record<number, any> = {};
@@ -73,6 +88,12 @@ export const TechnicianOrderDetail: React.FC = () => {
                 if (!isMounted) return;
                 if (res.success && res.data) {
                     setOrder(res.data);
+                    setCopilotItemId(previous => {
+                        const incomplete = res.data!.items.filter(item => item.status !== 'Completed' && item.status !== 'Cancelled');
+                        return previous && incomplete.some(item => item.id === previous)
+                            ? previous
+                            : incomplete.length === 1 ? incomplete[0].id : null;
+                    });
                     const initial: Record<number, any> = {};
                     res.data.items.forEach(item => {
                         initial[item.id] = {
@@ -298,6 +319,24 @@ export const TechnicianOrderDetail: React.FC = () => {
                                             <div style={{ fontSize: '12px', color: '#64748b' }}>Mã: {item.serviceCode} • Phân loại: {item.category}</div>
                                         </div>
                                     </div>
+                                    {!isCompleted && order.status !== 'Completed' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setCopilotItemId(item.id)}
+                                            aria-label={`Chọn ${item.serviceName} cho Copilot`}
+                                            style={{
+                                                padding: '4px 8px',
+                                                borderRadius: '6px',
+                                                border: copilotItemId === item.id ? '1px solid #0284c7' : '1px solid #cbd5e1',
+                                                background: copilotItemId === item.id ? '#e0f2fe' : '#fff',
+                                                color: '#0369a1',
+                                                fontSize: '11px',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            {copilotItemId === item.id ? 'Đã chọn Copilot' : 'Chọn cho Copilot'}
+                                        </button>
+                                    )}
                                     <span style={{ 
                                         padding: '3px 10px', 
                                         borderRadius: '12px', 

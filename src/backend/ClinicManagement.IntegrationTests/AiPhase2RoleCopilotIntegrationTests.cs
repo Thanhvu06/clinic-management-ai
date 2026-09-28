@@ -34,6 +34,32 @@ public sealed class AiPhase2RoleCopilotIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Patient_catalog_advertises_public_and_own_read_tools_but_not_write_tools()
+    {
+        var client = await CreateAuthenticatedClientAsync("pat1@test.com");
+
+        var response = await client.GetAsync("/api/v1/ai/copilot/catalog");
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var tools = document.RootElement.GetProperty("data").GetProperty("tools");
+
+        Assert.Contains(tools.EnumerateArray(), item => item.GetProperty("name").GetString() == "clinic.search_knowledge");
+        Assert.Contains(tools.EnumerateArray(), item => item.GetProperty("name").GetString() == "clinic.search_doctors");
+        Assert.Contains(tools.EnumerateArray(), item => item.GetProperty("name").GetString() == "patient.get_my_appointments");
+        Assert.Contains(tools.EnumerateArray(), item => item.GetProperty("name").GetString() == "patient.get_my_prescriptions");
+        Assert.DoesNotContain(tools.EnumerateArray(), item => item.GetProperty("name").GetString() == "patient.prepare_booking");
+        Assert.DoesNotContain(tools.EnumerateArray(), item => item.GetProperty("name").GetString() == "patient.execute_confirmed_action");
+
+        var chatResponse = await client.PostAsJsonAsync("/api/v1/ai/copilot/chat", new { message = "Xem lịch hẹn của tôi" });
+        Assert.True(chatResponse.IsSuccessStatusCode, await chatResponse.Content.ReadAsStringAsync());
+        using var chat = JsonDocument.Parse(await chatResponse.Content.ReadAsStringAsync());
+        var data = chat.RootElement.GetProperty("data");
+        Assert.Equal("Patient", data.GetProperty("role").GetString());
+        Assert.Equal("NotCalled", data.GetProperty("providerStatus").GetString());
+        Assert.Contains(data.GetProperty("cards").EnumerateArray(), card => card.GetProperty("type").GetString() == "appointments");
+    }
+
+    [Fact]
     public async Task Emergency_and_prompt_injection_are_blocked_before_any_role_tool_call()
     {
         var client = await CreateAuthenticatedClientAsync("doc@test.com");

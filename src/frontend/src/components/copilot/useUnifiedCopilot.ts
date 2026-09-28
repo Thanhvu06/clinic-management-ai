@@ -150,9 +150,66 @@ const actionCapability = (
                 };
             }
         case 'doctor.prepare_prescription_draft':
-            return { tool, enabled: false, reason: 'Cần các thuốc/liều lượng được chọn từ selector domain của visit; UI không tự đoán item.' };
+            {
+                const hasExactlyOneResource = id(context.visitId) !== id(context.appointmentId);
+                const appointmentNeedsDepartment = id(context.appointmentId) && !id(context.departmentId);
+                const rawItems = Array.isArray(extraArguments.items) ? extraArguments.items : [];
+                const items = rawItems
+                    .filter(item => item && typeof item === 'object')
+                    .map(item => item as Record<string, unknown>)
+                    .filter(item => id(typeof item.medicineId === 'number' ? item.medicineId : undefined) &&
+                        typeof item.quantity === 'number' && Number.isInteger(item.quantity) && item.quantity > 0 && item.quantity <= 1000)
+                    .map(item => ({
+                        medicineId: item.medicineId,
+                        quantity: item.quantity,
+                        ...(typeof item.dosage === 'string' && item.dosage.trim() ? { dosage: item.dosage.trim() } : {}),
+                        ...(typeof item.frequency === 'string' && item.frequency.trim() ? { frequency: item.frequency.trim() } : {}),
+                        ...(typeof item.durationDays === 'number' && Number.isInteger(item.durationDays) && item.durationDays > 0 ? { durationDays: item.durationDays } : {}),
+                        ...(typeof item.instructions === 'string' && item.instructions.trim() ? { instructions: item.instructions.trim() } : {})
+                    }));
+                const notes = typeof extraArguments.notes === 'string' ? extraArguments.notes.trim() : '';
+                const enabled = hasExactlyOneResource && !appointmentNeedsDepartment && items.length > 0;
+                return {
+                    tool,
+                    enabled,
+                    reason: !hasExactlyOneResource
+                        ? 'Cần đúng một visit hoặc lịch hẹn đang mở từ hồ sơ bác sĩ.'
+                        : appointmentNeedsDepartment
+                            ? 'Cần khoa của lịch hẹn từ dữ liệu nghiệp vụ; không tự đoán khoa.'
+                            : 'Cần ít nhất một thuốc và liều lượng đã được chọn trong form đơn thuốc.',
+                    arguments: enabled
+                        ? {
+                            ...(id(context.visitId)
+                                ? { visitId: context.visitId }
+                                : { appointmentId: context.appointmentId, ...(id(context.departmentId) ? { departmentId: context.departmentId } : {}) }),
+                            ...(notes ? { notes } : {}),
+                            items
+                        }
+                        : undefined
+                };
+            }
         case 'technician.prepare_record_diagnostic_result':
-            return { tool, enabled: false, reason: 'Cần item xét nghiệm và kết quả được chọn/nhập trong màn hình nghiệp vụ.' };
+            {
+                const resultText = typeof extraArguments.resultText === 'string' ? extraArguments.resultText.trim() : '';
+                const enabled = id(context.diagnosticOrderId) && id(context.itemId) && resultText.length > 0;
+                return {
+                    tool,
+                    enabled,
+                    reason: !id(context.diagnosticOrderId) || !id(context.itemId)
+                        ? 'Cần chọn đúng phiếu và item xét nghiệm trên màn hình nghiệp vụ.'
+                        : 'Cần nhập kết quả cho item trước khi xem preview.',
+                    arguments: enabled
+                        ? {
+                            orderId: context.diagnosticOrderId,
+                            itemId: context.itemId,
+                            resultText,
+                            ...(typeof extraArguments.conclusion === 'string' && extraArguments.conclusion.trim() ? { conclusion: extraArguments.conclusion.trim() } : {}),
+                            ...(typeof extraArguments.referenceRange === 'string' && extraArguments.referenceRange.trim() ? { referenceRange: extraArguments.referenceRange.trim() } : {}),
+                            ...(typeof extraArguments.unit === 'string' && extraArguments.unit.trim() ? { unit: extraArguments.unit.trim() } : {})
+                        }
+                        : undefined
+                };
+            }
         default:
             return { tool, enabled: false, reason: 'Thao tác này chưa có selector an toàn trong màn hình hiện tại.' };
     }
@@ -182,7 +239,8 @@ export const useUnifiedCopilot = () => {
             serviceIds: resourceContext.serviceIds ?? null,
             departmentId: resourceContext.departmentId ?? null,
             roomId: resourceContext.roomId ?? null,
-            assignedDoctorId: resourceContext.assignedDoctorId ?? null
+            assignedDoctorId: resourceContext.assignedDoctorId ?? null,
+            itemId: resourceContext.itemId ?? null
         };
     }, [resourceContext]);
     // A selected resource is the conversation's privacy/ownership boundary.

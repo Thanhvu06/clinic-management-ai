@@ -299,10 +299,19 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             resourceVersion: encounterRowVersion,
             actionArguments: {
                 clinicalIndication: clinicalIndication.trim(),
-                note: orderNotes.trim() || undefined
+                note: orderNotes.trim() || undefined,
+                notes: prescriptionNotes.trim() || undefined,
+                items: prescriptionItems.map(item => ({
+                    medicineId: item.medicineId,
+                    quantity: item.quantity,
+                    dosage: item.dosage.trim() || undefined,
+                    frequency: item.frequency.trim() || undefined,
+                    durationDays: item.durationDays,
+                    instructions: item.instructions.trim() || undefined
+                }))
             }
         });
-    }, [currentId, isVisit, selectedServiceIds, clinicalIndication, orderNotes, encounterRowVersion, setSelection]);
+    }, [currentId, isVisit, selectedServiceIds, clinicalIndication, orderNotes, prescriptionNotes, prescriptionItems, encounterRowVersion, setSelection]);
 
     // Background polling for diagnostic orders (every 20s) to reflect lab/imaging results in real-time
     useEffect(() => {

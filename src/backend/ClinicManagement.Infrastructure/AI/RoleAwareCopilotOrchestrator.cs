@@ -55,7 +55,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
     public IReadOnlyList<AiToolDefinition> GetToolsForCurrentRole()
     {
         var role = ResolveRole();
-        return AiRoleToolCatalog.Definitions.Where(x => x.AllowedRoles.Contains(role)).ToArray();
+        return ToolsForRole(role);
     }
 
     public IReadOnlyList<AiToolDefinition> GetActionToolsForCurrentRole()
@@ -69,7 +69,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
     public async Task<AiCopilotResponseDto> ChatAsync(AiCopilotRequestDto request, CancellationToken cancellationToken = default)
     {
         var role = ResolveRole();
-        var tools = AiRoleToolCatalog.Definitions.Where(x => x.AllowedRoles.Contains(role)).ToArray();
+        var tools = ToolsForRole(role);
         var conversationId = NormalizeId(request.ConversationId ?? request.SessionId, "conv");
         var sessionId = NormalizeId(request.SessionId ?? request.ConversationId, "sess");
         var turnId = NormalizeId(request.ClientTurnId, "turn");
@@ -217,6 +217,30 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             if (claim.Equals("Diagnostic Technician", StringComparison.OrdinalIgnoreCase)) return AiActorRole.DiagnosticTechnician;
         }
         return AiActorRole.Patient;
+    }
+
+    private static IReadOnlyList<AiToolDefinition> ToolsForRole(AiActorRole role)
+    {
+        var roleTools = AiRoleToolCatalog.Definitions
+            .Where(x => x.AllowedRoles.Contains(role));
+
+        // Patient read tools are registered by the patient dispatcher, not by
+        // the professional workspace catalog. They still belong in the
+        // authenticated patient Copilot contract so the UI and a structured
+        // planner do not advertise a smaller tool set than the deterministic
+        // patient planner can safely execute. Patient write tools remain on
+        // the dedicated prepare/confirm surface and are deliberately omitted.
+        var patientReadTools = role == AiActorRole.Patient
+            ? ClinicManagement.Infrastructure.AI.Tools.PatientCopilotToolHandler.Definitions()
+                .Where(x => x.Name.StartsWith("patient.get_", StringComparison.OrdinalIgnoreCase) ||
+                            x.AccessMode == AiToolAccessMode.Public)
+            : Enumerable.Empty<AiToolDefinition>();
+
+        return roleTools
+            .Concat(patientReadTools)
+            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .ToArray();
     }
 
     private static AiPlannerDecision FallbackDecision(string message, string subIntent) => new()
