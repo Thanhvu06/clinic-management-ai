@@ -51,12 +51,13 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         return currentUserId.Value;
     }
 
-    private async Task EnsureTechnicianFacilityScopeAsync(long? facilityId)
+    private async Task EnsureTechnicianFacilityScopeAsync(DiagnosticOrder order)
     {
         var userId = GetUserId();
-        if (!facilityId.HasValue || !await _dbContext.StaffFacilityAssignments.AnyAsync(x =>
+        if (!TryResolveEffectiveFacility(order, out var facilityId) ||
+            !await _dbContext.StaffFacilityAssignments.AnyAsync(x =>
                 x.UserId == userId && x.IsActive && x.Role == RoleNames.DiagnosticTechnician &&
-                x.FacilityId == facilityId.Value))
+                x.FacilityId == facilityId))
         {
             throw new NotFoundException("Phiếu chỉ định không tồn tại.");
         }
@@ -67,13 +68,180 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         return _doctorContextService.GetCurrentActiveDoctorAsync();
     }
 
-    private Task<long?> ResolveDoctorFacilityAsync(Guid doctorUserId) => _dbContext.StaffFacilityAssignments
-        .AsNoTracking()
-        .Where(x => x.UserId == doctorUserId && x.IsActive && x.Role == RoleNames.Doctor)
-        .OrderByDescending(x => x.IsPrimary)
-        .ThenBy(x => x.FacilityId)
-        .Select(x => (long?)x.FacilityId)
-        .FirstOrDefaultAsync();
+    private async Task<long> ResolveAppointmentFacilityAsync(Doctor doctor, Appointment appointment, long? explicitFacilityId)
+    {
+        var persistedFacilityIds = new List<long>();
+        if (appointment.FacilityId.HasValue)
+            persistedFacilityIds.Add(appointment.FacilityId.Value);
+
+        if (appointment.PatientVisit != null)
+        {
+            persistedFacilityIds.Add(appointment.PatientVisit.FacilityId);
+
+            if (appointment.PatientVisit.AppointmentId.HasValue && appointment.PatientVisit.Appointment == null)
+                throw new BusinessException("FACILITY_SCOPE_DENIED", "Không thể xác minh cơ sở của lượt khám liên kết.");
+
+            if (appointment.PatientVisit.Appointment?.FacilityId is long visitAppointmentFacilityId)
+                persistedFacilityIds.Add(visitAppointmentFacilityId);
+        }
+
+        var distinctPersistedFacilityIds = persistedFacilityIds.Distinct().ToList();
+        if (distinctPersistedFacilityIds.Count > 1)
+            throw new BusinessException("FACILITY_SCOPE_DENIED", "Các nguồn cơ sở của lịch hẹn không nhất quán.");
+
+        long resolvedFacilityId;
+        if (explicitFacilityId.HasValue)
+        {
+            if (distinctPersistedFacilityIds.Count == 1 && distinctPersistedFacilityIds[0] != explicitFacilityId.Value)
+                throw new BusinessException("FACILITY_SCOPE_DENIED", "Lịch hẹn không thuộc cơ sở chỉ định.");
+
+            resolvedFacilityId = explicitFacilityId.Value;
+        }
+        else if (distinctPersistedFacilityIds.Count == 1)
+        {
+            resolvedFacilityId = distinctPersistedFacilityIds[0];
+        }
+        else
+        {
+            var assignmentFacilityIds = await _dbContext.StaffFacilityAssignments
+                .AsNoTracking()
+                .Where(x => x.UserId == doctor.UserId && x.IsActive && x.Role == RoleNames.Doctor)
+                .Select(x => x.FacilityId)
+                .Distinct()
+                .Take(2)
+                .ToListAsync();
+
+            if (assignmentFacilityIds.Count != 1)
+                throw new BusinessException("FACILITY_SCOPE_DENIED", "Không thể xác định duy nhất cơ sở của lịch hẹn.");
+
+            resolvedFacilityId = assignmentFacilityIds[0];
+        }
+
+        var hasExactDoctorAssignment = await _dbContext.StaffFacilityAssignments
+            .AsNoTracking()
+            .AnyAsync(x => x.UserId == doctor.UserId && x.IsActive && x.Role == RoleNames.Doctor && x.FacilityId == resolvedFacilityId);
+
+        if (!hasExactDoctorAssignment)
+            throw new BusinessException("FACILITY_SCOPE_DENIED", "Bác sĩ không được phân quyền tại cơ sở của lịch hẹn.");
+
+        return resolvedFacilityId;
+    }
+
+    private async Task<long> ResolveVisitFacilityAsync(Doctor doctor, PatientVisit visit, long? explicitFacilityId)
+    {
+        if (visit.AppointmentId.HasValue && visit.Appointment == null)
+            throw new BusinessException("FACILITY_SCOPE_DENIED", "Không thể xác minh cơ sở của lịch hẹn liên kết.");
+
+        if (visit.Appointment?.FacilityId is long appointmentFacilityId && appointmentFacilityId != visit.FacilityId)
+            throw new BusinessException("FACILITY_SCOPE_DENIED", "Các nguồn cơ sở của lượt khám không nhất quán.");
+
+        if (explicitFacilityId.HasValue && explicitFacilityId.Value != visit.FacilityId)
+            throw new BusinessException("FACILITY_SCOPE_DENIED", "Lượt khám không thuộc cơ sở chỉ định.");
+
+        var hasExactDoctorAssignment = await _dbContext.StaffFacilityAssignments
+            .AsNoTracking()
+            .AnyAsync(x => x.UserId == doctor.UserId && x.IsActive && x.Role == RoleNames.Doctor && x.FacilityId == visit.FacilityId);
+
+        if (!hasExactDoctorAssignment)
+            throw new BusinessException("FACILITY_SCOPE_DENIED", "Bác sĩ không được phân quyền tại cơ sở của lượt khám.");
+
+        return visit.FacilityId;
+    }
+
+    private static bool TryResolveEffectiveFacility(DiagnosticOrder order, out long facilityId)
+    {
+        if (order.PatientVisitId.HasValue && order.PatientVisit == null)
+        {
+            facilityId = default;
+            return false;
+        }
+
+        if (order.AppointmentId.HasValue && order.Appointment == null)
+        {
+            facilityId = default;
+            return false;
+        }
+
+        if (order.PatientVisit?.AppointmentId.HasValue == true && order.PatientVisit.Appointment == null)
+        {
+            facilityId = default;
+            return false;
+        }
+
+        var persistedFacilityIds = new List<long>();
+        if (order.FacilityId.HasValue)
+            persistedFacilityIds.Add(order.FacilityId.Value);
+        if (order.PatientVisit != null)
+            persistedFacilityIds.Add(order.PatientVisit.FacilityId);
+        if (order.Appointment?.FacilityId is long appointmentFacilityId)
+            persistedFacilityIds.Add(appointmentFacilityId);
+        if (order.PatientVisit?.Appointment?.FacilityId is long visitAppointmentFacilityId)
+            persistedFacilityIds.Add(visitAppointmentFacilityId);
+
+        var distinctPersistedFacilityIds = persistedFacilityIds.Distinct().ToList();
+        if (distinctPersistedFacilityIds.Count != 1)
+        {
+            facilityId = default;
+            return false;
+        }
+
+        facilityId = distinctPersistedFacilityIds[0];
+        return true;
+    }
+
+    private async Task LoadLinkedVisitAppointmentAsync(DiagnosticOrder order)
+    {
+        if (order.PatientVisit?.AppointmentId is not long appointmentId || order.PatientVisit.Appointment != null)
+            return;
+
+        if (_dbContext.Entry(order).State == EntityState.Detached)
+        {
+            order.PatientVisit.Appointment = await _dbContext.Appointments
+                .AsNoTracking()
+                .FirstOrDefaultAsync(a => a.Id == appointmentId);
+        }
+        else
+        {
+            await _dbContext.Entry(order.PatientVisit)
+                .Reference(v => v.Appointment)
+                .LoadAsync();
+        }
+    }
+
+    private static IQueryable<DiagnosticOrder> WhereTechnicianFacilityScope(
+        IQueryable<DiagnosticOrder> query,
+        IReadOnlyCollection<long> facilityIds)
+    {
+        return query.Where(o =>
+            // Explicit order facility is authoritative, but every linked persisted
+            // facility source must be present (when referenced) and agree with it.
+            (o.FacilityId.HasValue &&
+             (!o.PatientVisitId.HasValue ||
+              (o.PatientVisit != null &&
+               o.PatientVisit.FacilityId == o.FacilityId &&
+               (!o.PatientVisit.AppointmentId.HasValue ||
+                (o.PatientVisit.Appointment != null &&
+                 (!o.PatientVisit.Appointment.FacilityId.HasValue ||
+                  o.PatientVisit.Appointment.FacilityId == o.FacilityId))))) &&
+             (!o.AppointmentId.HasValue ||
+              (o.Appointment != null &&
+               (!o.Appointment.FacilityId.HasValue || o.Appointment.FacilityId == o.FacilityId))) &&
+             facilityIds.Contains(o.FacilityId.Value)) ||
+            // Legacy order: linked visit facility is the next authority.
+            (!o.FacilityId.HasValue && o.PatientVisitId.HasValue && o.PatientVisit != null &&
+             (!o.PatientVisit.AppointmentId.HasValue ||
+              (o.PatientVisit.Appointment != null &&
+               (!o.PatientVisit.Appointment.FacilityId.HasValue ||
+                o.PatientVisit.Appointment.FacilityId == o.PatientVisit.FacilityId))) &&
+             (!o.AppointmentId.HasValue ||
+              (o.Appointment != null &&
+               (!o.Appointment.FacilityId.HasValue || o.Appointment.FacilityId == o.PatientVisit.FacilityId))) &&
+             facilityIds.Contains(o.PatientVisit.FacilityId)) ||
+            // Legacy order without a visit: linked appointment facility is the authority.
+            (!o.FacilityId.HasValue && !o.PatientVisitId.HasValue && o.AppointmentId.HasValue &&
+             o.Appointment != null && o.Appointment.FacilityId.HasValue &&
+             facilityIds.Contains(o.Appointment.FacilityId.Value)));
+    }
 
     private static void ValidateRowVersion(byte[]? entityVersion, string? clientVersion)
     {
@@ -225,6 +393,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         var appointment = await _dbContext.Appointments
             .Include(a => a.Patient)
+            .Include(a => a.PatientVisit)
             .FirstOrDefaultAsync(a => a.Id == appointmentId && a.DoctorId == doctor.Id);
 
         if (appointment == null)
@@ -233,13 +402,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         if (appointment.Status != AppointmentStatus.InConsultation)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể tạo phiếu chỉ định cận lâm sàng khi lịch hẹn đang trong phiên khám (InConsultation).");
 
-        var resolvedFacilityId = facilityId ?? appointment.FacilityId ?? await ResolveDoctorFacilityAsync(doctor.UserId);
-        if (!resolvedFacilityId.HasValue)
-            throw new BusinessException("FACILITY_SCOPE_DENIED", "Không xác định được cơ sở của lịch hẹn.");
-
-        if (facilityId.HasValue && !await _dbContext.StaffFacilityAssignments.AsNoTracking().AnyAsync(x =>
-                x.UserId == doctor.UserId && x.IsActive && x.Role == RoleNames.Doctor && x.FacilityId == facilityId.Value))
-            throw new BusinessException("FACILITY_SCOPE_DENIED", "Bác sĩ không được phân quyền tại cơ sở chỉ định.");
+        var resolvedFacilityId = await ResolveAppointmentFacilityAsync(doctor, appointment, facilityId);
 
         if (string.IsNullOrWhiteSpace(request.ClinicalIndication))
             throw new BusinessException("VALIDATION_ERROR", "Chỉ định lâm sàng không được để trống.");
@@ -423,6 +586,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         var visit = await _dbContext.PatientVisits
             .Include(v => v.Patient)
+            .Include(v => v.Appointment)
             .FirstOrDefaultAsync(v => v.Id == visitId && v.AssignedDoctorId == doctor.Id);
 
         if (visit == null)
@@ -431,8 +595,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         if (visit.Status != VisitStatus.InConsultation && visit.Status != VisitStatus.WaitingForDoctor && visit.Status != VisitStatus.WaitingForDiagnostics)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể tạo phiếu chỉ định cận lâm sàng khi lượt khám đang trong phiên khám.");
 
-        if (facilityId.HasValue && facilityId.Value != visit.FacilityId)
-            throw new BusinessException("FACILITY_SCOPE_DENIED", "Lượt khám không thuộc cơ sở chỉ định.");
+        var resolvedFacilityId = await ResolveVisitFacilityAsync(doctor, visit, facilityId);
 
         if (string.IsNullOrWhiteSpace(request.ClinicalIndication))
             throw new BusinessException("VALIDATION_ERROR", "Chỉ định lâm sàng không được để trống.");
@@ -461,7 +624,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                     OrderCode = orderCode,
                     PatientVisitId = visit.Id,
                     AppointmentId = visit.AppointmentId,
-                    FacilityId = visit.FacilityId,
+                    FacilityId = resolvedFacilityId,
                     SourceAiActionId = sourceAiActionId,
                     PatientId = visit.PatientId,
                     OrderingDoctorId = doctor.Id,
@@ -795,11 +958,12 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         var query = _dbContext.DiagnosticOrders
             .AsNoTracking()
-            .Where(o => o.FacilityId.HasValue && facilityIds.Contains(o.FacilityId.Value))
             .Include(o => o.Appointment)
             .Include(o => o.PatientVisit)
             .Include(o => o.Patient)
             .AsQueryable();
+
+        query = WhereTechnicianFacilityScope(query, facilityIds);
 
         if (status.HasValue)
         {
@@ -844,12 +1008,17 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
     public async Task<DiagnosticOrderDto> GetTechnicianOrderByIdAsync(long orderId)
     {
-        var facilityId = await _dbContext.DiagnosticOrders
+        var order = await _dbContext.DiagnosticOrders
             .AsNoTracking()
-            .Where(x => x.Id == orderId)
-            .Select(x => x.FacilityId)
-            .SingleOrDefaultAsync();
-        await EnsureTechnicianFacilityScopeAsync(facilityId);
+            .Include(o => o.Appointment)
+            .Include(o => o.PatientVisit)
+            .FirstOrDefaultAsync(x => x.Id == orderId);
+
+        if (order == null)
+            throw new NotFoundException("Phiếu chỉ định không tồn tại.");
+
+        await LoadLinkedVisitAppointmentAsync(order);
+        await EnsureTechnicianFacilityScopeAsync(order);
 
         var dto = await GetOrderDtoByIdAsync(orderId);
         if (dto == null)
@@ -866,8 +1035,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             .Select(x => x.FacilityId)
             .Distinct()
             .ToListAsync();
-        var scopedOrders = _dbContext.DiagnosticOrders
-            .Where(o => o.FacilityId.HasValue && facilityIds.Contains(o.FacilityId.Value));
+        var scopedOrders = _dbContext.DiagnosticOrders.AsQueryable();
+        scopedOrders = WhereTechnicianFacilityScope(scopedOrders, facilityIds);
         var today = _dateTimeProvider.VietnamToday;
         var orderedCount = await scopedOrders.CountAsync(o => o.Status == DiagnosticOrderStatus.Ordered);
         var inProgressCount = await scopedOrders.CountAsync(o => o.Status == DiagnosticOrderStatus.InProgress);
@@ -891,12 +1060,15 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         var order = await _dbContext.DiagnosticOrders
             .Include(o => o.Items)
+            .Include(o => o.Appointment)
+            .Include(o => o.PatientVisit)
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
         if (order == null)
             throw new NotFoundException("Phiếu chỉ định không tồn tại.");
 
-        await EnsureTechnicianFacilityScopeAsync(order.FacilityId);
+        await LoadLinkedVisitAppointmentAsync(order);
+        await EnsureTechnicianFacilityScopeAsync(order);
 
         if (order.Status != DiagnosticOrderStatus.Ordered)
             throw new BusinessException("INVALID_STATE_TRANSITION", "Chỉ có thể tiếp nhận thực hiện phiếu chỉ định đang ở trạng thái Ordered.");
@@ -946,12 +1118,15 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         var order = await _dbContext.DiagnosticOrders
             .Include(o => o.Items)
                 .ThenInclude(i => i.Result)
+            .Include(o => o.Appointment)
+            .Include(o => o.PatientVisit)
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
         if (order == null)
             throw new NotFoundException("Phiếu chỉ định không tồn tại.");
 
-        await EnsureTechnicianFacilityScopeAsync(order.FacilityId);
+        await LoadLinkedVisitAppointmentAsync(order);
+        await EnsureTechnicianFacilityScopeAsync(order);
 
         if (order.Status != DiagnosticOrderStatus.InProgress)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể nhập kết quả khi phiếu chỉ định đang trong trạng thái InProgress.");
@@ -1030,12 +1205,14 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             .Include(o => o.Items)
                 .ThenInclude(i => i.Result)
             .Include(o => o.Appointment)
+            .Include(o => o.PatientVisit)
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
         if (order == null)
             throw new NotFoundException("Phiếu chỉ định không tồn tại.");
 
-        await EnsureTechnicianFacilityScopeAsync(order.FacilityId);
+        await LoadLinkedVisitAppointmentAsync(order);
+        await EnsureTechnicianFacilityScopeAsync(order);
 
         if (order.Status != DiagnosticOrderStatus.InProgress)
             throw new BusinessException("INVALID_STATE_TRANSITION", "Chỉ có thể hoàn tất phiếu chỉ định đang ở trạng thái InProgress.");
