@@ -710,27 +710,42 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
 
     public static IReadOnlyList<AiToolDefinition> Definitions() => new[]
     {
-        Def("clinic.search_specialties", AiToolAccessMode.Public, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Tìm chuyên khoa đang hoạt động", new[] { AiActorCapability.ReadClinicCatalog }),
-        Def("clinic.search_doctors", AiToolAccessMode.Public, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Tìm bác sĩ đang hoạt động", new[] { AiActorCapability.ReadClinicCatalog }),
-        Def("clinic.get_available_slots", AiToolAccessMode.Public, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Tìm khung giờ còn trống theo policy", new[] { AiActorCapability.ReadClinicCatalog }),
+        Def("clinic.search_specialties", AiToolAccessMode.Public, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Tìm chuyên khoa đang hoạt động", new[] { AiActorCapability.ReadClinicCatalog }, schema: new[] { Arg("query", AiToolArgumentType.String) }),
+        // Public catalog planners may use human-readable filters only. Internal
+        // doctor/specialty/slot identifiers stay on the server-owned booking
+        // flow and are intentionally absent from the planner/UI schema.
+        Def("clinic.search_doctors", AiToolAccessMode.Public, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Tìm bác sĩ đang hoạt động", new[] { AiActorCapability.ReadClinicCatalog }, schema: new[] { Arg("query", AiToolArgumentType.String) }),
+        Def("clinic.get_available_slots", AiToolAccessMode.Public, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Tìm khung giờ còn trống theo policy", new[] { AiActorCapability.ReadClinicCatalog }, schema: new[] { Arg("fromDate", AiToolArgumentType.String), Arg("toDate", AiToolArgumentType.String), Arg("limit", AiToolArgumentType.Integer) }),
         Def("clinic.get_facilities", AiToolAccessMode.Public, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc cơ sở đang hoạt động", new[] { AiActorCapability.ReadClinicCatalog }),
         Def("clinic.get_pricing", AiToolAccessMode.Public, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc bảng giá đã công bố", new[] { AiActorCapability.ReadClinicCatalog }),
-        Def("patient.get_my_appointments", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc lịch hẹn của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly),
-        Def("patient.get_appointment_detail", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc chi tiết lịch hẹn của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly),
-        Def("patient.get_my_visits", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc lượt khám của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly),
-        Def("patient.get_my_diagnostic_results", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc kết quả cận lâm sàng của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly),
-        Def("patient.get_my_prescriptions", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc đơn thuốc của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly),
-        Def("patient.get_my_bills", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc hóa đơn của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly),
+        Def("patient.get_my_appointments", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc lịch hẹn của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly,
+            new[] { Arg("status", AiToolArgumentType.String), Arg("page", AiToolArgumentType.Integer), Arg("pageSize", AiToolArgumentType.Integer) }),
+        Def("patient.get_appointment_detail", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc chi tiết lịch hẹn của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly,
+            new[] { Arg("appointmentId", AiToolArgumentType.Integer, serverBound: true) },
+            new AiToolResourceBinding { ServerBoundArgumentNames = new[] { "appointmentId" }, RequiresCurrentResource = true }),
+        Def("patient.get_my_visits", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc lượt khám của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly,
+            new[] { Arg("page", AiToolArgumentType.Integer), Arg("pageSize", AiToolArgumentType.Integer) }),
+        Def("patient.get_my_diagnostic_results", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc kết quả cận lâm sàng của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly,
+            new[] { Arg("page", AiToolArgumentType.Integer), Arg("pageSize", AiToolArgumentType.Integer) }),
+        Def("patient.get_my_prescriptions", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc đơn thuốc của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly,
+            new[] { Arg("page", AiToolArgumentType.Integer), Arg("pageSize", AiToolArgumentType.Integer) }),
+        Def("patient.get_my_bills", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc hóa đơn của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly,
+            new[] { Arg("page", AiToolArgumentType.Integer), Arg("pageSize", AiToolArgumentType.Integer) }),
         Def("patient.prepare_booking", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Medium, AiToolConfirmationRequirement.ExistingBookingConfirmation, "Kiểm tra và chuẩn bị bản nháp đặt lịch", new[] { AiActorCapability.PrepareBooking }, PatientOnly),
         Def("patient.prepare_cancel_appointment", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.High, AiToolConfirmationRequirement.ExplicitUserConfirmation, "Tạo pending action yêu cầu hủy lịch", new[] { AiActorCapability.PrepareAppointmentChange }, PatientOnly),
         Def("patient.prepare_reschedule_appointment", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.High, AiToolConfirmationRequirement.ExplicitUserConfirmation, "Tạo pending action yêu cầu đổi lịch", new[] { AiActorCapability.PrepareAppointmentChange }, PatientOnly),
         Def("patient.execute_confirmed_action", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.High, AiToolConfirmationRequirement.ExplicitUserConfirmation, "Thực hiện pending action sau khi revalidate", new[] { AiActorCapability.ExecuteConfirmedPatientAction }, PatientOnly)
     };
 
-    private static AiToolDefinition Def(string name, AiToolAccessMode mode, AiToolRiskLevel risk, AiToolConfirmationRequirement confirmation, string description, AiActorCapability[] capabilities, IReadOnlySet<AiActorRole>? roles = null) => new()
+    private static AiToolDefinition Def(string name, AiToolAccessMode mode, AiToolRiskLevel risk, AiToolConfirmationRequirement confirmation, string description, AiActorCapability[] capabilities, IReadOnlySet<AiActorRole>? roles = null, IReadOnlyList<AiToolArgumentDefinition>? schema = null, AiToolResourceBinding? binding = null) => new()
     {
         Name = name, Version = "1.0", AccessMode = mode, RiskLevel = risk, Confirmation = confirmation, Description = description,
         AllowedRoles = roles ?? new HashSet<AiActorRole>(), Capabilities = capabilities.ToHashSet(),
-        DataSources = new[] { new AiToolDataSource("ClinicCare services", "backend") }
+        DataSources = new[] { new AiToolDataSource("ClinicCare services", "backend") },
+        ArgumentSchema = schema ?? Array.Empty<AiToolArgumentDefinition>(),
+        ResourceBinding = binding ?? AiToolResourceBinding.None
     };
+
+    private static AiToolArgumentDefinition Arg(string name, AiToolArgumentType type, bool required = false, bool serverBound = false) =>
+        new(name, type, required, serverBound);
 }

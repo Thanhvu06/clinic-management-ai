@@ -94,7 +94,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                     : "Yêu cầu điều khiển tool hoặc truy cập vượt quyền đã bị từ chối.",
                 SafetyNotice = "Safety guard đã chặn provider và mọi tool call trước khi truy cập dữ liệu.",
                 SuggestedPrompts = SuggestedPrompts(role),
-                AvailableTools = tools
+                AvailableTools = ToolsForUi(tools)
             };
             await PersistAndAudit(response, sessionId, role, null, 0, cancellationToken);
             return response;
@@ -139,7 +139,35 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                     AllowedTools = tools
                 }, cancellationToken);
                 providerState = planned.ProviderState;
-                decision = BindCurrentResourceArguments(planned.Decision, resolved.Context);
+                decision = planned.Decision;
+                if (planned.ProviderCalled && planned.IsSuccess && decision.ToolCalls.Count > 0)
+                {
+                    var refreshed = await _contextResolver.ResolveAsync(request, memory, role, _currentUser.UserId, cancellationToken);
+                    if (!refreshed.IsValid || !AiToolBindingRegistry.IsSameResourceContext(resolved.Context, refreshed.Context))
+                    {
+                        decision = FallbackDecision(
+                            "Resource hiện tại đã thay đổi trong lúc lập kế hoạch. Vui lòng chọn lại resource rồi thử lại.",
+                            "RESOURCE_CONTEXT_CHANGED",
+                            "RESOURCE_CONTEXT_CHANGED");
+                    }
+                    else
+                    {
+                        resolved = refreshed;
+                    }
+                }
+            }
+        }
+
+        if (decision.ToolCalls.Count > 0)
+        {
+            var preflight = AiToolBindingRegistry.ValidateAndBindPlan(decision.ToolCalls, tools, resolved.Context);
+            if (!preflight.IsValid)
+            {
+                decision = FallbackDecision(preflight.Message, preflight.Code, preflight.Code);
+            }
+            else
+            {
+                decision = CopyWithCalls(decision, preflight.BoundCalls);
             }
         }
 
@@ -166,13 +194,14 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             SubIntent = decision.SubIntent,
             Confidence = decision.Confidence,
             Message = grounded.Message,
+            ErrorCode = decision.ErrorCode,
             Clarification = decision.Clarification,
             NavigationRoute = grounded.NavigationRoute,
             Navigation = grounded.NavigationRoute,
             SuggestedPrompts = SuggestedPrompts(role),
             Cards = grounded.Cards,
             Sources = grounded.Sources,
-            AvailableTools = tools
+            AvailableTools = ToolsForUi(tools)
         };
         await PersistAndAudit(final, sessionId, role, resolved.Context, decision.ToolCalls.Count, cancellationToken);
         return final;
@@ -202,6 +231,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 source = "role-copilot",
                 intent = response.Intent,
                 subIntent = response.SubIntent,
+                errorCode = response.ErrorCode,
                 plannerMode = response.PlannerMode,
                 providerState = response.ProviderState,
                 role = response.Role,
@@ -246,36 +276,38 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             .ToArray();
     }
 
-    private static AiPlannerDecision FallbackDecision(string message, string subIntent) => new()
+    private static IReadOnlyList<AiToolDefinition> ToolsForUi(IReadOnlyList<AiToolDefinition> tools) =>
+        tools.Select(tool => new AiToolDefinition
+        {
+            Name = tool.Name,
+            Version = tool.Version,
+            Description = tool.Description,
+            AccessMode = tool.AccessMode,
+            RiskLevel = tool.RiskLevel,
+            Confirmation = tool.Confirmation,
+            Enabled = tool.Enabled,
+            AllowedRoles = tool.AllowedRoles,
+            Capabilities = tool.Capabilities,
+            DataSources = tool.DataSources,
+            // The UI can display capabilities, but never receives resource
+            // binding field names or server-owned resource metadata.
+            ArgumentSchema = tool.ArgumentSchema.Where(x => !x.ServerBound).ToArray(),
+            ResourceBinding = AiToolResourceBinding.None
+        }).ToArray();
+
+    private static AiPlannerDecision FallbackDecision(string message, string subIntent, string? errorCode = null) => new()
     {
         PlannerMode = AiPlannerModes.Fallback,
         Intent = AiChatIntentTypes.ClarificationRequired,
         SubIntent = subIntent,
+        ErrorCode = errorCode,
         Clarification = message,
         Message = message,
         Confidence = 1m
     };
 
-    private static AiPlannerDecision BindCurrentResourceArguments(AiPlannerDecision decision, AiResolvedResourceContext resource)
+    private static AiPlannerDecision CopyWithCalls(AiPlannerDecision decision, IReadOnlyList<AiPlannerToolCall> calls)
     {
-        var calls = decision.ToolCalls.Select(call =>
-        {
-            var required = call.Name.ToLowerInvariant() switch
-            {
-                "doctor.get_patient_summary" or "doctor.get_diagnostic_orders" or "doctor.get_prescription_status" =>
-                    resource.VisitId.HasValue ? ("visitId", resource.VisitId.Value) : resource.AppointmentId.HasValue ? ("appointmentId", resource.AppointmentId.Value) : (null, 0L),
-                "patient.get_appointment_detail" => resource.AppointmentId.HasValue ? ("appointmentId", resource.AppointmentId.Value) : (null, 0L),
-                "pharmacist.get_prescription_payment_status" => resource.PrescriptionId.HasValue ? ("prescriptionId", resource.PrescriptionId.Value) : (null, 0L),
-                _ => (null, 0L)
-            };
-            if (required.Item1 is null || call.Arguments.ValueKind != JsonValueKind.Object || call.Arguments.TryGetProperty(required.Item1, out _))
-                return call;
-
-            var arguments = call.Arguments.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.OrdinalIgnoreCase);
-            arguments[required.Item1] = JsonSerializer.SerializeToElement(required.Item2);
-            return new AiPlannerToolCall { Name = call.Name, Version = call.Version, Arguments = JsonSerializer.SerializeToElement(arguments) };
-        }).ToArray();
-
         return new AiPlannerDecision
         {
             PlannerMode = decision.PlannerMode,
@@ -286,6 +318,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             Message = decision.Message,
             Clarification = decision.Clarification,
             NavigationRoute = decision.NavigationRoute,
+            ErrorCode = decision.ErrorCode,
             ToolCalls = calls
         };
     }
@@ -300,11 +333,12 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         PlannerMode = plannerMode,
         Intent = AiChatIntentTypes.ClarificationRequired,
         SubIntent = subIntent,
+        ErrorCode = subIntent,
         Confidence = 1m,
         Message = message,
         Clarification = message,
         SuggestedPrompts = SuggestedPrompts(role),
-        AvailableTools = tools
+        AvailableTools = ToolsForUi(tools)
     };
 
     private static string NormalizeId(string? value, string prefix) =>

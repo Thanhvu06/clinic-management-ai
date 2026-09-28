@@ -260,7 +260,8 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             lower.Contains("địa chỉ") || lower.Contains("ở đâu") || lower.Contains("giờ mở cửa") ||
             lower.Contains("giờ làm việc") || lower.Contains("mấy giờ làm việc") || lower.Contains("liên hệ phòng khám") ||
             lower.Contains("nhận khách") || lower.Contains("mở đến") || lower.Contains("mở cửa") || Regex.IsMatch(lower, @"\b(?:mấy|sau|trước)\s+\d+\s+giờ\b", RegexOptions.IgnoreCase) ||
-            lower.Contains("chủ nhật có khám") || lower.Contains("có khám chủ nhật") || lower.Contains("phòng khám ở đâu"))
+            lower.Contains("chủ nhật có khám") || lower.Contains("có khám chủ nhật") || lower.Contains("phòng khám ở đâu") ||
+            lower.Contains("cơ sở khác") || lower.Contains("co so khac"))
         {
             result.Intent = AiChatIntentTypes.FacilityInquiry;
             return result;
@@ -387,6 +388,15 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         }
 
         // 13. Slot / Date Selection ("mai", "sáng mai", "09:30", "chọn khung giờ", "chọn giờ")
+        if ((lower.Contains("ngày mai") || lower.Contains("ngay mai")) &&
+            (lower.Contains("người đó") || lower.Contains("nguoi do") || lower.Contains("bác sĩ đó") || lower.Contains("bac si do")) &&
+            (lower.Contains("giờ") || lower.Contains("gio") || lower.Contains("khung giờ") || lower.Contains("khung gio")))
+        {
+            result.Intent = AiChatIntentTypes.SelectSlot;
+            result.ExtractedDate = "mai";
+            return result;
+        }
+
         if (lower == "mai" || lower == "ngày mai" || lower == "sáng mai" || lower == "chiều mai" ||
             lower.StartsWith("chọn khung giờ") || lower.StartsWith("tôi chọn khung giờ") ||
             lower.StartsWith("chọn giờ") || lower.StartsWith("tôi chọn giờ") || lower.StartsWith("chọn ngày") ||
@@ -812,6 +822,10 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             // "đã/đang/từng đặt lịch" describes an existing booking, not a
             // new one. Mask that sequence before checking the generic cue.
             var bookingClause = Regex.Replace(clause, @"\b(?:da|dang|tung)\s+dat\b", "booked", RegexOptions.CultureInvariant);
+            // A correction such as "không phải đặt lịch" is an explicit
+            // negative, not a new-booking request. Mask it before the cue
+            // matcher so a later read request can win deterministically.
+            bookingClause = Regex.Replace(bookingClause, @"\b(?:khong|ko)\s+(?:phai\s+)?(?:dat|dang\s+ky|hen)\b", "not-booking", RegexOptions.CultureInvariant);
             return Regex.IsMatch(
                 bookingClause,
                 @"\b(?:toi|em|minh)\s+muon\s+(?:dat|dang\s+ky|hen)\s+(?:mot\s+)?(?:lich|lich\s+hen|buoi\s+kham|cuoc\s+hen|kham)\b|\b(?:dat|dang\s+ky|hen|book)\s+(?:mot\s+)?(?:lich|lich\s+hen|buoi\s+kham|cuoc\s+hen|kham)\b",

@@ -62,6 +62,32 @@ public enum AiActorRole
 
 public sealed record AiToolDataSource(string Name, string Kind, string Status = "verified");
 
+public enum AiToolArgumentType
+{
+    String,
+    Integer,
+    Boolean
+}
+
+/// <summary>
+/// Closed, server-owned argument metadata for planner calls.  This is
+/// deliberately separate from the provider prompt: the executor and planner
+/// preflight use this metadata as the trust boundary.
+/// </summary>
+public sealed record AiToolArgumentDefinition(
+    string Name,
+    AiToolArgumentType Type,
+    bool Required = false,
+    bool ServerBound = false);
+
+public sealed class AiToolResourceBinding
+{
+    public IReadOnlyList<string> ServerBoundArgumentNames { get; init; } = Array.Empty<string>();
+    public bool RequiresCurrentResource { get; init; }
+
+    public static AiToolResourceBinding None { get; } = new();
+}
+
 public sealed class AiToolDefinition
 {
     public string Name { get; init; } = string.Empty;
@@ -74,6 +100,8 @@ public sealed class AiToolDefinition
     public IReadOnlySet<AiActorRole> AllowedRoles { get; init; } = new HashSet<AiActorRole>();
     public IReadOnlySet<AiActorCapability> Capabilities { get; init; } = new HashSet<AiActorCapability>();
     public IReadOnlyList<AiToolDataSource> DataSources { get; init; } = Array.Empty<AiToolDataSource>();
+    public IReadOnlyList<AiToolArgumentDefinition> ArgumentSchema { get; init; } = Array.Empty<AiToolArgumentDefinition>();
+    public AiToolResourceBinding ResourceBinding { get; init; } = AiToolResourceBinding.None;
 }
 
 public sealed class AiToolInvocation

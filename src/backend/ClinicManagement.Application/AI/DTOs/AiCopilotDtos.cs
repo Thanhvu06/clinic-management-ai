@@ -84,6 +84,7 @@ public sealed class AiCopilotResponseDto
     public string? SubIntent { get; init; }
     public decimal Confidence { get; init; }
     public string Message { get; init; } = string.Empty;
+    public string? ErrorCode { get; init; }
     public string? Clarification { get; init; }
     public string? SafetyNotice { get; init; }
     public string? NavigationRoute { get; init; }

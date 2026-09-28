@@ -108,6 +108,9 @@ public class IntentBenchmarkResult
     [JsonPropertyName("hybridAccuracy")]
     public double HybridAccuracy { get; set; }
 
+    [JsonPropertyName("valMacroF1AtOptimalThreshold")]
+    public double ValMacroF1AtOptimalThreshold { get; set; }
+
     [JsonPropertyName("mlNetMetrics")]
     public EvaluationMetricsDto MlNetMetrics { get; set; } = new();
 
@@ -181,7 +184,13 @@ public class IntentModelTrainer
         // Build classification pipeline
         var pipeline = mlContext.Transforms.Text.FeaturizeText("Features", nameof(IntentInput.Text))
             .Append(mlContext.Transforms.Conversion.MapValueToKey("KeyLabel", nameof(IntentInput.Label)))
-            .Append(mlContext.MulticlassClassification.Trainers.SdcaMaximumEntropy("KeyLabel", "Features"))
+            .Append(mlContext.MulticlassClassification.Trainers.SdcaMaximumEntropy(new Microsoft.ML.Trainers.SdcaMaximumEntropyMulticlassTrainer.Options
+            {
+                LabelColumnName = "KeyLabel",
+                FeatureColumnName = "Features",
+                NumberOfThreads = 1,
+                Shuffle = false
+            }))
             .Append(mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
 
         var model = pipeline.Fit(trainDataView);
@@ -198,27 +207,18 @@ public class IntentModelTrainer
         var valPredictions = mlContext.Data.CreateEnumerable<IntentEvaluationResult>(valTransformed, reuseRowObject: false).ToList();
 
         double bestThreshold = 0.35;
-        double bestValScore = 0.0;
+        double bestValScore = double.MinValue;
+        double bestValAccuracy = 0.0;
         var candidateThresholds = new[] { 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60 };
 
         foreach (var t in candidateThresholds)
         {
-            int correct = 0;
-            foreach (var r in valPredictions)
+            double valMacroF1 = ThresholdMacroF1(valPredictions, t);
+            if (valMacroF1 > bestValScore)
             {
-                float maxScore = (r.Score != null && r.Score.Length > 0) ? r.Score.Max() : 0.0f;
-                string effectivePred = maxScore >= t ? r.PredictedLabel : AiChatIntentTypes.UnclearOrOutOfScope;
-                if (string.Equals(effectivePred, r.Label, StringComparison.OrdinalIgnoreCase))
-                {
-                    correct++;
-                }
-            }
-
-            double valAcc = (double)correct / valPredictions.Count;
-            if (valAcc > bestValScore)
-            {
-                bestValScore = valAcc;
+                bestValScore = valMacroF1;
                 bestThreshold = t;
+                bestValAccuracy = ThresholdAccuracy(valPredictions, t);
             }
         }
 
@@ -320,7 +320,8 @@ public class IntentModelTrainer
             TotalValSamples = valRecords.Count,
             TotalTestSamples = testRecords.Count,
             OptimalThreshold = bestThreshold,
-            ValAccuracyAtOptimalThreshold = bestValScore,
+            ValAccuracyAtOptimalThreshold = bestValAccuracy,
+            ValMacroF1AtOptimalThreshold = bestValScore,
             RuleBasedCorrect = ruleBasedCorrect,
             RuleBasedAccuracy = (double)ruleBasedCorrect / testRecords.Count,
             MlNetOnlyCorrect = mlNetOnlyCorrect,
@@ -362,6 +363,30 @@ public class IntentModelTrainer
 
         return result;
     }
+
+    private static double ThresholdAccuracy(IReadOnlyList<IntentEvaluationResult> predictions, double threshold) =>
+        predictions.Count == 0 ? 0 : predictions.Count(item => ThresholdPrediction(item, threshold).Equals(item.Label, StringComparison.OrdinalIgnoreCase)) / (double)predictions.Count;
+
+    private static double ThresholdMacroF1(IReadOnlyList<IntentEvaluationResult> predictions, double threshold)
+    {
+        if (predictions.Count == 0) return 0;
+        var labels = predictions.Select(x => x.Label).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var f1 = labels.Select(label =>
+        {
+            var truePositive = predictions.Count(x => x.Label.Equals(label, StringComparison.OrdinalIgnoreCase) && ThresholdPrediction(x, threshold).Equals(label, StringComparison.OrdinalIgnoreCase));
+            var falsePositive = predictions.Count(x => !x.Label.Equals(label, StringComparison.OrdinalIgnoreCase) && ThresholdPrediction(x, threshold).Equals(label, StringComparison.OrdinalIgnoreCase));
+            var falseNegative = predictions.Count(x => x.Label.Equals(label, StringComparison.OrdinalIgnoreCase) && !ThresholdPrediction(x, threshold).Equals(label, StringComparison.OrdinalIgnoreCase));
+            var precision = truePositive + falsePositive == 0 ? 0 : (double)truePositive / (truePositive + falsePositive);
+            var recall = truePositive + falseNegative == 0 ? 0 : (double)truePositive / (truePositive + falseNegative);
+            return precision + recall == 0 ? 0 : 2 * precision * recall / (precision + recall);
+        });
+        return f1.Average();
+    }
+
+    private static string ThresholdPrediction(IntentEvaluationResult prediction, double threshold) =>
+        (prediction.Score?.Length > 0 ? prediction.Score.Max() : 0) >= threshold
+            ? prediction.PredictedLabel
+            : AiChatIntentTypes.UnclearOrOutOfScope;
 
     private static EvaluationMetricsDto ComputeMulticlassMetrics(
         MLContext mlContext,

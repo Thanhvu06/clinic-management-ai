@@ -134,6 +134,7 @@ describe('UnifiedCopilotPanel', () => {
             providerStatus: 'Timeout',
             providerState: 'Degraded',
             plannerMode: 'Fallback',
+            errorCode: 'PROVIDER_TIMEOUT',
             message: 'Dịch vụ AI phản hồi quá lâu; dữ liệu chưa được xác định.'
         }));
         render(<MemoryRouter initialEntries={['/doctor']}><UnifiedCopilotPanel /></MemoryRouter>);
@@ -144,6 +145,7 @@ describe('UnifiedCopilotPanel', () => {
 
         await waitFor(() => expect(screen.getByText('Đang dùng chế độ dự phòng')).toBeInTheDocument());
         expect(screen.getByText('Dịch vụ AI phản hồi quá lâu; dữ liệu chưa được xác định.')).toBeInTheDocument();
+        expect(screen.getByText('Mã xử lý: PROVIDER_TIMEOUT')).toBeInTheDocument();
         expect(screen.queryByText('Dữ liệu đã kiểm chứng.')).not.toBeInTheDocument();
     });
 

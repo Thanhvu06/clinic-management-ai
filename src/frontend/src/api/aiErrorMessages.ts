@@ -22,23 +22,20 @@ const readMessage = (error: unknown): string => {
     return readString(record.message || asRecord(record.response).message);
 };
 
-export const aiChatFailureMessage = (error: unknown, surface: 'booking' | 'copilot' = 'copilot'): string => {
+export const aiChatFailureMessage = (error: unknown): string => {
     const status = readStatus(error);
     const code = readCode(error);
     const message = readMessage(error).toLowerCase();
-    const preservedState = surface === 'booking'
-        ? 'Bản nháp đặt lịch vẫn được giữ nguyên.'
-        : 'Không có thao tác ghi nào được thực hiện.';
 
     if (status === 429 || code === 'TOO_MANY_REQUESTS' || message.includes('quá nhiều'))
-        return `Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút. ${preservedState}`;
+        return 'Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút. Bản nháp đặt lịch vẫn được giữ nguyên.';
     if (status === 401 || status === 403)
-        return `Phiên đăng nhập không còn hợp lệ hoặc không có quyền dùng trợ lý. ${preservedState}`;
+        return 'Phiên đăng nhập không còn hợp lệ hoặc không có quyền dùng trợ lý. Bản nháp đặt lịch vẫn được giữ nguyên.';
     if (code === 'ECONNABORTED' || code === 'ETIMEDOUT' || message.includes('timeout') || message.includes('timed out'))
-        return `Máy chủ phản hồi quá lâu. ${preservedState} Bạn có thể thử lại.`;
+        return 'Máy chủ phản hồi quá lâu. Bản nháp đặt lịch vẫn được giữ nguyên; bạn có thể thử lại hoặc đặt lịch trực tiếp.';
     if (status !== undefined && status >= 500)
-        return `Máy chủ ClinicCare đang gặp sự cố tạm thời. ${preservedState} Bạn có thể thử lại sau.`;
+        return 'Máy chủ ClinicCare đang gặp sự cố tạm thời. Bản nháp đặt lịch vẫn được giữ nguyên; bạn có thể thử lại sau.';
     if (status === 400)
-        return `Yêu cầu chưa hợp lệ. ${preservedState} Hãy kiểm tra lại thông tin.`;
-    return `Không thể kết nối máy chủ ClinicCare lúc này. ${preservedState} Bạn có thể thử lại.`;
+        return 'Yêu cầu đặt lịch chưa hợp lệ. Bản nháp đặt lịch vẫn được giữ nguyên; hãy kiểm tra lại thông tin.';
+    return 'Không thể kết nối máy chủ ClinicCare lúc này. Bản nháp đặt lịch vẫn được giữ nguyên; bạn có thể thử lại hoặc đặt lịch trực tiếp.';
 };

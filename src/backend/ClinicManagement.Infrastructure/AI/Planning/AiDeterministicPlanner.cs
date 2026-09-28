@@ -61,12 +61,7 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             return Clarify("Bạn muốn xem danh sách hay tra cứu tên chuyên khoa, bác sĩ, dịch vụ hoặc cơ sở nào?", "AmbiguousCatalogQuery", AiChatIntentTypes.FacilityInquiry, "/locations");
 
         if (knowledgeRequest && roleDecision.ToolCalls.Count == 0 && roleDecision.Clarification is null)
-            return Tool(AiChatIntentTypes.FacilityInquiry, "ClinicKnowledge", "clinic.search_knowledge", new
-            {
-                entity = InferKnowledgeEntity(text),
-                query = context.NormalizedMessage,
-                limit = 10
-            }, "/locations");
+            return Tool(AiChatIntentTypes.FacilityInquiry, "ClinicKnowledge", "clinic.search_knowledge", BuildKnowledgeArguments(text, context.NormalizedMessage), "/locations");
 
         return roleDecision;
     }
@@ -135,7 +130,7 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             };
         }
 
-        if (Regex.IsMatch(text, @"\b(?:hang doi|benh nhan tiep theo|danh sach cho|queue cua toi|ca benh .*\b(?:cho|dang cho)\b|danh sach .*\b(?:benh nhan|nguoi benh)\b.*\b(?:hom nay|tiep theo)\b|(?:benh nhan|nguoi benh)\b.*\bdanh sach\b.*\b(?:hom nay|tiep theo)\b)", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:hang doi|benh nhan tiep theo|ca tiep theo|danh sach cho|queue cua toi|ca benh .*\b(?:cho|dang cho)\b|danh sach .*\b(?:benh nhan|nguoi benh)\b.*\b(?:hom nay|tiep theo)\b|(?:benh nhan|nguoi benh)\b.*\bdanh sach\b.*\b(?:hom nay|tiep theo)\b)", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.QueueLookup, "DoctorQueue", "doctor.get_my_queue", new { }, "/doctor/queue");
 
         if (Regex.IsMatch(text, @"\b(?:benh nhan|ca kham|luot kham|trieu chung|sinh hieu|chan doan|chi tiet ho so|don thuoc|chi dinh|ket qua)\b", RegexOptions.CultureInvariant))
@@ -149,7 +144,7 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         if (Regex.IsMatch(text, @"\b(?:chuan bi tiep nhan phieu|tiep nhan phieu|nhan phieu|ghi ket qua|hoan tat order)\b", RegexOptions.CultureInvariant))
             return Clarify("Thao tác kỹ thuật phải đi qua action gateway và bước xác nhận rõ ràng; cuộc hội thoại không tự ghi kết quả.", "WriteRequiresExplicitActionConfirmation");
 
-        if (Regex.IsMatch(text, @"\b(?:worklist|wl|danh sach chi dinh|chi dinh dang cho|cong viec dang cho|qua han|phieu xet nghiem|chi dinh .*\b(?:doi|cho xu ly|chua xu ly)\b)", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:worklist|wl|danh sach chi dinh|chi dinh dang cho|cong viec dang cho|qua han|phieu xet nghiem|phieu nay\b.*\b(?:muc|chua|hoan thanh)\b|chi dinh .*\b(?:doi|cho xu ly|chua xu ly)\b)", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.DiagnosticLookup, "TechnicianWorklist", "technician.get_worklist", new { }, "/diagnostics");
         return ProviderRequired(AiChatIntentTypes.UnclearOrOutOfScope);
     }
@@ -225,6 +220,28 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         if (Regex.IsMatch(text, @"\b(?:co so|phong kham|dia chi|gio lam viec|ngay nghi|chu nhat|mo cua)\b", RegexOptions.CultureInvariant))
             return "facility";
         return "all";
+    }
+
+    private static object BuildKnowledgeArguments(string text, string displayText)
+    {
+        var entity = InferKnowledgeEntity(text);
+        if (!string.Equals(entity, "doctor", StringComparison.OrdinalIgnoreCase))
+            return new { entity, query = displayText, limit = 10 };
+
+        var specialty = Regex.Match(text, @"\b(?:kham|chuyen khoa)\s+(?<value>.+?)(?=\s+\b(?:o|tai)\s+co so\b|\s*$)", RegexOptions.CultureInvariant).Groups["value"].Value.Trim().TrimEnd('?', '.', '!');
+        var facility = Regex.Match(text, @"\b(?:o|tai)\s+co so\s+(?<value>.+)$", RegexOptions.CultureInvariant).Groups["value"].Value.Trim().TrimEnd('?', '.', '!');
+        var arguments = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["entity"] = entity,
+            // Keep the full user query as the primary match so a request for
+            // a named/inactive doctor cannot broaden into another doctor that
+            // merely shares the specialty filter.
+            ["query"] = displayText,
+            ["limit"] = 10
+        };
+        if (!string.IsNullOrWhiteSpace(specialty)) arguments["specialtyQuery"] = specialty;
+        if (!string.IsNullOrWhiteSpace(facility)) arguments["facilityQuery"] = facility;
+        return arguments;
     }
 
     private static bool IsAmbiguousCatalogRequest(string text)

@@ -82,6 +82,36 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
     }
 
     [Fact]
+    public void Vietnamese_multi_turn_followups_preserve_relative_selection_and_read_only_scope()
+    {
+        var classifier = new VietnameseIntentClassifier(IntentClassificationMode.Off);
+
+        var secondDoctor = classifier.Classify("Người thứ hai thì sao?");
+        Assert.Equal(AiChatIntentTypes.SelectDoctor, secondDoctor.Intent);
+        Assert.Equal(1, secondDoctor.ExtractedRelativeDoctorIndex);
+
+        var tomorrowSlot = classifier.Classify("Ngày mai người đó còn giờ nào?");
+        Assert.Equal(AiChatIntentTypes.SelectSlot, tomorrowSlot.Intent);
+        Assert.Equal("mai", tomorrowSlot.ExtractedDate);
+
+        Assert.Equal(AiChatIntentTypes.ViewAppointments, classifier.Classify("Không phải đặt lịch, tôi chỉ muốn xem lịch cũ.").Intent);
+        Assert.Equal(AiChatIntentTypes.FacilityInquiry, classifier.Classify("Ở cơ sở khác có không?").Intent);
+
+        var planner = new AiDeterministicPlanner();
+        var doctorSearch = planner.Plan(new AiCopilotPlanningContext
+        {
+            Role = AiActorRole.Patient,
+            NormalizedMessage = "Bác sĩ nào khám mắt ở cơ sở X?",
+            Analysis = new AiConversationAnalysis { NormalizedText = "Bác sĩ nào khám mắt ở cơ sở X?" }
+        });
+        var searchCall = Assert.Single(doctorSearch.ToolCalls);
+        Assert.Equal("clinic.search_knowledge", searchCall.Name);
+        Assert.Equal("doctor", searchCall.Arguments.GetProperty("entity").GetString());
+        Assert.Equal("mat", searchCall.Arguments.GetProperty("specialtyQuery").GetString());
+        Assert.Equal("x", searchCall.Arguments.GetProperty("facilityQuery").GetString());
+    }
+
+    [Fact]
     public async Task Patient_chat_clarifies_mixed_new_booking_and_existing_read_without_side_effects()
     {
         await AuthenticateAsync("pat1@test.com");
@@ -797,6 +827,56 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         Assert.Empty(decision.ToolCalls);
         Assert.Equal("MixedReadWritePlan", decision.SubIntent);
         Assert.NotNull(decision.Clarification);
+    }
+
+    [Fact]
+    public void Multi_turn_operational_followups_keep_the_request_read_only_and_role_scoped()
+    {
+        var planner = new AiDeterministicPlanner();
+        var doctor = planner.Plan(new AiCopilotPlanningContext
+        {
+            Role = AiActorRole.Doctor,
+            NormalizedMessage = "ca tiep theo cua toi la ai",
+            Analysis = new AiConversationAnalysis { NormalizedText = "ca tiep theo cua toi la ai" }
+        });
+        Assert.Equal("doctor.get_my_queue", Assert.Single(doctor.ToolCalls).Name);
+
+        var technician = planner.Plan(new AiCopilotPlanningContext
+        {
+            Role = AiActorRole.DiagnosticTechnician,
+            NormalizedMessage = "phieu nay con muc nao chua hoan thanh",
+            Analysis = new AiConversationAnalysis { NormalizedText = "phieu nay con muc nao chua hoan thanh" }
+        });
+        Assert.Equal("technician.get_worklist", Assert.Single(technician.ToolCalls).Name);
+
+        var pharmacist = planner.Plan(new AiCopilotPlanningContext
+        {
+            Role = AiActorRole.Pharmacist,
+            NormalizedMessage = "con thieu thuoc nao trong don dang mo",
+            Analysis = new AiConversationAnalysis { NormalizedText = "con thieu thuoc nao trong don dang mo" },
+            Resource = new AiResolvedResourceContext { PrescriptionId = 77 }
+        });
+        Assert.Equal("pharmacist.get_prescription_payment_status", Assert.Single(pharmacist.ToolCalls).Name);
+
+        foreach (var followup in new[] { "đơn này trả đủ thuốc chưa", "còn thiếu thuốc nào" })
+        {
+            var payment = planner.Plan(new AiCopilotPlanningContext
+            {
+                Role = AiActorRole.Pharmacist,
+                NormalizedMessage = followup,
+                Analysis = new AiConversationAnalysis { NormalizedText = followup },
+                Resource = new AiResolvedResourceContext { PrescriptionId = 77 }
+            });
+            Assert.Equal("pharmacist.get_prescription_payment_status", Assert.Single(payment.ToolCalls).Name);
+        }
+
+        var patient = planner.Plan(new AiCopilotPlanningContext
+        {
+            Role = AiActorRole.Patient,
+            NormalizedMessage = "kết quả lần trước của tôi có chưa",
+            Analysis = new AiConversationAnalysis { NormalizedText = "kết quả lần trước của tôi có chưa" }
+        });
+        Assert.Equal("patient.get_my_diagnostic_results", Assert.Single(patient.ToolCalls).Name);
     }
 
     [Fact]

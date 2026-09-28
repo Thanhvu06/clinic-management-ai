@@ -537,7 +537,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             const isRateLimited = errorCode === "TOO_MANY_REQUESTS" || message.includes("quá nhiều");
             setMessages(prev => [...prev, {
                 role: "model",
-                content: aiChatFailureMessage(err, "booking"),
+                content: aiChatFailureMessage(err),
                 urgency: "ROUTINE",
                 assistantStatus: "Offline",
                 ...(!isRateLimited ? { actions: [

@@ -14,6 +14,7 @@ const MessageBubble: React.FC<{ item: UnifiedCopilotMessage; onRetry: (text: str
         <div className={styles.messageRow} data-role={item.role}>
             <div className={`${styles.bubble} ${item.role === 'user' ? styles.user : styles.assistant} ${item.error ? styles.error : ''}`}>
                 <div>{item.content}</div>
+                {response?.errorCode && <div className={styles.clarification}>Mã xử lý: {response.errorCode}</div>}
                 {response?.clarification && <div className={styles.clarification}>{response.clarification}</div>}
                 {response?.safetyNotice && <div className={styles.clarification}>{response.safetyNotice}</div>}
                 {cards.map((card, index) => {

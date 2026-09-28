@@ -52,6 +52,7 @@ export interface AiCopilotResponse {
     turnId?: string;
     intent: string;
     message: string;
+    errorCode?: string | null;
     clarification?: string | null;
     safetyNotice?: string | null;
     navigationRoute?: string | null;

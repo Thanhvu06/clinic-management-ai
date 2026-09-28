@@ -500,13 +500,19 @@ public static class Phase4BenchmarkRunner
         var holdoutView = ml.Data.LoadFromEnumerable(holdoutInputs);
         var pipeline = ml.Transforms.Text.FeaturizeText("Features", nameof(IntentInput.Text))
             .Append(ml.Transforms.Conversion.MapValueToKey("KeyLabel", nameof(IntentInput.Label)))
-            .Append(ml.MulticlassClassification.Trainers.SdcaMaximumEntropy("KeyLabel", "Features"))
+            .Append(ml.MulticlassClassification.Trainers.SdcaMaximumEntropy(new Microsoft.ML.Trainers.SdcaMaximumEntropyMulticlassTrainer.Options
+            {
+                LabelColumnName = "KeyLabel",
+                FeatureColumnName = "Features",
+                NumberOfThreads = 1,
+                Shuffle = false
+            }))
             .Append(ml.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
         var model = pipeline.Fit(trainView);
         var valPredictions = ml.Data.CreateEnumerable<IntentEvaluationResult>(model.Transform(valView), false).ToList();
         var classes = trainRecords.Select(record => record.Intent).Concat(eligibleHoldout.Select(item => item.ExpectedIntent))
             .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value, StringComparer.Ordinal).ToList();
-        var threshold = SelectThreshold(valPredictions);
+        var threshold = SelectThreshold(valPredictions, validationRecords, classes);
         var transformed = model.Transform(holdoutView);
         var predictions = ml.Data.CreateEnumerable<IntentEvaluationResult>(transformed, false).ToList();
         VBuffer<ReadOnlyMemory<char>> scoreSlots = default;
@@ -548,14 +554,16 @@ public static class Phase4BenchmarkRunner
         };
     }
 
-    private static double SelectThreshold(IReadOnlyList<IntentEvaluationResult> predictions)
+    private static double SelectThreshold(
+        IReadOnlyList<IntentEvaluationResult> predictions,
+        IReadOnlyList<IntentDatasetRecord> expected,
+        IReadOnlyList<string> classes)
     {
         var bestThreshold = .35;
         var best = double.MinValue;
         foreach (var threshold in new[] { .15, .20, .25, .30, .35, .40, .45, .50, .55, .60 })
         {
-            var score = predictions.Count == 0 ? 0 : predictions.Average(item =>
-                ApplyThreshold(item, threshold) == item.Label ? 1d : 0d);
+            var score = ValidationMacroF1(predictions, expected, threshold, classes);
             if (score > best)
             {
                 best = score;

@@ -46,7 +46,10 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
                 Content = $"Previous server-owned conversation state: intent={request.Memory?.LastIntent ?? "none"}; subIntent={request.Memory?.LastSubIntent ?? "none"}; pendingClarification={request.Memory?.PendingClarification ?? "none"}."
             });
 
-        var allowedToolContracts = request.AllowedTools
+        var planningDefinitions = request.AllowedTools.Count > 0
+            ? request.AllowedTools
+            : request.AllowedToolNames.Select(name => new AiToolDefinition { Name = name }).ToArray();
+        var allowedToolContracts = planningDefinitions
             .Where(x => allowed.Contains(x.Name, StringComparer.OrdinalIgnoreCase) && AiPlannerPolicy.IsAllowed(x.Name))
             .Select(x => new
             {
@@ -54,7 +57,19 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
                 description = x.Description,
                 capabilities = x.Capabilities.Select(capability => capability.ToString()).OrderBy(x => x).ToArray(),
                 riskLevel = x.RiskLevel.ToString(),
-                confirmation = x.Confirmation.ToString()
+                confirmation = x.Confirmation.ToString(),
+                // Resource identifiers are server-bound. Do not disclose even
+                // their argument names to the provider-facing contract.
+                argumentSchema = x.ArgumentSchema
+                    .Where(argument => !argument.ServerBound)
+                    .Select(argument => new
+                    {
+                        name = argument.Name,
+                        type = argument.Type.ToString(),
+                        required = argument.Required,
+                        serverBound = argument.ServerBound
+                    }).ToArray(),
+                hasServerBoundResource = x.ResourceBinding.ServerBoundArgumentNames.Count > 0
             })
             .ToArray();
 
@@ -114,6 +129,14 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
                 return Failed(AiProviderStatusContract.Degraded, "INVALID_PROVIDER_PLAN", true);
             }
 
+            var preflight = AiToolBindingRegistry.ValidateAndBindPlan(calls, planningDefinitions, request.Resource);
+            if (!preflight.IsValid)
+            {
+                if (!string.Equals(preflight.Code, "PROVIDER_RESOURCE_MISMATCH", StringComparison.Ordinal))
+                    _health.RecordFailure();
+                return Failed(AiProviderStatusContract.Degraded, preflight.Code, true);
+            }
+
             if (!providerResult.IsClear && string.IsNullOrWhiteSpace(providerResult.Clarification) && string.IsNullOrWhiteSpace(providerResult.ClarificationPrompt))
             {
                 _health.RecordFailure();
@@ -135,7 +158,7 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
                     Confidence = providerResult.PlannerConfidence.Value,
                     Message = Limit(providerResult.Reply, 500),
                     Clarification = Limit(providerResult.Clarification ?? providerResult.ClarificationPrompt, 300),
-                    ToolCalls = calls.ToArray()
+                    ToolCalls = preflight.BoundCalls
                 }
             };
         }
@@ -180,8 +203,13 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
         {
             PlannerMode = AiPlannerModes.Fallback,
             Intent = AiChatIntentTypes.ClarificationRequired,
-            Clarification = "Tôi chưa xác định được yêu cầu đủ an toàn để tra cứu. Vui lòng mô tả rõ dữ liệu hoặc workspace cần xem.",
-            Message = "Tôi chưa xác định được yêu cầu đủ an toàn để tra cứu. Vui lòng mô tả rõ dữ liệu hoặc workspace cần xem."
+            ErrorCode = reason,
+            Clarification = reason == "PROVIDER_RESOURCE_MISMATCH"
+                ? "Tôi không thể dùng resource do provider chọn vì nó không khớp resource đang mở. Vui lòng chọn lại resource hiện tại rồi thử lại."
+                : "Tôi chưa xác định được yêu cầu đủ an toàn để tra cứu. Vui lòng mô tả rõ dữ liệu hoặc workspace cần xem.",
+            Message = reason == "PROVIDER_RESOURCE_MISMATCH"
+                ? "Tôi không thể dùng resource do provider chọn vì nó không khớp resource đang mở."
+                : "Tôi chưa xác định được yêu cầu đủ an toàn để tra cứu. Vui lòng mô tả rõ dữ liệu hoặc workspace cần xem."
         }
     };
 

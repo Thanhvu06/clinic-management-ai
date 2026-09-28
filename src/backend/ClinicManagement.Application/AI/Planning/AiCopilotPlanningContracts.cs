@@ -40,6 +40,7 @@ public sealed class AiPlannerDecision
     public string? Message { get; init; }
     public string? Clarification { get; init; }
     public string? NavigationRoute { get; init; }
+    public string? ErrorCode { get; init; }
     public IReadOnlyList<AiPlannerToolCall> ToolCalls { get; init; } = Array.Empty<AiPlannerToolCall>();
 }
 
