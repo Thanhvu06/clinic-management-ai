@@ -186,6 +186,19 @@ describe('P0-1 earliest-slot booking context', () => {
         expect(screen.queryByText(/Xác nhận đặt lịch khám/i)).not.toBeInTheDocument();
     });
 
+    it('shows a backend-specific transport message and preserves the booking draft', async () => {
+        vi.mocked(axiosClient.post).mockRejectedValueOnce({ status: 503, message: 'service unavailable' });
+        renderWidgetWithProbe();
+
+        fireEvent.click(screen.getByText('Draft Tim mạch'));
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        fireEvent.click(screen.getByText('Tìm lịch khám sớm nhất.'));
+
+        expect(await screen.findByText(/Máy chủ ClinicCare đang gặp sự cố tạm thời/i)).toBeInTheDocument();
+        expect(screen.getByTestId('draft-json')).toHaveTextContent('"specialtyId":1');
+        expect(screen.getByText('Mở trang Đặt lịch khám')).toBeInTheDocument();
+    });
+
     it('syncs page specialty into chat and sends structured intent with current context', async () => {
         vi.mocked(axiosClient.post).mockResolvedValueOnce(finderResponse);
         renderBookingPage();

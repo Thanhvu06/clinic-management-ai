@@ -26,6 +26,7 @@ export const CANONICAL_COPILOT_CARD_TYPES = [
     'doctor_prescription_status',
     'technician_worklist',
     'pharmacist_prescription_queue',
+    'pharmacist_prescription_payment',
     'pharmacy_inventory',
     'admin_dashboard_metrics',
     'admin_ai_health',

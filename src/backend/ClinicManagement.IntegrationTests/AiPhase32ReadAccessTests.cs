@@ -176,6 +176,26 @@ public sealed class AiPhase32ReadAccessTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Pharmacist_copilot_reads_payment_for_the_open_prescription_without_exposing_internal_id()
+    {
+        var fixture = await CreateClinicalFixtureAsync(Patient1EntityId, DoctorEntityId);
+        long prescriptionId;
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            prescriptionId = await db.Prescriptions.Where(x => x.PatientVisitId == fixture.VisitId).Select(x => x.Id).SingleAsync();
+        }
+
+        var pharmacist = await CreateAuthenticatedClientAsync("pharm@test.com");
+        var response = await ChatAsync(pharmacist, "Đơn này đã thanh toán đủ thuốc chưa?", new { prescriptionId }, "pharmacist-payment-status");
+
+        Assert.Equal("NotCalled", response.GetProperty("providerStatus").GetString());
+        var card = AssertCard(response, "pharmacist_prescription_payment");
+        Assert.Equal("unpaid", card.GetProperty("data").GetProperty("paymentStatus").GetString());
+        Assert.DoesNotContain("prescriptionId", response.GetRawText(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Context_resolver_rejects_cross_patient_composite_and_reassignment_at_request_time()
     {
         var first = await CreateClinicalFixtureAsync(Patient1EntityId, DoctorEntityId);

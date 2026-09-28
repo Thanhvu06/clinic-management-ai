@@ -56,10 +56,13 @@ public sealed class AiStructuredPlannerRequest
 {
     public AiActorRole Role { get; init; }
     public string Message { get; init; } = string.Empty;
+    public string? LocalIntent { get; init; }
+    public decimal? LocalConfidence { get; init; }
     public string ConversationId { get; init; } = string.Empty;
     public AiResolvedResourceContext Resource { get; init; } = new();
     public AiConversationMemoryState? Memory { get; init; }
     public IReadOnlyList<string> AllowedToolNames { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<AiToolDefinition> AllowedTools { get; init; } = Array.Empty<AiToolDefinition>();
 }
 
 public sealed class AiStructuredPlannerResult

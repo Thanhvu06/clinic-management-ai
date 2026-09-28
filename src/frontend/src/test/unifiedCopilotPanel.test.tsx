@@ -71,6 +71,15 @@ const DoctorPrescriptionArgumentsButton: React.FC = () => {
     })}>Chọn thuốc cho Copilot</button>;
 };
 
+const DoctorPrescriptionMinimumArgumentsButton: React.FC = () => {
+    const { setSelection } = useCopilotResource();
+    return <button type="button" onClick={() => setSelection({
+        context: { visitId: 42 },
+        source: 'doctor-prescription-form',
+        actionArguments: { items: [{ medicineId: 7, quantity: 2 }] }
+    })}>Chọn thuốc tối thiểu cho Copilot</button>;
+};
+
 const TechnicianResultArgumentsButton: React.FC = () => {
     const { setSelection } = useCopilotResource();
     return <button type="button" onClick={() => setSelection({
@@ -337,6 +346,24 @@ describe('UnifiedCopilotPanel', () => {
             notes: 'Uống sau ăn',
             items: [{ medicineId: 7, quantity: 2, dosage: '500mg', frequency: 'Ngày 2 lần', durationDays: 3 }]
         });
+    });
+
+    it('enables a prescription draft with medicine and quantity without inventing dosage', async () => {
+        mockUser = { userId: 'doctor-1', fullName: 'Doctor', role: 'Doctor' };
+        const tool = { name: 'doctor.prepare_prescription_draft', version: '1.0', description: 'Chuẩn bị đơn thuốc', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        prepareActionMock.mockResolvedValue({ status: 'pending_confirmation', actionId: 'rx-min-action', data: { confirmationToken: 'rx-min-token' }, preview: { toolName: tool.name, status: 'pending_confirmation', resourceType: 'PatientVisit', resourceId: '42', resource: { identity: 'Ca khám' }, changes: [{ kind: 'prescription_draft', summary: 'Lưu nháp đơn thuốc', items: [{ label: 'Thuốc', value: 'Thuốc đã chọn' }] }], consequence: 'Lưu nháp đơn thuốc.', confirmationSummary: 'Đã kiểm tra.', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:00Z', sources: [{ name: 'visit', kind: 'database' }] } });
+
+        render(<MemoryRouter initialEntries={['/doctor/visits/42']}><CopilotResourceProvider><DoctorPrescriptionMinimumArgumentsButton /><UnifiedCopilotPanel /></CopilotResourceProvider></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn thuốc tối thiểu cho Copilot' }));
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Bác sĩ/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument());
+        expect(screen.getByRole('button', { name: 'Xem trước' })).toBeEnabled();
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+
+        await waitFor(() => expect(prepareActionMock).toHaveBeenCalledTimes(1));
+        const request = prepareActionMock.mock.calls[0][0] as { argumentsJson: string };
+        expect(JSON.parse(request.argumentsJson)).toEqual({ visitId: 42, items: [{ medicineId: 7, quantity: 2 }] });
     });
 
     it('sends the selected technician result and item identity to the backend preview', async () => {

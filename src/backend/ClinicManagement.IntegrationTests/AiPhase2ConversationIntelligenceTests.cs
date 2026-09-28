@@ -2,8 +2,10 @@ using ClinicManagement.Application.AI;
 using ClinicManagement.Application.AI.Conversation;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
+using ClinicManagement.Application.AI.Planning;
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Infrastructure.AI;
+using ClinicManagement.Infrastructure.AI.Planning;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ClinicManagement.IntegrationTests;
@@ -80,5 +82,44 @@ public sealed class AiPhase2ConversationIntelligenceTests : IntegrationTestBase
         Assert.Equal(AiProviderStatusContract.Online, AiProviderStatusContract.FromProviderResult("Success", called: true));
         Assert.Equal(AiProviderStatusContract.Degraded, AiProviderStatusContract.FromProviderResult("InvalidResponse", called: true));
         Assert.Equal(AiProviderStatusContract.Unavailable, AiProviderStatusContract.FromProviderResult("Disabled", called: true));
+    }
+
+    [Fact]
+    public void Deterministic_planner_respects_negated_write_and_requires_context_for_prescription_payment()
+    {
+        var planner = new AiDeterministicPlanner();
+
+        var ownHistory = planner.Plan(new AiCopilotPlanningContext
+        {
+            Role = AiActorRole.Patient,
+            NormalizedMessage = "Tôi muốn xem lịch cũ, không phải đặt lịch mới",
+            Analysis = new AiConversationAnalysis()
+        });
+
+        Assert.Equal(AiChatIntentTypes.ViewAppointments, ownHistory.Intent);
+        Assert.Single(ownHistory.ToolCalls);
+        Assert.Equal("patient.get_my_appointments", ownHistory.ToolCalls[0].Name);
+
+        var payment = planner.Plan(new AiCopilotPlanningContext
+        {
+            Role = AiActorRole.Pharmacist,
+            NormalizedMessage = "Đơn này đã thanh toán đủ thuốc chưa?",
+            Resource = new AiResolvedResourceContext { PrescriptionId = 42 },
+            Analysis = new AiConversationAnalysis()
+        });
+
+        Assert.Single(payment.ToolCalls);
+        Assert.Equal("pharmacist.get_prescription_payment_status", payment.ToolCalls[0].Name);
+
+        var missingResource = planner.Plan(new AiCopilotPlanningContext
+        {
+            Role = AiActorRole.Pharmacist,
+            NormalizedMessage = "Đơn này đã thanh toán đủ thuốc chưa?",
+            Analysis = new AiConversationAnalysis()
+        });
+
+        Assert.Equal("MissingPrescriptionForPayment", missingResource.SubIntent);
+        Assert.Empty(missingResource.ToolCalls);
+        Assert.NotNull(missingResource.Clarification);
     }
 }

@@ -39,15 +39,49 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
 
         var allowed = request.AllowedToolNames.Where(AiPlannerPolicy.IsAllowed).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var context = new List<ChatMessageDto>();
-        if (!string.IsNullOrWhiteSpace(request.Memory?.LastIntent))
-            context.Add(new ChatMessageDto { Role = "model", Content = $"Previous sanitized intent: {request.Memory.LastIntent}." });
+        if (!string.IsNullOrWhiteSpace(request.Memory?.LastIntent) || !string.IsNullOrWhiteSpace(request.Memory?.PendingClarification))
+            context.Add(new ChatMessageDto
+            {
+                Role = "model",
+                Content = $"Previous server-owned conversation state: intent={request.Memory?.LastIntent ?? "none"}; subIntent={request.Memory?.LastSubIntent ?? "none"}; pendingClarification={request.Memory?.PendingClarification ?? "none"}."
+            });
+
+        var allowedToolContracts = request.AllowedTools
+            .Where(x => allowed.Contains(x.Name, StringComparer.OrdinalIgnoreCase) && AiPlannerPolicy.IsAllowed(x.Name))
+            .Select(x => new
+            {
+                name = x.Name,
+                description = x.Description,
+                capabilities = x.Capabilities.Select(capability => capability.ToString()).OrderBy(x => x).ToArray(),
+                riskLevel = x.RiskLevel.ToString(),
+                confirmation = x.Confirmation.ToString()
+            })
+            .ToArray();
 
         var policyContext = JsonSerializer.Serialize(new
         {
             actorRole = request.Role.ToString(),
-            allowedTools = allowed,
-            resourceContextAvailable = HasResource(request.Resource),
-            instruction = "Return JSON only. Use only allowedTools. Do not emit write or confirmation tools. Ask a clarification when data is missing."
+            localIntent = request.LocalIntent,
+            localConfidence = request.LocalConfidence,
+            allowedToolNames = allowed,
+            allowedToolContracts,
+            resourceContext = new
+            {
+                currentRoute = request.Resource.CurrentRoute,
+                hasAppointment = request.Resource.AppointmentId.HasValue,
+                hasVisit = request.Resource.VisitId.HasValue,
+                hasDiagnosticOrder = request.Resource.DiagnosticOrderId.HasValue,
+                hasPrescription = request.Resource.PrescriptionId.HasValue
+            },
+            conversation = new
+            {
+                request.Memory?.SanitizedSummary,
+                request.Memory?.LastIntent,
+                request.Memory?.LastSubIntent,
+                request.Memory?.PendingClarification,
+                request.Memory?.Version
+            },
+            instruction = "Return JSON only. Use only allowedTools. Do not emit write or confirmation tools. Ask a clarification when data is missing. Resource identifiers are server-bound and must not be requested from or echoed to the user."
         });
 
         try

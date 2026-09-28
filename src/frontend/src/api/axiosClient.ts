@@ -34,7 +34,15 @@ axiosClient.interceptors.response.use(
                 window.location.href = '/forbidden';
             }
         }
-        return Promise.reject(error.response?.data || error.message);
+        const payload = error.response?.data;
+        if (payload && typeof payload === 'object') {
+            return Promise.reject({
+                ...(payload as Record<string, unknown>),
+                status: error.response?.status,
+                code: error.code
+            });
+        }
+        return Promise.reject({ message: error.message, status: error.response?.status, code: error.code });
     }
 );
 

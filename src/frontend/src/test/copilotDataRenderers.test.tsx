@@ -27,6 +27,7 @@ const fixtures: Record<string, unknown> = {
     doctor_prescription_status: [{ id: 15, status: 'Issued', items: [{ medicine: 'Thuốc A', Dosage: '1 viên' }] }],
     technician_worklist: [{ id: 16, orderCode: 'LAB-16', status: 'Ordered', items: [{ service: 'Xét nghiệm', status: 'Ordered' }] }],
     pharmacist_prescription_queue: [{ id: 17, status: 'Issued', paymentStatus: 'unpaid', paymentItems: [{ medicine: 'Thuốc A', requiredQuantity: 1, paidQuantity: 0 }] }],
+    pharmacist_prescription_payment: { prescriptionStatus: 'Issued', paymentStatus: 'unpaid', paymentItems: [{ medicine: 'Thuốc A', requiredQuantity: 1, paidQuantity: 0, itemPaymentStatus: 'unpaid' }] },
     pharmacy_inventory: [{ id: 18, name: 'Thuốc A', unit: 'viên', stockQuantity: 10, reorderLevel: 2 }],
     admin_dashboard_metrics: { appointmentsToday: 1, activeVisits: 2, openDiagnosticOrders: 3, issuedPrescriptions: 4 },
     admin_ai_health: { pendingActions: 1, auditEvents: 5 },

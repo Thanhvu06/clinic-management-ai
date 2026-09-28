@@ -18,6 +18,7 @@ public static class AiRoleToolCatalog
         RoleTool("doctor.get_prescription_status", "Xem trạng thái đơn thuốc của ca được phân công", AiActorRole.Doctor, AiActorCapability.ReadDoctorWorkspace),
         RoleTool("technician.get_worklist", "Xem danh sách chỉ định cận lâm sàng được phân công", AiActorRole.DiagnosticTechnician, AiActorCapability.ReadDiagnosticWorkspace),
         RoleTool("pharmacist.get_prescription_queue", "Xem đơn thuốc đủ điều kiện xử lý", AiActorRole.Pharmacist, AiActorCapability.ReadPharmacyWorkspace),
+        RoleTool("pharmacist.get_prescription_payment_status", "Đối chiếu thanh toán theo từng dòng của đơn thuốc đang mở", AiActorRole.Pharmacist, AiActorCapability.ReadPharmacyWorkspace),
         RoleTool("pharmacist.get_inventory_status", "Xem tồn kho toàn hệ thống (mô hình hiện tại chưa phân tách theo cơ sở; vẫn yêu cầu phân công Pharmacist hợp lệ)", AiActorRole.Pharmacist, AiActorCapability.ReadPharmacyWorkspace),
         RoleTool("admin.get_dashboard_metrics", "Xem chỉ số tổng hợp không chứa dữ liệu lâm sàng", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics),
         RoleTool("admin.get_ai_health", "Xem chỉ số hoạt động AI đã được khử định danh", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics),

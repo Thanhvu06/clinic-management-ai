@@ -107,6 +107,14 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
             if (invocation.ToolName.Equals("doctor.get_diagnostic_orders", StringComparison.OrdinalIgnoreCase) &&
                 !HasAtMostOnePositiveResourceId(document.RootElement, "appointmentId", "visitId"))
                 return AiToolArgumentValidationResult.Invalid("INVALID_TOOL_ARGUMENTS", "Chỉ hỗ trợ tối đa một appointmentId hoặc visitId hợp lệ cho truy vấn chỉ định.");
+            if (invocation.ToolName.Equals("pharmacist.get_prescription_payment_status", StringComparison.OrdinalIgnoreCase))
+            {
+                if (document.RootElement.EnumerateObject().Any(x => !x.Name.Equals("prescriptionId", StringComparison.OrdinalIgnoreCase)))
+                    return AiToolArgumentValidationResult.Invalid("UNKNOWN_TOOL_ARGUMENT", "Công cụ đối chiếu thanh toán chỉ nhận prescriptionId do context hiện tại cung cấp.");
+                if (!document.RootElement.TryGetProperty("prescriptionId", out var prescriptionId) ||
+                    !prescriptionId.TryGetInt64(out var parsedPrescriptionId) || parsedPrescriptionId <= 0)
+                    return AiToolArgumentValidationResult.Invalid("MISSING_TOOL_ARGUMENT", "Cần mở đúng đơn thuốc để đối chiếu thanh toán.");
+            }
             return AiToolArgumentValidationResult.Valid();
         }
         catch (JsonException)
@@ -128,6 +136,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
             "doctor.get_prescription_status" => GetDoctorPrescriptionStatusAsync(context, invocation.ArgumentsJson, cancellationToken),
             "technician.get_worklist" => GetTechnicianWorklistAsync(context, cancellationToken),
             "pharmacist.get_prescription_queue" => GetPharmacyQueueAsync(context, cancellationToken),
+            "pharmacist.get_prescription_payment_status" => GetPrescriptionPaymentStatusAsync(context, invocation.ArgumentsJson, cancellationToken),
             "pharmacist.get_inventory_status" => GetInventoryAsync(context, cancellationToken),
             "admin.get_dashboard_metrics" => GetAdminMetricsAsync(context, cancellationToken),
             "admin.get_ai_health" => GetAiHealthAsync(context, cancellationToken),
@@ -904,6 +913,46 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
             });
         }
         return Completed(items, "pharmacist_prescription_queue", $"Có {items.Count} đơn thuốc trong hàng đợi.");
+    }
+
+    private async Task<AiToolExecutionResult> GetPrescriptionPaymentStatusAsync(AiToolExecutionContext context, string json, CancellationToken cancellationToken)
+    {
+        if (!TryGetLong(json, "prescriptionId", out var prescriptionId))
+            return AiToolExecutionResult.Failed("MISSING_TOOL_ARGUMENT", "Cần mở đúng đơn thuốc để đối chiếu thanh toán.");
+
+        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Pharmacist), cancellationToken);
+        if (facilities.Count == 0) return ScopeDenied();
+
+        var prescription = await _db.Prescriptions.AsNoTracking()
+            .Where(p => p.Id == prescriptionId &&
+                        ((p.PatientVisit != null && facilities.Contains(p.PatientVisit.FacilityId)) ||
+                         (p.PatientVisit == null && p.Appointment != null && p.Appointment.FacilityId.HasValue && facilities.Contains(p.Appointment.FacilityId.Value))))
+            .Select(p => new { status = p.Status.ToString(), p.CreatedAt })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (prescription is null)
+            return AiToolExecutionResult.Failed("NOT_FOUND", "Đơn thuốc không thuộc phạm vi cơ sở được phân quyền hoặc không còn tồn tại.");
+
+        var payment = await _pharmacy.EvaluatePrescriptionPaymentAsync(prescriptionId, cancellationToken);
+        var data = new
+        {
+            prescriptionStatus = prescription.status,
+            prescriptionCreatedAt = prescription.CreatedAt,
+            paymentStatus = payment.PaymentStatus,
+            paymentItems = payment.Items.Select(item => new
+            {
+                medicine = item.MedicineName,
+                requiredQuantity = item.RequiredQuantity,
+                paidQuantity = item.PaidQuantity,
+                itemPaymentStatus = item.IsPaidInFull ? "paid_in_full" : item.PaidQuantity > 0 ? "partially_paid" : "unpaid"
+            }).ToList()
+        };
+        return Completed(data, "pharmacist_prescription_payment", payment.PaymentStatus switch
+        {
+            "paid_in_full" => "Đơn thuốc đã được thanh toán đủ theo từng dòng thuốc.",
+            "partially_paid" => "Đơn thuốc mới được thanh toán một phần theo từng dòng thuốc.",
+            "unpaid" => "Đơn thuốc chưa được thanh toán đủ theo từng dòng thuốc.",
+            _ => "Chưa thể xác minh đầy đủ trạng thái thanh toán của đơn thuốc."
+        });
     }
 
     private async Task<AiToolExecutionResult> GetInventoryAsync(AiToolExecutionContext context, CancellationToken cancellationToken)

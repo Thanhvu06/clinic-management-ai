@@ -13,6 +13,7 @@ import {
     type AiCopilotTool,
     type AiActionPreview
 } from '../../api/aiCopilotApi';
+import { aiChatFailureMessage } from '../../api/aiErrorMessages';
 import { getCopilotRoleConfig, type CopilotRole } from './copilotConfig';
 import { useCopilotResource, type CopilotResourceSelection } from './copilotResourceContext';
 
@@ -176,7 +177,7 @@ const actionCapability = (
                         ? 'Cần đúng một visit hoặc lịch hẹn đang mở từ hồ sơ bác sĩ.'
                         : appointmentNeedsDepartment
                             ? 'Cần khoa của lịch hẹn từ dữ liệu nghiệp vụ; không tự đoán khoa.'
-                            : 'Cần ít nhất một thuốc và liều lượng đã được chọn trong form đơn thuốc.',
+                            : 'Cần ít nhất một thuốc và số lượng hợp lệ trong form đơn thuốc; liều dùng/tần suất nếu đã nhập sẽ được giữ nguyên, AI không tự điền.',
                     arguments: enabled
                         ? {
                             ...(id(context.visitId)
@@ -419,8 +420,7 @@ export const useUnifiedCopilot = () => {
         } catch (error) {
             if (controller.signal.aborted || requestNumber !== requestNumberRef.current) return;
             retryTextRef.current = message;
-            const detail = error && typeof error === 'object' && 'message' in error ? String((error as { message?: unknown }).message ?? '') : '';
-            setMessages(previous => [...previous, { id: makeId('error'), role: 'assistant', error: true, retryText: message, content: detail || 'Không thể kết nối Copilot. Bạn có thể thử lại.' }]);
+            setMessages(previous => [...previous, { id: makeId('error'), role: 'assistant', error: true, retryText: message, content: aiChatFailureMessage(error) }]);
         } finally {
             if (requestNumber === requestNumberRef.current) setLoading(false);
         }

@@ -10,6 +10,7 @@ import {
 } from "../contexts/ChatContext";
 import { useAuth } from "../auth/AuthContext";
 import axiosClient from "../api/axiosClient";
+import { aiChatFailureMessage } from "../api/aiErrorMessages";
 import type { ApiResponse } from "../types";
 import type {
     ChatMessage,
@@ -533,32 +534,24 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 return;
             }
 
-            if (errorCode === "TOO_MANY_REQUESTS" || message.includes("quá nhiều")) {
-                setMessages(prev => [...prev, {
-                    role: "model",
-                    content: "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.",
-                    urgency: "ROUTINE",
-                    assistantStatus: "Offline"
-                }]);
-            } else {
-                setMessages(prev => [...prev, {
-                    role: "model",
-                    content: "Xin lỗi, hệ thống AI đang bận hoặc gặp sự cố kết nối. Bạn có thể chọn chuyên khoa và đặt lịch trực tiếp qua trang Đặt lịch khám.",
-                    urgency: "ROUTINE",
-                    assistantStatus: "Offline",
-                    actions: [
-                        {
-                            id: "act-fallback-book",
-                            type: "StartBooking",
-                            label: "Mở trang Đặt lịch khám",
-                            style: "primary",
-                            requiresAuthentication: false,
-                            requiresConfirmation: false,
-                            payload: { targetUrl: "/patient/book" }
-                        }
-                    ]
-                }]);
-            }
+            const isRateLimited = errorCode === "TOO_MANY_REQUESTS" || message.includes("quá nhiều");
+            setMessages(prev => [...prev, {
+                role: "model",
+                content: aiChatFailureMessage(err, "booking"),
+                urgency: "ROUTINE",
+                assistantStatus: "Offline",
+                ...(!isRateLimited ? { actions: [
+                    {
+                        id: "act-fallback-book",
+                        type: "StartBooking" as const,
+                        label: "Mở trang Đặt lịch khám",
+                        style: "primary" as const,
+                        requiresAuthentication: false,
+                        requiresConfirmation: false,
+                        payload: { targetUrl: "/patient/book" }
+                    }
+                ] } : {})
+            }]);
         } finally {
             if (requestId === activeRequestIdRef.current) {
                 setLoading(false);

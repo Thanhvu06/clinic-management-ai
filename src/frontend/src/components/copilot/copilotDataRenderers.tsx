@@ -284,6 +284,22 @@ const PharmacyQueueCard: React.FC<{ data: unknown }> = ({ data }) => {
     return <List>{items.slice(0, 20).map((item, index) => <article className={styles.typedItem} key={index}><strong>Đơn thuốc trong hàng đợi</strong><StatusLine label="Trạng thái đơn" value={item.status} /><StatusLine label="Thanh toán" value={item.paymentStatus} />{asRecords(item.paymentItems).map((paymentItem, paymentIndex) => <div className={styles.typedSubsection} key={paymentIndex}><StatusLine label="Thuốc" value={paymentItem.medicine} /><StatusLine label="Số lượng yêu cầu" value={paymentItem.requiredQuantity} /><StatusLine label="Đã thanh toán" value={paymentItem.paidQuantity} /><StatusLine label="Trạng thái dòng thanh toán" value={paymentItem.itemPaymentStatus} /></div>)}</article>)}</List>;
 };
 
+const PharmacyPaymentCard: React.FC<{ data: unknown }> = ({ data }) => {
+    const item = asRecord(data);
+    if (!item) return <EmptyData message="Chưa thể hiển thị trạng thái thanh toán của đơn thuốc." />;
+    return <List><article className={styles.typedItem}>
+        <strong>Đối chiếu thanh toán đơn thuốc</strong>
+        <StatusLine label="Trạng thái đơn" value={item.prescriptionStatus} />
+        <StatusLine label="Thanh toán" value={item.paymentStatus} />
+        {asRecords(item.paymentItems).map((paymentItem, index) => <div className={styles.typedSubsection} key={index}>
+            <StatusLine label="Thuốc" value={paymentItem.medicine} />
+            <StatusLine label="Số lượng yêu cầu" value={paymentItem.requiredQuantity} />
+            <StatusLine label="Đã thanh toán" value={paymentItem.paidQuantity} />
+            <StatusLine label="Trạng thái dòng thanh toán" value={paymentItem.itemPaymentStatus} />
+        </div>)}
+    </article></List>;
+};
+
 const PharmacyInventoryCard: React.FC<{ data: unknown }> = ({ data }) => {
     const items = asRecords(data);
     if (!items.length) return <EmptyData message="Kho thuốc hiện không có dữ liệu phù hợp." />;
@@ -336,6 +352,7 @@ export const renderCopilotCardData = (card: AiCopilotCard): React.ReactNode => {
         case 'doctor_prescription_status': return <PrescriptionCard data={card.data} />;
         case 'technician_worklist': return <TechnicianWorklistCard data={card.data} />;
         case 'pharmacist_prescription_queue': return <PharmacyQueueCard data={card.data} />;
+        case 'pharmacist_prescription_payment': return <PharmacyPaymentCard data={card.data} />;
         case 'pharmacy_inventory': return <PharmacyInventoryCard data={card.data} />;
         case 'admin_dashboard_metrics': return <AdminMetricsCard data={card.data} />;
         case 'admin_ai_health': return <AdminHealthCard data={card.data} />;

@@ -31,6 +31,24 @@ public sealed class GeminiAiProviderResilienceTests
     }
 
     [Fact]
+    public async Task Specialty_suggestion_path_respects_retry_after_and_recovers_within_the_same_budget()
+    {
+        var handler = new SequenceHandler(
+            _ => Task.FromResult(Response(HttpStatusCode.TooManyRequests, "{}", TimeSpan.FromMilliseconds(60))),
+            _ => Task.FromResult(Response(HttpStatusCode.OK, ValidSuggestionEnvelope())));
+        var provider = CreateProvider(handler, timeoutSeconds: 2, maxAttempts: 2, retryBaseDelayMilliseconds: 0);
+
+        var result = await provider.GetSuggestionsFromAiAsync(
+            "đau đầu",
+            new List<WhitelistItemDto> { new() { Code = "SP01", Name = "Nội tổng quát" } },
+            CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal("SP01", result[0].SpecialtyCode);
+        Assert.Equal(2, handler.CallCount);
+    }
+
+    [Fact]
     public async Task Respects_retry_after_for_429_when_budget_allows_a_second_attempt()
     {
         var first = Response(HttpStatusCode.TooManyRequests, "{}", TimeSpan.FromMilliseconds(80));
@@ -226,6 +244,23 @@ public sealed class GeminiAiProviderResilienceTests
                 content = new
                 {
                     parts = new[] { new { text = "not-json" } }
+                }
+            }
+        }
+    });
+
+    private static string ValidSuggestionEnvelope() => JsonSerializer.Serialize(new
+    {
+        candidates = new[]
+        {
+            new
+            {
+                content = new
+                {
+                    parts = new[]
+                    {
+                        new { text = JsonSerializer.Serialize(new[] { new { specialtyCode = "SP01", reason = "Phù hợp để tra cứu ban đầu." } }) }
+                    }
                 }
             }
         }

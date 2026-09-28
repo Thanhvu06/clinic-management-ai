@@ -31,6 +31,7 @@ public static class AiPlannerPolicy
         "doctor.get_prescription_status",
         "technician.get_worklist",
         "pharmacist.get_prescription_queue",
+        "pharmacist.get_prescription_payment_status",
         "pharmacist.get_inventory_status",
         "admin.get_dashboard_metrics",
         "admin.get_ai_health"

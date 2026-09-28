@@ -130,13 +130,16 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 {
                     Role = role,
                     Message = analysis.NormalizedText,
+                    LocalIntent = analysis.Intent.Intent,
+                    LocalConfidence = (decimal)analysis.Intent.Confidence,
                     ConversationId = conversationId,
                     Resource = resolved.Context,
                     Memory = memory,
-                    AllowedToolNames = tools.Select(x => x.Name).ToArray()
+                    AllowedToolNames = tools.Select(x => x.Name).ToArray(),
+                    AllowedTools = tools
                 }, cancellationToken);
                 providerState = planned.ProviderState;
-                decision = planned.Decision;
+                decision = BindCurrentResourceArguments(planned.Decision, resolved.Context);
             }
         }
 
@@ -252,6 +255,40 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         Message = message,
         Confidence = 1m
     };
+
+    private static AiPlannerDecision BindCurrentResourceArguments(AiPlannerDecision decision, AiResolvedResourceContext resource)
+    {
+        var calls = decision.ToolCalls.Select(call =>
+        {
+            var required = call.Name.ToLowerInvariant() switch
+            {
+                "doctor.get_patient_summary" or "doctor.get_diagnostic_orders" or "doctor.get_prescription_status" =>
+                    resource.VisitId.HasValue ? ("visitId", resource.VisitId.Value) : resource.AppointmentId.HasValue ? ("appointmentId", resource.AppointmentId.Value) : (null, 0L),
+                "patient.get_appointment_detail" => resource.AppointmentId.HasValue ? ("appointmentId", resource.AppointmentId.Value) : (null, 0L),
+                "pharmacist.get_prescription_payment_status" => resource.PrescriptionId.HasValue ? ("prescriptionId", resource.PrescriptionId.Value) : (null, 0L),
+                _ => (null, 0L)
+            };
+            if (required.Item1 is null || call.Arguments.ValueKind != JsonValueKind.Object || call.Arguments.TryGetProperty(required.Item1, out _))
+                return call;
+
+            var arguments = call.Arguments.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.OrdinalIgnoreCase);
+            arguments[required.Item1] = JsonSerializer.SerializeToElement(required.Item2);
+            return new AiPlannerToolCall { Name = call.Name, Version = call.Version, Arguments = JsonSerializer.SerializeToElement(arguments) };
+        }).ToArray();
+
+        return new AiPlannerDecision
+        {
+            PlannerMode = decision.PlannerMode,
+            Intent = decision.Intent,
+            SubIntent = decision.SubIntent,
+            Confidence = decision.Confidence,
+            RequiresProvider = decision.RequiresProvider,
+            Message = decision.Message,
+            Clarification = decision.Clarification,
+            NavigationRoute = decision.NavigationRoute,
+            ToolCalls = calls
+        };
+    }
 
     private static AiCopilotResponseDto ClarifyingResponse(string conversationId, string turnId, AiActorRole role, IReadOnlyList<AiToolDefinition> tools, string message, string providerState, string plannerMode, string? subIntent) => new()
     {

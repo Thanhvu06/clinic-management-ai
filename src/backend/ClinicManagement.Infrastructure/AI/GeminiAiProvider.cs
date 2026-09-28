@@ -73,13 +73,25 @@ PATIENT SYMPTOM DESCRIPTION:
 
         var url = $"{_options.ProviderUrl}/v1beta/models/{_options.ModelName}:generateContent";
 
-        int maxRetries = 1;
-        int delayMs = 500;
-        
-        for (int i = 0; i <= maxRetries; i++)
+        var totalBudget = TimeSpan.FromSeconds(Math.Max(1, _options.TimeoutSeconds));
+        var totalClock = Stopwatch.StartNew();
+        var maxAttempts = Math.Clamp(_options.MaxAttempts, 1, 3);
+        var attemptBudget = TimeSpan.FromMilliseconds(Math.Max(100, totalBudget.TotalMilliseconds / maxAttempts));
+
+        using var overallCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        overallCts.CancelAfter(totalBudget);
+
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+            if (cancellationToken.IsCancellationRequested)
+                return new List<AiProviderSuggestionResult>();
+
+            var remaining = RemainingBudget(totalBudget, totalClock);
+            if (remaining <= TimeSpan.Zero)
+                return new List<AiProviderSuggestionResult>();
+
+            using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(overallCts.Token);
+            attemptCts.CancelAfter(remaining < attemptBudget ? remaining : attemptBudget);
             
             try
             {
@@ -89,16 +101,34 @@ PATIENT SYMPTOM DESCRIPTION:
                 };
                 requestMessage.Headers.Add("x-goog-api-key", _options.ApiKey);
 
-                var response = await _httpClient.SendAsync(requestMessage, cts.Token);
-                
-                if (!response.IsSuccessStatusCode)
+                using var response = await _httpClient.SendAsync(requestMessage, attemptCts.Token);
+
+                if (response.IsSuccessStatusCode)
                 {
-                    _logger.LogError("AI Provider returned status code {StatusCode}. Aborting.", response.StatusCode);
-                    return new List<AiProviderSuggestionResult>(); // Not a network error, don't retry quota/auth errors
+                    var responseString = await response.Content.ReadAsStringAsync(attemptCts.Token);
+                    return ParseGeminiResponse(responseString);
                 }
 
-                var responseString = await response.Content.ReadAsStringAsync(cts.Token);
-                return ParseGeminiResponse(responseString);
+                var statusCode = (int)response.StatusCode;
+                var statusType = statusCode switch
+                {
+                    401 or 403 => "AuthFailure",
+                    429 => "RateLimited",
+                    400 or 404 => "InvalidModelOrEndpoint",
+                    >= 500 => "ProviderServerError",
+                    _ => "NetworkError"
+                };
+                if (!IsRetryableStatus(statusCode) || attempt == maxAttempts - 1)
+                {
+                    _logger.LogError("AI Provider suggestion call failed on attempt {Attempt}/{MaxAttempts} with status {StatusCode} ({StatusType}).",
+                        attempt + 1, maxAttempts, response.StatusCode, statusType);
+                    return new List<AiProviderSuggestionResult>();
+                }
+
+                var delay = GetRetryAfter(response) ?? GetBackoffDelay(attempt);
+                var waitResult = await WaitForRetryAsync(delay, totalBudget, totalClock, overallCts.Token, cancellationToken);
+                if (waitResult == RetryWaitResult.Cancelled || waitResult == RetryWaitResult.NoBudget)
+                    return new List<AiProviderSuggestionResult>();
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -107,16 +137,24 @@ PATIENT SYMPTOM DESCRIPTION:
             }
             catch (OperationCanceledException)
             {
-                _logger.LogWarning("AI Provider call timed out on attempt {Attempt}.", i + 1);
-                if (i == maxRetries) throw;
+                _logger.LogWarning("AI Provider suggestion call timed out on attempt {Attempt}/{MaxAttempts}.", attempt + 1, maxAttempts);
+                if (overallCts.IsCancellationRequested || attempt == maxAttempts - 1)
+                    return new List<AiProviderSuggestionResult>();
+
+                var waitResult = await WaitForRetryAsync(GetBackoffDelay(attempt), totalBudget, totalClock, overallCts.Token, cancellationToken);
+                if (waitResult == RetryWaitResult.Cancelled || waitResult == RetryWaitResult.NoBudget)
+                    return new List<AiProviderSuggestionResult>();
             }
             catch (HttpRequestException ex)
             {
-                _logger.LogWarning(ex, "Network error on attempt {Attempt}.", i + 1);
-                if (i == maxRetries) throw;
+                _logger.LogWarning(ex, "Network error on AI Provider suggestion attempt {Attempt}/{MaxAttempts}.", attempt + 1, maxAttempts);
+                if (attempt == maxAttempts - 1)
+                    return new List<AiProviderSuggestionResult>();
+
+                var waitResult = await WaitForRetryAsync(GetBackoffDelay(attempt), totalBudget, totalClock, overallCts.Token, cancellationToken);
+                if (waitResult == RetryWaitResult.Cancelled || waitResult == RetryWaitResult.NoBudget)
+                    return new List<AiProviderSuggestionResult>();
             }
-            
-            await Task.Delay(delayMs, cancellationToken);
         }
 
         return new List<AiProviderSuggestionResult>();
