@@ -44,8 +44,16 @@ export interface AiCopilotTool {
 export interface AiCopilotResponse {
     role: string;
     assistantStatus: 'Ready' | 'Clarifying' | 'Online' | 'Degraded' | 'Unavailable' | 'SafetyBlocked';
-    providerStatus: 'NotCalled' | 'Online' | 'Degraded' | 'Unavailable' | 'SafetyBlocked';
-    providerState?: 'NotCalled' | 'Online' | 'Degraded' | 'Unavailable' | 'SafetyBlocked';
+    providerStatus: 'NotCalled' | 'Online' | 'Degraded' | 'Unavailable' | 'Disabled' | 'SafetyBlocked';
+    providerState?: 'NotCalled' | 'Online' | 'Degraded' | 'Unavailable' | 'Disabled' | 'SafetyBlocked';
+    providerFailureCode?: string;
+    executionMode?: 'ProviderAssisted' | 'DeterministicFallback' | 'ManualHandoff' | string;
+    fallbackActive?: boolean;
+    retryable?: boolean;
+    retryAfterUtc?: string;
+    retryAfterSeconds?: number;
+    correlationId?: string;
+    providerWasCalled?: boolean;
     assistantMode?: 'Ready' | 'Clarifying' | 'Degraded' | 'Unavailable' | 'SafetyBlocked' | string;
     plannerMode?: string;
     conversationId?: string;

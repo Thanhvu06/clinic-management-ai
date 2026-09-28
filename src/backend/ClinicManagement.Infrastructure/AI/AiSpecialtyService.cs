@@ -501,21 +501,28 @@ public class AiSpecialtyService : IAiSpecialtyService
         {
             aiResult = await _aiProvider.ChatWithAiAsync(cleanMessage, cleanContext, whitelistData, clinicContextJson, cancellationToken);
             if (string.Equals(aiResult.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) && cancellationToken.IsCancellationRequested)
+            {
+                _providerHealth?.RecordFailure(AiProviderStatusContract.FailureClientCancelled);
                 throw new OperationCanceledException(cancellationToken);
+            }
 
             if (aiResult.IsSuccess && !string.IsNullOrWhiteSpace(aiResult.Reply))
                 _providerHealth?.RecordSuccess();
-            else if (AiProviderStatusContract.IsCircuitFailure(aiResult.Status))
-                _providerHealth?.RecordFailure();
+            else
+                _providerHealth?.RecordFailure(
+                    aiResult.FailureCode == AiProviderStatusContract.FailureNone
+                        ? aiResult.Status
+                        : aiResult.FailureCode);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            _providerHealth?.RecordFailure(AiProviderStatusContract.FailureClientCancelled);
             throw;
         }
         catch (Exception ex)
         {
             providerActuallyFailed = true;
-            _providerHealth?.RecordFailure();
+            _providerHealth?.RecordFailure(AiProviderStatusContract.FailureNetworkError);
             _logger.LogError(ex, "AI Provider chat failed.");
             if (!localClassification.ExtractedRelativeDoctorIndex.HasValue && !localClassification.ExtractedRelativeSlotIndex.HasValue)
             {
@@ -579,7 +586,15 @@ public class AiSpecialtyService : IAiSpecialtyService
             PrimaryIntent = effectivePrimaryIntent,
             AssistantStatus = "Online",
             ProviderStatus = "Healthy",
-            ProviderState = AiProviderStatusContract.FromProviderResult(aiResult.Status, called: true)
+            ProviderState = AiProviderStatusContract.FromProviderResult(aiResult.Status, called: true),
+            ProviderFailureCode = AiProviderStatusContract.FailureNone,
+            ExecutionMode = AiProviderStatusContract.ExecutionProviderAssisted,
+            FallbackActive = false,
+            Retryable = false,
+            RetryAfterUtc = aiResult.RetryAfterUtc,
+            RetryAfterSeconds = aiResult.RetryAfterSeconds,
+            CorrelationId = aiResult.CorrelationId,
+            ProviderWasCalled = aiResult.ProviderWasCalled || !string.Equals(aiResult.Status, "NotCalled", StringComparison.OrdinalIgnoreCase)
         };
         if (_toolExecutor != null && aiResult.ToolCalls.Count > 0)
         {
@@ -605,6 +620,12 @@ public class AiSpecialtyService : IAiSpecialtyService
         {
             responseDto.ProviderStatus = "Degraded";
             responseDto.ProviderState = AiProviderStatusContract.Degraded;
+            responseDto.ProviderFailureCode = aiResult.FailureCode == AiProviderStatusContract.FailureNone
+                ? AiProviderStatusContract.FailureCodeFromProviderStatus(aiResult.Status)
+                : aiResult.FailureCode;
+            responseDto.ExecutionMode = AiProviderStatusContract.ExecutionDeterministicFallback;
+            responseDto.FallbackActive = true;
+            responseDto.Retryable = aiResult.Retryable || AiProviderStatusContract.IsCircuitFailure(aiResult.Status);
         }
 
         // Re-check emergency urgency from AI output
@@ -3058,9 +3079,22 @@ public class AiSpecialtyService : IAiSpecialtyService
             ManualSelectionRequired = true,
             AssistantStatus = "Degraded",
             ProviderStatus = providerStatus,
-            ProviderState = string.Equals(providerStatus, "ProviderCircuitOpen", StringComparison.OrdinalIgnoreCase)
-                ? AiProviderStatusContract.Unavailable
-                : AiProviderStatusContract.FromProviderResult(providerStatus, called: true),
+            // Safe deterministic/manual capabilities remain available, so the
+            // stable UI state is Degraded even when the provider is Disabled or
+            // the shared circuit is Open. The detailed code tells operators why.
+            ProviderState = string.Equals(providerStatus, "Disabled", StringComparison.OrdinalIgnoreCase)
+                ? AiProviderStatusContract.Disabled
+                : AiProviderStatusContract.Degraded,
+            ProviderFailureCode = AiProviderStatusContract.FailureCodeFromProviderStatus(providerStatus),
+            ExecutionMode = AiProviderStatusContract.ExecutionDeterministicFallback,
+            FallbackActive = true,
+            Retryable = AiProviderStatusContract.IsCircuitFailure(providerStatus),
+            RetryAfterUtc = _providerHealth?.NextProbeAtUtc,
+            RetryAfterSeconds = _providerHealth?.NextProbeAtUtc is { } nextProbe
+                ? Math.Max(0, (int)Math.Ceiling((nextProbe - new DateTimeOffset(_dateTimeProvider.UtcNow)).TotalSeconds))
+                : null,
+            ProviderWasCalled = !string.Equals(providerStatus, "ProviderCircuitOpen", StringComparison.OrdinalIgnoreCase) &&
+                                !string.Equals(providerStatus, "Disabled", StringComparison.OrdinalIgnoreCase),
             SessionId = request.SessionId,
             DraftId = request.DraftId,
             ContextSnapshotId = request.ContextSnapshotId,

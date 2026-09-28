@@ -634,6 +634,16 @@ public class AiChatResponseDto
     /// <summary>Stable provider state for all copilot clients.</summary>
     public string ProviderState { get; set; } = "NotCalled";
 
+    /// <summary>Stable machine-readable provider failure detail; never a raw exception.</summary>
+    public string ProviderFailureCode { get; set; } = AiProviderStatusContract.FailureNone;
+    public string ExecutionMode { get; set; } = AiProviderStatusContract.ExecutionDeterministicFallback;
+    public bool FallbackActive { get; set; } = true;
+    public bool Retryable { get; set; }
+    public DateTimeOffset? RetryAfterUtc { get; set; }
+    public int? RetryAfterSeconds { get; set; }
+    public string? CorrelationId { get; set; }
+    public bool ProviderWasCalled { get; set; }
+
     /// <summary>
     /// Dialogue lifecycle outcome: "Success", "UnclearInput", "ClarificationRequired", "DraftModified", "DraftCancelled", "Confirmed", "NoMatchingDoctor", "NoAvailableSlots", "ProviderUnavailable".
     /// </summary>
@@ -671,7 +681,13 @@ public class AiChatProviderResult
     public string? PlannerSchemaVersion { get; set; }
     public decimal? PlannerConfidence { get; set; }
     public bool IsSuccess { get; set; } = true;
-    public string Status { get; set; } = "Success"; // Success, Disabled, AuthFailure, RateLimited, Timeout, NetworkError, InvalidResponse, Cancelled
+    public string Status { get; set; } = "Success"; // Backward-compatible raw detail.
+    public string FailureCode { get; set; } = AiProviderStatusContract.FailureNone;
+    public bool Retryable { get; set; }
+    public DateTimeOffset? RetryAfterUtc { get; set; }
+    public int? RetryAfterSeconds { get; set; }
+    public string? CorrelationId { get; set; }
+    public bool ProviderWasCalled { get; set; }
     public string? ErrorMessage { get; set; }
     public string Reply { get; set; } = string.Empty;
     public List<string> SuggestedSpecialtyCodes { get; set; } = new();

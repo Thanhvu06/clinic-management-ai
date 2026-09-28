@@ -117,6 +117,12 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             Memory = memory
         });
         var providerState = AiProviderStatusContract.NotCalled;
+        var providerFailureCode = AiProviderStatusContract.FailureNone;
+        var providerWasCalled = false;
+        var retryable = false;
+        DateTimeOffset? retryAfterUtc = null;
+        int? retryAfterSeconds = null;
+        string? correlationId = null;
 
         if (decision.RequiresProvider)
         {
@@ -139,6 +145,12 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                     AllowedTools = tools
                 }, cancellationToken);
                 providerState = planned.ProviderState;
+                providerFailureCode = planned.FailureCode;
+                providerWasCalled = planned.ProviderCalled;
+                retryable = planned.Retryable;
+                retryAfterUtc = planned.RetryAfterUtc;
+                retryAfterSeconds = planned.RetryAfterSeconds;
+                correlationId = planned.CorrelationId;
                 decision = planned.Decision;
                 if (planned.ProviderCalled && planned.IsSuccess && decision.ToolCalls.Count > 0)
                 {
@@ -176,11 +188,17 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             : (await _executor.ExecutePlannerPlanAsync(decision.ToolCalls, sessionId, cancellationToken)).ToArray();
         var grounded = _composer.Compose(decision, results);
         var hasFailure = results.Any(x => x.Status != "completed");
-        var assistantMode = hasFailure || providerState == AiProviderStatusContract.Degraded
+        var assistantMode = hasFailure || providerState is AiProviderStatusContract.Degraded or AiProviderStatusContract.Disabled
             ? AiAssistantModes.Degraded
             : providerState == AiProviderStatusContract.Unavailable
                 ? AiAssistantModes.Unavailable
                 : !string.IsNullOrWhiteSpace(decision.Clarification) ? AiAssistantModes.Clarifying : AiAssistantModes.Ready;
+
+        var executionMode = providerWasCalled && providerState == AiProviderStatusContract.Online
+            ? AiProviderStatusContract.ExecutionProviderAssisted
+            : decision.PlannerMode == AiPlannerModes.Deterministic
+                ? AiProviderStatusContract.ExecutionDeterministicFallback
+                : AiProviderStatusContract.ExecutionManualHandoff;
 
         var final = new AiCopilotResponseDto
         {
@@ -201,7 +219,15 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             SuggestedPrompts = SuggestedPrompts(role),
             Cards = grounded.Cards,
             Sources = grounded.Sources,
-            AvailableTools = ToolsForUi(tools)
+            AvailableTools = ToolsForUi(tools),
+            ProviderFailureCode = providerFailureCode,
+            ExecutionMode = executionMode,
+            FallbackActive = executionMode != AiProviderStatusContract.ExecutionProviderAssisted,
+            Retryable = retryable,
+            RetryAfterUtc = retryAfterUtc,
+            RetryAfterSeconds = retryAfterSeconds,
+            CorrelationId = correlationId,
+            ProviderWasCalled = providerWasCalled
         };
         await PersistAndAudit(final, sessionId, role, resolved.Context, decision.ToolCalls.Count, cancellationToken);
         return final;

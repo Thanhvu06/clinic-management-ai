@@ -66,6 +66,22 @@ public sealed class GeminiAiProviderResilienceTests
     }
 
     [Fact]
+    public async Task Exhausted_429_preserves_bounded_retry_metadata_without_waiting_past_budget()
+    {
+        var handler = new SequenceHandler(_ => Task.FromResult(Response(HttpStatusCode.TooManyRequests, "{}", TimeSpan.FromSeconds(30))));
+        var provider = CreateProvider(handler, timeoutSeconds: 1, maxAttempts: 2, retryBaseDelayMilliseconds: 0);
+
+        var result = await provider.ChatWithAiAsync("xin chào", new(), new(), "{}", CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("RateLimited", result.Status);
+        Assert.Equal(AiProviderStatusContract.FailureRateLimited, result.FailureCode);
+        Assert.True(result.Retryable);
+        Assert.True(result.RetryAfterSeconds >= 29);
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
     public async Task Retries_503_once_and_recovers()
     {
         var handler = new SequenceHandler(
@@ -90,6 +106,37 @@ public sealed class GeminiAiProviderResilienceTests
         Assert.False(result.IsSuccess);
         Assert.Equal("AuthFailure", result.Status);
         Assert.Equal(1, handler.CallCount);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest)]
+    [InlineData(HttpStatusCode.NotFound)]
+    public async Task Does_not_retry_bad_request_or_missing_model(HttpStatusCode status)
+    {
+        var handler = new SequenceHandler(_ => Task.FromResult(Response(status, "{}")));
+        var provider = CreateProvider(handler, timeoutSeconds: 2, maxAttempts: 3);
+
+        var result = await provider.ChatWithAiAsync("xin chào", new(), new(), "{}", CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("InvalidModelOrEndpoint", result.Status);
+        Assert.Equal(AiProviderStatusContract.FailureModelUnavailable, result.FailureCode);
+        Assert.False(result.Retryable);
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task Retries_transient_network_exception_within_the_same_budget()
+    {
+        var handler = new SequenceHandler(
+            _ => throw new HttpRequestException("synthetic network failure"),
+            _ => Task.FromResult(Response(HttpStatusCode.OK, ValidEnvelope("đã hồi phục mạng"))));
+        var provider = CreateProvider(handler, timeoutSeconds: 2, maxAttempts: 2, retryBaseDelayMilliseconds: 0);
+
+        var result = await provider.ChatWithAiAsync("xin chào", new(), new(), "{}", CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, handler.CallCount);
     }
 
     [Fact]
@@ -121,6 +168,31 @@ public sealed class GeminiAiProviderResilienceTests
         Assert.Equal("InvalidResponse", result.Status);
         Assert.Empty(result.Reply);
         Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task Does_not_count_invalid_provider_json_as_a_transient_circuit_failure()
+    {
+        var handler = new SequenceHandler(
+            _ => Task.FromResult(Response(HttpStatusCode.OK, InvalidJsonEnvelope())),
+            _ => Task.FromResult(Response(HttpStatusCode.OK, InvalidJsonEnvelope())),
+            _ => Task.FromResult(Response(HttpStatusCode.OK, InvalidJsonEnvelope())),
+            _ => Task.FromResult(Response(HttpStatusCode.OK, ValidEnvelope("đã gọi lại"))));
+        var provider = CreateProvider(handler, timeoutSeconds: 2, maxAttempts: 1, retryBaseDelayMilliseconds: 0);
+        var health = new AiProviderHealth(TimeSpan.FromSeconds(30), failureThreshold: 1);
+        var planner = new GeminiStructuredPlanner(provider, health, NullLogger<GeminiStructuredPlanner>.Instance);
+        var request = new AiStructuredPlannerRequest { Role = AiActorRole.Doctor, Message = "câu hỏi", AllowedToolNames = new[] { "doctor.get_my_queue" } };
+
+        for (var i = 0; i < 3; i++)
+        {
+            var failed = await planner.PlanAsync(request);
+            Assert.Equal(AiProviderStatusContract.FailureInvalidResponse, failed.FailureCode);
+        }
+
+        Assert.Equal("Closed", health.State);
+        var recovered = await planner.PlanAsync(request);
+        Assert.True(recovered.IsSuccess);
+        Assert.Equal(4, handler.CallCount);
     }
 
     [Fact]
@@ -180,6 +252,26 @@ public sealed class GeminiAiProviderResilienceTests
         Assert.True(recovered.IsSuccess);
         Assert.Equal(AiProviderStatusContract.Online, recovered.ProviderState);
         Assert.Equal(4, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task Half_open_allows_exactly_one_concurrent_probe_and_client_cancel_does_not_count()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        var health = new AiProviderHealth(TimeSpan.FromSeconds(10), failureThreshold: 1, timeProvider: clock);
+        Assert.True(health.CanAttempt());
+        health.RecordFailure(AiProviderStatusContract.FailureTimeout);
+        Assert.Equal("Open", health.State);
+
+        clock.Advance(TimeSpan.FromSeconds(11));
+        Assert.Equal("HalfOpen", health.State);
+        var attempts = await Task.WhenAll(Enumerable.Range(0, 32).Select(_ => Task.Run(health.CanAttempt)));
+        Assert.Equal(1, attempts.Count(x => x));
+
+        health.RecordFailure(AiProviderStatusContract.FailureClientCancelled);
+        Assert.Equal(1, health.ConsecutiveFailures);
+        Assert.Equal("HalfOpen", health.State);
+        Assert.True(health.CanAttempt());
     }
 
     private static GeminiAiProvider CreateProvider(
@@ -282,6 +374,24 @@ public sealed class GeminiAiProviderResilienceTests
                 ? _responses.Dequeue()
                 : (_ => Task.FromResult(Response(HttpStatusCode.InternalServerError, "{}")));
             return response(cancellationToken);
+        }
+    }
+
+    private sealed class ManualTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _utcNow;
+        private long _timestamp;
+
+        public ManualTimeProvider(DateTimeOffset utcNow) => _utcNow = utcNow;
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+        public override long GetTimestamp() => _timestamp;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public void Advance(TimeSpan duration)
+        {
+            _utcNow = _utcNow.Add(duration);
+            _timestamp += duration.Ticks;
         }
     }
 }

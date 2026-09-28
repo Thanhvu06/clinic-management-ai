@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using System.Linq.Expressions;
 using System.Reflection;
 using ClinicManagement.Application.AI.Conversation;
+using ClinicManagement.Application.AI.Planning;
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Interfaces;
@@ -66,17 +67,20 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeProvider _clock;
     private readonly IPharmacyService _pharmacy;
+    private readonly IAiProviderHealth? _providerHealth;
 
     public RoleCopilotToolHandler(
         AppDbContext db,
         ICurrentUserService currentUser,
         IDateTimeProvider clock,
-        IPharmacyService pharmacy)
+        IPharmacyService pharmacy,
+        IAiProviderHealth? providerHealth = null)
     {
         _db = db;
         _currentUser = currentUser;
         _clock = clock;
         _pharmacy = pharmacy;
+        _providerHealth = providerHealth;
     }
 
     public AiToolDefinition Definition { get; } = new() { Name = "role.copilot.dispatch", Version = "1.0" };
@@ -982,7 +986,16 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         var metrics = new
         {
             pendingActions = await _db.AiPendingToolActions.CountAsync(a => a.State == AiPendingToolActionState.PendingConfirmation, cancellationToken),
-            auditEvents = await _db.AiAuditLogs.CountAsync(cancellationToken)
+            auditEvents = await _db.AiAuditLogs.CountAsync(cancellationToken),
+            providerState = _providerHealth?.State ?? "Unavailable",
+            circuitState = _providerHealth?.State ?? "Unavailable",
+            fallbackActive = _providerHealth?.State is "Open" or "HalfOpen" || _providerHealth is null,
+            requestCount = _providerHealth?.AttemptCount ?? 0,
+            successCount = _providerHealth?.SuccessCount ?? 0,
+            failureCounts = _providerHealth?.FailureCounts ?? new Dictionary<string, long>(),
+            lastFailureCode = _providerHealth?.LastFailureCode,
+            lastSuccessUtc = _providerHealth?.LastSuccessAtUtc,
+            nextProbeUtc = _providerHealth?.NextProbeAtUtc
         };
         return Completed(metrics, "admin_ai_health", "Chỉ số AI đã được tổng hợp, không trả secret hay nội dung prompt thô.");
     }

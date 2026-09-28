@@ -1,6 +1,9 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using ClinicManagement.Application.AI.DTOs;
+using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.AI.Tools;
+using Moq;
 using Xunit;
 
 namespace ClinicManagement.IntegrationTests;
@@ -31,6 +34,50 @@ public sealed class AiPhase2RoleCopilotIntegrationTests : IntegrationTestBase
         Assert.Equal("Receptionist", data.GetProperty("role").GetString());
         Assert.Equal("NotCalled", data.GetProperty("providerStatus").GetString());
         Assert.Contains(data.GetProperty("cards").EnumerateArray(), card => card.GetProperty("type").GetString() == "reception_appointments");
+    }
+
+    [Fact]
+    public async Task All_actor_read_paths_remain_available_when_fake_provider_is_unavailable()
+    {
+        Factory.MockAiProvider.Reset();
+        Factory.MockAiProvider
+            .Setup(x => x.ChatWithAiAsync(
+                It.IsAny<string>(),
+                It.IsAny<List<ChatMessageDto>>(),
+                It.IsAny<List<WhitelistItemDto>>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AiChatProviderResult { IsSuccess = false, Status = "ProviderServerError", FailureCode = "ServerError" });
+
+        var cases = new[]
+        {
+            (Email: "pat1@test.com", Message: "Xem lịch hẹn của tôi", Card: "appointments"),
+            (Email: "rec@test.com", Message: "Xem hàng đợi tiếp nhận", Card: "reception_queue"),
+            (Email: "doc@test.com", Message: "Xem hàng đợi của tôi", Card: "doctor_queue"),
+            (Email: "tech@test.com", Message: "Xem danh sách chỉ định đang chờ", Card: "technician_worklist"),
+            (Email: "pharm@test.com", Message: "Xem đơn thuốc chờ cấp", Card: "pharmacist_prescription_queue"),
+            (Email: "admin@test.com", Message: "Xem tình trạng AI", Card: "admin_ai_health")
+        };
+
+        try
+        {
+            foreach (var testCase in cases)
+            {
+                var client = await CreateAuthenticatedClientAsync(testCase.Email);
+                var response = await client.PostAsJsonAsync("/api/v1/ai/copilot/chat", new { message = testCase.Message });
+                Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+                using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                var data = document.RootElement.GetProperty("data");
+                Assert.Equal("NotCalled", data.GetProperty("providerState").GetString());
+                Assert.Equal("DeterministicFallback", data.GetProperty("executionMode").GetString());
+                Assert.True(data.GetProperty("fallbackActive").GetBoolean());
+                Assert.Contains(data.GetProperty("cards").EnumerateArray(), card => card.GetProperty("type").GetString() == testCase.Card);
+            }
+        }
+        finally
+        {
+            Factory.MockAiProvider.Reset();
+        }
     }
 
     [Fact]

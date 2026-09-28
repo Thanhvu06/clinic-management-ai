@@ -79,6 +79,15 @@ public sealed class AiCopilotResponseDto
     /// <summary>Backward-compatible alias for ProviderState.</summary>
     public string ProviderStatus { get => _providerState; init => _providerState = value; }
 
+    public string ProviderFailureCode { get; init; } = AiProviderStatusContract.FailureNone;
+    public string ExecutionMode { get; init; } = AiProviderStatusContract.ExecutionManualHandoff;
+    public bool FallbackActive { get; init; }
+    public bool Retryable { get; init; }
+    public DateTimeOffset? RetryAfterUtc { get; init; }
+    public int? RetryAfterSeconds { get; init; }
+    public string? CorrelationId { get; init; }
+    public bool ProviderWasCalled { get; init; }
+
     public string PlannerMode { get; init; } = AiPlannerModes.Deterministic;
     public string Intent { get; init; } = AiChatIntentTypes.UnclearOrOutOfScope;
     public string? SubIntent { get; init; }

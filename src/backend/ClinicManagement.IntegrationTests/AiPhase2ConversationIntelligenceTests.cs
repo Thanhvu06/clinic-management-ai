@@ -81,7 +81,7 @@ public sealed class AiPhase2ConversationIntelligenceTests : IntegrationTestBase
         Assert.Equal(AiProviderStatusContract.NotCalled, AiProviderStatusContract.FromProviderResult("Success", called: false));
         Assert.Equal(AiProviderStatusContract.Online, AiProviderStatusContract.FromProviderResult("Success", called: true));
         Assert.Equal(AiProviderStatusContract.Degraded, AiProviderStatusContract.FromProviderResult("InvalidResponse", called: true));
-        Assert.Equal(AiProviderStatusContract.Unavailable, AiProviderStatusContract.FromProviderResult("Disabled", called: true));
+        Assert.Equal(AiProviderStatusContract.Disabled, AiProviderStatusContract.FromProviderResult("Disabled", called: true));
     }
 
     [Fact]

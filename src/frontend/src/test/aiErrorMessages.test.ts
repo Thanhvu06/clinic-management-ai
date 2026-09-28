@@ -14,4 +14,12 @@ describe('aiChatFailureMessage', () => {
             expect(aiChatFailureMessage(error)).toMatch(/bản nháp đặt lịch vẫn được giữ nguyên/i);
         }
     });
+
+    it('explains provider failures without presenting them as a broken chat connection', () => {
+        expect(aiChatFailureMessage({ providerFailureCode: 'CircuitOpen' })).toMatch(/tạm ngưng/i);
+        expect(aiChatFailureMessage({ providerFailureCode: 'Timeout' })).toMatch(/phản hồi quá lâu/i);
+        expect(aiChatFailureMessage({ providerFailureCode: 'AuthenticationFailed' })).toMatch(/cấu hình model hoặc xác thực/i);
+        expect(aiChatFailureMessage({ providerFailureCode: 'ClientCancelled' })).not.toMatch(/kết nối/i);
+        expect(aiChatFailureMessage({ providerFailureCode: 'RateLimited', retryAfterSeconds: 7 })).toMatch(/7 giây/i);
+    });
 });

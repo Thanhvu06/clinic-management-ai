@@ -376,6 +376,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     data.providerStatus === "Error" ||
                     data.providerState === "Degraded" ||
                     data.providerState === "Unavailable" ||
+                    data.providerState === "Disabled" ||
                     data.providerState === "SafetyBlocked"
                 ) {
                     lastKnownGeminiStatusRef.current = "Degraded";
@@ -392,6 +393,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     data.providerStatus === "Error" ||
                     data.providerState === "Degraded" ||
                     data.providerState === "Unavailable" ||
+                    data.providerState === "Disabled" ||
                     data.providerState === "SafetyBlocked"
                 ) {
                     effectiveStatus = "Degraded";
@@ -418,6 +420,13 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     bookingDraft: data.bookingDraft,
                     missingFields: data.missingFields || [],
                     assistantStatus: effectiveStatus,
+                    providerFailureCode: data.providerFailureCode,
+                    executionMode: data.executionMode,
+                    fallbackActive: data.fallbackActive,
+                    retryable: data.retryable,
+                    retryAfterUtc: data.retryAfterUtc,
+                    retryAfterSeconds: data.retryAfterSeconds,
+                    providerWasCalled: data.providerWasCalled,
                     primaryIntent: data.primaryIntent,
                     providerState: data.providerState,
                     dialogueOutcome: data.dialogueOutcome,
@@ -513,10 +522,13 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }
         } catch (err: unknown) {
             if (requestController.signal.aborted || !isCurrentRequest()) return;
-            setAiAssistantStatus("Offline");
             const apiErr = err as { errorCode?: string; message?: string; response?: { data?: { errorCode?: string; message?: string } } };
             const errorCode = apiErr?.response?.data?.errorCode || apiErr?.errorCode;
             const message = apiErr?.response?.data?.message || apiErr?.message || "";
+            const httpStatus = (err as { status?: number })?.status;
+            const providerFailureCode = (err as { providerFailureCode?: string })?.providerFailureCode;
+            const providerFailure = Boolean(providerFailureCode) || httpStatus === 429;
+            setAiAssistantStatus(providerFailure ? "Degraded" : "Offline");
 
             if (errorCode === "SESSION_EXPIRED" || errorCode === "DRAFT_CANCELLED") {
                 draftCancelledAtRef.current = Date.now();
@@ -529,7 +541,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     role: "model",
                     content: "Phiên hoặc bản nháp cũ đã hết hiệu lực. Tôi đã tạo phiên mới; vui lòng chọn lại thông tin đặt lịch.",
                     urgency: "ROUTINE",
-                    assistantStatus: "Offline"
+                    assistantStatus: "Offline",
+                    providerState: "NotCalled"
                 }]);
                 return;
             }
@@ -539,7 +552,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 role: "model",
                 content: aiChatFailureMessage(err),
                 urgency: "ROUTINE",
-                assistantStatus: "Offline",
+                assistantStatus: providerFailure ? "Degraded" : "Offline",
+                providerState: providerFailure ? "Degraded" : undefined,
+                providerFailureCode,
                 ...(!isRateLimited ? { actions: [
                     {
                         id: "act-fallback-book",

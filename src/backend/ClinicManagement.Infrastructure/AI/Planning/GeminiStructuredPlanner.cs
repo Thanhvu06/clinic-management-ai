@@ -35,7 +35,7 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
     public async Task<AiStructuredPlannerResult> PlanAsync(AiStructuredPlannerRequest request, CancellationToken cancellationToken = default)
     {
         if (!_health.CanAttempt())
-            return Failed(AiProviderStatusContract.Unavailable, "PROVIDER_CIRCUIT_OPEN", false);
+            return Failed(AiProviderStatusContract.Unavailable, AiProviderStatusContract.FailureCircuitOpen, false, false);
 
         var allowed = request.AllowedToolNames.Where(AiPlannerPolicy.IsAllowed).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var context = new List<ChatMessageDto>();
@@ -106,18 +106,32 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
             if (!providerResult.IsSuccess)
             {
                 if (string.Equals(providerResult.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) && cancellationToken.IsCancellationRequested)
+                {
+                    _health.RecordFailure(AiProviderStatusContract.FailureClientCancelled);
                     throw new OperationCanceledException(cancellationToken);
+                }
 
                 if (AiProviderStatusContract.IsCircuitFailure(providerResult.Status))
-                    _health.RecordFailure();
-                return Failed(providerState, providerResult.Status, true);
+                    _health.RecordFailure(providerResult.Status);
+                else
+                    _health.RecordFailure(providerResult.FailureCode);
+                return Failed(
+                    providerState,
+                    providerResult.FailureCode == AiProviderStatusContract.FailureNone
+                        ? AiProviderStatusContract.FailureCodeFromProviderStatus(providerResult.Status)
+                        : providerResult.FailureCode,
+                    true,
+                    providerResult.Retryable,
+                    providerResult.RetryAfterUtc,
+                    providerResult.RetryAfterSeconds,
+                    providerResult.CorrelationId);
             }
 
             if (!string.Equals(providerResult.PlannerSchemaVersion, "1.0", StringComparison.Ordinal) ||
                 !providerResult.PlannerConfidence.HasValue || providerResult.PlannerConfidence is < 0m or > 1m ||
                 !AiChatIntentTypes.IsAllowed(providerResult.PrimaryIntent))
             {
-                _health.RecordFailure();
+                _health.RecordFailure(AiProviderStatusContract.FailureInvalidResponse);
                 return Failed(AiProviderStatusContract.Degraded, "INVALID_PROVIDER_SCHEMA", true);
             }
 
@@ -125,7 +139,7 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
             var calls = providerResult.ToolCalls ?? new List<AiPlannerToolCall>();
             if (calls.Count > 3 || calls.Any(x => !ValidateCall(x, allowed)))
             {
-                _health.RecordFailure();
+                _health.RecordFailure(AiProviderStatusContract.FailureInvalidResponse);
                 return Failed(AiProviderStatusContract.Degraded, "INVALID_PROVIDER_PLAN", true);
             }
 
@@ -133,13 +147,13 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
             if (!preflight.IsValid)
             {
                 if (!string.Equals(preflight.Code, "PROVIDER_RESOURCE_MISMATCH", StringComparison.Ordinal))
-                    _health.RecordFailure();
+                    _health.RecordFailure(AiProviderStatusContract.FailureInvalidResponse);
                 return Failed(AiProviderStatusContract.Degraded, preflight.Code, true);
             }
 
             if (!providerResult.IsClear && string.IsNullOrWhiteSpace(providerResult.Clarification) && string.IsNullOrWhiteSpace(providerResult.ClarificationPrompt))
             {
-                _health.RecordFailure();
+                _health.RecordFailure(AiProviderStatusContract.FailureInvalidResponse);
                 return Failed(AiProviderStatusContract.Degraded, "INVALID_PROVIDER_CLARIFICATION", true);
             }
 
@@ -150,6 +164,8 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
                 IsSuccess = true,
                 ProviderCalled = true,
                 ProviderState = providerState,
+                FailureCode = AiProviderStatusContract.FailureNone,
+                CorrelationId = providerResult.CorrelationId,
                 Decision = new AiPlannerDecision
                 {
                     PlannerMode = AiPlannerModes.Gemini,
@@ -164,13 +180,14 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            _health.RecordFailure(AiProviderStatusContract.FailureClientCancelled);
             throw;
         }
         catch (Exception ex)
         {
-            _health.RecordFailure();
+            _health.RecordFailure(AiProviderStatusContract.FailureNetworkError);
             _logger.LogWarning(ex, "Structured AI planner failed; returning a fail-closed fallback");
-            return Failed(AiProviderStatusContract.Degraded, "PROVIDER_FAILURE", true);
+            return Failed(AiProviderStatusContract.Degraded, AiProviderStatusContract.FailureNetworkError, true, true);
         }
     }
 
@@ -193,12 +210,24 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
         return false;
     }
 
-    private static AiStructuredPlannerResult Failed(string providerState, string? reason, bool called) => new()
+    private static AiStructuredPlannerResult Failed(
+        string providerState,
+        string? reason,
+        bool called,
+        bool retryable = false,
+        DateTimeOffset? retryAfterUtc = null,
+        int? retryAfterSeconds = null,
+        string? correlationId = null) => new()
     {
         IsSuccess = false,
         ProviderCalled = called,
         ProviderState = providerState,
         FailureReason = reason,
+        FailureCode = ToFailureCode(reason),
+        Retryable = retryable,
+        RetryAfterUtc = retryAfterUtc,
+        RetryAfterSeconds = retryAfterSeconds,
+        CorrelationId = correlationId,
         Decision = new AiPlannerDecision
         {
             PlannerMode = AiPlannerModes.Fallback,
@@ -212,6 +241,15 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
                 : "Tôi chưa xác định được yêu cầu đủ an toàn để tra cứu. Vui lòng mô tả rõ dữ liệu hoặc workspace cần xem."
         }
     };
+
+    private static string ToFailureCode(string? reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) return AiProviderStatusContract.FailureUnknown;
+        if (reason.StartsWith("INVALID_PROVIDER", StringComparison.Ordinal)) return AiProviderStatusContract.FailureInvalidResponse;
+        if (reason == "PROVIDER_FAILURE") return AiProviderStatusContract.FailureNetworkError;
+        if (reason == "PROVIDER_RESOURCE_MISMATCH") return AiProviderStatusContract.FailureNone;
+        return AiProviderStatusContract.FailureCodeFromProviderStatus(reason);
+    }
 
     private static bool HasResource(AiResolvedResourceContext x) => x.AppointmentId.HasValue || x.VisitId.HasValue || x.DiagnosticOrderId.HasValue || x.PrescriptionId.HasValue;
     private static string? Limit(string? value, int length) => string.IsNullOrWhiteSpace(value) ? null : value.Trim()[..Math.Min(length, value.Trim().Length)];

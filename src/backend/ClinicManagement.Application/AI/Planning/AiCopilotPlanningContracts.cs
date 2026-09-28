@@ -72,6 +72,11 @@ public sealed class AiStructuredPlannerResult
     public bool ProviderCalled { get; init; }
     public string ProviderState { get; init; } = AiProviderStatusContract.NotCalled;
     public string? FailureReason { get; init; }
+    public string FailureCode { get; init; } = AiProviderStatusContract.FailureNone;
+    public bool Retryable { get; init; }
+    public DateTimeOffset? RetryAfterUtc { get; init; }
+    public int? RetryAfterSeconds { get; init; }
+    public string? CorrelationId { get; init; }
     public AiPlannerDecision Decision { get; init; } = new() { PlannerMode = AiPlannerModes.Fallback };
 }
 
@@ -147,6 +152,13 @@ public interface IAiProviderHealth
 {
     bool CanAttempt();
     void RecordSuccess();
-    void RecordFailure();
+    void RecordFailure(string? failureCode = null);
     string State { get; }
+    DateTimeOffset? NextProbeAtUtc { get; }
+    int ConsecutiveFailures { get; }
+    string? LastFailureCode { get; }
+    DateTimeOffset? LastSuccessAtUtc { get; }
+    long AttemptCount { get; }
+    long SuccessCount { get; }
+    IReadOnlyDictionary<string, long> FailureCounts { get; }
 }

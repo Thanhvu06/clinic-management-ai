@@ -65,6 +65,7 @@ export const providerStateLabel = (state?: string): string => ({
     Online: 'Gemini đã phản hồi',
     Degraded: 'Đang dùng chế độ dự phòng',
     Unavailable: 'Dịch vụ AI chưa cấu hình/không khả dụng',
+    Disabled: 'AI bị tắt cấu hình; đang dùng hỗ trợ cơ bản',
     SafetyBlocked: 'Đã chặn vì an toàn'
 }[state ?? 'NotCalled'] ?? 'Trạng thái AI chưa xác định');
 

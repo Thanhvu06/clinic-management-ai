@@ -432,6 +432,7 @@ describe('UnifiedCopilotPanel', () => {
         expect(providerStateLabel('Online')).toBe('Gemini đã phản hồi');
         expect(providerStateLabel('Degraded')).toBe('Đang dùng chế độ dự phòng');
         expect(providerStateLabel('Unavailable')).toBe('Dịch vụ AI chưa cấu hình/không khả dụng');
+        expect(providerStateLabel('Disabled')).toMatch(/tắt cấu hình/i);
         expect(providerStateLabel('SafetyBlocked')).toBe('Đã chặn vì an toàn');
     });
 
