@@ -81,6 +81,31 @@ public sealed class AiPhase2RoleCopilotIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Admin_health_card_exposes_effective_config_metadata_without_credentials()
+    {
+        var admin = await CreateAuthenticatedClientAsync("admin@test.com");
+        var response = await admin.PostAsJsonAsync("/api/v1/ai/copilot/chat", new { message = "Xem tình trạng AI" });
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var card = Assert.Single(document.RootElement.GetProperty("data").GetProperty("cards").EnumerateArray(),
+            item => item.GetProperty("type").GetString() == "admin_ai_health");
+        var raw = card.GetRawText();
+        var data = card.GetProperty("data");
+
+        Assert.True(data.TryGetProperty("providerEnabled", out _));
+        Assert.Equal("Gemini", data.GetProperty("providerName").GetString());
+        Assert.Equal("gemini-3.6-flash", data.GetProperty("effectiveModelName").GetString());
+        Assert.Equal(10, data.GetProperty("timeoutSeconds").GetInt32());
+        Assert.Equal(3, data.GetProperty("maxAttempts").GetInt32());
+        Assert.Equal(250, data.GetProperty("retryBaseDelayMilliseconds").GetInt32());
+        Assert.Equal(3, data.GetProperty("circuitFailureThreshold").GetInt32());
+        Assert.Equal(30, data.GetProperty("circuitCooldownSeconds").GetInt32());
+        Assert.False(data.GetProperty("keyConfigured").GetBoolean());
+        Assert.DoesNotContain("Authorization", raw, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Patient_catalog_advertises_public_and_own_read_tools_but_not_write_tools()
     {
         var client = await CreateAuthenticatedClientAsync("pat1@test.com");

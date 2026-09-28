@@ -5,6 +5,7 @@ public class AiProviderOptions
     public const string SectionName = "AiProvider";
     
     public bool IsEnabled { get; set; } = false;
+    public string ProviderName { get; set; } = "Gemini";
     public string ProviderUrl { get; set; } = "https://generativelanguage.googleapis.com";
     public string ApiKey { get; set; } = string.Empty;
     public string ModelName { get; set; } = "gemini-3.6-flash";
@@ -13,4 +14,6 @@ public class AiProviderOptions
     /// <summary>Total request budget, including bounded retries and retry delays.</summary>
     public int MaxAttempts { get; set; } = 3;
     public int RetryBaseDelayMilliseconds { get; set; } = 250;
+    public int CircuitFailureThreshold { get; set; } = 3;
+    public int CircuitCooldownSeconds { get; set; } = 30;
 }

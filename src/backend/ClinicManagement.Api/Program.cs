@@ -118,6 +118,7 @@ builder.Services.AddScoped<ClinicManagement.Application.Admin.Interfaces.IAdminD
 builder.Services.AddScoped<ClinicManagement.Application.Leaves.Interfaces.IDoctorLeaveService, ClinicManagement.Infrastructure.Leaves.DoctorLeaveService>();
 builder.Services.AddScoped<ClinicManagement.Application.Leaves.Interfaces.IAdminLeaveService, ClinicManagement.Infrastructure.Leaves.AdminLeaveService>();
 builder.Services.Configure<ClinicManagement.Infrastructure.AI.AiProviderOptions>(builder.Configuration.GetSection(ClinicManagement.Infrastructure.AI.AiProviderOptions.SectionName));
+builder.Services.AddSingleton<ClinicManagement.Application.AI.IAiProviderConfigurationInspector, ClinicManagement.Infrastructure.AI.AiProviderConfigurationInspector>();
 builder.Services.Configure<ClinicManagement.Infrastructure.AI.AiClassifierOptions>(builder.Configuration.GetSection(ClinicManagement.Infrastructure.AI.AiClassifierOptions.SectionName));
 builder.Services.AddSingleton<ClinicManagement.Application.AI.Interfaces.IAiSpecialtyClassifier, ClinicManagement.Infrastructure.AI.MlNetSpecialtyClassifier>();
 builder.Services.AddSingleton<ClinicManagement.Application.AI.Interfaces.IVietnameseIntentClassifier, ClinicManagement.Infrastructure.AI.VietnameseIntentClassifier>();

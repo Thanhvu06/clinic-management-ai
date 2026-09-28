@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Linq.Expressions;
 using System.Reflection;
+using ClinicManagement.Application.AI;
 using ClinicManagement.Application.AI.Conversation;
 using ClinicManagement.Application.AI.Planning;
 using ClinicManagement.Application.AI.Tools;
@@ -68,19 +69,22 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
     private readonly IDateTimeProvider _clock;
     private readonly IPharmacyService _pharmacy;
     private readonly IAiProviderHealth? _providerHealth;
+    private readonly IAiProviderConfigurationInspector? _providerConfiguration;
 
     public RoleCopilotToolHandler(
         AppDbContext db,
         ICurrentUserService currentUser,
         IDateTimeProvider clock,
         IPharmacyService pharmacy,
-        IAiProviderHealth? providerHealth = null)
+        IAiProviderHealth? providerHealth = null,
+        IAiProviderConfigurationInspector? providerConfiguration = null)
     {
         _db = db;
         _currentUser = currentUser;
         _clock = clock;
         _pharmacy = pharmacy;
         _providerHealth = providerHealth;
+        _providerConfiguration = providerConfiguration;
     }
 
     public AiToolDefinition Definition { get; } = new() { Name = "role.copilot.dispatch", Version = "1.0" };
@@ -983,6 +987,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
 
     private async Task<AiToolExecutionResult> GetAiHealthAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
     {
+        var configuration = _providerConfiguration?.GetSnapshot();
         var metrics = new
         {
             pendingActions = await _db.AiPendingToolActions.CountAsync(a => a.State == AiPendingToolActionState.PendingConfirmation, cancellationToken),
@@ -992,10 +997,24 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
             fallbackActive = _providerHealth?.State is "Open" or "HalfOpen" || _providerHealth is null,
             requestCount = _providerHealth?.AttemptCount ?? 0,
             successCount = _providerHealth?.SuccessCount ?? 0,
+            failureCount = _providerHealth?.FailureCount ?? 0,
             failureCounts = _providerHealth?.FailureCounts ?? new Dictionary<string, long>(),
             lastFailureCode = _providerHealth?.LastFailureCode,
             lastSuccessUtc = _providerHealth?.LastSuccessAtUtc,
-            nextProbeUtc = _providerHealth?.NextProbeAtUtc
+            nextProbeUtc = _providerHealth?.NextProbeAtUtc,
+            providerEnabled = configuration?.IsEnabled ?? false,
+            providerName = configuration?.ProviderName,
+            effectiveModelName = configuration?.ModelName,
+            providerBaseUrl = configuration?.ProviderBaseUrl,
+            timeoutSeconds = configuration?.TimeoutSeconds,
+            maxAttempts = configuration?.MaxAttempts,
+            retryBaseDelayMilliseconds = configuration?.RetryBaseDelayMilliseconds,
+            circuitFailureThreshold = configuration?.CircuitFailureThreshold,
+            circuitCooldownSeconds = configuration?.CircuitCooldownSeconds,
+            keyConfigured = configuration?.KeyConfigured ?? false,
+            keyConfigurationSource = configuration?.KeyConfigurationSource,
+            configurationSources = configuration?.ConfigurationSources,
+            retrievedAtUtc = configuration?.RetrievedAtUtc
         };
         return Completed(metrics, "admin_ai_health", "Chỉ số AI đã được tổng hợp, không trả secret hay nội dung prompt thô.");
     }

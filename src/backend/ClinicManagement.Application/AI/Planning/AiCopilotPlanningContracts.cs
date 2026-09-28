@@ -160,5 +160,6 @@ public interface IAiProviderHealth
     DateTimeOffset? LastSuccessAtUtc { get; }
     long AttemptCount { get; }
     long SuccessCount { get; }
+    long FailureCount { get; }
     IReadOnlyDictionary<string, long> FailureCounts { get; }
 }

@@ -1,0 +1,71 @@
+name: ClinicCare AI Live Gemini Canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_name:
+        description: "Explicit Gemini model name (validated before execution)"
+        required: true
+        type: string
+      max_calls:
+        description: "Synthetic canary calls, maximum 12"
+        required: false
+        default: "12"
+        type: string
+
+concurrency:
+  group: cliniccare-ai-live-canary
+  cancel-in-progress: false
+
+jobs:
+  live-canary:
+    name: Synthetic Gemini runtime acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RUN_LIVE_GEMINI_CANARY: "true"
+      AiProvider__IsEnabled: "true"
+      AiProvider__ApiKey: ${{ secrets.GEMINI_API_KEY }}
+      AiProvider__ModelName: ${{ inputs.model_name }}
+      LIVE_GEMINI_MAX_CALLS: ${{ inputs.max_calls }}
+      DOTNET_ENVIRONMENT: Development
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate live canary inputs without printing secrets
+        shell: bash
+        run: |
+          if [[ -z "$AiProvider__ApiKey" ]]; then
+            echo "GEMINI_API_KEY secret is not configured."
+            exit 1
+          fi
+          if [[ ! "$AiProvider__ModelName" =~ ^[A-Za-z0-9._-]{1,128}$ ]]; then
+            echo "model_name must contain only letters, numbers, dot, underscore, and hyphen (1-128 chars)."
+            exit 1
+          fi
+          if [[ ! "$LIVE_GEMINI_MAX_CALLS" =~ ^([1-9]|1[0-2])$ ]]; then
+            echo "max_calls must be an integer from 1 to 12."
+            exit 1
+          fi
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore live canary
+        run: dotnet restore src/tools/ClinicManagement.AI.LiveCanary/ClinicManagement.AI.LiveCanary.csproj
+
+      - name: Run synthetic live canary
+        run: >-
+          dotnet run --project src/tools/ClinicManagement.AI.LiveCanary/ClinicManagement.AI.LiveCanary.csproj
+          --configuration Release --no-restore -- --require-live --report ./gate-d-live-canary-report.json
+
+      - name: Upload sanitized canary report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cliniccare-ai-live-canary-report
+          path: gate-d-live-canary-report.json
+          if-no-files-found: error

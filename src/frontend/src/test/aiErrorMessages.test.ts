@@ -22,4 +22,19 @@ describe('aiChatFailureMessage', () => {
         expect(aiChatFailureMessage({ providerFailureCode: 'ClientCancelled' })).not.toMatch(/kết nối/i);
         expect(aiChatFailureMessage({ providerFailureCode: 'RateLimited', retryAfterSeconds: 7 })).toMatch(/7 giây/i);
     });
+
+    it('reads sanitized provider metadata from an Axios-style nested error', () => {
+        expect(aiChatFailureMessage({
+            response: {
+                status: 503,
+                data: { providerFailureCode: 'ServerError', retryAfterSeconds: 4 }
+            }
+        })).toMatch(/lỗi tạm thời/i);
+        expect(aiChatFailureMessage({
+            response: {
+                status: 429,
+                data: { providerFailureCode: 'RateLimited', retryAfterSeconds: 6 }
+            }
+        })).toMatch(/6 giây/i);
+    });
 });

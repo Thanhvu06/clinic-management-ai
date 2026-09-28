@@ -522,11 +522,29 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }
         } catch (err: unknown) {
             if (requestController.signal.aborted || !isCurrentRequest()) return;
-            const apiErr = err as { errorCode?: string; message?: string; response?: { data?: { errorCode?: string; message?: string } } };
-            const errorCode = apiErr?.response?.data?.errorCode || apiErr?.errorCode;
-            const message = apiErr?.response?.data?.message || apiErr?.message || "";
-            const httpStatus = (err as { status?: number })?.status;
-            const providerFailureCode = (err as { providerFailureCode?: string })?.providerFailureCode;
+            const apiErr = err as {
+                errorCode?: string;
+                code?: string;
+                message?: string;
+                providerFailureCode?: string;
+                failureCode?: string;
+                response?: { status?: number; data?: Record<string, unknown> };
+                data?: Record<string, unknown>;
+                status?: number;
+            };
+            const responseData = apiErr?.response?.data || {};
+            const payload = apiErr?.data || {};
+            const errorCode = apiErr?.errorCode || responseData.errorCode || payload.errorCode;
+            const message = apiErr?.message || String(responseData.message || payload.message || "");
+            const httpStatus = apiErr?.status ?? apiErr?.response?.status;
+            const providerFailureCode = [
+                apiErr?.providerFailureCode,
+                responseData.providerFailureCode,
+                payload.providerFailureCode,
+                apiErr?.failureCode,
+                responseData.failureCode,
+                payload.failureCode
+            ].find(value => typeof value === "string") as string | undefined;
             const providerFailure = Boolean(providerFailureCode) || httpStatus === 429;
             setAiAssistantStatus(providerFailure ? "Degraded" : "Offline");
 

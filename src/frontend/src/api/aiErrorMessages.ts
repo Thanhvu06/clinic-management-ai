@@ -5,6 +5,14 @@ const asRecord = (value: unknown): ErrorRecord =>
 
 const readString = (value: unknown): string => typeof value === 'string' ? value : '';
 
+const readNestedPayload = (error: unknown): ErrorRecord => {
+    const record = asRecord(error);
+    const response = asRecord(record.response);
+    const responseData = asRecord(response.data);
+    const data = asRecord(record.data);
+    return { ...response, ...responseData, ...data, ...record };
+};
+
 const readStatus = (error: unknown): number | undefined => {
     const record = asRecord(error);
     const response = asRecord(record.response);
@@ -13,24 +21,24 @@ const readStatus = (error: unknown): number | undefined => {
 };
 
 const readCode = (error: unknown): string => {
-    const record = asRecord(error);
-    return readString(record.errorCode || record.code || asRecord(record.response).errorCode).toUpperCase();
+    const record = readNestedPayload(error);
+    return readString(record.errorCode || record.code).toUpperCase();
 };
 
 const readProviderCode = (error: unknown): string => {
-    const record = asRecord(error);
+    const record = readNestedPayload(error);
     return readString(record.providerFailureCode || record.failureCode || record.providerStatus).toUpperCase();
 };
 
 const readRetryAfterSeconds = (error: unknown): number | undefined => {
-    const record = asRecord(error);
+    const record = readNestedPayload(error);
     const value = record.retryAfterSeconds;
     return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.ceil(value) : undefined;
 };
 
 const readMessage = (error: unknown): string => {
-    const record = asRecord(error);
-    return readString(record.message || asRecord(record.response).message);
+    const record = readNestedPayload(error);
+    return readString(record.message);
 };
 
 export const aiChatFailureMessage = (error: unknown): string => {

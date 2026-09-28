@@ -117,6 +117,12 @@ jobs:
           --no-build --configuration Release --filter
           "FullyQualifiedName~AiPhase2ConversationIntelligenceTests|FullyQualifiedName~AiPhase2RoleCopilotIntegrationTests|FullyQualifiedName~AiPhase2RoleActionGatewayTests"
 
+      - name: Run deterministic Gate D provider, config, degraded, and cross-actor tests
+        run: >-
+          dotnet test src/backend/ClinicManagement.IntegrationTests/ClinicManagement.IntegrationTests.csproj
+          --no-build --configuration Release --filter
+          "FullyQualifiedName~GeminiAiProviderResilienceTests|FullyQualifiedName~AiProviderConfigurationInspectorTests|FullyQualifiedName~AiPhase32ReadAccessTests|FullyQualifiedName~AiPhase2RoleActionGatewayTests"
+
       - name: Generate official idempotent migration script
         shell: bash
         run: |

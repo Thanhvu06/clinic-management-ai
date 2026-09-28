@@ -1,5 +1,7 @@
 using ClinicManagement.Application.AI;
 using ClinicManagement.Application.AI.Planning;
+using ClinicManagement.Infrastructure.AI;
+using Microsoft.Extensions.Options;
 
 namespace ClinicManagement.Infrastructure.AI.Planning;
 
@@ -29,10 +31,12 @@ public sealed class AiProviderHealth : IAiProviderHealth
     public AiProviderHealth(
         TimeSpan? openDuration = null,
         int failureThreshold = DefaultFailureThreshold,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IOptions<AiProviderOptions>? options = null)
     {
-        _openDuration = openDuration ?? DefaultOpenDuration;
-        _failureThreshold = Math.Max(1, failureThreshold);
+        var configured = options?.Value;
+        _openDuration = openDuration ?? TimeSpan.FromSeconds(Math.Max(1, configured?.CircuitCooldownSeconds ?? (int)DefaultOpenDuration.TotalSeconds));
+        _failureThreshold = Math.Max(1, configured?.CircuitFailureThreshold ?? failureThreshold);
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -83,6 +87,15 @@ public sealed class AiProviderHealth : IAiProviderHealth
     public long SuccessCount
     {
         get { lock (_gate) return _successCount; }
+    }
+
+    public long FailureCount
+    {
+        get
+        {
+            lock (_gate)
+                return _failureCounts.Values.Sum();
+        }
     }
 
     public IReadOnlyDictionary<string, long> FailureCounts

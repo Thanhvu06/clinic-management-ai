@@ -66,6 +66,43 @@ public sealed class GeminiAiProviderResilienceTests
     }
 
     [Fact]
+    public async Task Respects_retry_after_http_date_without_resetting_the_total_budget()
+    {
+        var first = Response(HttpStatusCode.TooManyRequests, "{}");
+        first.Headers.RetryAfter = new RetryConditionHeaderValue(DateTimeOffset.UtcNow.AddMilliseconds(80));
+        var handler = new SequenceHandler(
+            _ => Task.FromResult(first),
+            _ => Task.FromResult(Response(HttpStatusCode.OK, ValidEnvelope("Đã thử lại theo HTTP date."))));
+        var provider = CreateProvider(handler, timeoutSeconds: 2, maxAttempts: 2, retryBaseDelayMilliseconds: 0);
+        var clock = Stopwatch.StartNew();
+
+        var result = await provider.ChatWithAiAsync("xin chào", new(), new(), "{}", CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, handler.CallCount);
+        Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(55), $"Retry-After HTTP date was not respected: {clock.Elapsed}");
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.RequestTimeout)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadGateway)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    [InlineData(HttpStatusCode.GatewayTimeout)]
+    public async Task Retries_transient_http_failures_within_the_same_budget(HttpStatusCode status)
+    {
+        var handler = new SequenceHandler(
+            _ => Task.FromResult(Response(status, "{}")),
+            _ => Task.FromResult(Response(HttpStatusCode.OK, ValidEnvelope("Đã hồi phục."))));
+        var provider = CreateProvider(handler, timeoutSeconds: 2, maxAttempts: 2, retryBaseDelayMilliseconds: 0);
+
+        var result = await provider.ChatWithAiAsync("xin chào", new(), new(), "{}", CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, handler.CallCount);
+    }
+
+    [Fact]
     public async Task Exhausted_429_preserves_bounded_retry_metadata_without_waiting_past_budget()
     {
         var handler = new SequenceHandler(_ => Task.FromResult(Response(HttpStatusCode.TooManyRequests, "{}", TimeSpan.FromSeconds(30))));
@@ -105,6 +142,21 @@ public sealed class GeminiAiProviderResilienceTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal("AuthFailure", result.Status);
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task Does_not_retry_forbidden_authentication_errors()
+    {
+        var handler = new SequenceHandler(_ => Task.FromResult(Response(HttpStatusCode.Forbidden, "{}")));
+        var provider = CreateProvider(handler, timeoutSeconds: 2, maxAttempts: 3);
+
+        var result = await provider.ChatWithAiAsync("xin chào", new(), new(), "{}", CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("AuthFailure", result.Status);
+        Assert.Equal(AiProviderStatusContract.FailureAuthenticationFailed, result.FailureCode);
+        Assert.False(result.Retryable);
         Assert.Equal(1, handler.CallCount);
     }
 
@@ -166,6 +218,20 @@ public sealed class GeminiAiProviderResilienceTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal("InvalidResponse", result.Status);
+        Assert.Empty(result.Reply);
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task Rejects_empty_success_body_without_retrying_or_fabricating_a_reply()
+    {
+        var handler = new SequenceHandler(_ => Task.FromResult(Response(HttpStatusCode.OK, string.Empty)));
+        var provider = CreateProvider(handler);
+
+        var result = await provider.ChatWithAiAsync("xin chào", new(), new(), "{}", CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(AiProviderStatusContract.FailureInvalidResponse, result.FailureCode);
         Assert.Empty(result.Reply);
         Assert.Equal(1, handler.CallCount);
     }
