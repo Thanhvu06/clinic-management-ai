@@ -50,6 +50,15 @@ const DoctorActionArgumentsButtons: React.FC = () => {
     </div>;
 };
 
+const ReceptionDepartmentButtons: React.FC = () => {
+    const { setSelection } = useCopilotResource();
+    return <div>
+        <button type="button" onClick={() => setSelection({ context: { appointmentId: 77, departmentId: 19 }, source: 'reception-appointment-row-A' })}>Chọn khoa A</button>
+        <button type="button" onClick={() => setSelection({ context: { appointmentId: 77 }, source: 'reception-appointment-row-A' })}>Bỏ chọn khoa</button>
+        <button type="button" onClick={() => setSelection({ context: { appointmentId: 77, departmentId: 20 }, source: 'reception-appointment-row-B' })}>Chọn khoa B</button>
+    </div>;
+};
+
 describe('UnifiedCopilotPanel', () => {
     afterEach(() => {
         vi.useRealTimers();
@@ -493,6 +502,42 @@ describe('UnifiedCopilotPanel', () => {
         await waitFor(() => expect(screen.getByText(/Dữ liệu hoặc mã xác nhận đã thay đổi/)).toBeInTheDocument());
         expect(screen.queryByRole('button', { name: /Xác nhận thao tác/i })).not.toBeInTheDocument();
         expect(screen.queryByText('conflict-token')).not.toBeInTheDocument();
+    });
+
+    it('locks and clears a receptionist preview when the department is deselected, then uses a new key for another department', async () => {
+        mockUser = { userId: 'reception-1', fullName: 'Reception', role: 'Receptionist' };
+        const tool = { name: 'reception.prepare_check_in_appointment', version: '1.0', description: 'Tiếp nhận lịch hẹn', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        const pending = (actionId: string, token: string, department: string) => ({
+            status: 'pending_confirmation', actionId, data: { confirmationToken: token },
+            preview: { toolName: tool.name, status: 'pending_confirmation', resourceType: 'Appointment', resourceId: '77', resource: { identity: `Lịch hẹn AP-77 · ${department}`, facility: 'Cơ sở test', department, subject: 'Bệnh nhân mã hóa', encounter: 'Appointment #77', currentStatus: 'Confirmed' }, changes: [{ kind: 'check_in', summary: 'Tiếp nhận bệnh nhân', items: [{ label: 'Khoa', value: department }] }], consequence: `Hậu quả ${department}`, confirmationSummary: 'Backend đã kiểm tra.', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-02T00:00:00Z', sources: [{ name: 'appointments', kind: 'database' }] }
+        });
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        prepareActionMock.mockResolvedValueOnce(pending('action-a', 'token-a', 'Khoa A')).mockResolvedValueOnce(pending('action-b', 'token-b', 'Khoa B'));
+
+        render(<MemoryRouter initialEntries={['/reception/appointments/77']}><CopilotResourceProvider><ReceptionDepartmentButtons /><UnifiedCopilotPanel /></CopilotResourceProvider></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn khoa A' }));
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Lễ tân/i }));
+        const previewButton = await screen.findByRole('button', { name: 'Xem trước' });
+        expect(previewButton).not.toBeDisabled();
+        fireEvent.click(previewButton);
+        await waitFor(() => expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeInTheDocument());
+        expect(screen.getByText('Hậu quả Khoa A')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Bỏ chọn khoa' }));
+        await waitFor(() => expect(screen.queryByRole('button', { name: /Xác nhận thao tác/i })).not.toBeInTheDocument());
+        expect(screen.queryByText('Hậu quả Khoa A')).not.toBeInTheDocument();
+        expect(screen.queryByText('token-a')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Xem trước' })).toBeDisabled();
+        expect(screen.getByText('Cần appointment và department đang được chọn từ dữ liệu thật.')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn khoa B' }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).not.toBeDisabled());
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        await waitFor(() => expect(screen.getByText('Hậu quả Khoa B')).toBeInTheDocument());
+        expect(prepareActionMock).toHaveBeenCalledTimes(2);
+        const firstKey = (prepareActionMock.mock.calls[0][0] as { idempotencyKey: string }).idempotencyKey;
+        const secondKey = (prepareActionMock.mock.calls[1][0] as { idempotencyKey: string }).idempotencyKey;
+        expect(secondKey).not.toBe(firstKey);
     });
 
     it('rejects gibberish/question booking reasons and normalizes a trailing escape', () => {

@@ -127,9 +127,9 @@ export const organizationApi = {
         return axiosClient.post<any, ApiResponse<BuildingDto>>(`/facilities/${facilityId}/buildings`, data);
     },
 
-    getDepartments: async (facilityId?: number): Promise<ApiResponse<DepartmentDto[]>> => {
+    getDepartments: async (facilityId?: number, signal?: AbortSignal): Promise<ApiResponse<DepartmentDto[]>> => {
         const query = facilityId ? `?facilityId=${facilityId}` : '';
-        return axiosClient.get<any, ApiResponse<DepartmentDto[]>>(`/departments${query}`);
+        return axiosClient.get<any, ApiResponse<DepartmentDto[]>>(`/departments${query}`, signal ? { signal } : undefined);
     },
 
     createDepartment: async (data: { facilityId: number; buildingId?: number; code: string; name: string; departmentType: number; description?: string }): Promise<ApiResponse<DepartmentDto>> => {

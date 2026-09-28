@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { AiCopilotCard } from '../api/aiCopilotApi';
 import { renderCopilotCardData } from '../components/copilot/copilotDataRenderers';
@@ -59,5 +59,54 @@ describe('canonical Copilot card contract', () => {
         expect(view.container.textContent).not.toContain('UNPUBLISHED_SECRET');
         expect(view.container.textContent).not.toContain('0900000000');
         expect(view.container.textContent).not.toContain('confirmationToken');
+    });
+
+    it('renders receptionist queue and lookup patient names without exposing sensitive fields', () => {
+        const queueView = render(<>{renderCopilotCardData({
+            type: 'reception_queue', title: 'Hàng đợi', data: [{
+                id: 101, visitCode: 'V-101', queueNumber: 4, patientName: 'Người bệnh hàng đợi', status: 'Waiting',
+                patientPhone: '0900000001', nationalId: 'NID-SECRET', medicalRecordNumber: 'MRN-SECRET', confirmationToken: 'TOKEN-SECRET'
+            }]
+        })}</>);
+        expect(screen.getByText('Người bệnh hàng đợi')).toBeInTheDocument();
+        expect(queueView.container.textContent).toContain('V-101');
+        expect(queueView.container.textContent).toContain('Waiting');
+        expect(queueView.container.textContent).not.toContain('0900000001');
+        expect(queueView.container.textContent).not.toContain('NID-SECRET');
+        expect(queueView.container.textContent).not.toContain('MRN-SECRET');
+        expect(queueView.container.textContent).not.toContain('TOKEN-SECRET');
+        queueView.unmount();
+
+        const lookupView = render(<>{renderCopilotCardData({
+            type: 'appointment_lookup', title: 'Tra cứu lịch hẹn', data: {
+                id: 102, appointmentCode: 'AP-102', appointmentDate: '2030-01-02', startTime: '08:00', endTime: '08:30',
+                patientName: 'Người bệnh tra cứu', status: 'Confirmed', patientPhone: '0900000002', nationalId: 'NID-LOOKUP', medicalRecordNumber: 'MRN-LOOKUP'
+            }
+        })}</>);
+        expect(screen.getByText('Người bệnh tra cứu')).toBeInTheDocument();
+        expect(lookupView.container.textContent).toContain('AP-102');
+        expect(lookupView.container.textContent).not.toContain('0900000002');
+        expect(lookupView.container.textContent).not.toContain('NID-LOOKUP');
+        expect(lookupView.container.textContent).not.toContain('MRN-LOOKUP');
+    });
+
+    it('keeps patient appointment cards supported and fails closed for empty or unknown data', () => {
+        const patientView = render(<>{renderCopilotCardData({
+            type: 'appointments', title: 'Lịch hẹn của tôi', data: { items: [{ appointmentCode: 'AP-PATIENT', status: 'Confirmed', appointmentDate: '2030-01-02' }] }
+        })}</>);
+        expect(screen.getByText('AP-PATIENT')).toBeInTheDocument();
+        patientView.unmount();
+
+        const emptyView = render(<>{renderCopilotCardData({ type: 'reception_queue', title: 'Hàng đợi', data: [] })}</>);
+        expect(screen.getByText('Hàng đợi hiện không có lượt phù hợp.')).toBeInTheDocument();
+        emptyView.unmount();
+
+        const notFoundView = render(<>{renderCopilotCardData({ type: 'appointment_lookup', title: 'Tra cứu', data: { status: 'not_found' } })}</>);
+        expect(screen.getByText('Không tìm thấy lịch hẹn phù hợp.')).toBeInTheDocument();
+        notFoundView.unmount();
+
+        render(<>{renderCopilotCardData({ type: 'unsupported_card', title: 'Không rõ', data: { patientName: 'Không được hiển thị' } })}</>);
+        expect(screen.getByText(/chưa hỗ trợ trình bày đầy đủ cấu trúc dữ liệu này/i)).toBeInTheDocument();
+        expect(screen.queryByText('Không được hiển thị')).not.toBeInTheDocument();
     });
 });

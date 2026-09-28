@@ -214,11 +214,27 @@ const ReceptionCard: React.FC<{ data: unknown; queue?: boolean }> = ({ data, que
     if (!items.length) return <EmptyData message={queue ? 'Hàng đợi hiện không có lượt phù hợp.' : 'Không có lịch hẹn phù hợp.'} />;
     return <List>{items.slice(0, 20).map((item, index) => <article className={styles.typedItem} key={index}>
         <strong>{text(queue ? item.visitCode : item.appointmentCode) ?? (queue ? 'Lượt trong hàng đợi' : 'Lịch hẹn')}</strong>
-        <StatusLine label={queue ? 'Số thứ tự' : 'Người bệnh'} value={queue ? item.queueNumber : item.patientName} />
+        {queue && <StatusLine label="Số thứ tự" value={item.queueNumber} />}
+        <StatusLine label="Người bệnh" value={item.patientName} />
         {!queue && <StatusLine label="Bác sĩ" value={item.doctorName} />}
         <StatusLine label="Trạng thái" value={item.status} />
         <StatusLine label="Thời gian" value={item.appointmentDate ?? item.visitDate ?? item.checkedInAtUtc} date />
     </article>)}</List>;
+};
+
+const ReceptionAppointmentLookupCard: React.FC<{ data: unknown }> = ({ data }) => {
+    const item = asRecord(data);
+    const status = text(item?.status)?.toLowerCase();
+    if (!item || status === 'not_found' || !text(item.appointmentCode)) {
+        return <EmptyData message="Không tìm thấy lịch hẹn phù hợp." />;
+    }
+    return <List><article className={styles.typedItem}>
+        <strong>{text(item.appointmentCode)}</strong>
+        <StatusLine label="Người bệnh" value={item.patientName} />
+        <StatusLine label="Trạng thái" value={item.status} />
+        <StatusLine label="Ngày" value={item.appointmentDate} date />
+        <StatusLine label="Giờ" value={item.startTime && item.endTime ? `${valueLabel(item.startTime)} – ${valueLabel(item.endTime)}` : item.startTime} />
+    </article></List>;
 };
 
 const DoctorSummaryCard: React.FC<{ data: unknown }> = ({ data }) => {
@@ -312,7 +328,7 @@ export const renderCopilotCardData = (card: AiCopilotCard): React.ReactNode => {
         case 'patient_bills': return <PatientBillsCard data={card.data} />;
         case 'reception_appointments': return <ReceptionCard data={card.data} />;
         case 'reception_queue': return <ReceptionCard data={card.data} queue />;
-        case 'appointment_lookup': return <AppointmentCard data={card.data} detail />;
+        case 'appointment_lookup': return <ReceptionAppointmentLookupCard data={card.data} />;
         case 'doctor_patient_summary': return <DoctorSummaryCard data={card.data} />;
         case 'doctor_summary': return <LegacyDoctorSummaryCard data={card.data} />;
         case 'doctor_queue': return <DoctorQueueCard data={card.data} />;

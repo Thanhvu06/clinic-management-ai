@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axiosClient from '../../api/axiosClient';
 import { patientVisitApi } from '../../api/patientVisitApi';
 import { organizationApi, type DepartmentDto } from '../../api/organizationApi';
@@ -44,7 +44,9 @@ export const ReceptionAppointments: React.FC = () => {
     const [historyError, setHistoryError] = useState('');
     const [departments, setDepartments] = useState<DepartmentDto[]>([]);
     const [departmentsLoading, setDepartmentsLoading] = useState(false);
+    const [departmentsError, setDepartmentsError] = useState('');
     const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null);
+    const departmentRequestRef = useRef<{ generation: number; controller: AbortController | null }>({ generation: 0, controller: null });
 
     // Check-in Ticket Modal state
     const [ticketModalOpen, setTicketModalOpen] = useState(false);
@@ -87,6 +89,11 @@ export const ReceptionAppointments: React.FC = () => {
         return () => window.removeEventListener('cliniccare:copilot-action-completed', refresh);
     }, [page, statusFilter, search]);
 
+    useEffect(() => () => {
+        departmentRequestRef.current.controller?.abort();
+        departmentRequestRef.current.generation += 1;
+    }, []);
+
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setPage(1);
@@ -110,9 +117,22 @@ export const ReceptionAppointments: React.FC = () => {
         }
     };
 
+    const cancelDepartmentRequest = () => {
+        departmentRequestRef.current.controller?.abort();
+        departmentRequestRef.current = {
+            generation: departmentRequestRef.current.generation + 1,
+            controller: null
+        };
+    };
+
     const openDetail = (apt: ReceptionAppointment) => {
+        cancelDepartmentRequest();
+        const generation = departmentRequestRef.current.generation;
+        const facilityId = apt.facilityId && apt.facilityId > 0 ? apt.facilityId : null;
         setSelectedDepartmentId(null);
         setDepartments([]);
+        setDepartmentsError(facilityId ? '' : 'Không xác định được cơ sở của lịch hẹn nên Copilot chưa thể chuẩn bị thao tác.');
+        setDepartmentsLoading(Boolean(facilityId));
         setSelection({
             context: { appointmentId: apt.id },
             source: 'reception-appointments',
@@ -120,30 +140,53 @@ export const ReceptionAppointments: React.FC = () => {
         });
         setModal({ isOpen: true, apt });
         fetchHistory(apt.id);
-        if (apt.facilityId && apt.facilityId > 0) {
-            setDepartmentsLoading(true);
-            void organizationApi.getDepartments(apt.facilityId)
+        if (facilityId) {
+            const controller = new AbortController();
+            departmentRequestRef.current.controller = controller;
+            void organizationApi.getDepartments(facilityId, controller.signal)
                 .then(result => {
+                    if (controller.signal.aborted || departmentRequestRef.current.generation !== generation) return;
                     if (result.success && result.data) {
-                        setDepartments(result.data.filter(department => department.isActive && department.facilityId === apt.facilityId));
+                        setDepartments(result.data.filter(department => department.isActive && department.facilityId === facilityId));
+                        setDepartmentsError('');
+                    } else {
+                        setDepartments([]);
+                        setDepartmentsError(result.message || 'Không thể tải khoa thuộc cơ sở của lịch hẹn.');
                     }
                 })
-                .catch(() => setDepartments([]))
-                .finally(() => setDepartmentsLoading(false));
+                .catch(error => {
+                    if (controller.signal.aborted || departmentRequestRef.current.generation !== generation) return;
+                    setDepartments([]);
+                    setDepartmentsError(error?.message || 'Không thể tải khoa thuộc cơ sở của lịch hẹn.');
+                })
+                .finally(() => {
+                    if (!controller.signal.aborted && departmentRequestRef.current.generation === generation) {
+                        setDepartmentsLoading(false);
+                        departmentRequestRef.current.controller = null;
+                    }
+                });
         }
     };
 
     const closeDetail = () => {
+        cancelDepartmentRequest();
         setSelection(null);
         setSelectedDepartmentId(null);
         setDepartments([]);
+        setDepartmentsError('');
+        setDepartmentsLoading(false);
         setModal({ isOpen: false, apt: null });
     };
 
     useEffect(() => {
-        if (!modal.isOpen || !modal.apt || !selectedDepartmentId) return;
-        const department = departments.find(item => item.id === selectedDepartmentId);
-        if (!department || department.facilityId !== modal.apt.facilityId) {
+        if (!modal.isOpen || !modal.apt) {
+            setSelection(null);
+            return;
+        }
+        const department = selectedDepartmentId === null ? undefined : departments.find(item =>
+            item.id === selectedDepartmentId && item.isActive && item.facilityId === modal.apt?.facilityId
+        );
+        if (!department) {
             setSelection({
                 context: { appointmentId: modal.apt.id },
                 source: 'reception-appointments',
@@ -156,7 +199,7 @@ export const ReceptionAppointments: React.FC = () => {
             source: 'reception-appointments',
             label: `Lịch hẹn ${modal.apt.appointmentCode} · ${department.name}`
         });
-    }, [departments, modal.apt, modal.isOpen, selectedDepartmentId, setSelection]);
+    }, [departments, modal, selectedDepartmentId, setSelection]);
 
     const { showAlert, showConfirm } = useDialog();
 
@@ -392,7 +435,7 @@ export const ReceptionAppointments: React.FC = () => {
                             <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 Chi tiết lịch hẹn <span style={{ color: 'var(--c-teal)' }}>#{modal.apt.appointmentCode}</span>
                             </h3>
-                            <button onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
+                            <button aria-label="Đóng chi tiết lịch hẹn" onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
@@ -436,6 +479,7 @@ export const ReceptionAppointments: React.FC = () => {
                                 <option value="">{departmentsLoading ? 'Đang tải khoa theo cơ sở…' : 'Chọn khoa từ cơ sở của lịch hẹn'}</option>
                                 {departments.map(department => <option key={department.id} value={department.id}>{department.name} ({department.code})</option>)}
                             </select>
+                            {departmentsError && <div role="alert" style={{ color: 'var(--c-danger, #b91c1c)', marginTop: '8px' }}>{departmentsError}</div>}
                             <small style={{ display: 'block', color: 'var(--c-muted)', marginTop: '8px' }}>
                                 Danh sách lấy từ API khoa của cơ sở {modal.apt.facilityName ? `“${modal.apt.facilityName}”` : 'đang gắn với lịch hẹn'}. Không tự chọn khoa; backend sẽ kiểm tra lại cơ sở, quyền và lịch hẹn khi chuẩn bị/xác nhận.
                             </small>
