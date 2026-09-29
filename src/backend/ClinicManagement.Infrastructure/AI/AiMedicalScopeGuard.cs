@@ -13,13 +13,18 @@ public static class AiMedicalScopeGuard
 {
     // Output is not a user question: numeric dosing and authored prescriptions
     // must be rejected even without request words such as "bao nhiêu".
-    private static readonly Regex ProviderMedicationAdvice = new(
-        @"\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|ml|vien)\b|\b(?:toi|minh)\s+ke\s+(?:don|thuoc)\b|\b(?:hay|nen)\s+(?:ngung|dung|doi|bo)\s+thuoc\b",
+    private static readonly Regex ProviderDoseOrPrescriptionAdvice = new(
+        @"\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|ml|viên|vien)\b|\b(?:toi|minh)\s+ke\s+(?:don|thuoc)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex ProviderMedicationChangeAdvice = new(
+        @"\b(?:hãy|nên)\s+(?:ngừng|ngưng|dừng|đổi|bỏ)\s+thuốc\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     public static bool IsUnsafeProviderAdvice(AiActorRole role, string? text) =>
         role == AiActorRole.Patient && !string.IsNullOrWhiteSpace(text) &&
-        (IsPrescriptionRequest(role, text) || ProviderMedicationAdvice.IsMatch(AiTextNormalizer.NormalizeForComparison(text)));
+        (IsPrescriptionRequest(role, text) ||
+         ProviderDoseOrPrescriptionAdvice.IsMatch(AiTextNormalizer.NormalizeForComparison(text)) ||
+         ProviderMedicationChangeAdvice.IsMatch(AiTextNormalizer.Normalize(text)));
 
     private static readonly Regex ExistingPrescriptionRead = new(
         @"\b(?:bac\s+si\s+ke\s+thuoc|thuoc\s+(?:bac\s+si\s+)?da\s+ke|(?:toa|don)\s+thuoc\s+cua\s+toi|thuoc\s+cua\s+toi)\b",

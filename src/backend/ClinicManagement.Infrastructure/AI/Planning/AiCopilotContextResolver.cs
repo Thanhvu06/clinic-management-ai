@@ -3,6 +3,7 @@ using System.Text;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Planning;
 using ClinicManagement.Application.AI.Tools;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -13,8 +14,13 @@ namespace ClinicManagement.Infrastructure.AI.Planning;
 public sealed class AiCopilotContextResolver : IAiCopilotContextResolver
 {
     private readonly AppDbContext _db;
+    private readonly IDateTimeProvider _clock;
 
-    public AiCopilotContextResolver(AppDbContext db) => _db = db;
+    public AiCopilotContextResolver(AppDbContext db, IDateTimeProvider clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<AiContextResolutionResult> ResolveAsync(
         AiCopilotRequestDto request,
@@ -71,7 +77,7 @@ public sealed class AiCopilotContextResolver : IAiCopilotContextResolver
         if (!await IsCompositeContextConsistentAsync(candidate, cancellationToken))
             return AiContextResolutionResult.Invalid("RESOURCE_CONTEXT_MISMATCH", "Các tài nguyên được chọn không thuộc cùng một ca khám được xác minh.");
 
-        var now = DateTime.UtcNow;
+        var now = _clock.UtcNow;
         // Executing blocks only for its existing two-minute backend lease, even
         // if confirmation TTL has elapsed. Retryable failures have no live lease
         // and remain actionable only until confirmation TTL. This does not mutate

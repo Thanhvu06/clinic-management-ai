@@ -59,19 +59,34 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
             }
         }
 
+        if (ContainsPromptInjectionNormalized(normalized))
+            return new AiSafetyGuardResult { IsPromptInjection = true, MatchedCategory = "prompt_injection" };
+
+        return new AiSafetyGuardResult();
+    }
+
+    /// <summary>Checks injection independently so conditional emergency guidance cannot hide it.</summary>
+    public bool ContainsPromptInjection(string? message)
+    {
+        var normalized = NormalizePreservingDiacritics(message);
+        return !string.IsNullOrWhiteSpace(normalized) && ContainsPromptInjectionNormalized(normalized);
+    }
+
+    private static bool ContainsPromptInjectionNormalized(string normalized)
+    {
+        var tokens = Tokenize(normalized);
         foreach (var phrase in InjectionPhrases)
         {
             foreach (var match in FindPhraseMatches(tokens, phrase))
             {
                 if (!IsNegated(normalized, tokens, match.StartTokenIndex))
-                    return new AiSafetyGuardResult { IsPromptInjection = true, MatchedCategory = "prompt_injection" };
+                    return true;
             }
         }
 
         if (HasUnnegatedInjectionSequence(normalized))
-            return new AiSafetyGuardResult { IsPromptInjection = true, MatchedCategory = "prompt_injection" };
-
-        return new AiSafetyGuardResult();
+            return true;
+        return false;
     }
 
     private static bool HasUnnegatedInjectionSequence(string normalized)
