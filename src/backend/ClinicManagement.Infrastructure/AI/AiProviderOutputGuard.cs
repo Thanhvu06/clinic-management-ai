@@ -14,6 +14,10 @@ public static class AiProviderOutputGuard
     private static readonly Regex CurrentState = new(
         @"\b(?:(?:bạn|người\s+bệnh|bệnh\s+nhân)\s+(?:hiện\s+)?đang|hiện\s+tại|lúc\s+này)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    // A condition alone ("Khi bạn nhập viện, bạn bị đau ngực") still asserts the symptom; guidance needs an action.
+    private static readonly Regex ActionPhrase = new(
+        @"\b(?:hãy|nên|cần|phải|thì|liên\s+hệ|gọi\s+(?:115|cấp\s+cứu|xe)|(?:đến|tới|đi)\s+(?:cấp\s+cứu|bệnh\s+viện|cơ\s+sở))\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex ListItem = new(
         @"^(?:[-*•]|\d+[.)])\s+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
@@ -30,8 +34,9 @@ public static class AiProviderOutputGuard
                 foreach (var clause in Regex.Split(sentence, @"(?<=,)"))
                 {
                     var safety = guard.Inspect(clause);
-                    // A condition scopes over the whole sentence, so a clause is judged with everything before it.
-                    if (safety.IsEmergency && HasAssertedEmergency(sentence[..offset], clause, safety.MatchedCategory))
+                    // A condition scopes over the whole sentence, so a clause is judged with everything before it,
+                    // and the action that makes it guidance may come anywhere in the sentence.
+                    if (safety.IsEmergency && HasAssertedEmergency(sentence, offset, clause, safety.MatchedCategory))
                         return new("Dấu hiệu có thể là tình huống cấp cứu. Hãy gọi 115 hoặc đến cơ sở cấp cứu gần nhất. Không chờ phản hồi qua trò chuyện.", "PROVIDER_OUTPUT_EMERGENCY", true);
                     offset += clause.Length;
                 }
@@ -84,10 +89,11 @@ public static class AiProviderOutputGuard
         yield return text;
     }
 
-    private static bool HasAssertedEmergency(string contextPrefix, string text, string? category)
+    private static bool HasAssertedEmergency(string sentence, int clauseStart, string text, string? category)
     {
         if (string.IsNullOrWhiteSpace(category)) return true;
-        var context = AiTextNormalizer.Normalize(contextPrefix).ToLowerInvariant();
+        if (!ActionPhrase.IsMatch(AiTextNormalizer.Normalize(sentence).ToLowerInvariant())) return true;
+        var context = AiTextNormalizer.Normalize(sentence[..clauseStart]).ToLowerInvariant();
         var normalized = AiTextNormalizer.Normalize(text).ToLowerInvariant();
         var phrase = AiTextNormalizer.Normalize(category).ToLowerInvariant();
         var searchFrom = 0;
