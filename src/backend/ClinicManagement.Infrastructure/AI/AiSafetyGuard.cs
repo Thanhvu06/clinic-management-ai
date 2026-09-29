@@ -76,10 +76,15 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
 
     private static bool HasUnnegatedInjectionSequence(string normalized)
     {
-        foreach (var variant in new[] { normalized, StripDiacritics(normalized) }.Distinct(StringComparer.Ordinal))
+        // Equal texts still need both grammars: ASCII input cannot match the accented grammar.
+        foreach (var (variant, pattern) in new[]
+        {
+            (normalized, InjectionSequence),
+            (StripDiacritics(normalized), InjectionSequenceWithoutDiacritics)
+        })
         {
             var tokens = Tokenize(variant);
-            var matches = (variant == normalized ? InjectionSequence : InjectionSequenceWithoutDiacritics)
+            var matches = pattern
                 .Matches(variant)
                 .Cast<Match>();
             foreach (var match in matches)
