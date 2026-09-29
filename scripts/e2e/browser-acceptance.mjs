@@ -326,43 +326,57 @@ async function runPatientPendingActionCancellation(browser) {
         await login(page, actor);
         const token = await page.evaluate(() => localStorage.getItem('token'));
         const headers = { Authorization: `Bearer ${token}` };
-        let routeError = null, injected = null;
-        const aiCalls = [];
-        page.on('response', r => { if (r.url().includes('/api/v1/ai/')) aiCalls.push(`${r.request().method()} ${r.url()} ${r.status()}`); });
+        let routeError = null;
         await page.route('**/api/v1/ai/chat', async route => {
-          try {
-            const sessionId = route.request().postDataJSON()?.sessionId;
-            const real = await route.fetch();
-            const json = await real.json();
-            const appointments = await (await page.request.post(`${apiBase}/api/v1/ai/tools/execute`, {
-                headers, data: { toolName: 'patient.get_my_appointments', toolVersion: '1.0', argumentsJson: '{}', sessionId }
-            })).json();
-            const appointment = JSON.stringify(appointments).match(/"appointmentId":(\d+),"appointmentCode":"CANARY-APT-001"|"appointmentCode":"CANARY-APT-001"[^}]*?"appointmentId":(\d+)|"id":(\d+),"appointmentCode":"CANARY-APT-001"/);
-            const appointmentId = Number(appointment?.[1] ?? appointment?.[2] ?? appointment?.[3]);
-            assert.ok(appointmentId, `synthetic appointment id not found in ${JSON.stringify(appointments).slice(0, 400)}`);
-            const prepared = await page.request.post(`${apiBase}/api/v1/ai/copilot/actions/prepare`, {
-                headers, data: {
-                    toolName: 'patient.prepare_cancel_appointment', toolVersion: '1.0',
-                    argumentsJson: JSON.stringify({ appointmentId, reason: 'Bận việc đột xuất' }),
-                    sessionId, conversationId: `conv_${Date.now()}`, idempotencyKey: `idem_${Date.now()}`
-                }
-            });
-            const result = await prepared.json();
-            assert.equal(result?.status, 'pending_confirmation', `real patient prepare must succeed: ${JSON.stringify(result).slice(0, 400)}`);
-            injected = JSON.stringify({ result, jsonKeys: Object.keys(json) }).slice(0, 900);
-            json.data = { ...(json.data ?? {}), toolResults: [result] };
-            await route.fulfill({ response: real, json });
-          } catch (error) { routeError = error; await route.continue().catch(() => {}); }
+            try {
+                const sessionId = route.request().postDataJSON()?.sessionId;
+                const real = await route.fetch();
+                const json = await real.json();
+                const appointments = await (await page.request.post(`${apiBase}/api/v1/ai/tools/execute`, {
+                    headers, data: { toolName: 'patient.get_my_appointments', toolVersion: '1.0', argumentsJson: '{}', sessionId }
+                })).json();
+                const findAppointment = value => {
+                    if (Array.isArray(value)) {
+                        for (const item of value) {
+                            const found = findAppointment(item);
+                            if (found) return found;
+                        }
+                    } else if (value && typeof value === 'object') {
+                        if (value.appointmentCode === 'CANARY-APT-001') return value;
+                        for (const child of Object.values(value)) {
+                            const found = findAppointment(child);
+                            if (found) return found;
+                        }
+                    }
+                    return null;
+                };
+                const appointment = findAppointment(appointments);
+                const appointmentId = appointment?.appointmentId ?? appointment?.id;
+                assert.ok(appointmentId, 'synthetic appointment id not found');
+                const prepared = await page.request.post(`${apiBase}/api/v1/ai/copilot/actions/prepare`, {
+                    headers, data: {
+                        toolName: 'patient.prepare_cancel_appointment', toolVersion: '1.0',
+                        argumentsJson: JSON.stringify({ appointmentId, reason: 'Bận việc đột xuất' }),
+                        sessionId, conversationId: `conv_${Date.now()}`, idempotencyKey: `idem_${Date.now()}`
+                    }
+                });
+                const result = await prepared.json();
+                assert.equal(result?.status, 'pending_confirmation', `real patient prepare must succeed: ${JSON.stringify(result).slice(0, 400)}`);
+                json.data = { ...(json.data ?? {}), toolResults: [result] };
+                await route.fulfill({ response: real, json });
+            } catch (error) { routeError = error; await route.continue().catch(() => {}); }
         });
-        await page.getByRole('textbox', { name: 'Nội dung tin nhắn tư vấn AI' }).fill('Xin chào');
-        await page.getByRole('button', { name: 'Gửi tin nhắn' }).click();
-        try { await page.getByRole('button', { name: 'Hủy thao tác' }).waitFor({ state: 'visible', timeout: 15000 }); }
-        catch (error) { throw new Error(`patient preview did not render; routeError=${routeError?.message}; aiCalls=${aiCalls.join(' , ')}; injected=${injected}; body=${(await page.locator('body').innerText()).slice(-1500)}`); }
+        await page.getByRole('button', { name: 'Mở Trợ lý ClinicCare AI' }).click();
+        const chat = page.getByRole('dialog', { name: /ClinicCare AI/i });
+        await chat.getByRole('textbox', { name: 'Nội dung tin nhắn gửi tới ClinicCare AI' }).fill('Xin chào');
+        await chat.getByRole('button', { name: 'Gửi tin nhắn' }).click();
+        try { await chat.getByRole('button', { name: 'Hủy thao tác' }).waitFor({ state: 'visible', timeout: 15000 }); }
+        catch (error) { throw new Error(`patient preview did not render; routeError=${routeError?.message}`); }
 
         const cancelResponsePromise = page.waitForResponse(response =>
             response.url().includes('/api/v1/ai/tool-actions/') &&
             response.url().endsWith('/cancel') && response.request().method() === 'POST');
-        await page.getByRole('button', { name: 'Hủy thao tác' }).click();
+        await chat.getByRole('button', { name: 'Hủy thao tác' }).click();
         const cancelResponse = await cancelResponsePromise;
         assert.equal(cancelResponse.status(), 200, 'patient-owned pending action cancel must succeed');
         assert.equal((await cancelResponse.json())?.status, 'cancelled', 'cancel response must be explicit');
