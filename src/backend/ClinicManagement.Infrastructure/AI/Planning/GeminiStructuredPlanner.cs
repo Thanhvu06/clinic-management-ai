@@ -261,6 +261,7 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
     private static string SanitizeForProvider(string value)
     {
         var sanitized = value.Trim();
+        sanitized = Regex.Replace(sanitized, @"(?<!\d)(?:\d{12}|\d{9})(?!\d)", "[identifier]", RegexOptions.CultureInvariant);
         sanitized = Regex.Replace(sanitized, @"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", "[email]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         sanitized = Regex.Replace(sanitized, @"(?<!\d)(?:\+?84|0)[1-9]\d{7,9}(?!\d)", "[phone]", RegexOptions.CultureInvariant);
         sanitized = Regex.Replace(sanitized, @"\b(?:cccd|cmnd|căn cước|mrn|mã hồ sơ|mã bệnh nhân)\s*[:#=]?\s*[A-Za-z0-9-]+", "[identifier]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);

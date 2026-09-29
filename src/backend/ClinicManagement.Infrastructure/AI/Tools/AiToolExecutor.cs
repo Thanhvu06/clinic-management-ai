@@ -227,7 +227,18 @@ public sealed class AiToolExecutor : IAiToolExecutor
         if (definition.Capabilities.Any(required => !capabilities.Contains(required)))
             return AiToolExecutionResult.Failed("FORBIDDEN_CAPABILITY", "Tài khoản hiện tại không có capability cần thiết cho công cụ này.");
 
-        var argumentValidation = handler.ValidateArguments(invocation, context);
+        AiToolArgumentValidationResult argumentValidation;
+        try
+        {
+            argumentValidation = handler.ValidateArguments(invocation, context);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception)
+        {
+            // Do not log exception text or raw arguments: either may contain PHI.
+            _logger.LogWarning("Tool argument validator failed for {ToolName}", definition.Name);
+            return AiToolExecutionResult.Failed("INVALID_TOOL_ARGUMENTS", "Tham số công cụ không hợp lệ.");
+        }
         return argumentValidation.IsValid
             ? null
             : AiToolExecutionResult.Failed(argumentValidation.Code, argumentValidation.Message);

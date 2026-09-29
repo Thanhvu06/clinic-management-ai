@@ -188,16 +188,16 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
                 return AiToolArgumentValidationResult.Invalid("INVALID_CONCURRENCY_TOKEN", "Mã đồng bộ không hợp lệ.");
             if (property.Name.EndsWith("Id", StringComparison.OrdinalIgnoreCase) &&
                 property.Name is not "actionId" &&
-                (!property.Value.TryGetInt64(out var id) || id <= 0))
+                (property.Value.ValueKind != JsonValueKind.Number || !property.Value.TryGetInt64(out var id) || id <= 0))
                 return AiToolArgumentValidationResult.Invalid("INVALID_IDENTIFIER", "Mã định danh phải là số dương.");
             if (property.Name.Equals("limit", StringComparison.OrdinalIgnoreCase) &&
-                (!property.Value.TryGetInt32(out var limit) || limit is < 1 or > 100))
+                (property.Value.ValueKind != JsonValueKind.Number || !property.Value.TryGetInt32(out var limit) || limit is < 1 or > 100))
                 return AiToolArgumentValidationResult.Invalid("INVALID_LIMIT", "Giới hạn phải từ 1 đến 100.");
             if (property.Name.Equals("page", StringComparison.OrdinalIgnoreCase) &&
-                (!property.Value.TryGetInt32(out var page) || page is < 1 or > 100))
+                (property.Value.ValueKind != JsonValueKind.Number || !property.Value.TryGetInt32(out var page) || page is < 1 or > 100))
                 return AiToolArgumentValidationResult.Invalid("INVALID_PAGE", "Trang phải từ 1 đến 100.");
             if (property.Name.Equals("pageSize", StringComparison.OrdinalIgnoreCase) &&
-                (!property.Value.TryGetInt32(out var pageSize) || pageSize is < 1 or > 50))
+                (property.Value.ValueKind != JsonValueKind.Number || !property.Value.TryGetInt32(out var pageSize) || pageSize is < 1 or > 50))
                 return AiToolArgumentValidationResult.Invalid("INVALID_PAGE_SIZE", "Kích thước trang phải từ 1 đến 50.");
             if (property.Name is "fromDate" or "toDate")
             {

@@ -120,7 +120,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
                 if (document.RootElement.EnumerateObject().Any(x => !x.Name.Equals("prescriptionId", StringComparison.OrdinalIgnoreCase)))
                     return AiToolArgumentValidationResult.Invalid("UNKNOWN_TOOL_ARGUMENT", "Công cụ đối chiếu thanh toán chỉ nhận prescriptionId do context hiện tại cung cấp.");
                 if (!document.RootElement.TryGetProperty("prescriptionId", out var prescriptionId) ||
-                    !prescriptionId.TryGetInt64(out var parsedPrescriptionId) || parsedPrescriptionId <= 0)
+                    prescriptionId.ValueKind != JsonValueKind.Number || !prescriptionId.TryGetInt64(out var parsedPrescriptionId) || parsedPrescriptionId <= 0)
                     return AiToolArgumentValidationResult.Invalid("MISSING_TOOL_ARGUMENT", "Cần mở đúng đơn thuốc để đối chiếu thanh toán.");
             }
             return AiToolArgumentValidationResult.Valid();
@@ -540,7 +540,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         if ((hasSpecialtyFilter || hasFacilityFilter) && entityName is not "doctor")
             return AiToolArgumentValidationResult.Invalid("INVALID_FILTER_ENTITY", "Bộ lọc chuyên khoa/cơ sở chỉ áp dụng khi entity=doctor; entity=all không được trộn bộ lọc quan hệ bác sĩ với các nguồn khác.");
 
-        if (root.TryGetProperty("limit", out var limit) && (!limit.TryGetInt32(out var parsedLimit) || parsedLimit is < 1 or > CatalogMaxResultLimit))
+        if (root.TryGetProperty("limit", out var limit) && (limit.ValueKind != JsonValueKind.Number || !limit.TryGetInt32(out var parsedLimit) || parsedLimit is < 1 or > CatalogMaxResultLimit))
             return AiToolArgumentValidationResult.Invalid("INVALID_LIMIT", $"Giới hạn danh mục phải từ 1 đến {CatalogMaxResultLimit}.");
 
         return AiToolArgumentValidationResult.Valid();
@@ -568,7 +568,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
                 : "all";
             var specialtyQuery = root.TryGetProperty("specialtyQuery", out var specialtyValue) && specialtyValue.ValueKind == JsonValueKind.String ? specialtyValue.GetString()?.Trim() : null;
             var facilityQuery = root.TryGetProperty("facilityQuery", out var facilityValue) && facilityValue.ValueKind == JsonValueKind.String ? facilityValue.GetString()?.Trim() : null;
-            var limit = root.TryGetProperty("limit", out var limitValue) && limitValue.TryGetInt32(out var parsedLimit) ? Math.Clamp(parsedLimit, 1, CatalogMaxResultLimit) : CatalogDefaultResultLimit;
+            var limit = root.TryGetProperty("limit", out var limitValue) && limitValue.ValueKind == JsonValueKind.Number && limitValue.TryGetInt32(out var parsedLimit) ? Math.Clamp(parsedLimit, 1, CatalogMaxResultLimit) : CatalogDefaultResultLimit;
             request = new CatalogSearchRequest(entity!, query, specialtyQuery, facilityQuery, limit);
             return true;
         }
@@ -1022,7 +1022,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
     private static bool TryGetLong(string json, string name, out long value)
     {
         value = 0;
-        try { using var document = JsonDocument.Parse(json); return document.RootElement.TryGetProperty(name, out var property) && property.TryGetInt64(out value) && value > 0; }
+        try { using var document = JsonDocument.Parse(json); return document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.Number && property.TryGetInt64(out value) && value > 0; }
         catch (JsonException) { return false; }
     }
 
@@ -1056,9 +1056,10 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         try
         {
             using var document = JsonDocument.Parse(json);
-            if (document.RootElement.TryGetProperty(firstName, out var firstValue) && firstValue.TryGetInt64(out var firstId) && firstId > 0)
+            if (document.RootElement.ValueKind != JsonValueKind.Object) return false;
+            if (document.RootElement.TryGetProperty(firstName, out var firstValue) && firstValue.ValueKind == JsonValueKind.Number && firstValue.TryGetInt64(out var firstId) && firstId > 0)
                 first = firstId;
-            if (document.RootElement.TryGetProperty(secondName, out var secondValue) && secondValue.TryGetInt64(out var secondId) && secondId > 0)
+            if (document.RootElement.TryGetProperty(secondName, out var secondValue) && secondValue.ValueKind == JsonValueKind.Number && secondValue.TryGetInt64(out var secondId) && secondId > 0)
                 second = secondId;
             return first.HasValue ^ second.HasValue;
         }

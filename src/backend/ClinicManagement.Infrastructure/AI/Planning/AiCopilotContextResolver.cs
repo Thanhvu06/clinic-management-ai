@@ -71,9 +71,15 @@ public sealed class AiCopilotContextResolver : IAiCopilotContextResolver
         if (!await IsCompositeContextConsistentAsync(candidate, cancellationToken))
             return AiContextResolutionResult.Invalid("RESOURCE_CONTEXT_MISMATCH", "Các tài nguyên được chọn không thuộc cùng một ca khám được xác minh.");
 
+        var now = DateTime.UtcNow;
+        // Executing blocks only for its existing two-minute backend lease, even
+        // if confirmation TTL has elapsed. Retryable failures have no live lease
+        // and remain actionable only until confirmation TTL. This does not mutate
+        // actions or authorize replay; confirm still enforces its own state checks.
         var hasPending = await _db.AiPendingToolActions.AsNoTracking().AnyAsync(x =>
             x.UserId == actorId.Value &&
-            (x.State == AiPendingToolActionState.PendingConfirmation || x.State == AiPendingToolActionState.Executing || x.State == AiPendingToolActionState.FailedRetryable), cancellationToken);
+            (((x.State == AiPendingToolActionState.PendingConfirmation || x.State == AiPendingToolActionState.FailedRetryable) && x.ExpiresAtUtc > now) ||
+             (x.State == AiPendingToolActionState.Executing && x.ExecutionLeaseExpiresAtUtc > now)), cancellationToken);
 
         return AiContextResolutionResult.Valid(candidate, hasPending);
     }

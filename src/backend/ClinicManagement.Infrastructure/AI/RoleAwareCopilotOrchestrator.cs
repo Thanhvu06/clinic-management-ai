@@ -212,6 +212,9 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             ? Array.Empty<AiToolExecutionResult>()
             : (await _executor.ExecutePlannerPlanAsync(decision.ToolCalls, sessionId, cancellationToken)).ToArray();
         var grounded = _composer.Compose(decision, results);
+        var outputBlock = providerWasCalled && results.Length == 0
+            ? AiProviderOutputGuard.Inspect(role, grounded.Message, decision.Clarification)
+            : null;
         var hasFailure = results.Any(x => x.Status != "completed");
         var assistantMode = hasFailure || providerState is AiProviderStatusContract.Degraded or AiProviderStatusContract.Disabled
             ? AiAssistantModes.Degraded
@@ -230,15 +233,16 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             ConversationId = conversationId,
             TurnId = turnId,
             Role = role.ToString(),
-            AssistantMode = assistantMode,
+            AssistantMode = outputBlock is null ? assistantMode : AiAssistantModes.SafetyBlocked,
             ProviderState = providerState,
             PlannerMode = decision.PlannerMode,
             Intent = decision.Intent,
             SubIntent = decision.SubIntent,
             Confidence = decision.Confidence,
-            Message = grounded.Message,
-            ErrorCode = decision.ErrorCode,
-            Clarification = decision.Clarification,
+            Message = outputBlock?.Message ?? grounded.Message,
+            ErrorCode = outputBlock?.Code ?? decision.ErrorCode,
+            Clarification = outputBlock is null && results.Length == 0 ? decision.Clarification : null,
+            SafetyNotice = outputBlock?.Message,
             NavigationRoute = grounded.NavigationRoute,
             Navigation = grounded.NavigationRoute,
             SuggestedPrompts = SuggestedPrompts(role),
@@ -246,8 +250,8 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             Sources = grounded.Sources,
             AvailableTools = ToolsForUi(tools),
             ProviderFailureCode = providerFailureCode,
-            ExecutionMode = executionMode,
-            FallbackActive = executionMode != AiProviderStatusContract.ExecutionProviderAssisted,
+            ExecutionMode = outputBlock is null ? executionMode : AiProviderStatusContract.ExecutionManualHandoff,
+            FallbackActive = outputBlock != null || executionMode != AiProviderStatusContract.ExecutionProviderAssisted,
             Retryable = retryable,
             RetryAfterUtc = retryAfterUtc,
             RetryAfterSeconds = retryAfterSeconds,

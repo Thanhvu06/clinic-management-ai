@@ -570,6 +570,27 @@ public class AiSpecialtyService : IAiSpecialtyService
             }
         }
 
+        if (aiResult.ToolCalls.Count == 0 && AiProviderOutputGuard.Inspect(AiActorRole.Patient,
+                aiResult.Reply, aiResult.Clarification, aiResult.ClarificationPrompt) is { } outputBlock)
+        {
+            var blocked = new AiChatResponseDto
+            {
+                Message = outputBlock.Message, Reply = outputBlock.Message,
+                Urgency = outputBlock.Emergency ? "EMERGENCY" : "ROUTINE",
+                SafetyNotice = outputBlock.Message, DialogueOutcome = outputBlock.Code,
+                PrimaryIntent = AiChatIntentTypes.UnclearOrOutOfScope,
+                ProviderState = AiProviderStatusContract.SafetyBlocked,
+                ProviderWasCalled = true, ProviderAttemptCount = aiResult.ProviderAttemptCount,
+                ExecutionMode = AiProviderStatusContract.ExecutionManualHandoff,
+                FallbackActive = true, ManualSelectionRequired = true
+            };
+            if (outputBlock.Emergency)
+                blocked.Actions.Add(new AiActionDto { Id = "act-emergency-115", Type = AiActionTypes.CallEmergency,
+                    Label = "Gọi cấp cứu 115", Style = "danger", Payload = new AiActionPayloadDto { TargetUrl = "tel:115" } });
+            await PreserveExistingDraftAsync(request, blocked, cancellationToken);
+            return WithDraftVersionSync(blocked, passiveDraftVersion);
+        }
+
         // Merge local entity extractions & corrections if model missed them
         if (localClassification.IsCorrection && !aiResult.IsCorrection)
         {
