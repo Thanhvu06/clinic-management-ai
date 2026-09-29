@@ -24,7 +24,7 @@ $env:RUN_LIVE_GEMINI_CANARY = "true"
 $env:AiProvider__IsEnabled = "true"
 $env:AiProvider__ApiKey = "<configured-out-of-band>"
 $env:AiProvider__ModelName = "<explicit-model-name>"
-$env:AiProvider__MaxAttempts = "2" # six HTTP actor cases x two attempts <= 12 provider calls
+$env:AiProvider__MaxAttempts = "2" # max_calls is the hard outbound-attempt budget; retries consume it
 $env:LIVE_GEMINI_MAX_CALLS = "12"
 dotnet run --project src/tools/ClinicManagement.AI.LiveCanary/ClinicManagement.AI.LiveCanary.csproj --configuration Release -- --require-live --report "$env:TEMP\cliniccare-gate-d-report.json"
 ```

@@ -85,6 +85,9 @@ public static class LiveCanaryAcceptanceEvaluator
         result.GroundedSourcesValid &&
         result.ToolExecutions > 0 &&
         result.ToolNames.Count > 0 &&
+        result.ActorVerified &&
+        result.RouteVerified &&
+        result.ExpectedToolVerified &&
         !result.Clarification &&
         !result.PolicyViolation &&
         !result.ProviderPlanRejected &&

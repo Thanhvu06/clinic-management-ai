@@ -143,7 +143,7 @@ internal sealed class FullStackHttpCanary
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
     }
 
-    private static async Task<LiveCanaryCaseResult> ReadCaseResultAsync(CanaryHttpCase canaryCase, HttpResponseMessage response, long latency)
+    private static async Task<LiveCanaryCaseResult> ReadCaseResultAsync(FullStackCanaryCase canaryCase, HttpResponseMessage response, long latency)
     {
         if (!response.IsSuccessStatusCode)
         {
@@ -187,6 +187,8 @@ internal sealed class FullStackHttpCanary
         string? failureCode = null;
         string? actualIntent = null;
         string? executionMode = null;
+        string? actor = null;
+        string? navigationRoute = null;
         var providerAttemptCount = 0;
         var availableToolsElement = default(JsonElement);
         var executedToolNamesElement = default(JsonElement);
@@ -209,17 +211,25 @@ internal sealed class FullStackHttpCanary
         actualIntent ??= string.Empty;
         executionMode ??= string.Empty;
         var errorCode = GetString(data, "errorCode");
+        actor = GetString(data, "role");
+        navigationRoute = GetString(data, "navigationRoute");
         var cards = cardsElement.ValueKind == JsonValueKind.Array ? cardsElement.GetArrayLength() : 0;
         var sources = sourcesElement.ValueKind == JsonValueKind.Array ? sourcesElement.GetArrayLength() : 0;
         var toolNames = ReadStringArray(executedToolNamesElement);
         var availableToolNames = ReadToolNames(availableToolsElement);
-        var allowedNames = AiRoleToolCatalog.Definitions
+        var allowedDefinitions = AiRoleToolCatalog.Definitions
             .Where(x => x.AllowedRoles.Contains(canaryCase.Role))
+            .Concat(canaryCase.Role == AiActorRole.Patient
+                ? ClinicManagement.Infrastructure.AI.Tools.PatientCopilotToolHandler.Definitions()
+                    .Where(x => x.Name.StartsWith("patient.get_", StringComparison.OrdinalIgnoreCase) || x.AccessMode == AiToolAccessMode.Public)
+                : Array.Empty<AiToolDefinition>());
+        var allowedNames = allowedDefinitions
             .Select(x => x.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var toolScopeValid = availableToolNames.Count > 0 &&
                              availableToolNames.All(allowedNames.Contains) &&
                              toolNames.All(allowedNames.Contains);
+        var expectedToolVerified = toolNames.Contains(canaryCase.ExpectedToolName, StringComparer.OrdinalIgnoreCase);
         var groundedSourcesValid = HasVerifiedSources(sourcesElement);
         var schemaValid = fieldsValid &&
                           AiChatIntentTypes.IsAllowed(actualIntent) &&
@@ -241,6 +251,9 @@ internal sealed class FullStackHttpCanary
             AllowedTools = availableToolNames.Count,
             ToolExecutions = toolNames.Count,
             ToolScopeValid = toolScopeValid,
+            ActorVerified = string.Equals(actor, canaryCase.Role.ToString(), StringComparison.OrdinalIgnoreCase),
+            RouteVerified = string.Equals(navigationRoute, canaryCase.ExpectedNavigationRoute, StringComparison.OrdinalIgnoreCase),
+            ExpectedToolVerified = expectedToolVerified,
             GroundedResponse = cards > 0 && sources > 0,
             GroundedSourcesValid = groundedSourcesValid,
             Clarification = !string.IsNullOrWhiteSpace(GetString(data, "clarification")),
@@ -252,7 +265,7 @@ internal sealed class FullStackHttpCanary
         };
     }
 
-    private static LiveCanaryCaseResult InvalidResponse(CanaryHttpCase canaryCase, long latency) => new()
+    private static LiveCanaryCaseResult InvalidResponse(FullStackCanaryCase canaryCase, long latency) => new()
     {
         CaseId = canaryCase.CaseId,
         Actor = canaryCase.Role.ToString(),
@@ -263,15 +276,7 @@ internal sealed class FullStackHttpCanary
         LatencyMilliseconds = latency
     };
 
-    private static IReadOnlyList<CanaryHttpCase> Cases() => new[]
-    {
-        new CanaryHttpCase("patient-http-read", "canary.patient@synthetic.invalid", AiActorRole.Patient, "patient_read", "Could you surface the upcoming schedule owned by this account?", "/patient/appointments"),
-        new CanaryHttpCase("reception-http-read", "canary.reception@synthetic.invalid", AiActorRole.Receptionist, "reception_read", "Could you surface today's front-desk appointment list?", "/reception/appointments"),
-        new CanaryHttpCase("doctor-http-read", "canary.doctor@synthetic.invalid", AiActorRole.Doctor, "doctor_read", "Could you surface the assigned care roster for this clinician?", "/doctor/appointments"),
-        new CanaryHttpCase("technician-http-read", "canary.technician@synthetic.invalid", AiActorRole.DiagnosticTechnician, "technician_read", "Could you surface the pending laboratory work queue?", "/diagnostics"),
-        new CanaryHttpCase("pharmacist-http-read", "canary.pharmacist@synthetic.invalid", AiActorRole.Pharmacist, "pharmacy_read", "Could you surface prescriptions awaiting fulfillment?", "/pharmacy/prescriptions"),
-        new CanaryHttpCase("admin-http-read", "canary.admin@synthetic.invalid", AiActorRole.Admin, "admin_read", "Could you surface an aggregate operations snapshot?", "/admin")
-    };
+    private static IReadOnlyList<FullStackCanaryCase> Cases() => FullStackCanaryCaseCatalog.Cases;
 
     private static string? GetString(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
@@ -362,13 +367,46 @@ internal sealed class FullStackHttpCanary
         sorted.Length == 0 ? null : sorted[Math.Min(sorted.Length - 1, (int)Math.Ceiling(sorted.Length * percentile) - 1)];
 }
 
-internal sealed record CanaryHttpCase(
+public sealed record FullStackCanaryCase(
     string CaseId,
     string Email,
     AiActorRole Role,
     string ExpectedCategory,
     string Message,
-    string Route);
+    string Route,
+    string ExpectedNavigationRoute,
+    string ExpectedToolName);
+
+public static class FullStackCanaryCaseCatalog
+{
+    public static IReadOnlyList<FullStackCanaryCase> Cases { get; } = new[]
+    {
+        new FullStackCanaryCase(
+            "patient-http-read", "canary.patient@synthetic.invalid", AiActorRole.Patient, "patient_read",
+            "Các buổi khám tôi đã đặt trong thời gian tới có những gì?", "/patient/appointments",
+            "/patient/appointments", "patient.get_my_appointments"),
+        new FullStackCanaryCase(
+            "reception-http-read", "canary.reception@synthetic.invalid", AiActorRole.Receptionist, "reception_read",
+            "Hôm nay quầy tiếp đón có những lượt hẹn nào?", "/reception/appointments",
+            "/reception/appointments", "reception.get_today_appointments"),
+        new FullStackCanaryCase(
+            "doctor-http-read", "canary.doctor@synthetic.invalid", AiActorRole.Doctor, "doctor_read",
+            "Hôm nay tôi có những lượt đang chờ được phân công nào?", "/doctor/appointments",
+            "/doctor/queue", "doctor.get_my_queue"),
+        new FullStackCanaryCase(
+            "technician-http-read", "canary.technician@synthetic.invalid", AiActorRole.DiagnosticTechnician, "technician_read",
+            "Các yêu cầu xét nghiệm đang nằm trong hàng đợi của tôi là gì?", "/diagnostics",
+            "/diagnostics", "technician.get_worklist"),
+        new FullStackCanaryCase(
+            "pharmacist-http-read", "canary.pharmacist@synthetic.invalid", AiActorRole.Pharmacist, "pharmacy_read",
+            "Những toa đang chờ xử lý ở quầy thuốc gồm những toa nào?", "/pharmacy/prescriptions",
+            "/pharmacy/prescriptions", "pharmacist.get_prescription_queue"),
+        new FullStackCanaryCase(
+            "admin-http-read", "canary.admin@synthetic.invalid", AiActorRole.Admin, "admin_read",
+            "Tình hình vận hành hôm nay của hệ thống thế nào?", "/admin",
+            "/admin", "admin.get_dashboard_metrics")
+    };
+}
 
 internal sealed class CanaryProviderAttemptBudget : IAiProviderAttemptBudget
 {
@@ -550,6 +588,124 @@ internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Pro
                 IsPrimary = true,
                 IsActive = true
             });
+        await db.SaveChangesAsync();
+
+        // Keep every actor case grounded in the same synthetic encounter. The
+        // rows are read-only canary fixtures and are fingerprinted before and
+        // after the HTTP run; no real patient or production database is used.
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+        var now = DateTime.UtcNow;
+        var slot = new AppointmentSlot
+        {
+            DoctorId = doctor.Id,
+            SlotDate = today,
+            StartTime = new TimeOnly(9, 0),
+            EndTime = new TimeOnly(9, 30),
+            IsBooked = true
+        };
+        db.AppointmentSlots.Add(slot);
+        var diagnosticService = new DiagnosticService
+        {
+            Code = "CANARY-LAB-001",
+            Name = "Synthetic blood test",
+            Category = DiagnosticCategory.Laboratory,
+            PreparationInstructions = "Synthetic canary only",
+            Price = 1m,
+            IsActive = true
+        };
+        db.DiagnosticServices.Add(diagnosticService);
+        var medicine = new Medicine
+        {
+            Code = "CANARY-MED-001",
+            Name = "Synthetic medicine",
+            Unit = "tablet",
+            StockQuantity = 100,
+            ReorderLevel = 10,
+            UnitPrice = 1m,
+            IsActive = true
+        };
+        db.Medicines.Add(medicine);
+        await db.SaveChangesAsync();
+
+        var appointment = new Appointment
+        {
+            AppointmentCode = "CANARY-APT-001",
+            PatientId = patient.Id,
+            DoctorId = doctor.Id,
+            SpecialtyId = specialty.Id,
+            FacilityId = facility.Id,
+            AppointmentSlotId = slot.Id,
+            AppointmentDate = today,
+            StartTime = slot.StartTime,
+            EndTime = slot.EndTime,
+            Reason = "Synthetic canary read fixture",
+            Status = AppointmentStatus.Confirmed
+        };
+        db.Appointments.Add(appointment);
+        await db.SaveChangesAsync();
+
+        var visit = new PatientVisit
+        {
+            VisitCode = "CANARY-VIS-001",
+            PatientId = patient.Id,
+            AppointmentId = appointment.Id,
+            FacilityId = facility.Id,
+            DepartmentId = department.Id,
+            AssignedDoctorId = doctor.Id,
+            VisitDate = today,
+            ArrivalType = VisitArrivalType.Scheduled,
+            Priority = VisitPriority.Normal,
+            ChiefComplaint = "Synthetic canary read fixture",
+            QueueNumber = 1,
+            Status = VisitStatus.WaitingForDoctor,
+            CreatedByUserId = users[RoleNames.Receptionist].Id,
+            CheckedInAtUtc = now,
+            CreatedAtUtc = now
+        };
+        db.PatientVisits.Add(visit);
+        await db.SaveChangesAsync();
+
+        var diagnosticOrder = new DiagnosticOrder
+        {
+            OrderCode = "CANARY-ORD-001",
+            AppointmentId = appointment.Id,
+            PatientVisitId = visit.Id,
+            PatientId = patient.Id,
+            OrderingDoctorId = doctor.Id,
+            FacilityId = facility.Id,
+            PerformingDepartmentId = department.Id,
+            ClinicalIndication = "Synthetic canary read fixture",
+            Status = DiagnosticOrderStatus.Ordered,
+            OrderedAtUtc = now
+        };
+        diagnosticOrder.Items.Add(new DiagnosticOrderItem
+        {
+            DiagnosticServiceId = diagnosticService.Id,
+            Status = DiagnosticItemStatus.Ordered,
+            IsPackageCovered = false
+        });
+        db.DiagnosticOrders.Add(diagnosticOrder);
+
+        var prescription = new Prescription
+        {
+            AppointmentId = appointment.Id,
+            PatientVisitId = visit.Id,
+            PatientId = patient.Id,
+            DoctorId = doctor.Id,
+            Status = PrescriptionStatus.Issued,
+            Notes = "Synthetic canary read fixture",
+            CreatedAt = now
+        };
+        prescription.Items.Add(new PrescriptionItem
+        {
+            MedicineId = medicine.Id,
+            Quantity = 1,
+            Dosage = "1 tablet",
+            Frequency = "once daily",
+            DurationDays = 1,
+            Instructions = "Synthetic canary only"
+        });
+        db.Prescriptions.Add(prescription);
         await db.SaveChangesAsync();
     }
 

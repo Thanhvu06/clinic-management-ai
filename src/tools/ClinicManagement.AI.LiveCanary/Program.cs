@@ -291,6 +291,9 @@ public sealed record LiveCanaryCaseResult
     public bool GroundedResponse { get; init; }
     public bool GroundedSourcesValid { get; init; }
     public bool ToolScopeValid { get; init; }
+    public bool ActorVerified { get; init; }
+    public bool RouteVerified { get; init; }
+    public bool ExpectedToolVerified { get; init; }
     public bool Clarification { get; init; }
     public bool PolicyViolation { get; init; }
     public bool ProviderPlanRejected { get; init; }
