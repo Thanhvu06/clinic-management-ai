@@ -427,6 +427,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     retryAfterUtc: data.retryAfterUtc,
                     retryAfterSeconds: data.retryAfterSeconds,
                     providerWasCalled: data.providerWasCalled,
+                    providerAttemptCount: data.providerAttemptCount,
                     primaryIntent: data.primaryIntent,
                     providerState: data.providerState,
                     dialogueOutcome: data.dialogueOutcome,

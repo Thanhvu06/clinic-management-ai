@@ -5,6 +5,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ClinicManagement.Application.AI;
+using ClinicManagement.Application.AI.DTOs;
+using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.Common.Constants;
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Domain.Entities;
@@ -26,16 +28,18 @@ internal sealed class FullStackHttpCanary
 
     public async Task<LiveCanaryReport> RunAsync(LiveCanaryReport report, int maxCalls)
     {
-        using var factory = new SyntheticCanaryFactory();
+        var budget = new CanaryProviderAttemptBudget(maxCalls);
+        using var factory = new SyntheticCanaryFactory(budget);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         await factory.SeedAsync();
 
         var before = await factory.BusinessFingerprintAsync();
-        var cases = Cases().Take(Math.Min(6, maxCalls)).ToArray();
+        var cases = Cases().ToArray();
         var results = new List<LiveCanaryCaseResult>(cases.Length);
 
         foreach (var canaryCase in cases)
         {
+            if (budget.Remaining == 0) break;
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             try
             {
@@ -63,6 +67,7 @@ internal sealed class FullStackHttpCanary
                     ExpectedCategory = canaryCase.ExpectedCategory,
                     ProviderState = AiProviderStatusContract.NotCalled,
                     FailureCode = AiProviderStatusContract.FailureClientCancelled,
+                    HttpSucceeded = false,
                     LatencyMilliseconds = stopwatch.ElapsedMilliseconds
                 });
             }
@@ -76,6 +81,7 @@ internal sealed class FullStackHttpCanary
                     ExpectedCategory = canaryCase.ExpectedCategory,
                     ProviderState = AiProviderStatusContract.Degraded,
                     FailureCode = AiProviderStatusContract.FailureUnknown,
+                    HttpSucceeded = false,
                     LatencyMilliseconds = stopwatch.ElapsedMilliseconds
                 });
             }
@@ -83,18 +89,20 @@ internal sealed class FullStackHttpCanary
 
         var after = await factory.BusinessFingerprintAsync();
         var latencies = results.Select(x => x.LatencyMilliseconds).OrderBy(x => x).ToArray();
-        return report with
+        var completed = report with
         {
             CanaryLayer = "FullStackHttp",
             CanaryLayers = new[] { "FullStackHttp", "AuthenticatedHttp", "RealOrchestrator", "ReadOnlyToolGateway" },
-            LiveGeminiExecuted = results.Any(x => x.ProviderCalled),
+            LiveGeminiExecuted = budget.Consumed > 0,
             CallsBudget = maxCalls,
             CallsPlanned = cases.Length,
             CallsAttempted = results.Count,
             CallsExecuted = results.Count(x => x.ProviderCalled),
             ProviderCallsExecuted = results.Count(x => x.ProviderCalled),
+            ProviderAttemptsExecuted = budget.Consumed,
+            UnexecutedCaseCount = cases.Length - results.Count,
             HttpCanaryRequests = results.Count,
-            HttpSuccessCount = results.Count(x => x.ProviderState == AiProviderStatusContract.Online),
+            HttpSuccessCount = results.Count(x => x.HttpSucceeded),
             StructuredSchemaValidCount = results.Count(x => x.SchemaValid),
             PlannerSchemaValidCount = results.Count(x => x.SchemaValid),
             AllowedToolCount = results.Sum(x => x.AllowedTools),
@@ -117,6 +125,7 @@ internal sealed class FullStackHttpCanary
             P95LatencyMilliseconds = Percentile(latencies, .95),
             Cases = results
         };
+        return completed with { AcceptanceStatus = LiveCanaryAcceptanceEvaluator.Evaluate(completed) };
     }
 
     private static async Task AuthenticateAsync(HttpClient client, string email)
@@ -148,63 +157,111 @@ internal sealed class FullStackHttpCanary
                     : AiProviderStatusContract.Degraded,
                 FailureCode = response.StatusCode switch
                 {
-                    HttpStatusCode.Unauthorized => AiProviderStatusContract.FailureAuthenticationFailed,
+                    HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => AiProviderStatusContract.FailureAuthenticationFailed,
                     HttpStatusCode.TooManyRequests => AiProviderStatusContract.FailureRateLimited,
                     HttpStatusCode.RequestTimeout => AiProviderStatusContract.FailureTimeout,
                     >= HttpStatusCode.InternalServerError => AiProviderStatusContract.FailureServerError,
                     _ => AiProviderStatusContract.FailureUnknown
                 },
                 AuthorizationDenied = response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
+                HttpSucceeded = false,
                 LatencyMilliseconds = latency
             };
         }
 
-        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
-        if (!payload.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+        JsonElement payload;
+        try
         {
-            return new LiveCanaryCaseResult
-            {
-                CaseId = canaryCase.CaseId,
-                Actor = canaryCase.Role.ToString(),
-                ExpectedCategory = canaryCase.ExpectedCategory,
-                ProviderState = AiProviderStatusContract.Degraded,
-                FailureCode = AiProviderStatusContract.FailureInvalidResponse,
-                LatencyMilliseconds = latency
-            };
+            payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        }
+        catch (JsonException)
+        {
+            return InvalidResponse(canaryCase, latency);
         }
 
-        var providerCalled = GetBool(data, "providerWasCalled");
-        var providerState = GetString(data, "providerState") ?? AiProviderStatusContract.NotCalled;
-        var failureCode = GetString(data, "providerFailureCode") ?? AiProviderStatusContract.FailureNone;
+        if (!payload.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+            return InvalidResponse(canaryCase, latency);
+
+        var providerCalled = false;
+        string? providerState = null;
+        string? failureCode = null;
+        string? actualIntent = null;
+        string? executionMode = null;
+        var providerAttemptCount = 0;
+        var availableToolsElement = default(JsonElement);
+        var executedToolNamesElement = default(JsonElement);
+        var cardsElement = default(JsonElement);
+        var sourcesElement = default(JsonElement);
+        var fieldsValid =
+            TryGetBool(data, "providerWasCalled", out providerCalled) &&
+            TryGetString(data, "providerState", out providerState) &&
+            TryGetString(data, "providerFailureCode", out failureCode) &&
+            TryGetString(data, "intent", out actualIntent) &&
+            TryGetString(data, "executionMode", out executionMode) &&
+            TryGetNonNegativeInt(data, "providerAttemptCount", out providerAttemptCount) &&
+            TryGetArray(data, "availableTools", out availableToolsElement) &&
+            TryGetArray(data, "executedToolNames", out executedToolNamesElement) &&
+            TryGetArray(data, "cards", out cardsElement) &&
+            TryGetArray(data, "sources", out sourcesElement);
+
+        providerState ??= AiProviderStatusContract.NotCalled;
+        failureCode ??= AiProviderStatusContract.FailureUnknown;
+        actualIntent ??= string.Empty;
+        executionMode ??= string.Empty;
         var errorCode = GetString(data, "errorCode");
-        var cards = GetArrayLength(data, "cards");
-        var sources = GetArrayLength(data, "sources");
-        var availableTools = GetArrayLength(data, "availableTools");
-        var toolExecutions = cards;
-        var schemaValid = !string.Equals(errorCode, "INVALID_PROVIDER_SCHEMA", StringComparison.OrdinalIgnoreCase) &&
+        var cards = cardsElement.ValueKind == JsonValueKind.Array ? cardsElement.GetArrayLength() : 0;
+        var sources = sourcesElement.ValueKind == JsonValueKind.Array ? sourcesElement.GetArrayLength() : 0;
+        var toolNames = ReadStringArray(executedToolNamesElement);
+        var availableToolNames = ReadToolNames(availableToolsElement);
+        var allowedNames = AiRoleToolCatalog.Definitions
+            .Where(x => x.AllowedRoles.Contains(canaryCase.Role))
+            .Select(x => x.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var toolScopeValid = availableToolNames.Count > 0 &&
+                             availableToolNames.All(allowedNames.Contains) &&
+                             toolNames.All(allowedNames.Contains);
+        var groundedSourcesValid = HasVerifiedSources(sourcesElement);
+        var schemaValid = fieldsValid &&
+                          AiChatIntentTypes.IsAllowed(actualIntent) &&
+                          !string.Equals(errorCode, "INVALID_PROVIDER_SCHEMA", StringComparison.OrdinalIgnoreCase) &&
                           !string.Equals(errorCode, "INVALID_PROVIDER_PLAN", StringComparison.OrdinalIgnoreCase);
         return new LiveCanaryCaseResult
         {
             CaseId = canaryCase.CaseId,
             Actor = canaryCase.Role.ToString(),
             ExpectedCategory = canaryCase.ExpectedCategory,
-            ActualIntent = GetString(data, "intent"),
-            ToolNames = Array.Empty<string>(),
+            ActualIntent = actualIntent,
+            ToolNames = toolNames,
             ProviderState = providerState,
             FailureCode = failureCode,
             ProviderCalled = providerCalled,
+            ProviderAttemptCount = providerAttemptCount,
+            HttpSucceeded = true,
             SchemaValid = schemaValid,
-            AllowedTools = availableTools,
-            ToolExecutions = toolExecutions,
-            GroundedResponse = cards > 0 || sources > 0,
+            AllowedTools = availableToolNames.Count,
+            ToolExecutions = toolNames.Count,
+            ToolScopeValid = toolScopeValid,
+            GroundedResponse = cards > 0 && sources > 0,
+            GroundedSourcesValid = groundedSourcesValid,
             Clarification = !string.IsNullOrWhiteSpace(GetString(data, "clarification")),
             PolicyViolation = errorCode is not null && errorCode.Contains("POLICY", StringComparison.OrdinalIgnoreCase),
             ProviderPlanRejected = errorCode is not null && (errorCode.StartsWith("INVALID_PROVIDER", StringComparison.OrdinalIgnoreCase) || errorCode == "PROVIDER_RESOURCE_MISMATCH"),
             AuthorizationDenied = errorCode is not null && errorCode.Contains("DENIED", StringComparison.OrdinalIgnoreCase),
-            ExecutionMode = GetString(data, "executionMode"),
+            ExecutionMode = executionMode,
             LatencyMilliseconds = latency
         };
     }
+
+    private static LiveCanaryCaseResult InvalidResponse(CanaryHttpCase canaryCase, long latency) => new()
+    {
+        CaseId = canaryCase.CaseId,
+        Actor = canaryCase.Role.ToString(),
+        ExpectedCategory = canaryCase.ExpectedCategory,
+        ProviderState = AiProviderStatusContract.Degraded,
+        FailureCode = AiProviderStatusContract.FailureInvalidResponse,
+        HttpSucceeded = true,
+        LatencyMilliseconds = latency
+    };
 
     private static IReadOnlyList<CanaryHttpCase> Cases() => new[]
     {
@@ -219,8 +276,84 @@ internal sealed class FullStackHttpCanary
     private static string? GetString(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
-    private static bool GetBool(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
+    private static bool TryGetString(JsonElement element, string name, out string? value)
+    {
+        value = GetString(element, name);
+        return value is not null;
+    }
+
+    private static bool TryGetBool(JsonElement element, string name, out bool value)
+    {
+        if (element.TryGetProperty(name, out var property) && property.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            value = property.GetBoolean();
+            return true;
+        }
+
+        value = false;
+        return false;
+    }
+
+    private static bool TryGetNonNegativeInt(JsonElement element, string name, out int value)
+    {
+        if (element.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out value) && value >= 0)
+            return true;
+
+        value = 0;
+        return false;
+    }
+
+    private static bool TryGetArray(JsonElement element, string name, out JsonElement value)
+    {
+        if (element.TryGetProperty(name, out value) && value.ValueKind == JsonValueKind.Array)
+            return true;
+
+        value = default;
+        return false;
+    }
+
+    private static IReadOnlyList<string> ReadStringArray(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Array) return Array.Empty<string>();
+        return value.EnumerateArray()
+            .Where(x => x.ValueKind == JsonValueKind.String)
+            .Select(x => x.GetString())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> ReadToolNames(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Array) return Array.Empty<string>();
+        return value.EnumerateArray()
+            .Where(x => x.ValueKind == JsonValueKind.Object && x.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String)
+            .Select(x => x.GetProperty("name").GetString())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static bool HasVerifiedSources(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() == 0) return false;
+        foreach (var source in value.EnumerateArray())
+        {
+            if (source.ValueKind != JsonValueKind.Object ||
+                !source.TryGetProperty("name", out var name) || name.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(name.GetString()) ||
+                !source.TryGetProperty("kind", out var kind) || kind.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(kind.GetString()))
+                return false;
+
+            if (!source.TryGetProperty("status", out var status) ||
+                status.ValueKind != JsonValueKind.String ||
+                !string.Equals(status.GetString(), "verified", StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+
+        return true;
+    }
 
     private static int GetArrayLength(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array ? value.GetArrayLength() : 0;
@@ -237,9 +370,42 @@ internal sealed record CanaryHttpCase(
     string Message,
     string Route);
 
+internal sealed class CanaryProviderAttemptBudget : IAiProviderAttemptBudget
+{
+    private int _remaining;
+    private int _consumed;
+
+    public CanaryProviderAttemptBudget(int budget)
+    {
+        if (budget is < 1 or > 12) throw new ArgumentOutOfRangeException(nameof(budget));
+        _remaining = budget;
+    }
+
+    public int Consumed => Volatile.Read(ref _consumed);
+    public int Remaining => Volatile.Read(ref _remaining);
+
+    public bool TryReserveAttempt()
+    {
+        while (true)
+        {
+            var remaining = Volatile.Read(ref _remaining);
+            if (remaining <= 0) return false;
+            if (Interlocked.CompareExchange(ref _remaining, remaining - 1, remaining) != remaining) continue;
+            Interlocked.Increment(ref _consumed);
+            return true;
+        }
+    }
+}
+
 internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Program>
 {
     private readonly string _dbFilePath = Path.Combine(Path.GetTempPath(), $"clinic_gate_d_canary_{Guid.NewGuid():N}.db");
+    private readonly IAiProviderAttemptBudget _attemptBudget;
+
+    public SyntheticCanaryFactory(IAiProviderAttemptBudget attemptBudget)
+    {
+        _attemptBudget = attemptBudget;
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -275,6 +441,7 @@ internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Pro
                 initDb.Database.EnsureCreated();
 
             services.AddDbContext<AppDbContext>(options => options.UseSqlite(connectionString));
+            services.AddSingleton(_attemptBudget);
         });
     }
 

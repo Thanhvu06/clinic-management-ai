@@ -70,6 +70,7 @@ public sealed class AiStructuredPlannerResult
 {
     public bool IsSuccess { get; init; }
     public bool ProviderCalled { get; init; }
+    public int ProviderAttemptCount { get; init; }
     public string ProviderState { get; init; } = AiProviderStatusContract.NotCalled;
     public string? FailureReason { get; init; }
     public string FailureCode { get; init; } = AiProviderStatusContract.FailureNone;

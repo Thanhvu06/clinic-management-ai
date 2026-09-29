@@ -150,6 +150,7 @@ public sealed class AiToolError
 
 public sealed class AiToolExecutionResult
 {
+    public string? ToolName { get; set; }
     public string Status { get; init; } = "completed";
     public object? Data { get; init; }
     public string? ResultType { get; init; }

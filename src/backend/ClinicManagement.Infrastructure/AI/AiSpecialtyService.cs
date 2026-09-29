@@ -594,7 +594,8 @@ public class AiSpecialtyService : IAiSpecialtyService
             RetryAfterUtc = aiResult.RetryAfterUtc,
             RetryAfterSeconds = aiResult.RetryAfterSeconds,
             CorrelationId = aiResult.CorrelationId,
-            ProviderWasCalled = aiResult.ProviderWasCalled || !string.Equals(aiResult.Status, "NotCalled", StringComparison.OrdinalIgnoreCase)
+            ProviderWasCalled = aiResult.ProviderWasCalled || !string.Equals(aiResult.Status, "NotCalled", StringComparison.OrdinalIgnoreCase),
+            ProviderAttemptCount = aiResult.ProviderAttemptCount
         };
         if (_toolExecutor != null && aiResult.ToolCalls.Count > 0)
         {

@@ -344,6 +344,7 @@ export interface AiChatResponse {
     retryAfterSeconds?: number;
     correlationId?: string;
     providerWasCalled?: boolean;
+    providerAttemptCount?: number;
     dialogueOutcome?: string;
     clarificationPrompt?: string;
     primaryIntent?: AiChatIntent | string;
@@ -385,6 +386,7 @@ export interface ChatMessage {
     retryAfterSeconds?: number;
     correlationId?: string;
     providerWasCalled?: boolean;
+    providerAttemptCount?: number;
     dialogueOutcome?: string;
     clarificationPrompt?: string;
     primaryIntent?: AiChatIntent | string;

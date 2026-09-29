@@ -27,8 +27,9 @@ jobs:
       AiProvider__IsEnabled: "true"
       AiProvider__ApiKey: ${{ secrets.GEMINI_API_KEY }}
       AiProvider__ModelName: ${{ inputs.model_name }}
-      # Six actor HTTP cases x two provider attempts keeps the total Gemini
-      # request budget at or below twelve, including one bounded retry.
+      # The canary treats max_calls as a hard budget of outbound Gemini HTTP
+      # attempts, including bounded retries, and stops before reserving one
+      # beyond that budget.
       AiProvider__MaxAttempts: "2"
       LIVE_GEMINI_MAX_CALLS: ${{ inputs.max_calls }}
       DOTNET_ENVIRONMENT: Development

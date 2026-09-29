@@ -123,6 +123,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         DateTimeOffset? retryAfterUtc = null;
         int? retryAfterSeconds = null;
         string? correlationId = null;
+        var providerAttemptCount = 0;
 
         if (decision.RequiresProvider)
         {
@@ -151,6 +152,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 retryAfterUtc = planned.RetryAfterUtc;
                 retryAfterSeconds = planned.RetryAfterSeconds;
                 correlationId = planned.CorrelationId;
+                providerAttemptCount = planned.ProviderAttemptCount;
                 decision = planned.Decision;
                 if (planned.ProviderCalled && planned.IsSuccess && decision.ToolCalls.Count > 0)
                 {
@@ -227,7 +229,15 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             RetryAfterUtc = retryAfterUtc,
             RetryAfterSeconds = retryAfterSeconds,
             CorrelationId = correlationId,
-            ProviderWasCalled = providerWasCalled
+            ProviderWasCalled = providerWasCalled,
+            ProviderAttemptCount = providerAttemptCount,
+            ExecutedToolNames = results
+                .Select(x => x.ToolName)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x, StringComparer.Ordinal)
+                .ToArray()
         };
         await PersistAndAudit(final, sessionId, role, resolved.Context, decision.ToolCalls.Count, cancellationToken);
         return final;

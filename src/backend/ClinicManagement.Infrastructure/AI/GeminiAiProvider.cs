@@ -24,17 +24,20 @@ public class GeminiAiProvider : IAiSpecialtySuggestionProvider
     private readonly AiProviderOptions _options;
     private readonly ILogger<GeminiAiProvider> _logger;
     private readonly TimeProvider _timeProvider;
+    private readonly IAiProviderAttemptBudget? _attemptBudget;
 
     public GeminiAiProvider(
         HttpClient httpClient,
         IOptions<AiProviderOptions> options,
         ILogger<GeminiAiProvider> logger,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IAiProviderAttemptBudget? attemptBudget = null)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _logger = logger;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _attemptBudget = attemptBudget;
     }
 
     public async Task<List<AiProviderSuggestionResult>> GetSuggestionsFromAiAsync(string symptomDescription, List<WhitelistItemDto> whitelist, CancellationToken cancellationToken = default)
@@ -309,6 +312,7 @@ TOOL PLANNER CONTRACT:
         var totalStart = _timeProvider.GetTimestamp();
         var maxAttempts = Math.Clamp(_options.MaxAttempts, 1, 3);
         var attemptBudget = TimeSpan.FromMilliseconds(Math.Max(100, totalBudget.TotalMilliseconds / maxAttempts));
+        var providerAttempts = 0;
 
         using var overallCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         overallCts.CancelAfter(totalBudget);
@@ -325,6 +329,16 @@ TOOL PLANNER CONTRACT:
             using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(overallCts.Token);
             attemptCts.CancelAfter(remaining < attemptBudget ? remaining : attemptBudget);
             var attemptSw = Stopwatch.StartNew();
+
+            if (_attemptBudget is not null && !_attemptBudget.TryReserveAttempt())
+                return FailureResult(
+                    "AttemptBudgetExceeded",
+                    "The live canary provider-attempt budget has been exhausted.",
+                    correlationId,
+                    providerAttemptCount: providerAttempts,
+                    providerWasCalled: providerAttempts > 0);
+
+            providerAttempts++;
 
             try
             {
@@ -345,7 +359,7 @@ TOOL PLANNER CONTRACT:
                     {
                         _logger.LogError("[{CorrelationId}] Failed to parse valid chat JSON from AI provider on attempt {Attempt} in {ElapsedMs}ms.",
                             correlationId, attempt + 1, attemptSw.ElapsedMilliseconds);
-                        return new AiChatProviderResult
+                        return WithAttemptCount(new AiChatProviderResult
                         {
                             IsSuccess = false,
                             Status = "InvalidResponse",
@@ -353,7 +367,7 @@ TOOL PLANNER CONTRACT:
                             CorrelationId = correlationId,
                             ProviderWasCalled = true,
                             ErrorMessage = "Malformed or empty response from AI provider."
-                        };
+                        }, providerAttempts);
                     }
 
                     sw.Stop();
@@ -362,7 +376,7 @@ TOOL PLANNER CONTRACT:
                     parsed.FailureCode = AiProviderStatusContract.FailureNone;
                     parsed.CorrelationId = correlationId;
                     parsed.ProviderWasCalled = true;
-                    return parsed;
+                    return WithAttemptCount(parsed, providerAttempts);
                 }
 
                 var statusCode = (int)response.StatusCode;
@@ -381,15 +395,15 @@ TOOL PLANNER CONTRACT:
                     sw.Stop();
                     _logger.LogError("[{CorrelationId}] AI Chat Provider failed on attempt {Attempt}/{MaxAttempts} with status {StatusCode} ({StatusType}) in {ElapsedMs}ms.",
                         correlationId, attempt + 1, maxAttempts, response.StatusCode, statusType, sw.ElapsedMilliseconds);
-                    return FailureResult(statusType, $"Provider returned HTTP {response.StatusCode}", correlationId, retryable: isTransient, retryAfter: GetRetryAfter(response));
+                    return FailureResult(statusType, $"Provider returned HTTP {response.StatusCode}", correlationId, retryable: isTransient, retryAfter: GetRetryAfter(response), providerAttemptCount: providerAttempts);
                 }
 
                 var delay = GetRetryAfter(response) ?? GetBackoffDelay(attempt);
                 var waitResult = await WaitForRetryAsync(delay, totalBudget, _timeProvider, totalStart, overallCts.Token, cancellationToken);
                 if (waitResult == RetryWaitResult.Cancelled)
-                    return CancelledResult(correlationId);
+                    return CancelledResult(correlationId, providerAttempts);
                 if (waitResult == RetryWaitResult.NoBudget)
-                    return FailureResult(statusType, $"Provider returned HTTP {response.StatusCode}", correlationId, retryable: isTransient, retryAfter: delay);
+                    return FailureResult(statusType, $"Provider returned HTTP {response.StatusCode}", correlationId, retryable: isTransient, retryAfter: delay, providerAttemptCount: providerAttempts);
 
                 _logger.LogWarning("[{CorrelationId}] AI Chat Provider transient failure on attempt {Attempt}/{MaxAttempts} with status {StatusCode} ({StatusType}) in {ElapsedMs}ms. Retrying after {DelayMs}ms.",
                     correlationId, attempt + 1, maxAttempts, response.StatusCode, statusType, attemptSw.ElapsedMilliseconds, (long)delay.TotalMilliseconds);
@@ -399,7 +413,7 @@ TOOL PLANNER CONTRACT:
                 sw.Stop();
                 _logger.LogInformation("[{CorrelationId}] AI Chat Provider request cancelled by client after {ElapsedMs}ms.",
                     correlationId, sw.ElapsedMilliseconds);
-                return CancelledResult(correlationId);
+                return CancelledResult(correlationId, providerAttempts);
             }
             catch (OperationCanceledException)
             {
@@ -409,15 +423,15 @@ TOOL PLANNER CONTRACT:
                     sw.Stop();
                     _logger.LogWarning("[{CorrelationId}] AI Chat Provider timed out after {ElapsedMs}ms (budget: {Timeout}s, attempt: {Attempt}).",
                         correlationId, sw.ElapsedMilliseconds, _options.TimeoutSeconds, attempt + 1);
-                    return TimeoutResult(correlationId);
+                    return TimeoutResult(correlationId, providerAttempts);
                 }
 
                 var delay = GetBackoffDelay(attempt);
                 var waitResult = await WaitForRetryAsync(delay, totalBudget, _timeProvider, totalStart, overallCts.Token, cancellationToken);
                 if (waitResult == RetryWaitResult.Cancelled)
-                    return CancelledResult(correlationId);
+                    return CancelledResult(correlationId, providerAttempts);
                 if (waitResult == RetryWaitResult.NoBudget)
-                    return TimeoutResult(correlationId);
+                    return TimeoutResult(correlationId, providerAttempts);
                 _logger.LogWarning("[{CorrelationId}] AI Chat Provider attempt {Attempt}/{MaxAttempts} timed out; retrying after {DelayMs}ms.",
                     correlationId, attempt + 1, maxAttempts, (long)delay.TotalMilliseconds);
             }
@@ -429,15 +443,15 @@ TOOL PLANNER CONTRACT:
                     sw.Stop();
                     _logger.LogError(ex, "[{CorrelationId}] Network error calling AI Chat Provider on final attempt {Attempt} after {ElapsedMs}ms.",
                         correlationId, attempt + 1, sw.ElapsedMilliseconds);
-                    return FailureResult("NetworkError", "Network error connecting to AI provider.", correlationId, retryable: true);
+                    return FailureResult("NetworkError", "Network error connecting to AI provider.", correlationId, retryable: true, providerAttemptCount: providerAttempts);
                 }
 
                 var delay = GetBackoffDelay(attempt);
                 var waitResult = await WaitForRetryAsync(delay, totalBudget, _timeProvider, totalStart, overallCts.Token, cancellationToken);
                 if (waitResult == RetryWaitResult.Cancelled)
-                    return CancelledResult(correlationId);
+                    return CancelledResult(correlationId, providerAttempts);
                 if (waitResult == RetryWaitResult.NoBudget)
-                    return FailureResult("NetworkError", "Network error connecting to AI provider.", correlationId, retryable: true);
+                    return FailureResult("NetworkError", "Network error connecting to AI provider.", correlationId, retryable: true, providerAttemptCount: providerAttempts);
                 _logger.LogWarning(ex, "[{CorrelationId}] Network error calling AI Chat Provider on attempt {Attempt}; retrying after {DelayMs}ms.",
                     correlationId, attempt + 1, (long)delay.TotalMilliseconds);
             }
@@ -446,11 +460,11 @@ TOOL PLANNER CONTRACT:
                 sw.Stop();
                 _logger.LogError(ex, "[{CorrelationId}] Unexpected error calling AI Chat Provider after {ElapsedMs}ms.",
                     correlationId, sw.ElapsedMilliseconds);
-                return FailureResult("NetworkError", "Unexpected error calling AI provider.", correlationId, retryable: true);
+                return FailureResult("NetworkError", "Unexpected error calling AI provider.", correlationId, retryable: true, providerAttemptCount: providerAttempts);
             }
         }
 
-        return FailureResult("NetworkError", "Failed to obtain response from AI provider within the request budget.", correlationId, retryable: true);
+        return FailureResult("NetworkError", "Failed to obtain response from AI provider within the request budget.", correlationId, retryable: true, providerAttemptCount: providerAttempts);
     }
 
     private async Task<RetryWaitResult> WaitForRetryAsync(
@@ -521,7 +535,9 @@ TOOL PLANNER CONTRACT:
         string message,
         string? correlationId = null,
         bool retryable = false,
-        TimeSpan? retryAfter = null) => new()
+        TimeSpan? retryAfter = null,
+        int providerAttemptCount = 0,
+        bool providerWasCalled = true) => new()
     {
         IsSuccess = false,
         Status = status,
@@ -530,13 +546,20 @@ TOOL PLANNER CONTRACT:
         RetryAfterUtc = retryAfter.HasValue ? _timeProvider.GetUtcNow().Add(retryAfter.Value) : null,
         RetryAfterSeconds = retryAfter.HasValue ? Math.Max(0, (int)Math.Ceiling(retryAfter.Value.TotalSeconds)) : null,
         CorrelationId = correlationId,
-        ProviderWasCalled = true,
+        ProviderWasCalled = providerWasCalled,
+        ProviderAttemptCount = providerAttemptCount,
         ErrorMessage = message
     };
 
-    private AiChatProviderResult TimeoutResult(string? correlationId = null) => FailureResult("Timeout", "AI Provider request timed out.", correlationId, retryable: true);
+    private AiChatProviderResult TimeoutResult(string? correlationId = null, int providerAttemptCount = 0) => FailureResult("Timeout", "AI Provider request timed out.", correlationId, retryable: true, providerAttemptCount: providerAttemptCount);
 
-    private AiChatProviderResult CancelledResult(string? correlationId = null) => FailureResult("Cancelled", "Request was cancelled.", correlationId);
+    private AiChatProviderResult CancelledResult(string? correlationId = null, int providerAttemptCount = 0) => FailureResult("Cancelled", "Request was cancelled.", correlationId, providerAttemptCount: providerAttemptCount);
+
+    private static AiChatProviderResult WithAttemptCount(AiChatProviderResult result, int providerAttemptCount)
+    {
+        result.ProviderAttemptCount = providerAttemptCount;
+        return result;
+    }
 
     private AiChatProviderResult? ParseChatGeminiResponse(string json)
     {

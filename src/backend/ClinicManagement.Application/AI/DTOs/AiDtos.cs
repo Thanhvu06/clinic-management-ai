@@ -643,6 +643,7 @@ public class AiChatResponseDto
     public int? RetryAfterSeconds { get; set; }
     public string? CorrelationId { get; set; }
     public bool ProviderWasCalled { get; set; }
+    public int ProviderAttemptCount { get; set; }
 
     /// <summary>
     /// Dialogue lifecycle outcome: "Success", "UnclearInput", "ClarificationRequired", "DraftModified", "DraftCancelled", "Confirmed", "NoMatchingDoctor", "NoAvailableSlots", "ProviderUnavailable".
@@ -688,6 +689,7 @@ public class AiChatProviderResult
     public int? RetryAfterSeconds { get; set; }
     public string? CorrelationId { get; set; }
     public bool ProviderWasCalled { get; set; }
+    public int ProviderAttemptCount { get; set; }
     public string? ErrorMessage { get; set; }
     public string Reply { get; set; } = string.Empty;
     public List<string> SuggestedSpecialtyCodes { get; set; } = new();

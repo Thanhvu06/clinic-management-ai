@@ -17,6 +17,18 @@ public interface IAiSpecialtySuggestionProvider
     Task<AiChatProviderResult> ChatWithAiAsync(string message, List<ChatMessageDto> context, List<WhitelistItemDto> whitelist, string clinicContextJson, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Optional, caller-owned budget for outbound provider attempts. Production
+/// traffic does not register this service; the live canary does so it can
+/// reserve each HTTP attempt before it is sent, including retries.
+/// </summary>
+public interface IAiProviderAttemptBudget
+{
+    bool TryReserveAttempt();
+    int Consumed { get; }
+    int Remaining { get; }
+}
+
 public interface IClinicAiContextService
 {
     Task<string> GetClinicContextJsonAsync(CancellationToken cancellationToken = default);

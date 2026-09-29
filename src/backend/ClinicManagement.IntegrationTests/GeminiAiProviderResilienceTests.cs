@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using ClinicManagement.Application.AI;
 using ClinicManagement.Application.AI.DTOs;
+using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.AI.Planning;
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Infrastructure.AI;
@@ -28,6 +29,95 @@ public sealed class GeminiAiProviderResilienceTests
         Assert.Equal("Success", result.Status);
         Assert.Equal("Đã hiểu yêu cầu.", result.Reply);
         Assert.Equal(1, handler.CallCount);
+        Assert.Equal(1, result.ProviderAttemptCount);
+    }
+
+    [Fact]
+    public async Task Attempt_budget_one_blocks_a_retry_before_a_second_http_attempt()
+    {
+        var handler = new SequenceHandler(
+            _ => Task.FromResult(Response(HttpStatusCode.ServiceUnavailable, "{}", TimeSpan.Zero)),
+            _ => Task.FromResult(Response(HttpStatusCode.OK, ValidEnvelope("không được gọi"))));
+        var budget = new TestAttemptBudget(1);
+        var provider = CreateProvider(handler, timeoutSeconds: 2, maxAttempts: 2, retryBaseDelayMilliseconds: 0, attemptBudget: budget);
+
+        var result = await provider.ChatWithAiAsync("xin chào", new(), new(), "{}", CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(AiProviderStatusContract.FailureAttemptBudgetExceeded, result.FailureCode);
+        Assert.Equal(1, handler.CallCount);
+        Assert.Equal(1, result.ProviderAttemptCount);
+        Assert.Equal(1, budget.Consumed);
+    }
+
+    [Fact]
+    public async Task Attempt_budget_two_allows_a_single_bounded_retry()
+    {
+        var handler = new SequenceHandler(
+            _ => Task.FromResult(Response(HttpStatusCode.ServiceUnavailable, "{}", TimeSpan.Zero)),
+            _ => Task.FromResult(Response(HttpStatusCode.OK, ValidEnvelope("đã hồi phục"))));
+        var budget = new TestAttemptBudget(2);
+        var provider = CreateProvider(handler, timeoutSeconds: 2, maxAttempts: 2, retryBaseDelayMilliseconds: 0, attemptBudget: budget);
+
+        var result = await provider.ChatWithAiAsync("xin chào", new(), new(), "{}", CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, handler.CallCount);
+        Assert.Equal(2, result.ProviderAttemptCount);
+        Assert.Equal(2, budget.Consumed);
+    }
+
+    [Fact]
+    public async Task Attempt_budget_twelve_counts_each_attempt_across_six_retrying_cases()
+    {
+        var handler = new SequenceHandler(Enumerable.Range(0, 6)
+            .SelectMany(_ => new[]
+            {
+                (Func<CancellationToken, Task<HttpResponseMessage>>)(_ => Task.FromResult(Response(HttpStatusCode.ServiceUnavailable, "{}", TimeSpan.Zero))),
+                _ => Task.FromResult(Response(HttpStatusCode.OK, ValidEnvelope("đã hồi phục")))
+            }).ToArray());
+        var budget = new TestAttemptBudget(12);
+        var provider = CreateProvider(handler, timeoutSeconds: 2, maxAttempts: 2, retryBaseDelayMilliseconds: 0, attemptBudget: budget);
+
+        for (var index = 0; index < 6; index++)
+        {
+            var result = await provider.ChatWithAiAsync("xin chào", new(), new(), "{}", CancellationToken.None);
+            Assert.True(result.IsSuccess);
+            Assert.Equal(2, result.ProviderAttemptCount);
+        }
+
+        Assert.Equal(12, handler.CallCount);
+        Assert.Equal(12, budget.Consumed);
+    }
+
+    [Fact]
+    public async Task Exhausted_503_reports_both_real_attempts_without_retrying_forever()
+    {
+        var handler = new SequenceHandler(
+            _ => Task.FromResult(Response(HttpStatusCode.ServiceUnavailable, "{}", TimeSpan.Zero)),
+            _ => Task.FromResult(Response(HttpStatusCode.ServiceUnavailable, "{}", TimeSpan.Zero)));
+        var provider = CreateProvider(handler, timeoutSeconds: 2, maxAttempts: 2, retryBaseDelayMilliseconds: 0);
+
+        var result = await provider.ChatWithAiAsync("xin chào", new(), new(), "{}", CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(AiProviderStatusContract.FailureServerError, result.FailureCode);
+        Assert.Equal(2, handler.CallCount);
+        Assert.Equal(2, result.ProviderAttemptCount);
+    }
+
+    [Fact]
+    public async Task Disabled_provider_does_not_make_an_http_attempt()
+    {
+        var handler = new SequenceHandler(_ => Task.FromResult(Response(HttpStatusCode.OK, ValidEnvelope("không được gọi"))));
+        var provider = CreateProvider(handler, enabled: false);
+
+        var result = await provider.ChatWithAiAsync("xin chào", new(), new(), "{}", CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(0, handler.CallCount);
+        Assert.Equal(0, result.ProviderAttemptCount);
+        Assert.False(result.ProviderWasCalled);
     }
 
     [Fact]
@@ -62,6 +152,7 @@ public sealed class GeminiAiProviderResilienceTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal(2, handler.CallCount);
+        Assert.Equal(2, result.ProviderAttemptCount);
         Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(65), $"Retry-After was not respected: {clock.Elapsed}");
     }
 
@@ -116,6 +207,7 @@ public sealed class GeminiAiProviderResilienceTests
         Assert.True(result.Retryable);
         Assert.True(result.RetryAfterSeconds >= 29);
         Assert.Equal(1, handler.CallCount);
+        Assert.Equal(1, result.ProviderAttemptCount);
     }
 
     [Fact]
@@ -130,6 +222,7 @@ public sealed class GeminiAiProviderResilienceTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal(2, handler.CallCount);
+        Assert.Equal(2, result.ProviderAttemptCount);
     }
 
     [Fact]
@@ -143,6 +236,7 @@ public sealed class GeminiAiProviderResilienceTests
         Assert.False(result.IsSuccess);
         Assert.Equal("AuthFailure", result.Status);
         Assert.Equal(1, handler.CallCount);
+        Assert.Equal(1, result.ProviderAttemptCount);
     }
 
     [Fact]
@@ -158,6 +252,7 @@ public sealed class GeminiAiProviderResilienceTests
         Assert.Equal(AiProviderStatusContract.FailureAuthenticationFailed, result.FailureCode);
         Assert.False(result.Retryable);
         Assert.Equal(1, handler.CallCount);
+        Assert.Equal(1, result.ProviderAttemptCount);
     }
 
     [Theory]
@@ -175,6 +270,7 @@ public sealed class GeminiAiProviderResilienceTests
         Assert.Equal(AiProviderStatusContract.FailureModelUnavailable, result.FailureCode);
         Assert.False(result.Retryable);
         Assert.Equal(1, handler.CallCount);
+        Assert.Equal(1, result.ProviderAttemptCount);
     }
 
     [Fact]
@@ -344,11 +440,13 @@ public sealed class GeminiAiProviderResilienceTests
         HttpMessageHandler handler,
         int timeoutSeconds = 2,
         int maxAttempts = 3,
-        int retryBaseDelayMilliseconds = 1) => new(
+        int retryBaseDelayMilliseconds = 1,
+        bool enabled = true,
+        IAiProviderAttemptBudget? attemptBudget = null) => new(
         new HttpClient(handler),
         Options.Create(new AiProviderOptions
         {
-            IsEnabled = true,
+            IsEnabled = enabled,
             ApiKey = "test-only-key",
             ProviderUrl = "https://fake-gemini.test",
             ModelName = "gemini-3.5-flash-lite",
@@ -356,7 +454,8 @@ public sealed class GeminiAiProviderResilienceTests
             MaxAttempts = maxAttempts,
             RetryBaseDelayMilliseconds = retryBaseDelayMilliseconds
         }),
-        NullLogger<GeminiAiProvider>.Instance);
+        NullLogger<GeminiAiProvider>.Instance,
+        attemptBudget: attemptBudget);
 
     private static HttpResponseMessage Response(HttpStatusCode status, string body, TimeSpan? retryAfter = null)
     {
@@ -440,6 +539,23 @@ public sealed class GeminiAiProviderResilienceTests
                 ? _responses.Dequeue()
                 : (_ => Task.FromResult(Response(HttpStatusCode.InternalServerError, "{}")));
             return response(cancellationToken);
+        }
+    }
+
+    private sealed class TestAttemptBudget : IAiProviderAttemptBudget
+    {
+        private int _remaining;
+
+        public TestAttemptBudget(int budget) => _remaining = budget;
+        public int Consumed { get; private set; }
+        public int Remaining => _remaining;
+
+        public bool TryReserveAttempt()
+        {
+            if (_remaining <= 0) return false;
+            _remaining--;
+            Consumed++;
+            return true;
         }
     }
 

@@ -29,6 +29,7 @@ public static class AiProviderStatusContract
     public const string FailureCircuitOpen = "CircuitOpen";
     public const string FailureClientCancelled = "ClientCancelled";
     public const string FailureConfigurationDisabled = "ConfigurationDisabled";
+    public const string FailureAttemptBudgetExceeded = "AttemptBudgetExceeded";
     public const string FailureUnknown = "UnknownProviderFailure";
 
     public static string FromProviderResult(string? providerStatus, bool called)
@@ -58,6 +59,7 @@ public static class AiProviderStatusContract
         "ProviderCircuitOpen" or "CircuitOpen" => FailureCircuitOpen,
         "Cancelled" or "ClientCancelled" => FailureClientCancelled,
         "Disabled" or "ConfigurationDisabled" => FailureConfigurationDisabled,
+        "AttemptBudgetExceeded" => FailureAttemptBudgetExceeded,
         _ => FailureUnknown
     };
 

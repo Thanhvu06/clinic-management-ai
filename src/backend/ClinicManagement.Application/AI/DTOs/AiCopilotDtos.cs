@@ -87,6 +87,8 @@ public sealed class AiCopilotResponseDto
     public int? RetryAfterSeconds { get; init; }
     public string? CorrelationId { get; init; }
     public bool ProviderWasCalled { get; init; }
+    public int ProviderAttemptCount { get; init; }
+    public IReadOnlyList<string> ExecutedToolNames { get; init; } = Array.Empty<string>();
 
     public string PlannerMode { get; init; } = AiPlannerModes.Deterministic;
     public string Intent { get; init; } = AiChatIntentTypes.UnclearOrOutOfScope;

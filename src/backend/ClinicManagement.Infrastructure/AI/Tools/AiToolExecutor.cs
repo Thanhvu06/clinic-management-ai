@@ -187,6 +187,7 @@ public sealed class AiToolExecutor : IAiToolExecutor
             }, cancellationToken);
         }
 
+        result.ToolName = definition.Name;
         return result;
     }
 

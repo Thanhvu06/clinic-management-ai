@@ -124,7 +124,8 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
                     providerResult.Retryable,
                     providerResult.RetryAfterUtc,
                     providerResult.RetryAfterSeconds,
-                    providerResult.CorrelationId);
+                    providerResult.CorrelationId,
+                    providerResult.ProviderAttemptCount);
             }
 
             if (!string.Equals(providerResult.PlannerSchemaVersion, "1.0", StringComparison.Ordinal) ||
@@ -132,7 +133,7 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
                 !AiChatIntentTypes.IsAllowed(providerResult.PrimaryIntent))
             {
                 _health.RecordFailure(AiProviderStatusContract.FailureInvalidResponse);
-                return Failed(AiProviderStatusContract.Degraded, "INVALID_PROVIDER_SCHEMA", true);
+                return Failed(AiProviderStatusContract.Degraded, "INVALID_PROVIDER_SCHEMA", true, providerAttempts: providerResult.ProviderAttemptCount);
             }
 
             var intent = providerResult.PrimaryIntent!;
@@ -140,7 +141,7 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
             if (calls.Count > 3 || calls.Any(x => !ValidateCall(x, allowed)))
             {
                 _health.RecordFailure(AiProviderStatusContract.FailureInvalidResponse);
-                return Failed(AiProviderStatusContract.Degraded, "INVALID_PROVIDER_PLAN", true);
+                return Failed(AiProviderStatusContract.Degraded, "INVALID_PROVIDER_PLAN", true, providerAttempts: providerResult.ProviderAttemptCount);
             }
 
             var preflight = AiToolBindingRegistry.ValidateAndBindPlan(calls, planningDefinitions, request.Resource);
@@ -148,13 +149,13 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
             {
                 if (!string.Equals(preflight.Code, "PROVIDER_RESOURCE_MISMATCH", StringComparison.Ordinal))
                     _health.RecordFailure(AiProviderStatusContract.FailureInvalidResponse);
-                return Failed(AiProviderStatusContract.Degraded, preflight.Code, true);
+                return Failed(AiProviderStatusContract.Degraded, preflight.Code, true, providerAttempts: providerResult.ProviderAttemptCount);
             }
 
             if (!providerResult.IsClear && string.IsNullOrWhiteSpace(providerResult.Clarification) && string.IsNullOrWhiteSpace(providerResult.ClarificationPrompt))
             {
                 _health.RecordFailure(AiProviderStatusContract.FailureInvalidResponse);
-                return Failed(AiProviderStatusContract.Degraded, "INVALID_PROVIDER_CLARIFICATION", true);
+                return Failed(AiProviderStatusContract.Degraded, "INVALID_PROVIDER_CLARIFICATION", true, providerAttempts: providerResult.ProviderAttemptCount);
             }
 
             _health.RecordSuccess();
@@ -164,6 +165,7 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
                 IsSuccess = true,
                 ProviderCalled = true,
                 ProviderState = providerState,
+                ProviderAttemptCount = providerResult.ProviderAttemptCount,
                 FailureCode = AiProviderStatusContract.FailureNone,
                 CorrelationId = providerResult.CorrelationId,
                 Decision = new AiPlannerDecision
@@ -217,10 +219,12 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
         bool retryable = false,
         DateTimeOffset? retryAfterUtc = null,
         int? retryAfterSeconds = null,
-        string? correlationId = null) => new()
+        string? correlationId = null,
+        int providerAttempts = 0) => new()
     {
         IsSuccess = false,
         ProviderCalled = called,
+        ProviderAttemptCount = providerAttempts,
         ProviderState = providerState,
         FailureReason = reason,
         FailureCode = ToFailureCode(reason),

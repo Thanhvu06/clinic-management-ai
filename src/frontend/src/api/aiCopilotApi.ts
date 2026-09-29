@@ -54,6 +54,8 @@ export interface AiCopilotResponse {
     retryAfterSeconds?: number;
     correlationId?: string;
     providerWasCalled?: boolean;
+    providerAttemptCount?: number;
+    executedToolNames?: string[];
     assistantMode?: 'Ready' | 'Clarifying' | 'Degraded' | 'Unavailable' | 'SafetyBlocked' | string;
     plannerMode?: string;
     conversationId?: string;
