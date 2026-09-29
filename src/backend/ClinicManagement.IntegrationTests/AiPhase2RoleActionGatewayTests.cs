@@ -432,6 +432,27 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Cancelled_role_action_cannot_be_confirmed_and_same_request_can_be_prepared_again()
+    {
+        var receptionist = await CreateAuthenticatedClientAsync("rec@test.com");
+        var (appointment, first) = await PrepareReceptionActionAsync(receptionist, "cancel-reprepare");
+
+        var cancel = await receptionist.PostAsJsonAsync($"/api/v1/ai/copilot/actions/{first.ActionId}/cancel", new { sessionId = first.SessionId });
+        Assert.Equal(HttpStatusCode.OK, cancel.StatusCode);
+
+        var confirm = await ConfirmAsync(receptionist, first);
+        Assert.Equal(HttpStatusCode.Gone, confirm.StatusCode);
+        await AssertNoVisitAsync(appointment.AppointmentId);
+
+        var second = await PrepareAsync(receptionist, "reception.prepare_check_in_appointment",
+            new { appointmentId = appointment.AppointmentId, departmentId = appointment.DepartmentId }, "cancel-reprepare", sessionId: first.SessionId);
+        Assert.NotEqual(first.ActionId, second.ActionId);
+        await AssertNoVisitAsync(appointment.AppointmentId);
+        Assert.Equal(HttpStatusCode.OK, (await ConfirmAsync(receptionist, second)).StatusCode);
+        await AssertSingleVisitAsync(appointment.AppointmentId);
+    }
+
+    [Fact]
     public async Task Role_pending_state_machine_handles_expired_cancelled_lease_retry_and_corrupt_payload_fail_closed()
     {
         var receptionist = await CreateAuthenticatedClientAsync("rec@test.com");

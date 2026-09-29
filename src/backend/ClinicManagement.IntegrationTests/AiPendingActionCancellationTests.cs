@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Domain.Entities;
@@ -68,6 +69,90 @@ public sealed class AiPendingActionCancellationTests : IntegrationTestBase
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.Null((await db.AiPendingToolActions.SingleAsync(x => x.ActionId == action.ActionId)).CancelledAtUtc);
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cancel_via_the_other_roles_endpoint_is_forbidden(bool staff)
+    {
+        var action = await Seed(staff);
+        var client = await CreateAuthenticatedClientAsync(staff ? "doc@test.com" : "pat1@test.com");
+        var response = await client.PostAsJsonAsync(Route(!staff, action.ActionId), new { sessionId = action.SessionId });
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(AiPendingToolActionState.PendingConfirmation, (await db.AiPendingToolActions.SingleAsync(x => x.ActionId == action.ActionId)).State);
+    }
+
+    [Fact]
+    public async Task Cancelled_patient_action_cannot_be_confirmed_and_same_request_can_be_prepared_again()
+    {
+        var client = await CreateAuthenticatedClientAsync("pat1@test.com");
+        var session = "sess_" + Guid.NewGuid().ToString("N");
+        var appointmentId = await SeedAppointmentAsync();
+
+        var first = await PrepareCancelAsync(client, session, appointmentId);
+        var cancel = await client.PostAsJsonAsync(Route(false, first.ActionId), new { sessionId = session });
+        Assert.Equal(HttpStatusCode.OK, cancel.StatusCode);
+
+        var confirm = await client.PostAsJsonAsync($"/api/v1/ai/tool-actions/{first.ActionId}/confirm",
+            new { sessionId = session, concurrencyToken = first.Token });
+        Assert.Equal(HttpStatusCode.Gone, confirm.StatusCode);
+        await AssertAppointmentStatusAsync(appointmentId, AppointmentStatus.Confirmed);
+
+        var second = await PrepareCancelAsync(client, session, appointmentId);
+        Assert.NotEqual(first.ActionId, second.ActionId);
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(AiPendingToolActionState.PendingConfirmation, (await db.AiPendingToolActions.SingleAsync(x => x.ActionId == second.ActionId)).State);
+        Assert.Equal(AiPendingToolActionState.Cancelled, (await db.AiPendingToolActions.SingleAsync(x => x.ActionId == first.ActionId)).State);
+        await AssertAppointmentStatusAsync(appointmentId, AppointmentStatus.Confirmed);
+    }
+
+    private async Task<(Guid ActionId, string Token)> PrepareCancelAsync(HttpClient client, string session, long appointmentId)
+    {
+        var response = await client.PostAsJsonAsync("/api/v1/ai/copilot/actions/prepare", new
+        {
+            toolName = "patient.prepare_cancel_appointment",
+            toolVersion = "1.0",
+            argumentsJson = JsonSerializer.Serialize(new { appointmentId, reason = "Bận việc đột xuất" }),
+            sessionId = session,
+            conversationId = "conv_" + Guid.NewGuid().ToString("N"),
+            idempotencyKey = "idem_" + Guid.NewGuid().ToString("N")
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<AiToolExecutionResult>();
+        Assert.Equal("pending_confirmation", body?.Status);
+        var data = Assert.IsType<JsonElement>(body!.Data);
+        return (data.GetProperty("actionId").GetGuid(), data.GetProperty("concurrencyToken").GetString()!);
+    }
+
+    private async Task<long> SeedAppointmentAsync()
+    {
+        var date = GetFutureWorkingDate(24);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(15, 0), new TimeOnly(15, 30));
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await db.AppointmentSlots.SingleAsync(x => x.Id == slot.Id)).IsBooked = true;
+        var appointment = new Appointment
+        {
+            AppointmentCode = $"APT-AI-{Guid.NewGuid():N}"[..18].ToUpperInvariant(),
+            PatientId = Patient1EntityId, DoctorId = DoctorEntityId, SpecialtyId = SpecialtyEntityId,
+            AppointmentSlotId = slot.Id, AppointmentDate = date, StartTime = slot.StartTime, EndTime = slot.EndTime,
+            Reason = "Kiểm thử hủy thao tác AI", Status = AppointmentStatus.Confirmed
+        };
+        db.Appointments.Add(appointment);
+        await db.SaveChangesAsync();
+        return appointment.Id;
+    }
+
+    private async Task AssertAppointmentStatusAsync(long appointmentId, AppointmentStatus expected)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(expected, (await db.Appointments.SingleAsync(x => x.Id == appointmentId)).Status);
+    }
+
 
     private static string Route(bool staff, Guid id) => staff ? $"/api/v1/ai/copilot/actions/{id}/cancel" : $"/api/v1/ai/tool-actions/{id}/cancel";
 

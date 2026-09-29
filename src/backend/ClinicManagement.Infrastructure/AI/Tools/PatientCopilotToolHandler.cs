@@ -506,7 +506,7 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
 
         var action = new AiPendingToolAction
         {
-            ActionId = Guid.NewGuid(), UserId = context.ActorId.Value, SessionId = context.SessionId!.Trim(),
+            ActionId = Guid.NewGuid(), UserId = context.ActorId.Value, ActorRole = AiActorRole.Patient.ToString(), SessionId = context.SessionId!.Trim(),
             ToolName = $"patient.prepare_{operation}_appointment", ToolVersion = "1.0",
             RequestHash = requestHash, ResourceType = "appointment", ResourceId = appointment.Id.ToString(),
             NormalizedArgumentsJson = JsonSerializer.Serialize(new { appointmentId = appointment.Id, requestedSlotId }),

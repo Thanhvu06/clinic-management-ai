@@ -128,7 +128,7 @@ export const UnifiedCopilotPanel: React.FC = () => {
                         <button type="button" className={styles.actionButton} disabled={Boolean(copilot.actionLoading)} onClick={() => void copilot.cancelAction()}>Hủy thao tác</button>
                         {copilot.pendingActionExpired && pendingCapability?.enabled && <button type="button" className={styles.actionButton} disabled={Boolean(copilot.actionLoading)} onClick={() => void copilot.prepareAction(pendingCapability)}>Chuẩn bị lại xem trước</button>}
                     </div>}
-                    {copilot.actionFeedback && <p className={copilot.actionFeedback.status === 'completed' ? styles.actionSuccess : styles.actionError} role="status">{copilot.actionFeedback.message}</p>}
+                    {copilot.actionFeedback && <p className={copilot.actionFeedback.status === 'completed' ? styles.actionSuccess : copilot.actionFeedback.status === 'cancelled' ? styles.actionNeutral : styles.actionError} role="status">{copilot.actionFeedback.message}</p>}
                 </section>}
                 <div className={styles.toolTray} aria-label="Công cụ được phép">{tools.map(tool => <span className={styles.toolBadge} key={typeof tool === 'string' ? tool : tool.name}>{toolDisplayName(tool)}</span>)}</div>
                 <div className={styles.prompts}>{suggestedPrompts.slice(0, 4).map(prompt => <button type="button" className={styles.prompt} key={prompt} onClick={() => void copilot.send(prompt)} disabled={copilot.loading}>{prompt}</button>)}</div>

@@ -487,7 +487,9 @@ describe('UnifiedCopilotPanel', () => {
         expect(confirmActionMock).not.toHaveBeenCalled();
         expect(screen.queryByRole('button', { name: 'Hủy thao tác' })).not.toBeInTheDocument();
         expect(screen.getByRole('textbox', { name: 'Nội dung Copilot' })).toHaveValue('Giữ nguyên bản nháp này');
-        expect(screen.getByText('Đã hủy thao tác đang chờ.')).toBeInTheDocument();
+        const feedback = screen.getByText('Đã hủy thao tác đang chờ.');
+        expect(feedback.className).toMatch(/actionNeutral/);
+        expect(feedback.className).not.toMatch(/actionError/);
     });
 
     it('retires an idempotency key after completion before preparing the same resource again', async () => {

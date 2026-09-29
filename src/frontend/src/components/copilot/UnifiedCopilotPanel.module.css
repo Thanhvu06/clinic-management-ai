@@ -51,9 +51,10 @@
 .actionPreview { display: grid; gap: 6px; padding: 9px; border: 1px solid #8ac7bf; border-radius: 9px; background: #fff; color: #315654; font-size: .75rem; }
 .previewLine { overflow-wrap: anywhere; }
 .confirmButton { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
-.actionError, .actionSuccess { margin: 0; padding: 6px 8px; border-radius: 7px; font-size: .72rem; }
+.actionError, .actionSuccess, .actionNeutral { margin: 0; padding: 6px 8px; border-radius: 7px; font-size: .72rem; }
 .actionError { color: #8f3728; background: #fff5f2; }
 .actionSuccess { color: #166534; background: #ecfdf5; }
+.actionNeutral { color: #334155; background: #f1f5f9; }
 .prompts { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px; }
 .prompt { border: 1px solid #acd5d1; border-radius: 999px; padding: 6px 9px; background: white; color: #146a65; cursor: pointer; text-align: left; font-size: .75rem; }
 .prompt:disabled { opacity: .55; cursor: wait; }

@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 using ClinicManagement.Application.AI.Conversation;
 using ClinicManagement.Application.AI.Tools;
@@ -13,6 +14,8 @@ public static class AiProviderOutputGuard
     private static readonly Regex CurrentState = new(
         @"\b(?:(?:bạn|người\s+bệnh|bệnh\s+nhân)\s+(?:hiện\s+)?đang|hiện\s+tại|lúc\s+này)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex ListItem = new(
+        @"^(?:[-*•]|\d+[.)])\s+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public sealed record Block(string Message, string Code, bool Emergency);
 
@@ -21,11 +24,17 @@ public static class AiProviderOutputGuard
         var guard = new AiSafetyGuard();
         foreach (var text in texts.Where(x => !string.IsNullOrWhiteSpace(x)))
         {
-            foreach (var clause in Regex.Split(text!, @"[.!?;,\r\n]+"))
+            foreach (var sentence in SplitSentences(text!))
             {
-                var safety = guard.Inspect(clause);
-                if (safety.IsEmergency && HasAssertedEmergency(clause, safety.MatchedCategory))
-                    return new("Dấu hiệu có thể là tình huống cấp cứu. Hãy gọi 115 hoặc đến cơ sở cấp cứu gần nhất. Không chờ phản hồi qua trò chuyện.", "PROVIDER_OUTPUT_EMERGENCY", true);
+                var offset = 0;
+                foreach (var clause in Regex.Split(sentence, @"(?<=,)"))
+                {
+                    var safety = guard.Inspect(clause);
+                    // A condition scopes over the whole sentence, so a clause is judged with everything before it.
+                    if (safety.IsEmergency && HasAssertedEmergency(sentence[..offset], clause, safety.MatchedCategory))
+                        return new("Dấu hiệu có thể là tình huống cấp cứu. Hãy gọi 115 hoặc đến cơ sở cấp cứu gần nhất. Không chờ phản hồi qua trò chuyện.", "PROVIDER_OUTPUT_EMERGENCY", true);
+                    offset += clause.Length;
+                }
             }
         }
         if (texts.Any(guard.ContainsPromptInjection))
@@ -35,9 +44,50 @@ public static class AiProviderOutputGuard
         return null;
     }
 
-    private static bool HasAssertedEmergency(string text, string? category)
+    /// <summary>
+    /// Splits on . ! ? ; and line breaks, except that list items under a header line ending in ":"
+    /// that carries a condition stay attached to it, so the condition covers the whole list.
+    /// </summary>
+    private static IEnumerable<string> SplitSentences(string text)
+    {
+        var block = new StringBuilder();
+        foreach (var rawLine in Regex.Split(text, @"\r?\n"))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+            {
+                foreach (var done in Flush(block)) yield return done;
+                continue;
+            }
+            if (block.Length > 0 && ListItem.IsMatch(line))
+            {
+                block.Append(' ').Append(ListItem.Replace(line, string.Empty));
+                continue;
+            }
+            foreach (var done in Flush(block)) yield return done;
+            if (line.EndsWith(':') && ConditionalWarning.IsMatch(AiTextNormalizer.Normalize(line).ToLowerInvariant()))
+            {
+                block.Append(line);
+                continue;
+            }
+            foreach (var part in Regex.Split(ListItem.Replace(line, string.Empty), @"[.!?;]+"))
+                if (!string.IsNullOrWhiteSpace(part)) yield return part;
+        }
+        foreach (var done in Flush(block)) yield return done;
+    }
+
+    private static IEnumerable<string> Flush(StringBuilder block)
+    {
+        if (block.Length == 0) yield break;
+        var text = block.ToString();
+        block.Clear();
+        yield return text;
+    }
+
+    private static bool HasAssertedEmergency(string contextPrefix, string text, string? category)
     {
         if (string.IsNullOrWhiteSpace(category)) return true;
+        var context = AiTextNormalizer.Normalize(contextPrefix).ToLowerInvariant();
         var normalized = AiTextNormalizer.Normalize(text).ToLowerInvariant();
         var phrase = AiTextNormalizer.Normalize(category).ToLowerInvariant();
         var searchFrom = 0;
@@ -45,8 +95,7 @@ public static class AiProviderOutputGuard
         {
             var phraseIndex = normalized.IndexOf(phrase, searchFrom, StringComparison.Ordinal);
             if (phraseIndex < 0) break;
-            var sentenceStart = normalized.LastIndexOfAny(new[] { '.', '!', '?', ';', '\n', '\r' }, Math.Max(0, phraseIndex - 1));
-            var prefix = normalized[(sentenceStart + 1)..phraseIndex];
+            var prefix = context + " " + normalized[..phraseIndex];
             var conditions = ConditionalWarning.Matches(prefix);
             if (conditions.Count == 0)
                 return true;

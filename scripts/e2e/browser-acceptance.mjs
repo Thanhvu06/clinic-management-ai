@@ -309,6 +309,73 @@ async function runPendingActionCancellation(browser) {
     }
 }
 
+async function runPatientPendingActionCancellation(browser) {
+    // The planner never prepares writes (PLANNER_TOOL_NOT_ALLOWED), so no chat text yields a pending card.
+    // This case prepares a REAL pending action through the authenticated prepare endpoint and injects it
+    // into the chat response; MedicalChatWidget's cancel button and the backend cancel endpoint are real.
+    const host = await startHost('online');
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const forbiddenWrites = [];
+    page.on('request', request => {
+        if (request.url().includes('/confirm') || /\/appointments\/[^/]+\/cancel/.test(request.url()))
+            forbiddenWrites.push(`${request.method()} ${request.url()}`);
+    });
+    try {
+        const actor = actorCases[0];
+        await login(page, actor);
+        const token = await page.evaluate(() => localStorage.getItem('token'));
+        const headers = { Authorization: `Bearer ${token}` };
+        let routeError = null, injected = null;
+        const aiCalls = [];
+        page.on('response', r => { if (r.url().includes('/api/v1/ai/')) aiCalls.push(`${r.request().method()} ${r.url()} ${r.status()}`); });
+        await page.route('**/api/v1/ai/chat', async route => {
+          try {
+            const sessionId = route.request().postDataJSON()?.sessionId;
+            const real = await route.fetch();
+            const json = await real.json();
+            const appointments = await (await page.request.post(`${apiBase}/api/v1/ai/tools/execute`, {
+                headers, data: { toolName: 'patient.get_my_appointments', toolVersion: '1.0', argumentsJson: '{}', sessionId }
+            })).json();
+            const appointment = JSON.stringify(appointments).match(/"appointmentId":(\d+),"appointmentCode":"CANARY-APT-001"|"appointmentCode":"CANARY-APT-001"[^}]*?"appointmentId":(\d+)|"id":(\d+),"appointmentCode":"CANARY-APT-001"/);
+            const appointmentId = Number(appointment?.[1] ?? appointment?.[2] ?? appointment?.[3]);
+            assert.ok(appointmentId, `synthetic appointment id not found in ${JSON.stringify(appointments).slice(0, 400)}`);
+            const prepared = await page.request.post(`${apiBase}/api/v1/ai/copilot/actions/prepare`, {
+                headers, data: {
+                    toolName: 'patient.prepare_cancel_appointment', toolVersion: '1.0',
+                    argumentsJson: JSON.stringify({ appointmentId, reason: 'Bận việc đột xuất' }),
+                    sessionId, conversationId: `conv_${Date.now()}`, idempotencyKey: `idem_${Date.now()}`
+                }
+            });
+            const result = await prepared.json();
+            assert.equal(result?.status, 'pending_confirmation', `real patient prepare must succeed: ${JSON.stringify(result).slice(0, 400)}`);
+            injected = JSON.stringify({ result, jsonKeys: Object.keys(json) }).slice(0, 900);
+            json.data = { ...(json.data ?? {}), toolResults: [result] };
+            await route.fulfill({ response: real, json });
+          } catch (error) { routeError = error; await route.continue().catch(() => {}); }
+        });
+        await page.getByRole('textbox', { name: 'Nội dung tin nhắn tư vấn AI' }).fill('Xin chào');
+        await page.getByRole('button', { name: 'Gửi tin nhắn' }).click();
+        try { await page.getByRole('button', { name: 'Hủy thao tác' }).waitFor({ state: 'visible', timeout: 15000 }); }
+        catch (error) { throw new Error(`patient preview did not render; routeError=${routeError?.message}; aiCalls=${aiCalls.join(' , ')}; injected=${injected}; body=${(await page.locator('body').innerText()).slice(-1500)}`); }
+
+        const cancelResponsePromise = page.waitForResponse(response =>
+            response.url().includes('/api/v1/ai/tool-actions/') &&
+            response.url().endsWith('/cancel') && response.request().method() === 'POST');
+        await page.getByRole('button', { name: 'Hủy thao tác' }).click();
+        const cancelResponse = await cancelResponsePromise;
+        assert.equal(cancelResponse.status(), 200, 'patient-owned pending action cancel must succeed');
+        assert.equal((await cancelResponse.json())?.status, 'cancelled', 'cancel response must be explicit');
+        await page.waitForFunction(() => ![...document.querySelectorAll('button')].some(b => b.textContent?.includes('Hủy thao tác')), null, { timeout: 10000 });
+        assert.equal(await page.getByRole('button', { name: /Xác nhận thực hiện/ }).count(), 0, 'cancelled preview cannot still be confirmed');
+        assert.deepEqual(forbiddenWrites, [], 'cancel must not call confirm or the appointment cancel endpoint');
+        results.push({ scenario: 'N1 patient pending action cancellation', status: 'PASS', evidence: 'real prepare + real /ai/tool-actions/{id}/cancel via MedicalChatWidget button; preview card injected into chat response (planner cannot prepare writes); confirm/domain write absent' });
+    } finally {
+        await context.close();
+        stop(host);
+    }
+}
+
 async function main() {
     if (process.env.E2E_ALLOW_MUTATION?.toLowerCase() === 'true')
         throw new Error('The isolated browser E2E refuses E2E_ALLOW_MUTATION=true.');
@@ -330,6 +397,7 @@ async function main() {
         await runCancellation(browser);
         await runRouteIsolation(browser);
         await runPendingActionCancellation(browser);
+        await runPatientPendingActionCancellation(browser);
 
         // Cancellation has a synthetic browser fixture above. Confirmation and
         // diagnostic publication still remain outside this non-mutating suite.
