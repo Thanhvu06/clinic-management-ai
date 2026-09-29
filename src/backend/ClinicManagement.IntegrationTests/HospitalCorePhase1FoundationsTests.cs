@@ -155,6 +155,7 @@ public class HospitalCorePhase1FoundationsTests : IntegrationTestBase
         var isSqlServer = await SqlServerTestHelper.IsSqlServerAvailableAsync();
         string dbName = $"ClinicMrnConc_{Guid.NewGuid():N}";
         string? connStr = isSqlServer ? SqlServerTestHelper.GetTestDatabaseConnectionString(dbName) : null;
+        var sqlitePath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), dbName + ".db");
 
         try
         {
@@ -168,13 +169,15 @@ public class HospitalCorePhase1FoundationsTests : IntegrationTestBase
             }
             else
             {
-                var sqliteConn = new Microsoft.Data.Sqlite.SqliteConnection("DataSource=:memory:");
-                await sqliteConn.OpenAsync();
+                // A connection is not thread-safe. Each context must own its
+                // connection, just as concurrent production requests do, while
+                // all twenty tasks still contend on the same sequence row.
                 options = new DbContextOptionsBuilder<AppDbContext>()
-                    .UseSqlite(sqliteConn)
+                    .UseSqlite($"Data Source={sqlitePath};Pooling=False;Default Timeout=15")
                     .Options;
                 using var initCtx = new AppDbContext(options);
                 initCtx.Database.EnsureCreated();
+                await initCtx.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
             }
 
             const int concurrency = 20;
@@ -214,6 +217,11 @@ public class HospitalCorePhase1FoundationsTests : IntegrationTestBase
             if (isSqlServer)
             {
                 await SqlServerTestHelper.DropDatabaseAsync(dbName);
+            }
+            else
+            {
+                foreach (var suffix in new[] { "", "-wal", "-shm" })
+                    System.IO.File.Delete(sqlitePath + suffix);
             }
         }
     }
