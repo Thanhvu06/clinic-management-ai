@@ -12,11 +12,21 @@ public sealed class AiToolGatewayController : ControllerBase
 {
     private readonly IAiToolRegistry _registry;
     private readonly IAiToolExecutor _executor;
+    private readonly IAiPendingActionCancellationService _cancellation;
 
-    public AiToolGatewayController(IAiToolRegistry registry, IAiToolExecutor executor)
+    public AiToolGatewayController(IAiToolRegistry registry, IAiToolExecutor executor, IAiPendingActionCancellationService cancellation)
     {
         _registry = registry;
         _executor = executor;
+        _cancellation = cancellation;
+    }
+
+    [HttpPost("/api/v1/ai/tool-actions/{actionId:guid}/cancel")]
+    [Authorize(Roles = "Patient")]
+    public async Task<IActionResult> CancelPatientAction(Guid actionId, [FromBody] CancelAiToolActionRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _cancellation.CancelPatientActionAsync(actionId, request.SessionId, cancellationToken);
+        return ToCancelResponse(result);
     }
 
     [HttpGet]
@@ -98,6 +108,25 @@ public sealed class AiToolGatewayController : ControllerBase
         return ToRoleActionResponse(result);
     }
 
+    [HttpPost("/api/v1/ai/copilot/actions/{actionId:guid}/cancel")]
+    [Authorize(Roles = "Receptionist,Doctor,DiagnosticTechnician,Pharmacist")]
+    public async Task<IActionResult> CancelRoleAction(Guid actionId, [FromBody] CancelAiToolActionRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _cancellation.CancelRoleActionAsync(actionId, request.SessionId, cancellationToken);
+        return ToCancelResponse(result);
+    }
+
+    private IActionResult ToCancelResponse(AiToolExecutionResult result)
+    {
+        if (result.Error?.Code is "AUTHENTICATION_REQUIRED") return Unauthorized(result);
+        if (result.Error?.Code is "ROLE_MISMATCH") return Forbid();
+        if (result.Error?.Code is "ACTION_NOT_FOUND" or "SESSION_MISMATCH") return NotFound(result);
+        if (result.Error?.Code is "ACTION_EXPIRED") return StatusCode(StatusCodes.Status410Gone, result);
+        if (result.Error?.Code is "ACTION_NOT_CANCELLABLE") return Conflict(result);
+        if (result.Error != null) return BadRequest(result);
+        return Ok(result);
+    }
+
     private IActionResult ToRoleActionResponse(AiToolExecutionResult result)
     {
         if (result.Error?.Code is "AUTHENTICATION_REQUIRED") return Unauthorized(result);
@@ -116,4 +145,9 @@ public sealed class ConfirmAiToolActionRequest
 {
     public string SessionId { get; set; } = string.Empty;
     public string? ConcurrencyToken { get; set; }
+}
+
+public sealed class CancelAiToolActionRequest
+{
+    public string SessionId { get; set; } = string.Empty;
 }

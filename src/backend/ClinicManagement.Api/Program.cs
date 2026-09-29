@@ -172,6 +172,7 @@ foreach (var toolDefinition in ClinicManagement.Application.AI.Tools.AiRoleActio
 builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolRegistry, ClinicManagement.Infrastructure.AI.Tools.AiToolRegistry>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiCapabilityResolver, ClinicManagement.Infrastructure.AI.Tools.AiCapabilityResolver>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolExecutor, ClinicManagement.Infrastructure.AI.Tools.AiToolExecutor>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiPendingActionCancellationService, ClinicManagement.Infrastructure.AI.Tools.AiPendingActionCancellationService>();
 builder.Services.AddScoped<ClinicManagement.Application.HealthPackages.Interfaces.IHealthPackageService, ClinicManagement.Infrastructure.HealthPackages.HealthPackageService>();
 builder.Services.AddScoped<ClinicManagement.Application.HealthPackages.Interfaces.IHealthPackageRegistrationService, ClinicManagement.Infrastructure.HealthPackages.HealthPackageRegistrationService>();
 builder.Services.AddScoped<ClinicManagement.Application.Locations.Interfaces.ILocationService, ClinicManagement.Infrastructure.Locations.LocationService>();

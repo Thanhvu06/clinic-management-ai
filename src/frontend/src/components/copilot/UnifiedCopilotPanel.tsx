@@ -125,6 +125,7 @@ export const UnifiedCopilotPanel: React.FC = () => {
                         <div className={styles.previewLine}><strong>Hết hạn:</strong> {new Date(copilot.pendingAction.preview.expiresAtUtc).toLocaleString('vi-VN')}</div>
                         {copilot.pendingActionExpired && <p className={styles.actionError} role="alert">Preview đã hết hạn; backend sẽ từ chối token cũ. Hãy chuẩn bị lại để nhận dữ liệu kiểm tra mới.</p>}
                         <button type="button" className={styles.confirmButton} disabled={Boolean(copilot.actionLoading) || copilot.pendingActionExpired} onClick={() => void copilot.confirmAction()}><CheckCircle2 size={14} /> Xác nhận thao tác</button>
+                        <button type="button" className={styles.actionButton} disabled={Boolean(copilot.actionLoading)} onClick={() => void copilot.cancelAction()}>Hủy thao tác</button>
                         {copilot.pendingActionExpired && pendingCapability?.enabled && <button type="button" className={styles.actionButton} disabled={Boolean(copilot.actionLoading)} onClick={() => void copilot.prepareAction(pendingCapability)}>Chuẩn bị lại xem trước</button>}
                     </div>}
                     {copilot.actionFeedback && <p className={copilot.actionFeedback.status === 'completed' ? styles.actionSuccess : styles.actionError} role="status">{copilot.actionFeedback.message}</p>}

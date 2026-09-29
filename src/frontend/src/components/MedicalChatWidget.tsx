@@ -97,6 +97,7 @@ const PatientMedicalChatWidget: React.FC = () => {
         handleSendMessage,
         handleActionClick,
         confirmToolAction,
+        cancelToolAction,
         formatVietnameseDate
     } = useAiBookingFlow(() => setIsOpen(false));
 
@@ -320,7 +321,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                         : toolResult.error?.message || toolResult.displayText || "Kết quả được trả về từ dịch vụ ClinicCare đã kiểm chứng."}
                                                 </p>
                                                 <GroundedToolData result={toolResult} />
-                                                {toolResult.status === "pending_confirmation" && toolResult.actionId && (
+                                                {toolResult.status === "pending_confirmation" && toolResult.actionId && (<>
                                                     <button
                                                         type="button"
                                                         className={`${styles.actionBtn} ${styles.btnPrimary}`}
@@ -344,7 +345,18 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                                 ? "Thiếu mã xác nhận"
                                                                 : "Xác nhận thực hiện"}
                                                     </button>
-                                                )}
+                                                    <button
+                                                        type="button"
+                                                        className={`${styles.actionBtn} ${styles.btnSecondary}`}
+                                                        disabled={executingActionId === toolResult.actionId}
+                                                        onClick={() => {
+                                                            setExecutingActionId(toolResult.actionId || null);
+                                                            void cancelToolAction(toolResult.actionId || "").finally(() => setExecutingActionId(null));
+                                                        }}
+                                                    >
+                                                        {executingActionId === toolResult.actionId ? "Đang hủy..." : "Hủy thao tác"}
+                                                    </button>
+                                                </>)}
                                             </div>
                                         </div>
                                     ))}

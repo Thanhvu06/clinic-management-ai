@@ -265,6 +265,50 @@ async function runRouteIsolation(browser) {
     }
 }
 
+async function runPendingActionCancellation(browser) {
+    const host = await startHost('online');
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const forbiddenWrites = [];
+    page.on('request', request => {
+        if (request.url().includes('/confirm') || request.url().includes('/diagnostics/orders/1/start'))
+            forbiddenWrites.push(`${request.method()} ${request.url()}`);
+    });
+    try {
+        const actor = { ...actorCases[3], route: '/diagnostics/orders/1' };
+        await login(page, actor);
+        await page.getByRole('button', { name: `Mở ${roleLabels[actor.name]}` }).click();
+        const description = page.getByText('Chuẩn bị tiếp nhận phiếu chỉ định', { exact: true });
+        await description.waitFor({ state: 'visible', timeout: 15000 });
+        const actionRow = description.locator('..').locator('..');
+        const prepareResponsePromise = page.waitForResponse(response =>
+            response.url().includes('/api/v1/ai/copilot/actions/prepare') && response.request().method() === 'POST');
+        await actionRow.getByRole('button', { name: 'Xem trước' }).click();
+        const prepareResponse = await prepareResponsePromise;
+        assert.equal(prepareResponse.status(), 200, 'synthetic action prepare must succeed');
+        const prepareBody = await prepareResponse.json();
+        assert.equal(prepareBody?.status, 'pending_confirmation', 'synthetic fixture must produce a pending preview');
+        await page.getByRole('button', { name: 'Hủy thao tác' }).waitFor({ state: 'visible', timeout: 10000 });
+
+        const cancelResponsePromise = page.waitForResponse(response =>
+            response.url().includes('/api/v1/ai/copilot/actions/') &&
+            response.url().endsWith('/cancel') && response.request().method() === 'POST');
+        await page.getByRole('button', { name: 'Hủy thao tác' }).click();
+        const cancelResponse = await cancelResponsePromise;
+        assert.equal(cancelResponse.status(), 200, 'owned pending action cancel must succeed');
+        const cancelBody = await cancelResponse.json();
+        assert.equal(cancelBody?.status, 'cancelled', 'cancel response must be explicit');
+        await page.getByText(/Đã hủy thao tác chờ xác nhận/).waitFor({ state: 'visible', timeout: 10000 });
+        assert.equal(await page.getByRole('button', { name: 'Hủy thao tác' }).count(), 0, 'cancelled preview must leave the UI immediately');
+        assert.equal(await page.getByRole('button', { name: /Xác nhận thao tác/ }).count(), 0, 'cancelled preview cannot still be confirmed');
+        assert.deepEqual(forbiddenWrites, [], 'cancel must not call confirm or the domain start endpoint');
+        results.push({ scenario: 'N1 pending action cancellation', status: 'PASS', evidence: 'synthetic preview cancelled; confirm/domain write absent; preview retired' });
+    } finally {
+        await context.close();
+        stop(host);
+    }
+}
+
 async function main() {
     if (process.env.E2E_ALLOW_MUTATION?.toLowerCase() === 'true')
         throw new Error('The isolated browser E2E refuses E2E_ALLOW_MUTATION=true.');
@@ -285,10 +329,11 @@ async function main() {
         await runProviderMode(browser, 'disabled', 'AI bị tắt cấu hình; đang dùng hỗ trợ cơ bản');
         await runCancellation(browser);
         await runRouteIsolation(browser);
+        await runPendingActionCancellation(browser);
 
-        // The current browser UI exposes no complete diagnostic publish control
-        // and no patient booking confirmation fixture in the isolated seed.
-        results.push({ scenario: '5 write preview/confirm', status: 'NOT_COVERED', evidence: 'UI fixture is not complete; HTTP confirmation tests remain authoritative' });
+        // Cancellation has a synthetic browser fixture above. Confirmation and
+        // diagnostic publication still remain outside this non-mutating suite.
+        results.push({ scenario: '5 write preview/confirm', status: 'NOT_COVERED', evidence: 'cancel is covered; confirm is intentionally absent from this non-mutating browser fixture' });
         results.push({ scenario: '6 unpublished/published diagnostic result', status: 'NOT_COVERED', evidence: 'no safe browser publish fixture was added in this acceptance harness' });
     } finally {
         await browser.close();

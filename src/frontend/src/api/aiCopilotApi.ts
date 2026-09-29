@@ -176,3 +176,7 @@ export async function prepareRoleAction(request: AiToolInvocationRequest, signal
 export async function confirmRoleAction(actionId: string, request: { sessionId: string; concurrencyToken: string }, signal?: AbortSignal): Promise<AiRoleActionResult> {
     return axiosClient.post<typeof request, AiRoleActionResult>(`/ai/copilot/actions/${encodeURIComponent(actionId)}/confirm`, request, { signal });
 }
+
+export async function cancelRoleAction(actionId: string, request: { sessionId: string }, signal?: AbortSignal): Promise<AiRoleActionResult> {
+    return axiosClient.post<typeof request, AiRoleActionResult>(`/ai/copilot/actions/${encodeURIComponent(actionId)}/cancel`, request, { signal });
+}

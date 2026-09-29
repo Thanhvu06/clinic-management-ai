@@ -168,6 +168,48 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         expect(vi.mocked(axiosClient.post).mock.calls[1][1]).toEqual({ sessionId: 'sess_confirm', concurrencyToken: 'A'.repeat(43) });
     });
 
+    it('cancels a pending patient action through the dedicated endpoint and removes its preview', async () => {
+        vi.mocked(axiosClient.post)
+            .mockResolvedValueOnce({
+                success: true,
+                message: '',
+                data: {
+                    message: 'Bạn có một thao tác đang chờ xác nhận.',
+                    urgency: 'ROUTINE',
+                    sessionId: 'sess_cancel',
+                    toolResults: [{
+                        status: 'pending_confirmation',
+                        actionId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+                        resultType: 'pending_action',
+                        data: { appointmentCode: 'APPT-45', concurrencyToken: 'C'.repeat(43) }
+                    }]
+                }
+            })
+            .mockResolvedValueOnce({
+                status: 'cancelled',
+                displayText: 'Đã hủy thao tác đang chờ.',
+                data: { status: 'cancelled' }
+            });
+
+        render(
+            <MemoryRouter>
+                <ChatProvider>
+                    <MedicalChatWidget />
+                </ChatProvider>
+            </MemoryRouter>
+        );
+        fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
+        fireEvent.click(screen.getByText('Tôi nên khám chuyên khoa nào?'));
+        fireEvent.click(await screen.findByRole('button', { name: 'Hủy thao tác' }));
+
+        await waitFor(() => expect(axiosClient.post).toHaveBeenCalledTimes(2));
+        expect(vi.mocked(axiosClient.post).mock.calls[1][0]).toBe('/ai/tool-actions/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/cancel');
+        expect(vi.mocked(axiosClient.post).mock.calls[1][1]).toEqual({ sessionId: 'sess_cancel' });
+        expect(screen.queryByRole('button', { name: 'Hủy thao tác' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Xác nhận thực hiện' })).not.toBeInTheDocument();
+        expect(await screen.findByText('Đã hủy thao tác đang chờ.')).toBeInTheDocument();
+    });
+
     it('fails closed and disables confirmation when the grounded action has no concurrency token', async () => {
         vi.mocked(axiosClient.post).mockResolvedValueOnce({
             success: true,

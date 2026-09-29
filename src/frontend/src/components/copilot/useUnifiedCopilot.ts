@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import {
+    cancelRoleAction,
     confirmRoleAction,
     getRoleCopilotCatalog,
     prepareRoleAction,
@@ -596,6 +597,61 @@ export const useUnifiedCopilot = () => {
         }
     }, [actionInputKey, actionLoading, identityKey, pendingAction, resourceKey, routeKey]);
 
+    const cancelAction = useCallback(async () => {
+        const action = pendingAction;
+        if (!action || actionLoading || actionBusyRef.current) return;
+        actionBusyRef.current = true;
+        const requestId = ++actionRequestNumberRef.current;
+        const requestIdentityKey = identityKey;
+        const requestRouteKey = routeKey;
+        const requestResourceKey = resourceKey;
+        const requestActionInputKey = actionInputKey;
+        const sessionId = sessionIdRef.current;
+        const controller = new AbortController();
+        actionControllerRef.current?.abort();
+        actionControllerRef.current = controller;
+        setActionLoading(action.toolName);
+        const isCurrentRequest = () => !controller.signal.aborted &&
+            actionRequestNumberRef.current === requestId &&
+            actionContextRef.current.identityKey === requestIdentityKey &&
+            actionContextRef.current.routeKey === requestRouteKey &&
+            actionContextRef.current.resourceKey === requestResourceKey &&
+            actionContextRef.current.actionInputKey === requestActionInputKey &&
+            sessionIdRef.current === sessionId;
+        try {
+            const result = await cancelRoleAction(action.actionId, { sessionId }, controller.signal);
+            if (!isCurrentRequest()) return;
+            if (result.status === 'cancelled') {
+                setPendingAction(null);
+                actionKeysRef.current.delete(action.requestSignature);
+                setActionFeedback({ status: 'cancelled', message: result.displayText || 'Đã hủy thao tác đang chờ. Không có thay đổi nghiệp vụ nào được thực hiện.' });
+            } else {
+                const status = (result.status || '').toLowerCase();
+                const terminal = ['expired', 'cancelled', 'failed_terminal'].includes(status) || terminalActionError(result.error?.code);
+                if (terminal) {
+                    setPendingAction(null);
+                    actionKeysRef.current.delete(action.requestSignature);
+                }
+                setActionFeedback({ status: result.status || 'failed', message: result.error?.message || 'Backend chưa thể hủy thao tác đang chờ.' });
+            }
+        } catch (error) {
+            if (isCurrentRequest()) {
+                const details = actionErrorDetails(error);
+                const terminal = details.status === 404 || details.status === 410 || terminalActionError(details.code, details.status);
+                if (terminal) {
+                    setPendingAction(null);
+                    actionKeysRef.current.delete(action.requestSignature);
+                }
+                setActionFeedback({ status: 'failed', message: actionErrorMessage(details, 'Không thể hủy thao tác lúc này.') });
+            }
+        } finally {
+            if (isCurrentRequest()) {
+                setActionLoading(null);
+                actionBusyRef.current = false;
+            }
+        }
+    }, [actionInputKey, actionLoading, identityKey, pendingAction, resourceKey, routeKey]);
+
     const retry = useCallback(() => {
         const value = retryTextRef.current;
         if (value) void send(value);
@@ -604,6 +660,6 @@ export const useUnifiedCopilot = () => {
     return {
         user, role, config, open, setOpen, input, setInput, loading, messages, send, reset, abort, retry,
         resourceContext, resourceSelection, catalogTools: catalog.tools, actionCapabilities, actionLoading,
-        pendingAction, pendingActionExpired, actionFeedback, catalogError, prepareAction, confirmAction
+        pendingAction, pendingActionExpired, actionFeedback, catalogError, prepareAction, confirmAction, cancelAction
     };
 };

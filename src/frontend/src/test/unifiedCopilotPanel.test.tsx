@@ -13,6 +13,7 @@ const sendMock = vi.fn();
 const catalogMock = vi.fn();
 const prepareActionMock = vi.fn();
 const confirmActionMock = vi.fn();
+const cancelActionMock = vi.fn();
 
 vi.mock('../auth/AuthContext', () => ({
     useAuth: () => ({ user: mockUser, identityVersion: mockIdentityVersion })
@@ -22,7 +23,8 @@ vi.mock('../api/aiCopilotApi', () => ({
     sendRoleCopilotMessage: (...args: unknown[]) => sendMock(...args),
     getRoleCopilotCatalog: (...args: unknown[]) => catalogMock(...args),
     prepareRoleAction: (...args: unknown[]) => prepareActionMock(...args),
-    confirmRoleAction: (...args: unknown[]) => confirmActionMock(...args)
+    confirmRoleAction: (...args: unknown[]) => confirmActionMock(...args),
+    cancelRoleAction: (...args: unknown[]) => cancelActionMock(...args)
 }));
 
 const response = (overrides: Record<string, unknown> = {}) => ({
@@ -99,6 +101,7 @@ describe('UnifiedCopilotPanel', () => {
         catalogMock.mockReset().mockResolvedValue({ tools: [], actionTools: [] });
         prepareActionMock.mockReset();
         confirmActionMock.mockReset();
+        cancelActionMock.mockReset();
         mockUser = { userId: 'doctor-1', fullName: 'Doctor', role: 'Doctor' };
         mockIdentityVersion = 1;
     });
@@ -459,6 +462,32 @@ describe('UnifiedCopilotPanel', () => {
         await waitFor(() => expect(screen.getByText('Đã tiếp nhận phiếu.')).toBeInTheDocument());
         expect(confirmActionMock).toHaveBeenCalledWith('action-1', expect.objectContaining({ sessionId: expect.any(String), concurrencyToken: 'secret-token' }), expect.anything());
         expect(screen.queryByRole('button', { name: /Xác nhận thao tác/i })).not.toBeInTheDocument();
+    });
+
+    it('cancels a pending role action without confirming it or losing the typed draft', async () => {
+        mockUser = { userId: 'tech-1', fullName: 'Technician', role: 'DiagnosticTechnician' };
+        catalogMock.mockResolvedValue({
+            tools: [],
+            actionTools: [{ name: 'technician.prepare_start_diagnostic_order', version: '1.0', description: 'Tiếp nhận phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' }]
+        });
+        prepareActionMock.mockResolvedValue({ status: 'pending_confirmation', actionId: 'action-cancel', data: { confirmationToken: 'must-not-be-sent' }, preview: { toolName: 'technician.prepare_start_diagnostic_order', status: 'pending_confirmation', resourceType: 'DiagnosticOrder', resourceId: '42', resource: { identity: 'Phiếu chỉ định LAB-42' }, changes: [{ kind: 'diagnostic_start', summary: 'Tiếp nhận phiếu', items: [{ label: 'Phiếu', value: 'LAB-42' }] }], consequence: 'Backend sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra quyền và resource.', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:00Z', sources: [{ name: 'diagnostic_orders', kind: 'database' }] } });
+        cancelActionMock.mockResolvedValue({ status: 'cancelled', displayText: 'Đã hủy thao tác đang chờ.' });
+
+        render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Kỹ thuật viên/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Xem trước' })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Hủy thao tác' })).toBeInTheDocument());
+        fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'Giữ nguyên bản nháp này' } });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Hủy thao tác' }));
+
+        await waitFor(() => expect(cancelActionMock).toHaveBeenCalledTimes(1));
+        expect(cancelActionMock).toHaveBeenCalledWith('action-cancel', { sessionId: expect.any(String) }, expect.anything());
+        expect(confirmActionMock).not.toHaveBeenCalled();
+        expect(screen.queryByRole('button', { name: 'Hủy thao tác' })).not.toBeInTheDocument();
+        expect(screen.getByRole('textbox', { name: 'Nội dung Copilot' })).toHaveValue('Giữ nguyên bản nháp này');
+        expect(screen.getByText('Đã hủy thao tác đang chờ.')).toBeInTheDocument();
     });
 
     it('retires an idempotency key after completion before preparing the same resource again', async () => {

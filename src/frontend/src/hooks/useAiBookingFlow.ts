@@ -203,7 +203,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         readPersistedBookingAttempt(accountKey)
     );
     const isSubmittingBookingRef = useRef(false);
-    const isConfirmingToolActionRef = useRef(false);
+    const isMutatingToolActionRef = useRef(false);
     const lastKnownGeminiStatusRef = useRef<"Unchecked" | "Healthy" | "Degraded">("Unchecked");
     const draftCancelledAtRef = useRef<number>(0);
     const contextSnapshotIdRef = useRef<string | undefined>(undefined);
@@ -1328,8 +1328,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     };
 
     const confirmToolAction = async (actionId: string, concurrencyToken?: string): Promise<void> => {
-        if (!actionId || !concurrencyToken || loading || submittingBooking || isConfirmingToolActionRef.current) return;
-        isConfirmingToolActionRef.current = true;
+        if (!actionId || !concurrencyToken || loading || submittingBooking || isMutatingToolActionRef.current) return;
+        isMutatingToolActionRef.current = true;
         try {
             const result = await axiosClient.post<{
                 sessionId: string;
@@ -1371,7 +1371,50 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 toolResults: failed ? [failed] : undefined
             }]);
         } finally {
-            isConfirmingToolActionRef.current = false;
+            isMutatingToolActionRef.current = false;
+        }
+    };
+
+    const cancelToolAction = async (actionId: string): Promise<void> => {
+        if (!actionId || loading || submittingBooking || isMutatingToolActionRef.current) return;
+        isMutatingToolActionRef.current = true;
+        const retirePreview = (result: AiToolExecutionResult) => {
+            setMessages(previous => previous.map(message => ({
+                ...message,
+                toolResults: message.toolResults?.map(toolResult => toolResult.actionId === actionId
+                    ? { ...toolResult, ...result, actionId }
+                    : toolResult)
+            })));
+        };
+        try {
+            const result = await axiosClient.post<{ sessionId: string }, AiToolExecutionResult>(`/ai/tool-actions/${encodeURIComponent(actionId)}/cancel`, {
+                sessionId: sessionIdRef.current
+            });
+            if (result.status === "cancelled") retirePreview(result);
+            setMessages(previous => [...previous, {
+                role: "model",
+                content: result.status === "cancelled"
+                    ? "Thao tác đang chờ đã được hủy. Bản nháp hội thoại vẫn được giữ nguyên."
+                    : result.error?.message || "ClinicCare chưa thể hủy thao tác này.",
+                urgency: "ROUTINE"
+            }]);
+        } catch (err: unknown) {
+            const response = (err as { response?: { status?: number; data?: AiToolExecutionResult } })?.response;
+            const failed = response?.data;
+            const code = failed?.error?.code;
+            if (response?.status === 404 || response?.status === 409 || response?.status === 410 ||
+                ["ACTION_EXPIRED", "ACTION_NOT_CANCELLABLE", "ACTION_NOT_FOUND", "SESSION_MISMATCH"].includes(code ?? "")) {
+                retirePreview(failed ?? { status: "failed", actionId, error: { code, message: "Preview không còn có thể hủy." } });
+            }
+            setMessages(previous => [...previous, {
+                role: "model",
+                content: code === "ACTION_EXPIRED"
+                    ? "Thao tác đã hết hạn và không còn chờ xác nhận."
+                    : failed?.error?.message || "Không thể hủy thao tác lúc này. Vui lòng thử lại.",
+                urgency: "ROUTINE"
+            }]);
+        } finally {
+            isMutatingToolActionRef.current = false;
         }
     };
 
@@ -1388,6 +1431,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         handleSendMessage,
         handleActionClick,
         confirmToolAction,
+        cancelToolAction,
         formatVietnameseDate,
         aiAssistantStatus
     };

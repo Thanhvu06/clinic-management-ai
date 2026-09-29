@@ -234,6 +234,12 @@ public interface IAiToolExecutor
     Task<AiToolExecutionResult> ExecuteRoleActionConfirmationAsync(Guid actionId, string sessionId, string? confirmationToken, CancellationToken cancellationToken = default);
 }
 
+public interface IAiPendingActionCancellationService
+{
+    Task<AiToolExecutionResult> CancelPatientActionAsync(Guid actionId, string sessionId, CancellationToken cancellationToken = default);
+    Task<AiToolExecutionResult> CancelRoleActionAsync(Guid actionId, string sessionId, CancellationToken cancellationToken = default);
+}
+
 public sealed class AiSafetyGuardResult
 {
     public bool IsEmergency { get; init; }
