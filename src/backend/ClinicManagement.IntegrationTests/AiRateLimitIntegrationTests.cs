@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ClinicManagement.Api;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 
 namespace ClinicManagement.IntegrationTests;
@@ -16,8 +17,9 @@ public sealed class AiRateLimitIntegrationTests : IntegrationTestBase
     [Fact]
     public async Task Ai_endpoint_partition_keeps_user_b_isolated_when_user_a_exceeds_the_limit()
     {
-        using var userA = CreateLowLimitClient();
-        using var userB = CreateLowLimitClient();
+        using var lowLimitFactory = CreateLowLimitFactory();
+        using var userA = lowLimitFactory.CreateClient();
+        using var userB = lowLimitFactory.CreateClient();
         await LoginAsync(userA, "rec@test.com");
         await LoginAsync(userB, "doc@test.com");
 
@@ -30,7 +32,8 @@ public sealed class AiRateLimitIntegrationTests : IntegrationTestBase
     [Fact]
     public async Task Copilot_chat_uses_the_partitioned_endpoint_policy()
     {
-        using var client = CreateLowLimitClient();
+        using var lowLimitFactory = CreateLowLimitFactory();
+        using var client = lowLimitFactory.CreateClient();
         await LoginAsync(client, "doc@test.com");
 
         var request = new { message = "Tình hình hôm nay thế nào?", sessionId = $"rate-chat-{Guid.NewGuid():N}" };
@@ -42,13 +45,30 @@ public sealed class AiRateLimitIntegrationTests : IntegrationTestBase
     [Fact]
     public async Task Legacy_chat_still_uses_its_dedicated_ai_chat_policy()
     {
-        using var client = CreateLowLimitClient();
-        await LoginAsync(client, "pat1@test.com");
+        using var lowLimitFactory = CreateLowLimitFactory();
+        using var userA = lowLimitFactory.CreateClient();
+        using var userB = lowLimitFactory.CreateClient();
+        await LoginAsync(userA, "pat1@test.com");
+        await LoginAsync(userB, "pat2@test.com");
 
         var request = new { message = "Xin chào", sessionId = $"rate-legacy-{Guid.NewGuid():N}" };
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/ai/chat", request)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/ai/chat", new { message = request.message, sessionId = $"rate-legacy-{Guid.NewGuid():N}" })).StatusCode);
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await client.PostAsJsonAsync("/api/v1/ai/chat", new { message = request.message, sessionId = $"rate-legacy-{Guid.NewGuid():N}" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await userA.PostAsJsonAsync("/api/v1/ai/chat", request)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await userA.PostAsJsonAsync("/api/v1/ai/chat", new { message = request.message, sessionId = $"rate-legacy-{Guid.NewGuid():N}" })).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await userA.PostAsJsonAsync("/api/v1/ai/chat", new { message = request.message, sessionId = $"rate-legacy-{Guid.NewGuid():N}" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await userB.PostAsJsonAsync("/api/v1/ai/chat", new { message = request.message, sessionId = $"rate-legacy-{Guid.NewGuid():N}" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Anonymous_requests_on_one_server_share_the_ip_partition()
+    {
+        using var lowLimitFactory = CreateLowLimitFactory();
+        using var first = lowLimitFactory.CreateClient();
+        using var second = lowLimitFactory.CreateClient();
+        var request = new { symptomDescription = "đau đầu kéo dài nhiều ngày" };
+
+        Assert.Equal(HttpStatusCode.OK, (await first.PostAsJsonAsync("/api/v1/ai/specialty-suggestions", request)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await second.PostAsJsonAsync("/api/v1/ai/specialty-suggestions", request)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await first.PostAsJsonAsync("/api/v1/ai/specialty-suggestions", request)).StatusCode);
     }
 
     [Fact]
@@ -67,7 +87,7 @@ public sealed class AiRateLimitIntegrationTests : IntegrationTestBase
         Assert.NotEqual(AiRateLimitPartitioning.GetPartitionKey(first), AiRateLimitPartitioning.GetPartitionKey(second));
     }
 
-    private HttpClient CreateLowLimitClient() => Factory
+    private WebApplicationFactory<Program> CreateLowLimitFactory() => Factory
         .WithWebHostBuilder(builder =>
         {
             builder.UseSetting($"{AiRateLimitOptions.SectionName}:TestingPermitLimit", "2");
@@ -75,8 +95,7 @@ public sealed class AiRateLimitIntegrationTests : IntegrationTestBase
             {
                 [$"{AiRateLimitOptions.SectionName}:TestingPermitLimit"] = "2"
             }));
-        })
-        .CreateClient();
+        });
 
     private static async Task LoginAsync(HttpClient client, string email)
     {

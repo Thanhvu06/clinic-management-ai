@@ -184,7 +184,7 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
     {
         if (Regex.IsMatch(text, @"\b(?:ket qua|ket qua xet nghiem|xet nghiem cua toi|chi dinh cua toi|ket qua can lam sang|kq xet nghiem)\b", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.DiagnosticLookup, "MyDiagnosticResults", "patient.get_my_diagnostic_results", new { page = 1, pageSize = 20 }, "/patient/diagnostic-results");
-        if (Regex.IsMatch(text, @"\b(?:don thuoc|thuoc cua toi|thuoc dang|ke don|phat thuoc|toa thuoc)\b", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:don thuoc|thuoc cua toi|thuoc dang|ke don|bac si ke thuoc|phat thuoc|toa thuoc)\b", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.PrescriptionLookup, "MyPrescriptions", "patient.get_my_prescriptions", new { page = 1, pageSize = 20 }, "/patient/prescriptions");
         if (Regex.IsMatch(text, @"\b(?:hoa don|thanh toan|vien phi|chi phi da|chi phi kham|bien lai)\b", RegexOptions.CultureInvariant))
             return Tool(AiChatIntentTypes.ViewAppointments, "MyBills", "patient.get_my_bills", new { page = 1, pageSize = 20 }, "/patient/invoices");

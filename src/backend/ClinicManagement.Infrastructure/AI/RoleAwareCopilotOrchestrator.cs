@@ -100,7 +100,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             return response;
         }
 
-        if (AiMedicalScopeGuard.IsPrescriptionRequest(request.Message))
+        if (AiMedicalScopeGuard.IsPrescriptionRequest(role, request.Message))
         {
             var response = new AiCopilotResponseDto
             {

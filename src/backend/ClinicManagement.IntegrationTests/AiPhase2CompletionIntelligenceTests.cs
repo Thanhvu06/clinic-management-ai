@@ -180,11 +180,29 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
     }
 
     [Theory]
+    [InlineData("toi bi dau nguc, mẹ tôi lo lắm")]
+    [InlineData("bị đau nguc")]
+    [InlineData("con toi kho thở nặng")]
+    [InlineData("khong sot va đau ngực")]
+    [InlineData("Tôi không sốt, nhung ngất xỉu")]
+    public void Emergency_matching_accepts_mixed_diacritics_per_syllable(string message)
+    {
+        var result = new AiSafetyGuard().Inspect(message);
+
+        Assert.True(result.IsEmergency, message);
+    }
+
+    [Theory]
     [InlineData("tôi không bị đau ngực")]
     [InlineData("chưa từng ngất")]
     [InlineData("ngạt mũi")]
     [InlineData("ngắt điện")]
     [InlineData("bác sĩ kê thuốc gì cho tôi")]
+    [InlineData("tôi không thấy đau ngực")]
+    [InlineData("tôi không bị đau nguc")]
+    [InlineData("không còn đau ngực")]
+    [InlineData("không cảm thấy khó thở")]
+    [InlineData("chưa từng ngat")]
     public void Negation_and_word_boundaries_do_not_create_false_emergency_or_injection(string message)
     {
         var result = new AiSafetyGuard().Inspect(message);
@@ -204,7 +222,7 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Legacy_chat_refuses_prescribing_without_labeling_a_normal_question_as_injection()
+    public async Task Legacy_chat_allows_a_normal_question_about_an_existing_prescription()
     {
         await AuthenticateAsync("pat1@test.com");
 
@@ -216,29 +234,73 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         var payload = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(payload?.Data);
-        Assert.Equal("OutOfScopeMedicalRequest", payload.Data.DialogueOutcome);
-        Assert.Equal(AiProviderStatusContract.NotCalled, payload.Data.ProviderState);
-        Assert.NotEqual(AiProviderStatusContract.SafetyBlocked, payload.Data.ProviderState);
-        Assert.Contains("không thể kê đơn", payload.Data.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual("OutOfScopeMedicalRequest", payload.Data.DialogueOutcome);
+        Assert.DoesNotContain("không thể kê đơn", payload.Data.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("kê đơn thuốc cho tôi", true)]
+    [InlineData("cho tôi toa trị đau đầu", true)]
+    [InlineData("tôi nên uống bao nhiêu viên", true)]
+    [InlineData("liều paracetamol là bao nhiêu", true)]
+    [InlineData("lieu dung bao nhieu vien", true)]
+    [InlineData("tôi có nên ngừng thuốc huyết áp không", true)]
+    [InlineData("Bác sĩ kê thuốc gì cho tôi?", false)]
+    [InlineData("toa thuốc của tôi đâu", false)]
+    [InlineData("thuốc bác sĩ đã kê", false)]
+    [InlineData("Liệu tôi có cần uống thuốc không?", false)]
+    public void Medical_scope_only_blocks_patient_prescription_requests(string message, bool expected)
+    {
+        Assert.Equal(expected, AiMedicalScopeGuard.IsPrescriptionRequest(message));
     }
 
     [Fact]
-    public async Task Copilot_refuses_prescribing_without_calling_provider_or_tools()
+    public async Task Copilot_patient_can_read_existing_prescription_without_medical_scope_block()
     {
-        var client = await CreateAuthenticatedClientAsync("doc@test.com");
+        var client = await CreateAuthenticatedClientAsync("pat1@test.com");
         var response = await client.PostAsJsonAsync("/api/v1/ai/copilot/chat", new
         {
             message = "Bác sĩ kê thuốc gì cho tôi?",
-            sessionId = $"medication-scope-{Guid.NewGuid():N}"
+            sessionId = $"medication-read-{Guid.NewGuid():N}"
         });
 
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var data = document.RootElement.GetProperty("data");
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(AiProviderStatusContract.NotCalled, data.GetProperty("providerState").GetString());
-        Assert.Equal("MEDICAL_PRESCRIPTION_OUT_OF_SCOPE", data.GetProperty("errorCode").GetString());
-        Assert.Empty(data.GetProperty("executedToolNames").EnumerateArray());
-        Assert.Contains("không thể kê đơn", data.GetProperty("message").GetString(), StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual("MEDICAL_PRESCRIPTION_OUT_OF_SCOPE", data.GetProperty("errorCode").GetString());
+        Assert.Contains("patient.get_my_prescriptions", data.GetProperty("executedToolNames").EnumerateArray().Select(x => x.GetString()));
+    }
+
+    [Fact]
+    public async Task Copilot_doctor_can_reach_prescription_draft_planner_without_patient_scope_block()
+    {
+        var client = await CreateAuthenticatedClientAsync("doc@test.com");
+        var response = await client.PostAsJsonAsync("/api/v1/ai/copilot/chat", new
+        {
+            message = "Chuẩn bị bản nháp kê đơn cho ca này",
+            sessionId = $"medication-draft-{Guid.NewGuid():N}"
+        });
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = document.RootElement.GetProperty("data");
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        Assert.NotEqual("MEDICAL_PRESCRIPTION_OUT_OF_SCOPE", data.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public void Doctor_prescription_draft_text_reaches_the_write_confirmation_planner()
+    {
+        var planner = new AiDeterministicPlanner();
+        var decision = planner.Plan(new AiCopilotPlanningContext
+        {
+            Role = AiActorRole.Doctor,
+            NormalizedMessage = "Chuẩn bị bản nháp kê đơn cho ca này",
+            Analysis = new AiConversationAnalysis { NormalizedText = "Chuẩn bị bản nháp kê đơn cho ca này" },
+            Resource = new AiResolvedResourceContext { AppointmentId = 42 }
+        });
+
+        Assert.Equal("WriteRequiresExplicitActionConfirmation", decision.SubIntent);
+        Assert.Empty(decision.ToolCalls);
     }
 
     [Fact]

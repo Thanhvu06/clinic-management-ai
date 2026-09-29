@@ -32,120 +32,160 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
         @"(?:^|[^\p{L}\p{N}])(?:bo qua|vo hieu hoa|phot lo|bat chap|vuot qua)(?:\s+[\p{L}]+){0,3}\s+(?:kiem soat|quy tac|huong dan|gioi han|quyen|quyen truy cap|kiem tra|xac nhan)(?![\p{L}\p{N}])|(?:^|[^\p{L}\p{N}])(?:goi|chay|thuc thi)\s+(?:tool|cong cu)(?![\p{L}\p{N}])",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
-    private static readonly Regex NegationAtScopeEnd = new(
-        @"(?:^|\s)(?:không|chưa)(?:\s+(?:bị|có|hề|từng|phải)){0,2}\s*$",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex Word = new(@"[\p{L}\p{N}_]+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    private static readonly Regex NegationAtScopeEndWithoutDiacritics = new(
-        @"(?:^|\s)(?:khong|chua)(?:\s+(?:bi|co|he|tung|phai)){0,2}\s*$",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    // Negation is intentionally narrow: at most two filler words can follow
+    // "không/chưa". Conjunctions and punctuation are not in this allowlist, so
+    // "không sốt và đau ngực" remains an emergency. Ambiguous wording fails safe.
+    private static readonly HashSet<string> NegationFillers = new(StringComparer.Ordinal)
+    {
+        "bi", "co", "he", "tung", "phai", "thay", "cam", "con", "gap", "thuong", "bao", "gio"
+    };
+
+    private static readonly HashSet<char> ClauseBoundaries = new(".!?;:,\n\r".ToCharArray());
 
     public AiSafetyGuardResult Inspect(string? message)
     {
-        var normalized = NormalizeForMatching(message, out var hasDiacritics);
+        var normalized = NormalizePreservingDiacritics(message);
         if (string.IsNullOrWhiteSpace(normalized)) return new AiSafetyGuardResult();
 
+        var tokens = Tokenize(normalized);
         foreach (var phrase in EmergencyPhrases)
         {
-            var normalizedPhrase = hasDiacritics
-                ? NormalizePreservingDiacritics(phrase)
-                : StripDiacritics(NormalizePreservingDiacritics(phrase));
-            var searchFrom = 0;
-            while (searchFrom < normalized.Length)
+            foreach (var match in FindPhraseMatches(tokens, phrase))
             {
-                var index = IndexOfWholePhrase(normalized, normalizedPhrase, searchFrom);
-                if (index < 0) break;
-                if (!IsNegated(normalized, index, hasDiacritics))
+                if (!IsNegated(normalized, tokens, match.StartTokenIndex))
                     return new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = phrase };
-                searchFrom = index + normalizedPhrase.Length;
             }
         }
 
-        if (InjectionPhrases.Any(x => ContainsUnnegated(
-                normalized,
-                hasDiacritics ? NormalizePreservingDiacritics(x) : StripDiacritics(NormalizePreservingDiacritics(x)),
-                hasDiacritics)) ||
-            (hasDiacritics ? InjectionSequence : InjectionSequenceWithoutDiacritics)
-                .Matches(normalized)
-                .Cast<Match>()
-                .Any(match => !IsNegated(normalized, match.Index + LeadingBoundaryLength(normalized, match.Index), hasDiacritics)))
+        foreach (var phrase in InjectionPhrases)
+        {
+            foreach (var match in FindPhraseMatches(tokens, phrase))
+            {
+                if (!IsNegated(normalized, tokens, match.StartTokenIndex))
+                    return new AiSafetyGuardResult { IsPromptInjection = true, MatchedCategory = "prompt_injection" };
+            }
+        }
+
+        if (HasUnnegatedInjectionSequence(normalized))
             return new AiSafetyGuardResult { IsPromptInjection = true, MatchedCategory = "prompt_injection" };
 
         return new AiSafetyGuardResult();
     }
 
-    private static bool IsNegated(string text, int phraseIndex, bool hasDiacritics)
+    private static bool HasUnnegatedInjectionSequence(string normalized)
     {
-        if (phraseIndex <= 0) return false;
-
-        var start = phraseIndex;
-        while (start > 0 && !IsClauseBoundary(text[start - 1]))
-            start--;
-
-        var prefix = text[start..phraseIndex].Trim();
-        if (prefix.Length == 0) return false;
-
-        return (hasDiacritics ? NegationAtScopeEnd : NegationAtScopeEndWithoutDiacritics).IsMatch(prefix);
-    }
-
-    private static bool ContainsUnnegated(string text, string phrase, bool hasDiacritics)
-    {
-        if (string.IsNullOrWhiteSpace(phrase)) return false;
-        var searchFrom = 0;
-        while (searchFrom < text.Length)
+        foreach (var variant in new[] { normalized, StripDiacritics(normalized) }.Distinct(StringComparer.Ordinal))
         {
-            var index = IndexOfWholePhrase(text, phrase, searchFrom);
-            if (index < 0) return false;
-            if (!IsNegated(text, index, hasDiacritics)) return true;
-            searchFrom = index + phrase.Length;
+            var tokens = Tokenize(variant);
+            var matches = (variant == normalized ? InjectionSequence : InjectionSequenceWithoutDiacritics)
+                .Matches(variant)
+                .Cast<Match>();
+            foreach (var match in matches)
+            {
+                var tokenIndex = Array.FindIndex(tokens, token => token.StartIndex >= match.Index);
+                if (tokenIndex >= 0 && !IsNegated(variant, tokens, tokenIndex))
+                    return true;
+            }
         }
 
         return false;
     }
 
-    private static int IndexOfWholePhrase(string text, string phrase, int startIndex)
+    private static bool IsNegated(string text, IReadOnlyList<TextToken> tokens, int phraseStartTokenIndex)
     {
-        if (string.IsNullOrWhiteSpace(phrase)) return -1;
-        var searchFrom = Math.Max(0, startIndex);
-        while (searchFrom < text.Length)
+        if (phraseStartTokenIndex <= 0 || phraseStartTokenIndex > tokens.Count)
+            return false;
+
+        var currentIndex = phraseStartTokenIndex - 1;
+        var fillerCount = 0;
+        while (currentIndex >= 0 && fillerCount < 2)
         {
-            var index = text.IndexOf(phrase, searchFrom, StringComparison.Ordinal);
-            if (index < 0) return -1;
-            var beforeIsWord = index > 0 && IsWordChar(text[index - 1]);
-            var end = index + phrase.Length;
-            var afterIsWord = end < text.Length && IsWordChar(text[end]);
-            if (!beforeIsWord && !afterIsWord) return index;
-            searchFrom = end;
+            if (HasClauseBoundaryBetween(text, tokens[currentIndex].EndIndex, tokens[phraseStartTokenIndex].StartIndex))
+                return false;
+
+            var token = tokens[currentIndex].Comparison;
+            if (token is "khong" or "chua")
+                return true;
+
+            if (!NegationFillers.Contains(token))
+                return false;
+
+            fillerCount++;
+            currentIndex--;
         }
 
-        return -1;
+        return currentIndex >= 0 && tokens[currentIndex].Comparison is "khong" or "chua" &&
+               !HasClauseBoundaryBetween(text, tokens[currentIndex].EndIndex, tokens[phraseStartTokenIndex].StartIndex);
     }
 
-    private static bool IsWordChar(char value) => char.IsLetterOrDigit(value) || value == '_';
+    private static bool HasClauseBoundaryBetween(string text, int fromExclusive, int toExclusive)
+    {
+        if (fromExclusive >= toExclusive || fromExclusive < 0 || toExclusive > text.Length)
+            return false;
 
-    private static bool IsClauseBoundary(char value) => value is '.' or '!' or '?' or ';' or ':' or ',' or '\n' or '\r';
+        for (var index = fromExclusive; index < toExclusive; index++)
+        {
+            if (ClauseBoundaries.Contains(text[index]))
+                return true;
+        }
 
-    private static int LeadingBoundaryLength(string value, int matchIndex) =>
-        matchIndex < value.Length && !IsWordChar(value[matchIndex]) ? 1 : 0;
+        return false;
+    }
+
+    private static IReadOnlyList<PhraseMatch> FindPhraseMatches(IReadOnlyList<TextToken> textTokens, string phrase)
+    {
+        var phraseTokens = Tokenize(NormalizePreservingDiacritics(phrase));
+        if (phraseTokens.Length == 0 || textTokens.Count < phraseTokens.Length)
+            return Array.Empty<PhraseMatch>();
+
+        var matches = new List<PhraseMatch>();
+        for (var start = 0; start <= textTokens.Count - phraseTokens.Length; start++)
+        {
+            var match = true;
+            for (var offset = 0; offset < phraseTokens.Length; offset++)
+            {
+                if (!MatchesSyllable(textTokens[start + offset], phraseTokens[offset]))
+                {
+                    match = false;
+                    break;
+                }
+            }
+
+            if (match)
+                matches.Add(new PhraseMatch(start));
+        }
+
+        return matches;
+    }
+
+    private static bool MatchesSyllable(TextToken actual, TextToken expected)
+    {
+        // A mixed-diacritic sentence is matched syllable by syllable. An accented
+        // syllable must match exactly; an unaccented syllable accepts its folded
+        // form. This preserves ngạt/ngắt/ngất distinctions whenever the user typed
+        // the Vietnamese mark and intentionally treats fully unaccented "ngat"
+        // as ambiguous and therefore fail-safe.
+        return ContainsDiacritics(actual.Value)
+            ? string.Equals(actual.Value, expected.Value, StringComparison.Ordinal)
+            : string.Equals(actual.Comparison, expected.Comparison, StringComparison.Ordinal);
+    }
+
+    private static TextToken[] Tokenize(string value) => Word.Matches(value)
+        .Cast<Match>()
+        .Select(match =>
+        {
+            var token = match.Value.ToLowerInvariant();
+            return new TextToken(token, StripDiacritics(token), match.Index, match.Index + match.Length);
+        })
+        .ToArray();
 
     private static bool ContainsDiacritics(string value) => value.Normalize(NormalizationForm.FormD)
         .Any(ch => CharUnicodeInfo.GetUnicodeCategory(ch) == UnicodeCategory.NonSpacingMark);
 
-    private static string NormalizeForMatching(string? value, out bool hasDiacritics)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            hasDiacritics = false;
-            return string.Empty;
-        }
-
-        var preserved = NormalizePreservingDiacritics(value);
-        hasDiacritics = ContainsDiacritics(preserved);
-        return hasDiacritics ? preserved : StripDiacritics(preserved);
-    }
-
-    private static string NormalizePreservingDiacritics(string value) =>
-        value.Normalize(NormalizationForm.FormC).ToLowerInvariant();
+    private static string NormalizePreservingDiacritics(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? string.Empty : value.Normalize(NormalizationForm.FormC).ToLowerInvariant();
 
     private static string StripDiacritics(string value)
     {
@@ -159,4 +199,8 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
 
         return builder.ToString().Normalize(NormalizationForm.FormC).Replace("đ", "d");
     }
+
+    private sealed record TextToken(string Value, string Comparison, int StartIndex, int EndIndex);
+
+    private sealed record PhraseMatch(int StartTokenIndex);
 }

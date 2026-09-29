@@ -254,6 +254,8 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseHttpsRedirection();
+app.UseRouting();
 app.UseCors(corsBuilder => 
 {
     if (app.Environment.IsDevelopment())
@@ -277,9 +279,8 @@ app.UseCors(corsBuilder =>
     }
 });
 
-app.UseHttpsRedirection();
-app.UseRateLimiter();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();
