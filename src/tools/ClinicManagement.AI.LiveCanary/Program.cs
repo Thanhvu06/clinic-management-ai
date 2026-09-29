@@ -18,6 +18,9 @@ internal static class Program
 
     public static async Task<int> Main(string[] args)
     {
+        if (args.Contains("--browser-server", StringComparer.OrdinalIgnoreCase))
+            return await BrowserE2eHost.RunAsync(args);
+
         var reportPath = Option(args, "--report") ?? Environment.GetEnvironmentVariable("GATE_D_REPORT_PATH") ?? "gate-d-live-canary-report.json";
         var requireLive = args.Contains("--require-live", StringComparer.OrdinalIgnoreCase);
         var configuration = BuildConfiguration();

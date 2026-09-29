@@ -12,7 +12,9 @@ using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Identity;
+using ClinicManagement.Infrastructure.AI;
 using ClinicManagement.Infrastructure.Persistence;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -439,15 +441,27 @@ internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Pro
 {
     private readonly string _dbFilePath = Path.Combine(Path.GetTempPath(), $"clinic_gate_d_canary_{Guid.NewGuid():N}.db");
     private readonly IAiProviderAttemptBudget _attemptBudget;
+    private readonly HttpMessageHandler? _providerHandler;
+    private readonly string? _serverUrl;
+    private readonly bool _providerEnabled;
 
-    public SyntheticCanaryFactory(IAiProviderAttemptBudget attemptBudget)
+    public SyntheticCanaryFactory(
+        IAiProviderAttemptBudget attemptBudget,
+        HttpMessageHandler? providerHandler = null,
+        string? serverUrl = null,
+        bool providerEnabled = true)
     {
         _attemptBudget = attemptBudget;
+        _providerHandler = providerHandler;
+        _serverUrl = serverUrl;
+        _providerEnabled = providerEnabled;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        if (!string.IsNullOrWhiteSpace(_serverUrl))
+            builder.UseKestrel().UseUrls(_serverUrl);
         builder.ConfigureLogging(logging =>
         {
             logging.ClearProviders();
@@ -455,6 +469,7 @@ internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Pro
         });
         builder.ConfigureServices(services =>
         {
+            services.AddDataProtection().UseEphemeralDataProtectionProvider();
             var descriptors = services.Where(d =>
                 d.ServiceType.Name.Contains("DbContextOptions", StringComparison.Ordinal) ||
                 d.ServiceType == typeof(System.Data.Common.DbConnection) ||
@@ -480,6 +495,29 @@ internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Pro
 
             services.AddDbContext<AppDbContext>(options => options.UseSqlite(connectionString));
             services.AddSingleton(_attemptBudget);
+
+            if (_providerHandler is not null)
+            {
+                foreach (var descriptor in services
+                    .Where(d => d.ServiceType == typeof(IAiSpecialtySuggestionProvider))
+                    .ToList())
+                    services.Remove(descriptor);
+
+                services.PostConfigure<AiProviderOptions>(options =>
+                {
+                    options.IsEnabled = _providerEnabled;
+                    options.ApiKey = "synthetic-e2e-key";
+                    options.ProviderUrl = "https://synthetic-gemini.invalid";
+                    options.ModelName = "synthetic-e2e-model";
+                    options.TimeoutSeconds = 2;
+                    options.MaxAttempts = 2;
+                    options.RetryBaseDelayMilliseconds = 10;
+                    options.CircuitFailureThreshold = 3;
+                    options.CircuitCooldownSeconds = 1;
+                });
+                services.AddHttpClient<IAiSpecialtySuggestionProvider, GeminiAiProvider>()
+                    .ConfigurePrimaryHttpMessageHandler(() => _providerHandler);
+            }
         });
     }
 

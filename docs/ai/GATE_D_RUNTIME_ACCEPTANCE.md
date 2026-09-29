@@ -39,14 +39,40 @@ The Gate D CI step runs provider resilience, configuration redaction, degraded c
 
 The Gate D CI step runs provider resilience, configuration redaction, degraded capability, and cross-actor tests. The live workflow is intentionally separate.
 
-## Manual browser check
+## Isolated browser E2E
 
-This repository has Vitest but no Playwright/Cypress browser harness. For a synthetic Development seed, manually verify:
+The repository now has a Windows-local Playwright harness at
+`scripts/e2e/browser-acceptance.mjs`, invoked with `npm run e2e` from
+`src/frontend`. It builds the canary and frontend, starts a separate local
+Kestrel proxy over the real API pipeline, and uses the existing
+`SyntheticCanaryFactory` with a temporary SQLite file. The provider seam is a
+fake `HttpMessageHandler`; the harness refuses ambient Gemini keys and
+`E2E_ALLOW_MUTATION=true`, and writes no report, trace, or database artifact to
+the repository.
 
-1. Patient booking retains the selected draft after a provider timeout/503 response; no confirmation is sent automatically.
-2. Copilot shows the stable degraded/disabled/circuit message and continues to render deterministic read cards.
-3. Aborting a request produces no error bubble and does not clear the draft.
-4. Switching account or route while a response is pending does not render the old response.
-5. Prepare and confirm remain separate requests; double-clicking does not create duplicate side effects.
+The browser suite covers three consecutive runs of six Vietnamese actor flows:
+patient own-appointment scope plus receptionist, doctor, technician,
+pharmacist, and admin role/facility/tool scope. It also checks provider
+recovery (503 then 200), server error, rate limit, disabled configuration,
+client cancellation, and route change while pending. A successful browser run
+must show grounded synthetic evidence for read cases and the honest degraded or
+disabled status for provider failures.
 
-Manual browser execution is evidence for UI runtime behavior only; it must not be described as browser E2E automation.
+The current UI does not expose a safe end-to-end fixture for write
+preview/confirm or diagnostic publication. Those two cases are reported as
+`NOT_COVERED` by the browser harness, not as browser passes; the existing HTTP
+integration/cross-actor tests remain authoritative for confirmation,
+idempotency, publication gating, and exactly-once effects. No browser test
+uses the real development database or sends patient data to a provider.
+
+Run the browser suite manually on Windows:
+
+```powershell
+Set-Location src/frontend
+npm run e2e
+```
+
+The browser harness is not added to `.github/workflows/ci.yml`: this project
+currently depends on the Windows WebApplicationFactory/Kestrel content-root
+layout and has not been proven stable on the Linux CI runner. Normal push/PR
+CI remains deterministic; the manual live Gemini workflow stays separate.
