@@ -1,4 +1,5 @@
 using ClinicManagement.Api.Middlewares;
+using ClinicManagement.Api;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Patients.Interfaces;
 using ClinicManagement.Application.Specialties.Interfaces;
@@ -21,6 +22,13 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+var aiRateLimitOptions = builder.Configuration
+    .GetSection(AiRateLimitOptions.SectionName)
+    .Get<AiRateLimitOptions>() ?? new AiRateLimitOptions();
+var aiRateLimitWindow = TimeSpan.FromSeconds(Math.Max(1, aiRateLimitOptions.WindowSeconds));
+var aiTestingPermitLimit = Math.Max(1, aiRateLimitOptions.TestingPermitLimit);
+var aiChatPermitLimit = Math.Max(1, aiRateLimitOptions.ChatPermitLimit);
+var aiEndpointPermitLimit = Math.Max(1, aiRateLimitOptions.EndpointPermitLimit);
 
 var connectionString = builder.Configuration.GetConnectionString("ClinicManagementDb")
     ?? "Server=(localdb)\\mssqllocaldb;Database=ClinicManagementDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True";
@@ -192,22 +200,28 @@ builder.Services.AddRateLimiter(options =>
 
     options.AddPolicy("AiChatPolicy", httpContext =>
     {
-        var userId = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(userId, _ =>
+        var partitionKey = AiRateLimitPartitioning.GetPartitionKey(httpContext);
+        return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ =>
             new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
             {
-                PermitLimit = builder.Environment.IsEnvironment("Testing") ? 1000 : 8,
-                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = builder.Environment.IsEnvironment("Testing") ? aiTestingPermitLimit : aiChatPermitLimit,
+                Window = aiRateLimitWindow,
                 QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             });
     });
 
-    options.AddFixedWindowLimiter("ai_endpoint", opt =>
+    options.AddPolicy("ai_endpoint", httpContext =>
     {
-        opt.Window = TimeSpan.FromMinutes(1);
-        opt.PermitLimit = builder.Environment.IsEnvironment("Testing") ? 1000 : 10;
-        opt.QueueLimit = 0;
+        var partitionKey = AiRateLimitPartitioning.GetPartitionKey(httpContext);
+        return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ =>
+            new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = builder.Environment.IsEnvironment("Testing") ? aiTestingPermitLimit : aiEndpointPermitLimit,
+                Window = aiRateLimitWindow,
+                QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
     });
 });
 

@@ -10,7 +10,6 @@ namespace ClinicManagement.Api.Controllers.AI;
 
 [ApiController]
 [Route("api/v1/ai")]
-[Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ai_endpoint")]
 public class AiSpecialtyController : ControllerBase
 {
     private readonly IAiSpecialtyService _aiSpecialtyService;
@@ -22,6 +21,7 @@ public class AiSpecialtyController : ControllerBase
 
     [HttpPost("specialty-suggestions")]
     [AllowAnonymous] // Assuming patient can use this before logging in or while logged in, up to requirements
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ai_endpoint")]
     public async Task<IActionResult> SuggestSpecialty([FromBody] AiSuggestionRequestDto request, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)

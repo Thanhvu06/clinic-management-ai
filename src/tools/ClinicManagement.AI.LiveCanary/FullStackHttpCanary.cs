@@ -55,7 +55,7 @@ internal sealed class FullStackHttpCanary
                     locale = "vi-VN",
                     timezone = "Asia/Ho_Chi_Minh"
                 };
-                using var response = await client.PostAsJsonAsync("/api/v1/ai/copilot/chat", request);
+                using var response = await client.PostAsJsonAsync(canaryCase.ApiPath, request);
                 stopwatch.Stop();
                 results.Add(await ReadCaseResultAsync(canaryCase, response, stopwatch.ElapsedMilliseconds));
             }
@@ -99,7 +99,7 @@ internal sealed class FullStackHttpCanary
             CallsBudget = maxCalls,
             CallsPlanned = cases.Length,
             CallsAttempted = results.Count,
-            CallsExecuted = results.Count(x => x.ProviderCalled),
+            CallsExecuted = results.Count,
             ProviderCallsExecuted = results.Count(x => x.ProviderCalled),
             ProviderAttemptsExecuted = budget.Consumed,
             UnexecutedCaseCount = cases.Length - results.Count,
@@ -184,6 +184,7 @@ internal sealed class FullStackHttpCanary
         if (!payload.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
             return InvalidResponse(canaryCase, latency);
 
+        var isLegacyChat = string.Equals(canaryCase.ApiPath, "/api/v1/ai/chat", StringComparison.OrdinalIgnoreCase);
         var providerCalled = false;
         string? providerState = null;
         string? failureCode = null;
@@ -196,17 +197,24 @@ internal sealed class FullStackHttpCanary
         var executedToolNamesElement = default(JsonElement);
         var cardsElement = default(JsonElement);
         var sourcesElement = default(JsonElement);
-        var fieldsValid =
-            TryGetBool(data, "providerWasCalled", out providerCalled) &&
-            TryGetString(data, "providerState", out providerState) &&
-            TryGetString(data, "providerFailureCode", out failureCode) &&
-            TryGetString(data, "intent", out actualIntent) &&
-            TryGetString(data, "executionMode", out executionMode) &&
-            TryGetNonNegativeInt(data, "providerAttemptCount", out providerAttemptCount) &&
-            TryGetArray(data, "availableTools", out availableToolsElement) &&
-            TryGetArray(data, "executedToolNames", out executedToolNamesElement) &&
-            TryGetArray(data, "cards", out cardsElement) &&
-            TryGetArray(data, "sources", out sourcesElement);
+        var fieldsValid = TryGetBool(data, "providerWasCalled", out providerCalled) &&
+                          TryGetString(data, "providerFailureCode", out failureCode) &&
+                          TryGetString(data, "executionMode", out executionMode) &&
+                          TryGetNonNegativeInt(data, "providerAttemptCount", out providerAttemptCount);
+        if (isLegacyChat)
+        {
+            fieldsValid &= TryGetString(data, "primaryIntent", out actualIntent);
+            providerState = GetString(data, "providerState") ?? GetString(data, "providerStatus");
+        }
+        else
+        {
+            fieldsValid &= TryGetString(data, "providerState", out providerState) &&
+                           TryGetString(data, "intent", out actualIntent) &&
+                           TryGetArray(data, "availableTools", out availableToolsElement) &&
+                           TryGetArray(data, "executedToolNames", out executedToolNamesElement) &&
+                           TryGetArray(data, "cards", out cardsElement) &&
+                           TryGetArray(data, "sources", out sourcesElement);
+        }
 
         providerState ??= AiProviderStatusContract.NotCalled;
         failureCode ??= AiProviderStatusContract.FailureUnknown;
@@ -228,11 +236,23 @@ internal sealed class FullStackHttpCanary
         var allowedNames = allowedDefinitions
             .Select(x => x.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var toolScopeValid = availableToolNames.Count > 0 &&
+        var toolScopeValid = isLegacyChat || (availableToolNames.Count > 0 &&
                              availableToolNames.All(allowedNames.Contains) &&
-                             toolNames.All(allowedNames.Contains);
-        var expectedToolVerified = toolNames.Contains(canaryCase.ExpectedToolName, StringComparer.OrdinalIgnoreCase);
-        var groundedSourcesValid = HasVerifiedSources(sourcesElement);
+                             toolNames.All(allowedNames.Contains));
+        var legacyEvidenceVerified = isLegacyChat &&
+            GetString(data, "message") is { } legacyMessage &&
+            legacyMessage.Contains("CANARY-APT-001", StringComparison.Ordinal) &&
+            data.TryGetProperty("actions", out var actions) &&
+            actions.ValueKind == JsonValueKind.Array &&
+            actions.EnumerateArray().Any(action =>
+                action.TryGetProperty("payload", out var payloadElement) &&
+                payloadElement.ValueKind == JsonValueKind.Object &&
+                payloadElement.TryGetProperty("appointmentCode", out var code) &&
+                string.Equals(code.GetString(), "CANARY-APT-001", StringComparison.Ordinal));
+        var expectedToolVerified = isLegacyChat
+            ? legacyEvidenceVerified
+            : toolNames.Contains(canaryCase.ExpectedToolName, StringComparer.OrdinalIgnoreCase);
+        var groundedSourcesValid = isLegacyChat ? legacyEvidenceVerified : HasVerifiedSources(sourcesElement);
         var schemaValid = fieldsValid &&
                           AiChatIntentTypes.IsAllowed(actualIntent) &&
                           !string.Equals(errorCode, "INVALID_PROVIDER_SCHEMA", StringComparison.OrdinalIgnoreCase) &&
@@ -248,15 +268,16 @@ internal sealed class FullStackHttpCanary
             FailureCode = failureCode,
             ProviderCalled = providerCalled,
             ProviderAttemptCount = providerAttemptCount,
+            ProviderCallExpected = canaryCase.ProviderCallExpected,
             HttpSucceeded = true,
             SchemaValid = schemaValid,
             AllowedTools = availableToolNames.Count,
             ToolExecutions = toolNames.Count,
             ToolScopeValid = toolScopeValid,
-            ActorVerified = string.Equals(actor, canaryCase.Role.ToString(), StringComparison.OrdinalIgnoreCase),
-            RouteVerified = string.Equals(navigationRoute, canaryCase.ExpectedNavigationRoute, StringComparison.OrdinalIgnoreCase),
+            ActorVerified = isLegacyChat || string.Equals(actor, canaryCase.Role.ToString(), StringComparison.OrdinalIgnoreCase),
+            RouteVerified = isLegacyChat || string.Equals(navigationRoute, canaryCase.ExpectedNavigationRoute, StringComparison.OrdinalIgnoreCase),
             ExpectedToolVerified = expectedToolVerified,
-            GroundedResponse = cards > 0 && sources > 0,
+            GroundedResponse = isLegacyChat ? legacyEvidenceVerified : cards > 0 && sources > 0,
             GroundedSourcesValid = groundedSourcesValid,
             Clarification = !string.IsNullOrWhiteSpace(GetString(data, "clarification")),
             PolicyViolation = errorCode is not null && errorCode.Contains("POLICY", StringComparison.OrdinalIgnoreCase),
@@ -377,7 +398,9 @@ public sealed record FullStackCanaryCase(
     string Message,
     string Route,
     string ExpectedNavigationRoute,
-    string ExpectedToolName);
+    string ExpectedToolName,
+    string ApiPath = "/api/v1/ai/copilot/chat",
+    bool ProviderCallExpected = true);
 
 public static class FullStackCanaryCaseCatalog
 {
@@ -387,6 +410,10 @@ public static class FullStackCanaryCaseCatalog
             "patient-http-read", "canary.patient@synthetic.invalid", AiActorRole.Patient, "patient_read",
             "Các buổi khám tôi đã đặt trong thời gian tới có những gì?", "/patient/appointments",
             "/patient/appointments", "patient.get_my_appointments"),
+        new FullStackCanaryCase(
+            "patient-legacy-http-read", "canary.patient@synthetic.invalid", AiActorRole.Patient, "patient_legacy_read",
+            "Mở các cuộc hẹn sắp tới gắn với tài khoản của tôi.", "/patient/appointments",
+            "/patient/appointments", "patient.get_my_appointments", "/api/v1/ai/chat", false),
         new FullStackCanaryCase(
             "reception-http-read", "canary.reception@synthetic.invalid", AiActorRole.Receptionist, "reception_read",
             "Hôm nay quầy tiếp đón có những lượt hẹn nào?", "/reception/appointments",
@@ -541,7 +568,16 @@ internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Pro
             Phone = "0000001000",
             IsActive = true
         };
-        db.Facilities.Add(facility);
+        var secondFacility = new Facility
+        {
+            Code = "CANARY-BETA",
+            Name = "Synthetic Gate D Secondary Facility",
+            Address = "Synthetic only",
+            City = "Synthetic",
+            Phone = "0000001007",
+            IsActive = true
+        };
+        db.Facilities.AddRange(facility, secondFacility);
         var specialty = new Specialty
         {
             SpecialtyCode = "CANARY-SP",
@@ -562,7 +598,16 @@ internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Pro
             DepartmentType = DepartmentType.Clinical,
             IsActive = true
         };
-        db.Departments.Add(department);
+        var secondDepartment = new Department
+        {
+            FacilityId = secondFacility.Id,
+            SpecialtyId = specialty.Id,
+            Code = "CANARY-DEPT-BETA",
+            Name = "Synthetic Secondary Department",
+            DepartmentType = DepartmentType.Clinical,
+            IsActive = true
+        };
+        db.Departments.AddRange(department, secondDepartment);
         await db.SaveChangesAsync();
 
         var accounts = new[]
@@ -594,6 +639,36 @@ internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Pro
             users[account.Role] = user;
         }
 
+        var secondPatientUser = new ApplicationUser
+        {
+            UserName = "canary.patient-b@synthetic.invalid",
+            Email = "canary.patient-b@synthetic.invalid",
+            EmailConfirmed = true,
+            PhoneNumber = "0000001008",
+            FullName = "Synthetic Patient B",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        (await userManager.CreateAsync(secondPatientUser, "Canary@12345")).Succeeded.ShouldBeTrue(secondPatientUser.Email!);
+        (await userManager.AddToRoleAsync(secondPatientUser, RoleNames.Patient)).Succeeded.ShouldBeTrue(RoleNames.Patient);
+        users["PatientB"] = secondPatientUser;
+
+        var secondDoctorUser = new ApplicationUser
+        {
+            UserName = "canary.doctor-b@synthetic.invalid",
+            Email = "canary.doctor-b@synthetic.invalid",
+            EmailConfirmed = true,
+            PhoneNumber = "0000001009",
+            FullName = "Synthetic Doctor B",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        (await userManager.CreateAsync(secondDoctorUser, "Canary@12345")).Succeeded.ShouldBeTrue(secondDoctorUser.Email!);
+        (await userManager.AddToRoleAsync(secondDoctorUser, RoleNames.Doctor)).Succeeded.ShouldBeTrue(RoleNames.Doctor);
+        users["DoctorB"] = secondDoctorUser;
+
         var doctor = new Doctor
         {
             UserId = users[RoleNames.Doctor].Id,
@@ -602,7 +677,15 @@ internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Pro
             Description = "Synthetic canary doctor",
             IsActive = true
         };
-        db.Doctors.Add(doctor);
+        var secondDoctor = new Doctor
+        {
+            UserId = users["DoctorB"].Id,
+            AcademicTitle = "Synthetic MD B",
+            ExperienceYears = 1,
+            Description = "Synthetic secondary facility doctor",
+            IsActive = true
+        };
+        db.Doctors.AddRange(doctor, secondDoctor);
         var patient = new Patient
         {
             UserId = users[RoleNames.Patient].Id,
@@ -614,8 +697,21 @@ internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Pro
             PrimaryFacilityId = facility.Id
         };
         db.Patients.Add(patient);
+        var secondPatient = new Patient
+        {
+            UserId = users["PatientB"].Id,
+            MedicalRecordNumber = "CANARY-MRN-002",
+            FullName = "Synthetic Patient B",
+            PhoneNumber = "0000001008",
+            Email = "canary.patient-b@synthetic.invalid",
+            Gender = Gender.Other,
+            PrimaryFacilityId = secondFacility.Id
+        };
+        db.Patients.Add(secondPatient);
         await db.SaveChangesAsync();
-        db.DoctorSpecialties.Add(new DoctorSpecialty { DoctorId = doctor.Id, SpecialtyId = specialty.Id, IsPrimary = true });
+        db.DoctorSpecialties.AddRange(
+            new DoctorSpecialty { DoctorId = doctor.Id, SpecialtyId = specialty.Id, IsPrimary = true },
+            new DoctorSpecialty { DoctorId = secondDoctor.Id, SpecialtyId = specialty.Id, IsPrimary = true });
         foreach (var role in new[] { RoleNames.Receptionist, RoleNames.Doctor, RoleNames.DiagnosticTechnician, RoleNames.Pharmacist })
             db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
             {
@@ -626,6 +722,15 @@ internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Pro
                 IsPrimary = true,
                 IsActive = true
             });
+        db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+        {
+            UserId = users["DoctorB"].Id,
+            FacilityId = secondFacility.Id,
+            DepartmentId = secondDepartment.Id,
+            Role = RoleNames.Doctor,
+            IsPrimary = true,
+            IsActive = true
+        });
         await db.SaveChangesAsync();
 
         // Keep every actor case grounded in the same synthetic encounter. The
@@ -680,6 +785,32 @@ internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Pro
             Status = AppointmentStatus.Confirmed
         };
         db.Appointments.Add(appointment);
+        await db.SaveChangesAsync();
+
+        var secondSlot = new AppointmentSlot
+        {
+            DoctorId = secondDoctor.Id,
+            SlotDate = today,
+            StartTime = new TimeOnly(10, 0),
+            EndTime = new TimeOnly(10, 30),
+            IsBooked = true
+        };
+        db.AppointmentSlots.Add(secondSlot);
+        await db.SaveChangesAsync();
+        db.Appointments.Add(new Appointment
+        {
+            AppointmentCode = "CANARY-APT-002",
+            PatientId = secondPatient.Id,
+            DoctorId = secondDoctor.Id,
+            SpecialtyId = specialty.Id,
+            FacilityId = secondFacility.Id,
+            AppointmentSlotId = secondSlot.Id,
+            AppointmentDate = today,
+            StartTime = secondSlot.StartTime,
+            EndTime = secondSlot.EndTime,
+            Reason = "Synthetic secondary facility isolation fixture",
+            Status = AppointmentStatus.Confirmed
+        });
         await db.SaveChangesAsync();
 
         var visit = new PatientVisit

@@ -287,6 +287,7 @@ public sealed record LiveCanaryCaseResult
     public string FailureCode { get; init; } = AiProviderStatusContract.FailureNone;
     public bool ProviderCalled { get; init; }
     public int ProviderAttemptCount { get; init; }
+    public bool ProviderCallExpected { get; init; } = true;
     public bool HttpSucceeded { get; init; }
     public bool SchemaValid { get; init; }
     public int AllowedTools { get; init; }

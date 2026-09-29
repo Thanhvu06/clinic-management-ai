@@ -203,6 +203,25 @@ public class AiSpecialtyService : IAiSpecialtyService
             };
         }
 
+        if (AiMedicalScopeGuard.IsPrescriptionRequest(rawMessage))
+        {
+            return new AiChatResponseDto
+            {
+                Message = "Tôi không thể kê đơn hoặc hướng dẫn liều dùng qua cuộc trò chuyện. Bạn có thể đặt lịch để được bác sĩ thăm khám, hoặc xem toa thuốc đã được cơ sở xác nhận trong tài khoản của mình.",
+                Reply = "Tôi không thể kê đơn hoặc hướng dẫn liều dùng qua cuộc trò chuyện.",
+                Urgency = "ROUTINE",
+                PromptVersion = GeminiAiProvider.CurrentPromptVersion,
+                AssistantStatus = "Online",
+                ProviderStatus = AiProviderStatusContract.NotCalled,
+                ProviderState = AiProviderStatusContract.NotCalled,
+                ExecutionMode = AiProviderStatusContract.ExecutionDeterministicFallback,
+                FallbackActive = true,
+                DialogueOutcome = "OutOfScopeMedicalRequest",
+                PrimaryIntent = AiChatIntentTypes.UnclearOrOutOfScope,
+                ManualSelectionRequired = true
+            };
+        }
+
         // A client may start a new tab with no session ID, but an existing session
         // can never be silently rebound to another account or revived after expiry.
         // Stateless cancellation intentionally remains stateless until its scope is
@@ -257,7 +276,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         var injectionKeywords = new[]
         {
             "bỏ qua quy tắc", "ignore previous", "bỏ qua hướng dẫn", "đóng vai bác sĩ",
-            "hãy chẩn đoán", "kê thuốc", "xuất toàn bộ dữ liệu", "system prompt", "developer mode"
+            "hãy chẩn đoán", "xuất toàn bộ dữ liệu", "system prompt", "developer mode"
         };
         if (injectionKeywords.Any(k => lowerMsg.Contains(k)))
         {

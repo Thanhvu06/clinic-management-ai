@@ -13,7 +13,7 @@ The canary runs only when all of these are true:
 - The canary uses synthetic actors and a temporary SQLite WebApplicationFactory only in full-stack mode; it never uses the development database, OneDrive checkout, real patient data, or a production host.
 - `LIVE_GEMINI_MAX_CALLS` is bounded to 1–12; the default is 12.
 
-The default live canary is `FullStackHttp`: six authenticated HTTP calls (Patient, Receptionist, Doctor, DiagnosticTechnician, Pharmacist, Admin) go through `/api/v1/ai/copilot/chat`, the real context resolver, Gemini structured planner, read-only tool gateway, and grounded response composer. It executes no action prepare/confirm/write endpoint and compares a sanitized business-state fingerprint before and after. A separate `--planner-only` switch preserves the lower-level planner probe; its report is explicitly labelled `PlannerOnly`.
+The default live canary is `FullStackHttp`: six provider-backed authenticated actor calls (Patient, Receptionist, Doctor, DiagnosticTechnician, Pharmacist, Admin) go through `/api/v1/ai/copilot/chat`, plus a Patient read case through the production `/api/v1/ai/chat` path. The cases use the real context resolver, Gemini structured planner where required, read-only tool gateway, and grounded response composer. It executes no action prepare/confirm/write endpoint and compares a sanitized business-state fingerprint before and after. A separate `--planner-only` switch preserves the lower-level planner probe; its report is explicitly labelled `PlannerOnly`.
 
 The report contains only case IDs, actor/category labels, intent/tool names, execution mode, stable failure codes, status, counts, database fingerprints, and latency percentiles. It does not store prompts, provider responses, headers, keys, tokens, patient identifiers, or database identifiers.
 
@@ -58,6 +58,11 @@ client cancellation, and route change while pending. A successful browser run
 must show grounded synthetic evidence for read cases and the honest degraded or
 disabled status for provider failures.
 
+The browser harness is an offline wiring check: it uses synthetic SQLite data
+and a fake provider handler, verifies the UI request/response path, executed
+tool names, scope-visible cards, and honest provider states. It does not prove
+Gemini answer quality, medical correctness, or production-data behavior.
+
 The current UI does not expose a safe end-to-end fixture for write
 preview/confirm or diagnostic publication. Those two cases are reported as
 `NOT_COVERED` by the browser harness, not as browser passes; the existing HTTP
@@ -69,6 +74,7 @@ Run the browser suite manually on Windows:
 
 ```powershell
 Set-Location src/frontend
+npx playwright install chromium
 npm run e2e
 ```
 

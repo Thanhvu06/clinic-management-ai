@@ -9,6 +9,7 @@ namespace ClinicManagement.Api.Controllers.AI;
 [ApiController]
 [Route("api/v1/ai/copilot")]
 [Authorize]
+[Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ai_endpoint")]
 public sealed class AiRoleCopilotController : ControllerBase
 {
     private readonly IAiRoleCopilotService _service;

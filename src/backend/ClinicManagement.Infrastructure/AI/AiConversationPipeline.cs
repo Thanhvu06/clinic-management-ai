@@ -25,7 +25,11 @@ public sealed class AiConversationPipeline : IAiConversationPipeline
     public AiConversationAnalysis Analyze(string? rawMessage, IntentClassificationContext? context = null)
     {
         var normalized = AiTextNormalizer.Normalize(rawMessage);
-        var safety = _safetyGuard.Inspect(normalized);
+        // Safety matching must see the original text. The intent classifier can
+        // use its shared comparison form, but stripping Vietnamese accents
+        // before the guard turns distinct words such as "ngất" and "ngạt"
+        // into the same token.
+        var safety = _safetyGuard.Inspect(rawMessage);
         var intent = _classifier.Classify(normalized, context);
         var entities = ExtractEntities(normalized, intent);
 

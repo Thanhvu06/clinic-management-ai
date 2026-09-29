@@ -10,14 +10,15 @@ namespace ClinicManagement.IntegrationTests;
 public sealed class LiveCanaryAcceptanceTests
 {
     [Fact]
-    public void Full_stack_catalog_has_six_vietnamese_actor_cases_with_explicit_scope_mapping()
+    public void Full_stack_catalog_has_vietnamese_actor_cases_with_explicit_scope_mapping()
     {
         var cases = FullStackCanaryCaseCatalog.Cases;
 
-        Assert.Equal(6, cases.Count);
+        Assert.Equal(7, cases.Count);
         Assert.Equal(
             new[]
             {
+                AiActorRole.Patient,
                 AiActorRole.Patient,
                 AiActorRole.Receptionist,
                 AiActorRole.Doctor,
@@ -53,6 +54,10 @@ public sealed class LiveCanaryAcceptanceTests
             [AiActorRole.Admin] = "/admin"
         };
         Assert.All(cases, canaryCase => Assert.Equal(expectedRoutes[canaryCase.Role], canaryCase.Route));
+
+        var legacyPatient = Assert.Single(cases, canaryCase => canaryCase.CaseId == "patient-legacy-http-read");
+        Assert.Equal("/api/v1/ai/chat", legacyPatient.ApiPath);
+        Assert.False(legacyPatient.ProviderCallExpected);
     }
 
     [Fact]
@@ -60,7 +65,7 @@ public sealed class LiveCanaryAcceptanceTests
     {
         var planner = new AiDeterministicPlanner();
 
-        Assert.All(FullStackCanaryCaseCatalog.Cases, canaryCase =>
+        Assert.All(FullStackCanaryCaseCatalog.Cases.Where(x => x.ProviderCallExpected), canaryCase =>
         {
             var decision = planner.Plan(new AiCopilotPlanningContext
             {
@@ -225,6 +230,41 @@ public sealed class LiveCanaryAcceptanceTests
 
         Assert.Equal(LiveCanaryAcceptanceEvaluator.PartialDegraded, LiveCanaryAcceptanceEvaluator.Evaluate(report));
         Assert.Equal(2, LiveCanaryAcceptanceEvaluator.ExitCode(report, requireLive: true));
+    }
+
+    [Fact]
+    public void Legacy_patient_read_can_pass_only_with_server_derived_evidence_and_without_a_provider_call()
+    {
+        var cases = ValidCases().ToList();
+        cases.Add(new LiveCanaryCaseResult
+        {
+            CaseId = "patient-legacy-http-read",
+            Actor = AiActorRole.Patient.ToString(),
+            ExpectedCategory = "patient_legacy_read",
+            ProviderCallExpected = false,
+            ProviderState = AiProviderStatusContract.NotCalled,
+            FailureCode = AiProviderStatusContract.FailureNone,
+            ProviderCalled = false,
+            ProviderAttemptCount = 0,
+            HttpSucceeded = true,
+            SchemaValid = true,
+            ToolScopeValid = true,
+            ActorVerified = true,
+            RouteVerified = true,
+            ExpectedToolVerified = true,
+            GroundedResponse = true,
+            GroundedSourcesValid = true
+        });
+        var report = FullStackReport(cases) with
+        {
+            CallsPlanned = cases.Count,
+            CallsAttempted = cases.Count,
+            HttpCanaryRequests = cases.Count,
+            ProviderCallsExecuted = cases.Count(x => x.ProviderCallExpected),
+            ProviderAttemptsExecuted = cases.Sum(x => x.ProviderAttemptCount)
+        };
+
+        Assert.Equal(LiveCanaryAcceptanceEvaluator.PassFull, LiveCanaryAcceptanceEvaluator.Evaluate(report));
     }
 
     private static LiveCanaryReport FullStackReport(IReadOnlyList<LiveCanaryCaseResult> cases) => new()

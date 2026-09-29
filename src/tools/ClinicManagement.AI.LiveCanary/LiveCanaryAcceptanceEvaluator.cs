@@ -33,8 +33,7 @@ public static class LiveCanaryAcceptanceEvaluator
                 report.Cases.Count == report.CallsPlanned &&
                 report.CallsAttempted == report.CallsPlanned &&
                 report.HttpCanaryRequests == report.CallsPlanned &&
-                report.ProviderCallsExecuted == report.CallsPlanned &&
-                report.ProviderAttemptsExecuted > 0 &&
+                report.ProviderCallsExecuted == report.Cases.Count(x => x.ProviderCallExpected) &&
                 report.Cases.All(IsFullStackCaseSuccess);
 
             return fullStackPass ? PassFull : PartialDegraded;
@@ -73,25 +72,35 @@ public static class LiveCanaryAcceptanceEvaluator
         return status == Fail ? 3 : 2;
     }
 
-    private static bool IsFullStackCaseSuccess(LiveCanaryCaseResult result) =>
-        result.HttpSucceeded &&
-        result.ProviderCalled &&
-        result.ProviderAttemptCount > 0 &&
-        result.ProviderState == AiProviderStatusContract.Online &&
-        result.FailureCode == AiProviderStatusContract.FailureNone &&
-        result.SchemaValid &&
-        result.ToolScopeValid &&
-        result.GroundedResponse &&
-        result.GroundedSourcesValid &&
-        result.ToolExecutions > 0 &&
-        result.ToolNames.Count > 0 &&
-        result.ActorVerified &&
-        result.RouteVerified &&
-        result.ExpectedToolVerified &&
-        !result.Clarification &&
-        !result.PolicyViolation &&
-        !result.ProviderPlanRejected &&
-        !result.AuthorizationDenied;
+    private static bool IsFullStackCaseSuccess(LiveCanaryCaseResult result)
+    {
+        var providerExecutionValid = result.ProviderCallExpected
+            ? result.ProviderCalled &&
+              result.ProviderAttemptCount > 0 &&
+              result.ProviderState == AiProviderStatusContract.Online &&
+              result.ToolExecutions > 0 &&
+              result.ToolNames.Count > 0
+            : !result.ProviderCalled &&
+              result.ProviderAttemptCount == 0 &&
+              result.ProviderState == AiProviderStatusContract.NotCalled &&
+              result.ToolExecutions == 0 &&
+              result.ToolNames.Count == 0;
+
+        return result.HttpSucceeded &&
+               providerExecutionValid &&
+               result.FailureCode == AiProviderStatusContract.FailureNone &&
+               result.SchemaValid &&
+               result.ToolScopeValid &&
+               result.GroundedResponse &&
+               result.GroundedSourcesValid &&
+               result.ActorVerified &&
+               result.RouteVerified &&
+               result.ExpectedToolVerified &&
+               !result.Clarification &&
+               !result.PolicyViolation &&
+               !result.ProviderPlanRejected &&
+               !result.AuthorizationDenied;
+    }
 
     private static bool IsFatalCaseFailure(LiveCanaryCaseResult result)
     {

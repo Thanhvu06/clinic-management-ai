@@ -128,15 +128,22 @@ async function sendPatient(page, actor) {
     }
     const text = await page.locator('body').innerText();
     assert.match(text, /CANARY-APT-001/, 'patient card must contain the synthetic appointment');
-    assert.doesNotMatch(text, /Patient B|bệnh nhân khác/i, 'patient must not receive another patient record');
-    results.push({ scenario: '1 patient own appointment', status: 'PASS', evidence: 'UI card CANARY-APT-001; no cross-patient text' });
+    assert.doesNotMatch(text, /CANARY-APT-002|Synthetic Patient B|CANARY-BETA/i, 'patient must not receive secondary synthetic data');
+    results.push({ scenario: '1 patient own appointment', status: 'PASS', evidence: 'UI card CANARY-APT-001; secondary facility/patient absent' });
 }
 
 async function sendStaff(page, actor) {
     await page.getByRole('button', { name: `Mở ${roleLabels[actor.name]}` }).click();
     const input = page.getByRole('textbox', { name: 'Nội dung Copilot' });
     await input.fill(actor.message);
+    const responsePromise = page.waitForResponse(response =>
+        response.url().includes('/api/v1/ai/copilot/chat') && response.request().method() === 'POST');
     await page.getByRole('button', { name: 'Gửi yêu cầu Copilot' }).click();
+    const copilotResponse = await responsePromise;
+    const envelope = await copilotResponse.json();
+    const executedToolNames = envelope?.data?.executedToolNames;
+    assert.ok(Array.isArray(executedToolNames), `${actor.name} response must expose executedToolNames`);
+    assert.ok(executedToolNames.some(name => name.toLowerCase() === actor.tool.toLowerCase()), `${actor.name} response must execute ${actor.tool}`);
     const assistant = page.locator('[data-role="assistant"]').last();
     await assistant.waitFor({ state: 'visible', timeout: 15000 });
     try {
@@ -147,6 +154,7 @@ async function sendStaff(page, actor) {
     }
     const body = await page.locator('body').innerText();
     assert.match(body, /ClinicCare domain database|clinic_public_catalog/, `${actor.name} must show a verified source`);
+    assert.doesNotMatch(body, /CANARY-APT-002|Synthetic Patient B|CANARY-BETA/i, `${actor.name} must stay within facility A synthetic scope`);
     const displayTool = actor.tool.split('.').at(-1).replaceAll('_', ' ');
     assert.match(body, new RegExp(displayTool.replaceAll(' ', '\\s+'), 'i'), `${actor.name} tool must be present in the permitted tool tray`);
     results.push({ scenario: `3 ${actor.name} scoped copilot`, status: 'PASS', evidence: 'online grounded card and verified source' });
@@ -203,15 +211,32 @@ async function runCancellation(browser) {
         const actor = actorCases[2];
         await login(page, actor);
         await page.getByRole('button', { name: `Mở ${roleLabels[actor.name]}` }).click();
-        await page.getByRole('textbox', { name: 'Nội dung Copilot' }).fill(actor.message);
+        const input = page.getByRole('textbox', { name: 'Nội dung Copilot' });
+        await input.fill(actor.message);
+        const requestFailures = [];
+        page.on('requestfailed', request => {
+            if (request.url().includes('/api/v1/ai/copilot/chat'))
+                requestFailures.push(request.failure()?.errorText ?? 'unknown');
+        });
         await page.getByRole('button', { name: 'Gửi yêu cầu Copilot' }).click();
         const cancel = page.getByRole('button', { name: 'Dừng yêu cầu Copilot' });
         await cancel.waitFor({ state: 'visible', timeout: 5000 });
         await cancel.click();
+        await cancel.waitFor({ state: 'hidden', timeout: 5000 });
         await page.waitForTimeout(500);
+        assert.ok(requestFailures.some(error => /ABORT|CANCEL/i.test(error)), `cancelled request must fail as aborted; failures=${requestFailures.join(',')}`);
+        assert.equal(await input.isEnabled(), true, 'copilot input must be usable after cancellation');
+        const send = page.getByRole('button', { name: 'Gửi yêu cầu Copilot' });
+        assert.equal(await send.isEnabled(), false, 'send must be idle after cancellation');
+        await input.fill('Tin nhắn mới sau khi hủy.');
+        assert.equal(await send.isEnabled(), true, 'a new message must be sendable after cancellation');
+        await send.click();
+        await cancel.waitFor({ state: 'visible', timeout: 5000 });
+        await cancel.click();
+        await cancel.waitFor({ state: 'hidden', timeout: 5000 });
         const body = await page.locator('body').innerText();
         assert.doesNotMatch(body, /Tôi đã kiểm tra dữ liệu synthetic/, 'cancelled response must not be rendered');
-        results.push({ scenario: '4 client cancellation', status: 'PASS', evidence: 'cancel button removed pending response' });
+        results.push({ scenario: '4 client cancellation', status: 'PASS', evidence: 'requestfailed abort; UI idle; a second message could be sent' });
     } finally {
         await context.close();
         stop(host);
@@ -228,7 +253,8 @@ async function runRouteIsolation(browser) {
         await page.getByRole('button', { name: `Mở ${roleLabels[actor.name]}` }).click();
         await page.getByRole('textbox', { name: 'Nội dung Copilot' }).fill(actor.message);
         await page.getByRole('button', { name: 'Gửi yêu cầu Copilot' }).click();
-        await page.goto(`${appBase}/reception`, { waitUntil: 'domcontentloaded' });
+        await page.getByRole('link', { name: 'Bàn làm việc', exact: true }).first().click();
+        await page.waitForURL(url => url.pathname === '/reception', { timeout: 5000 });
         await page.waitForTimeout(1000);
         const body = await page.locator('body').innerText();
         assert.doesNotMatch(body, /Tôi đã kiểm tra dữ liệu synthetic/, 'old route response must not appear after navigation');

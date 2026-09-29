@@ -100,6 +100,29 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             return response;
         }
 
+        if (AiMedicalScopeGuard.IsPrescriptionRequest(request.Message))
+        {
+            var response = new AiCopilotResponseDto
+            {
+                ConversationId = conversationId,
+                TurnId = turnId,
+                Role = role.ToString(),
+                AssistantMode = AiAssistantModes.Clarifying,
+                ProviderState = AiProviderStatusContract.NotCalled,
+                PlannerMode = AiPlannerModes.Deterministic,
+                Intent = AiChatIntentTypes.UnclearOrOutOfScope,
+                Confidence = 1m,
+                Message = "Tôi không thể kê đơn hoặc hướng dẫn liều dùng qua cuộc trò chuyện. Bạn có thể đặt lịch để được bác sĩ thăm khám, hoặc xem toa thuốc đã được cơ sở xác nhận trong tài khoản của mình.",
+                ErrorCode = "MEDICAL_PRESCRIPTION_OUT_OF_SCOPE",
+                ExecutionMode = AiProviderStatusContract.ExecutionDeterministicFallback,
+                FallbackActive = true,
+                SuggestedPrompts = SuggestedPrompts(role),
+                AvailableTools = ToolsForUi(tools)
+            };
+            await PersistAndAudit(response, sessionId, role, null, 0, cancellationToken);
+            return response;
+        }
+
         var resolved = await _contextResolver.ResolveAsync(request, memory, role, _currentUser.UserId, cancellationToken);
         if (!resolved.IsValid)
         {
