@@ -67,6 +67,322 @@ public sealed class AiProviderHttpDiagnosticTests
         Assert.DoesNotContain(SecretMarker, JsonSerializer.Serialize(report), StringComparison.Ordinal);
     }
 
+    // L4 probes: a response-format rename and a bad schema node used to collapse
+    // into the same ResponseFormatSchema value with no path or rejection kind.
+
+    private const string UnknownResponseFormatMessage =
+        "Invalid JSON payload received. Unknown name \"responseFormat\" at 'generation_config': Cannot find field.";
+
+    [Fact]
+    public async Task Planner_result_names_the_rejected_field_path_and_rejection_kind()
+    {
+        var result = await PlanAsync(new StaticHandler(HttpStatusCode.BadRequest,
+            GoogleError(400, "INVALID_ARGUMENT", "generation_config", UnknownResponseFormatMessage)));
+        var providerHttp = JsonNode.Parse(JsonSerializer.Serialize(result, NamedEnums))![nameof(AiRolePlannerProviderResult.ProviderHttp)]!;
+
+        Assert.Equal("UnknownField", (string?)providerHttp["RejectionKind"]);
+        Assert.Equal("responseFormat", (string?)providerHttp["RejectedName"]);
+        Assert.Equal("generation_config", (string?)providerHttp["RejectedFieldPath"]);
+    }
+
+    [Fact]
+    public async Task Full_stack_canary_report_names_the_rejected_field_path_and_rejection_kind()
+    {
+        using var handler = new StaticHandler(HttpStatusCode.BadRequest,
+            GoogleError(400, "INVALID_ARGUMENT", "generation_config", UnknownResponseFormatMessage));
+
+        var report = await new FullStackHttpCanary().RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
+        var patient = JsonNode.Parse(JsonSerializer.Serialize(Assert.Single(report.Cases, x => x.CaseId == "patient-http-read")))!;
+
+        Assert.Equal("UnknownField", (string?)patient["ProviderRejectionKind"]);
+        Assert.Equal("responseFormat", (string?)patient["ProviderRejectedName"]);
+        Assert.Equal("generation_config", (string?)patient["ProviderRejectedFieldPath"]);
+    }
+
+    // ------------------------------------- rejected path / kind / schema size
+
+    private const string ClarificationTypePath = "generation_config.response_format.text.schema.properties[clarification].type";
+
+    [Fact]
+    public async Task Unknown_response_format_name_reports_kind_name_and_path()
+    {
+        var result = await PlanAsync(new StaticHandler(HttpStatusCode.BadRequest,
+            GoogleError(400, "INVALID_ARGUMENT", "generation_config", UnknownResponseFormatMessage)));
+
+        Assert.Equal(AiProviderRejectionKind.UnknownField, result.ProviderHttp!.RejectionKind);
+        Assert.Equal("responseFormat", result.ProviderHttp.RejectedName);
+        Assert.Equal("generation_config", result.ProviderHttp.RejectedFieldPath);
+        // Existing wire values are unchanged: the violation field is classified first.
+        Assert.Equal(AiProviderRejectedRequestPart.GenerationConfig, result.ProviderHttp.RejectedRequestPart);
+        Assert.Equal(AiProviderStatusContract.FailureModelUnavailable, result.FailureCode);
+    }
+
+    [Fact]
+    public async Task Field_violation_path_through_a_sent_schema_property_is_kept()
+    {
+        var result = await PlanAsync(new StaticHandler(HttpStatusCode.BadRequest,
+            GoogleError(400, "INVALID_ARGUMENT", ClarificationTypePath, "Invalid value at 'generation_config.response_format' (type), \"string\"")));
+
+        Assert.Equal(ClarificationTypePath, result.ProviderHttp!.RejectedFieldPath);
+        Assert.Equal(AiProviderRejectionKind.InvalidValue, result.ProviderHttp.RejectionKind);
+        Assert.Equal(AiProviderHttpDiagnostic.NotAvailable, result.ProviderHttp.RejectedName);
+    }
+
+    [Theory]
+    [InlineData("generation_config.response_format.text.schema.properties[SECRET-MARKER-123].type", "generation_config.response_format.text.schema.properties[?].type")]
+    [InlineData("generation_config.response_format.text.schema.properties[patientFullName].type", "generation_config.response_format.text.schema.properties[?].type")]
+    [InlineData("generation_config.response_format.text.schema.properties.toolCalls.items.any_of[11].properties.arguments.properties.query.type",
+                "generation_config.response_format.text.schema.properties.toolCalls.items.any_of[11].properties.arguments.properties.query.type")]
+    [InlineData("generation_config.SECRET-MARKER-123[1000].properties['reply']", "generation_config.?[?].properties[reply]")]
+    [InlineData("contents[0].parts[0].text", "contents[0].?[0].text")]
+    public async Task Field_violation_segments_outside_the_allowlist_and_sent_schema_become_question_marks(string field, string expected)
+    {
+        var result = await PlanAsync(new StaticHandler(HttpStatusCode.BadRequest, GoogleError(400, "INVALID_ARGUMENT", field)));
+
+        Assert.Equal(expected, result.ProviderHttp!.RejectedFieldPath);
+        Assert.DoesNotContain(SecretMarker, JsonSerializer.Serialize(result, NamedEnums), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Path_and_name_from_free_text_message_are_sanitized()
+    {
+        var message = $"Invalid JSON payload received. Unknown name \"{SecretMarker}\" at 'generation_config.{SecretMarker}': Cannot find field. {SecretMarker}";
+
+        var result = await PlanAsync(new StaticHandler(HttpStatusCode.BadRequest, GoogleError(400, "INVALID_ARGUMENT", null, message)));
+
+        Assert.Equal(AiProviderRejectionKind.UnknownField, result.ProviderHttp!.RejectionKind);
+        Assert.Equal(AiProviderHttpDiagnostic.Other, result.ProviderHttp.RejectedName);
+        Assert.Equal("generation_config.?", result.ProviderHttp.RejectedFieldPath);
+        Assert.DoesNotContain(SecretMarker, JsonSerializer.Serialize(result, NamedEnums), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Invalid JSON payload received. Unknown name \"responseFormat\" at 'generation_config': Cannot find field.", AiProviderRejectionKind.UnknownField, "responseFormat")]
+    [InlineData("Invalid value at 'generation_config.response_format' (oneOf), \"x\"", AiProviderRejectionKind.InvalidValue, "NotAvailable")]
+    [InlineData("Keyword \"prefixItems\" is not supported in response schema.", AiProviderRejectionKind.UnsupportedKeyword, "NotAvailable")]
+    [InlineData("The specified schema produces a constraint that has too many states for serving.", AiProviderRejectionKind.SchemaTooComplex, "NotAvailable")]
+    [InlineData("Schema nesting depth exceeds the limit.", AiProviderRejectionKind.SchemaTooComplex, "NotAvailable")]
+    [InlineData("Unsupported keyword \"const\" in schema.", AiProviderRejectionKind.UnsupportedKeyword, "const")]
+    [InlineData("Request contains an invalid argument.", AiProviderRejectionKind.Other, "NotAvailable")]
+    public async Task Rejection_kind_and_name_follow_the_message_patterns(string message, AiProviderRejectionKind expectedKind, string expectedName)
+    {
+        var result = await PlanAsync(new StaticHandler(HttpStatusCode.BadRequest, GoogleError(400, "INVALID_ARGUMENT", null, message)), maxAttempts: 1);
+
+        Assert.Equal(expectedKind, result.ProviderHttp!.RejectionKind);
+        Assert.Equal(expectedName, result.ProviderHttp.RejectedName);
+    }
+
+    public static IEnumerable<object[]> UnparsedBodies() => new[]
+    {
+        new object[] { string.Empty, AiProviderRejectionKind.NotAvailable },
+        new object[] { "<html>" + SecretMarker + "</html>", AiProviderRejectionKind.Other },
+        new object[] { "{\"error\":{\"code\":400}}", AiProviderRejectionKind.NotAvailable },
+        new object[] { "{\"error\":{\"message\":\"Unknown name", AiProviderRejectionKind.Other },
+        new object[] { GoogleError(400, "INVALID_ARGUMENT", ClarificationTypePath, UnknownResponseFormatMessage + new string('x', 20 * 1024)), AiProviderRejectionKind.Other }
+    };
+
+    [Theory]
+    [MemberData(nameof(UnparsedBodies))]
+    public async Task Empty_non_json_or_oversized_bodies_never_throw_and_report_no_name_or_path(string body, AiProviderRejectionKind expectedKind)
+    {
+        var result = await PlanAsync(new StaticHandler(HttpStatusCode.BadRequest, body), maxAttempts: 1);
+
+        Assert.Equal(expectedKind, result.ProviderHttp!.RejectionKind);
+        Assert.Equal(AiProviderHttpDiagnostic.NotAvailable, result.ProviderHttp.RejectedName);
+        Assert.Equal(AiProviderHttpDiagnostic.NotAvailable, result.ProviderHttp.RejectedFieldPath);
+        Assert.Equal(AiProviderStatusContract.FailureModelUnavailable, result.FailureCode);
+    }
+
+    [Fact]
+    public void Field_path_is_capped_at_twenty_four_segments_and_three_hundred_characters()
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal) { new string('a', 60) };
+        var deep = string.Join(".", Enumerable.Repeat("items", 40));
+        var wide = string.Join(".", Enumerable.Repeat(new string('a', 60), 10));
+
+        var deepPath = AiProviderHttpDiagnostic.NormalizeFieldPath(deep, names);
+        var widePath = AiProviderHttpDiagnostic.NormalizeFieldPath(wide, names);
+
+        Assert.Equal(string.Join(".", Enumerable.Repeat("items", 24)) + AiProviderHttpDiagnostic.Truncated, deepPath);
+        Assert.True(widePath.Length <= AiProviderHttpDiagnostic.MaxFieldPathLength);
+        Assert.EndsWith(AiProviderHttpDiagnostic.Truncated, widePath, StringComparison.Ordinal);
+        Assert.True(AiProviderHttpDiagnostic.IsNormalizedFieldPath(deepPath, names));
+        Assert.True(AiProviderHttpDiagnostic.IsNormalizedFieldPath(widePath, names));
+        Assert.Equal(AiProviderHttpDiagnostic.NotAvailable, AiProviderHttpDiagnostic.NormalizeFieldPath("  ", names));
+    }
+
+    [Theory]
+    [InlineData(AiActorRole.Patient, 12)]
+    [InlineData(AiActorRole.DiagnosticTechnician, 2)]
+    public async Task Schema_metrics_match_the_schema_actually_sent_and_appear_only_on_http_rejection(AiActorRole role, int expectedTools)
+    {
+        using var handler = new CapturingHandler(HttpStatusCode.BadRequest, GoogleError(400, "INVALID_ARGUMENT", ResponseFormatField));
+        var tools = AiRolePlannerContractTests.ToolsFor(role);
+        var request = new AiRolePlannerProviderRequest
+        {
+            Role = role,
+            Message = "synthetic",
+            AllowedTools = AiRolePlannerContract.BuildToolContracts(tools, tools.Select(x => x.Name)),
+            AllowedIntents = AiRolePlannerContract.AllowedIntents
+        };
+        Assert.Equal(expectedTools, request.AllowedTools.Count);
+
+        var result = await CreateProvider(handler, maxAttempts: 1).PlanRoleCopilotAsync(request);
+
+        using var sent = JsonDocument.Parse(handler.LastBody!);
+        var schema = sent.RootElement.GetProperty("generationConfig").GetProperty("responseFormat").GetProperty("text").GetProperty("schema");
+        Assert.Equal(Encoding.UTF8.GetByteCount(schema.GetRawText()), result.ProviderHttp!.RequestSchemaSizeBytes);
+        Assert.Equal(expectedTools, schema.GetProperty("properties").GetProperty("toolCalls").GetProperty("items").GetProperty("anyOf").GetArrayLength());
+        Assert.Equal(expectedTools, result.ProviderHttp.RequestSchemaToolBranches);
+        // root > properties > toolCalls > items > anyOf > tool > properties > arguments > properties > argument
+        Assert.Equal(10, MaxDepth(schema));
+        Assert.Equal(10, result.ProviderHttp.RequestSchemaMaxDepth);
+
+        // Legacy chat has no schema; a successful call has no HTTP diagnostic.
+        using var legacyHandler = new StaticHandler(HttpStatusCode.BadRequest, GoogleError(400, "INVALID_ARGUMENT", "contents[0]"));
+        var legacy = await CreateProvider(legacyHandler, maxAttempts: 1).ChatWithAiAsync("xin chào", new(), new(), "{}", CancellationToken.None);
+        Assert.Null(legacy.ProviderHttp!.RequestSchemaSizeBytes);
+        Assert.Null(legacy.ProviderHttp.RequestSchemaToolBranches);
+        Assert.Null(legacy.ProviderHttp.RequestSchemaMaxDepth);
+        Assert.Null(AiCopilotPlannerDiagnosticDto.From(new AiPlannerValidationDiagnostic(AiPlannerValidationStage.PlannerSchema, AiPlannerValidationReason.MalformedJson))!.RequestSchemaSizeBytes);
+    }
+
+    [Fact]
+    public async Task Retryable_status_keeps_attempts_and_wire_values_and_carries_the_new_fields()
+    {
+        using var handler = new StaticHandler(HttpStatusCode.ServiceUnavailable,
+            GoogleError(503, "UNAVAILABLE", null, "The model is overloaded. Please try again later."));
+
+        var result = await PlanAsync(handler, maxAttempts: 2);
+
+        Assert.Equal("ProviderServerError", result.Status);
+        Assert.Equal(AiProviderStatusContract.FailureServerError, result.FailureCode);
+        Assert.Equal(2, handler.CallCount);
+        Assert.Equal(2, result.ProviderAttemptCount);
+        Assert.Equal("503", result.ProviderHttp!.HttpStatus);
+        Assert.Equal(AiProviderRejectedRequestPart.Unknown, result.ProviderHttp.RejectedRequestPart);
+        Assert.Equal(AiProviderRejectionKind.Other, result.ProviderHttp.RejectionKind);
+        Assert.Equal(AiProviderHttpDiagnostic.NotAvailable, result.ProviderHttp.RejectedFieldPath);
+        Assert.NotNull(result.ProviderHttp.RequestSchemaSizeBytes);
+    }
+
+    [Fact]
+    public async Task Rejected_path_kind_and_schema_size_reach_the_api_logs_and_full_stack_canary_report_without_the_marker()
+    {
+        var field = "generation_config.response_format.text.schema.properties[" + SecretMarker + "].type";
+        var message = $"Invalid JSON payload received. Unknown name \"additionalProperties\" at '{field}': Cannot find field. {SecretMarker}";
+        using var handler = new StaticHandler(HttpStatusCode.BadRequest, GoogleError(400, "INVALID_ARGUMENT", field, message));
+        var sanitizedPath = "generation_config.response_format.text.schema.properties[?].type";
+
+        var report = await new FullStackHttpCanary().RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
+
+        Assert.Equal(LiveCanaryAcceptanceEvaluator.Fail, report.AcceptanceStatus);
+        var roleCases = report.Cases.Where(x => x.ProviderHttpStatus == "400").ToArray();
+        Assert.NotEmpty(roleCases);
+        foreach (var roleCase in roleCases)
+        {
+            Assert.Equal(AiProviderStatusContract.FailureModelUnavailable, roleCase.FailureCode);
+            Assert.Equal(1, roleCase.ProviderAttemptCount);
+            Assert.Equal(nameof(AiProviderRejectedRequestPart.ResponseFormatSchema), roleCase.ProviderRejectedRequestPart);
+            Assert.Equal(nameof(AiProviderRejectionKind.UnknownField), roleCase.ProviderRejectionKind);
+            Assert.Equal("additionalProperties", roleCase.ProviderRejectedName);
+            Assert.Equal(sanitizedPath, roleCase.ProviderRejectedFieldPath);
+            Assert.True(roleCase.RequestSchemaSizeBytes > 0);
+            Assert.True(roleCase.RequestSchemaToolBranches > 0);
+            Assert.True(roleCase.RequestSchemaMaxDepth > 0);
+        }
+        var patient = Assert.Single(report.Cases, x => x.CaseId == "patient-http-read");
+        Assert.Equal(12, patient.RequestSchemaToolBranches);
+        Assert.Equal(10, patient.RequestSchemaMaxDepth);
+
+        var legacy = Assert.Single(report.Cases, x => x.CaseId == "patient-legacy-http-read");
+        Assert.Equal(CanaryDiagnosticSanitizer.NotAvailable, legacy.ProviderRejectionKind);
+        Assert.Equal(CanaryDiagnosticSanitizer.NotAvailable, legacy.ProviderRejectedName);
+        Assert.Equal(CanaryDiagnosticSanitizer.NotAvailable, legacy.ProviderRejectedFieldPath);
+        Assert.Null(legacy.RequestSchemaSizeBytes);
+        Assert.DoesNotContain(SecretMarker, JsonSerializer.Serialize(report), StringComparison.Ordinal);
+
+        // Same body straight through the API and the provider logs.
+        using var factory = new SyntheticCanaryFactory(new CanaryProviderAttemptBudget(12), handler);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        await factory.SeedAsync();
+        using (var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { emailOrPhone = "canary.patient@synthetic.invalid", password = "Canary@12345" }))
+        {
+            login.EnsureSuccessStatusCode();
+            var token = (await login.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data").GetProperty("accessToken").GetString();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        using var response = await client.PostAsJsonAsync("/api/v1/ai/copilot/chat", new
+        {
+            message = "Các buổi khám tôi đã đặt trong thời gian tới có những gì?",
+            conversationId = "conv_http_path_api",
+            sessionId = "sess_http_path_api",
+            currentRoute = "/patient/appointments",
+            locale = "vi-VN",
+            timezone = "Asia/Ho_Chi_Minh"
+        });
+        var raw = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(SecretMarker, raw, StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(raw);
+        var diagnostic = document.RootElement.GetProperty("data").GetProperty("plannerDiagnostic");
+        Assert.Equal("UnknownField", diagnostic.GetProperty("providerRejectionKind").GetString());
+        Assert.Equal("additionalProperties", diagnostic.GetProperty("providerRejectedName").GetString());
+        Assert.Equal(sanitizedPath, diagnostic.GetProperty("providerRejectedFieldPath").GetString());
+        Assert.Equal(12, diagnostic.GetProperty("requestSchemaToolBranches").GetInt32());
+
+        var providerLog = new ListLogger<GeminiAiProvider>();
+        var planned = await CreateProvider(handler, 1, providerLog).PlanRoleCopilotAsync(new AiRolePlannerProviderRequest
+        {
+            Role = AiActorRole.Patient,
+            Message = "lịch hẹn của tôi",
+            AllowedTools = AiRolePlannerContract.BuildToolContracts(
+                AiRolePlannerContractTests.ToolsFor(AiActorRole.Patient),
+                AiRolePlannerContractTests.ToolsFor(AiActorRole.Patient).Select(x => x.Name)),
+            AllowedIntents = AiRolePlannerContract.AllowedIntents
+        });
+        var logs = string.Join("\n", providerLog.Entries);
+        Assert.Contains(sanitizedPath, logs, StringComparison.Ordinal);
+        Assert.Contains(planned.CorrelationId!, logs, StringComparison.Ordinal);
+        Assert.DoesNotContain(SecretMarker, logs, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Canary_sanitizer_keeps_only_allowlisted_rejection_names_paths_and_bounded_metrics()
+    {
+        using var document = JsonDocument.Parse("""
+        {"plannerDiagnostic":{"stage":"NotAvailable","providerRejectionKind":"SECRET-MARKER-123","providerRejectedName":"SECRET-MARKER-123","providerRejectedFieldPath":"generation_config.SECRET-MARKER-123","requestSchemaSizeBytes":-1,"requestSchemaToolBranches":100000,"requestSchemaMaxDepth":10}}
+        """);
+        var rejected = CanaryDiagnosticSanitizer.FromResponse(document.RootElement, new HashSet<string>());
+        Assert.Equal("Other", rejected.ProviderRejectionKind);
+        Assert.Equal("Other", rejected.ProviderRejectedName);
+        Assert.Equal("Other", rejected.ProviderRejectedFieldPath);
+        Assert.Null(rejected.RequestSchemaSizeBytes);
+        Assert.Null(rejected.RequestSchemaToolBranches);
+        Assert.Equal(10, rejected.RequestSchemaMaxDepth);
+
+        using var valid = JsonDocument.Parse("""
+        {"plannerDiagnostic":{"stage":"NotAvailable","providerRejectionKind":"UnsupportedKeyword","providerRejectedName":"anyOf","providerRejectedFieldPath":"generation_config.response_format.text.schema.properties.toolCalls.items.anyOf[3].properties[?].description"}}
+        """);
+        var kept = CanaryDiagnosticSanitizer.FromResponse(valid.RootElement, new HashSet<string>());
+        Assert.Equal("UnsupportedKeyword", kept.ProviderRejectionKind);
+        Assert.Equal("anyOf", kept.ProviderRejectedName);
+        Assert.Equal("generation_config.response_format.text.schema.properties.toolCalls.items.anyOf[3].properties[?].description", kept.ProviderRejectedFieldPath);
+
+        using var absent = JsonDocument.Parse("""{"plannerDiagnostic":{"stage":"PlannerSchema"}}""");
+        var none = CanaryDiagnosticSanitizer.FromResponse(absent.RootElement, new HashSet<string>());
+        Assert.Equal(CanaryDiagnosticSanitizer.NotAvailable, none.ProviderRejectionKind);
+        Assert.Equal(CanaryDiagnosticSanitizer.NotAvailable, none.ProviderRejectedName);
+        Assert.Equal(CanaryDiagnosticSanitizer.NotAvailable, none.ProviderRejectedFieldPath);
+        Assert.Null(none.RequestSchemaSizeBytes);
+    }
+
+    private static int MaxDepth(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Object => 1 + element.EnumerateObject().Select(x => MaxDepth(x.Value)).DefaultIfEmpty(0).Max(),
+        JsonValueKind.Array => 1 + element.EnumerateArray().Select(MaxDepth).DefaultIfEmpty(0).Max(),
+        _ => 0
+    };
+
     // ------------------------------------------------------- provider level
 
     [Fact]
@@ -231,7 +547,9 @@ public sealed class AiProviderHttpDiagnosticTests
         var logs = string.Join("\n", providerLog.Entries.Concat(plannerLog.Entries));
         Assert.NotEmpty(providerLog.Entries);
         Assert.DoesNotContain(SecretMarker, logs, StringComparison.Ordinal);
-        Assert.DoesNotContain(ResponseFormatField, logs, StringComparison.Ordinal);
+        // The path may now be logged, but only as the normalized, allowlisted value.
+        Assert.Equal(ResponseFormatField, result.ProviderHttp.RejectedFieldPath);
+        Assert.DoesNotContain("Invalid value", logs, StringComparison.Ordinal);
         Assert.DoesNotContain(SecretMarker, JsonSerializer.Serialize(result, NamedEnums), StringComparison.Ordinal);
     }
 
@@ -290,7 +608,11 @@ public sealed class AiProviderHttpDiagnosticTests
 
         Assert.True(response.IsSuccessStatusCode);
         Assert.DoesNotContain(SecretMarker, raw, StringComparison.Ordinal);
-        Assert.DoesNotContain(ResponseFormatField, raw, StringComparison.Ordinal);
+        // The rejected path appears only as the sanitized providerRejectedFieldPath.
+        var withoutPath = JsonNode.Parse(raw)!;
+        Assert.Equal(ResponseFormatField, (string?)withoutPath["data"]!["plannerDiagnostic"]!["providerRejectedFieldPath"]);
+        withoutPath["data"]!["plannerDiagnostic"]!.AsObject().Remove("providerRejectedFieldPath");
+        Assert.DoesNotContain(ResponseFormatField, withoutPath.ToJsonString(), StringComparison.Ordinal);
         using var document = JsonDocument.Parse(raw);
         var data = document.RootElement.GetProperty("data");
         Assert.Equal(AiProviderStatusContract.FailureModelUnavailable, data.GetProperty("providerFailureCode").GetString());
@@ -332,7 +654,10 @@ public sealed class AiProviderHttpDiagnosticTests
 
         var serialized = JsonSerializer.Serialize(report);
         Assert.DoesNotContain(SecretMarker, serialized, StringComparison.Ordinal);
-        Assert.DoesNotContain(ResponseFormatField, serialized, StringComparison.Ordinal);
+        // The rejected path appears only as the sanitized ProviderRejectedFieldPath.
+        Assert.Equal(ResponseFormatField, patient.ProviderRejectedFieldPath);
+        var withoutPath = report with { Cases = report.Cases.Select(x => x with { ProviderRejectedFieldPath = string.Empty }).ToArray() };
+        Assert.DoesNotContain(ResponseFormatField, JsonSerializer.Serialize(withoutPath), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -436,6 +761,27 @@ public sealed class AiProviderHttpDiagnosticTests
             {
                 Content = new StringContent(_body, Encoding.UTF8, "application/json")
             });
+        }
+    }
+
+    /// <summary>Returns a fixed error and keeps the last request body so tests can measure the sent schema.</summary>
+    private sealed class CapturingHandler : HttpMessageHandler
+    {
+        private readonly HttpStatusCode _status;
+        private readonly string _body;
+
+        public CapturingHandler(HttpStatusCode status, string body)
+        {
+            _status = status;
+            _body = body;
+        }
+
+        public string? LastBody { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            LastBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(_status) { Content = new StringContent(_body, Encoding.UTF8, "application/json") };
         }
     }
 

@@ -128,6 +128,20 @@ public enum AiProviderRejectedRequestPart
 }
 
 /// <summary>
+/// What kind of rejection error.message describes. NotAvailable means the
+/// error body carried no message; Other means it matched no known pattern.
+/// </summary>
+public enum AiProviderRejectionKind
+{
+    NotAvailable,
+    UnknownField,
+    InvalidValue,
+    UnsupportedKeyword,
+    SchemaTooComplex,
+    Other
+}
+
+/// <summary>
 /// Sanitized reason a provider HTTP call was rejected. Only closed values are
 /// kept: the error body is read solely to pick them and is never stored.
 /// </summary>
@@ -135,8 +149,27 @@ public sealed record AiProviderHttpDiagnostic
 {
     public const string NotAvailable = "NotAvailable";
     public const string Other = "Other";
+    public const string UnknownPathSegment = "?";
+    public const string Truncated = "…";
+    public const int MaxFieldPathLength = 300;
+    public const int MaxFieldPathSegments = 24;
 
     public static IReadOnlySet<int> ReportedHttpStatuses { get; } = new HashSet<int> { 400, 401, 403, 404, 408, 429, 500, 502, 503, 504 };
+
+    /// <summary>
+    /// Request field names the role planner sends and the schema keywords it
+    /// may use, with their snake_case forms. Nothing else is ever echoed.
+    /// </summary>
+    public static IReadOnlySet<string> AllowedRequestNames { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "contents", "systemInstruction", "system_instruction", "generationConfig", "generation_config",
+        "temperature", "maxOutputTokens", "max_output_tokens", "responseFormat", "response_format",
+        "responseSchema", "response_schema", "responseMimeType", "response_mime_type", "text",
+        "mimeType", "mime_type", "schema",
+        "type", "title", "description", "properties", "required", "additionalProperties", "additional_properties",
+        "enum", "format", "minimum", "maximum", "items", "prefixItems", "prefix_items", "minItems", "min_items",
+        "maxItems", "max_items", "anyOf", "any_of", "nullable", "const"
+    };
 
     /// <summary>An allowlisted HTTP status code, "Other" or "NotAvailable".</summary>
     public string HttpStatus { get; init; } = NotAvailable;
@@ -144,6 +177,232 @@ public sealed record AiProviderHttpDiagnostic
     public AiProviderErrorStatus ErrorStatus { get; init; } = AiProviderErrorStatus.NotAvailable;
 
     public AiProviderRejectedRequestPart RejectedRequestPart { get; init; } = AiProviderRejectedRequestPart.NotAvailable;
+
+    public AiProviderRejectionKind RejectionKind { get; init; } = AiProviderRejectionKind.NotAvailable;
+
+    /// <summary>A name from <see cref="AllowedRequestNames"/>, "Other" or "NotAvailable".</summary>
+    public string RejectedName { get; init; } = NotAvailable;
+
+    /// <summary>
+    /// Rejected request path whose segments are indexes, allowlisted names or
+    /// property names of the schema this request sent; anything else is "?".
+    /// </summary>
+    public string RejectedFieldPath { get; init; } = NotAvailable;
+
+    // Measured by the server from the schema it sent; null unless a role
+    // planner request was rejected over HTTP.
+    public int? RequestSchemaSizeBytes { get; init; }
+    public int? RequestSchemaToolBranches { get; init; }
+    public int? RequestSchemaMaxDepth { get; init; }
+
+    public static AiProviderRejectionKind MapRejectionKind(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return AiProviderRejectionKind.NotAvailable;
+        if (ContainsAny(message, "unknown name", "cannot find field")) return AiProviderRejectionKind.UnknownField;
+        if (ContainsAny(message, "invalid value", "invalid json payload")) return AiProviderRejectionKind.InvalidValue;
+        if (ContainsAny(message, "not supported", "unsupported")) return AiProviderRejectionKind.UnsupportedKeyword;
+        if (ContainsAny(message, "too many", "exceed", "nesting", "complex", "too large")) return AiProviderRejectionKind.SchemaTooComplex;
+        return AiProviderRejectionKind.Other;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex RejectedNamePattern = new(
+        "(?:unknown name|unknown field|cannot find field|unsupported keyword|unsupported field)\\s*:?\\s*\"([^\"]{0,128})\"",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(100));
+
+    /// <summary>The quoted name Google gives after "Unknown name", kept only if allowlisted.</summary>
+    public static string MapRejectedName(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return NotAvailable;
+        try
+        {
+            var match = RejectedNamePattern.Match(message);
+            if (!match.Success) return NotAvailable;
+            return AllowedRequestNames.Contains(match.Groups[1].Value) ? match.Groups[1].Value : Other;
+        }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+        {
+            return Other;
+        }
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex MessagePathPattern = new(
+        "at '([^']{1,512})'",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(100));
+
+    /// <summary>
+    /// First fieldViolations[].field, else the path after "at '" in the
+    /// message, normalized by <see cref="NormalizeFieldPath"/>.
+    /// </summary>
+    public static string MapRejectedFieldPath(string? violationField, string? message, IReadOnlySet<string> schemaPropertyNames)
+    {
+        if (!string.IsNullOrWhiteSpace(violationField))
+            return NormalizeFieldPath(violationField, schemaPropertyNames);
+        if (string.IsNullOrWhiteSpace(message)) return NotAvailable;
+        try
+        {
+            var match = MessagePathPattern.Match(message);
+            return match.Success ? NormalizeFieldPath(match.Groups[1].Value, schemaPropertyNames) : NotAvailable;
+        }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+        {
+            return Other;
+        }
+    }
+
+    /// <summary>
+    /// Splits on '.' and '[...]'. A segment survives only as an index 0-999,
+    /// an allowlisted request name or a sent schema property name; others
+    /// become "?". At most 24 segments and 300 characters, then "…".
+    /// </summary>
+    public static string NormalizeFieldPath(string? path, IReadOnlySet<string> schemaPropertyNames)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return NotAvailable;
+        var segments = SplitPath(path);
+        if (segments.Count == 0) return NotAvailable;
+
+        var builder = new System.Text.StringBuilder();
+        for (var index = 0; index < segments.Count; index++)
+        {
+            var (text, bracket) = segments[index];
+            var kept = IsKnownSegment(text, schemaPropertyNames) ? text : UnknownPathSegment;
+            var piece = bracket ? "[" + kept + "]" : (builder.Length == 0 ? kept : "." + kept);
+            if (index >= MaxFieldPathSegments || builder.Length + piece.Length > MaxFieldPathLength - Truncated.Length)
+                return builder.Append(Truncated).ToString();
+            builder.Append(piece);
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>True only for a value <see cref="NormalizeFieldPath"/> could have produced.</summary>
+    public static bool IsNormalizedFieldPath(string? value, IReadOnlySet<string> schemaPropertyNames)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length > MaxFieldPathLength) return false;
+        var body = value.EndsWith(Truncated, StringComparison.Ordinal) ? value[..^Truncated.Length] : value;
+        if (body.Length == 0) return false;
+        var segments = SplitPath(body);
+        if (segments.Count == 0 || segments.Count > MaxFieldPathSegments) return false;
+        return segments.All(x => x.Text == UnknownPathSegment || IsKnownSegment(x.Text, schemaPropertyNames)) &&
+               string.Equals(Rebuild(segments), body, StringComparison.Ordinal);
+    }
+
+    private static bool IsKnownSegment(string text, IReadOnlySet<string> schemaPropertyNames) =>
+        text.Length is >= 1 and <= 3 && text.All(char.IsAsciiDigit) ||
+        AllowedRequestNames.Contains(text) ||
+        schemaPropertyNames.Contains(text);
+
+    private static List<(string Text, bool Bracket)> SplitPath(string path)
+    {
+        var segments = new List<(string Text, bool Bracket)>();
+        var current = new System.Text.StringBuilder();
+        void Flush()
+        {
+            if (current.Length > 0) segments.Add((current.ToString(), false));
+            current.Clear();
+        }
+
+        for (var index = 0; index < path.Length; index++)
+        {
+            var c = path[index];
+            if (c == '.')
+            {
+                Flush();
+            }
+            else if (c == '[')
+            {
+                Flush();
+                var close = path.IndexOf(']', index + 1);
+                var inner = close < 0 ? path[(index + 1)..] : path[(index + 1)..close];
+                segments.Add((inner.Trim().Trim('"', '\''), true));
+                index = close < 0 ? path.Length : close;
+            }
+            else
+            {
+                current.Append(c);
+            }
+        }
+
+        Flush();
+        return segments;
+    }
+
+    private static string Rebuild(IEnumerable<(string Text, bool Bracket)> segments)
+    {
+        var builder = new System.Text.StringBuilder();
+        foreach (var (text, bracket) in segments)
+            builder.Append(bracket ? "[" + text + "]" : (builder.Length == 0 ? text : "." + text));
+        return builder.ToString();
+    }
+
+    /// <summary>Keys of every "properties" object in a schema this server built.</summary>
+    public static IReadOnlySet<string> CollectSchemaPropertyNames(System.Text.Json.Nodes.JsonNode? schema)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        void Visit(System.Text.Json.Nodes.JsonNode? node)
+        {
+            switch (node)
+            {
+                case System.Text.Json.Nodes.JsonObject obj:
+                    foreach (var (key, value) in obj)
+                    {
+                        if (key == "properties" && value is System.Text.Json.Nodes.JsonObject properties)
+                            foreach (var (name, _) in properties) names.Add(name);
+                        Visit(value);
+                    }
+                    break;
+                case System.Text.Json.Nodes.JsonArray array:
+                    foreach (var item in array) Visit(item);
+                    break;
+            }
+        }
+
+        Visit(schema);
+        return names;
+    }
+
+    /// <summary>
+    /// Server-side size of the sent schema: UTF-8 bytes of its JSON, tool-call
+    /// branches (anyOf members, or one direct items schema) and max depth of
+    /// nested objects/arrays.
+    /// </summary>
+    public AiProviderHttpDiagnostic WithRequestSchemaMetrics(System.Text.Json.Nodes.JsonObject schema)
+    {
+        var anyOfBranches = 0;
+        void CountAnyOf(System.Text.Json.Nodes.JsonNode? node)
+        {
+            switch (node)
+            {
+                case System.Text.Json.Nodes.JsonObject obj:
+                    foreach (var (key, value) in obj)
+                    {
+                        if (key == "anyOf" && value is System.Text.Json.Nodes.JsonArray branches) anyOfBranches += branches.Count;
+                        CountAnyOf(value);
+                    }
+                    break;
+                case System.Text.Json.Nodes.JsonArray array:
+                    foreach (var item in array) CountAnyOf(item);
+                    break;
+            }
+        }
+
+        static int Depth(System.Text.Json.Nodes.JsonNode? node) => node switch
+        {
+            System.Text.Json.Nodes.JsonObject obj => 1 + obj.Select(x => Depth(x.Value)).DefaultIfEmpty(0).Max(),
+            System.Text.Json.Nodes.JsonArray array => 1 + array.Select(Depth).DefaultIfEmpty(0).Max(),
+            _ => 0
+        };
+
+        CountAnyOf(schema);
+        var directItems = schema["properties"]?["toolCalls"]?["items"] is System.Text.Json.Nodes.JsonObject items && items["anyOf"] is null;
+        return this with
+        {
+            RequestSchemaSizeBytes = System.Text.Encoding.UTF8.GetByteCount(schema.ToJsonString()),
+            RequestSchemaToolBranches = anyOfBranches > 0 ? anyOfBranches : directItems ? 1 : 0,
+            RequestSchemaMaxDepth = Depth(schema)
+        };
+    }
 
     public static string MapHttpStatus(int? statusCode) => statusCode switch
     {

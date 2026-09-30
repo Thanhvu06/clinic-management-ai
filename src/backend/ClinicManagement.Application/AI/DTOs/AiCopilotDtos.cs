@@ -75,6 +75,16 @@ public sealed class AiCopilotPlannerDiagnosticDto
     public string ProviderHttpStatus { get; init; } = ClinicManagement.Application.AI.Planning.AiProviderHttpDiagnostic.NotAvailable;
     public string ProviderErrorStatus { get; init; } = nameof(ClinicManagement.Application.AI.Planning.AiProviderErrorStatus.NotAvailable);
     public string ProviderRejectedRequestPart { get; init; } = nameof(ClinicManagement.Application.AI.Planning.AiProviderRejectedRequestPart.NotAvailable);
+    public string ProviderRejectionKind { get; init; } = nameof(ClinicManagement.Application.AI.Planning.AiProviderRejectionKind.NotAvailable);
+
+    /// <summary>Allowlisted request field or schema keyword, "Other" or "NotAvailable".</summary>
+    public string ProviderRejectedName { get; init; } = ClinicManagement.Application.AI.Planning.AiProviderHttpDiagnostic.NotAvailable;
+
+    /// <summary>Normalized path; unknown segments are "?".</summary>
+    public string ProviderRejectedFieldPath { get; init; } = ClinicManagement.Application.AI.Planning.AiProviderHttpDiagnostic.NotAvailable;
+    public int? RequestSchemaSizeBytes { get; init; }
+    public int? RequestSchemaToolBranches { get; init; }
+    public int? RequestSchemaMaxDepth { get; init; }
 
     /// <summary>
     /// A provider HTTP rejection has no validation stage, so those fields
@@ -97,7 +107,13 @@ public sealed class AiCopilotPlannerDiagnosticDto
             FinishReason = diagnostic?.FinishReason.ToString() ?? notAvailable,
             ProviderHttpStatus = providerHttp?.HttpStatus ?? notAvailable,
             ProviderErrorStatus = (providerHttp?.ErrorStatus ?? ClinicManagement.Application.AI.Planning.AiProviderErrorStatus.NotAvailable).ToString(),
-            ProviderRejectedRequestPart = (providerHttp?.RejectedRequestPart ?? ClinicManagement.Application.AI.Planning.AiProviderRejectedRequestPart.NotAvailable).ToString()
+            ProviderRejectedRequestPart = (providerHttp?.RejectedRequestPart ?? ClinicManagement.Application.AI.Planning.AiProviderRejectedRequestPart.NotAvailable).ToString(),
+            ProviderRejectionKind = (providerHttp?.RejectionKind ?? ClinicManagement.Application.AI.Planning.AiProviderRejectionKind.NotAvailable).ToString(),
+            ProviderRejectedName = providerHttp?.RejectedName ?? notAvailable,
+            ProviderRejectedFieldPath = providerHttp?.RejectedFieldPath ?? notAvailable,
+            RequestSchemaSizeBytes = providerHttp?.RequestSchemaSizeBytes,
+            RequestSchemaToolBranches = providerHttp?.RequestSchemaToolBranches,
+            RequestSchemaMaxDepth = providerHttp?.RequestSchemaMaxDepth
         };
     }
 }

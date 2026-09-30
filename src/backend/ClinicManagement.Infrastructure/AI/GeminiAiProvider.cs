@@ -344,6 +344,7 @@ TOOL PLANNER CONTRACT:
         }
 
         var correlationId = Guid.NewGuid().ToString("N")[..8];
+        var responseSchema = AiRolePlannerContract.BuildResponseSchema(request.AllowedTools, request.AllowedIntents);
         var payload = new JsonObject
         {
             ["systemInstruction"] = new JsonObject
@@ -366,15 +367,23 @@ TOOL PLANNER CONTRACT:
                     ["text"] = new JsonObject
                     {
                         ["mimeType"] = AiRolePlannerContract.MimeType,
-                        ["schema"] = AiRolePlannerContract.BuildResponseSchema(request.AllowedTools, request.AllowedIntents)
+                        ["schema"] = responseSchema
                     }
                 }
             }
         };
 
-        var outcome = await SendChatPayloadAsync(payload.ToJsonString(), correlationId, cancellationToken);
+        var outcome = await SendChatPayloadAsync(
+            payload.ToJsonString(),
+            correlationId,
+            cancellationToken,
+            AiProviderHttpDiagnostic.CollectSchemaPropertyNames(responseSchema));
         if (outcome.Failure is { } failure)
         {
+            var providerHttp = failure.ProviderHttp?.WithRequestSchemaMetrics(responseSchema);
+            if (providerHttp is not null)
+                _logger.LogWarning("[{CorrelationId}] Role planner request rejected over HTTP; sent schema {SchemaSizeBytes} bytes, {SchemaToolBranches} tool branches, depth {SchemaMaxDepth}.",
+                    correlationId, providerHttp.RequestSchemaSizeBytes, providerHttp.RequestSchemaToolBranches, providerHttp.RequestSchemaMaxDepth);
             return new AiRolePlannerProviderResult
             {
                 IsSuccess = false,
@@ -387,7 +396,7 @@ TOOL PLANNER CONTRACT:
                 ProviderWasCalled = failure.ProviderWasCalled,
                 ProviderAttemptCount = failure.ProviderAttemptCount,
                 Diagnostic = failure.Diagnostic,
-                ProviderHttp = failure.ProviderHttp
+                ProviderHttp = providerHttp
             };
         }
 
@@ -499,7 +508,11 @@ SERVER_CONTEXT:
     /// Shared bounded HTTP loop for chat and role planning. Only transport and
     /// HTTP-status failures retry; an invalid body is never retried here.
     /// </summary>
-    private async Task<ChatSendOutcome> SendChatPayloadAsync(string payloadJson, string correlationId, CancellationToken cancellationToken)
+    private async Task<ChatSendOutcome> SendChatPayloadAsync(
+        string payloadJson,
+        string correlationId,
+        CancellationToken cancellationToken,
+        IReadOnlySet<string>? schemaPropertyNames = null)
     {
         var sw = Stopwatch.StartNew();
         var url = $"{_options.ProviderUrl}/v1beta/models/{_options.ModelName}:generateContent";
@@ -565,13 +578,14 @@ SERVER_CONTEXT:
                     >= 500 => "ProviderServerError",
                     _ => "NetworkError"
                 };
-                var httpDiagnostic = await ReadHttpDiagnosticAsync(response, attemptCts.Token);
+                var httpDiagnostic = await ReadHttpDiagnosticAsync(response, schemaPropertyNames ?? EmptyNames, attemptCts.Token);
                 var isTransient = IsRetryableStatus(statusCode);
                 if (!isTransient || attempt == maxAttempts - 1)
                 {
                     sw.Stop();
-                    _logger.LogError("[{CorrelationId}] AI Chat Provider failed on attempt {Attempt}/{MaxAttempts} with status {StatusCode} ({StatusType}, {ProviderErrorStatus}, {RejectedRequestPart}) in {ElapsedMs}ms.",
-                        correlationId, attempt + 1, maxAttempts, response.StatusCode, statusType, httpDiagnostic.ErrorStatus, httpDiagnostic.RejectedRequestPart, sw.ElapsedMilliseconds);
+                    _logger.LogError("[{CorrelationId}] AI Chat Provider failed on attempt {Attempt}/{MaxAttempts} with status {StatusCode} ({StatusType}, {ProviderErrorStatus}, {RejectedRequestPart}, {RejectionKind}, {RejectedName}, {RejectedFieldPath}) in {ElapsedMs}ms.",
+                        correlationId, attempt + 1, maxAttempts, response.StatusCode, statusType, httpDiagnostic.ErrorStatus, httpDiagnostic.RejectedRequestPart,
+                        httpDiagnostic.RejectionKind, httpDiagnostic.RejectedName, httpDiagnostic.RejectedFieldPath, sw.ElapsedMilliseconds);
                     return Fail(FailureResult(statusType, $"Provider returned HTTP {response.StatusCode}", correlationId, retryable: isTransient, retryAfter: GetRetryAfter(response), providerAttemptCount: providerAttempts, providerHttp: httpDiagnostic));
                 }
 
@@ -645,12 +659,14 @@ SERVER_CONTEXT:
     }
 
     private const int MaxErrorBodyBytes = 16 * 1024;
+    private static readonly IReadOnlySet<string> EmptyNames = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
-    /// Reads at most 16 KB of a rejected response and keeps only closed codes.
-    /// The body, error.message and field paths are discarded; this never throws.
+    /// Reads at most 16 KB of a rejected response and keeps only closed codes,
+    /// allowlisted names and a path normalized against the sent schema. The
+    /// body and error.message themselves are discarded; this never throws.
     /// </summary>
-    private static async Task<AiProviderHttpDiagnostic> ReadHttpDiagnosticAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private static async Task<AiProviderHttpDiagnostic> ReadHttpDiagnosticAsync(HttpResponseMessage response, IReadOnlySet<string> schemaPropertyNames, CancellationToken cancellationToken)
     {
         var httpStatus = AiProviderHttpDiagnostic.MapHttpStatus((int)response.StatusCode);
         string body;
@@ -663,7 +679,7 @@ SERVER_CONTEXT:
             while (length < buffer.Length && (read = await stream.ReadAsync(buffer.AsMemory(length), cancellationToken)) > 0)
                 length += read;
             if (length > MaxErrorBodyBytes)
-                return new AiProviderHttpDiagnostic { HttpStatus = httpStatus, ErrorStatus = AiProviderErrorStatus.Other };
+                return new AiProviderHttpDiagnostic { HttpStatus = httpStatus, ErrorStatus = AiProviderErrorStatus.Other, RejectionKind = AiProviderRejectionKind.Other };
             body = Encoding.UTF8.GetString(buffer, 0, length);
         }
         catch (Exception)
@@ -680,12 +696,13 @@ SERVER_CONTEXT:
             if (document.RootElement.ValueKind != JsonValueKind.Object ||
                 !document.RootElement.TryGetProperty("error", out var error) ||
                 error.ValueKind != JsonValueKind.Object)
-                return new AiProviderHttpDiagnostic { HttpStatus = httpStatus, ErrorStatus = AiProviderErrorStatus.Other };
+                return new AiProviderHttpDiagnostic { HttpStatus = httpStatus, ErrorStatus = AiProviderErrorStatus.Other, RejectionKind = AiProviderRejectionKind.Other };
 
             var status = error.TryGetProperty("status", out var statusElement) && statusElement.ValueKind == JsonValueKind.String
                 ? statusElement.GetString()
                 : null;
             var texts = new List<string?>();
+            string? firstViolationField = null;
             if (error.TryGetProperty("details", out var details) && details.ValueKind == JsonValueKind.Array)
             {
                 foreach (var detail in details.EnumerateArray())
@@ -698,22 +715,37 @@ SERVER_CONTEXT:
                         if (violation.ValueKind == JsonValueKind.Object &&
                             violation.TryGetProperty("field", out var field) &&
                             field.ValueKind == JsonValueKind.String)
-                            texts.Add(field.GetString());
+                        {
+                            var fieldText = field.GetString();
+                            texts.Add(fieldText);
+                            if (firstViolationField is null && !string.IsNullOrWhiteSpace(fieldText))
+                                firstViolationField = fieldText;
+                        }
                 }
             }
-            if (error.TryGetProperty("message", out var message) && message.ValueKind == JsonValueKind.String)
-                texts.Add(message.GetString());
+            var messageText = error.TryGetProperty("message", out var message) && message.ValueKind == JsonValueKind.String
+                ? message.GetString()
+                : null;
+            if (messageText is not null)
+                texts.Add(messageText);
 
             return new AiProviderHttpDiagnostic
             {
                 HttpStatus = httpStatus,
                 ErrorStatus = AiProviderHttpDiagnostic.MapErrorStatus(status),
-                RejectedRequestPart = AiProviderHttpDiagnostic.MapRejectedRequestPart(texts)
+                RejectedRequestPart = AiProviderHttpDiagnostic.MapRejectedRequestPart(texts),
+                RejectionKind = AiProviderHttpDiagnostic.MapRejectionKind(messageText),
+                RejectedName = AiProviderHttpDiagnostic.MapRejectedName(messageText),
+                RejectedFieldPath = AiProviderHttpDiagnostic.MapRejectedFieldPath(firstViolationField, messageText, schemaPropertyNames)
             };
         }
         catch (JsonException)
         {
-            return new AiProviderHttpDiagnostic { HttpStatus = httpStatus, ErrorStatus = AiProviderErrorStatus.Other };
+            return new AiProviderHttpDiagnostic { HttpStatus = httpStatus, ErrorStatus = AiProviderErrorStatus.Other, RejectionKind = AiProviderRejectionKind.Other };
+        }
+        catch (Exception)
+        {
+            return new AiProviderHttpDiagnostic { HttpStatus = httpStatus, ErrorStatus = AiProviderErrorStatus.Other, RejectionKind = AiProviderRejectionKind.Other };
         }
     }
 

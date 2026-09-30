@@ -123,7 +123,13 @@ internal static class Program
                     RejectedToolName = diagnostic.RejectedToolName,
                     ProviderHttpStatus = diagnostic.ProviderHttpStatus,
                     ProviderErrorStatus = diagnostic.ProviderErrorStatus,
-                    ProviderRejectedRequestPart = diagnostic.ProviderRejectedRequestPart
+                    ProviderRejectedRequestPart = diagnostic.ProviderRejectedRequestPart,
+                    ProviderRejectionKind = diagnostic.ProviderRejectionKind,
+                    ProviderRejectedName = diagnostic.ProviderRejectedName,
+                    ProviderRejectedFieldPath = diagnostic.ProviderRejectedFieldPath,
+                    RequestSchemaSizeBytes = diagnostic.RequestSchemaSizeBytes,
+                    RequestSchemaToolBranches = diagnostic.RequestSchemaToolBranches,
+                    RequestSchemaMaxDepth = diagnostic.RequestSchemaMaxDepth
                 });
             }
             catch (OperationCanceledException)
@@ -343,6 +349,15 @@ public sealed record LiveCanaryCaseResult
     public string ProviderHttpStatus { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
     public string ProviderErrorStatus { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
     public string ProviderRejectedRequestPart { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string ProviderRejectionKind { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string ProviderRejectedName { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string ProviderRejectedFieldPath { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+
+    // Server-measured size of the schema sent; null unless a role planner
+    // request was rejected over HTTP.
+    public int? RequestSchemaSizeBytes { get; init; }
+    public int? RequestSchemaToolBranches { get; init; }
+    public int? RequestSchemaMaxDepth { get; init; }
 }
 
 public sealed record LiveCanaryReport

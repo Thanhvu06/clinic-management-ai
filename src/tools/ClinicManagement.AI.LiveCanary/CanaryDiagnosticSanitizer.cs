@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using ClinicManagement.Application.AI;
 using ClinicManagement.Application.AI.Planning;
+using ClinicManagement.Application.AI.Tools;
 
 namespace ClinicManagement.AI.LiveCanary;
 
@@ -25,6 +26,20 @@ internal static class CanaryDiagnosticSanitizer
         .ToHashSet(StringComparer.Ordinal);
     private static readonly IReadOnlySet<string> ProviderErrorStatuses = Enum.GetNames<AiProviderErrorStatus>().ToHashSet(StringComparer.Ordinal);
     private static readonly IReadOnlySet<string> RejectedRequestParts = Enum.GetNames<AiProviderRejectedRequestPart>().ToHashSet(StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> RejectionKinds = Enum.GetNames<AiProviderRejectionKind>().ToHashSet(StringComparer.Ordinal);
+    private const int MaxSchemaSizeBytes = 1024 * 1024;
+    private const int MaxSchemaCount = 256;
+
+    // Every property name a role planner schema can contain: all planner
+    // tools of every role, built by the same server contract.
+    private static readonly Lazy<IReadOnlySet<string>> SchemaPropertyNames = new(() =>
+    {
+        var definitions = AiRoleToolCatalog.Definitions
+            .Concat(ClinicManagement.Infrastructure.AI.Tools.PatientCopilotToolHandler.Definitions())
+            .ToArray();
+        var tools = AiRolePlannerContract.BuildToolContracts(definitions, definitions.Select(x => x.Name));
+        return AiProviderHttpDiagnostic.CollectSchemaPropertyNames(AiRolePlannerContract.BuildResponseSchema(tools, AiRolePlannerContract.AllowedIntents));
+    });
     private static readonly Regex ServerCorrelationId = new("^[0-9a-f]{8}$", RegexOptions.CultureInvariant);
 
     private static readonly IReadOnlySet<string> ErrorCodes = AiPlannerErrorCodes.All
@@ -57,6 +72,17 @@ internal static class CanaryDiagnosticSanitizer
     public static string ProviderHttpStatus(string? value) => ClosedOrOther(value, HttpStatuses);
     public static string ProviderErrorStatus(string? value) => ClosedOrOther(value, ProviderErrorStatuses);
     public static string ProviderRejectedRequestPart(string? value) => ClosedOrOther(value, RejectedRequestParts);
+    public static string ProviderRejectionKind(string? value) => ClosedOrOther(value, RejectionKinds);
+    public static string ProviderRejectedName(string? value) => ClosedOrOther(value, AiProviderHttpDiagnostic.AllowedRequestNames);
+
+    // A path is kept only if every segment is an index, an allowlisted name,
+    // a planner schema property or "?"; otherwise the whole value is "Other".
+    public static string ProviderRejectedFieldPath(string? value) =>
+        value is null or NotAvailable ? NotAvailable :
+        AiProviderHttpDiagnostic.IsNormalizedFieldPath(value, SchemaPropertyNames.Value) ? value : OtherErrorCode;
+
+    public static int? SchemaSizeBytes(int? value) => value is >= 0 and <= MaxSchemaSizeBytes ? value : null;
+    public static int? SchemaCount(int? value) => value is >= 0 and <= MaxSchemaCount ? value : null;
 
     public static string? CorrelationId(string? value) =>
         value is not null && ServerCorrelationId.IsMatch(value) ? value : null;
@@ -85,7 +111,13 @@ internal static class CanaryDiagnosticSanitizer
         {
             ProviderHttpStatus = ProviderHttpStatus(Text(diagnostic, "providerHttpStatus")),
             ProviderErrorStatus = ProviderErrorStatus(Text(diagnostic, "providerErrorStatus")),
-            ProviderRejectedRequestPart = ProviderRejectedRequestPart(Text(diagnostic, "providerRejectedRequestPart"))
+            ProviderRejectedRequestPart = ProviderRejectedRequestPart(Text(diagnostic, "providerRejectedRequestPart")),
+            ProviderRejectionKind = ProviderRejectionKind(Text(diagnostic, "providerRejectionKind")),
+            ProviderRejectedName = ProviderRejectedName(Text(diagnostic, "providerRejectedName")),
+            ProviderRejectedFieldPath = ProviderRejectedFieldPath(Text(diagnostic, "providerRejectedFieldPath")),
+            RequestSchemaSizeBytes = SchemaSizeBytes(Int(diagnostic, "requestSchemaSizeBytes")),
+            RequestSchemaToolBranches = SchemaCount(Int(diagnostic, "requestSchemaToolBranches")),
+            RequestSchemaMaxDepth = SchemaCount(Int(diagnostic, "requestSchemaMaxDepth"))
         };
     }
 
@@ -105,7 +137,13 @@ internal static class CanaryDiagnosticSanitizer
         {
             ProviderHttpStatus = ProviderHttpStatus(providerHttp?.HttpStatus),
             ProviderErrorStatus = ProviderErrorStatus(providerHttp?.ErrorStatus.ToString()),
-            ProviderRejectedRequestPart = ProviderRejectedRequestPart(providerHttp?.RejectedRequestPart.ToString())
+            ProviderRejectedRequestPart = ProviderRejectedRequestPart(providerHttp?.RejectedRequestPart.ToString()),
+            ProviderRejectionKind = ProviderRejectionKind(providerHttp?.RejectionKind.ToString()),
+            ProviderRejectedName = ProviderRejectedName(providerHttp?.RejectedName),
+            ProviderRejectedFieldPath = ProviderRejectedFieldPath(providerHttp?.RejectedFieldPath),
+            RequestSchemaSizeBytes = SchemaSizeBytes(providerHttp?.RequestSchemaSizeBytes),
+            RequestSchemaToolBranches = SchemaCount(providerHttp?.RequestSchemaToolBranches),
+            RequestSchemaMaxDepth = SchemaCount(providerHttp?.RequestSchemaMaxDepth)
         };
     }
 
@@ -137,6 +175,12 @@ internal sealed record CanaryRejectionDiagnostic(
     public string ProviderHttpStatus { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
     public string ProviderErrorStatus { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
     public string ProviderRejectedRequestPart { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string ProviderRejectionKind { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string ProviderRejectedName { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string ProviderRejectedFieldPath { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public int? RequestSchemaSizeBytes { get; init; }
+    public int? RequestSchemaToolBranches { get; init; }
+    public int? RequestSchemaMaxDepth { get; init; }
 
     public bool IsPlannerSchemaOrJson =>
         ValidationStage is nameof(AiPlannerValidationStage.ProviderEnvelope) or nameof(AiPlannerValidationStage.GeneratedJson) or nameof(AiPlannerValidationStage.PlannerSchema);

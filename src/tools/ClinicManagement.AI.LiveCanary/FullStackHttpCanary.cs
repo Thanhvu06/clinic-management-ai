@@ -331,7 +331,13 @@ internal sealed class FullStackHttpCanary
             RejectedToolName = diagnostic.RejectedToolName,
             ProviderHttpStatus = diagnostic.ProviderHttpStatus,
             ProviderErrorStatus = diagnostic.ProviderErrorStatus,
-            ProviderRejectedRequestPart = diagnostic.ProviderRejectedRequestPart
+            ProviderRejectedRequestPart = diagnostic.ProviderRejectedRequestPart,
+            ProviderRejectionKind = diagnostic.ProviderRejectionKind,
+            ProviderRejectedName = diagnostic.ProviderRejectedName,
+            ProviderRejectedFieldPath = diagnostic.ProviderRejectedFieldPath,
+            RequestSchemaSizeBytes = diagnostic.RequestSchemaSizeBytes,
+            RequestSchemaToolBranches = diagnostic.RequestSchemaToolBranches,
+            RequestSchemaMaxDepth = diagnostic.RequestSchemaMaxDepth
         };
     }
 
