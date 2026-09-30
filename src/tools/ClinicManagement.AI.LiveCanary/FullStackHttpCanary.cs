@@ -28,10 +28,13 @@ internal sealed class FullStackHttpCanary
 {
     private const string SyntheticPassword = "Canary@12345";
 
-    public async Task<LiveCanaryReport> RunAsync(LiveCanaryReport report, int maxCalls)
+    public async Task<LiveCanaryReport> RunAsync(
+        LiveCanaryReport report,
+        int maxCalls,
+        HttpMessageHandler? providerHandler = null)
     {
         var budget = new CanaryProviderAttemptBudget(maxCalls);
-        using var factory = new SyntheticCanaryFactory(budget);
+        using var factory = new SyntheticCanaryFactory(budget, providerHandler);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         await factory.SeedAsync();
 
@@ -68,6 +71,9 @@ internal sealed class FullStackHttpCanary
                     Actor = canaryCase.Role.ToString(),
                     ExpectedCategory = canaryCase.ExpectedCategory,
                     RequestPath = canaryCase.ApiPath,
+                    RequestCurrentRoute = canaryCase.Route,
+                    ExpectedNavigationRoute = canaryCase.ExpectedNavigationRoute,
+                    NavigationExpectation = canaryCase.NavigationExpectation.ToString(),
                     ProviderCallExpected = canaryCase.ProviderCallExpected,
                     ProviderState = AiProviderStatusContract.NotCalled,
                     FailureCode = AiProviderStatusContract.FailureClientCancelled,
@@ -84,6 +90,9 @@ internal sealed class FullStackHttpCanary
                     Actor = canaryCase.Role.ToString(),
                     ExpectedCategory = canaryCase.ExpectedCategory,
                     RequestPath = canaryCase.ApiPath,
+                    RequestCurrentRoute = canaryCase.Route,
+                    ExpectedNavigationRoute = canaryCase.ExpectedNavigationRoute,
+                    NavigationExpectation = canaryCase.NavigationExpectation.ToString(),
                     ProviderCallExpected = canaryCase.ProviderCallExpected,
                     ProviderState = AiProviderStatusContract.Degraded,
                     FailureCode = AiProviderStatusContract.FailureUnknown,
@@ -159,6 +168,9 @@ internal sealed class FullStackHttpCanary
                 Actor = canaryCase.Role.ToString(),
                 ExpectedCategory = canaryCase.ExpectedCategory,
                 RequestPath = canaryCase.ApiPath,
+                RequestCurrentRoute = canaryCase.Route,
+                ExpectedNavigationRoute = canaryCase.ExpectedNavigationRoute,
+                NavigationExpectation = canaryCase.NavigationExpectation.ToString(),
                 ProviderCallExpected = canaryCase.ProviderCallExpected,
                 ProviderState = response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
                     ? AiProviderStatusContract.NotCalled
@@ -229,6 +241,10 @@ internal sealed class FullStackHttpCanary
         var errorCode = GetString(data, "errorCode");
         actor = GetString(data, "role");
         navigationRoute = GetString(data, "navigationRoute");
+        var navigationVerified = CanaryNavigationContract.IsValid(
+            canaryCase.NavigationExpectation,
+            canaryCase.ExpectedNavigationRoute,
+            navigationRoute);
         var cards = cardsElement.ValueKind == JsonValueKind.Array ? cardsElement.GetArrayLength() : 0;
         var sources = sourcesElement.ValueKind == JsonValueKind.Array ? sourcesElement.GetArrayLength() : 0;
         var toolNames = ReadStringArray(executedToolNamesElement);
@@ -270,7 +286,13 @@ internal sealed class FullStackHttpCanary
             ObservedActor = actor,
             ExpectedCategory = canaryCase.ExpectedCategory,
             RequestPath = canaryCase.ApiPath,
+            RequestCurrentRoute = canaryCase.Route,
+            ExpectedNavigationRoute = canaryCase.ExpectedNavigationRoute,
+            NavigationExpectation = canaryCase.NavigationExpectation.ToString(),
             ObservedNavigationRoute = navigationRoute,
+            NavigationVerified = canaryCase.NavigationExpectation == CanaryNavigationExpectation.NotApplicable
+                ? null
+                : navigationVerified,
             ActualIntent = actualIntent,
             ToolNames = toolNames,
             ProviderState = providerState,
@@ -284,7 +306,7 @@ internal sealed class FullStackHttpCanary
             ToolExecutions = toolNames.Count,
             ToolScopeValid = toolScopeValid,
             ActorVerified = isLegacyChat || string.Equals(actor, canaryCase.Role.ToString(), StringComparison.OrdinalIgnoreCase),
-            RouteVerified = isLegacyChat || string.Equals(navigationRoute, canaryCase.ExpectedNavigationRoute, StringComparison.OrdinalIgnoreCase),
+            RouteVerified = canaryCase.NavigationExpectation != CanaryNavigationExpectation.NotApplicable && navigationVerified,
             ExpectedToolVerified = expectedToolVerified,
             GroundedResponse = isLegacyChat ? legacyEvidenceVerified : cards > 0 && sources > 0,
             GroundedSourcesValid = groundedSourcesValid,
@@ -303,6 +325,9 @@ internal sealed class FullStackHttpCanary
         Actor = canaryCase.Role.ToString(),
         ExpectedCategory = canaryCase.ExpectedCategory,
         RequestPath = canaryCase.ApiPath,
+        RequestCurrentRoute = canaryCase.Route,
+        ExpectedNavigationRoute = canaryCase.ExpectedNavigationRoute,
+        NavigationExpectation = canaryCase.NavigationExpectation.ToString(),
         ProviderCallExpected = canaryCase.ProviderCallExpected,
         ProviderState = AiProviderStatusContract.Degraded,
         FailureCode = AiProviderStatusContract.FailureInvalidResponse,
@@ -411,7 +436,38 @@ public sealed record FullStackCanaryCase(
     string ExpectedNavigationRoute,
     string ExpectedToolName,
     string ApiPath = "/api/v1/ai/copilot/chat",
-    bool ProviderCallExpected = true);
+    bool ProviderCallExpected = true,
+    CanaryNavigationExpectation NavigationExpectation = CanaryNavigationExpectation.Optional);
+
+public enum CanaryNavigationExpectation
+{
+    NotApplicable,
+    Optional,
+    Required
+}
+
+public static class CanaryNavigationContract
+{
+    public static bool IsValid(
+        CanaryNavigationExpectation expectation,
+        string? expectedDestination,
+        string? observedNavigationRoute)
+    {
+        if (expectation == CanaryNavigationExpectation.NotApplicable)
+            return observedNavigationRoute is null;
+
+        if (observedNavigationRoute is null)
+            return expectation == CanaryNavigationExpectation.Optional;
+
+        return IsInternalRoute(expectedDestination) &&
+               string.Equals(observedNavigationRoute, expectedDestination, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsInternalRoute(string? route) =>
+        !string.IsNullOrWhiteSpace(route) &&
+        route.StartsWith("/", StringComparison.Ordinal) &&
+        !route.Contains("://", StringComparison.Ordinal);
+}
 
 public static class FullStackCanaryCaseCatalog
 {
@@ -424,7 +480,8 @@ public static class FullStackCanaryCaseCatalog
         new FullStackCanaryCase(
             "patient-legacy-http-read", "canary.patient@synthetic.invalid", AiActorRole.Patient, "patient_legacy_read",
             "Mở các cuộc hẹn sắp tới gắn với tài khoản của tôi.", "/patient/appointments",
-            "/patient/appointments", "patient.get_my_appointments", "/api/v1/ai/chat", false),
+            "/patient/appointments", "patient.get_my_appointments", "/api/v1/ai/chat", false,
+            CanaryNavigationExpectation.NotApplicable),
         new FullStackCanaryCase(
             "reception-http-read", "canary.reception@synthetic.invalid", AiActorRole.Receptionist, "reception_read",
             "Hôm nay quầy tiếp đón có những lượt hẹn nào?", "/reception/appointments",

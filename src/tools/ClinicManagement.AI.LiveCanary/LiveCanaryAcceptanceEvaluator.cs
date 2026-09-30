@@ -85,15 +85,17 @@ public static class LiveCanaryAcceptanceEvaluator
             if (!string.Equals(result.Actor, expectedActor, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(result.ExpectedCategory, required.ExpectedCategory, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(result.RequestPath, required.ApiPath, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(result.RequestCurrentRoute, required.Route, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(result.ExpectedNavigationRoute, required.ExpectedNavigationRoute, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(result.NavigationExpectation, required.NavigationExpectation.ToString(), StringComparison.OrdinalIgnoreCase) ||
                 result.ProviderCallExpected != required.ProviderCallExpected ||
                 !result.ActorVerified ||
-                !result.RouteVerified)
+                !IsNavigationEvidenceValid(required, result))
                 return false;
 
             if (required.ProviderCallExpected)
             {
                 if (!string.Equals(result.ObservedActor, expectedActor, StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(result.ObservedNavigationRoute, required.ExpectedNavigationRoute, StringComparison.OrdinalIgnoreCase) ||
                     !result.ToolNames.Contains(required.ExpectedToolName, StringComparer.OrdinalIgnoreCase) ||
                     !result.ExpectedToolVerified)
                     return false;
@@ -105,6 +107,23 @@ public static class LiveCanaryAcceptanceEvaluator
         }
 
         return true;
+    }
+
+    private static bool IsNavigationEvidenceValid(FullStackCanaryCase required, LiveCanaryCaseResult result)
+    {
+        if (required.NavigationExpectation == CanaryNavigationExpectation.NotApplicable)
+        {
+            return result.ObservedNavigationRoute is null &&
+                   result.NavigationVerified is null &&
+                   !result.RouteVerified;
+        }
+
+        return result.NavigationVerified == true &&
+               result.RouteVerified &&
+               CanaryNavigationContract.IsValid(
+                   required.NavigationExpectation,
+                   required.ExpectedNavigationRoute,
+                   result.ObservedNavigationRoute);
     }
 
     public static int ExitCode(LiveCanaryReport report, bool requireLive)
@@ -139,7 +158,6 @@ public static class LiveCanaryAcceptanceEvaluator
                result.GroundedResponse &&
                result.GroundedSourcesValid &&
                result.ActorVerified &&
-               result.RouteVerified &&
                result.ExpectedToolVerified &&
                !result.Clarification &&
                !result.PolicyViolation &&

@@ -43,6 +43,8 @@ public sealed class LiveCanaryAcceptanceTests
                     .Contains(canaryCase.ExpectedToolName, StringComparer.OrdinalIgnoreCase),
                 $"Missing expected tool {canaryCase.ExpectedToolName} for {canaryCase.Role}.");
         });
+        Assert.All(cases.Where(x => x.ProviderCallExpected), canaryCase =>
+            Assert.Equal(CanaryNavigationExpectation.Optional, canaryCase.NavigationExpectation));
 
         var expectedRoutes = new Dictionary<AiActorRole, string>
         {
@@ -58,6 +60,7 @@ public sealed class LiveCanaryAcceptanceTests
         var legacyPatient = Assert.Single(cases, canaryCase => canaryCase.CaseId == "patient-legacy-http-read");
         Assert.Equal("/api/v1/ai/chat", legacyPatient.ApiPath);
         Assert.False(legacyPatient.ProviderCallExpected);
+        Assert.Equal(CanaryNavigationExpectation.NotApplicable, legacyPatient.NavigationExpectation);
     }
 
     [Fact]
@@ -92,6 +95,29 @@ public sealed class LiveCanaryAcceptanceTests
     }
 
     [Fact]
+    public async Task Full_stack_fake_provider_accepts_a_read_response_without_navigation()
+    {
+        using var handler = new FakeGeminiHttpHandler("online");
+        var report = await new FullStackHttpCanary().RunAsync(
+            new LiveCanaryReport { DatabaseUnchanged = true },
+            maxCalls: 12,
+            providerHandler: handler);
+
+        Assert.Equal(LiveCanaryAcceptanceEvaluator.PassFull, report.AcceptanceStatus);
+        Assert.Equal(LiveCanaryAcceptanceEvaluator.PassFull, LiveCanaryAcceptanceEvaluator.Evaluate(report));
+        Assert.Equal(6, report.ProviderCallsExecuted);
+        Assert.Equal(6, report.ProviderAttemptsExecuted);
+        Assert.All(
+            report.Cases.Where(x => x.ProviderCallExpected),
+            result =>
+            {
+                Assert.Null(result.ObservedNavigationRoute);
+                Assert.Equal(CanaryNavigationExpectation.Optional.ToString(), result.NavigationExpectation);
+                Assert.True(result.NavigationVerified);
+            });
+    }
+
+    [Fact]
     public void Full_stack_cannot_accept_arbitrary_case_ids_as_the_required_actor_catalog()
     {
         var report = FullStackReport(ValidCases());
@@ -122,6 +148,78 @@ public sealed class LiveCanaryAcceptanceTests
         cases[0] = cases[0] with
         {
             ObservedNavigationRoute = "/admin",
+            RouteVerified = true
+        };
+
+        Assert.NotEqual(LiveCanaryAcceptanceEvaluator.PassFull, LiveCanaryAcceptanceEvaluator.Evaluate(FullStackReport(cases)));
+    }
+
+    [Fact]
+    public void Full_stack_allows_null_navigation_for_an_optional_read_case()
+    {
+        var cases = CatalogValidCases().ToArray();
+        cases[0] = cases[0] with
+        {
+            ObservedNavigationRoute = null,
+            NavigationVerified = true,
+            RouteVerified = true
+        };
+
+        Assert.Equal(LiveCanaryAcceptanceEvaluator.PassFull, LiveCanaryAcceptanceEvaluator.Evaluate(FullStackReport(cases)));
+    }
+
+    [Fact]
+    public void Full_stack_accepts_the_catalog_destination_for_an_optional_read_case()
+    {
+        var cases = CatalogValidCases().ToArray();
+        cases[0] = cases[0] with
+        {
+            ObservedNavigationRoute = "/patient/appointments",
+            NavigationVerified = true,
+            RouteVerified = true
+        };
+
+        Assert.Equal(LiveCanaryAcceptanceEvaluator.PassFull, LiveCanaryAcceptanceEvaluator.Evaluate(FullStackReport(cases)));
+    }
+
+    [Theory]
+    [InlineData("/admin")]
+    [InlineData("https://external.example/appointments")]
+    [InlineData("malformed-route")]
+    public void Full_stack_rejects_wrong_external_or_malformed_optional_navigation(string observedRoute)
+    {
+        var cases = CatalogValidCases().ToArray();
+        cases[0] = cases[0] with
+        {
+            ObservedNavigationRoute = observedRoute,
+            NavigationVerified = true,
+            RouteVerified = true
+        };
+
+        Assert.NotEqual(LiveCanaryAcceptanceEvaluator.PassFull, LiveCanaryAcceptanceEvaluator.Evaluate(FullStackReport(cases)));
+    }
+
+    [Fact]
+    public void Required_navigation_contract_rejects_null_and_accepts_the_exact_internal_destination()
+    {
+        Assert.False(CanaryNavigationContract.IsValid(
+            CanaryNavigationExpectation.Required,
+            "/doctor/queue",
+            null));
+        Assert.True(CanaryNavigationContract.IsValid(
+            CanaryNavigationExpectation.Required,
+            "/doctor/queue",
+            "/doctor/queue"));
+    }
+
+    [Fact]
+    public void Full_stack_rejects_a_report_that_changes_the_server_owned_navigation_expectation()
+    {
+        var cases = CatalogValidCases().ToArray();
+        cases[0] = cases[0] with
+        {
+            NavigationExpectation = CanaryNavigationExpectation.Required.ToString(),
+            NavigationVerified = true,
             RouteVerified = true
         };
 
@@ -334,7 +432,11 @@ public sealed class LiveCanaryAcceptanceTests
             ObservedActor = canaryCase.ProviderCallExpected ? canaryCase.Role.ToString() : null,
             ExpectedCategory = canaryCase.ExpectedCategory,
             RequestPath = canaryCase.ApiPath,
+            RequestCurrentRoute = canaryCase.Route,
+            ExpectedNavigationRoute = canaryCase.ExpectedNavigationRoute,
+            NavigationExpectation = canaryCase.NavigationExpectation.ToString(),
             ObservedNavigationRoute = canaryCase.ProviderCallExpected ? canaryCase.ExpectedNavigationRoute : null,
+            NavigationVerified = canaryCase.ProviderCallExpected ? true : null,
             ProviderState = canaryCase.ProviderCallExpected
                 ? AiProviderStatusContract.Online
                 : AiProviderStatusContract.NotCalled,
@@ -351,7 +453,7 @@ public sealed class LiveCanaryAcceptanceTests
                 : Array.Empty<string>(),
             ToolScopeValid = true,
             ActorVerified = true,
-            RouteVerified = true,
+            RouteVerified = canaryCase.ProviderCallExpected,
             ExpectedToolVerified = true,
             GroundedResponse = true,
             GroundedSourcesValid = true

@@ -283,7 +283,11 @@ public sealed record LiveCanaryCaseResult
     public string? ObservedActor { get; init; }
     public string ExpectedCategory { get; init; } = string.Empty;
     public string? RequestPath { get; init; }
+    public string? RequestCurrentRoute { get; init; }
+    public string? ExpectedNavigationRoute { get; init; }
+    public string NavigationExpectation { get; init; } = CanaryNavigationExpectation.Optional.ToString();
     public string? ObservedNavigationRoute { get; init; }
+    public bool? NavigationVerified { get; init; }
     public string? ActualIntent { get; init; }
     public IReadOnlyList<string> ToolNames { get; init; } = Array.Empty<string>();
     public string ProviderState { get; init; } = AiProviderStatusContract.NotCalled;
@@ -299,6 +303,7 @@ public sealed record LiveCanaryCaseResult
     public bool GroundedSourcesValid { get; init; }
     public bool ToolScopeValid { get; init; }
     public bool ActorVerified { get; init; }
+    // Compatibility field for older reports; new evaluation uses NavigationVerified and raw route data.
     public bool RouteVerified { get; init; }
     public bool ExpectedToolVerified { get; init; }
     public bool Clarification { get; init; }
@@ -313,7 +318,7 @@ public sealed record LiveCanaryReport
 {
     public DateTimeOffset TimestampUtc { get; init; }
     public string CommitSha { get; init; } = string.Empty;
-    public string CanaryVersion { get; init; } = "gate-d-v2";
+    public string CanaryVersion { get; init; } = "gate-d-v3-navigation-contract";
     public string CanaryLayer { get; init; } = "NotRun";
     public IReadOnlyList<string> CanaryLayers { get; init; } = Array.Empty<string>();
     public string ModelName { get; init; } = string.Empty;

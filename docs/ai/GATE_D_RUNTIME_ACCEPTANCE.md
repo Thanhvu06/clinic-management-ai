@@ -15,7 +15,7 @@ The canary runs only when all of these are true:
 
 The default live canary is `FullStackHttp`: six provider-backed authenticated actor calls (Patient, Receptionist, Doctor, DiagnosticTechnician, Pharmacist, Admin) go through `/api/v1/ai/copilot/chat`, plus a Patient read case through the production `/api/v1/ai/chat` path. The cases use the real context resolver, Gemini structured planner where required, read-only tool gateway, and grounded response composer. It executes no action prepare/confirm/write endpoint and compares a sanitized business-state fingerprint before and after. A separate `--planner-only` switch preserves the lower-level planner probe; its report is explicitly labelled `PlannerOnly`.
 
-The report contains only case IDs, actor/category labels, intent/tool names, execution mode, stable failure codes, status, counts, database fingerprints, and latency percentiles. It does not store prompts, provider responses, headers, keys, tokens, patient identifiers, or database identifiers.
+The report contains only case IDs, actor/category labels, request path/current route, navigation expectation/observation/verification, intent/tool names, execution mode, stable failure codes, status, counts, database fingerprints, and latency percentiles. Navigation is `Optional` for the provider-backed read cases: null is valid, but any returned route must match the catalog's internal destination. The Patient legacy case is `NotApplicable` for observed navigation. It does not store prompts, provider responses, headers, keys, tokens, patient identifiers, or database identifiers.
 
 Local opt-in example (keep the key in the process environment and never place it in a file or command history):
 

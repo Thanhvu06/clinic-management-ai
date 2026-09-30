@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc.Testing;
+using System.Runtime.CompilerServices;
 
 // The canary is an executable rather than an xUnit test assembly, so the
 // MVC-testing SDK cannot generate this metadata for WebApplicationFactory.
@@ -8,3 +9,4 @@ using Microsoft.AspNetCore.Mvc.Testing;
     "../../../../../../src/backend/ClinicManagement.Api",
     "appsettings.json",
     "0")]
+[assembly: InternalsVisibleTo("ClinicManagement.IntegrationTests")]
