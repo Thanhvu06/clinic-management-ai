@@ -334,13 +334,32 @@ public class AiBookingConfirmationTests : IntegrationTestBase
         Assert.Contains(appointmentBody.Data.AppointmentCode, visibleAppointments, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void FixtureDate_IsDistinctAndNeverSunday_ForEveryBaseWeekday()
+    {
+        var firstBase = new DateOnly(2026, 1, 5);
+        for (var offset = 0; offset < 7; offset++)
+        {
+            var baseDate = firstBase.AddDays(offset);
+            var dates = Enumerable.Range(1, 20).Select(sequence => FixtureDate(baseDate, sequence)).ToList();
+
+            Assert.Equal(dates.Count, dates.Distinct().Count());
+            Assert.DoesNotContain(dates, date => date.DayOfWeek == DayOfWeek.Sunday);
+            Assert.True(dates.First() > baseDate, $"First fixture date must be after base {baseDate:yyyy-MM-dd}.");
+            for (var i = 1; i < dates.Count; i++)
+            {
+                Assert.True(dates[i] > dates[i - 1], $"Fixture dates must strictly increase for base {baseDate:yyyy-MM-dd}.");
+            }
+        }
+    }
+
     private async Task<ConfirmationFixture> PrepareConfirmationAsync(string suffix, TimeSpan? ttl = null)
     {
         // Use a process-unique future date so parallel/ordered tests cannot
         // accidentally share the same doctor slot and bypass confirmation
         // validation through the existing-appointment fast path.
         var sequence = Interlocked.Increment(ref _confirmationFixtureSequence);
-        var date = GetFutureWorkingDate(500 + sequence);
+        var date = FixtureDate(GetFutureWorkingDate(500), sequence);
         var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(10, 0), new TimeOnly(10, 30));
         var sessionId = $"sess_{suffix}_{Guid.NewGuid():N}";
         var draftId = $"draft_{suffix}_{Guid.NewGuid():N}";
@@ -389,6 +408,24 @@ public class AiBookingConfirmationTests : IntegrationTestBase
             slot.StartTime,
             slot.EndTime,
             reason);
+    }
+
+    // Advance one working day per sequence step. Rolling Sunday forward per
+    // step (instead of once on the final date) keeps dates strictly increasing,
+    // so two fixtures can never land on the same doctor slot.
+    internal static DateOnly FixtureDate(DateOnly baseDate, int sequence)
+    {
+        var date = baseDate;
+        for (var i = 0; i < sequence; i++)
+        {
+            date = date.AddDays(1);
+            if (date.DayOfWeek == DayOfWeek.Sunday)
+            {
+                date = date.AddDays(1);
+            }
+        }
+
+        return date;
     }
 
     private static CreateAppointmentRequest BuildRequest(ConfirmationFixture fixture, string idempotencyKey) => new()
