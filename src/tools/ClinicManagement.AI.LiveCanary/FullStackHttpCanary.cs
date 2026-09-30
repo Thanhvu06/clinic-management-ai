@@ -275,10 +275,14 @@ internal sealed class FullStackHttpCanary
             ? legacyEvidenceVerified
             : toolNames.Contains(canaryCase.ExpectedToolName, StringComparer.OrdinalIgnoreCase);
         var groundedSourcesValid = isLegacyChat ? legacyEvidenceVerified : HasVerifiedSources(sourcesElement);
+        var diagnostic = CanaryDiagnosticSanitizer.FromResponse(data, allowedNames);
+        // Diagnostics can only make a case stricter: an envelope, JSON or
+        // planner-schema rejection is never counted as schema-valid.
         var schemaValid = fieldsValid &&
                           AiChatIntentTypes.IsAllowed(actualIntent) &&
                           !string.Equals(errorCode, "INVALID_PROVIDER_SCHEMA", StringComparison.OrdinalIgnoreCase) &&
-                          !string.Equals(errorCode, "INVALID_PROVIDER_PLAN", StringComparison.OrdinalIgnoreCase);
+                          !string.Equals(errorCode, "INVALID_PROVIDER_PLAN", StringComparison.OrdinalIgnoreCase) &&
+                          !diagnostic.IsPlannerSchemaOrJson;
         return new LiveCanaryCaseResult
         {
             CaseId = canaryCase.CaseId,
@@ -312,10 +316,19 @@ internal sealed class FullStackHttpCanary
             GroundedSourcesValid = groundedSourcesValid,
             Clarification = !string.IsNullOrWhiteSpace(GetString(data, "clarification")),
             PolicyViolation = errorCode is not null && errorCode.Contains("POLICY", StringComparison.OrdinalIgnoreCase),
-            ProviderPlanRejected = errorCode is not null && (errorCode.StartsWith("INVALID_PROVIDER", StringComparison.OrdinalIgnoreCase) || errorCode == "PROVIDER_RESOURCE_MISMATCH"),
+            ProviderPlanRejected = errorCode is not null && (errorCode.StartsWith("INVALID_PROVIDER", StringComparison.OrdinalIgnoreCase) || errorCode == "PROVIDER_RESOURCE_MISMATCH") ||
+                                   providerCalled && diagnostic.IsToolPlanOrBinding,
             AuthorizationDenied = errorCode is not null && errorCode.Contains("DENIED", StringComparison.OrdinalIgnoreCase),
             ExecutionMode = executionMode,
-            LatencyMilliseconds = latency
+            LatencyMilliseconds = latency,
+            ApplicationErrorCode = diagnostic.ApplicationErrorCode,
+            ValidationStage = diagnostic.ValidationStage,
+            ValidationReason = diagnostic.ValidationReason,
+            ProviderFinishReason = diagnostic.FinishReason,
+            CorrelationId = diagnostic.CorrelationId,
+            RejectedToolIndex = diagnostic.RejectedToolIndex,
+            RejectedPlanToolCount = diagnostic.ToolCount,
+            RejectedToolName = diagnostic.RejectedToolName
         };
     }
 

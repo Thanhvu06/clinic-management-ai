@@ -186,17 +186,11 @@ public sealed class AiToolBindingRegistryTests
     public async Task Structured_planner_returns_resource_mismatch_without_a_bound_call()
     {
         var provider = new Mock<IAiSpecialtySuggestionProvider>();
-        provider.Setup(x => x.ChatWithAiAsync(It.IsAny<string>(), It.IsAny<List<ChatMessageDto>>(), It.IsAny<List<WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new AiChatProviderResult
-            {
-                IsSuccess = true,
-                Status = "Success",
-                PlannerSchemaVersion = "1.0",
-                PlannerConfidence = .95m,
-                PrimaryIntent = AiChatIntentTypes.PatientSummary,
-                IsClear = true,
-                ToolCalls = new List<AiPlannerToolCall> { Call("doctor.get_patient_summary", new { visitId = 202L }) }
-            });
+        provider.Setup(x => x.PlanRoleCopilotAsync(It.IsAny<AiRolePlannerProviderRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(RolePlannerResults.Success(
+                AiChatIntentTypes.PatientSummary,
+                .95m,
+                toolCalls: new[] { Call("doctor.get_patient_summary", new { visitId = 202L }) }));
 
         var planner = new GeminiStructuredPlanner(provider.Object, new AiProviderHealth(), NullLogger<GeminiStructuredPlanner>.Instance);
         var result = await planner.PlanAsync(new AiStructuredPlannerRequest
@@ -212,25 +206,22 @@ public sealed class AiToolBindingRegistryTests
         Assert.Equal("PROVIDER_RESOURCE_MISMATCH", result.FailureReason);
         Assert.Equal("PROVIDER_RESOURCE_MISMATCH", result.Decision.ErrorCode);
         Assert.Empty(result.Decision.ToolCalls);
+        Assert.Equal(AiPlannerValidationStage.ResourceBinding, result.Diagnostic?.Stage);
+        Assert.Equal(AiPlannerValidationReason.ResourceMismatch, result.Diagnostic?.Reason);
+        Assert.Equal("doctor.get_patient_summary", result.Diagnostic?.ToolName);
     }
 
     [Fact]
     public async Task Structured_planner_does_not_disclose_server_bound_argument_names_to_provider()
     {
         var provider = new Mock<IAiSpecialtySuggestionProvider>();
-        var capturedPolicy = string.Empty;
-        provider.Setup(x => x.ChatWithAiAsync(It.IsAny<string>(), It.IsAny<List<ChatMessageDto>>(), It.IsAny<List<WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Callback<string, List<ChatMessageDto>, List<WhitelistItemDto>, string, CancellationToken>((_, _, _, policy, _) => capturedPolicy = policy)
-            .ReturnsAsync(new AiChatProviderResult
-            {
-                IsSuccess = true,
-                Status = "Success",
-                PlannerSchemaVersion = "1.0",
-                PlannerConfidence = .95m,
-                PrimaryIntent = AiChatIntentTypes.QueueLookup,
-                IsClear = true,
-                ToolCalls = new List<AiPlannerToolCall> { Call("doctor.get_my_queue", new { }) }
-            });
+        AiRolePlannerProviderRequest? captured = null;
+        provider.Setup(x => x.PlanRoleCopilotAsync(It.IsAny<AiRolePlannerProviderRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<AiRolePlannerProviderRequest, CancellationToken>((request, _) => captured = request)
+            .ReturnsAsync(RolePlannerResults.Success(
+                AiChatIntentTypes.QueueLookup,
+                .95m,
+                toolCalls: new[] { Call("doctor.get_my_queue", new { }) }));
 
         var planner = new GeminiStructuredPlanner(provider.Object, new AiProviderHealth(), NullLogger<GeminiStructuredPlanner>.Instance);
         var doctorTools = AiRoleToolCatalog.Definitions.Where(x => x.AllowedRoles.Contains(AiActorRole.Doctor)).ToArray();
@@ -244,9 +235,14 @@ public sealed class AiToolBindingRegistryTests
         });
 
         Assert.True(result.IsSuccess, result.FailureReason);
-        Assert.DoesNotContain("visitId", capturedPolicy, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("appointmentId", capturedPolicy, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("hasServerBoundResource", capturedPolicy, StringComparison.Ordinal);
+        var providerFacing = JsonSerializer.Serialize(captured);
+        Assert.DoesNotContain("visitId", providerFacing, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("appointmentId", providerFacing, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("101", providerFacing, StringComparison.Ordinal);
+        var summary = Assert.Single(captured!.AllowedTools, x => x.Name == "doctor.get_patient_summary");
+        Assert.True(summary.RequiresCurrentResource);
+        Assert.Empty(summary.Arguments);
+        Assert.True(captured.Context.HasVisit);
     }
 
     private static AiToolPlanPreflightResult Preflight(

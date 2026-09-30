@@ -78,6 +78,7 @@ public sealed class AiStructuredPlannerResult
     public DateTimeOffset? RetryAfterUtc { get; init; }
     public int? RetryAfterSeconds { get; init; }
     public string? CorrelationId { get; init; }
+    public AiPlannerValidationDiagnostic? Diagnostic { get; init; }
     public AiPlannerDecision Decision { get; init; } = new() { PlannerMode = AiPlannerModes.Fallback };
 }
 

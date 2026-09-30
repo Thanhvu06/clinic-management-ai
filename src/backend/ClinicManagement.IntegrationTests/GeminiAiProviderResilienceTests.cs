@@ -339,7 +339,7 @@ public sealed class GeminiAiProviderResilienceTests
             _ => Task.FromResult(Response(HttpStatusCode.OK, InvalidJsonEnvelope())),
             _ => Task.FromResult(Response(HttpStatusCode.OK, InvalidJsonEnvelope())),
             _ => Task.FromResult(Response(HttpStatusCode.OK, InvalidJsonEnvelope())),
-            _ => Task.FromResult(Response(HttpStatusCode.OK, ValidEnvelope("đã gọi lại"))));
+            _ => Task.FromResult(Response(HttpStatusCode.OK, RolePlannerEnvelope("đã gọi lại"))));
         var provider = CreateProvider(handler, timeoutSeconds: 2, maxAttempts: 1, retryBaseDelayMilliseconds: 0);
         var health = new AiProviderHealth(TimeSpan.FromSeconds(30), failureThreshold: 1);
         var planner = new GeminiStructuredPlanner(provider, health, NullLogger<GeminiStructuredPlanner>.Instance);
@@ -353,7 +353,7 @@ public sealed class GeminiAiProviderResilienceTests
 
         Assert.Equal("Closed", health.State);
         var recovered = await planner.PlanAsync(request);
-        Assert.True(recovered.IsSuccess);
+        Assert.True(recovered.IsSuccess, $"{recovered.FailureReason} {recovered.Diagnostic} {recovered.ProviderState}");
         Assert.Equal(4, handler.CallCount);
     }
 
@@ -385,7 +385,7 @@ public sealed class GeminiAiProviderResilienceTests
             _ => Task.FromResult(Response(HttpStatusCode.ServiceUnavailable, "{}", TimeSpan.Zero)),
             _ => Task.FromResult(Response(HttpStatusCode.ServiceUnavailable, "{}", TimeSpan.Zero)),
             _ => Task.FromResult(Response(HttpStatusCode.ServiceUnavailable, "{}", TimeSpan.Zero)),
-            _ => Task.FromResult(Response(HttpStatusCode.OK, ValidEnvelope("Đã hồi phục."))));
+            _ => Task.FromResult(Response(HttpStatusCode.OK, RolePlannerEnvelope("Đã hồi phục."))));
         var provider = CreateProvider(handler, timeoutSeconds: 2, maxAttempts: 1, retryBaseDelayMilliseconds: 0);
         var health = new AiProviderHealth(TimeSpan.FromMilliseconds(60));
         var planner = new GeminiStructuredPlanner(provider, health, NullLogger<GeminiStructuredPlanner>.Instance);
@@ -411,7 +411,7 @@ public sealed class GeminiAiProviderResilienceTests
         await Task.Delay(100);
         var recovered = await planner.PlanAsync(request);
 
-        Assert.True(recovered.IsSuccess);
+        Assert.True(recovered.IsSuccess, $"{recovered.FailureReason} {recovered.Diagnostic} {recovered.ProviderState}");
         Assert.Equal(AiProviderStatusContract.Online, recovered.ProviderState);
         Assert.Equal(4, handler.CallCount);
     }
@@ -488,6 +488,34 @@ public sealed class GeminiAiProviderResilienceTests
                         }) }
                     }
                 }
+            }
+        }
+    });
+
+    // Role planner output: the role contract requires isClear, clarification and toolCalls.
+    private static string RolePlannerEnvelope(string reply) => JsonSerializer.Serialize(new
+    {
+        candidates = new[]
+        {
+            new
+            {
+                content = new
+                {
+                    parts = new[]
+                    {
+                        new { text = JsonSerializer.Serialize(new
+                        {
+                            plannerSchemaVersion = "1.0",
+                            plannerConfidence = 0.9m,
+                            primaryIntent = "Help",
+                            isClear = true,
+                            clarification = (string?)null,
+                            toolCalls = Array.Empty<object>(),
+                            reply
+                        }) }
+                    }
+                },
+                finishReason = "STOP"
             }
         }
     });

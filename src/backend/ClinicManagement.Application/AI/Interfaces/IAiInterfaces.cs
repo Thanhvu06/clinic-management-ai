@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.AI.DTOs;
+using ClinicManagement.Application.AI.Planning;
 
 namespace ClinicManagement.Application.AI.Interfaces;
 
@@ -15,6 +16,12 @@ public interface IAiSpecialtySuggestionProvider
 {
     Task<List<AiProviderSuggestionResult>> GetSuggestionsFromAiAsync(string symptomDescription, List<WhitelistItemDto> whitelist, CancellationToken cancellationToken = default);
     Task<AiChatProviderResult> ChatWithAiAsync(string message, List<ChatMessageDto> context, List<WhitelistItemDto> whitelist, string clinicContextJson, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Role Copilot read planner. A separate, server-selected contract: a
+    /// role-specific prompt and a response schema built from the granted tools.
+    /// </summary>
+    Task<AiRolePlannerProviderResult> PlanRoleCopilotAsync(AiRolePlannerProviderRequest request, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

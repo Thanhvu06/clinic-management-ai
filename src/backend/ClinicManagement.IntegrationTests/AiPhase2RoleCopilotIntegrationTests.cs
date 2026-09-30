@@ -48,6 +48,9 @@ public sealed class AiPhase2RoleCopilotIntegrationTests : IntegrationTestBase
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new AiChatProviderResult { IsSuccess = false, Status = "ProviderServerError", FailureCode = "ServerError" });
+        Factory.MockAiProvider
+            .Setup(x => x.PlanRoleCopilotAsync(It.IsAny<ClinicManagement.Application.AI.Planning.AiRolePlannerProviderRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(RolePlannerResults.Failure("ProviderServerError", "ServerError"));
 
         var cases = new[]
         {

@@ -147,6 +147,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         int? retryAfterSeconds = null;
         string? correlationId = null;
         var providerAttemptCount = 0;
+        AiPlannerValidationDiagnostic? plannerDiagnostic = null;
 
         if (decision.RequiresProvider)
         {
@@ -176,6 +177,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 retryAfterSeconds = planned.RetryAfterSeconds;
                 correlationId = planned.CorrelationId;
                 providerAttemptCount = planned.ProviderAttemptCount;
+                plannerDiagnostic = planned.Diagnostic;
                 decision = planned.Decision;
                 if (planned.ProviderCalled && planned.IsSuccess && decision.ToolCalls.Count > 0)
                 {
@@ -184,8 +186,12 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                     {
                         decision = FallbackDecision(
                             "Resource hiện tại đã thay đổi trong lúc lập kế hoạch. Vui lòng chọn lại resource rồi thử lại.",
-                            "RESOURCE_CONTEXT_CHANGED",
-                            "RESOURCE_CONTEXT_CHANGED");
+                            AiPlannerErrorCodes.ResourceContextChanged,
+                            AiPlannerErrorCodes.ResourceContextChanged);
+                        plannerDiagnostic = new AiPlannerValidationDiagnostic(AiPlannerValidationStage.ResourceBinding, AiPlannerValidationReason.ResourceContextChanged)
+                        {
+                            ToolCount = planned.Decision.ToolCalls.Count
+                        };
                     }
                     else
                     {
@@ -201,6 +207,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             if (!preflight.IsValid)
             {
                 decision = FallbackDecision(preflight.Message, preflight.Code, preflight.Code);
+                plannerDiagnostic ??= preflight.Diagnostic;
             }
             else
             {
@@ -264,7 +271,8 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 .Select(x => x!)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(x => x, StringComparer.Ordinal)
-                .ToArray()
+                .ToArray(),
+            PlannerDiagnostic = AiCopilotPlannerDiagnosticDto.From(plannerDiagnostic)
         };
         await PersistAndAudit(final, sessionId, role, resolved.Context, decision.ToolCalls.Count, cancellationToken);
         return final;
@@ -295,6 +303,9 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 intent = response.Intent,
                 subIntent = response.SubIntent,
                 errorCode = response.ErrorCode,
+                validationStage = response.PlannerDiagnostic?.Stage,
+                validationReason = response.PlannerDiagnostic?.Reason,
+                correlationId = response.CorrelationId,
                 plannerMode = response.PlannerMode,
                 providerState = response.ProviderState,
                 role = response.Role,

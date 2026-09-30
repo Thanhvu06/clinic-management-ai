@@ -93,6 +93,9 @@ internal static class Program
                     .ToArray();
                 var policyViolation = string.Equals(result.FailureReason, "INVALID_PROVIDER_PLAN", StringComparison.Ordinal) ||
                                       string.Equals(result.FailureReason, "PROVIDER_RESOURCE_MISMATCH", StringComparison.Ordinal);
+                var diagnostic = CanaryDiagnosticSanitizer.FromPlannerResult(
+                    result,
+                    ToolsFor(canaryCase.Role).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase));
 
                 results.Add(new LiveCanaryCaseResult
                 {
@@ -109,7 +112,15 @@ internal static class Program
                     AllowedTools = toolNames.Length,
                     Clarification = !string.IsNullOrWhiteSpace(result.Decision.Clarification),
                     PolicyViolation = policyViolation,
-                    LatencyMilliseconds = stopwatch.ElapsedMilliseconds
+                    LatencyMilliseconds = stopwatch.ElapsedMilliseconds,
+                    ApplicationErrorCode = diagnostic.ApplicationErrorCode,
+                    ValidationStage = diagnostic.ValidationStage,
+                    ValidationReason = diagnostic.ValidationReason,
+                    ProviderFinishReason = diagnostic.FinishReason,
+                    CorrelationId = diagnostic.CorrelationId,
+                    RejectedToolIndex = diagnostic.RejectedToolIndex,
+                    RejectedPlanToolCount = diagnostic.ToolCount,
+                    RejectedToolName = diagnostic.RejectedToolName
                 });
             }
             catch (OperationCanceledException)
@@ -312,13 +323,24 @@ public sealed record LiveCanaryCaseResult
     public bool AuthorizationDenied { get; init; }
     public string? ExecutionMode { get; init; }
     public long LatencyMilliseconds { get; init; }
+
+    // Sanitized rejection diagnostics: closed server codes only. Absent
+    // diagnostics are reported as NotAvailable, never inferred.
+    public string ApplicationErrorCode { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string ValidationStage { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string ValidationReason { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string ProviderFinishReason { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string? CorrelationId { get; init; }
+    public int? RejectedToolIndex { get; init; }
+    public int? RejectedPlanToolCount { get; init; }
+    public string? RejectedToolName { get; init; }
 }
 
 public sealed record LiveCanaryReport
 {
     public DateTimeOffset TimestampUtc { get; init; }
     public string CommitSha { get; init; } = string.Empty;
-    public string CanaryVersion { get; init; } = "gate-d-v3-navigation-contract";
+    public string CanaryVersion { get; init; } = "gate-d-v4-rejection-diagnostics";
     public string CanaryLayer { get; init; } = "NotRun";
     public IReadOnlyList<string> CanaryLayers { get; init; } = Array.Empty<string>();
     public string ModelName { get; init; } = string.Empty;

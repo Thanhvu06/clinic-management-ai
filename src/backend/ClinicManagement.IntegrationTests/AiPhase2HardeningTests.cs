@@ -131,6 +131,8 @@ public sealed class AiPhase2HardeningTests : IntegrationTestBase
                 IsSuccess = true, Status = "Success", PlannerSchemaVersion = "1.0", PlannerConfidence = .8m,
                 IsClear = true, PrimaryIntent = AiChatIntentTypes.Greeting, Reply = reply, Clarification = reply
             });
+        Factory.MockAiProvider.Setup(x => x.PlanRoleCopilotAsync(It.IsAny<AiRolePlannerProviderRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(RolePlannerResults.Success(AiChatIntentTypes.Greeting, .8m, reply: reply, clarification: reply));
         try
         {
             var response = await Client.PostAsJsonAsync(route, new
@@ -171,6 +173,8 @@ public sealed class AiPhase2HardeningTests : IntegrationTestBase
                 IsClear = true, PrimaryIntent = AiChatIntentTypes.Greeting,
                 Reply = reply, Clarification = reply
             });
+        Factory.MockAiProvider.Setup(x => x.PlanRoleCopilotAsync(It.IsAny<AiRolePlannerProviderRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(RolePlannerResults.Success(AiChatIntentTypes.Greeting, .8m, reply: reply, clarification: reply));
         try
         {
             var response = await Client.PostAsJsonAsync(route, new
@@ -178,8 +182,11 @@ public sealed class AiPhase2HardeningTests : IntegrationTestBase
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             var data = json.RootElement.GetProperty("data");
-            Factory.MockAiProvider.Verify(x => x.ChatWithAiAsync(It.IsAny<string>(), It.IsAny<List<ChatMessageDto>>(),
-                It.IsAny<List<WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+            if (route.EndsWith("copilot/chat"))
+                Factory.MockAiProvider.Verify(x => x.PlanRoleCopilotAsync(It.IsAny<AiRolePlannerProviderRequest>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+            else
+                Factory.MockAiProvider.Verify(x => x.ChatWithAiAsync(It.IsAny<string>(), It.IsAny<List<ChatMessageDto>>(),
+                    It.IsAny<List<WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
             Assert.Contains(expected, data.GetProperty("message").GetString());
             Assert.DoesNotContain("500 mg", data.ToString());
         }
@@ -193,10 +200,9 @@ public sealed class AiPhase2HardeningTests : IntegrationTestBase
     {
         var provider = new Mock<IAiSpecialtySuggestionProvider>();
         string? captured = null;
-        provider.Setup(x => x.ChatWithAiAsync(It.IsAny<string>(), It.IsAny<List<ChatMessageDto>>(),
-            It.IsAny<List<WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Callback<string, List<ChatMessageDto>, List<WhitelistItemDto>, string, CancellationToken>((message, _, _, _, _) => captured = message)
-            .ReturnsAsync(new AiChatProviderResult { IsSuccess = false, Status = "ProviderUnavailable" });
+        provider.Setup(x => x.PlanRoleCopilotAsync(It.IsAny<AiRolePlannerProviderRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<AiRolePlannerProviderRequest, CancellationToken>((request, _) => captured = request.Message)
+            .ReturnsAsync(RolePlannerResults.Failure("ProviderUnavailable"));
         var planner = new GeminiStructuredPlanner(provider.Object, new AiProviderHealth(), NullLogger<GeminiStructuredPlanner>.Instance);
         await planner.PlanAsync(new AiStructuredPlannerRequest
         { Role = AiActorRole.Patient, Message = $"Tôi ho nhẹ {identifier}", AllowedToolNames = new[] { "clinic.get_facilities" } });

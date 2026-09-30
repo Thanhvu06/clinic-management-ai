@@ -15,12 +15,6 @@ namespace ClinicManagement.Infrastructure.AI.Planning;
 /// </summary>
 public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
 {
-    private static readonly HashSet<string> ForbiddenArgumentNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "userId", "actorId", "role", "facilityId", "facilityAuthorization",
-        "confirm", "confirmationToken", "concurrencyToken", "idempotencyKey"
-    };
-
     private readonly IAiSpecialtySuggestionProvider _provider;
     private readonly IAiProviderHealth _health;
     private readonly ILogger<GeminiStructuredPlanner> _logger;
@@ -38,71 +32,43 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
             return Failed(AiProviderStatusContract.Unavailable, AiProviderStatusContract.FailureCircuitOpen, false, false);
 
         var allowed = request.AllowedToolNames.Where(AiPlannerPolicy.IsAllowed).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        var context = new List<ChatMessageDto>();
-        if (!string.IsNullOrWhiteSpace(request.Memory?.LastIntent) || !string.IsNullOrWhiteSpace(request.Memory?.PendingClarification))
-            context.Add(new ChatMessageDto
-            {
-                Role = "model",
-                Content = $"Previous server-owned conversation state: intent={request.Memory?.LastIntent ?? "none"}; subIntent={request.Memory?.LastSubIntent ?? "none"}; pendingClarification={request.Memory?.PendingClarification ?? "none"}."
-            });
-
         var planningDefinitions = request.AllowedTools.Count > 0
             ? request.AllowedTools
             : request.AllowedToolNames.Select(name => new AiToolDefinition { Name = name }).ToArray();
-        var allowedToolContracts = planningDefinitions
-            .Where(x => allowed.Contains(x.Name, StringComparer.OrdinalIgnoreCase) && AiPlannerPolicy.IsAllowed(x.Name))
-            .Select(x => new
-            {
-                name = x.Name,
-                description = x.Description,
-                capabilities = x.Capabilities.Select(capability => capability.ToString()).OrderBy(x => x).ToArray(),
-                riskLevel = x.RiskLevel.ToString(),
-                confirmation = x.Confirmation.ToString(),
-                // Resource identifiers are server-bound. Do not disclose even
-                // their argument names to the provider-facing contract.
-                argumentSchema = x.ArgumentSchema
-                    .Where(argument => !argument.ServerBound)
-                    .Select(argument => new
-                    {
-                        name = argument.Name,
-                        type = argument.Type.ToString(),
-                        required = argument.Required,
-                        serverBound = argument.ServerBound
-                    }).ToArray(),
-                hasServerBoundResource = x.ResourceBinding.ServerBoundArgumentNames.Count > 0
-            })
-            .ToArray();
+        var definitionMap = planningDefinitions
+            .Where(x => allowed.Contains(x.Name, StringComparer.OrdinalIgnoreCase))
+            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
 
-        var policyContext = JsonSerializer.Serialize(new
+        var providerRequest = new AiRolePlannerProviderRequest
         {
-            actorRole = request.Role.ToString(),
-            localIntent = request.LocalIntent,
-            localConfidence = request.LocalConfidence,
-            allowedToolNames = allowed,
-            allowedToolContracts,
-            resourceContext = new
+            Role = request.Role,
+            Message = SanitizeForProvider(request.Message),
+            AllowedTools = AiRolePlannerContract.BuildToolContracts(planningDefinitions, allowed),
+            AllowedIntents = AiRolePlannerContract.AllowedIntents,
+            // Resource identifiers stay on the server; the provider only
+            // learns whether a verified resource of each kind is open.
+            Context = new AiRolePlannerServerContext
             {
-                currentRoute = request.Resource.CurrentRoute,
-                hasAppointment = request.Resource.AppointmentId.HasValue,
-                hasVisit = request.Resource.VisitId.HasValue,
-                hasDiagnosticOrder = request.Resource.DiagnosticOrderId.HasValue,
-                hasPrescription = request.Resource.PrescriptionId.HasValue
-            },
-            conversation = new
-            {
-                request.Memory?.SanitizedSummary,
-                request.Memory?.LastIntent,
-                request.Memory?.LastSubIntent,
-                request.Memory?.PendingClarification,
-                request.Memory?.Version
-            },
-            instruction = "Return JSON only. Use only allowedTools. Do not emit write or confirmation tools. Ask a clarification when data is missing. Resource identifiers are server-bound and must not be requested from or echoed to the user."
-        });
+                LocalIntent = request.LocalIntent,
+                LocalConfidence = request.LocalConfidence,
+                HasAppointment = request.Resource.AppointmentId.HasValue,
+                HasVisit = request.Resource.VisitId.HasValue,
+                HasDiagnosticOrder = request.Resource.DiagnosticOrderId.HasValue,
+                HasPrescription = request.Resource.PrescriptionId.HasValue,
+                LastIntent = request.Memory?.LastIntent,
+                LastSubIntent = request.Memory?.LastSubIntent,
+                PendingClarification = request.Memory?.PendingClarification,
+                ConversationVersion = request.Memory?.Version
+            }
+        };
 
         try
         {
-            var providerResult = await _provider.ChatWithAiAsync(SanitizeForProvider(request.Message), context, new List<WhitelistItemDto>(), policyContext, cancellationToken);
+            var providerResult = await _provider.PlanRoleCopilotAsync(providerRequest, cancellationToken);
             var providerState = AiProviderStatusContract.FromProviderResult(providerResult.Status, true);
+            var correlationId = providerResult.CorrelationId;
+            var attempts = providerResult.ProviderAttemptCount;
             if (!providerResult.IsSuccess)
             {
                 if (string.Equals(providerResult.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) && cancellationToken.IsCancellationRequested)
@@ -124,39 +90,33 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
                     providerResult.Retryable,
                     providerResult.RetryAfterUtc,
                     providerResult.RetryAfterSeconds,
-                    providerResult.CorrelationId,
-                    providerResult.ProviderAttemptCount);
+                    correlationId,
+                    attempts,
+                    providerResult.Diagnostic);
             }
 
-            if (!string.Equals(providerResult.PlannerSchemaVersion, "1.0", StringComparison.Ordinal) ||
-                !providerResult.PlannerConfidence.HasValue || providerResult.PlannerConfidence is < 0m or > 1m ||
-                !AiChatIntentTypes.IsAllowed(providerResult.PrimaryIntent))
-            {
-                _health.RecordFailure(AiProviderStatusContract.FailureInvalidResponse);
-                return Failed(AiProviderStatusContract.Degraded, "INVALID_PROVIDER_SCHEMA", true, providerAttempts: providerResult.ProviderAttemptCount);
-            }
+            var output = providerResult.Output;
+            var schemaFailure = output is null
+                ? new AiPlannerValidationDiagnostic(AiPlannerValidationStage.GeneratedJson, AiPlannerValidationReason.MissingRequiredField) { Field = AiPlannerOutputField.Root }
+                : ValidateSchema(output);
+            if (schemaFailure is not null)
+                return Rejected(AiPlannerErrorCodes.InvalidProviderSchema, schemaFailure, correlationId, attempts);
 
-            var intent = providerResult.PrimaryIntent!;
-            var calls = providerResult.ToolCalls ?? new List<AiPlannerToolCall>();
-            if (calls.Count > 3 || calls.Any(x => !ValidateCall(x, allowed)))
-            {
-                _health.RecordFailure(AiProviderStatusContract.FailureInvalidResponse);
-                return Failed(AiProviderStatusContract.Degraded, "INVALID_PROVIDER_PLAN", true, providerAttempts: providerResult.ProviderAttemptCount);
-            }
+            var calls = output!.ToolCalls!;
+            var planFailure = ValidatePlan(output, calls, definitionMap);
+            if (planFailure is not null)
+                return Rejected(AiPlannerErrorCodes.InvalidProviderPlan, planFailure, correlationId, attempts);
 
             var preflight = AiToolBindingRegistry.ValidateAndBindPlan(calls, planningDefinitions, request.Resource);
             if (!preflight.IsValid)
-            {
-                if (!string.Equals(preflight.Code, "PROVIDER_RESOURCE_MISMATCH", StringComparison.Ordinal))
-                    _health.RecordFailure(AiProviderStatusContract.FailureInvalidResponse);
-                return Failed(AiProviderStatusContract.Degraded, preflight.Code, true, providerAttempts: providerResult.ProviderAttemptCount);
-            }
+                return Rejected(preflight.Code, preflight.Diagnostic, correlationId, attempts);
 
-            if (!providerResult.IsClear && string.IsNullOrWhiteSpace(providerResult.Clarification) && string.IsNullOrWhiteSpace(providerResult.ClarificationPrompt))
-            {
-                _health.RecordFailure(AiProviderStatusContract.FailureInvalidResponse);
-                return Failed(AiProviderStatusContract.Degraded, "INVALID_PROVIDER_CLARIFICATION", true, providerAttempts: providerResult.ProviderAttemptCount);
-            }
+            if (output.IsClear == false && string.IsNullOrWhiteSpace(output.Clarification))
+                return Rejected(
+                    AiPlannerErrorCodes.InvalidProviderClarification,
+                    new AiPlannerValidationDiagnostic(AiPlannerValidationStage.PlannerSchema, AiPlannerValidationReason.MissingClarification) { Field = AiPlannerOutputField.Clarification },
+                    correlationId,
+                    attempts);
 
             _health.RecordSuccess();
 
@@ -165,17 +125,16 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
                 IsSuccess = true,
                 ProviderCalled = true,
                 ProviderState = providerState,
-                ProviderAttemptCount = providerResult.ProviderAttemptCount,
+                ProviderAttemptCount = attempts,
                 FailureCode = AiProviderStatusContract.FailureNone,
-                CorrelationId = providerResult.CorrelationId,
+                CorrelationId = correlationId,
                 Decision = new AiPlannerDecision
                 {
                     PlannerMode = AiPlannerModes.Gemini,
-                    Intent = intent,
-                    SubIntent = providerResult.SecondaryIntent,
-                    Confidence = providerResult.PlannerConfidence.Value,
-                    Message = Limit(providerResult.Reply, 500),
-                    Clarification = Limit(providerResult.Clarification ?? providerResult.ClarificationPrompt, 300),
+                    Intent = output.PrimaryIntent!,
+                    Confidence = output.PlannerConfidence!.Value,
+                    Message = Limit(output.Reply, 500),
+                    Clarification = Limit(output.Clarification, 300),
                     ToolCalls = preflight.BoundCalls
                 }
             };
@@ -188,28 +147,83 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
         catch (Exception ex)
         {
             _health.RecordFailure(AiProviderStatusContract.FailureNetworkError);
-            _logger.LogWarning(ex, "Structured AI planner failed; returning a fail-closed fallback");
+            _logger.LogWarning("Structured AI planner failed with {ExceptionType}; returning a fail-closed fallback", ex.GetType().Name);
             return Failed(AiProviderStatusContract.Degraded, AiProviderStatusContract.FailureNetworkError, true, true);
         }
     }
 
-    private static bool ValidateCall(AiPlannerToolCall call, IReadOnlyCollection<string> allowed)
+    /// <summary>
+    /// Required planner fields. Nothing is defaulted: a missing version,
+    /// confidence, intent, isClear or toolCalls rejects the whole plan.
+    /// </summary>
+    private static AiPlannerValidationDiagnostic? ValidateSchema(AiRolePlannerOutput output)
     {
-        if (string.IsNullOrWhiteSpace(call.Name) || !allowed.Contains(call.Name, StringComparer.OrdinalIgnoreCase) || !AiPlannerPolicy.IsAllowed(call.Name)) return false;
-        if (!string.Equals(call.Version, "1.0", StringComparison.Ordinal)) return false;
-        if (call.Arguments.ValueKind != JsonValueKind.Object) return false;
-        return !ContainsForbiddenArgument(call.Arguments);
+        static AiPlannerValidationDiagnostic Schema(AiPlannerValidationReason reason, AiPlannerOutputField field) =>
+            new(AiPlannerValidationStage.PlannerSchema, reason) { Field = field };
+
+        if (output.PlannerSchemaVersion is null)
+            return Schema(AiPlannerValidationReason.MissingSchemaVersion, AiPlannerOutputField.PlannerSchemaVersion);
+        if (!string.Equals(output.PlannerSchemaVersion, AiRolePlannerContract.SchemaVersion, StringComparison.Ordinal))
+            return Schema(AiPlannerValidationReason.UnsupportedSchemaVersion, AiPlannerOutputField.PlannerSchemaVersion);
+        if (!output.PlannerConfidence.HasValue)
+            return Schema(AiPlannerValidationReason.MissingConfidence, AiPlannerOutputField.PlannerConfidence);
+        if (output.PlannerConfidence is < 0m or > 1m)
+            return Schema(AiPlannerValidationReason.InvalidConfidence, AiPlannerOutputField.PlannerConfidence);
+        if (!AiRolePlannerContract.IsAllowedIntent(output.PrimaryIntent))
+            return Schema(AiPlannerValidationReason.InvalidIntent, AiPlannerOutputField.PrimaryIntent);
+        if (!output.IsClear.HasValue)
+            return Schema(AiPlannerValidationReason.MissingRequiredField, AiPlannerOutputField.IsClear);
+        if (output.ToolCalls is null)
+            return Schema(AiPlannerValidationReason.MissingRequiredField, AiPlannerOutputField.ToolCalls);
+        return null;
     }
 
-    private static bool ContainsForbiddenArgument(JsonElement element)
+    /// <summary>
+    /// Whole-plan check before any tool runs. The first invalid call rejects
+    /// every call; nothing is dropped, renamed or repaired.
+    /// </summary>
+    private static AiPlannerValidationDiagnostic? ValidatePlan(
+        AiRolePlannerOutput output,
+        IReadOnlyList<AiPlannerToolCall> calls,
+        IReadOnlyDictionary<string, AiToolDefinition> definitions)
     {
-        if (element.ValueKind == JsonValueKind.Object)
-            foreach (var property in element.EnumerateObject())
-                if (ForbiddenArgumentNames.Contains(property.Name) || ContainsForbiddenArgument(property.Value)) return true;
-        if (element.ValueKind == JsonValueKind.Array)
-            foreach (var item in element.EnumerateArray())
-                if (ContainsForbiddenArgument(item)) return true;
-        return false;
+        if (output.IsClear == false && calls.Count > 0)
+            return new AiPlannerValidationDiagnostic(AiPlannerValidationStage.ToolPlan, AiPlannerValidationReason.ClarificationWithTools) { ToolCount = calls.Count };
+        if (calls.Count > AiRolePlannerContract.MaxToolCalls)
+            return new AiPlannerValidationDiagnostic(AiPlannerValidationStage.ToolPlan, AiPlannerValidationReason.ToolLimitExceeded)
+            {
+                RejectedToolIndex = AiRolePlannerContract.MaxToolCalls,
+                ToolCount = calls.Count
+            };
+
+        for (var index = 0; index < calls.Count; index++)
+        {
+            var call = calls[index];
+            AiPlannerValidationDiagnostic Plan(AiPlannerValidationReason reason, string? canonicalName) =>
+                new(AiPlannerValidationStage.ToolPlan, reason) { RejectedToolIndex = index, ToolCount = calls.Count, ToolName = canonicalName };
+
+            if (string.IsNullOrWhiteSpace(call.Name) || !AiPlannerPolicy.IsAllowed(call.Name) ||
+                !definitions.TryGetValue(call.Name.Trim(), out var definition))
+                return Plan(AiPlannerValidationReason.ToolNotAllowed, null);
+            if (!string.Equals(call.Version, definition.Version, StringComparison.Ordinal))
+                return Plan(AiPlannerValidationReason.UnsupportedToolVersion, definition.Name);
+            if (call.Arguments.ValueKind != JsonValueKind.Object)
+                return Plan(AiPlannerValidationReason.InvalidArguments, definition.Name);
+            if (AiToolBindingRegistry.ContainsForbiddenArgument(call.Arguments))
+                return Plan(AiPlannerValidationReason.ForbiddenArgument, definition.Name);
+        }
+
+        return null;
+    }
+
+    private AiStructuredPlannerResult Rejected(string code, AiPlannerValidationDiagnostic? diagnostic, string? correlationId, int attempts)
+    {
+        if (!string.Equals(code, AiPlannerErrorCodes.ProviderResourceMismatch, StringComparison.Ordinal))
+            _health.RecordFailure(AiProviderStatusContract.FailureInvalidResponse);
+        _logger.LogWarning(
+            "[{CorrelationId}] Role planner output rejected: {ErrorCode} {Stage}/{Reason} tool {ToolIndex} of {ToolCount}.",
+            correlationId, code, diagnostic?.Stage, diagnostic?.Reason, diagnostic?.RejectedToolIndex, diagnostic?.ToolCount);
+        return Failed(AiProviderStatusContract.Degraded, code, true, correlationId: correlationId, providerAttempts: attempts, diagnostic: diagnostic);
     }
 
     private static AiStructuredPlannerResult Failed(
@@ -220,7 +234,8 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
         DateTimeOffset? retryAfterUtc = null,
         int? retryAfterSeconds = null,
         string? correlationId = null,
-        int providerAttempts = 0) => new()
+        int providerAttempts = 0,
+        AiPlannerValidationDiagnostic? diagnostic = null) => new()
     {
         IsSuccess = false,
         ProviderCalled = called,
@@ -232,15 +247,16 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
         RetryAfterUtc = retryAfterUtc,
         RetryAfterSeconds = retryAfterSeconds,
         CorrelationId = correlationId,
+        Diagnostic = diagnostic,
         Decision = new AiPlannerDecision
         {
             PlannerMode = AiPlannerModes.Fallback,
             Intent = AiChatIntentTypes.ClarificationRequired,
             ErrorCode = reason,
-            Clarification = reason == "PROVIDER_RESOURCE_MISMATCH"
+            Clarification = reason == AiPlannerErrorCodes.ProviderResourceMismatch
                 ? "Tôi không thể dùng resource do provider chọn vì nó không khớp resource đang mở. Vui lòng chọn lại resource hiện tại rồi thử lại."
                 : "Tôi chưa xác định được yêu cầu đủ an toàn để tra cứu. Vui lòng mô tả rõ dữ liệu hoặc workspace cần xem.",
-            Message = reason == "PROVIDER_RESOURCE_MISMATCH"
+            Message = reason == AiPlannerErrorCodes.ProviderResourceMismatch
                 ? "Tôi không thể dùng resource do provider chọn vì nó không khớp resource đang mở."
                 : "Tôi chưa xác định được yêu cầu đủ an toàn để tra cứu. Vui lòng mô tả rõ dữ liệu hoặc workspace cần xem."
         }
@@ -251,11 +267,10 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
         if (string.IsNullOrWhiteSpace(reason)) return AiProviderStatusContract.FailureUnknown;
         if (reason.StartsWith("INVALID_PROVIDER", StringComparison.Ordinal)) return AiProviderStatusContract.FailureInvalidResponse;
         if (reason == "PROVIDER_FAILURE") return AiProviderStatusContract.FailureNetworkError;
-        if (reason == "PROVIDER_RESOURCE_MISMATCH") return AiProviderStatusContract.FailureNone;
+        if (reason == AiPlannerErrorCodes.ProviderResourceMismatch) return AiProviderStatusContract.FailureNone;
         return AiProviderStatusContract.FailureCodeFromProviderStatus(reason);
     }
 
-    private static bool HasResource(AiResolvedResourceContext x) => x.AppointmentId.HasValue || x.VisitId.HasValue || x.DiagnosticOrderId.HasValue || x.PrescriptionId.HasValue;
     private static string? Limit(string? value, int length) => string.IsNullOrWhiteSpace(value) ? null : value.Trim()[..Math.Min(length, value.Trim().Length)];
 
     private static string SanitizeForProvider(string value)

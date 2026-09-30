@@ -1086,8 +1086,8 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         {
             new() { Name = "doctor.get_my_queue", Version = "1.0", Arguments = JsonSerializer.SerializeToElement(new { }) }
         };
-        provider.Setup(x => x.ChatWithAiAsync(It.IsAny<string>(), It.IsAny<List<ChatMessageDto>>(), It.IsAny<List<WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new AiChatProviderResult { PlannerSchemaVersion = "1.0", PlannerConfidence = .91m, IsSuccess = true, Status = "Success", IsClear = true, PrimaryIntent = AiChatIntentTypes.QueueLookup, Reply = "Đã hiểu yêu cầu.", ToolCalls = validCalls });
+        provider.Setup(x => x.PlanRoleCopilotAsync(It.IsAny<AiRolePlannerProviderRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(RolePlannerResults.Success(AiChatIntentTypes.QueueLookup, .91m, reply: "Đã hiểu yêu cầu.", toolCalls: validCalls));
         var planner = new GeminiStructuredPlanner(provider.Object, new AiProviderHealth(), NullLogger<GeminiStructuredPlanner>.Instance);
         var request = new AiStructuredPlannerRequest { Role = AiActorRole.Doctor, Message = "xem bệnh nhân đang chờ", AllowedToolNames = new[] { "doctor.get_my_queue" } };
         var valid = await planner.PlanAsync(request);
@@ -1096,27 +1096,20 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         Assert.Equal(AiProviderStatusContract.Online, valid.ProviderState);
         Assert.Single(valid.Decision.ToolCalls);
 
-        provider.Setup(x => x.ChatWithAiAsync(It.IsAny<string>(), It.IsAny<List<ChatMessageDto>>(), It.IsAny<List<WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new AiChatProviderResult
-            {
-                IsSuccess = true,
-                Status = "Success",
-                PlannerSchemaVersion = "1.0",
-                PlannerConfidence = .9m,
-                PrimaryIntent = AiChatIntentTypes.QueueLookup,
-                IsClear = true,
-                ToolCalls = new List<AiPlannerToolCall>
+        provider.Setup(x => x.PlanRoleCopilotAsync(It.IsAny<AiRolePlannerProviderRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(RolePlannerResults.Success(
+                AiChatIntentTypes.QueueLookup,
+                toolCalls: new List<AiPlannerToolCall>
                 {
                     validCalls[0],
                     new() { Name = "patient.execute_confirmed_action", Version = "1.0", Arguments = JsonSerializer.SerializeToElement(new { confirm = true }) }
-                }
-            });
+                }));
         var invalid = await planner.PlanAsync(request);
         Assert.False(invalid.IsSuccess);
         Assert.Empty(invalid.Decision.ToolCalls);
         Assert.Equal(AiProviderStatusContract.Degraded, invalid.ProviderState);
 
-        provider.Setup(x => x.ChatWithAiAsync(It.IsAny<string>(), It.IsAny<List<ChatMessageDto>>(), It.IsAny<List<WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        provider.Setup(x => x.PlanRoleCopilotAsync(It.IsAny<AiRolePlannerProviderRequest>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new TimeoutException("test timeout"));
         var timeout = await planner.PlanAsync(request);
         Assert.False(timeout.IsSuccess);
@@ -1129,18 +1122,9 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
     {
         var provider = new Mock<IAiSpecialtySuggestionProvider>();
         var captured = string.Empty;
-        provider.Setup(x => x.ChatWithAiAsync(It.IsAny<string>(), It.IsAny<List<ChatMessageDto>>(), It.IsAny<List<WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Callback<string, List<ChatMessageDto>, List<WhitelistItemDto>, string, CancellationToken>((message, _, _, _, _) => captured = message)
-            .ReturnsAsync(new AiChatProviderResult
-            {
-                IsSuccess = true,
-                Status = "Success",
-                PlannerSchemaVersion = "1.0",
-                PlannerConfidence = .9m,
-                PrimaryIntent = AiChatIntentTypes.UnclearOrOutOfScope,
-                IsClear = false,
-                Reply = "Cần thêm thông tin."
-            });
+        provider.Setup(x => x.PlanRoleCopilotAsync(It.IsAny<AiRolePlannerProviderRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<AiRolePlannerProviderRequest, CancellationToken>((request, _) => captured = JsonSerializer.Serialize(request))
+            .ReturnsAsync(RolePlannerResults.Success(AiChatIntentTypes.UnclearOrOutOfScope, isClear: false, reply: "Cần thêm thông tin.", clarification: "Cần thêm thông tin."));
         var planner = new GeminiStructuredPlanner(provider.Object, new AiProviderHealth(), NullLogger<GeminiStructuredPlanner>.Instance);
         var request = new AiStructuredPlannerRequest
         {

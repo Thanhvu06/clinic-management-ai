@@ -408,6 +408,9 @@ public sealed class AiPhase32ReadAccessTests : IntegrationTestBase
                 It.IsAny<string>(), It.IsAny<List<ClinicManagement.Application.AI.DTOs.ChatMessageDto>>(),
                 It.IsAny<List<ClinicManagement.Application.AI.DTOs.WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("provider intentionally unavailable"));
+        Factory.MockAiProvider.Setup(x => x.PlanRoleCopilotAsync(
+                It.IsAny<ClinicManagement.Application.AI.Planning.AiRolePlannerProviderRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("provider intentionally unavailable"));
         var client = await CreateAuthenticatedClientAsync("doc@test.com");
 
         var response = await ChatAsync(client, "Xem hàng đợi bệnh nhân của tôi", null, "provider-not-needed");
@@ -415,16 +418,11 @@ public sealed class AiPhase32ReadAccessTests : IntegrationTestBase
         Assert.Contains(response.GetProperty("cards").EnumerateArray(), x => x.GetProperty("type").GetString() == "doctor_queue");
 
         var captured = string.Empty;
-        Factory.MockAiProvider.Setup(x => x.ChatWithAiAsync(
-                It.IsAny<string>(), It.IsAny<List<ClinicManagement.Application.AI.DTOs.ChatMessageDto>>(),
-                It.IsAny<List<ClinicManagement.Application.AI.DTOs.WhitelistItemDto>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Callback<string, List<ClinicManagement.Application.AI.DTOs.ChatMessageDto>, List<ClinicManagement.Application.AI.DTOs.WhitelistItemDto>, string, CancellationToken>((message, _, _, _, _) => captured = message)
-            .ReturnsAsync(new ClinicManagement.Application.AI.DTOs.AiChatProviderResult
-            {
-                IsSuccess = true, Status = "Success", IsClear = false, PlannerSchemaVersion = "1.0", PlannerConfidence = .5m,
-                PrimaryIntent = ClinicManagement.Application.AI.DTOs.AiChatIntentTypes.UnclearOrOutOfScope,
-                Clarification = "Cần làm rõ"
-            });
+        Factory.MockAiProvider.Setup(x => x.PlanRoleCopilotAsync(
+                It.IsAny<ClinicManagement.Application.AI.Planning.AiRolePlannerProviderRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<ClinicManagement.Application.AI.Planning.AiRolePlannerProviderRequest, CancellationToken>((request, _) => captured = JsonSerializer.Serialize(request))
+            .ReturnsAsync(RolePlannerResults.Success(
+                ClinicManagement.Application.AI.DTOs.AiChatIntentTypes.UnclearOrOutOfScope, .5m, isClear: false, clarification: "Cần làm rõ"));
         var providerRequest = await ChatAsync(client, "Tôi là Patient 1, CCCD 079088012345, MRN BN-2026-000001, email patient1@test.com; tôi cần hỗ trợ", null, "provider-redaction");
         Assert.Equal("Gemini", providerRequest.GetProperty("plannerMode").GetString());
         Assert.DoesNotContain("079088012345", captured, StringComparison.Ordinal);

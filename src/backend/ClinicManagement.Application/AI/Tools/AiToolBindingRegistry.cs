@@ -9,6 +9,7 @@ public sealed class AiToolPlanPreflightResult
     public string Code { get; init; } = string.Empty;
     public string Message { get; init; } = string.Empty;
     public IReadOnlyList<AiPlannerToolCall> BoundCalls { get; init; } = Array.Empty<AiPlannerToolCall>();
+    public AiPlannerValidationDiagnostic? Diagnostic { get; init; }
 
     public static AiToolPlanPreflightResult Valid(IReadOnlyList<AiPlannerToolCall> calls) => new()
     {
@@ -20,8 +21,42 @@ public sealed class AiToolPlanPreflightResult
     {
         IsValid = false,
         Code = code,
-        Message = message
+        Message = message,
+        Diagnostic = DiagnosticFor(code, null, null, null)
     };
+
+    internal static AiToolPlanPreflightResult Invalid(string code, string message, int index, int count, string? canonicalToolName) => new()
+    {
+        IsValid = false,
+        Code = code,
+        Message = message,
+        Diagnostic = DiagnosticFor(code, index, count, canonicalToolName)
+    };
+
+    private static AiPlannerValidationDiagnostic? DiagnosticFor(string code, int? index, int? count, string? toolName)
+    {
+        (AiPlannerValidationStage Stage, AiPlannerValidationReason Reason)? mapped = code switch
+        {
+            AiPlannerErrorCodes.ToolLimitExceeded => (AiPlannerValidationStage.ToolPlan, AiPlannerValidationReason.ToolLimitExceeded),
+            AiPlannerErrorCodes.ToolNotAllowed => (AiPlannerValidationStage.ToolPlan, AiPlannerValidationReason.ToolNotAllowed),
+            AiPlannerErrorCodes.ToolVersionNotSupported => (AiPlannerValidationStage.ToolPlan, AiPlannerValidationReason.UnsupportedToolVersion),
+            AiPlannerErrorCodes.InvalidToolArguments => (AiPlannerValidationStage.ToolPlan, AiPlannerValidationReason.InvalidArguments),
+            AiPlannerErrorCodes.ForbiddenToolArgument => (AiPlannerValidationStage.ToolPlan, AiPlannerValidationReason.ForbiddenArgument),
+            AiPlannerErrorCodes.UnknownToolArgument => (AiPlannerValidationStage.ToolPlan, AiPlannerValidationReason.UnknownArgument),
+            AiPlannerErrorCodes.MissingToolArgument => (AiPlannerValidationStage.ToolPlan, AiPlannerValidationReason.MissingArgument),
+            AiPlannerErrorCodes.ResourceContextRequired => (AiPlannerValidationStage.ResourceBinding, AiPlannerValidationReason.ResourceContextRequired),
+            AiPlannerErrorCodes.ProviderResourceMismatch => (AiPlannerValidationStage.ResourceBinding, AiPlannerValidationReason.ResourceMismatch),
+            _ => null
+        };
+        return mapped is null
+            ? null
+            : new AiPlannerValidationDiagnostic(mapped.Value.Stage, mapped.Value.Reason)
+            {
+                RejectedToolIndex = index,
+                ToolCount = count,
+                ToolName = toolName
+            };
+    }
 }
 
 /// <summary>
@@ -42,64 +77,67 @@ public static class AiToolBindingRegistry
         AiResolvedResourceContext resource)
     {
         if (calls.Count > 3)
-            return AiToolPlanPreflightResult.Invalid("PLANNER_TOOL_LIMIT_EXCEEDED", "Kế hoạch AI vượt quá giới hạn số công cụ cho một lượt.");
+            return AiToolPlanPreflightResult.Invalid(AiPlannerErrorCodes.ToolLimitExceeded, "Kế hoạch AI vượt quá giới hạn số công cụ cho một lượt.", 3, calls.Count, null);
 
         var definitionMap = definitions
             .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
         var bound = new List<AiPlannerToolCall>(calls.Count);
 
-        foreach (var call in calls)
+        for (var index = 0; index < calls.Count; index++)
         {
+            var call = calls[index];
             if (string.IsNullOrWhiteSpace(call.Name) || !definitionMap.TryGetValue(call.Name.Trim(), out var definition) ||
                 !definition.Enabled || !AiPlannerPolicy.IsAllowed(definition.Name))
-                return AiToolPlanPreflightResult.Invalid("PLANNER_TOOL_NOT_ALLOWED", "Kế hoạch công cụ không nằm trong allowlist.");
+                return AiToolPlanPreflightResult.Invalid(AiPlannerErrorCodes.ToolNotAllowed, "Kế hoạch công cụ không nằm trong allowlist.", index, calls.Count, null);
+            AiToolPlanPreflightResult Reject(string code, string message) =>
+                AiToolPlanPreflightResult.Invalid(code, message, index, calls.Count, definition.Name);
             if (!string.Equals(definition.Version, call.Version?.Trim(), StringComparison.OrdinalIgnoreCase))
-                return AiToolPlanPreflightResult.Invalid("TOOL_VERSION_NOT_SUPPORTED", "Phiên bản công cụ không được hỗ trợ.");
+                return Reject(AiPlannerErrorCodes.ToolVersionNotSupported, "Phiên bản công cụ không được hỗ trợ.");
             if (call.Arguments.ValueKind != JsonValueKind.Object)
-                return AiToolPlanPreflightResult.Invalid("INVALID_TOOL_ARGUMENTS", "Tham số công cụ phải là JSON object.");
+                return Reject(AiPlannerErrorCodes.InvalidToolArguments, "Tham số công cụ phải là JSON object.");
 
             var schema = definition.ArgumentSchema.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
             var properties = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
             foreach (var property in call.Arguments.EnumerateObject())
             {
                 if (!properties.TryAdd(property.Name, property.Value.Clone()))
-                    return AiToolPlanPreflightResult.Invalid("INVALID_TOOL_ARGUMENTS", "Tham số công cụ chứa tên trùng lặp.");
+                    return Reject(AiPlannerErrorCodes.InvalidToolArguments, "Tham số công cụ chứa tên trùng lặp.");
                 if (ContainsForbiddenArgument(property.Value) || ForbiddenArgumentNames.Contains(property.Name))
-                    return AiToolPlanPreflightResult.Invalid("FORBIDDEN_TOOL_ARGUMENT", "Tham số quyền hạn chỉ được xác định phía server.");
+                    return Reject(AiPlannerErrorCodes.ForbiddenToolArgument, "Tham số quyền hạn chỉ được xác định phía server.");
                 if (!schema.TryGetValue(property.Name, out var argument))
-                    return AiToolPlanPreflightResult.Invalid("UNKNOWN_TOOL_ARGUMENT", "Tham số công cụ không nằm trong schema server.");
+                    return Reject(AiPlannerErrorCodes.UnknownToolArgument, "Tham số công cụ không nằm trong schema server.");
                 if (!MatchesType(property.Value, argument.Type))
-                    return AiToolPlanPreflightResult.Invalid("INVALID_TOOL_ARGUMENTS", "Kiểu tham số công cụ không hợp lệ.");
+                    return Reject(AiPlannerErrorCodes.InvalidToolArguments, "Kiểu tham số công cụ không hợp lệ.");
             }
 
             foreach (var argument in definition.ArgumentSchema.Where(x => x.Required && !x.ServerBound))
             {
                 if (!properties.ContainsKey(argument.Name))
-                    return AiToolPlanPreflightResult.Invalid("MISSING_TOOL_ARGUMENT", "Thiếu tham số bắt buộc cho công cụ.");
+                    return Reject(AiPlannerErrorCodes.MissingToolArgument, "Thiếu tham số bắt buộc cho công cụ.");
             }
 
             var binding = definition.ResourceBinding;
             if (binding.RequiresCurrentResource && !HasAnyBoundResource(resource, binding.ServerBoundArgumentNames))
-                return AiToolPlanPreflightResult.Invalid("RESOURCE_CONTEXT_REQUIRED", "Công cụ này chỉ được chạy trên resource hiện tại đã xác minh.");
+                return Reject(AiPlannerErrorCodes.ResourceContextRequired, "Công cụ này chỉ được chạy trên resource hiện tại đã xác minh.");
 
             var suppliedBound = binding.ServerBoundArgumentNames
                 .Where(properties.ContainsKey)
                 .ToArray();
             if (suppliedBound.Length > 1)
-                return AiToolPlanPreflightResult.Invalid("INVALID_TOOL_ARGUMENTS", "Công cụ chỉ nhận một resource binding server-bound.");
+                return Reject(AiPlannerErrorCodes.InvalidToolArguments, "Công cụ chỉ nhận một resource binding server-bound.");
 
             foreach (var name in suppliedBound)
             {
                 if (!TryPositiveInt64(properties[name], out var supplied) || !MatchesCurrentResource(name, supplied, resource))
-                    return AiToolPlanPreflightResult.Invalid("PROVIDER_RESOURCE_MISMATCH", "Provider đã chọn resource khác với resource hiện tại; không có tool nào được thực thi.");
+                    return Reject(AiPlannerErrorCodes.ProviderResourceMismatch, "Provider đã chọn resource khác với resource hiện tại; không có tool nào được thực thi.");
             }
 
             if (binding.RequiresCurrentResource)
             {
                 var canonical = CanonicalBinding(resource, binding.ServerBoundArgumentNames);
                 if (canonical is null)
-                    return AiToolPlanPreflightResult.Invalid("RESOURCE_CONTEXT_REQUIRED", "Resource hiện tại không có định danh phù hợp cho công cụ này.");
+                    return Reject(AiPlannerErrorCodes.ResourceContextRequired, "Resource hiện tại không có định danh phù hợp cho công cụ này.");
                 foreach (var name in binding.ServerBoundArgumentNames)
                     properties.Remove(name);
                 properties[canonical.Value.Name] = JsonSerializer.SerializeToElement(canonical.Value.Value);
@@ -125,7 +163,8 @@ public static class AiToolBindingRegistry
         left.PrescriptionId == right.PrescriptionId &&
         string.Equals(left.ResourceVersion, right.ResourceVersion, StringComparison.Ordinal);
 
-    private static bool ContainsForbiddenArgument(JsonElement element)
+    /// <summary>True when an authority-bearing argument name appears at any depth.</summary>
+    public static bool ContainsForbiddenArgument(JsonElement element)
     {
         if (element.ValueKind == JsonValueKind.Object)
         {

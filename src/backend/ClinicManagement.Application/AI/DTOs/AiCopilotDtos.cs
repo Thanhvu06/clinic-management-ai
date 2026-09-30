@@ -61,6 +61,31 @@ public sealed class AiCopilotDataCardDto
     public DateTimeOffset RetrievedAtUtc { get; init; }
 }
 
+public sealed class AiCopilotPlannerDiagnosticDto
+{
+    public string Stage { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+    public string? Field { get; init; }
+    public int? RejectedToolIndex { get; init; }
+    public int? ToolCount { get; init; }
+    public string? ToolName { get; init; }
+    public string FinishReason { get; init; } = string.Empty;
+
+    public static AiCopilotPlannerDiagnosticDto? From(ClinicManagement.Application.AI.Planning.AiPlannerValidationDiagnostic? diagnostic) =>
+        diagnostic is null
+            ? null
+            : new AiCopilotPlannerDiagnosticDto
+            {
+                Stage = diagnostic.Stage.ToString(),
+                Reason = diagnostic.Reason.ToString(),
+                Field = diagnostic.Field?.ToString(),
+                RejectedToolIndex = diagnostic.RejectedToolIndex,
+                ToolCount = diagnostic.ToolCount,
+                ToolName = diagnostic.ToolName,
+                FinishReason = diagnostic.FinishReason.ToString()
+            };
+}
+
 public sealed class AiCopilotResponseDto
 {
     private string _assistantMode = AiAssistantModes.Ready;
@@ -89,6 +114,12 @@ public sealed class AiCopilotResponseDto
     public bool ProviderWasCalled { get; init; }
     public int ProviderAttemptCount { get; init; }
     public IReadOnlyList<string> ExecutedToolNames { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Sanitized, closed-code reason a provider plan was rejected. Null when
+    /// nothing was rejected. Never contains provider or user text.
+    /// </summary>
+    public AiCopilotPlannerDiagnosticDto? PlannerDiagnostic { get; init; }
 
     public string PlannerMode { get; init; } = AiPlannerModes.Deterministic;
     public string Intent { get; init; } = AiChatIntentTypes.UnclearOrOutOfScope;
