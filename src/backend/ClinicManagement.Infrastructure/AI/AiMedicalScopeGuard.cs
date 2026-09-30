@@ -26,8 +26,11 @@ public static class AiMedicalScopeGuard
          ProviderDoseOrPrescriptionAdvice.IsMatch(AiTextNormalizer.NormalizeForComparison(text)) ||
          ProviderMedicationChangeAdvice.IsMatch(AiTextNormalizer.Normalize(text)));
 
-    private static readonly Regex ExistingPrescriptionRead = new(
-        @"\b(?:bac\s+si\s+ke\s+thuoc|thuoc\s+(?:bac\s+si\s+)?da\s+ke|(?:toa|don)\s+thuoc\s+cua\s+toi|thuoc\s+cua\s+toi)\b",
+    private static readonly Regex PreservedPrescriptionRead = new(
+        @"\bđã\s+kê\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex FoldedPrescriptionRead = new(
+        @"\b(?:bac\s+si\s+da\s+ke|thuoc\s+(?:bac\s+si\s+)?da\s+ke|(?:toa|don)\s+thuoc\s+cua\s+toi|thuoc\s+cua\s+toi)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     private static readonly Regex PrescriptionRequest = new(
@@ -54,6 +57,14 @@ public static class AiMedicalScopeGuard
         @"\bliều\b.{0,60}(?:bao\s+nhiêu|viên|mg|thuốc|paracetamol)|\buống\b.{0,60}\b(?:bao\s+nhiêu|mấy)\s+viên\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
+    private static readonly Regex PrescriptionAddition = new(
+        @"\bke\s+them\b|\bke\s+(?:thuoc|don)\s+moi\b|\bthem\s+(?:thuoc|don\s+thuoc)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    private static readonly Regex DosageSuggestion = new(
+        @"\b(?:co\s+nen|nen)\b.{0,40}\b(?:bao\s+nhieu|may|lieu|tang|giam|gap\s+doi)\b|\b(?:bao\s+nhieu|may|lieu|tang|giam|gap\s+doi)\b.{0,40}\b(?:co\s+nen|nen)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
     public static bool IsPrescriptionRequest(string? message) =>
         IsPrescriptionRequest(AiActorRole.Patient, message);
 
@@ -69,15 +80,49 @@ public static class AiMedicalScopeGuard
         // swallow the ordinary conjunction/question word "liệu". In fully
         // unaccented input only explicit dose forms such as "lieu dung" or
         // "bao nhieu vien" are accepted.
-        if (AccentedDoseRequest.IsMatch(preserved) || PrescriptionRequest.IsMatch(folded) ||
-            UnaccentedDoseRequest.IsMatch(folded) ||
-            (MedicationChange.IsMatch(preserved) && RequestContext.IsMatch(preserved)) ||
-            (preserved == folded && UnaccentedChange.IsMatch(preserved)))
+        if ((MedicationChange.IsMatch(preserved) && RequestContext.IsMatch(preserved)) ||
+            (preserved == folded && UnaccentedChange.IsMatch(preserved)) ||
+            PrescriptionAddition.IsMatch(folded))
             return true;
 
-        // Read exemptions never bypass an explicit request to change medication.
-        if (ExistingPrescriptionRead.IsMatch(folded))
-            return false;
+        foreach (var clause in SplitClauses(message))
+        {
+            var clausePreserved = clause.Preserved;
+            var clauseFolded = clause.Folded;
+            if (DosageSuggestion.IsMatch(clauseFolded))
+                return true;
+
+            var isReadClause = PreservedPrescriptionRead.IsMatch(clausePreserved) ||
+                               FoldedPrescriptionRead.IsMatch(clauseFolded);
+            var isSoftRequest = AccentedDoseRequest.IsMatch(clausePreserved) ||
+                                PrescriptionRequest.IsMatch(clauseFolded) ||
+                                UnaccentedDoseRequest.IsMatch(clauseFolded);
+            if (isSoftRequest && !isReadClause)
+                return true;
+        }
         return false;
+    }
+
+    private static IEnumerable<(string Preserved, string Folded)> SplitClauses(string message)
+    {
+        foreach (var rawPart in Regex.Split(message, @"[.!?;\r\n]+"))
+        {
+            var preserved = AiTextNormalizer.Normalize(rawPart).ToLowerInvariant();
+            if (preserved.Length == 0) continue;
+            var folded = AiTextNormalizer.NormalizeForComparison(preserved);
+            var start = 0;
+            foreach (Match boundary in Regex.Matches(folded, @"\b(?:bay\s+gio|gio|nhung|sau\s+do)\b", RegexOptions.CultureInvariant))
+            {
+                if (boundary.Value == "gio" && Regex.IsMatch(folded[..boundary.Index], @"\bmay\s*$", RegexOptions.CultureInvariant))
+                    continue;
+
+                if (boundary.Index > start)
+                    yield return (preserved[start..boundary.Index].Trim(), folded[start..boundary.Index].Trim());
+                start = boundary.Index + boundary.Length;
+            }
+
+            if (start < preserved.Length)
+                yield return (preserved[start..].Trim(), folded[start..].Trim());
+        }
     }
 }

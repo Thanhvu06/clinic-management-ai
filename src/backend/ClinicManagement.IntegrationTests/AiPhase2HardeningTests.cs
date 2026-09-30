@@ -78,6 +78,13 @@ public sealed class AiPhase2HardeningTests : IntegrationTestBase
     [InlineData("Nếu bạn mệt, hãy nghỉ. Bạn đang đau ngực.", true)]
     [InlineData("Nếu bạn đau ngực thì hãy gọi 115.", false)]
     [InlineData("Gọi 115 ngay khi bạn đau ngực dữ dội.", false)]
+    [InlineData("Bạn đang dau ngực dữ dội, hãy nghỉ ngơi.", true)]
+    [InlineData("Bạn đang khó tho, hãy gọi 115.", true)]
+    [InlineData("Hiện tại bạn khó tho nặng, hãy nghỉ.", true)]
+    [InlineData("Bạn đang đau - ngực dữ dội, hãy nghỉ ngơi.", true)]
+    [InlineData("Bạn đang khó (thở) dữ dội, hãy nghỉ ngơi.", true)]
+    [InlineData("Nếu bạn dau ngực, hãy gọi 115.", false)]
+    [InlineData("Nếu bạn đau nguc, kho tho hoặc ngất, hãy gọi 115.", false)]
     public void Output_guard_distinguishes_current_emergency_from_conditional_guidance(string reply, bool emergency)
     {
         Assert.Equal(emergency, AiProviderOutputGuard.Inspect(AiActorRole.Patient, reply)?.Emergency == true);
@@ -148,6 +155,10 @@ public sealed class AiPhase2HardeningTests : IntegrationTestBase
     [InlineData("/api/v1/ai/copilot/chat", "Nếu bạn đau ngực, hãy nghỉ. Hiện tại bạn khó thở nặng.", "115")]
     [InlineData("/api/v1/ai/chat", "Khi bạn nhập viện, bạn bị đau ngực.", "115")]
     [InlineData("/api/v1/ai/copilot/chat", "Khi bạn nhập viện, bạn bị đau ngực.", "115")]
+    [InlineData("/api/v1/ai/chat", "Bạn đang dau ngực dữ dội, hãy nghỉ ngơi.", "115")]
+    [InlineData("/api/v1/ai/copilot/chat", "Bạn đang dau ngực dữ dội, hãy nghỉ ngơi.", "115")]
+    [InlineData("/api/v1/ai/chat", "Bạn đang đau - ngực dữ dội, hãy nghỉ ngơi.", "115")]
+    [InlineData("/api/v1/ai/copilot/chat", "Bạn đang đau - ngực dữ dội, hãy nghỉ ngơi.", "115")]
     public async Task Provider_free_text_is_checked_before_return(string route, string reply, string expected)
     {
         await AuthenticateAsync("pat1@test.com");

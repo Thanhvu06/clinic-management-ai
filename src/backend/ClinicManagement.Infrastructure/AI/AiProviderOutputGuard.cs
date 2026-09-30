@@ -94,14 +94,19 @@ public static class AiProviderOutputGuard
         if (string.IsNullOrWhiteSpace(category)) return true;
         if (!ActionPhrase.IsMatch(AiTextNormalizer.Normalize(sentence).ToLowerInvariant())) return true;
         var context = AiTextNormalizer.Normalize(sentence[..clauseStart]).ToLowerInvariant();
-        var normalized = AiTextNormalizer.Normalize(text).ToLowerInvariant();
-        var phrase = AiTextNormalizer.Normalize(category).ToLowerInvariant();
+        var preserved = AiTextNormalizer.Normalize(text).ToLowerInvariant();
+        var folded = AiTextNormalizer.NormalizeForComparison(text);
+        var phraseFolded = AiTextNormalizer.NormalizeForComparison(category);
+        if (folded.Length != preserved.Length) return true;
+
+        var located = false;
         var searchFrom = 0;
-        while (searchFrom < normalized.Length)
+        while (searchFrom < folded.Length)
         {
-            var phraseIndex = normalized.IndexOf(phrase, searchFrom, StringComparison.Ordinal);
+            var phraseIndex = folded.IndexOf(phraseFolded, searchFrom, StringComparison.Ordinal);
             if (phraseIndex < 0) break;
-            var prefix = context + " " + normalized[..phraseIndex];
+            located = true;
+            var prefix = context + " " + preserved[..phraseIndex];
             var conditions = ConditionalWarning.Matches(prefix);
             if (conditions.Count == 0)
                 return true;
@@ -109,8 +114,8 @@ public static class AiProviderOutputGuard
             var afterCondition = prefix[(lastCondition.Index + lastCondition.Length)..];
             if (CurrentState.IsMatch(afterCondition))
                 return true;
-            searchFrom = phraseIndex + phrase.Length;
+            searchFrom = phraseIndex + phraseFolded.Length;
         }
-        return false;
+        return !located;
     }
 }

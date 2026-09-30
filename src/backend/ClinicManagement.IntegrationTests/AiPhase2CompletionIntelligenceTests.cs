@@ -238,6 +238,23 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         Assert.DoesNotContain("không thể kê đơn", payload.Data.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Legacy_chat_allows_reading_the_prescription_that_was_already_issued()
+    {
+        await AuthenticateAsync("pat1@test.com");
+
+        var response = await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
+        {
+            Message = "Bác sĩ đã kê thuốc cho tôi những gì?"
+        });
+
+        var payload = await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(payload?.Data);
+        Assert.NotEqual("OutOfScopeMedicalRequest", payload.Data.DialogueOutcome);
+        Assert.DoesNotContain("không thể kê đơn", payload.Data.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("kê đơn thuốc cho tôi", true)]
     [InlineData("cho tôi toa trị đau đầu", true)]
@@ -269,6 +286,46 @@ public sealed class AiPhase2CompletionIntelligenceTests : IntegrationTestBase
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
         Assert.NotEqual("MEDICAL_PRESCRIPTION_OUT_OF_SCOPE", data.GetProperty("errorCode").GetString());
         Assert.Contains("patient.get_my_prescriptions", data.GetProperty("executedToolNames").EnumerateArray().Select(x => x.GetString()));
+    }
+
+    [Fact]
+    public async Task Copilot_patient_can_read_the_prescription_that_was_already_issued()
+    {
+        var client = await CreateAuthenticatedClientAsync("pat1@test.com");
+        var response = await client.PostAsJsonAsync("/api/v1/ai/copilot/chat", new
+        {
+            message = "Bác sĩ đã kê thuốc cho tôi những gì?",
+            sessionId = $"medication-read-issued-{Guid.NewGuid():N}"
+        });
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = document.RootElement.GetProperty("data");
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        Assert.NotEqual("MEDICAL_PRESCRIPTION_OUT_OF_SCOPE", data.GetProperty("errorCode").GetString());
+        Assert.DoesNotContain("không thể kê đơn", data.GetProperty("message").GetString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("/api/v1/ai/chat")]
+    [InlineData("/api/v1/ai/copilot/chat")]
+    public async Task Patient_medication_change_after_reading_a_prescription_is_still_blocked(string route)
+    {
+        await AuthenticateAsync("pat1@test.com");
+        const string message = "Bác sĩ đã kê thuốc cho tôi; giờ kê thêm thuốc cho tôi";
+        object request = route.EndsWith("copilot/chat", StringComparison.Ordinal)
+            ? new { message, sessionId = $"medication-change-{Guid.NewGuid():N}" }
+            : new AiChatRequestDto { Message = message };
+
+        var response = await Client.PostAsJsonAsync(route, request);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = document.RootElement.GetProperty("data");
+
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        if (route.EndsWith("copilot/chat", StringComparison.Ordinal))
+            Assert.Equal("MEDICAL_PRESCRIPTION_OUT_OF_SCOPE", data.GetProperty("errorCode").GetString());
+        else
+            Assert.Equal("OutOfScopeMedicalRequest", data.GetProperty("dialogueOutcome").GetString());
+        Assert.Contains("không thể kê đơn", data.GetProperty("message").GetString(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
