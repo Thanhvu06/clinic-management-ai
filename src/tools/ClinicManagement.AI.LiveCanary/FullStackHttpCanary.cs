@@ -328,7 +328,10 @@ internal sealed class FullStackHttpCanary
             CorrelationId = diagnostic.CorrelationId,
             RejectedToolIndex = diagnostic.RejectedToolIndex,
             RejectedPlanToolCount = diagnostic.ToolCount,
-            RejectedToolName = diagnostic.RejectedToolName
+            RejectedToolName = diagnostic.RejectedToolName,
+            ProviderHttpStatus = diagnostic.ProviderHttpStatus,
+            ProviderErrorStatus = diagnostic.ProviderErrorStatus,
+            ProviderRejectedRequestPart = diagnostic.ProviderRejectedRequestPart
         };
     }
 

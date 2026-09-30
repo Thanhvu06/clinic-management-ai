@@ -695,6 +695,10 @@ public class AiChatProviderResult
     /// <summary>Server-set parse diagnostic; never read from generated JSON.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public ClinicManagement.Application.AI.Planning.AiPlannerValidationDiagnostic? Diagnostic { get; set; }
+
+    /// <summary>Server-set, closed-code HTTP rejection diagnostic; never provider text.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ClinicManagement.Application.AI.Planning.AiProviderHttpDiagnostic? ProviderHttp { get; set; }
     public string Reply { get; set; } = string.Empty;
     public List<string> SuggestedSpecialtyCodes { get; set; } = new();
     public string Urgency { get; set; } = "ROUTINE";

@@ -148,6 +148,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         string? correlationId = null;
         var providerAttemptCount = 0;
         AiPlannerValidationDiagnostic? plannerDiagnostic = null;
+        AiProviderHttpDiagnostic? providerHttpDiagnostic = null;
 
         if (decision.RequiresProvider)
         {
@@ -178,6 +179,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 correlationId = planned.CorrelationId;
                 providerAttemptCount = planned.ProviderAttemptCount;
                 plannerDiagnostic = planned.Diagnostic;
+                providerHttpDiagnostic = planned.ProviderHttp;
                 decision = planned.Decision;
                 if (planned.ProviderCalled && planned.IsSuccess && decision.ToolCalls.Count > 0)
                 {
@@ -272,7 +274,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(x => x, StringComparer.Ordinal)
                 .ToArray(),
-            PlannerDiagnostic = AiCopilotPlannerDiagnosticDto.From(plannerDiagnostic)
+            PlannerDiagnostic = AiCopilotPlannerDiagnosticDto.From(plannerDiagnostic, providerHttpDiagnostic)
         };
         await PersistAndAudit(final, sessionId, role, resolved.Context, decision.ToolCalls.Count, cancellationToken);
         return final;

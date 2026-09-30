@@ -20,6 +20,11 @@ internal static class CanaryDiagnosticSanitizer
     private static readonly IReadOnlySet<string> Stages = Enum.GetNames<AiPlannerValidationStage>().ToHashSet(StringComparer.Ordinal);
     private static readonly IReadOnlySet<string> Reasons = Enum.GetNames<AiPlannerValidationReason>().ToHashSet(StringComparer.Ordinal);
     private static readonly IReadOnlySet<string> FinishReasons = Enum.GetNames<AiProviderFinishReason>().ToHashSet(StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> HttpStatuses = AiProviderHttpDiagnostic.ReportedHttpStatuses
+        .Select(x => x.ToString(System.Globalization.CultureInfo.InvariantCulture))
+        .ToHashSet(StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> ProviderErrorStatuses = Enum.GetNames<AiProviderErrorStatus>().ToHashSet(StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> RejectedRequestParts = Enum.GetNames<AiProviderRejectedRequestPart>().ToHashSet(StringComparer.Ordinal);
     private static readonly Regex ServerCorrelationId = new("^[0-9a-f]{8}$", RegexOptions.CultureInvariant);
 
     private static readonly IReadOnlySet<string> ErrorCodes = AiPlannerErrorCodes.All
@@ -48,6 +53,11 @@ internal static class CanaryDiagnosticSanitizer
     public static string Reason(string? value) => Closed(value, Reasons);
     public static string FinishReason(string? value) => Closed(value, FinishReasons);
 
+    // Provider HTTP rejection codes: anything outside the closed set is "Other".
+    public static string ProviderHttpStatus(string? value) => ClosedOrOther(value, HttpStatuses);
+    public static string ProviderErrorStatus(string? value) => ClosedOrOther(value, ProviderErrorStatuses);
+    public static string ProviderRejectedRequestPart(string? value) => ClosedOrOther(value, RejectedRequestParts);
+
     public static string? CorrelationId(string? value) =>
         value is not null && ServerCorrelationId.IsMatch(value) ? value : null;
 
@@ -71,12 +81,18 @@ internal static class CanaryDiagnosticSanitizer
             correlationId,
             ToolPosition(Int(diagnostic, "rejectedToolIndex")),
             ToolPosition(Int(diagnostic, "toolCount")),
-            ToolName(Text(diagnostic, "toolName"), allowedToolNames));
+            ToolName(Text(diagnostic, "toolName"), allowedToolNames))
+        {
+            ProviderHttpStatus = ProviderHttpStatus(Text(diagnostic, "providerHttpStatus")),
+            ProviderErrorStatus = ProviderErrorStatus(Text(diagnostic, "providerErrorStatus")),
+            ProviderRejectedRequestPart = ProviderRejectedRequestPart(Text(diagnostic, "providerRejectedRequestPart"))
+        };
     }
 
     public static CanaryRejectionDiagnostic FromPlannerResult(AiStructuredPlannerResult result, IReadOnlySet<string> allowedToolNames)
     {
         var diagnostic = result.Diagnostic;
+        var providerHttp = result.ProviderHttp;
         return new CanaryRejectionDiagnostic(
             ErrorCode(result.FailureReason),
             diagnostic is null ? NotAvailable : Stage(diagnostic.Stage.ToString()),
@@ -85,11 +101,21 @@ internal static class CanaryDiagnosticSanitizer
             CorrelationId(result.CorrelationId),
             ToolPosition(diagnostic?.RejectedToolIndex),
             ToolPosition(diagnostic?.ToolCount),
-            ToolName(diagnostic?.ToolName, allowedToolNames));
+            ToolName(diagnostic?.ToolName, allowedToolNames))
+        {
+            ProviderHttpStatus = ProviderHttpStatus(providerHttp?.HttpStatus),
+            ProviderErrorStatus = ProviderErrorStatus(providerHttp?.ErrorStatus.ToString()),
+            ProviderRejectedRequestPart = ProviderRejectedRequestPart(providerHttp?.RejectedRequestPart.ToString())
+        };
     }
 
+    // The server writes "NotAvailable" for validation fields of a provider
+    // HTTP rejection; keep it rather than folding it into "Unknown".
     private static string Closed(string? value, IReadOnlySet<string> allowed) =>
-        value is null ? NotAvailable : allowed.Contains(value) ? value : Unknown;
+        value is null or NotAvailable ? NotAvailable : allowed.Contains(value) ? value : Unknown;
+
+    private static string ClosedOrOther(string? value, IReadOnlySet<string> allowed) =>
+        value is null or NotAvailable ? NotAvailable : allowed.Contains(value) ? value : OtherErrorCode;
 
     private static string? Text(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
@@ -108,6 +134,10 @@ internal sealed record CanaryRejectionDiagnostic(
     int? ToolCount,
     string? RejectedToolName)
 {
+    public string ProviderHttpStatus { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string ProviderErrorStatus { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string ProviderRejectedRequestPart { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+
     public bool IsPlannerSchemaOrJson =>
         ValidationStage is nameof(AiPlannerValidationStage.ProviderEnvelope) or nameof(AiPlannerValidationStage.GeneratedJson) or nameof(AiPlannerValidationStage.PlannerSchema);
 

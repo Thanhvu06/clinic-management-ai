@@ -120,7 +120,10 @@ internal static class Program
                     CorrelationId = diagnostic.CorrelationId,
                     RejectedToolIndex = diagnostic.RejectedToolIndex,
                     RejectedPlanToolCount = diagnostic.ToolCount,
-                    RejectedToolName = diagnostic.RejectedToolName
+                    RejectedToolName = diagnostic.RejectedToolName,
+                    ProviderHttpStatus = diagnostic.ProviderHttpStatus,
+                    ProviderErrorStatus = diagnostic.ProviderErrorStatus,
+                    ProviderRejectedRequestPart = diagnostic.ProviderRejectedRequestPart
                 });
             }
             catch (OperationCanceledException)
@@ -334,6 +337,12 @@ public sealed record LiveCanaryCaseResult
     public int? RejectedToolIndex { get; init; }
     public int? RejectedPlanToolCount { get; init; }
     public string? RejectedToolName { get; init; }
+
+    // Sanitized provider HTTP rejection: allowlisted codes, "Other" for
+    // anything else, "NotAvailable" when the server reported nothing.
+    public string ProviderHttpStatus { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string ProviderErrorStatus { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
+    public string ProviderRejectedRequestPart { get; init; } = CanaryDiagnosticSanitizer.NotAvailable;
 }
 
 public sealed record LiveCanaryReport

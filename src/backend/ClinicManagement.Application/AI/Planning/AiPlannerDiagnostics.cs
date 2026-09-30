@@ -96,6 +96,113 @@ public sealed record AiPlannerValidationDiagnostic(AiPlannerValidationStage Stag
     };
 }
 
+/// <summary>Gemini <c>error.status</c> of a rejected HTTP call, folded into a closed set.</summary>
+public enum AiProviderErrorStatus
+{
+    NotAvailable,
+    InvalidArgument,
+    FailedPrecondition,
+    NotFound,
+    PermissionDenied,
+    Unauthenticated,
+    ResourceExhausted,
+    Unavailable,
+    DeadlineExceeded,
+    Internal,
+    Other
+}
+
+/// <summary>
+/// Part of the outgoing request a provider rejection points at. NotAvailable
+/// means the error body named nothing; Unknown means it named something the
+/// server does not classify.
+/// </summary>
+public enum AiProviderRejectedRequestPart
+{
+    NotAvailable,
+    ResponseFormatSchema,
+    SystemInstruction,
+    Contents,
+    GenerationConfig,
+    Unknown
+}
+
+/// <summary>
+/// Sanitized reason a provider HTTP call was rejected. Only closed values are
+/// kept: the error body is read solely to pick them and is never stored.
+/// </summary>
+public sealed record AiProviderHttpDiagnostic
+{
+    public const string NotAvailable = "NotAvailable";
+    public const string Other = "Other";
+
+    public static IReadOnlySet<int> ReportedHttpStatuses { get; } = new HashSet<int> { 400, 401, 403, 404, 408, 429, 500, 502, 503, 504 };
+
+    /// <summary>An allowlisted HTTP status code, "Other" or "NotAvailable".</summary>
+    public string HttpStatus { get; init; } = NotAvailable;
+
+    public AiProviderErrorStatus ErrorStatus { get; init; } = AiProviderErrorStatus.NotAvailable;
+
+    public AiProviderRejectedRequestPart RejectedRequestPart { get; init; } = AiProviderRejectedRequestPart.NotAvailable;
+
+    public static string MapHttpStatus(int? statusCode) => statusCode switch
+    {
+        null => NotAvailable,
+        var code when ReportedHttpStatuses.Contains(code.Value) => code.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        _ => Other
+    };
+
+    public static AiProviderErrorStatus MapErrorStatus(string? value) => value?.Trim().ToUpperInvariant() switch
+    {
+        null or "" => AiProviderErrorStatus.NotAvailable,
+        "INVALID_ARGUMENT" => AiProviderErrorStatus.InvalidArgument,
+        "FAILED_PRECONDITION" => AiProviderErrorStatus.FailedPrecondition,
+        "NOT_FOUND" => AiProviderErrorStatus.NotFound,
+        "PERMISSION_DENIED" => AiProviderErrorStatus.PermissionDenied,
+        "UNAUTHENTICATED" => AiProviderErrorStatus.Unauthenticated,
+        "RESOURCE_EXHAUSTED" => AiProviderErrorStatus.ResourceExhausted,
+        "UNAVAILABLE" => AiProviderErrorStatus.Unavailable,
+        "DEADLINE_EXCEEDED" => AiProviderErrorStatus.DeadlineExceeded,
+        "INTERNAL" => AiProviderErrorStatus.Internal,
+        _ => AiProviderErrorStatus.Other
+    };
+
+    /// <summary>
+    /// Case-insensitive substring match over provider field paths and message.
+    /// The first classifiable text wins; the text itself is discarded.
+    /// </summary>
+    public static AiProviderRejectedRequestPart MapRejectedRequestPart(IEnumerable<string?> texts)
+    {
+        var sawText = false;
+        foreach (var text in texts)
+        {
+            if (string.IsNullOrWhiteSpace(text)) continue;
+            sawText = true;
+            var part = ClassifyRequestPart(text);
+            if (part != AiProviderRejectedRequestPart.Unknown) return part;
+        }
+
+        return sawText ? AiProviderRejectedRequestPart.Unknown : AiProviderRejectedRequestPart.NotAvailable;
+    }
+
+    private static AiProviderRejectedRequestPart ClassifyRequestPart(string text)
+    {
+        // Most specific first: a response-format path also names generation_config.
+        if (ContainsAny(text, "responseFormat", "response_format", "responseSchema", "response_schema", "responseJsonSchema", "response_json_schema"))
+            return AiProviderRejectedRequestPart.ResponseFormatSchema;
+        if (ContainsAny(text, "systemInstruction", "system_instruction"))
+            return AiProviderRejectedRequestPart.SystemInstruction;
+        if (ContainsAny(text, "contents"))
+            return AiProviderRejectedRequestPart.Contents;
+        if (ContainsAny(text, "generationConfig", "generation_config"))
+            return AiProviderRejectedRequestPart.GenerationConfig;
+        return AiProviderRejectedRequestPart.Unknown;
+    }
+
+    private static bool ContainsAny(string text, params string[] needles) =>
+        needles.Any(needle => text.Contains(needle, StringComparison.OrdinalIgnoreCase));
+}
+
 /// <summary>
 /// Application error codes a role planner rejection can surface. These are
 /// the existing wire values; the canary allowlists exactly this set.

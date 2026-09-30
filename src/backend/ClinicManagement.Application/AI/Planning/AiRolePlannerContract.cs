@@ -73,6 +73,7 @@ public sealed class AiRolePlannerProviderResult
     public bool ProviderWasCalled { get; init; }
     public int ProviderAttemptCount { get; init; }
     public AiPlannerValidationDiagnostic? Diagnostic { get; init; }
+    public AiProviderHttpDiagnostic? ProviderHttp { get; init; }
     public AiRolePlannerOutput? Output { get; init; }
 }
 

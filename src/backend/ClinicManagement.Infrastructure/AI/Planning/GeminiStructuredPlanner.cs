@@ -92,7 +92,8 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
                     providerResult.RetryAfterSeconds,
                     correlationId,
                     attempts,
-                    providerResult.Diagnostic);
+                    providerResult.Diagnostic,
+                    providerResult.ProviderHttp);
             }
 
             var output = providerResult.Output;
@@ -235,7 +236,8 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
         int? retryAfterSeconds = null,
         string? correlationId = null,
         int providerAttempts = 0,
-        AiPlannerValidationDiagnostic? diagnostic = null) => new()
+        AiPlannerValidationDiagnostic? diagnostic = null,
+        AiProviderHttpDiagnostic? providerHttp = null) => new()
     {
         IsSuccess = false,
         ProviderCalled = called,
@@ -248,6 +250,7 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
         RetryAfterSeconds = retryAfterSeconds,
         CorrelationId = correlationId,
         Diagnostic = diagnostic,
+        ProviderHttp = providerHttp,
         Decision = new AiPlannerDecision
         {
             PlannerMode = AiPlannerModes.Fallback,

@@ -71,19 +71,35 @@ public sealed class AiCopilotPlannerDiagnosticDto
     public string? ToolName { get; init; }
     public string FinishReason { get; init; } = string.Empty;
 
-    public static AiCopilotPlannerDiagnosticDto? From(ClinicManagement.Application.AI.Planning.AiPlannerValidationDiagnostic? diagnostic) =>
-        diagnostic is null
-            ? null
-            : new AiCopilotPlannerDiagnosticDto
-            {
-                Stage = diagnostic.Stage.ToString(),
-                Reason = diagnostic.Reason.ToString(),
-                Field = diagnostic.Field?.ToString(),
-                RejectedToolIndex = diagnostic.RejectedToolIndex,
-                ToolCount = diagnostic.ToolCount,
-                ToolName = diagnostic.ToolName,
-                FinishReason = diagnostic.FinishReason.ToString()
-            };
+    /// <summary>Allowlisted provider HTTP status code, "Other" or "NotAvailable".</summary>
+    public string ProviderHttpStatus { get; init; } = ClinicManagement.Application.AI.Planning.AiProviderHttpDiagnostic.NotAvailable;
+    public string ProviderErrorStatus { get; init; } = nameof(ClinicManagement.Application.AI.Planning.AiProviderErrorStatus.NotAvailable);
+    public string ProviderRejectedRequestPart { get; init; } = nameof(ClinicManagement.Application.AI.Planning.AiProviderRejectedRequestPart.NotAvailable);
+
+    /// <summary>
+    /// A provider HTTP rejection has no validation stage, so those fields
+    /// read "NotAvailable" rather than borrowing a validation code.
+    /// </summary>
+    public static AiCopilotPlannerDiagnosticDto? From(
+        ClinicManagement.Application.AI.Planning.AiPlannerValidationDiagnostic? diagnostic,
+        ClinicManagement.Application.AI.Planning.AiProviderHttpDiagnostic? providerHttp = null)
+    {
+        if (diagnostic is null && providerHttp is null) return null;
+        const string notAvailable = ClinicManagement.Application.AI.Planning.AiProviderHttpDiagnostic.NotAvailable;
+        return new AiCopilotPlannerDiagnosticDto
+        {
+            Stage = diagnostic?.Stage.ToString() ?? notAvailable,
+            Reason = diagnostic?.Reason.ToString() ?? notAvailable,
+            Field = diagnostic?.Field?.ToString(),
+            RejectedToolIndex = diagnostic?.RejectedToolIndex,
+            ToolCount = diagnostic?.ToolCount,
+            ToolName = diagnostic?.ToolName,
+            FinishReason = diagnostic?.FinishReason.ToString() ?? notAvailable,
+            ProviderHttpStatus = providerHttp?.HttpStatus ?? notAvailable,
+            ProviderErrorStatus = (providerHttp?.ErrorStatus ?? ClinicManagement.Application.AI.Planning.AiProviderErrorStatus.NotAvailable).ToString(),
+            ProviderRejectedRequestPart = (providerHttp?.RejectedRequestPart ?? ClinicManagement.Application.AI.Planning.AiProviderRejectedRequestPart.NotAvailable).ToString()
+        };
+    }
 }
 
 public sealed class AiCopilotResponseDto

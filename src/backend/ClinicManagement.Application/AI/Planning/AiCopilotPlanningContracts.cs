@@ -79,6 +79,7 @@ public sealed class AiStructuredPlannerResult
     public int? RetryAfterSeconds { get; init; }
     public string? CorrelationId { get; init; }
     public AiPlannerValidationDiagnostic? Diagnostic { get; init; }
+    public AiProviderHttpDiagnostic? ProviderHttp { get; init; }
     public AiPlannerDecision Decision { get; init; } = new() { PlannerMode = AiPlannerModes.Fallback };
 }
 

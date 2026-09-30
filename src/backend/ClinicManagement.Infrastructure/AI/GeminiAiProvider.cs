@@ -385,7 +385,9 @@ TOOL PLANNER CONTRACT:
                 RetryAfterSeconds = failure.RetryAfterSeconds,
                 CorrelationId = failure.CorrelationId,
                 ProviderWasCalled = failure.ProviderWasCalled,
-                ProviderAttemptCount = failure.ProviderAttemptCount
+                ProviderAttemptCount = failure.ProviderAttemptCount,
+                Diagnostic = failure.Diagnostic,
+                ProviderHttp = failure.ProviderHttp
             };
         }
 
@@ -552,6 +554,8 @@ SERVER_CONTEXT:
                 }
 
                 var statusCode = (int)response.StatusCode;
+                // 400 and 404 keep the same wire status; the HTTP diagnostic
+                // below is what tells a rejected request from a missing model.
                 var statusType = statusCode switch
                 {
                     401 or 403 => "AuthFailure",
@@ -561,13 +565,14 @@ SERVER_CONTEXT:
                     >= 500 => "ProviderServerError",
                     _ => "NetworkError"
                 };
+                var httpDiagnostic = await ReadHttpDiagnosticAsync(response, attemptCts.Token);
                 var isTransient = IsRetryableStatus(statusCode);
                 if (!isTransient || attempt == maxAttempts - 1)
                 {
                     sw.Stop();
-                    _logger.LogError("[{CorrelationId}] AI Chat Provider failed on attempt {Attempt}/{MaxAttempts} with status {StatusCode} ({StatusType}) in {ElapsedMs}ms.",
-                        correlationId, attempt + 1, maxAttempts, response.StatusCode, statusType, sw.ElapsedMilliseconds);
-                    return Fail(FailureResult(statusType, $"Provider returned HTTP {response.StatusCode}", correlationId, retryable: isTransient, retryAfter: GetRetryAfter(response), providerAttemptCount: providerAttempts));
+                    _logger.LogError("[{CorrelationId}] AI Chat Provider failed on attempt {Attempt}/{MaxAttempts} with status {StatusCode} ({StatusType}, {ProviderErrorStatus}, {RejectedRequestPart}) in {ElapsedMs}ms.",
+                        correlationId, attempt + 1, maxAttempts, response.StatusCode, statusType, httpDiagnostic.ErrorStatus, httpDiagnostic.RejectedRequestPart, sw.ElapsedMilliseconds);
+                    return Fail(FailureResult(statusType, $"Provider returned HTTP {response.StatusCode}", correlationId, retryable: isTransient, retryAfter: GetRetryAfter(response), providerAttemptCount: providerAttempts, providerHttp: httpDiagnostic));
                 }
 
                 var delay = GetRetryAfter(response) ?? GetBackoffDelay(attempt);
@@ -575,10 +580,10 @@ SERVER_CONTEXT:
                 if (waitResult == RetryWaitResult.Cancelled)
                     return Fail(CancelledResult(correlationId, providerAttempts));
                 if (waitResult == RetryWaitResult.NoBudget)
-                    return Fail(FailureResult(statusType, $"Provider returned HTTP {response.StatusCode}", correlationId, retryable: isTransient, retryAfter: delay, providerAttemptCount: providerAttempts));
+                    return Fail(FailureResult(statusType, $"Provider returned HTTP {response.StatusCode}", correlationId, retryable: isTransient, retryAfter: delay, providerAttemptCount: providerAttempts, providerHttp: httpDiagnostic));
 
-                _logger.LogWarning("[{CorrelationId}] AI Chat Provider transient failure on attempt {Attempt}/{MaxAttempts} with status {StatusCode} ({StatusType}) in {ElapsedMs}ms. Retrying after {DelayMs}ms.",
-                    correlationId, attempt + 1, maxAttempts, response.StatusCode, statusType, attemptSw.ElapsedMilliseconds, (long)delay.TotalMilliseconds);
+                _logger.LogWarning("[{CorrelationId}] AI Chat Provider transient failure on attempt {Attempt}/{MaxAttempts} with status {StatusCode} ({StatusType}, {ProviderErrorStatus}) in {ElapsedMs}ms. Retrying after {DelayMs}ms.",
+                    correlationId, attempt + 1, maxAttempts, response.StatusCode, statusType, httpDiagnostic.ErrorStatus, attemptSw.ElapsedMilliseconds, (long)delay.TotalMilliseconds);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -637,6 +642,79 @@ SERVER_CONTEXT:
         }
 
         return Fail(FailureResult("NetworkError", "Failed to obtain response from AI provider within the request budget.", correlationId, retryable: true, providerAttemptCount: providerAttempts));
+    }
+
+    private const int MaxErrorBodyBytes = 16 * 1024;
+
+    /// <summary>
+    /// Reads at most 16 KB of a rejected response and keeps only closed codes.
+    /// The body, error.message and field paths are discarded; this never throws.
+    /// </summary>
+    private static async Task<AiProviderHttpDiagnostic> ReadHttpDiagnosticAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        var httpStatus = AiProviderHttpDiagnostic.MapHttpStatus((int)response.StatusCode);
+        string body;
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            var buffer = new byte[MaxErrorBodyBytes + 1];
+            var length = 0;
+            int read;
+            while (length < buffer.Length && (read = await stream.ReadAsync(buffer.AsMemory(length), cancellationToken)) > 0)
+                length += read;
+            if (length > MaxErrorBodyBytes)
+                return new AiProviderHttpDiagnostic { HttpStatus = httpStatus, ErrorStatus = AiProviderErrorStatus.Other };
+            body = Encoding.UTF8.GetString(buffer, 0, length);
+        }
+        catch (Exception)
+        {
+            return new AiProviderHttpDiagnostic { HttpStatus = httpStatus };
+        }
+
+        if (string.IsNullOrWhiteSpace(body))
+            return new AiProviderHttpDiagnostic { HttpStatus = httpStatus };
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("error", out var error) ||
+                error.ValueKind != JsonValueKind.Object)
+                return new AiProviderHttpDiagnostic { HttpStatus = httpStatus, ErrorStatus = AiProviderErrorStatus.Other };
+
+            var status = error.TryGetProperty("status", out var statusElement) && statusElement.ValueKind == JsonValueKind.String
+                ? statusElement.GetString()
+                : null;
+            var texts = new List<string?>();
+            if (error.TryGetProperty("details", out var details) && details.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var detail in details.EnumerateArray())
+                {
+                    if (detail.ValueKind != JsonValueKind.Object ||
+                        !detail.TryGetProperty("fieldViolations", out var violations) ||
+                        violations.ValueKind != JsonValueKind.Array)
+                        continue;
+                    foreach (var violation in violations.EnumerateArray())
+                        if (violation.ValueKind == JsonValueKind.Object &&
+                            violation.TryGetProperty("field", out var field) &&
+                            field.ValueKind == JsonValueKind.String)
+                            texts.Add(field.GetString());
+                }
+            }
+            if (error.TryGetProperty("message", out var message) && message.ValueKind == JsonValueKind.String)
+                texts.Add(message.GetString());
+
+            return new AiProviderHttpDiagnostic
+            {
+                HttpStatus = httpStatus,
+                ErrorStatus = AiProviderHttpDiagnostic.MapErrorStatus(status),
+                RejectedRequestPart = AiProviderHttpDiagnostic.MapRejectedRequestPart(texts)
+            };
+        }
+        catch (JsonException)
+        {
+            return new AiProviderHttpDiagnostic { HttpStatus = httpStatus, ErrorStatus = AiProviderErrorStatus.Other };
+        }
     }
 
     private async Task<RetryWaitResult> WaitForRetryAsync(
@@ -709,7 +787,8 @@ SERVER_CONTEXT:
         bool retryable = false,
         TimeSpan? retryAfter = null,
         int providerAttemptCount = 0,
-        bool providerWasCalled = true) => new()
+        bool providerWasCalled = true,
+        AiProviderHttpDiagnostic? providerHttp = null) => new()
     {
         IsSuccess = false,
         Status = status,
@@ -720,7 +799,8 @@ SERVER_CONTEXT:
         CorrelationId = correlationId,
         ProviderWasCalled = providerWasCalled,
         ProviderAttemptCount = providerAttemptCount,
-        ErrorMessage = message
+        ErrorMessage = message,
+        ProviderHttp = providerHttp
     };
 
     private AiChatProviderResult TimeoutResult(string? correlationId = null, int providerAttemptCount = 0) => FailureResult("Timeout", "AI Provider request timed out.", correlationId, retryable: true, providerAttemptCount: providerAttemptCount);
