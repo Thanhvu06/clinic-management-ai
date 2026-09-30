@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
     useChatContext,
     buildStandardBookingPayloadFingerprint,
@@ -11,6 +11,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import axiosClient from "../api/axiosClient";
 import { aiChatFailureMessage } from "../api/aiErrorMessages";
+import { sendRoleCopilotMessage } from "../api/aiCopilotApi";
 import type { ApiResponse } from "../types";
 import type {
     ChatMessage,
@@ -20,7 +21,8 @@ import type {
     AiChatIntent,
     ConfirmBookingAction,
     ReviewBookingAction,
-    AiToolExecutionResult
+    AiToolExecutionResult,
+    AiSuggestionItem
 } from "../types/ai";
 
 export function isBookingConfirmationAction(action: AiAction): action is ConfirmBookingAction | ReviewBookingAction {
@@ -190,7 +192,11 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     const [submittingBooking, setSubmittingBooking] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
     const navigate = useNavigate();
+    const location = useLocation();
     const activeRequestIdRef = useRef(0);
+    // Role-Copilot memory is keyed separately from the booking session so a
+    // suggestion read never touches the booking draft/snapshot session.
+    const copilotSessionRef = useRef<{ accountKey: string | null; id: string } | null>(null);
     const activeBookingSubmitIdRef = useRef(0);
     const activeRequestControllerRef = useRef<AbortController | null>(null);
     const accountKey = user ? (user.userId || (user.id !== undefined ? String(user.id) : null)) : null;
@@ -585,6 +591,69 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         payload: { targetUrl: "/patient/book" }
                     }
                 ] } : {})
+            }]);
+        } finally {
+            if (requestId === activeRequestIdRef.current) {
+                setLoading(false);
+                activeRequestControllerRef.current = null;
+            }
+        }
+    };
+
+    // Suggestion buttons run a server-owned read through the role Copilot.
+    // Only the code is authoritative; the label is shown as the user's turn.
+    const handleSuggestion = async (suggestion: AiSuggestionItem): Promise<void> => {
+        const label = suggestion.label.trim();
+        if (!label || !suggestion.code || loading) return;
+
+        setMessages(previous => [...previous, { role: "user", content: label }]);
+        setErrorMsg("");
+        setLoading(true);
+        const requestId = ++activeRequestIdRef.current;
+        const requesterAccountKey = accountKeyRef.current;
+        const requestController = new AbortController();
+        activeRequestControllerRef.current?.abort();
+        activeRequestControllerRef.current = requestController;
+        const isCurrentRequest = () =>
+            requestId === activeRequestIdRef.current && requesterAccountKey === accountKeyRef.current;
+        if (!copilotSessionRef.current || copilotSessionRef.current.accountKey !== requesterAccountKey) {
+            copilotSessionRef.current = { accountKey: requesterAccountKey, id: generateSessionIdentity().replace(/[^A-Za-z0-9_-]/g, "").slice(0, 120) };
+        }
+
+        try {
+            const response = await sendRoleCopilotMessage({
+                message: label,
+                suggestionCode: suggestion.code,
+                sessionId: copilotSessionRef.current.id,
+                currentRoute: location.pathname,
+                clientTurnId: `turn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+                locale: "vi-VN",
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            }, requestController.signal);
+            if (requestController.signal.aborted || !isCurrentRequest()) return;
+            setMessages(previous => [...previous, {
+                role: "model",
+                content: response.message,
+                providerState: response.providerState,
+                executionMode: response.executionMode,
+                fallbackActive: response.fallbackActive,
+                providerWasCalled: response.providerWasCalled,
+                providerAttemptCount: response.providerAttemptCount,
+                primaryIntent: response.intent,
+                clarificationPrompt: response.clarification ?? undefined,
+                copilotCards: response.cards ?? [],
+                suggestionChips: response.suggestions ?? []
+            }]);
+        } catch (err: unknown) {
+            if (requestController.signal.aborted || !isCurrentRequest()) return;
+            const status = (err as { status?: number; response?: { status?: number } })?.status ??
+                (err as { response?: { status?: number } })?.response?.status;
+            setAiAssistantStatus(status === 429 ? "Degraded" : "Offline");
+            setMessages(previous => [...previous, {
+                role: "model",
+                content: aiChatFailureMessage(err),
+                urgency: "ROUTINE",
+                assistantStatus: status === 429 ? "Degraded" : "Offline"
             }]);
         } finally {
             if (requestId === activeRequestIdRef.current) {
@@ -1429,6 +1498,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         activeDraft,
         clearChat,
         handleSendMessage,
+        handleSuggestion,
         handleActionClick,
         confirmToolAction,
         cancelToolAction,

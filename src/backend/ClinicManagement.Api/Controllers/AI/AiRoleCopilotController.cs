@@ -31,4 +31,13 @@ public sealed class AiRoleCopilotController : ControllerBase
         var result = await _service.ChatAsync(request, cancellationToken);
         return Ok(ApiResponse<AiCopilotResponseDto>.Ok(result));
     }
+
+    [HttpPost("suggestions")]
+    public async Task<IActionResult> Suggestions([FromBody] AiCopilotSuggestionsRequestDto request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(new ApiErrorResponse { ErrorCode = "INVALID_AI_REQUEST", Message = "Nội dung copilot không hợp lệ." });
+        var result = await _service.GetSuggestionsAsync(request, cancellationToken);
+        return Ok(ApiResponse<AiCopilotSuggestionsResponseDto>.Ok(result));
+    }
 }

@@ -1,5 +1,6 @@
 import axiosClient from './axiosClient';
 import type { ApiResponse } from '../types';
+import type { AiSuggestionItem } from '../types/ai';
 
 export interface AiCopilotCard {
     type: string;
@@ -67,6 +68,7 @@ export interface AiCopilotResponse {
     safetyNotice?: string | null;
     navigationRoute?: string | null;
     suggestedPrompts: string[];
+    suggestions?: AiSuggestionItem[];
     cards: AiCopilotCard[];
     availableTools: AiCopilotTool[];
     sources?: Array<{ name: string; kind: string; status?: string }>;
@@ -96,6 +98,8 @@ export interface AiCopilotRequest {
     clientTurnId?: string;
     locale?: string;
     timezone?: string;
+    /** Server-owned suggestion code; when set, the server ignores `message` for routing. */
+    suggestionCode?: string;
 }
 
 export async function sendRoleCopilotMessage(request: AiCopilotRequest | string, signal?: AbortSignal): Promise<AiCopilotResponse> {

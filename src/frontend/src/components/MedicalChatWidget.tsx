@@ -13,6 +13,9 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import type { AiAction, AiChatIntent, AiToolExecutionResult } from "../types/ai";
 import SafeMarkdown from "./SafeMarkdown";
+import { SuggestionChips } from "./copilot/SuggestionChips";
+import { useSuggestionMenu } from "./copilot/useSuggestionMenu";
+import { renderCopilotCardData } from "./copilot/copilotDataRenderers";
 
 const QUICK_PROMPTS: Array<{ label: string; intent?: AiChatIntent }> = [
     { label: "Tôi nên khám chuyên khoa nào?" },
@@ -83,6 +86,8 @@ const PatientMedicalChatWidget: React.FC = () => {
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
+    const location = useLocation();
+    const { user } = useAuth();
     const { setPendingSpecialtyId, aiAssistantStatus } = useChatContext();
 
     const {
@@ -95,11 +100,23 @@ const PatientMedicalChatWidget: React.FC = () => {
         activeDraft,
         clearChat,
         handleSendMessage,
+        handleSuggestion,
         handleActionClick,
         confirmToolAction,
         cancelToolAction,
         formatVietnameseDate
     } = useAiBookingFlow(() => setIsOpen(false));
+    const suggestionMenu = useSuggestionMenu({
+        enabled: isOpen,
+        role: user?.role,
+        identityKey: user?.userId ?? (user?.id !== undefined ? String(user.id) : "anonymous"),
+        currentRoute: location.pathname
+    });
+    const suggestionsBusy = loading || submittingBooking || executingActionId !== null;
+    const onSuggestion = (suggestion: Parameters<typeof handleSuggestion>[0]) => {
+        if (suggestionsBusy) return;
+        void handleSuggestion(suggestion);
+    };
 
     useEffect(() => {
         if (isOpen) {
@@ -281,6 +298,12 @@ const PatientMedicalChatWidget: React.FC = () => {
                                             </button>
                                         ))}
                                     </div>
+                                    <SuggestionChips
+                                        suggestions={suggestionMenu}
+                                        disabled={suggestionsBusy}
+                                        onSelect={onSuggestion}
+                                        ariaLabel="Tra cứu nhanh dữ liệu của bạn"
+                                    />
                                 </>
                             )}
                         </div>
@@ -360,6 +383,28 @@ const PatientMedicalChatWidget: React.FC = () => {
                                             </div>
                                         </div>
                                     ))}
+
+                                    {msg.copilotCards?.map((card, cardIndex) => (
+                                        <div key={`${card.type}-${cardIndex}`} className={styles.cardContainer}>
+                                            <div className={styles.bookingSummaryCard} role="status" aria-label="Dữ liệu từ hệ thống ClinicCare">
+                                                <h4 className={styles.bookingSummaryTitle}>
+                                                    <CheckCircle2 size={18} color={card.data === null || card.data === undefined ? "#b91c1c" : "#0d9488"} />
+                                                    {card.title}
+                                                </h4>
+                                                {card.description && <p className={styles.specialtyReason}>{card.description}</p>}
+                                                {renderCopilotCardData(card)}
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    {msg.role === "model" && (
+                                        <SuggestionChips
+                                            suggestions={msg.suggestionChips}
+                                            disabled={suggestionsBusy}
+                                            onSelect={onSuggestion}
+                                            ariaLabel="Gợi ý tiếp theo"
+                                        />
+                                    )}
 
                                     {/* Specialty Suggestions */}
                                     {msg.suggestions && msg.suggestions.length > 0 && msg.urgency !== "EMERGENCY" && (

@@ -3,11 +3,18 @@ import { Bot, CheckCircle2, ExternalLink, RotateCcw, Send, ShieldCheck, Square, 
 import { useUnifiedCopilot, type UnifiedCopilotMessage } from './useUnifiedCopilot';
 import { providerStateLabel, toolDisplayName } from './copilotConfig';
 import { renderCopilotCardData } from './copilotDataRenderers';
+import { SuggestionChips } from './SuggestionChips';
+import type { AiSuggestionItem } from '../../types/ai';
 import styles from './UnifiedCopilotPanel.module.css';
 
 const safeRoute = (route?: string | null): route is string => Boolean(route && route.startsWith('/') && !route.startsWith('//') && !route.includes('://') && !route.includes('..') && !route.includes('\\'));
 
-const MessageBubble: React.FC<{ item: UnifiedCopilotMessage; onRetry: (text: string) => void }> = ({ item, onRetry }) => {
+const MessageBubble: React.FC<{
+    item: UnifiedCopilotMessage;
+    onRetry: (item: UnifiedCopilotMessage) => void;
+    onSuggestion: (suggestion: AiSuggestionItem) => void;
+    busy: boolean;
+}> = ({ item, onRetry, onSuggestion, busy }) => {
     const response = item.response;
     const cards = response?.cards ?? [];
     return (
@@ -34,7 +41,8 @@ const MessageBubble: React.FC<{ item: UnifiedCopilotMessage; onRetry: (text: str
                         </article>
                     );
                 })}
-                {item.error && item.retryText && <button type="button" className={styles.retryButton} onClick={() => onRetry(item.retryText!)}><RotateCcw size={13} /> Thử lại</button>}
+                {item.role === 'assistant' && <SuggestionChips suggestions={response?.suggestions} disabled={busy} onSelect={onSuggestion} ariaLabel="Gợi ý tiếp theo" />}
+                {item.error && item.retryText && <button type="button" className={styles.retryButton} onClick={() => onRetry(item)}><RotateCcw size={13} /> Thử lại</button>}
             </div>
         </div>
     );
@@ -97,7 +105,16 @@ export const UnifiedCopilotPanel: React.FC = () => {
                 <div className={styles.statusBar} data-state={providerStatus}><span className={styles.statusDot} /> <span>{providerStateLabel(providerStatus)}</span><span className={styles.mode}>{latestResponse?.assistantMode ?? 'Ready'}{latestResponse?.plannerMode ? ` · ${latestResponse.plannerMode}` : ''}</span></div>
                 <div className={styles.messages} aria-live="polite" aria-relevant="additions">
                     <p className={styles.cardDescription}><ShieldCheck size={13} /> Dữ liệu và quyền truy cập do backend kiểm tra; Copilot này không tự thực hiện thao tác ghi.</p>
-                    {copilot.messages.map(message => <MessageBubble key={message.id} item={message} onRetry={text => void copilot.send(text)} />)}
+                    {copilot.messages.map(message => <MessageBubble
+                        key={message.id}
+                        item={message}
+                        busy={copilot.loading}
+                        onSuggestion={suggestion => void copilot.sendSuggestion(suggestion)}
+                        onRetry={failed => void (failed.retrySuggestionCode
+                            ? copilot.sendSuggestion({ code: failed.retrySuggestionCode, label: failed.retryText ?? '' })
+                            : copilot.send(failed.retryText ?? ''))}
+                    />)}
+                    {!copilot.messages.some(message => message.response) && <SuggestionChips suggestions={copilot.menuSuggestions} disabled={copilot.loading} onSelect={suggestion => void copilot.sendSuggestion(suggestion)} ariaLabel="Gợi ý theo vai trò" />}
                     {copilot.loading && <div className={`${styles.messageRow} ${styles.assistant}`}><div className={styles.bubble}>Đang kiểm tra dữ liệu…</div></div>}
                 </div>
                 {copilot.actionCapabilities.length > 0 && <section className={styles.actionTray} aria-label="Thao tác có xác nhận">

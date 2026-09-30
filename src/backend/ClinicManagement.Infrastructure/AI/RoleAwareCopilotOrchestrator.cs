@@ -5,8 +5,10 @@ using ClinicManagement.Application.AI.Conversation;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.AI.Planning;
+using ClinicManagement.Application.AI.Suggestions;
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Application.Authentication.Interfaces;
+using ClinicManagement.Infrastructure.AI.Planning;
 using Microsoft.AspNetCore.Http;
 
 namespace ClinicManagement.Infrastructure.AI;
@@ -75,6 +77,10 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         var turnId = NormalizeId(request.ClientTurnId, "turn");
         var memory = await _memoryStore.LoadAsync(sessionId, _currentUser.UserId, role, cancellationToken);
         var analysis = _pipeline.Analyze(request.Message);
+        // A suggestion button is routed by its server-owned code only. The
+        // message is kept for history and safety screening, never for routing.
+        var suggestionRequested = !string.IsNullOrWhiteSpace(request.SuggestionCode);
+        var auditSource = suggestionRequested ? SuggestionAuditSource : FreeTextAuditSource;
 
         if (analysis.Safety.IsEmergency || analysis.Safety.IsPromptInjection)
         {
@@ -94,13 +100,14 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                     : "Yêu cầu điều khiển tool hoặc truy cập vượt quyền đã bị từ chối.",
                 SafetyNotice = "Safety guard đã chặn provider và mọi tool call trước khi truy cập dữ liệu.",
                 SuggestedPrompts = SuggestedPrompts(role),
+                Suggestions = AiSuggestionCatalog.ForRole(role, hasCaseResource: false),
                 AvailableTools = ToolsForUi(tools)
             };
-            await PersistAndAudit(response, sessionId, role, null, 0, cancellationToken);
+            await PersistAndAudit(response, sessionId, role, null, 0, cancellationToken, auditSource);
             return response;
         }
 
-        if (AiMedicalScopeGuard.IsPrescriptionRequest(role, request.Message))
+        if (!suggestionRequested && AiMedicalScopeGuard.IsPrescriptionRequest(role, request.Message))
         {
             var response = new AiCopilotResponseDto
             {
@@ -117,6 +124,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 ExecutionMode = AiProviderStatusContract.ExecutionDeterministicFallback,
                 FallbackActive = true,
                 SuggestedPrompts = SuggestedPrompts(role),
+                Suggestions = AiSuggestionCatalog.ForRole(role, hasCaseResource: false),
                 AvailableTools = ToolsForUi(tools)
             };
             await PersistAndAudit(response, sessionId, role, null, 0, cancellationToken);
@@ -127,18 +135,35 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         if (!resolved.IsValid)
         {
             var response = ClarifyingResponse(conversationId, turnId, role, tools, resolved.ErrorMessage!, AiProviderStatusContract.NotCalled, AiPlannerModes.Deterministic, resolved.ErrorCode);
-            await PersistAndAudit(response, sessionId, role, null, 0, cancellationToken);
+            await PersistAndAudit(response, sessionId, role, null, 0, cancellationToken, auditSource);
             return response;
         }
 
-        var decision = _deterministicPlanner.Plan(new AiCopilotPlanningContext
+        // Case-scoped suggestions use only resource the caller sent on this
+        // turn (verified above), never a resource remembered from memory.
+        var hasCaseResource = HasExplicitCaseResource(request.ResourceContext) &&
+                              (resolved.Context.AppointmentId.HasValue || resolved.Context.VisitId.HasValue);
+        AiPlannerDecision decision;
+        if (suggestionRequested)
         {
-            Role = role,
-            NormalizedMessage = analysis.NormalizedText,
-            Analysis = analysis,
-            Resource = resolved.Context,
-            Memory = memory
-        });
+            var suggestion = AiSuggestionCatalog.Find(request.SuggestionCode, role);
+            decision = suggestion is null
+                ? AiDeterministicPlanner.SuggestionRejected()
+                : _deterministicPlanner.PlanSuggestion(suggestion, hasCaseResource
+                    ? resolved.Context
+                    : new AiResolvedResourceContext { CurrentRoute = resolved.Context.CurrentRoute });
+        }
+        else
+        {
+            decision = _deterministicPlanner.Plan(new AiCopilotPlanningContext
+            {
+                Role = role,
+                NormalizedMessage = analysis.NormalizedText,
+                Analysis = analysis,
+                Resource = resolved.Context,
+                Memory = memory
+            });
+        }
         var providerState = AiProviderStatusContract.NotCalled;
         var providerFailureCode = AiProviderStatusContract.FailureNone;
         var providerWasCalled = false;
@@ -150,7 +175,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         AiPlannerValidationDiagnostic? plannerDiagnostic = null;
         AiProviderHttpDiagnostic? providerHttpDiagnostic = null;
 
-        if (decision.RequiresProvider)
+        if (decision.RequiresProvider && !suggestionRequested)
         {
             if (resolved.HasPendingConfirmation)
             {
@@ -255,6 +280,10 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             NavigationRoute = grounded.NavigationRoute,
             Navigation = grounded.NavigationRoute,
             SuggestedPrompts = SuggestedPrompts(role),
+            Suggestions = AiSuggestionCatalog.ForRole(
+                role,
+                hasCaseResource,
+                results.Select(x => x.ToolName).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!).ToArray()),
             Cards = grounded.Cards,
             Sources = grounded.Sources,
             AvailableTools = ToolsForUi(tools),
@@ -276,11 +305,40 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 .ToArray(),
             PlannerDiagnostic = AiCopilotPlannerDiagnosticDto.From(plannerDiagnostic, providerHttpDiagnostic)
         };
-        await PersistAndAudit(final, sessionId, role, resolved.Context, decision.ToolCalls.Count, cancellationToken);
+        await PersistAndAudit(final, sessionId, role, resolved.Context, decision.ToolCalls.Count, cancellationToken, auditSource);
         return final;
     }
 
-    private async Task PersistAndAudit(AiCopilotResponseDto response, string sessionId, AiActorRole role, AiResolvedResourceContext? resource, int toolCount, CancellationToken ct)
+    public async Task<AiCopilotSuggestionsResponseDto> GetSuggestionsAsync(AiCopilotSuggestionsRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var role = ResolveRole();
+        var hasCaseResource = false;
+        if (HasExplicitCaseResource(request.ResourceContext))
+        {
+            // Same resolver as chat: ownership, facility scope and composite
+            // consistency. Any failure simply hides case-scoped suggestions.
+            var resolved = await _contextResolver.ResolveAsync(new AiCopilotRequestDto
+            {
+                CurrentRoute = request.CurrentRoute,
+                ResourceContext = request.ResourceContext
+            }, null, role, _currentUser.UserId, cancellationToken);
+            hasCaseResource = resolved.IsValid && (resolved.Context.AppointmentId.HasValue || resolved.Context.VisitId.HasValue);
+        }
+
+        return new AiCopilotSuggestionsResponseDto
+        {
+            Role = role.ToString(),
+            Suggestions = AiSuggestionCatalog.ForRole(role, hasCaseResource)
+        };
+    }
+
+    private static bool HasExplicitCaseResource(AiCopilotResourceContextDto? resource) =>
+        resource is not null && (resource.AppointmentId.HasValue || resource.VisitId.HasValue);
+
+    private const string FreeTextAuditSource = "role-copilot";
+    private const string SuggestionAuditSource = "role-copilot-suggestion";
+
+    private async Task PersistAndAudit(AiCopilotResponseDto response, string sessionId, AiActorRole role, AiResolvedResourceContext? resource, int toolCount, CancellationToken ct, string source = FreeTextAuditSource)
     {
         var memory = await _memoryStore.SaveTurnAsync(new AiConversationMemoryWriteRequest
         {
@@ -301,7 +359,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             Outcome = response.AssistantMode,
             MetadataJson = JsonSerializer.Serialize(new
             {
-                source = "role-copilot",
+                source,
                 intent = response.Intent,
                 subIntent = response.SubIntent,
                 errorCode = response.ErrorCode,
@@ -414,6 +472,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         Message = message,
         Clarification = message,
         SuggestedPrompts = SuggestedPrompts(role),
+        Suggestions = AiSuggestionCatalog.ForRole(role, hasCaseResource: false),
         AvailableTools = ToolsForUi(tools)
     };
 

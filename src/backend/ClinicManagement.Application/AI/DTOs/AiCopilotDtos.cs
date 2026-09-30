@@ -31,6 +31,33 @@ public sealed class AiCopilotRequestDto
 
     [MaxLength(64)]
     public string? Timezone { get; set; }
+
+    /// <summary>
+    /// Server-owned suggestion code. When present it alone selects the read
+    /// tool; Message is kept only for conversation history.
+    /// </summary>
+    [MaxLength(64)]
+    public string? SuggestionCode { get; set; }
+}
+
+public sealed class AiSuggestionItemDto
+{
+    public string Code { get; init; } = string.Empty;
+    public string Label { get; init; } = string.Empty;
+}
+
+public sealed class AiCopilotSuggestionsRequestDto
+{
+    [MaxLength(256)]
+    public string? CurrentRoute { get; set; }
+
+    public AiCopilotResourceContextDto? ResourceContext { get; set; }
+}
+
+public sealed class AiCopilotSuggestionsResponseDto
+{
+    public string Role { get; init; } = string.Empty;
+    public IReadOnlyList<AiSuggestionItemDto> Suggestions { get; init; } = Array.Empty<AiSuggestionItemDto>();
 }
 
 public sealed class AiCopilotResourceContextDto
@@ -164,6 +191,9 @@ public sealed class AiCopilotResponseDto
     public string? NavigationRoute { get; init; }
     public string? Navigation { get; init; }
     public IReadOnlyList<string> SuggestedPrompts { get; init; } = Array.Empty<string>();
+
+    /// <summary>Server-computed suggestion buttons for the caller's role and verified context.</summary>
+    public IReadOnlyList<AiSuggestionItemDto> Suggestions { get; init; } = Array.Empty<AiSuggestionItemDto>();
     public IReadOnlyList<AiCopilotDataCardDto> Cards { get; init; } = Array.Empty<AiCopilotDataCardDto>();
     public IReadOnlyList<AiToolDataSource> Sources { get; init; } = Array.Empty<AiToolDataSource>();
     public IReadOnlyList<AiToolDefinition> AvailableTools { get; init; } = Array.Empty<AiToolDefinition>();

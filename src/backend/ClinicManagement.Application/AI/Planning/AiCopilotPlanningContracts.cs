@@ -123,6 +123,13 @@ public sealed class AiGroundedResponse
 public interface IAiDeterministicPlanner
 {
     AiPlannerDecision Plan(AiCopilotPlanningContext context);
+
+    /// <summary>
+    /// Plans a server-owned suggestion button. Never consults message text
+    /// and never requires a provider. <paramref name="resource"/> must contain
+    /// only resource the caller explicitly supplied and the resolver verified.
+    /// </summary>
+    AiPlannerDecision PlanSuggestion(ClinicManagement.Application.AI.Suggestions.AiSuggestionDefinition suggestion, AiResolvedResourceContext resource);
 }
 
 public interface IAiStructuredPlanner

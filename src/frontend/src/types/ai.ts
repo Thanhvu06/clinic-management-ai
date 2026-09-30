@@ -1,3 +1,5 @@
+import type { AiCopilotCard } from "../api/aiCopilotApi";
+
 export type AiActionType =
     | "ViewSpecialty"
     | "ViewDoctors"
@@ -391,4 +393,30 @@ export interface ChatMessage {
     clarificationPrompt?: string;
     primaryIntent?: AiChatIntent | string;
     toolResults?: AiToolExecutionResult[];
+    /** Grounded cards returned by the role Copilot for a suggestion button. */
+    copilotCards?: AiCopilotCard[];
+    /** Server-issued suggestion buttons shown under this reply. */
+    suggestionChips?: AiSuggestionItem[];
+}
+
+/** A server-owned suggestion button. The client only ever sends `code` back. */
+export interface AiSuggestionItem {
+    code: string;
+    label: string;
+}
+
+export interface AiSuggestionMenuRequest {
+    currentRoute?: string;
+    resourceContext?: {
+        appointmentId?: number;
+        visitId?: number;
+        encounterId?: number;
+        diagnosticOrderId?: number;
+        prescriptionId?: number;
+    };
+}
+
+export interface AiSuggestionMenu {
+    role: string;
+    suggestions: AiSuggestionItem[];
 }

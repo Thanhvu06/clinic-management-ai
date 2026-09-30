@@ -24,6 +24,12 @@ vi.mock('../auth/AuthContext', () => ({
     })
 }));
 
+// The suggestion menu is fetched from its own module when the widget opens;
+// keep it out of the axiosClient call sequence these flows assert on.
+vi.mock('../api/aiSuggestionApi', () => ({
+    getCopilotSuggestions: async () => ({ role: 'Patient', suggestions: [] })
+}));
+
 vi.mock('../api/axiosClient', () => ({
     default: {
         post: vi.fn(),

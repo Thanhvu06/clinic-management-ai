@@ -15,8 +15,10 @@ import {
     type AiActionPreview
 } from '../../api/aiCopilotApi';
 import { aiChatFailureMessage } from '../../api/aiErrorMessages';
+import type { AiSuggestionItem } from '../../types/ai';
 import { getCopilotRoleConfig, type CopilotRole } from './copilotConfig';
 import { useCopilotResource, type CopilotResourceSelection } from './copilotResourceContext';
+import { useSuggestionMenu } from './useSuggestionMenu';
 
 export interface UnifiedCopilotMessage {
     id: string;
@@ -25,6 +27,7 @@ export interface UnifiedCopilotMessage {
     response?: AiCopilotResponse;
     error?: boolean;
     retryText?: string;
+    retrySuggestionCode?: string;
 }
 
 const makeId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -284,7 +287,9 @@ export const useUnifiedCopilot = () => {
     const previousResourceRef = useRef(resourceKey);
     const previousActionInputRef = useRef(actionInputKey);
     const retryTextRef = useRef<string | null>(null);
+    const retrySuggestionCodeRef = useRef<string | null>(null);
     const actionBusyRef = useRef(false);
+    const menuSuggestions = useSuggestionMenu({ enabled: open, role, identityKey, currentRoute: location.pathname, resourceContext });
 
     const reset = useCallback(() => {
         controllerRef.current?.abort();
@@ -292,6 +297,7 @@ export const useUnifiedCopilot = () => {
         requestNumberRef.current += 1;
         actionRequestNumberRef.current += 1;
         retryTextRef.current = null;
+        retrySuggestionCodeRef.current = null;
         sessionIdRef.current = makeSession();
         conversationIdRef.current = makeSession().replace(/^sess_/, 'conv_');
         setLoading(false);
@@ -389,7 +395,9 @@ export const useUnifiedCopilot = () => {
         return () => controller.abort();
     }, [identityKey]);
 
-    const send = useCallback(async (value = input) => {
+    // A suggestion button sends its server-owned code; the label is only
+    // the visible history text. Free text keeps the original behaviour.
+    const submit = useCallback(async (value: string, suggestionCode?: string) => {
         const message = value.trim();
         if (!message || loading || message.length > 500) return;
         const requestNumber = ++requestNumberRef.current;
@@ -397,8 +405,9 @@ export const useUnifiedCopilot = () => {
         controllerRef.current?.abort();
         controllerRef.current = controller;
         retryTextRef.current = null;
+        retrySuggestionCodeRef.current = null;
         setLoading(true);
-        setInput('');
+        if (!suggestionCode) setInput('');
         setMessages(previous => [...previous, { id: makeId('user'), role: 'user', content: message }]);
         const request: AiCopilotRequest = {
             message,
@@ -409,7 +418,8 @@ export const useUnifiedCopilot = () => {
             resourceVersion,
             clientTurnId: makeId('turn'),
             locale: 'vi-VN',
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            ...(suggestionCode ? { suggestionCode } : {})
         };
 
         try {
@@ -421,11 +431,16 @@ export const useUnifiedCopilot = () => {
         } catch (error) {
             if (controller.signal.aborted || requestNumber !== requestNumberRef.current) return;
             retryTextRef.current = message;
-            setMessages(previous => [...previous, { id: makeId('error'), role: 'assistant', error: true, retryText: message, content: aiChatFailureMessage(error) }]);
+            retrySuggestionCodeRef.current = suggestionCode ?? null;
+            setMessages(previous => [...previous, { id: makeId('error'), role: 'assistant', error: true, retryText: message, retrySuggestionCode: suggestionCode, content: aiChatFailureMessage(error) }]);
         } finally {
             if (requestNumber === requestNumberRef.current) setLoading(false);
         }
-    }, [input, loading, location.pathname, resourceContext, resourceVersion]);
+    }, [loading, location.pathname, resourceContext, resourceVersion]);
+
+    const send = useCallback((value = input) => submit(value), [input, submit]);
+
+    const sendSuggestion = useCallback((suggestion: AiSuggestionItem) => submit(suggestion.label, suggestion.code), [submit]);
 
     const abort = useCallback(() => {
         controllerRef.current?.abort();
@@ -654,11 +669,11 @@ export const useUnifiedCopilot = () => {
 
     const retry = useCallback(() => {
         const value = retryTextRef.current;
-        if (value) void send(value);
-    }, [send]);
+        if (value) void submit(value, retrySuggestionCodeRef.current ?? undefined);
+    }, [submit]);
 
     return {
-        user, role, config, open, setOpen, input, setInput, loading, messages, send, reset, abort, retry,
+        user, role, config, open, setOpen, input, setInput, loading, messages, send, sendSuggestion, menuSuggestions, reset, abort, retry,
         resourceContext, resourceSelection, catalogTools: catalog.tools, actionCapabilities, actionLoading,
         pendingAction, pendingActionExpired, actionFeedback, catalogError, prepareAction, confirmAction, cancelAction
     };

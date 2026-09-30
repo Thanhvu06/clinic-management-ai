@@ -27,6 +27,10 @@ vi.mock('../api/aiCopilotApi', () => ({
     cancelRoleAction: (...args: unknown[]) => cancelActionMock(...args)
 }));
 
+vi.mock('../api/aiSuggestionApi', () => ({
+    getCopilotSuggestions: async () => ({ role: 'Doctor', suggestions: [] })
+}));
+
 const response = (overrides: Record<string, unknown> = {}) => ({
     role: 'Doctor', assistantStatus: 'Ready', providerStatus: 'Online', assistantMode: 'Ready', plannerMode: 'ProviderStructured',
     conversationId: 'conv-1', turnId: 'turn-1', intent: 'PatientSummary', message: 'Đây là dữ liệu đã kiểm chứng.',
