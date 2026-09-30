@@ -66,7 +66,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = doc.Id,
                 Status = VisitStatus.InConsultation,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit);
@@ -126,7 +126,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = doc.Id,
                 Status = VisitStatus.InConsultation,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit);
@@ -230,7 +230,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = doc.Id,
                 Status = VisitStatus.InConsultation,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit);
@@ -345,7 +345,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = doc.Id,
                 Status = VisitStatus.InPharmacy,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit);
@@ -466,7 +466,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = doc.Id,
                 Status = VisitStatus.InConsultation,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit);
@@ -549,7 +549,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = doc.Id,
                 Status = VisitStatus.InConsultation,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit);
@@ -599,7 +599,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 CancelledAtUtc = DateTime.UtcNow,
                 CancellationReason = "Bệnh nhân yêu cầu hủy",
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit);
@@ -668,7 +668,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = null,
                 Status = VisitStatus.InConsultation,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit);
@@ -746,7 +746,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = doc.Id,
                 Status = VisitStatus.InPharmacy,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit1);
@@ -761,7 +761,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = doc.Id,
                 Status = VisitStatus.InPharmacy,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit2);
@@ -850,7 +850,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = doc.Id,
                 Status = VisitStatus.InPharmacy,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit);
@@ -987,7 +987,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = doc.Id,
                 Status = VisitStatus.InPharmacy,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit);
@@ -1091,7 +1091,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = doc.Id,
                 Status = VisitStatus.InPharmacy,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit);
@@ -1190,7 +1190,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = doc.Id,
                 Status = VisitStatus.InConsultation,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit);
@@ -1296,7 +1296,7 @@ public class OutpatientHardenFlowTests : IntegrationTestBase
                 AssignedDoctorId = doc.Id,
                 Status = VisitStatus.InPharmacy,
                 Priority = VisitPriority.Normal,
-                QueueNumber = Random.Shared.Next(1000, 999999),
+                QueueNumber = TestQueueNumbers.Next(),
                 VisitDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             db.PatientVisits.Add(visit);

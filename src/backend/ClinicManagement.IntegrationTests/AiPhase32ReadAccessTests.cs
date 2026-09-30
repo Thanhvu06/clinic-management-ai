@@ -526,7 +526,7 @@ public sealed class AiPhase32ReadAccessTests : IntegrationTestBase
             PatientId = patientId, FacilityId = department.FacilityId, DepartmentId = department.Id,
             AssignedDoctorId = doctorId, AppointmentId = null,
             VisitDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)), ArrivalType = VisitArrivalType.WalkIn,
-            Priority = VisitPriority.Normal, ChiefComplaint = "Đau đầu tổng hợp cho test", QueueNumber = Random.Shared.Next(1000, 9000),
+            Priority = VisitPriority.Normal, ChiefComplaint = "Đau đầu tổng hợp cho test", QueueNumber = TestQueueNumbers.Next(),
             Status = VisitStatus.InConsultation, CreatedByUserId = ReceptionistId
         };
         db.PatientVisits.Add(visit);
@@ -616,7 +616,7 @@ public sealed class AiPhase32ReadAccessTests : IntegrationTestBase
             VisitCode = $"AI32-RV-{Guid.NewGuid():N}"[..16].ToUpperInvariant(), PatientId = Patient1EntityId,
             AppointmentId = appointment.Id, FacilityId = sharedFacilityId, DepartmentId = department.Id,
             AssignedDoctorId = Doctor2EntityId, VisitDate = date, ArrivalType = VisitArrivalType.Scheduled,
-            Priority = VisitPriority.Normal, ChiefComplaint = "REASSIGNED SECRET", QueueNumber = Random.Shared.Next(1000, 9000),
+            Priority = VisitPriority.Normal, ChiefComplaint = "REASSIGNED SECRET", QueueNumber = TestQueueNumbers.Next(),
             Status = VisitStatus.InConsultation, CreatedByUserId = ReceptionistId
         };
         db.PatientVisits.Add(visit);
