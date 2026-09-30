@@ -978,10 +978,8 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 summary.CompletedAtUtc = DateTime.UtcNow;
             }
 
-            bool hasPrescription = false;
             if (request.IssuePrescription && request.PrescriptionItems != null && request.PrescriptionItems.Count > 0)
             {
-                hasPrescription = true;
                 var prescription = appointment.Prescription;
                 if (prescription == null)
                 {
@@ -1036,7 +1034,6 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 if (appointment.Prescription.Items.Count > 0)
                 {
                     appointment.Prescription.Status = PrescriptionStatus.Issued;
-                    hasPrescription = true;
                 }
             }
 
