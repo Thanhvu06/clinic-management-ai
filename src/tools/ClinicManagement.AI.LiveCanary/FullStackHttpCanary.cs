@@ -67,6 +67,8 @@ internal sealed class FullStackHttpCanary
                     CaseId = canaryCase.CaseId,
                     Actor = canaryCase.Role.ToString(),
                     ExpectedCategory = canaryCase.ExpectedCategory,
+                    RequestPath = canaryCase.ApiPath,
+                    ProviderCallExpected = canaryCase.ProviderCallExpected,
                     ProviderState = AiProviderStatusContract.NotCalled,
                     FailureCode = AiProviderStatusContract.FailureClientCancelled,
                     HttpSucceeded = false,
@@ -81,6 +83,8 @@ internal sealed class FullStackHttpCanary
                     CaseId = canaryCase.CaseId,
                     Actor = canaryCase.Role.ToString(),
                     ExpectedCategory = canaryCase.ExpectedCategory,
+                    RequestPath = canaryCase.ApiPath,
+                    ProviderCallExpected = canaryCase.ProviderCallExpected,
                     ProviderState = AiProviderStatusContract.Degraded,
                     FailureCode = AiProviderStatusContract.FailureUnknown,
                     HttpSucceeded = false,
@@ -154,6 +158,8 @@ internal sealed class FullStackHttpCanary
                 CaseId = canaryCase.CaseId,
                 Actor = canaryCase.Role.ToString(),
                 ExpectedCategory = canaryCase.ExpectedCategory,
+                RequestPath = canaryCase.ApiPath,
+                ProviderCallExpected = canaryCase.ProviderCallExpected,
                 ProviderState = response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
                     ? AiProviderStatusContract.NotCalled
                     : AiProviderStatusContract.Degraded,
@@ -260,8 +266,11 @@ internal sealed class FullStackHttpCanary
         return new LiveCanaryCaseResult
         {
             CaseId = canaryCase.CaseId,
-            Actor = canaryCase.Role.ToString(),
+            Actor = isLegacyChat ? canaryCase.Role.ToString() : actor ?? string.Empty,
+            ObservedActor = actor,
             ExpectedCategory = canaryCase.ExpectedCategory,
+            RequestPath = canaryCase.ApiPath,
+            ObservedNavigationRoute = navigationRoute,
             ActualIntent = actualIntent,
             ToolNames = toolNames,
             ProviderState = providerState,
@@ -293,6 +302,8 @@ internal sealed class FullStackHttpCanary
         CaseId = canaryCase.CaseId,
         Actor = canaryCase.Role.ToString(),
         ExpectedCategory = canaryCase.ExpectedCategory,
+        RequestPath = canaryCase.ApiPath,
+        ProviderCallExpected = canaryCase.ProviderCallExpected,
         ProviderState = AiProviderStatusContract.Degraded,
         FailureCode = AiProviderStatusContract.FailureInvalidResponse,
         HttpSucceeded = true,

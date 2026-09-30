@@ -85,10 +85,47 @@ public sealed class LiveCanaryAcceptanceTests
     [Fact]
     public void All_actor_cases_with_grounded_allowlisted_data_are_full_pass()
     {
-        var report = FullStackReport(ValidCases());
+        var report = FullStackReport(CatalogValidCases());
 
         Assert.Equal(LiveCanaryAcceptanceEvaluator.PassFull, LiveCanaryAcceptanceEvaluator.Evaluate(report));
         Assert.Equal(0, LiveCanaryAcceptanceEvaluator.ExitCode(report, requireLive: true));
+    }
+
+    [Fact]
+    public void Full_stack_cannot_accept_arbitrary_case_ids_as_the_required_actor_catalog()
+    {
+        var report = FullStackReport(ValidCases());
+
+        Assert.NotEqual(LiveCanaryAcceptanceEvaluator.PassFull, LiveCanaryAcceptanceEvaluator.Evaluate(report));
+    }
+
+    [Fact]
+    public void Full_stack_cannot_accept_wrong_actor_or_tool_when_boolean_flags_claim_success()
+    {
+        var cases = CatalogValidCases().ToArray();
+        cases[0] = cases[0] with
+        {
+            Actor = AiActorRole.Doctor.ToString(),
+            ObservedActor = AiActorRole.Doctor.ToString(),
+            ToolNames = new[] { "doctor.get_my_queue" },
+            ActorVerified = true,
+            ExpectedToolVerified = true
+        };
+
+        Assert.NotEqual(LiveCanaryAcceptanceEvaluator.PassFull, LiveCanaryAcceptanceEvaluator.Evaluate(FullStackReport(cases)));
+    }
+
+    [Fact]
+    public void Full_stack_cannot_accept_wrong_observed_route_when_boolean_flags_claim_success()
+    {
+        var cases = CatalogValidCases().ToArray();
+        cases[0] = cases[0] with
+        {
+            ObservedNavigationRoute = "/admin",
+            RouteVerified = true
+        };
+
+        Assert.NotEqual(LiveCanaryAcceptanceEvaluator.PassFull, LiveCanaryAcceptanceEvaluator.Evaluate(FullStackReport(cases)));
     }
 
     [Fact]
@@ -171,9 +208,11 @@ public sealed class LiveCanaryAcceptanceTests
     }
 
     [Fact]
-    public void Budget_twelve_allows_six_cases_at_two_attempts_without_overflow()
+    public void Budget_twelve_allows_six_provider_cases_at_two_attempts_without_overflow()
     {
-        var cases = ValidCases().Select(x => x with { ProviderAttemptCount = 2 }).ToArray();
+        var cases = CatalogValidCases()
+            .Select(x => x.ProviderCallExpected ? x with { ProviderAttemptCount = 2 } : x)
+            .ToArray();
         var report = FullStackReport(cases) with
         {
             CallsBudget = 12,
@@ -235,26 +274,7 @@ public sealed class LiveCanaryAcceptanceTests
     [Fact]
     public void Legacy_patient_read_can_pass_only_with_server_derived_evidence_and_without_a_provider_call()
     {
-        var cases = ValidCases().ToList();
-        cases.Add(new LiveCanaryCaseResult
-        {
-            CaseId = "patient-legacy-http-read",
-            Actor = AiActorRole.Patient.ToString(),
-            ExpectedCategory = "patient_legacy_read",
-            ProviderCallExpected = false,
-            ProviderState = AiProviderStatusContract.NotCalled,
-            FailureCode = AiProviderStatusContract.FailureNone,
-            ProviderCalled = false,
-            ProviderAttemptCount = 0,
-            HttpSucceeded = true,
-            SchemaValid = true,
-            ToolScopeValid = true,
-            ActorVerified = true,
-            RouteVerified = true,
-            ExpectedToolVerified = true,
-            GroundedResponse = true,
-            GroundedSourcesValid = true
-        });
+        var cases = CatalogValidCases();
         var report = FullStackReport(cases) with
         {
             CallsPlanned = cases.Count,
@@ -297,6 +317,38 @@ public sealed class LiveCanaryAcceptanceTests
             AllowedTools = 1,
             ToolExecutions = 1,
             ToolNames = new[] { "synthetic.read" },
+            ToolScopeValid = true,
+            ActorVerified = true,
+            RouteVerified = true,
+            ExpectedToolVerified = true,
+            GroundedResponse = true,
+            GroundedSourcesValid = true
+        })
+        .ToArray();
+
+    private static IReadOnlyList<LiveCanaryCaseResult> CatalogValidCases() => FullStackCanaryCaseCatalog.Cases
+        .Select(canaryCase => new LiveCanaryCaseResult
+        {
+            CaseId = canaryCase.CaseId,
+            Actor = canaryCase.Role.ToString(),
+            ObservedActor = canaryCase.ProviderCallExpected ? canaryCase.Role.ToString() : null,
+            ExpectedCategory = canaryCase.ExpectedCategory,
+            RequestPath = canaryCase.ApiPath,
+            ObservedNavigationRoute = canaryCase.ProviderCallExpected ? canaryCase.ExpectedNavigationRoute : null,
+            ProviderState = canaryCase.ProviderCallExpected
+                ? AiProviderStatusContract.Online
+                : AiProviderStatusContract.NotCalled,
+            FailureCode = AiProviderStatusContract.FailureNone,
+            ProviderCalled = canaryCase.ProviderCallExpected,
+            ProviderAttemptCount = canaryCase.ProviderCallExpected ? 1 : 0,
+            ProviderCallExpected = canaryCase.ProviderCallExpected,
+            HttpSucceeded = true,
+            SchemaValid = true,
+            AllowedTools = canaryCase.ProviderCallExpected ? 1 : 0,
+            ToolExecutions = canaryCase.ProviderCallExpected ? 1 : 0,
+            ToolNames = canaryCase.ProviderCallExpected
+                ? new[] { canaryCase.ExpectedToolName }
+                : Array.Empty<string>(),
             ToolScopeValid = true,
             ActorVerified = true,
             RouteVerified = true,

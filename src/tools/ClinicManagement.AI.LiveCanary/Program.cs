@@ -280,7 +280,10 @@ public sealed record LiveCanaryCaseResult
 {
     public string CaseId { get; init; } = string.Empty;
     public string Actor { get; init; } = string.Empty;
+    public string? ObservedActor { get; init; }
     public string ExpectedCategory { get; init; } = string.Empty;
+    public string? RequestPath { get; init; }
+    public string? ObservedNavigationRoute { get; init; }
     public string? ActualIntent { get; init; }
     public IReadOnlyList<string> ToolNames { get; init; } = Array.Empty<string>();
     public string ProviderState { get; init; } = AiProviderStatusContract.NotCalled;

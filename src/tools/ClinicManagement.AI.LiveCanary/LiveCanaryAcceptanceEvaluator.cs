@@ -34,6 +34,7 @@ public static class LiveCanaryAcceptanceEvaluator
                 report.CallsAttempted == report.CallsPlanned &&
                 report.HttpCanaryRequests == report.CallsPlanned &&
                 report.ProviderCallsExecuted == report.Cases.Count(x => x.ProviderCallExpected) &&
+                HasRequiredFullStackCatalog(report) &&
                 report.Cases.All(IsFullStackCaseSuccess);
 
             return fullStackPass ? PassFull : PartialDegraded;
@@ -60,6 +61,50 @@ public static class LiveCanaryAcceptanceEvaluator
         }
 
         return PartialDegraded;
+    }
+
+    private static bool HasRequiredFullStackCatalog(LiveCanaryReport report)
+    {
+        var requiredCases = FullStackCanaryCaseCatalog.Cases;
+        if (report.CallsPlanned != requiredCases.Count || report.Cases.Count != requiredCases.Count)
+            return false;
+
+        var observedCases = report.Cases
+            .GroupBy(x => x.CaseId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.OrdinalIgnoreCase);
+        if (observedCases.Count != requiredCases.Count)
+            return false;
+
+        foreach (var required in requiredCases)
+        {
+            if (!observedCases.TryGetValue(required.CaseId, out var matches) || matches.Length != 1)
+                return false;
+
+            var result = matches[0];
+            var expectedActor = required.Role.ToString();
+            if (!string.Equals(result.Actor, expectedActor, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(result.ExpectedCategory, required.ExpectedCategory, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(result.RequestPath, required.ApiPath, StringComparison.OrdinalIgnoreCase) ||
+                result.ProviderCallExpected != required.ProviderCallExpected ||
+                !result.ActorVerified ||
+                !result.RouteVerified)
+                return false;
+
+            if (required.ProviderCallExpected)
+            {
+                if (!string.Equals(result.ObservedActor, expectedActor, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(result.ObservedNavigationRoute, required.ExpectedNavigationRoute, StringComparison.OrdinalIgnoreCase) ||
+                    !result.ToolNames.Contains(required.ExpectedToolName, StringComparer.OrdinalIgnoreCase) ||
+                    !result.ExpectedToolVerified)
+                    return false;
+            }
+            else if (result.ToolNames.Count != 0 || !result.ExpectedToolVerified)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public static int ExitCode(LiveCanaryReport report, bool requireLive)
