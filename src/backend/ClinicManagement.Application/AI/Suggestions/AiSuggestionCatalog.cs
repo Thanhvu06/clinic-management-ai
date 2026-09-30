@@ -4,17 +4,21 @@ using ClinicManagement.Application.AI.Tools;
 
 namespace ClinicManagement.Application.AI.Suggestions;
 
+public enum AiSuggestionActionKind { ReadTool, Wizard }
+
 public sealed record AiSuggestionDefinition(
     string Code,
     string Label,
     AiActorRole Role,
     string ToolName,
-    bool RequiresResource);
+    bool RequiresResource,
+    AiSuggestionActionKind ActionKind = AiSuggestionActionKind.ReadTool,
+    string? WizardStep = null);
 
 /// <summary>
 /// Server-owned suggestion buttons. The browser only ever sends a code; the
-/// server maps it to an existing read tool that is already allowed for the
-/// caller's role, then runs it through the normal authorization pipeline.
+/// server maps it to an existing read tool through the normal authorization
+/// pipeline, or to the patient wizard start step without a tool invocation.
 /// Codes and labels are stable wire values — never derived from user text.
 /// </summary>
 public static class AiSuggestionCatalog
@@ -25,6 +29,7 @@ public static class AiSuggestionCatalog
 
     public static IReadOnlyList<AiSuggestionDefinition> Definitions { get; } = new[]
     {
+        new AiSuggestionDefinition("patient.start_booking", "Đặt lịch khám", AiActorRole.Patient, "", false, AiSuggestionActionKind.Wizard, "start"),
         new AiSuggestionDefinition("doctor.my_queue", "Hôm nay tôi khám ai?", AiActorRole.Doctor, "doctor.get_my_queue", false),
         new AiSuggestionDefinition("doctor.patient_summary", "Tóm tắt bệnh nhân đang mở", AiActorRole.Doctor, "doctor.get_patient_summary", true),
         new AiSuggestionDefinition("doctor.diagnostic_orders", "Chỉ định cận lâm sàng của ca này", AiActorRole.Doctor, "doctor.get_diagnostic_orders", true),

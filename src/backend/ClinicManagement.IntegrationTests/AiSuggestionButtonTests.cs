@@ -53,6 +53,15 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
             Assert.Contains(suggestion.Role, new[] { AiActorRole.Patient, AiActorRole.Doctor });
             Assert.StartsWith(suggestion.Role == AiActorRole.Patient ? "patient." : "doctor.", suggestion.Code, StringComparison.Ordinal);
 
+            if (suggestion.ActionKind == AiSuggestionActionKind.Wizard)
+            {
+                Assert.Equal(AiActorRole.Patient, suggestion.Role);
+                Assert.Equal("start", suggestion.WizardStep);
+                Assert.Equal("patient.start_booking", suggestion.Code);
+                Assert.Empty(suggestion.ToolName);
+                Assert.False(suggestion.RequiresResource);
+                return;
+            }
             Assert.True(roleTools.TryGetValue(suggestion.ToolName, out var tool), suggestion.ToolName);
             Assert.True(registry.TryGetHandler(suggestion.ToolName, out _), suggestion.ToolName);
             // Read-only: low risk, no confirmation, planner-allowlisted, never a prepare/confirm tool.
@@ -85,7 +94,7 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             var names = document.RootElement.GetProperty("data").GetProperty("tools").EnumerateArray()
                 .Select(x => x.GetProperty("name").GetString()).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            Assert.All(AiSuggestionCatalog.Definitions.Where(x => x.Role == role), x => Assert.Contains(x.ToolName, names));
+            Assert.All(AiSuggestionCatalog.Definitions.Where(x => x.Role == role && x.ActionKind == AiSuggestionActionKind.ReadTool), x => Assert.Contains(x.ToolName, names));
         }
     }
 
@@ -319,7 +328,7 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
 
         var patientSession = NewSession("audit-pat");
         var doctorSession = NewSession("audit-doc");
-        foreach (var definition in AiSuggestionCatalog.Definitions.Where(x => x.Role == AiActorRole.Patient))
+        foreach (var definition in AiSuggestionCatalog.Definitions.Where(x => x.Role == AiActorRole.Patient && x.ActionKind == AiSuggestionActionKind.ReadTool))
             AssertLocalExecution(await ChatAsync(patient, new { message = definition.Label, suggestionCode = definition.Code, sessionId = patientSession }), definition.ToolName);
         foreach (var definition in AiSuggestionCatalog.Definitions.Where(x => x.Role == AiActorRole.Doctor))
             AssertLocalExecution(await ChatAsync(doctor, new { message = definition.Label, suggestionCode = definition.Code, sessionId = doctorSession, resourceContext = new { appointmentId = own } }), definition.ToolName);
@@ -340,11 +349,11 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
                 Assert.DoesNotContain("Patient 1", x.MetadataJson ?? string.Empty, StringComparison.Ordinal);
                 Assert.DoesNotContain("Doctor 1", x.MetadataJson ?? string.Empty, StringComparison.Ordinal);
             });
-            var expectedTools = AiSuggestionCatalog.Definitions.Where(x => x.Role == role).Select(x => $"Tool:{x.ToolName}").OrderBy(x => x, StringComparer.Ordinal).ToArray();
+            var expectedTools = AiSuggestionCatalog.Definitions.Where(x => x.Role == role && x.ActionKind == AiSuggestionActionKind.ReadTool).Select(x => $"Tool:{x.ToolName}").OrderBy(x => x, StringComparer.Ordinal).ToArray();
             Assert.Equal(expectedTools, logs.Where(x => x.ActionType.StartsWith("Tool:", StringComparison.Ordinal)).Select(x => x.ActionType).OrderBy(x => x, StringComparer.Ordinal).ToArray());
             Assert.All(logs.Where(x => x.ActionType.StartsWith("Tool:", StringComparison.Ordinal)), x => Assert.Equal("completed", x.Outcome));
         }
-        Assert.Equal(AiSuggestionCatalog.Definitions.Count(x => x.Role == AiActorRole.Patient) + 1,
+        Assert.Equal(AiSuggestionCatalog.Definitions.Count(x => x.Role == AiActorRole.Patient && x.ActionKind == AiSuggestionActionKind.ReadTool) + 1,
             await db.AiAuditLogs.CountAsync(x => x.SessionId == patientSession && x.ActionType == "CopilotTurn"));
         Assert.Contains(await db.AiAuditLogs.Where(x => x.SessionId == patientSession && x.ActionType == "CopilotTurn").Select(x => x.MetadataJson).ToListAsync(),
             json => json!.Contains(AiPlannerErrorCodes.ToolNotAllowed, StringComparison.Ordinal));

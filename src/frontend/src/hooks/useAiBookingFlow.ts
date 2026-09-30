@@ -22,7 +22,9 @@ import type {
     ConfirmBookingAction,
     ReviewBookingAction,
     AiToolExecutionResult,
-    AiSuggestionItem
+    AiSuggestionItem,
+    AiBookingWizardRequest,
+    AiBookingWizardResponse
 } from "../types/ai";
 
 export function isBookingConfirmationAction(action: AiAction): action is ConfirmBookingAction | ReviewBookingAction {
@@ -187,6 +189,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     } = useChatContext();
     const { user } = useAuth();
 
+    const [wizard, setWizard] = useState<AiBookingWizardResponse | null>(null);
+    const wizardSessionRef = useRef<string>(generateSessionIdentity());
+    const wizardBusyRef = useRef(false);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
     const [submittingBooking, setSubmittingBooking] = useState(false);
@@ -265,6 +270,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         accountKeyRef.current = accountKey;
 
         if (prevAccountKey !== accountKey) {
+            setWizard(null);
+            wizardSessionRef.current = generateSessionIdentity();
+            wizardBusyRef.current = false;
             activeBookingSubmitIdRef.current += 1;
             isSubmittingBookingRef.current = false;
             setSubmittingBooking(false);
@@ -601,8 +609,64 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     };
 
     // Suggestion buttons run a server-owned read through the role Copilot.
+    const handleWizardStep = async (step: AiBookingWizardRequest['step'], optionToken?: string, reason?: string): Promise<void> => {
+        if (loading || submittingBooking || wizardBusyRef.current) return;
+        wizardBusyRef.current = true;
+        if (step === 'start') {
+            wizardSessionRef.current = generateSessionIdentity();
+            setActiveDraft(null);
+            setWizard(null);
+        }
+        const requestId = ++activeRequestIdRef.current;
+        const account = accountKeyRef.current;
+        const controller = new AbortController();
+        activeRequestControllerRef.current?.abort();
+        activeRequestControllerRef.current = controller;
+        setLoading(true);
+        setErrorMsg('');
+        try {
+            const response = await axiosClient.post<AiBookingWizardRequest, ApiResponse<AiBookingWizardResponse>>('/ai/booking-wizard', {
+                sessionId: wizardSessionRef.current, step, optionToken, reason,
+                currentRoute: location.pathname, locale: 'vi-VN'
+            }, { signal: controller.signal });
+            if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
+            const data = response.data;
+            if (!data) throw new Error('Không nhận được dữ liệu đặt lịch. Vui lòng thử lại.');
+            setWizard(data);
+            if (data.reviewAction) {
+                const payload = data.reviewAction.payload;
+                const draft: AiBookingDraft = { ...payload, version: payload.draftVersion, isComplete: true };
+                sessionIdRef.current = payload.sessionId ?? wizardSessionRef.current;
+                contextSnapshotIdRef.current = payload.contextSnapshotId;
+                draftCancelledAtRef.current = 0;
+                activeDraftRef.current = draft;
+                setActiveDraft(draft);
+                setMessages(previous => [...previous, { role: 'model', content: data.message,
+                    bookingDraft: draft, actions: [data.reviewAction!], providerWasCalled: false, providerAttemptCount: 0 }]);
+            } else if (data.step === 'stopped') {
+                setActiveDraft(null);
+                setMessages(previous => [...previous, { role: 'model', content: data.message, urgency: 'EMERGENCY', actions: data.actions }]);
+            } else if (step === 'back') {
+                setActiveDraft(null);
+            }
+        } catch (error: unknown) {
+            if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
+            setErrorMsg(aiChatFailureMessage(error));
+        } finally {
+            if (requestId === activeRequestIdRef.current) {
+                wizardBusyRef.current = false;
+                setLoading(false);
+                activeRequestControllerRef.current = null;
+            }
+        }
+    };
+
     // Only the code is authoritative; the label is shown as the user's turn.
     const handleSuggestion = async (suggestion: AiSuggestionItem): Promise<void> => {
+        if (suggestion.code === 'patient.start_booking') {
+            await handleWizardStep('start');
+            return;
+        }
         const label = suggestion.label.trim();
         if (!label || !suggestion.code || loading) return;
 
@@ -1499,6 +1563,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         clearChat,
         handleSendMessage,
         handleSuggestion,
+        wizard,
+        handleWizardStep,
         handleActionClick,
         confirmToolAction,
         cancelToolAction,

@@ -128,8 +128,9 @@ public interface IAiDeterministicPlanner
     /// Plans a server-owned suggestion button. Never consults message text
     /// and never requires a provider. <paramref name="resource"/> must contain
     /// only resource the caller explicitly supplied and the resolver verified.
+    /// A null suggestion produces the same local rejection as an unknown code.
     /// </summary>
-    AiPlannerDecision PlanSuggestion(ClinicManagement.Application.AI.Suggestions.AiSuggestionDefinition suggestion, AiResolvedResourceContext resource);
+    AiPlannerDecision PlanSuggestion(ClinicManagement.Application.AI.Suggestions.AiSuggestionDefinition? suggestion, AiResolvedResourceContext resource);
 }
 
 public interface IAiStructuredPlanner

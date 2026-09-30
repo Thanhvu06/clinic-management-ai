@@ -34,7 +34,7 @@ public sealed class AiCopilotRequestDto
 
     /// <summary>
     /// Server-owned suggestion code. When present it alone selects the read
-    /// tool; Message is kept only for conversation history.
+    /// action; a valid role-owned code replaces Message with the catalog label.
     /// </summary>
     [MaxLength(64)]
     public string? SuggestionCode { get; set; }

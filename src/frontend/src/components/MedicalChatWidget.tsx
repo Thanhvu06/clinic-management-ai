@@ -1,3 +1,5 @@
+import { BookingSummaryCard } from "./BookingSummaryCard";
+import { BookingWizard } from "./BookingWizard";
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -101,6 +103,8 @@ const PatientMedicalChatWidget: React.FC = () => {
         clearChat,
         handleSendMessage,
         handleSuggestion,
+        wizard,
+        handleWizardStep,
         handleActionClick,
         confirmToolAction,
         cancelToolAction,
@@ -442,41 +446,11 @@ const PatientMedicalChatWidget: React.FC = () => {
                                         </div>
                                     )}
 
-                                    {/* Booking Draft Summary Card */}
                                     {msg.bookingDraft && msg.bookingDraft.isComplete && msg.urgency !== "EMERGENCY" && (
-                                        <div className={styles.cardContainer}>
-                                            <div className={styles.bookingSummaryCard}>
-                                                <h4 className={styles.bookingSummaryTitle}>
-                                                    <Calendar size={18} color="#0d9488" />
-                                                    Tóm tắt thông tin đặt lịch
-                                                </h4>
-                                                <div className={styles.summaryTable}>
-                                                    <div className={styles.summaryRow}>
-                                                        <span className={styles.summaryLabel}>Chuyên khoa:</span>
-                                                        <span className={styles.summaryValue}>{msg.bookingDraft.specialtyName}</span>
-                                                    </div>
-                                                    <div className={styles.summaryRow}>
-                                                        <span className={styles.summaryLabel}>Bác sĩ:</span>
-                                                        <span className={styles.summaryValue}>{msg.bookingDraft.doctorName}</span>
-                                                    </div>
-                                                    <div className={styles.summaryRow}>
-                                                        <span className={styles.summaryLabel}>Ngày khám:</span>
-                                                        <span className={styles.summaryValue}>{formatVietnameseDate(msg.bookingDraft.slotDate)}</span>
-                                                    </div>
-                                                    <div className={styles.summaryRow}>
-                                                        <span className={styles.summaryLabel}>Khung giờ:</span>
-                                                        <span className={styles.summaryValue}>{msg.bookingDraft.startTime} - {msg.bookingDraft.endTime}</span>
-                                                    </div>
-                                                    <div className={styles.summaryRow}>
-                                                        <span className={styles.summaryLabel}>Lý do khám:</span>
-                                                        <span className={styles.summaryValue}>{msg.bookingDraft.reason}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
+    <BookingSummaryCard draft={msg.bookingDraft} formatVietnameseDate={formatVietnameseDate} />
+)}
 
-                                    {/* Action Buttons */}
+{/* Action Buttons */}
                                     {msg.actions && msg.actions.length > 0 && msg.urgency !== "EMERGENCY" && (
                                         <div className={styles.cardContainer}>
                                             {msg.actions.map(act => {
@@ -535,6 +509,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                             </div>
                         ))}
 
+                    <BookingWizard state={wizard} busy={loading || submittingBooking} onStep={handleWizardStep} />
                         {loading && (
                             <div className={`${styles.messageRow} ${styles.rowModel}`}>
                                 <div className={`${styles.bubble} ${styles.bubbleModel}`}>

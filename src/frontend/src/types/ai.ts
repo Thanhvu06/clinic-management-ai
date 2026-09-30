@@ -405,6 +405,32 @@ export interface AiSuggestionItem {
     label: string;
 }
 
+export interface AiBookingWizardRequest {
+    sessionId: string;
+    step: "start" | "pick" | "back" | "reason";
+    optionToken?: string;
+    reason?: string;
+    currentRoute?: string;
+    locale?: string;
+}
+
+export interface AiBookingWizardResponse {
+    step: "specialty" | "doctor" | "day" | "slot" | "reason" | "review" | "stopped" | "error";
+    title: string;
+    message: string;
+    options: Array<{ token: string; label: string; hint?: string }>;
+    canGoBack: boolean;
+    backToken?: string;
+    reasonToken?: string;
+    summary?: { specialtyName?: string; doctorName?: string; slotDate?: string; startTime?: string; endTime?: string; reasonProvided: boolean };
+    reviewAction?: ReviewBookingAction;
+    actions: AiAction[];
+    suggestions: AiSuggestionItem[];
+    assistantMode: string;
+    errorCode?: string;
+    providerWasCalled: false;
+}
+
 export interface AiSuggestionMenuRequest {
     currentRoute?: string;
     resourceContext?: {

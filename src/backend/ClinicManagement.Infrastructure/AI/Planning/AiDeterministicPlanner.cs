@@ -34,8 +34,11 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             ["doctor.get_prescription_status"] = (AiChatIntentTypes.PrescriptionLookup, "AssignedPrescriptionStatus", "/doctor/appointments")
         };
 
-    public AiPlannerDecision PlanSuggestion(AiSuggestionDefinition suggestion, AiResolvedResourceContext resource)
+    public AiPlannerDecision PlanSuggestion(AiSuggestionDefinition? suggestion, AiResolvedResourceContext resource)
     {
+        if (suggestion is null) return SuggestionRejected();
+        if (suggestion.ActionKind == AiSuggestionActionKind.Wizard)
+            return Local(AiChatIntentTypes.StartBooking, "BookingWizard", "Chọn Đặt lịch khám để bắt đầu chọn chuyên khoa và lịch trống.", 1m);
         if (!SingleReadRoutes.TryGetValue(suggestion.ToolName, out var route))
             return SuggestionRejected();
 
@@ -60,7 +63,7 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             : new { appointmentId = resource.AppointmentId!.Value });
     }
 
-    public static AiPlannerDecision SuggestionRejected() => new()
+    private static AiPlannerDecision SuggestionRejected() => new()
     {
         PlannerMode = AiPlannerModes.Deterministic,
         Intent = AiChatIntentTypes.ClarificationRequired,

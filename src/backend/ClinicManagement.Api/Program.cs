@@ -135,6 +135,10 @@ builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSession
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiAuditService, ClinicManagement.Infrastructure.AI.Persistence.EfAiAuditService>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiBookingConfirmationStore, ClinicManagement.Infrastructure.AI.Persistence.EfAiBookingConfirmationStore>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSpecialtyService, ClinicManagement.Infrastructure.AI.AiSpecialtyService>();
+builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.AiBookingReviewIssuer>();
+builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.AiBookingWizardTokens>();
+builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.AiBookingWizardService>();
+builder.Services.AddDataProtection();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiRoleCopilotService, ClinicManagement.Infrastructure.AI.RoleAwareCopilotOrchestrator>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IClinicAiContextService, ClinicManagement.Infrastructure.AI.ClinicAiContextService>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiSafetyGuard, ClinicManagement.Infrastructure.AI.AiSafetyGuard>();

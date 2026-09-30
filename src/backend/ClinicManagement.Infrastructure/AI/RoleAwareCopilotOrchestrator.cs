@@ -76,9 +76,10 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         var sessionId = NormalizeId(request.SessionId ?? request.ConversationId, "sess");
         var turnId = NormalizeId(request.ClientTurnId, "turn");
         var memory = await _memoryStore.LoadAsync(sessionId, _currentUser.UserId, role, cancellationToken);
+        var suggestion = AiSuggestionCatalog.Find(request.SuggestionCode, role);
+        // Discard untrusted text before analysis, resolution, memory or audit.
+        if (suggestion is not null) request.Message = suggestion.Label;
         var analysis = _pipeline.Analyze(request.Message);
-        // A suggestion button is routed by its server-owned code only. The
-        // message is kept for history and safety screening, never for routing.
         var suggestionRequested = !string.IsNullOrWhiteSpace(request.SuggestionCode);
         var auditSource = suggestionRequested ? SuggestionAuditSource : FreeTextAuditSource;
 
@@ -107,7 +108,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             return response;
         }
 
-        if (!suggestionRequested && AiMedicalScopeGuard.IsPrescriptionRequest(role, request.Message))
+        if ((!suggestionRequested || suggestion is not null) && AiMedicalScopeGuard.IsPrescriptionRequest(role, request.Message))
         {
             var response = new AiCopilotResponseDto
             {
@@ -146,10 +147,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         AiPlannerDecision decision;
         if (suggestionRequested)
         {
-            var suggestion = AiSuggestionCatalog.Find(request.SuggestionCode, role);
-            decision = suggestion is null
-                ? AiDeterministicPlanner.SuggestionRejected()
-                : _deterministicPlanner.PlanSuggestion(suggestion, hasCaseResource
+            decision = _deterministicPlanner.PlanSuggestion(suggestion, hasCaseResource
                     ? resolved.Context
                     : new AiResolvedResourceContext { CurrentRoute = resolved.Context.CurrentRoute });
         }

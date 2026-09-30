@@ -82,6 +82,14 @@ public class EfAiAuditService : IAiAuditService
             var safe = new Dictionary<string, object?>(StringComparer.Ordinal);
             foreach (var property in document.RootElement.EnumerateObject())
             {
+                // Wizard-only scalar metadata; never allow reason text or tokens.
+                if (document.RootElement.TryGetProperty("source", out var source) && source.ValueKind == JsonValueKind.String && source.GetString() == "booking-wizard")
+                {
+                    if (property.Name == "reasonLength" && property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetInt64(out var length) && length >= 0)
+                        safe[property.Name] = length;
+                    if (property.Name == "providerWasCalled" && property.Value.ValueKind == JsonValueKind.False)
+                        safe[property.Name] = false;
+                }
                 if (!AllowedFields.Contains(property.Name)) continue;
                 switch (property.Value.ValueKind)
                 {
