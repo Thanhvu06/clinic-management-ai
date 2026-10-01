@@ -8,14 +8,19 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
+import { createServer } from 'node:net';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const frontendRoot = join(repoRoot, 'src', 'frontend');
 const { chromium } = createRequire(join(frontendRoot, 'package.json'))('@playwright/test');
 const canaryProject = join(repoRoot, 'src', 'tools', 'ClinicManagement.AI.LiveCanary', 'ClinicManagement.AI.LiveCanary.csproj');
-const canaryExecutable = join(repoRoot, 'src', 'tools', 'ClinicManagement.AI.LiveCanary', 'bin', 'Release', 'net10.0', 'ClinicManagement.AI.LiveCanary.exe');
+const canaryExecutable = join(repoRoot, 'src', 'tools', 'ClinicManagement.AI.LiveCanary', 'bin', 'Release', 'net10.0', `ClinicManagement.AI.LiveCanary${process.platform === 'win32' ? '.exe' : ''}`);
 const tempRoot = mkdtempSync(join(tmpdir(), 'cliniccare-browser-e2e-'));
-const npmCli = join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+const npmCli = [
+    join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    resolve(dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js')
+].find(existsSync);
+if (!npmCli) throw new Error('Cannot locate npm-cli.js beside Node.js or in the Unix global npm layout.');
 const providerPort = 5318;
 const frontendPort = 5418;
 const apiBase = `http://127.0.0.1:${providerPort}`;
@@ -88,9 +93,43 @@ async function waitForHttp(url, child, timeoutMs = 30000) {
     }
 }
 
-function stop(child) {
-    if (!child || child.exitCode !== null) return;
-    child.kill();
+async function waitForPortReleased(port, timeoutMs = 10000) {
+    const started = Date.now();
+    while (true) {
+        const available = await new Promise((resolveAvailable, reject) => {
+            const probe = createServer();
+            probe.once('error', error => {
+                if (error.code === 'EADDRINUSE') resolveAvailable(false);
+                else reject(error);
+            });
+            probe.listen(port, '127.0.0.1', () => probe.close(() => resolveAvailable(true)));
+        });
+        if (available) return;
+        if (Date.now() - started >= timeoutMs) throw new Error(`Port ${port} was not released after stopping the E2E child.`);
+        await delay(100);
+    }
+}
+
+async function stop(child, port) {
+    if (!child) return;
+    if (child.exitCode === null && child.signalCode === null) {
+        let timeout;
+        const exited = new Promise(resolveExit => child.once('exit', resolveExit));
+        child.kill('SIGTERM');
+        try {
+            await Promise.race([
+                exited,
+                new Promise(resolveTimeout => { timeout = setTimeout(resolveTimeout, 10000); })
+            ]);
+            if (child.exitCode === null && child.signalCode === null) {
+                child.kill('SIGKILL');
+                await exited;
+            }
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+    await waitForPortReleased(port);
 }
 
 async function startHost(mode, isolatedTemp = false) {
@@ -184,7 +223,7 @@ async function runOnlineActors(browser, runNumber) {
         }
         results.push({ scenario: `online actor run ${runNumber}`, status: 'PASS', evidence: 'six browser actor flows completed' });
     } finally {
-        stop(host);
+        await stop(host, providerPort);
     }
 }
 
@@ -207,7 +246,7 @@ async function runProviderMode(browser, mode, expectedState, shouldHaveCard = fa
         results.push({ scenario: `2/7 provider ${mode}`, status: 'PASS', evidence: `${expectedState}; grounded card=${shouldHaveCard}` });
     } finally {
         await context.close();
-        stop(host);
+        await stop(host, providerPort);
     }
 }
 
@@ -247,7 +286,7 @@ async function runCancellation(browser) {
         results.push({ scenario: '4 client cancellation', status: 'PASS', evidence: 'requestfailed abort; UI idle; a second message could be sent' });
     } finally {
         await context.close();
-        stop(host);
+        await stop(host, providerPort);
     }
 }
 
@@ -269,7 +308,7 @@ async function runRouteIsolation(browser) {
         results.push({ scenario: '4 route change while pending', status: 'PASS', evidence: 'old assistant response not rendered on new route' });
     } finally {
         await context.close();
-        stop(host);
+        await stop(host, providerPort);
     }
 }
 
@@ -314,7 +353,7 @@ async function runPendingActionCancellation(browser) {
         results.push({ scenario: 'N1 pending action cancellation', status: 'PASS', evidence: 'synthetic preview cancelled; confirm/domain write absent; preview retired' });
     } finally {
         await context.close();
-        stop(host);
+        await stop(host, providerPort);
     }
 }
 
@@ -395,7 +434,7 @@ async function runPatientPendingActionCancellation(browser) {
         results.push({ scenario: 'N1 patient pending action cancellation', status: 'PASS', evidence: 'real prepare + real /ai/tool-actions/{id}/cancel via MedicalChatWidget button; preview card injected into chat response (planner cannot prepare writes); confirm/domain write absent' });
     } finally {
         await context.close();
-        stop(host);
+        await stop(host, providerPort);
     }
 }
 
@@ -584,7 +623,7 @@ async function runLocalSuggestionAndWizardAcceptance(browser) {
         }
     } finally {
         db.close();
-        stop(host);
+        await stop(host, providerPort);
     }
 }
 
@@ -769,7 +808,7 @@ async function runVisualAcceptance(browser) {
                 console.log('Visual browser acceptance FAIL: ' + name + '; ' + results.at(-1).evidence);
             } finally { await context.close(); }
         }
-    } finally { stop(host); }
+    } finally { await stop(host, providerPort); }
 }
 
 async function main() {
@@ -804,7 +843,7 @@ async function main() {
         results.push({ scenario: '6 unpublished/published diagnostic result', status: 'NOT_COVERED', evidence: 'no safe browser publish fixture was added in this acceptance harness' });
     } finally {
         await browser.close();
-        stop(vite);
+        await stop(vite, frontendPort);
     }
 
     const failed = results.filter(result => result.status === 'FAIL');
