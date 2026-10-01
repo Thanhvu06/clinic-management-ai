@@ -22,9 +22,9 @@ AiPendingToolAction is a short-lived server record with action/user/session/tool
 - requires the same user and session;
 - requires an explicit human confirmation endpoint; the browser cannot select an execution channel;
 - re-reads the patient appointment and delegates final validation to the existing change-request service;
-- returns the prior result for an already executed action;
+- returns the prior result for an already executed action when replayed with the same valid confirmation token, without executing it again;
 - uses an atomic lease claim, reclaims stale leases, and binds the downstream AppointmentChangeRequest to SourceAiActionId so a crash after the side effect is idempotent;
-- rejects expiry, replay, account mismatch, session mismatch, missing/stale confirmation tokens and an active conflicting logical action;
+- rejects expiry, account mismatch, session mismatch, missing/invalid confirmation tokens and an active conflicting logical action;
 - classifies malformed persisted actions as terminal and downstream transient database contention as retryable, so a claimed action cannot remain `Executing` forever.
 
 AiSessionCleanupWorker terminalizes expired actions, converts stale leases to retryable state, and purges only retained terminal rows. Permanent AI cancellation/session tombstone tables are not touched.
@@ -35,4 +35,4 @@ The Patient catalog delegates to ISpecialtyService, IDoctorService, IAppointment
 
 ## Persistence
 
-Migration AddAiPendingToolAction remains immutable. HardenAiPendingToolActionExecution is the additive migration; it backfills legacy rows into terminal/pending state, adds leases/attempts/errors and SourceAiActionId, and protects its down path from silent idempotency-data loss. It must be applied by deployment, not by the Phase 1.2 development task. `docs/ai/PHASE_1_2_SQLSERVER_IDEMPOTENT.sql`: file này do CI sinh lại mỗi lần chạy, xem .github/workflows/ci.yml. No manual overlay may be run before EF migrations or outside migration history.
+Migration AddAiPendingToolAction remains immutable. HardenAiPendingToolActionExecution is the additive migration; it backfills legacy rows into terminal/pending state, adds leases/attempts/errors and SourceAiActionId, and protects its down path from silent idempotency-data loss. It must be applied by deployment, not by the Phase 1.2 development task. `docs/ai/PHASE_1_2_SQLSERVER_IDEMPOTENT.sql`: Not checked in. Generate locally with `dotnet ef migrations script --idempotent --context AppDbContext --project src/backend/ClinicManagement.Infrastructure --startup-project src/backend/ClinicManagement.Api --configuration Release --output ./ai-ef-idempotent.sql`; CI generates a temporary copy for validation only. Deployers must generate the history-aware script with this command and apply it through deployment. No manual overlay may be run before EF migrations or outside migration history.

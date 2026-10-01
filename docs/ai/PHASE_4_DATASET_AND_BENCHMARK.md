@@ -40,7 +40,7 @@ dotnet run --project src/tools/ClinicManagement.AI.Training/ClinicManagement.AI.
 
 The official generated-file checksum is recorded by the generator and validator. Re-generating with the same source and seed must produce the same case content and checksum.
 
-`docs/ai/PHASE_4_BENCHMARK_REPORT.json`: file này do CI sinh lại mỗi lần chạy, xem .github/workflows/ci.yml. The machine-readable JSON report records the evaluator version, timestamp, checked HEAD, split counts, checksum, metric numerator/denominator, failure case IDs, latency method, and \`liveGeminiExecuted\`. This gate sets \`liveGeminiExecuted=false\`; deterministic and ML.NET results are not mixed with Gemini results.
+`docs/ai/PHASE_4_BENCHMARK_REPORT.json`: Not checked in. Generate locally with `dotnet run --project src/tools/ClinicManagement.AI.Training/ClinicManagement.AI.Training.csproj --no-build --configuration Release -- --benchmark-phase4 src/tools/ClinicManagement.AI.Training/data/phase4_independent_cases.json --report ./phase4-benchmark-report.json`; CI generates a temporary copy for validation only. The machine-readable JSON report records the evaluator version, timestamp, checked HEAD, split counts, checksum, metric numerator/denominator, failure case IDs, latency method, and \`liveGeminiExecuted\`. This gate sets \`liveGeminiExecuted=false\`; deterministic and ML.NET results are not mixed with Gemini results.
 
 ## Metric definitions
 
