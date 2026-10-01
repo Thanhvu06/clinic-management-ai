@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
@@ -7,6 +7,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const frontendRoot = join(repoRoot, 'src', 'frontend');
@@ -92,13 +93,20 @@ function stop(child) {
     child.kill();
 }
 
-async function startHost(mode) {
+async function startHost(mode, isolatedTemp = false) {
     const readyFile = join(tempRoot, `${mode}-${Date.now()}.json`);
+    const hostTemp = isolatedTemp ? join(tempRoot, `local-${Date.now()}`) : null;
+    if (hostTemp) mkdirSync(hostTemp, { recursive: true });
     const child = start(canaryExecutable, [
         '--browser-server', '--browser-port', String(providerPort),
         '--browser-provider-mode', mode, '--browser-ready-file', readyFile
-    ], repoRoot);
+    ], repoRoot, hostTemp ? { TMP: hostTemp, TEMP: hostTemp, TMPDIR: hostTemp } : {});
     await waitForFile(readyFile, child);
+    if (hostTemp) {
+        const databases = readdirSync(hostTemp).filter(name => /^clinic_gate_d_canary_[a-f0-9]{32}\.db$/.test(name));
+        assert.equal(databases.length, 1, 'must identify exactly one isolated synthetic SQLite database');
+        child.syntheticDatabase = join(hostTemp, databases[0]);
+    }
     return child;
 }
 
@@ -390,6 +398,171 @@ async function runPatientPendingActionCancellation(browser) {
     }
 }
 
+async function suggestionCodes(dialog) {
+    return dialog.locator('[data-suggestion-code]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-suggestion-code')));
+}
+
+function assertLocalResponse(data) {
+    assert.equal(data.providerWasCalled, false, 'suggestion must not call the provider');
+    assert.equal(data.providerAttemptCount, 0, 'suggestion provider attempts must stay zero');
+    assert.equal(data.plannerMode, 'Deterministic', 'suggestion must use the local planner');
+}
+
+async function clickCopilotSuggestion(page, dialog, label, code, tool, cardType) {
+    const pending = page.waitForResponse(response => response.url().endsWith('/api/v1/ai/copilot/chat') && response.request().method() === 'POST');
+    await dialog.getByRole('button', { name: `Gợi ý: ${label}`, exact: true }).click();
+    const response = await pending;
+    assert.equal(response.status(), 200, 'suggestion request must succeed');
+    assert.equal(response.request().postDataJSON().suggestionCode, code, 'browser must send the selected server code');
+    const data = (await response.json()).data;
+    assertLocalResponse(data);
+    assert.ok(data.executedToolNames.includes(tool), 'expected read tool must execute');
+    const card = data.cards.find(item => item.type === cardType);
+    assert.ok(card, 'expected result card must be returned');
+    await dialog.getByText(card.title, { exact: true }).last().waitFor({ state: 'visible' });
+    return data;
+}
+
+async function assertNoRawWizardValues(dialog, state) {
+    // Inspect text nodes and attributes, including hidden DOM. Payload stays in memory/network only.
+    const dom = await dialog.evaluate(root => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const texts = [];
+        while (walker.nextNode()) texts.push(walker.currentNode.textContent.trim());
+        return { texts, attributes: [root, ...root.querySelectorAll('*')].flatMap(node => [...node.attributes].map(attribute => ({
+            name: attribute.name, value: attribute.value, svg: node.namespaceURI === 'http://www.w3.org/2000/svg'
+        }))) };
+    });
+    const values = [...dom.texts, ...dom.attributes.map(attribute => attribute.value)];
+    const tokens = [...state.options.map(option => option.token), state.backToken, state.reasonToken].filter(Boolean);
+    const payload = state.reviewAction?.payload ?? {};
+    const opaque = ['sessionId', 'draftId', 'contextSnapshotId', 'confirmationId'].map(key => payload[key]).filter(Boolean);
+    assert.ok(!values.some(value => [...tokens, ...opaque].some(secret => value.includes(secret))), 'raw wizard capabilities/identifiers must not enter DOM');
+    assert.ok(!values.some(value => /\b(?:specialtyId|doctorId|slotId|patientId|appointmentSlotId|confirmationId|contextSnapshotId|draftId|sessionId)\s*[:=]/i.test(value)), 'DOM must not label internal identifier fields');
+    const ids = ['specialtyId', 'doctorId', 'slotId'].map(key => payload[key]).filter(value => value != null).map(String);
+    // Drawing coordinates and HTML layout limits are not selection identifiers. Keep all other attributes.
+    const geometry = new Set(['x', 'y', 'x1', 'x2', 'y1', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'width', 'height', 'stroke-width']);
+    const layout = new Set(['rows', 'cols', 'size', 'maxlength', 'minlength']);
+    const numericAttributes = dom.attributes.filter(attribute => !(attribute.svg && geometry.has(attribute.name)) && !layout.has(attribute.name));
+    const exposedFields = numericAttributes.filter(attribute => ids.includes(attribute.value)).map(attribute => attribute.name);
+    assert.ok(!dom.texts.some(value => ids.includes(value)) && exposedFields.length === 0,
+        `raw numeric selection identifiers must not appear as DOM text/attributes; matching fields: ${[...new Set(exposedFields)].join(',') || 'none'}`);
+}
+
+async function runLocalSuggestionAndWizardAcceptance(browser) {
+    const host = await startHost('disabled', true);
+    const db = new DatabaseSync(host.syntheticDatabase, { readOnly: true });
+    const scenarios = [
+        ['patient suggestion chips', async page => {
+            await login(page, actorCases[0]);
+            await page.getByRole('button', { name: 'Mở Trợ lý ClinicCare AI' }).click();
+            const dialog = page.getByRole('dialog', { name: /ClinicCare AI/i });
+            await dialog.getByRole('button', { name: 'Gợi ý: Lịch hẹn của tôi', exact: true }).waitFor({ state: 'visible' });
+            assert.deepEqual((await suggestionCodes(dialog)).sort(), [
+                'patient.start_booking', 'patient.my_appointments', 'patient.my_visits',
+                'patient.my_diagnostic_results', 'patient.my_prescriptions', 'patient.my_bills'
+            ].sort(), 'initial menu must contain only the six patient suggestions');
+            await clickCopilotSuggestion(page, dialog, 'Lịch hẹn của tôi', 'patient.my_appointments', 'patient.get_my_appointments', 'appointments');
+            await dialog.getByText('CANARY-APT-001', { exact: true }).last().waitFor({ state: 'visible' });
+            assert.ok((await suggestionCodes(dialog)).every(code => code.startsWith('patient.')), 'response chips must stay patient-only');
+            return 'disabled provider; six patient-only menu chips; real click executes own-appointments read and renders synthetic appointment card';
+        }],
+        ['doctor suggestion chips', async page => {
+            await login(page, actorCases[2]);
+            await page.getByRole('button', { name: 'Mở Copilot Bác sĩ' }).click();
+            let dialog = page.getByRole('dialog', { name: 'Copilot Bác sĩ', exact: true });
+            await dialog.getByRole('button', { name: 'Gợi ý: Hôm nay tôi khám ai?', exact: true }).waitFor({ state: 'visible' });
+            assert.deepEqual(await suggestionCodes(dialog), ['doctor.my_queue'], 'case chips must be absent on the appointment list');
+            await clickCopilotSuggestion(page, dialog, 'Hôm nay tôi khám ai?', 'doctor.my_queue', 'doctor.get_my_queue', 'doctor_queue');
+            assert.ok(!(await suggestionCodes(dialog)).some(code => ['doctor.patient_summary', 'doctor.diagnostic_orders', 'doctor.prescription_status'].includes(code)), 'case chips must remain absent without a case');
+            const ownAppointment = db.prepare("SELECT Id FROM Appointments WHERE AppointmentCode = 'CANARY-APT-001'").get();
+            assert.ok(ownAppointment, 'synthetic assigned appointment must exist');
+            await page.goto(`${appBase}/doctor/appointments/${ownAppointment.Id}`, { waitUntil: 'domcontentloaded' });
+            await page.getByText('CANARY-APT-001', { exact: false }).first().waitFor({ state: 'visible' });
+            await page.getByRole('button', { name: 'Mở Copilot Bác sĩ' }).click();
+            dialog = page.getByRole('dialog', { name: 'Copilot Bác sĩ', exact: true });
+            await dialog.getByRole('button', { name: 'Gợi ý: Tóm tắt bệnh nhân đang mở', exact: true }).waitFor({ state: 'visible' });
+            assert.deepEqual((await suggestionCodes(dialog)).sort(), [
+                'doctor.my_queue', 'doctor.patient_summary', 'doctor.diagnostic_orders', 'doctor.prescription_status'
+            ].sort(), 'case chips must appear only on the server-verified assigned case');
+            return 'disabled provider; real queue chip/card; case chips absent on list and present on assigned appointment detail; doctor-only menu';
+        }],
+        ['patient booking wizard', async page => {
+            await login(page, actorCases[0]);
+            await page.getByRole('button', { name: 'Mở Trợ lý ClinicCare AI' }).click();
+            const dialog = page.getByRole('dialog', { name: /ClinicCare AI/i });
+            await dialog.getByRole('button', { name: 'Gợi ý: Đặt lịch khám', exact: true }).waitFor({ state: 'visible' });
+            const wizard = dialog.getByRole('region', { name: 'Đặt lịch khám từng bước' });
+            const before = db.prepare('SELECT COUNT(*) AS count FROM Appointments').get().count;
+            assert.ok(db.prepare("SELECT COUNT(*) AS count FROM AppointmentSlots WHERE strftime('%w', SlotDate) = '0' AND IsBooked = 0").get().count > 0, 'seed must include an unbooked Sunday slot');
+            const wizardClick = async (button, expectedStep) => {
+                const pending = page.waitForResponse(response => response.url().endsWith('/api/v1/ai/booking-wizard') && response.request().method() === 'POST');
+                await button.click();
+                const response = await pending;
+                assert.equal(response.status(), 200, 'wizard step must succeed');
+                const state = (await response.json()).data;
+                assert.equal(state.step, expectedStep, 'wizard must reach the expected step');
+                assert.equal(state.providerWasCalled, false, 'wizard must never call provider');
+                assert.ok(!state.errorCode, 'wizard step must not return an error');
+                await wizard.getByRole('heading', { name: state.title, exact: true }).waitFor({ state: 'visible' });
+                await assertNoRawWizardValues(dialog, state);
+                return state;
+            };
+            let state = await wizardClick(dialog.getByRole('button', { name: 'Gợi ý: Đặt lịch khám', exact: true }), 'specialty');
+            state = await wizardClick(wizard.getByRole('button', { name: state.options[0].label, exact: true }), 'doctor');
+            state = await wizardClick(wizard.getByRole('button', { name: state.options[0].label, exact: true }), 'day');
+            assert.ok(state.options.length > 0, 'bookable dates must exist');
+            const renderedDates = (await wizard.getByRole('button').allTextContents()).filter(label => /^\d{2}\/\d{2}\/\d{4}$/.test(label));
+            assert.deepEqual(renderedDates, state.options.map(option => option.label), 'date buttons must reflect all server options');
+            for (const label of renderedDates) {
+                const [day, month, year] = label.split('/').map(Number);
+                assert.notEqual(new Date(Date.UTC(year, month - 1, day)).getUTCDay(), 0, 'Sunday must not be a date button');
+            }
+            state = await wizardClick(wizard.getByRole('button', { name: state.options[0].label, exact: true }), 'slot');
+            state = await wizardClick(wizard.getByRole('button', { name: state.options[0].label, exact: true }), 'reason');
+            state = await wizardClick(wizard.getByRole('button', { name: 'Khám tổng quát', exact: true }), 'review');
+            await dialog.getByRole('heading', { name: 'Tóm tắt thông tin đặt lịch', exact: true }).waitFor({ state: 'visible' });
+            assert.equal(db.prepare('SELECT COUNT(*) AS count FROM Appointments').get().count, before, 'review must not create an appointment');
+            await dialog.getByRole('button', { name: state.reviewAction.label, exact: true }).click();
+            await dialog.getByRole('button', { name: 'Xác nhận đặt lịch', exact: true }).waitFor({ state: 'visible' });
+            await assertNoRawWizardValues(dialog, state);
+            const pending = page.waitForResponse(response => response.url().endsWith('/api/v1/appointments') && response.request().method() === 'POST');
+            await dialog.getByRole('button', { name: 'Xác nhận đặt lịch', exact: true }).click();
+            const confirmation = await pending;
+            const bookingResult = await confirmation.json();
+            const errorCode = bookingResult.errorCode ?? bookingResult.error?.code;
+            const safeCode = typeof errorCode === 'string' && /^[A-Z][A-Z0-9_]+$/.test(errorCode) ? errorCode : 'none';
+            const validationFields = bookingResult.errors && !Array.isArray(bookingResult.errors) ? Object.keys(bookingResult.errors).filter(key => /^[A-Za-z.]+$/.test(key)).join(',') : 'none';
+            assert.equal(confirmation.status(), 201, `existing booking endpoint must create the appointment; HTTP ${confirmation.status()}; code ${safeCode}; validation fields ${validationFields}`);
+            assert.ok(confirmation.request().headers()['idempotency-key'], 'existing confirmation must retain its idempotency key');
+            assert.equal(confirmation.request().postDataJSON().confirmationId, state.reviewAction.payload.confirmationId, 'existing issued confirmation must be used');
+            assert.equal(db.prepare('SELECT COUNT(*) AS count FROM Appointments').get().count, before + 1, 'exactly one new appointment must exist in isolated SQLite');
+            assert.equal(db.prepare('SELECT COUNT(*) AS count FROM Appointments WHERE AppointmentSlotId = ?').get(state.reviewAction.payload.slotId).count, 1, 'selected slot must have exactly one appointment');
+            return 'disabled provider; real specialty/doctor/day/slot/preset-reason/review/button-confirm flow; Sunday fixture excluded; no raw wizard IDs/tokens in DOM; SQLite appointment count increases by exactly one';
+        }]
+    ];
+    try {
+        for (const [scenario, execute] of scenarios) {
+            const context = await browser.newContext();
+            try {
+                const evidence = await execute(await context.newPage());
+                results.push({ scenario, status: 'PASS', evidence });
+                console.log(`Local browser acceptance PASS: ${scenario}`);
+            } catch (error) {
+                // Do not print payloads, identifiers, tokens or DOM dumps on failure.
+                const location = error.stack?.match(/browser-acceptance\.mjs:(\d+):\d+/)?.[1];
+                results.push({ scenario, status: 'FAIL', evidence: error instanceof assert.AssertionError ? error.message.split('\n')[0] : `${error.name ?? 'Browser error'} at acceptance script line ${location ?? 'unknown'}; no payload/DOM recorded` });
+                console.log(`Local browser acceptance FAIL: ${scenario}; ${results.at(-1).evidence}`);
+            } finally {
+                await context.close();
+            }
+        }
+    } finally {
+        db.close();
+        stop(host);
+    }
+}
+
 async function main() {
     if (process.env.E2E_ALLOW_MUTATION?.toLowerCase() === 'true')
         throw new Error('The isolated browser E2E refuses E2E_ALLOW_MUTATION=true.');
@@ -403,6 +576,7 @@ async function main() {
 
     const browser = await chromium.launch({ headless: true });
     try {
+        await runLocalSuggestionAndWizardAcceptance(browser);
         for (let runNumber = 1; runNumber <= 3; runNumber++) await runOnlineActors(browser, runNumber);
         await runProviderMode(browser, 'recover', 'Gemini đã phản hồi', true);
         await runProviderMode(browser, 'server-error', 'Đang dùng chế độ dự phòng');
@@ -414,8 +588,9 @@ async function main() {
         await runPatientPendingActionCancellation(browser);
 
         // Cancellation has a synthetic browser fixture above. Confirmation and
-        // diagnostic publication still remain outside this non-mutating suite.
-        results.push({ scenario: '5 write preview/confirm', status: 'NOT_COVERED', evidence: 'cancel is covered; confirm is intentionally absent from this non-mutating browser fixture' });
+        // diagnostic publication still remain outside the role-action fixture.
+        // The patient booking wizard separately confirms only in isolated synthetic SQLite.
+        results.push({ scenario: '5 write preview/confirm', status: 'NOT_COVERED', evidence: 'role-action cancel is covered; generic role-action confirm fixture is absent; patient booking confirmation is covered separately' });
         results.push({ scenario: '6 unpublished/published diagnostic result', status: 'NOT_COVERED', evidence: 'no safe browser publish fixture was added in this acceptance harness' });
     } finally {
         await browser.close();

@@ -828,6 +828,27 @@ internal sealed class SyntheticCanaryFactory : WebApplicationFactory<global::Pro
         // after the HTTP run; no real patient or production database is used.
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         var now = DateTime.UtcNow;
+        // Disabled-provider browser acceptance needs bookable synthetic slots.
+        // Include a Sunday fixture so the browser can verify it is filtered out.
+        if (_providerHandler is not null && !_providerEnabled)
+        {
+            // The existing booking endpoint requires a complete synthetic patient profile.
+            patient.DateOfBirth = new DateOnly(1990, 1, 1);
+            for (var offset = 1; offset <= 13; offset++)
+            {
+                var day = today.AddDays(offset);
+                db.DoctorWorkSchedules.Add(new DoctorWorkSchedule
+                {
+                    DoctorId = doctor.Id, WorkDate = day,
+                    StartTime = new TimeOnly(14, 0), EndTime = new TimeOnly(15, 0), IsActive = true
+                });
+                db.AppointmentSlots.Add(new AppointmentSlot
+                {
+                    DoctorId = doctor.Id, SlotDate = day,
+                    StartTime = new TimeOnly(14, 0), EndTime = new TimeOnly(14, 30), IsBooked = false
+                });
+            }
+        }
         var slot = new AppointmentSlot
         {
             DoctorId = doctor.Id,
