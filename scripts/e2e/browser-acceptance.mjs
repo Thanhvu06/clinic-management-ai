@@ -357,6 +357,197 @@ async function runPendingActionCancellation(browser) {
     }
 }
 
+async function domainData(responsePromise, label) {
+    const response = await responsePromise;
+    const envelope = await response.json();
+    assert.equal(response.status(), 200, `${label}: HTTP ${response.status()}; code=${envelope.errorCode ?? 'none'}`);
+    assert.equal(envelope.success, true, `${label} must succeed`);
+    assert.ok(envelope.data, `${label} must return domain data`);
+    return envelope.data;
+}
+
+async function authenticatedHeaders(page) {
+    const token = await page.evaluate(() => localStorage.getItem('token'));
+    assert.ok(token, 'synthetic actor must have a real login token');
+    return { Authorization: `Bearer ${token}` };
+}
+
+async function runStaffConfirmationIdempotency(browser) {
+    const host = await startHost('online');
+    const technicianContext = await browser.newContext();
+    const adminContext = await browser.newContext();
+    try {
+        const page = await technicianContext.newPage();
+        const adminPage = await adminContext.newPage();
+        await login(page, { ...actorCases[3], route: '/diagnostics/orders/1' });
+        await login(adminPage, actorCases[5]);
+        const headers = await authenticatedHeaders(page);
+        const adminHeaders = await authenticatedHeaders(adminPage);
+        const readOrder = () => domainData(page.request.get(`${apiBase}/api/v1/diagnostics/orders/1`, { headers }), 'technician order');
+        const before = await readOrder();
+        assert.equal(before.orderCode, 'CANARY-ORD-001', 'must use the existing synthetic fixture');
+        assert.equal(before.status, 'Ordered');
+        const sideEffectIds = async () => {
+            const audit = await domainData(adminPage.request.get(`${apiBase}/api/v1/admin/audit-logs?action=DiagnosticOrderStarted&entityName=DiagnosticOrder&page=1&pageSize=100`, { headers: adminHeaders }), 'domain audit');
+            assert.equal(audit.items.length, audit.totalItems, 'all matching domain audit records must fit in this synthetic API page');
+            return audit.items.filter(item => String(item.entityId) === String(before.id)).map(item => item.id).sort();
+        };
+        const initialIds = await sideEffectIds();
+        assert.equal(initialIds.length, 0, 'Ordered fixture must not have a start side effect');
+
+        await page.getByRole('button', { name: `Mở ${roleLabels.technician}` }).click();
+        await page.locator('summary').filter({ hasText: 'Thao tác có xác nhận' }).click();
+        const description = page.getByText('Chuẩn bị tiếp nhận phiếu chỉ định', { exact: true });
+        await description.waitFor({ state: 'visible', timeout: 15000 });
+        const actionRow = description.locator('..').locator('..');
+        const prepare = async () => {
+            const responsePromise = page.waitForResponse(response => response.url().endsWith('/api/v1/ai/copilot/actions/prepare') && response.request().method() === 'POST');
+            await actionRow.getByRole('button', { name: 'Xem trước' }).click();
+            const response = await responsePromise;
+            assert.equal(response.status(), 200, 'real staff prepare must succeed');
+            const result = await response.json();
+            assert.equal(result.status, 'pending_confirmation');
+            assert.equal(result.preview.resourceId, String(before.id));
+            await page.getByRole('button', { name: /Xác nhận thao tác/ }).waitFor({ state: 'visible', timeout: 10000 });
+            await page.getByText(`Thông tin đã chọn: ${result.preview.resource.identity}`, { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+            return result;
+        };
+        await prepare();
+        assert.deepEqual(await readOrder(), before, 'preview must not change domain state');
+        const cancelPromise = page.waitForResponse(response => response.url().includes('/api/v1/ai/copilot/actions/') && response.url().endsWith('/cancel') && response.request().method() === 'POST');
+        await page.getByRole('button', { name: 'Hủy thao tác' }).click();
+        const cancelled = await cancelPromise;
+        assert.equal(cancelled.status(), 200);
+        assert.equal((await cancelled.json()).status, 'cancelled');
+        await page.getByText(/Đã hủy thao tác chờ xác nhận/).waitFor({ state: 'visible', timeout: 10000 });
+        assert.deepEqual(await readOrder(), before, 'cancel must not change domain state');
+        assert.deepEqual(await sideEffectIds(), initialIds, 'cancel must not create domain records');
+
+        const pending = await prepare();
+        const confirmUrl = `${apiBase}/api/v1/ai/copilot/actions/${pending.actionId}/confirm`;
+        const requestPromise = page.waitForRequest(request => request.url() === confirmUrl && request.method() === 'POST');
+        const responsePromise = page.waitForResponse(response => response.url() === confirmUrl && response.request().method() === 'POST');
+        await page.getByRole('button', { name: /Xác nhận thao tác/ }).click();
+        const confirmRequest = await requestPromise;
+        const confirmed = await responsePromise;
+        assert.equal(confirmed.status(), 200);
+        assert.equal((await confirmed.json()).status, 'completed');
+        const after = await readOrder();
+        assert.equal(after.status, 'InProgress');
+        assert.ok(after.startedAtUtc, 'confirmed start must have its real domain timestamp');
+        const executedIds = await sideEffectIds();
+        assert.equal(executedIds.length, initialIds.length + 1, 'confirm must create exactly one domain start record');
+
+        const payload = confirmRequest.postDataJSON();
+        const replay = await page.request.post(confirmUrl, { headers, data: payload });
+        assert.equal(replay.status(), 200, 'same-token replay must succeed');
+        const replayResult = await replay.json();
+        assert.equal(replayResult.status, 'completed');
+        assert.equal(replayResult.data.status, 'already_completed');
+        assert.equal(replayResult.isIdempotentReplay, true);
+        assert.deepEqual(await readOrder(), after, 'replay must not change domain state again');
+        assert.deepEqual(await sideEffectIds(), executedIds, 'replay must not create another side-effect record');
+
+        const invalidToken = (payload.concurrencyToken[0] === 'A' ? 'B' : 'A') + payload.concurrencyToken.slice(1);
+        const wrongToken = await page.request.post(confirmUrl, { headers, data: { ...payload, concurrencyToken: invalidToken } });
+        assert.equal(wrongToken.status(), 409, 'incorrect token must be refused');
+        const wrongTokenResult = await wrongToken.json();
+        assert.equal(wrongTokenResult.status, 'failed');
+        assert.equal(wrongTokenResult.error.code, 'CONCURRENCY_CONFLICT');
+        assert.deepEqual(await readOrder(), after, 'incorrect token must not change domain state');
+        assert.deepEqual(await sideEffectIds(), executedIds, 'incorrect token must not create side effects');
+        results.push({ scenario: '5 staff preview/cancel/confirm idempotency', status: 'PASS', evidence: 'real UI preview/cancel/confirm; domain audit API count 0 -> 1 -> 1; same-token already_completed/isIdempotentReplay=true; wrong token HTTP 409; no direct DB writes' });
+    } finally {
+        await technicianContext.close();
+        await adminContext.close();
+        await stop(host, providerPort);
+    }
+}
+
+async function runDiagnosticResultVisibility(browser) {
+    const host = await startHost('online');
+    const technicianContext = await browser.newContext();
+    const patientContext = await browser.newContext();
+    const doctorContext = await browser.newContext();
+    try {
+        const technicianPage = await technicianContext.newPage();
+        await login(technicianPage, { ...actorCases[3], route: '/diagnostics/orders/1' });
+        const headers = await authenticatedHeaders(technicianPage);
+        const orderUrl = `${apiBase}/api/v1/diagnostics/orders/1`;
+        let order = await domainData(technicianPage.request.get(orderUrl, { headers }), 'Ordered fixture');
+        assert.equal(order.orderCode, 'CANARY-ORD-001');
+        assert.equal(order.status, 'Ordered');
+        assert.equal(order.items.length, 1, 'existing synthetic order must contain one service');
+        assert.equal(order.items[0].result, null);
+
+        order = await domainData(technicianPage.request.post(`${orderUrl}/start`, { headers, data: { rowVersion: order.rowVersion } }), 'technician start');
+        assert.equal(order.status, 'InProgress');
+        const itemId = order.items[0].id;
+        const resultText = 'CANARY-E2E-RESULT-REVIEW-001';
+        const conclusion = 'CANARY-E2E-CONCLUSION-REVIEW-001';
+        order = await domainData(technicianPage.request.put(`${orderUrl}/items/${itemId}/result`, {
+            headers, data: { resultText, conclusion, rowVersion: order.items[0].rowVersion }
+        }), 'technician record result');
+        assert.equal(order.items[0].result.resultText, resultText);
+        assert.equal(order.items[0].status, 'Completed');
+        order = await domainData(technicianPage.request.post(`${orderUrl}/complete`, { headers, data: { rowVersion: order.rowVersion } }), 'technician complete');
+        assert.equal(order.status, 'Completed');
+        assert.equal(order.reviewedAtUtc, null);
+        assert.equal(order.items[0].result.resultText, resultText, 'technician must see the stored result before doctor review');
+
+        const patientPage = await patientContext.newPage();
+        const patientListPath = '/api/v1/patients/me/diagnostic-orders';
+        const waitForPatientList = () => patientPage.waitForResponse(response => new URL(response.url()).pathname === patientListPath && response.request().method() === 'GET');
+        const hiddenUiResponse = waitForPatientList();
+        await login(patientPage, { ...actorCases[0], route: '/patient/diagnostic-results' });
+        const patientHeaders = await authenticatedHeaders(patientPage);
+        const ownOrder = list => {
+            const found = list.items.find(item => item.id === order.id);
+            assert.ok(found, 'patient must receive the owned synthetic order');
+            return found;
+        };
+        const assertHidden = patientOrder => {
+            assert.equal(patientOrder.status, 'Completed');
+            assert.equal(patientOrder.reviewedAtUtc, null);
+            assert.equal(patientOrder.items.length, 1);
+            assert.equal(patientOrder.items[0].result, null, 'patient Result must remain null before doctor review');
+            assert.ok(!JSON.stringify(patientOrder).includes(resultText), 'API must not leak stored result text');
+            assert.ok(!JSON.stringify(patientOrder).includes(conclusion), 'API must not leak stored conclusion');
+        };
+        assertHidden(ownOrder(await domainData(hiddenUiResponse, 'patient UI list before review')));
+        assertHidden(ownOrder(await domainData(patientPage.request.get(`${apiBase}${patientListPath}`, { headers: patientHeaders }), 'patient API list before review')));
+        await patientPage.getByText(order.orderCode, { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+        await patientPage.getByText('Đang chờ kỹ thuật viên trả kết quả...', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+        assert.equal(await patientPage.getByText(resultText).count(), 0, 'patient UI must hide the stored result');
+        assert.equal(await patientPage.getByText(conclusion).count(), 0, 'patient UI must hide the stored conclusion');
+
+        const doctorPage = await doctorContext.newPage();
+        await login(doctorPage, actorCases[2]);
+        const doctorHeaders = await authenticatedHeaders(doctorPage);
+        const reviewed = await domainData(doctorPage.request.post(`${apiBase}/api/v1/doctor/diagnostic-orders/${order.id}/review`, {
+            headers: doctorHeaders, data: { rowVersion: order.rowVersion }
+        }), 'doctor review');
+        assert.ok(reviewed.reviewedAtUtc, 'real doctor review must set its timestamp');
+        const visible = ownOrder(await domainData(patientPage.request.get(`${apiBase}${patientListPath}`, { headers: patientHeaders }), 'patient API list after review'));
+        assert.ok(visible.reviewedAtUtc);
+        assert.equal(visible.items[0].result.resultText, resultText);
+        assert.equal(visible.items[0].result.conclusion, conclusion);
+        const visibleUiResponse = waitForPatientList();
+        await patientPage.reload({ waitUntil: 'domcontentloaded' });
+        const visibleUiOrder = ownOrder(await domainData(visibleUiResponse, 'patient UI list after review'));
+        assert.equal(visibleUiOrder.items[0].result.resultText, resultText);
+        await patientPage.getByText(`Kết quả: ${resultText}`, { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+        await patientPage.getByText(`Kết luận: ${conclusion}`, { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+        assert.equal(await patientPage.getByText('Đang chờ kỹ thuật viên trả kết quả...', { exact: true }).count(), 0);
+        results.push({ scenario: '6 diagnostic result hidden until doctor review', status: 'PASS', evidence: 'Ordered -> technician start/result/complete via real API; patient UI and API Result=null until doctor review; result and conclusion visible in UI/API after review; no direct DB writes' });
+    } finally {
+        await technicianContext.close();
+        await patientContext.close();
+        await doctorContext.close();
+        await stop(host, providerPort);
+    }
+}
+
 async function runPatientPendingActionCancellation(browser) {
     // The planner never prepares writes (PLANNER_TOOL_NOT_ALLOWED), so no chat text yields a pending card.
     // This case prepares a REAL pending action through the authenticated prepare endpoint and injects it
@@ -836,11 +1027,8 @@ async function main() {
         await runPendingActionCancellation(browser);
         await runPatientPendingActionCancellation(browser);
 
-        // Cancellation has a synthetic browser fixture above. Confirmation and
-        // diagnostic publication still remain outside the role-action fixture.
-        // The patient booking wizard separately confirms only in isolated synthetic SQLite.
-        results.push({ scenario: '5 write preview/confirm', status: 'NOT_COVERED', evidence: 'role-action cancel is covered; generic role-action confirm fixture is absent; patient booking confirmation is covered separately' });
-        results.push({ scenario: '6 unpublished/published diagnostic result', status: 'NOT_COVERED', evidence: 'no safe browser publish fixture was added in this acceptance harness' });
+        await runStaffConfirmationIdempotency(browser);
+        await runDiagnosticResultVisibility(browser);
     } finally {
         await browser.close();
         await stop(vite, frontendPort);
