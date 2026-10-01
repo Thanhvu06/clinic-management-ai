@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UnifiedCopilotPanel } from '../components/copilot/UnifiedCopilotPanel';
 import { MedicalChatWidget } from '../components/MedicalChatWidget';
+import { PatientAiConsultation } from '../pages/patient/PatientAiConsultation';
 import { SuggestionChips } from '../components/copilot/SuggestionChips';
 import { sanitizeSuggestions } from '../components/copilot/useSuggestionMenu';
 import { ChatProvider } from '../contexts/ChatContext';
@@ -65,10 +66,84 @@ const menuGroup = (name: string) => screen.findByRole('group', { name });
 
 describe('Role suggestion buttons', () => {
     beforeEach(() => {
+        vi.unstubAllEnvs();
         sendMock.mockReset();
         menuMock.mockReset();
         sessionStorage.clear();
         mockUser = null;
+    });
+
+    it('shows grouped two-column empty buttons with icons and preserves sanitized groups', async () => {
+        const grouped = [
+            { code: 'patient.start_booking', label: 'Đặt lịch khám', group: ' Đặt lịch ' },
+            { code: 'patient.my_bills', label: 'Hóa đơn của tôi', group: 'Dữ liệu của tôi' }
+        ];
+        expect(sanitizeSuggestions(grouped)[0].group).toBe('Đặt lịch');
+        const { container } = render(<SuggestionChips suggestions={grouped} variant="grid" onSelect={vi.fn()} />);
+        expect(screen.getAllByRole('heading').map(element => element.textContent)).toEqual(['Đặt lịch', 'Dữ liệu của tôi']);
+        expect(container.querySelectorAll('button svg')).toHaveLength(2);
+        expect(screen.getByRole('group').className).toMatch(/grid/);
+    });
+
+    it('keeps exactly one strip under only the latest assistant and removes legacy and raw-tool trays', async () => {
+        mockUser = { userId: 'doctor-1', fullName: 'Synthetic', role: 'Doctor' };
+        menuMock.mockResolvedValue({ role: 'Doctor', suggestions: DOCTOR_MENU });
+        sendMock.mockResolvedValueOnce(copilotResponse({ message: 'Câu trả lời thứ nhất', suggestions: DOCTOR_MENU }))
+            .mockResolvedValueOnce(copilotResponse({ message: 'Câu trả lời thứ hai', suggestions: DOCTOR_MENU }));
+        render(<MemoryRouter><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Mở Copilot Bác sĩ' }));
+        fireEvent.click(within(await menuGroup('Gợi ý theo vai trò')).getByRole('button'));
+        await screen.findByText('Câu trả lời thứ nhất');
+        fireEvent.click(within(await menuGroup('Gợi ý tiếp theo')).getByRole('button'));
+        await screen.findByText('Câu trả lời thứ hai');
+        expect(screen.getAllByRole('group')).toHaveLength(1);
+        expect(screen.getByRole('group').parentElement).toHaveAttribute('aria-describedby', 'copilot-latest-reply');
+        expect(document.getElementById('copilot-latest-reply')).toContainElement(screen.getByText('Câu trả lời thứ hai'));
+        expect(screen.getByText('Câu trả lời thứ nhất').parentElement).not.toContainElement(screen.getByRole('group'));
+        expect(screen.queryByLabelText('Công cụ được phép')).not.toBeInTheDocument();
+        expect(screen.queryByText(/get my queue|doctor\.get_my_queue/)).not.toBeInTheDocument();
+        expect(screen.queryByRole('group', { name: 'Gợi ý dự phòng' })).not.toBeInTheDocument();
+    });
+
+    it('deduplicates clarification, hides codes in production and offers the menu on ManualHandoff', async () => {
+        vi.stubEnv('DEV', false);
+        mockUser = { userId: 'doctor-1', fullName: 'Synthetic', role: 'Doctor' };
+        menuMock.mockResolvedValue({ role: 'Doctor', suggestions: DOCTOR_MENU });
+        sendMock.mockResolvedValueOnce(copilotResponse({ message: 'Bạn muốn tra cứu gì?', clarification: '  BẠN   MUỐN TRA CỨU GÌ?  ', assistantMode: 'Clarifying', executionMode: 'ManualHandoff', errorCode: 'LOCAL_CLARIFICATION', cards: [], suggestions: [] }));
+        render(<MemoryRouter><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Mở Copilot Bác sĩ' }));
+        await menuGroup('Gợi ý theo vai trò');
+        fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Câu hỏi chưa rõ' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
+        expect(await screen.findByText('Bạn muốn tra cứu gì?')).toBeInTheDocument();
+        expect(screen.getAllByText(/bạn muốn tra cứu gì\?/i)).toHaveLength(1);
+        expect(screen.queryByText(/Mã xử lý|LOCAL_CLARIFICATION/)).not.toBeInTheDocument();
+        expect(screen.getByText('Đang chờ bạn làm rõ')).toHaveAttribute('title', 'Clarifying · Deterministic');
+        expect(screen.queryByText('Clarifying · Deterministic')).not.toBeInTheDocument();
+        expect(screen.getByText('Bạn có thể chọn một trong các gợi ý bên dưới.')).toBeInTheDocument();
+        expect(within(await menuGroup('Gợi ý tiếp theo')).getAllByRole('button')).toHaveLength(1);
+    });
+
+    it('uses legacy prompts only when the server menu is empty and hides missing-case prompts', async () => {
+        mockUser = { userId: 'doctor-1', fullName: 'Synthetic', role: 'Doctor' };
+        menuMock.mockResolvedValue({ role: 'Doctor', suggestions: [] });
+        render(<MemoryRouter initialEntries={['/doctor']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Mở Copilot Bác sĩ' }));
+        expect(screen.getByRole('group', { name: 'Gợi ý dự phòng' })).toBeInTheDocument();
+        expect(screen.queryByText('Tóm tắt bệnh nhân hiện tại')).not.toBeInTheDocument();
+        expect(screen.queryByText('Xem chỉ định cận lâm sàng')).not.toBeInTheDocument();
+    });
+
+    it('patient consultation also uses one server strip and renders suggestion read cards', async () => {
+        mockUser = { userId: 'patient-1', fullName: 'Synthetic', role: 'Patient' };
+        menuMock.mockResolvedValue({ role: 'Patient', suggestions: PATIENT_MENU });
+        sendMock.mockResolvedValueOnce(copilotResponse({ role: 'Patient', message: 'Dữ liệu của bạn', suggestions: PATIENT_MENU, cards: [{ type: 'patient_bills', title: 'Hóa đơn kiểm thử', data: [], sources: [] }] }));
+        render(<MemoryRouter><ChatProvider><PatientAiConsultation /></ChatProvider></MemoryRouter>);
+        const menu = await menuGroup('Tra cứu nhanh dữ liệu của bạn');
+        expect(screen.queryByText('Tôi nên khám chuyên khoa nào?')).not.toBeInTheDocument();
+        fireEvent.click(within(menu).getByRole('button', { name: 'Gợi ý: Hóa đơn của tôi' }));
+        expect(await screen.findByText('Hóa đơn kiểm thử')).toBeInTheDocument();
+        expect(screen.getAllByRole('group')).toHaveLength(1);
     });
 
     it('sanitizes server chips: valid codes only, no duplicates, at most six', () => {
@@ -170,14 +245,23 @@ describe('Role suggestion buttons', () => {
         expect(sendMock.mock.calls[1][0]).toMatchObject({ message: 'Hôm nay tôi khám ai?', suggestionCode: 'doctor.my_queue' });
     });
 
-    it('roles without suggestion buttons never request or render a menu', async () => {
-        mockUser = { userId: 'rec-1', fullName: 'Receptionist', role: 'Receptionist' };
-        menuMock.mockResolvedValue({ role: 'Receptionist', suggestions: DOCTOR_MENU });
-        render(<MemoryRouter initialEntries={['/reception']}><UnifiedCopilotPanel /></MemoryRouter>);
-        fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Lễ tân/i }));
-        await screen.findByRole('dialog');
-        expect(menuMock).not.toHaveBeenCalled();
-        expect(screen.queryByRole('group', { name: 'Gợi ý theo vai trò' })).not.toBeInTheDocument();
+    it.each([
+        ['Patient', '/patient', 'Mở Trợ lý bệnh nhân', 'patient.my_appointments', 'Lịch hẹn của tôi'],
+        ['Doctor', '/doctor', 'Mở Copilot Bác sĩ', 'doctor.my_queue', 'Hôm nay tôi khám ai?'],
+        ['Receptionist', '/reception', 'Mở Copilot Lễ tân', 'receptionist.queue', 'Hàng đợi tiếp nhận'],
+        ['DiagnosticTechnician', '/diagnostics', 'Mở Copilot Kỹ thuật viên', 'technician.worklist', 'Chỉ định cần thực hiện'],
+        ['Pharmacist', '/pharmacy', 'Mở Copilot Dược sĩ', 'pharmacist.inventory', 'Tồn kho thuốc'],
+        ['Admin', '/admin', 'Mở Copilot Quản trị viên', 'admin.ai_health', 'Hoạt động của trợ lý AI']
+    ])('%s loads its own server menu', async (role, route, launcher, code, label) => {
+        mockUser = { userId: 'synthetic-actor', fullName: 'Synthetic', role };
+        menuMock.mockResolvedValue({ role, suggestions: [{ code, label, group: 'Việc hôm nay' }] });
+        render(<MemoryRouter initialEntries={[route]}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: launcher }));
+        const group = await menuGroup('Gợi ý theo vai trò');
+        expect(menuMock.mock.calls[0][0]).toEqual({ currentRoute: route });
+        expect(within(group).getAllByRole('button')).toHaveLength(1);
+        expect(within(group).getByRole('button', { name: 'Gợi ý: ' + label })).toBeInTheDocument();
+        expect(screen.queryByRole('group', { name: 'Gợi ý dự phòng' })).not.toBeInTheDocument();
     });
 
     it('patient widget shows the patient menu, sends the code, renders the grounded card and next suggestions', async () => {
@@ -191,8 +275,8 @@ describe('Role suggestion buttons', () => {
         const menu = await menuGroup('Tra cứu nhanh dữ liệu của bạn');
         expect(menuMock.mock.calls[0][0]).toEqual({ currentRoute: '/patient' });
         expect(within(menu).queryByText(/Hôm nay tôi khám ai/)).not.toBeInTheDocument();
-        // Existing free-text quick prompts are still there.
-        expect(screen.getByText('Tôi nên khám chuyên khoa nào?')).toBeInTheDocument();
+        // Legacy prompts yield to the single server menu.
+        expect(screen.queryByText('Tôi nên khám chuyên khoa nào?')).not.toBeInTheDocument();
 
         fireEvent.click(within(menu).getByRole('button', { name: 'Gợi ý: Lịch hẹn của tôi' }));
         await waitFor(() => expect(sendMock).toHaveBeenCalledTimes(1));
@@ -229,7 +313,7 @@ describe('Role suggestion buttons', () => {
         expect(sendMock.mock.calls[1][0]).toMatchObject({ message: 'Hóa đơn của tôi', suggestionCode: 'patient.my_bills' });
         await act(async () => { second.resolve(copilotResponse({ role: 'Patient', message: 'Hóa đơn của bạn.', cards: [], suggestions: [] })); await second.promise; });
         expect(await screen.findByText('Hóa đơn của bạn.')).toBeInTheDocument();
-        expect(within(next).getByRole('button', { name: 'Gợi ý: Lượt khám của tôi' })).toBeEnabled();
+        expect(screen.queryByRole('button', { name: 'Gợi ý: Lượt khám của tôi' })).not.toBeInTheDocument();
     });
 
     it('patient widget reports a 429 on a suggestion with the existing rate-limit message', async () => {

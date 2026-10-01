@@ -10,6 +10,11 @@ import {
     Stethoscope, Calendar, Clock, CheckCircle2, Phone,
     FileText, Activity, CreditCard
 } from "lucide-react";
+import { useAuth } from "../../auth/AuthContext";
+import { useLocation } from "react-router-dom";
+import { useSuggestionMenu } from "../../components/copilot/useSuggestionMenu";
+import { SuggestionChips } from "../../components/copilot/SuggestionChips";
+import { renderCopilotCardData } from "../../components/copilot/copilotDataRenderers";
 import { Breadcrumb } from "../../components/Breadcrumb";
 
 const QUICK_PROMPTS = [
@@ -35,11 +40,19 @@ export const PatientAiConsultation: React.FC = () => {
         activeDraft,
         clearChat,
         handleSendMessage,
+        handleSuggestion,
         wizard,
         handleWizardStep,
         handleActionClick,
         formatVietnameseDate
     } = useAiBookingFlow();
+
+    const { user, identityVersion } = useAuth();
+    const location = useLocation();
+    const suggestionMenu = useSuggestionMenu({ enabled: true, role: user?.role, identityKey: `${user?.userId}:${identityVersion}`, currentRoute: location.pathname });
+    const latestAssistantIndex = messages.map(message => message.role).lastIndexOf("model");
+    const emptySuggestions = messages.length <= 1;
+    const activeSuggestions = emptySuggestions ? suggestionMenu : messages[latestAssistantIndex]?.suggestionChips ?? suggestionMenu;
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -100,7 +113,6 @@ export const PatientAiConsultation: React.FC = () => {
                 </div>
 
                 <div style={{ flex: 1, overflowY: 'auto', padding: '24px', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '16px' }} aria-live="polite">
-                    <button type="button" aria-label="Đặt lịch khám" disabled={loading || submittingBooking} onClick={() => void handleWizardStep("start")}>Đặt lịch khám</button>
                     {/* Welcome Disclaimer */}
                     <div className={styles.welcomeContainer}>
                         <div className={styles.disclaimerBadge}>
@@ -108,7 +120,7 @@ export const PatientAiConsultation: React.FC = () => {
                             <span>Trợ lý hỗ trợ định hướng chuyên khoa và đặt lịch khám. Thông tin chỉ mang tính tham khảo, không thay thế chẩn đoán y khoa.</span>
                         </div>
 
-                        {messages.length <= 1 && (
+                        {emptySuggestions && !activeSuggestions?.length && (
                             <>
                                 <p className={styles.quickPromptsTitle}>Gợi ý câu hỏi nhanh:</p>
                                 <div className={styles.quickPrompts}>
@@ -125,12 +137,16 @@ export const PatientAiConsultation: React.FC = () => {
                                 </div>
                             </>
                         )}
+                        {emptySuggestions && <SuggestionChips variant="grid" suggestions={activeSuggestions} disabled={loading || submittingBooking} onSelect={suggestion => void handleSuggestion(suggestion)} ariaLabel="Tra cứu nhanh dữ liệu của bạn" />}
                     </div>
 
                     {messages.map((msg, idx) => (
                         <div key={idx} className={`${styles.messageRow} ${msg.role === "user" ? styles.rowUser : styles.rowModel}`}>
                             <div className={`${styles.bubble} ${msg.role === "user" ? styles.bubbleUser : styles.bubbleModel}`}>
                                 <div>{msg.content}</div>
+
+                                {msg.copilotCards?.map((card, cardIndex) => <article className={styles.bookingSummaryCard} key={`${card.type}-${cardIndex}`}><h4>{card.title}</h4>{card.description && <p>{card.description}</p>}{renderCopilotCardData(card)}</article>)}
+                                {!emptySuggestions && idx === latestAssistantIndex && <SuggestionChips suggestions={activeSuggestions} disabled={loading || submittingBooking} onSelect={suggestion => void handleSuggestion(suggestion)} ariaLabel="Gợi ý tiếp theo" />}
 
                                 {/* Emergency Card */}
                                 {msg.urgency === "EMERGENCY" && (

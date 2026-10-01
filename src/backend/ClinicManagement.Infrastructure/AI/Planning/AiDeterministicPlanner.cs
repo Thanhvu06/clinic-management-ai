@@ -31,7 +31,15 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             ["doctor.get_my_queue"] = (AiChatIntentTypes.QueueLookup, "DoctorQueue", "/doctor/queue"),
             ["doctor.get_patient_summary"] = (AiChatIntentTypes.PatientSummary, "AssignedPatientSummary", "/doctor/appointments"),
             ["doctor.get_diagnostic_orders"] = (AiChatIntentTypes.DiagnosticLookup, "AssignedDiagnosticOrders", "/doctor/appointments"),
-            ["doctor.get_prescription_status"] = (AiChatIntentTypes.PrescriptionLookup, "AssignedPrescriptionStatus", "/doctor/appointments")
+            ["doctor.get_prescription_status"] = (AiChatIntentTypes.PrescriptionLookup, "AssignedPrescriptionStatus", "/doctor/appointments"),
+            ["reception.get_today_appointments"] = (AiChatIntentTypes.ViewAppointments, "TodayAppointments", "/reception/appointments"),
+            ["reception.get_queue"] = (AiChatIntentTypes.QueueLookup, "ReceptionQueue", "/reception"),
+            ["technician.get_worklist"] = (AiChatIntentTypes.DiagnosticLookup, "TechnicianWorklist", "/diagnostics"),
+            ["pharmacist.get_prescription_queue"] = (AiChatIntentTypes.PrescriptionLookup, "PrescriptionQueue", "/pharmacy/prescriptions"),
+            ["pharmacist.get_inventory_status"] = (AiChatIntentTypes.PharmacyInventory, "InventoryStatus", "/pharmacy/inventory"),
+            ["pharmacist.get_prescription_payment_status"] = (AiChatIntentTypes.PrescriptionLookup, "PrescriptionPaymentStatus", "/pharmacy/prescriptions"),
+            ["admin.get_dashboard_metrics"] = (AiChatIntentTypes.AdminMetrics, "DashboardMetrics", "/admin"),
+            ["admin.get_ai_health"] = (AiChatIntentTypes.AdminMetrics, "AiHealth", "/admin/audit-logs")
         };
 
     public AiPlannerDecision PlanSuggestion(AiSuggestionDefinition? suggestion, AiResolvedResourceContext resource)
@@ -42,8 +50,24 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         if (!SingleReadRoutes.TryGetValue(suggestion.ToolName, out var route))
             return SuggestionRejected();
 
-        if (!suggestion.RequiresResource)
+        if (suggestion.ResourceKind == AiSuggestionResourceKind.None)
             return ReadTool(suggestion.ToolName, suggestion.ToolName.StartsWith("patient.", StringComparison.OrdinalIgnoreCase) ? new { page = 1, pageSize = 20 } : new { });
+
+        if (suggestion.ResourceKind == AiSuggestionResourceKind.Prescription)
+            return resource.PrescriptionId.HasValue
+                // Resource arguments are attached by the existing binding pipeline.
+                ? ReadTool(suggestion.ToolName, new { })
+                : new AiPlannerDecision
+                {
+                    PlannerMode = AiPlannerModes.Deterministic,
+                    Intent = route.Intent,
+                    SubIntent = "MissingPrescriptionForPayment",
+                    ErrorCode = AiPlannerErrorCodes.ResourceContextRequired,
+                    Confidence = 1m,
+                    Clarification = "Hãy mở đúng đơn thuốc cần kiểm tra để đối chiếu thanh toán.",
+                    Message = "Hãy mở đúng đơn thuốc cần kiểm tra để đối chiếu thanh toán.",
+                    NavigationRoute = route.Route
+                };
 
         if (!resource.AppointmentId.HasValue && !resource.VisitId.HasValue)
             return new AiPlannerDecision

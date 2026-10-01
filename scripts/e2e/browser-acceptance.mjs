@@ -163,8 +163,8 @@ async function sendStaff(page, actor) {
     const body = await page.locator('body').innerText();
     assert.match(body, /ClinicCare domain database|clinic_public_catalog/, `${actor.name} must show a verified source`);
     assert.doesNotMatch(body, /CANARY-APT-002|Synthetic Patient B|CANARY-BETA/i, `${actor.name} must stay within facility A synthetic scope`);
-    const displayTool = actor.tool.split('.').at(-1).replaceAll('_', ' ');
-    assert.match(body, new RegExp(displayTool.replaceAll(' ', '\\s+'), 'i'), `${actor.name} tool must be present in the permitted tool tray`);
+    assert.equal(await page.getByLabel('Công cụ được phép').count(), 0, 'technical tool tray is removed');
+    assert.ok(!body.includes(actor.tool), 'raw tool name must not be visible');
     results.push({ scenario: `3 ${actor.name} scoped copilot`, status: 'PASS', evidence: 'online grounded card and verified source' });
 }
 
@@ -286,6 +286,7 @@ async function runPendingActionCancellation(browser) {
         const actor = { ...actorCases[3], route: '/diagnostics/orders/1' };
         await login(page, actor);
         await page.getByRole('button', { name: `Mở ${roleLabels[actor.name]}` }).click();
+        await page.locator('summary').filter({ hasText: 'Thao tác có xác nhận' }).click();
         const description = page.getByText('Chuẩn bị tiếp nhận phiếu chỉ định', { exact: true });
         await description.waitFor({ state: 'visible', timeout: 15000 });
         const actionRow = description.locator('..').locator('..');
@@ -487,6 +488,30 @@ async function runLocalSuggestionAndWizardAcceptance(browser) {
             ].sort(), 'case chips must appear only on the server-verified assigned case');
             return 'disabled provider; real queue chip/card; case chips absent on list and present on assigned appointment detail; doctor-only menu';
         }],
+        ...[
+            { actor: actorCases[1], codes: ['receptionist.today_appointments', 'receptionist.queue'], buttons: [
+                ['Lịch hẹn hôm nay', 'receptionist.today_appointments', 'reception.get_today_appointments', 'reception_appointments'],
+                ['Hàng đợi tiếp nhận', 'receptionist.queue', 'reception.get_queue', 'reception_queue']] },
+            { actor: actorCases[4], codes: ['pharmacist.prescription_queue', 'pharmacist.inventory'], buttons: [
+                ['Đơn thuốc chờ xử lý', 'pharmacist.prescription_queue', 'pharmacist.get_prescription_queue', 'pharmacist_prescription_queue'],
+                ['Tồn kho thuốc', 'pharmacist.inventory', 'pharmacist.get_inventory_status', 'pharmacy_inventory']] },
+            { actor: actorCases[5], codes: ['admin.dashboard_metrics', 'admin.ai_health'], buttons: [
+                ['Chỉ số hôm nay', 'admin.dashboard_metrics', 'admin.get_dashboard_metrics', 'admin_dashboard_metrics'],
+                ['Hoạt động của trợ lý AI', 'admin.ai_health', 'admin.get_ai_health', 'admin_ai_health']] }
+        ].map(({ actor, codes, buttons }) => [actor.name + ' suggestion chips', async page => {
+            await login(page, actor);
+            await page.getByRole('button', { name: 'Mở ' + roleLabels[actor.name] }).click();
+            const dialog = page.getByRole('dialog', { name: roleLabels[actor.name], exact: true });
+            await dialog.getByRole('button', { name: 'Gợi ý: ' + buttons[0][0], exact: true }).waitFor({ state: 'visible' });
+            assert.deepEqual((await suggestionCodes(dialog)).sort(), [...codes].sort(), 'initial menu must contain only this role’s current-resource-safe buttons');
+            for (const [label, code, tool, card] of buttons) {
+                await clickCopilotSuggestion(page, dialog, label, code, tool, card);
+                assert.ok((await suggestionCodes(dialog)).every(value => codes.includes(value)), 'reply menu stays role-scoped');
+                assert.equal(await dialog.locator('[data-suggestion-code="' + code + '"]').count(), 0, 'just-executed button is excluded');
+                assert.equal(await dialog.getByLabel('Công cụ được phép').count(), 0, 'no technical tool tray');
+            }
+            return 'disabled provider; role-only menu; every resource-free button executes its real read tool and renders a verified card; zero provider attempts';
+        }]),
         ['patient booking wizard', async page => {
             await login(page, actorCases[0]);
             await page.getByRole('button', { name: 'Mở Trợ lý ClinicCare AI' }).click();

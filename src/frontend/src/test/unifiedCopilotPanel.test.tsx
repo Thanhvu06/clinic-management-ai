@@ -110,6 +110,30 @@ describe('UnifiedCopilotPanel', () => {
         mockIdentityVersion = 1;
     });
 
+    it('collapses confirmed actions by default, translates their names and opens for pending preview', async () => {
+        mockUser = { userId: 'tech-1', fullName: 'Synthetic', role: 'DiagnosticTechnician' };
+        const tool = { name: 'technician.prepare_start_diagnostic_order', version: '1.0', description: 'Tiếp nhận phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        catalogMock.mockResolvedValue({ tools: [{ name: 'technician.get_worklist' }], actionTools: [tool] });
+        prepareActionMock.mockResolvedValue({ status: 'pending_confirmation', actionId: 'synthetic-action', data: { confirmationToken: 'synthetic-token' }, preview: {
+            toolName: tool.name, status: 'pending_confirmation', resourceType: 'DiagnosticOrder', resourceId: '42', resource: { identity: 'Phiếu kiểm thử' },
+            changes: [{ kind: 'start', summary: 'Tiếp nhận', items: [{ label: 'Phiếu', value: 'Đã chọn' }] }], consequence: 'Sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra.',
+            validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:10Z', sources: [{ name: 'diagnostic_orders', kind: 'database' }]
+        } });
+        render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Mở Copilot Kỹ thuật viên' }));
+        const summary = await screen.findByText('Thao tác có xác nhận (1)');
+        const details = summary.closest('details')!;
+        expect(details.open).toBe(false);
+        expect(screen.queryByLabelText('Công cụ được phép')).not.toBeInTheDocument();
+        expect(details.textContent).not.toMatch(/technician\.|prepare start diagnostic order/);
+        expect(screen.getByText('Tiếp nhận phiếu chỉ định')).toBeInTheDocument();
+        fireEvent.click(summary);
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        await screen.findByLabelText('Xem trước thao tác');
+        expect(details.open).toBe(true);
+        expect(screen.getByRole('button', { name: 'Xác nhận thao tác' })).toBeEnabled();
+    });
+
     it('renders role-specific prompts, sends only route/resource context, and displays grounded response metadata', async () => {
         sendMock.mockResolvedValueOnce(response());
         render(<MemoryRouter initialEntries={['/doctor/appointments/42']}><UnifiedCopilotPanel /></MemoryRouter>);
@@ -233,7 +257,7 @@ describe('UnifiedCopilotPanel', () => {
         fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'Có bác sĩ nào?' } });
         fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
 
-        await waitFor(() => expect(screen.getAllByText('Bạn muốn xem danh sách hay tra cứu tên cụ thể?')).toHaveLength(2));
+        await waitFor(() => expect(screen.getAllByText('Bạn muốn xem danh sách hay tra cứu tên cụ thể?')).toHaveLength(1));
         expect(screen.queryByText('Bác sĩ Nhiễu')).not.toBeInTheDocument();
     });
 

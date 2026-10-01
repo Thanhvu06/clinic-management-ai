@@ -116,6 +116,9 @@ const PatientMedicalChatWidget: React.FC = () => {
         identityKey: user?.userId ?? (user?.id !== undefined ? String(user.id) : "anonymous"),
         currentRoute: location.pathname
     });
+    const latestAssistantIndex = messages.map(message => message.role).lastIndexOf("model");
+    const emptySuggestions = messages.length <= 1;
+    const activeSuggestions = emptySuggestions ? suggestionMenu : messages[latestAssistantIndex]?.suggestionChips ?? suggestionMenu;
     const suggestionsBusy = loading || submittingBooking || executingActionId !== null;
     const onSuggestion = (suggestion: Parameters<typeof handleSuggestion>[0]) => {
         if (suggestionsBusy) return;
@@ -287,10 +290,10 @@ const PatientMedicalChatWidget: React.FC = () => {
                                 <span>Trợ lý hỗ trợ định hướng chuyên khoa và đặt lịch khám. Thông tin chỉ mang tính tham khảo, không thay thế chẩn đoán y khoa.</span>
                             </div>
 
-                            {messages.length <= 1 && (
+                            {emptySuggestions && (
                                 <>
-                                    <p className={styles.quickPromptsTitle}>Gợi ý câu hỏi nhanh:</p>
-                                    <div className={styles.quickPrompts}>
+                                    {!activeSuggestions?.length && <p className={styles.quickPromptsTitle}>Gợi ý câu hỏi nhanh:</p>}
+                                    {!activeSuggestions?.length && <div className={styles.quickPrompts}>
                                         {QUICK_PROMPTS.map((qp) => (
                                             <button
                                                 key={qp.label}
@@ -301,9 +304,10 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                 {qp.label}
                                             </button>
                                         ))}
-                                    </div>
+                                    </div>}
                                     <SuggestionChips
-                                        suggestions={suggestionMenu}
+                                        variant="grid"
+                                        suggestions={activeSuggestions}
                                         disabled={suggestionsBusy}
                                         onSelect={onSuggestion}
                                         ariaLabel="Tra cứu nhanh dữ liệu của bạn"
@@ -401,9 +405,9 @@ const PatientMedicalChatWidget: React.FC = () => {
                                         </div>
                                     ))}
 
-                                    {msg.role === "model" && (
+                                    {!emptySuggestions && idx === latestAssistantIndex && (
                                         <SuggestionChips
-                                            suggestions={msg.suggestionChips}
+                                            suggestions={activeSuggestions}
                                             disabled={suggestionsBusy}
                                             onSelect={onSuggestion}
                                             ariaLabel="Gợi ý tiếp theo"

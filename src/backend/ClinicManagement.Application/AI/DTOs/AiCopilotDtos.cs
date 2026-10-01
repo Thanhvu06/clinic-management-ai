@@ -44,6 +44,7 @@ public sealed class AiSuggestionItemDto
 {
     public string Code { get; init; } = string.Empty;
     public string Label { get; init; } = string.Empty;
+    public string? Group { get; init; }
 }
 
 public sealed class AiCopilotSuggestionsRequestDto

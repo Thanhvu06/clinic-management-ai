@@ -47,7 +47,7 @@ describe('patient button booking wizard', () => {
         mockFlow();
         post.mockResolvedValueOnce({ success: true, data: { id: 9911, appointmentCode: 'TEST-BOOKING', ...review.payload } });
         mount();
-        fireEvent.click(screen.getByRole('button', { name: 'Đặt lịch khám' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Gợi ý: Đặt lịch khám' }));
         for (const label of ['Khoa tổng hợp', 'Bác sĩ kiểm thử', '02/10/2026', '08:00 – 08:30']) await choose(label);
         const reason = await screen.findByRole('textbox', { name: 'Lý do khám từ 10 đến 500 ký tự' });
         fireEvent.change(reason, { target: { value: 'Khám tổng quát' } });
@@ -69,7 +69,7 @@ describe('patient button booking wizard', () => {
         let resolve: ((value: unknown) => void) | undefined;
         post.mockReturnValueOnce(new Promise(done => { resolve = done; }));
         mount();
-        const start = screen.getByRole('button', { name: 'Đặt lịch khám' });
+        const start = await screen.findByRole('button', { name: 'Gợi ý: Đặt lịch khám' });
         fireEvent.click(start); fireEvent.click(start);
         expect(post).toHaveBeenCalledTimes(1);
         expect(start).toBeDisabled();
@@ -81,7 +81,7 @@ describe('patient button booking wizard', () => {
         post.mockResolvedValueOnce({ success: true, data: flow[0] }).mockResolvedValueOnce({ success: true, data: flow[1] })
             .mockResolvedValueOnce({ success: true, data: flow[0] }).mockResolvedValueOnce({ success: true, data: flow[0] });
         mount();
-        fireEvent.click(screen.getByRole('button', { name: 'Đặt lịch khám' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Gợi ý: Đặt lịch khám' }));
         await choose('Khoa tổng hợp');
         await choose('Quay lại bước trước');
         await choose('Bắt đầu lại đặt lịch');
@@ -95,7 +95,7 @@ describe('patient button booking wizard', () => {
         post.mockResolvedValueOnce({ success: true, data: flow[4] }).mockResolvedValueOnce({ success: true, data: flow[5] });
         const user = userEvent.setup();
         mount();
-        fireEvent.click(screen.getByRole('button', { name: 'Đặt lịch khám' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Gợi ý: Đặt lịch khám' }));
         const input = await screen.findByRole('textbox', { name: 'Lý do khám từ 10 đến 500 ký tự' });
         await user.click(input); await user.type(input, 'Khám');
         const button = within(wizard()).getByRole('button', { name: 'Xem lại thông tin khám' });
@@ -108,9 +108,9 @@ describe('patient button booking wizard', () => {
 
     it('displays 429 errors and enables retry', async () => {
         post.mockRejectedValueOnce({ status: 429 });
-        mount(); fireEvent.click(screen.getByRole('button', { name: 'Đặt lịch khám' }));
+        mount(); fireEvent.click(await screen.findByRole('button', { name: 'Gợi ý: Đặt lịch khám' }));
         await screen.findByText(/Bạn đã gửi quá nhiều yêu cầu/);
-        expect(screen.getByRole('button', { name: 'Đặt lịch khám' })).toBeEnabled();
+        expect(await screen.findByRole('button', { name: 'Gợi ý: Đặt lịch khám' })).toBeEnabled();
     });
 
     it('starts from the patient widget suggestion and presents emergency call 115', async () => {

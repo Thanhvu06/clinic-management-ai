@@ -1,29 +1,30 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Bot, CheckCircle2, ExternalLink, RotateCcw, Send, ShieldCheck, Square, X } from 'lucide-react';
 import { useUnifiedCopilot, type UnifiedCopilotMessage } from './useUnifiedCopilot';
 import { providerStateLabel, toolDisplayName } from './copilotConfig';
 import { renderCopilotCardData } from './copilotDataRenderers';
 import { SuggestionChips } from './SuggestionChips';
-import type { AiSuggestionItem } from '../../types/ai';
+import { sanitizeSuggestions } from './useSuggestionMenu';
 import styles from './UnifiedCopilotPanel.module.css';
 
 const safeRoute = (route?: string | null): route is string => Boolean(route && route.startsWith('/') && !route.startsWith('//') && !route.includes('://') && !route.includes('..') && !route.includes('\\'));
 
+const normalizeText = (value?: string | null) => value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('vi-VN');
+
 const MessageBubble: React.FC<{
     item: UnifiedCopilotMessage;
     onRetry: (item: UnifiedCopilotMessage) => void;
-    onSuggestion: (suggestion: AiSuggestionItem) => void;
-    busy: boolean;
-}> = ({ item, onRetry, onSuggestion, busy }) => {
+    latest: boolean;
+}> = ({ item, onRetry, latest }) => {
     const response = item.response;
     const cards = response?.cards ?? [];
     return (
-        <div className={styles.messageRow} data-role={item.role}>
+        <div className={styles.messageRow} data-role={item.role} id={latest ? "copilot-latest-reply" : undefined}>
             <div className={`${styles.bubble} ${item.role === 'user' ? styles.user : styles.assistant} ${item.error ? styles.error : ''}`}>
                 <div>{item.content}</div>
-                {response?.errorCode && <div className={styles.clarification}>Mã xử lý: {response.errorCode}</div>}
-                {response?.clarification && <div className={styles.clarification}>{response.clarification}</div>}
-                {response?.safetyNotice && <div className={styles.clarification}>{response.safetyNotice}</div>}
+                {import.meta.env.DEV && response?.errorCode && <div className={styles.clarification}>Mã xử lý: {response.errorCode}</div>}
+                {response?.clarification && normalizeText(response.clarification) !== normalizeText(item.content) && <div className={styles.clarification}>{response.clarification}</div>}
+                {response?.safetyNotice && normalizeText(response.safetyNotice) !== normalizeText(item.content) && normalizeText(response.safetyNotice) !== normalizeText(response.clarification) && <div className={styles.clarification}>{response.safetyNotice}</div>}
                 {cards.map((card, index) => {
                     const sources = Array.from(new Map(
                         [...(card.sources ?? []), ...(index === 0 ? (response?.sources ?? []) : [])]
@@ -41,7 +42,6 @@ const MessageBubble: React.FC<{
                         </article>
                     );
                 })}
-                {item.role === 'assistant' && <SuggestionChips suggestions={response?.suggestions} disabled={busy} onSelect={onSuggestion} ariaLabel="Gợi ý tiếp theo" />}
                 {item.error && item.retryText && <button type="button" className={styles.retryButton} onClick={() => onRetry(item)}><RotateCcw size={13} /> Thử lại</button>}
             </div>
         </div>
@@ -53,7 +53,6 @@ export const UnifiedCopilotPanel: React.FC = () => {
     const launcherRef = useRef<HTMLButtonElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const panelRef = useRef<HTMLElement>(null);
-    const tools = useMemo(() => copilot.catalogTools?.length ? copilot.catalogTools : copilot.config.defaultTools, [copilot.catalogTools, copilot.config.defaultTools]);
 
     useEffect(() => {
         if (!copilot.open) {
@@ -71,7 +70,7 @@ export const UnifiedCopilotPanel: React.FC = () => {
             return;
         }
         if (event.key !== 'Tab' || !panelRef.current) return;
-        const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), textarea, a[href]'));
+        const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), textarea, a[href], summary')).filter(element => !element.closest('details:not([open])') || element.tagName === 'SUMMARY');
         if (focusable.length === 0) return;
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
@@ -82,11 +81,16 @@ export const UnifiedCopilotPanel: React.FC = () => {
     if (!copilot.user) return null;
     if (!copilot.open) return <div className={styles.shell}><button ref={launcherRef} type="button" className={styles.launcher} onClick={() => copilot.setOpen(true)} aria-label={`Mở ${copilot.config.label}`}><Bot size={18} /> {copilot.config.shortLabel}</button></div>;
 
+    const latestAssistant = copilot.messages.slice().reverse().find(message => message.role === 'assistant');
+    const empty = !copilot.messages.some(message => message.role === 'user');
     const latestResponse = copilot.messages.slice().reverse().find(message => message.response)?.response;
     // providerStatus is a legacy/raw detail (for example "Timeout"); the
     // stable UI state is providerState (Degraded/Unavailable/etc.).
     const providerStatus = latestResponse?.providerState ?? latestResponse?.providerStatus ?? 'NotCalled';
-    const suggestedPrompts = latestResponse?.suggestedPrompts?.length ? latestResponse.suggestedPrompts : copilot.config.prompts;
+    const needsMenu = !latestAssistant?.response || latestAssistant.response.assistantMode === 'Clarifying' || latestAssistant.response.executionMode === 'ManualHandoff';
+    const suggestions = sanitizeSuggestions(latestAssistant?.response?.suggestions?.length ? latestAssistant.response.suggestions : needsMenu ? copilot.menuSuggestions : []);
+    const hasCase = Boolean(copilot.resourceContext?.appointmentId || copilot.resourceContext?.visitId);
+    const suggestedPrompts = copilot.role === 'Doctor' && !hasCase ? ['Xem hàng đợi của tôi'] : latestResponse?.suggestedPrompts?.length ? latestResponse.suggestedPrompts : copilot.config.prompts;
     const pendingCapability = copilot.pendingAction
         ? copilot.actionCapabilities.find(capability => capability.tool.name === copilot.pendingAction?.toolName)
         : undefined;
@@ -102,23 +106,25 @@ export const UnifiedCopilotPanel: React.FC = () => {
                         <button type="button" className={styles.iconButton} onClick={() => copilot.setOpen(false)} aria-label="Đóng Copilot"><X size={18} /></button>
                     </div>
                 </header>
-                <div className={styles.statusBar} data-state={providerStatus}><span className={styles.statusDot} /> <span>{providerStateLabel(providerStatus)}</span><span className={styles.mode}>{latestResponse?.assistantMode ?? 'Ready'}{latestResponse?.plannerMode ? ` · ${latestResponse.plannerMode}` : ''}</span></div>
+                <div className={styles.statusBar} data-state={providerStatus}><span className={styles.statusDot} /> <span title={`${latestResponse?.assistantMode ?? 'Ready'} · ${latestResponse?.plannerMode ?? 'Deterministic'}`}>{latestResponse?.assistantMode === 'Clarifying' ? 'Đang chờ bạn làm rõ' : providerStateLabel(providerStatus)}</span></div>
                 <div className={styles.messages} aria-live="polite" aria-relevant="additions">
                     <p className={styles.cardDescription}><ShieldCheck size={13} /> Dữ liệu và quyền truy cập do backend kiểm tra; Copilot này không tự thực hiện thao tác ghi.</p>
                     {copilot.messages.map(message => <MessageBubble
                         key={message.id}
                         item={message}
-                        busy={copilot.loading}
-                        onSuggestion={suggestion => void copilot.sendSuggestion(suggestion)}
+                        latest={message.id === latestAssistant?.id}
                         onRetry={failed => void (failed.retrySuggestionCode
                             ? copilot.sendSuggestion({ code: failed.retrySuggestionCode, label: failed.retryText ?? '' })
                             : copilot.send(failed.retryText ?? ''))}
                     />)}
-                    {!copilot.messages.some(message => message.response) && <SuggestionChips suggestions={copilot.menuSuggestions} disabled={copilot.loading} onSelect={suggestion => void copilot.sendSuggestion(suggestion)} ariaLabel="Gợi ý theo vai trò" />}
                     {copilot.loading && <div className={`${styles.messageRow} ${styles.assistant}`}><div className={styles.bubble}>Đang kiểm tra dữ liệu…</div></div>}
                 </div>
-                {copilot.actionCapabilities.length > 0 && <section className={styles.actionTray} aria-label="Thao tác có xác nhận">
-                    <div className={styles.actionHeading}><strong>Thao tác có xác nhận</strong><span>Backend kiểm tra lại quyền, resource và điều kiện domain.</span></div>
+                {suggestions.length > 0 && <div className={styles.suggestionFooter} aria-describedby="copilot-latest-reply">
+                    {(latestAssistant?.response?.assistantMode === 'Clarifying' || latestAssistant?.response?.executionMode === 'ManualHandoff') && <p className={styles.cardDescription}>Bạn có thể chọn một trong các gợi ý bên dưới.</p>}
+                    <SuggestionChips suggestions={suggestions} variant={empty ? 'grid' : 'compact'} disabled={copilot.loading} onSelect={suggestion => void copilot.sendSuggestion(suggestion)} ariaLabel={empty || !latestAssistant?.response ? "Gợi ý theo vai trò" : "Gợi ý tiếp theo"} />
+                </div>}
+                {copilot.actionCapabilities.length > 0 && <details className={styles.actionTray} aria-label="Thao tác có xác nhận" open={Boolean(copilot.pendingAction || copilot.actionFeedback)}>
+                    <summary className={styles.actionHeading}>Thao tác có xác nhận ({copilot.actionCapabilities.length})<span>Xem trước và xác nhận trước khi thực hiện.</span></summary>
                     {copilot.resourceSelection && <p className={styles.cardDescription}>Resource nghiệp vụ: {copilot.resourceSelection.label ?? copilot.resourceSelection.source}</p>}
                     {copilot.catalogError && <p className={styles.actionError}>{copilot.catalogError}</p>}
                     {copilot.actionCapabilities.map(capability => <div className={styles.actionRow} key={capability.tool.name}>
@@ -146,9 +152,8 @@ export const UnifiedCopilotPanel: React.FC = () => {
                         {copilot.pendingActionExpired && pendingCapability?.enabled && <button type="button" className={styles.actionButton} disabled={Boolean(copilot.actionLoading)} onClick={() => void copilot.prepareAction(pendingCapability)}>Chuẩn bị lại xem trước</button>}
                     </div>}
                     {copilot.actionFeedback && <p className={copilot.actionFeedback.status === 'completed' ? styles.actionSuccess : copilot.actionFeedback.status === 'cancelled' ? styles.actionNeutral : styles.actionError} role="status">{copilot.actionFeedback.message}</p>}
-                </section>}
-                <div className={styles.toolTray} aria-label="Công cụ được phép">{tools.map(tool => <span className={styles.toolBadge} key={typeof tool === 'string' ? tool : tool.name}>{toolDisplayName(tool)}</span>)}</div>
-                <div className={styles.prompts}>{suggestedPrompts.slice(0, 4).map(prompt => <button type="button" className={styles.prompt} key={prompt} onClick={() => void copilot.send(prompt)} disabled={copilot.loading}>{prompt}</button>)}</div>
+                </details>}
+                {suggestions.length === 0 && <div className={styles.prompts} role="group" aria-label="Gợi ý dự phòng">{suggestedPrompts.slice(0, 4).map(prompt => <button type="button" className={styles.prompt} key={prompt} onClick={() => void copilot.send(prompt)} disabled={copilot.loading}>{prompt}</button>)}</div>}
                 <form className={styles.form} onSubmit={event => { event.preventDefault(); void copilot.send(); }}>
                     <textarea ref={inputRef} className={styles.input} value={copilot.input} onChange={event => copilot.setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void copilot.send(); } }} maxLength={500} rows={2} placeholder="Hỏi về công việc hoặc thông tin phòng khám…" aria-label="Nội dung Copilot" />
                     <button type="submit" className={styles.sendButton} disabled={copilot.loading || !copilot.input.trim()} aria-label="Gửi yêu cầu Copilot"><Send size={17} /></button>

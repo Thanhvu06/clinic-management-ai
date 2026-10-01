@@ -144,10 +144,11 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         // turn (verified above), never a resource remembered from memory.
         var hasCaseResource = HasExplicitCaseResource(request.ResourceContext) &&
                               (resolved.Context.AppointmentId.HasValue || resolved.Context.VisitId.HasValue);
+        var hasPrescriptionResource = request.ResourceContext?.PrescriptionId.HasValue == true && resolved.Context.PrescriptionId.HasValue;
         AiPlannerDecision decision;
         if (suggestionRequested)
         {
-            decision = _deterministicPlanner.PlanSuggestion(suggestion, hasCaseResource
+            decision = _deterministicPlanner.PlanSuggestion(suggestion, hasCaseResource || hasPrescriptionResource
                     ? resolved.Context
                     : new AiResolvedResourceContext { CurrentRoute = resolved.Context.CurrentRoute });
         }
@@ -281,7 +282,8 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             Suggestions = AiSuggestionCatalog.ForRole(
                 role,
                 hasCaseResource,
-                results.Select(x => x.ToolName).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!).ToArray()),
+                results.Select(x => x.ToolName).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!).ToArray(),
+                hasPrescriptionResource),
             Cards = grounded.Cards,
             Sources = grounded.Sources,
             AvailableTools = ToolsForUi(tools),
@@ -311,7 +313,8 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
     {
         var role = ResolveRole();
         var hasCaseResource = false;
-        if (HasExplicitCaseResource(request.ResourceContext))
+        var hasPrescriptionResource = false;
+        if (HasExplicitCaseResource(request.ResourceContext) || request.ResourceContext?.PrescriptionId.HasValue == true)
         {
             // Same resolver as chat: ownership, facility scope and composite
             // consistency. Any failure simply hides case-scoped suggestions.
@@ -321,12 +324,13 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 ResourceContext = request.ResourceContext
             }, null, role, _currentUser.UserId, cancellationToken);
             hasCaseResource = resolved.IsValid && (resolved.Context.AppointmentId.HasValue || resolved.Context.VisitId.HasValue);
+            hasPrescriptionResource = resolved.IsValid && request.ResourceContext?.PrescriptionId.HasValue == true && resolved.Context.PrescriptionId.HasValue;
         }
 
         return new AiCopilotSuggestionsResponseDto
         {
             Role = role.ToString(),
-            Suggestions = AiSuggestionCatalog.ForRole(role, hasCaseResource)
+            Suggestions = AiSuggestionCatalog.ForRole(role, hasCaseResource, hasPrescriptionResource: hasPrescriptionResource)
         };
     }
 

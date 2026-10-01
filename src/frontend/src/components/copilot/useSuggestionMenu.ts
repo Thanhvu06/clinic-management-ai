@@ -4,7 +4,7 @@ import type { AiSuggestionItem, AiSuggestionMenuRequest } from '../../types/ai';
 
 export const MAX_SUGGESTION_CHIPS = 6;
 const SUGGESTION_CODE = /^[a-z]+(\.[a-z_]+)+$/;
-const SUGGESTION_ROLES = new Set(['Patient', 'Doctor']);
+const SUGGESTION_ROLES = new Set(['Patient', 'Doctor', 'Receptionist', 'DiagnosticTechnician', 'Pharmacist', 'Admin']);
 
 /**
  * Defence in depth for server-issued (or session-restored) chips: keep only
@@ -19,7 +19,8 @@ export const sanitizeSuggestions = (items: readonly AiSuggestionItem[] | null | 
         const label = item.label.trim();
         if (item.code.length > 64 || !SUGGESTION_CODE.test(item.code) || !label || seen.has(item.code)) continue;
         seen.add(item.code);
-        result.push({ code: item.code, label });
+        const group = typeof item.group === 'string' ? item.group.trim().slice(0, 40) : undefined;
+        result.push({ code: item.code, label, ...(group ? { group } : {}) });
         if (result.length >= MAX_SUGGESTION_CHIPS) break;
     }
     return result;

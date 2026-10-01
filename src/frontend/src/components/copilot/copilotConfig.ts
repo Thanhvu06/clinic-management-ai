@@ -71,5 +71,15 @@ export const providerStateLabel = (state?: string): string => ({
 
 export const toolDisplayName = (tool: AiCopilotTool | string): string => {
     const name = typeof tool === 'string' ? tool : tool.name;
-    return name.replace(/^.*\./, '').replaceAll('_', ' ');
+    return ({
+        'reception.prepare_check_in_appointment': 'Tiếp nhận lịch hẹn',
+        'reception.prepare_create_walk_in': 'Tiếp nhận bệnh nhân vãng lai',
+        'doctor.prepare_diagnostic_order': 'Chuẩn bị chỉ định cận lâm sàng',
+        'doctor.prepare_prescription_draft': 'Chuẩn bị bản nháp đơn thuốc',
+        'technician.prepare_start_diagnostic_order': 'Tiếp nhận phiếu chỉ định',
+        'technician.prepare_record_diagnostic_result': 'Lưu kết quả kỹ thuật',
+        'technician.prepare_complete_diagnostic_order': 'Hoàn tất phiếu chỉ định',
+        'pharmacist.prepare_reserve_prescription': 'Giữ chỗ thuốc theo đơn',
+        'pharmacist.prepare_dispense_prescription': 'Cấp phát đơn thuốc'
+    } as Record<string, string>)[name] ?? 'Thao tác nghiệp vụ';
 };

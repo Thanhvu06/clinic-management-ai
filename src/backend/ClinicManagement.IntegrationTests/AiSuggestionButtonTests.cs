@@ -30,7 +30,116 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
     private const string ChatUrl = "/api/v1/ai/copilot/chat";
     private const string SuggestionsUrl = "/api/v1/ai/copilot/suggestions";
 
+    private static readonly (string Email, AiActorRole Role)[] NewActors =
+    {
+        ("rec@test.com", AiActorRole.Receptionist), ("tech@test.com", AiActorRole.DiagnosticTechnician),
+        ("pharm@test.com", AiActorRole.Pharmacist), ("admin@test.com", AiActorRole.Admin)
+    };
+
     public AiSuggestionButtonTests(CustomWebApplicationFactory factory) : base(factory) { }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task New_role_buttons_use_only_their_real_read_tools_and_ignore_forged_body_fields(bool enabled)
+    {
+        using var factory = CreateProviderConfiguredFactory(enabled);
+        ResetProviderSpy();
+        var prescriptionId = await CreatePrescriptionAsync(await CreateAppointmentAsync(DoctorEntityId, "SUG-RX"));
+        var cards = new Dictionary<string, string>
+        {
+            ["receptionist.today_appointments"] = "reception_appointments", ["receptionist.queue"] = "reception_queue",
+            ["technician.worklist"] = "technician_worklist", ["pharmacist.prescription_queue"] = "pharmacist_prescription_queue",
+            ["pharmacist.inventory"] = "pharmacy_inventory", ["pharmacist.prescription_payment"] = "pharmacist_prescription_payment",
+            ["admin.dashboard_metrics"] = "admin_dashboard_metrics", ["admin.ai_health"] = "admin_ai_health"
+        };
+        var before = await DomainFingerprintAsync();
+        foreach (var (email, role) in NewActors)
+        {
+            var client = await LoginAsync(factory.CreateClient(), email);
+            var definitions = AiSuggestionCatalog.Definitions.Where(x => x.Role == role).ToArray();
+            var menu = await MenuAsync(client, new { });
+            Assert.Equal(role.ToString(), menu.GetProperty("role").GetString());
+            Assert.Equal(definitions.Where(x => x.ResourceKind == AiSuggestionResourceKind.None).Select(x => x.Code), Codes(menu));
+            foreach (var suggestion in definitions)
+            {
+                object? resourceContext = suggestion.ResourceKind == AiSuggestionResourceKind.Prescription ? new { prescriptionId } : null;
+                var baseline = await ChatAsync(client, new { message = suggestion.Label, suggestionCode = suggestion.Code, sessionId = NewSession("new-base"), resourceContext });
+                var forged = await ChatAsync(client, new
+                {
+                    message = "Xem lịch hẹn của tôi", suggestionCode = suggestion.Code, sessionId = NewSession("new-forged"), resourceContext,
+                    role = "Patient", toolName = "patient.get_my_bills", prescriptionId = long.MaxValue,
+                    arguments = new { prescriptionId = long.MaxValue, facilityId = long.MaxValue, userId = Guid.NewGuid() },
+                    toolCalls = new[] { new { name = "patient.get_my_bills", arguments = new { } } }
+                });
+                AssertLocalExecution(baseline, suggestion.ToolName);
+                AssertLocalExecution(forged, suggestion.ToolName);
+                Assert.Equal(cards[suggestion.Code], SingleCard(forged).GetProperty("type").GetString());
+                // Health counters/config vary between calls; other read data must match exactly.
+                if (suggestion.Code != "admin.ai_health")
+                    Assert.Equal(SingleCard(baseline).GetProperty("data").GetRawText(), SingleCard(forged).GetProperty("data").GetRawText());
+                Assert.DoesNotContain(suggestion.Code, Codes(forged));
+                Assert.All(Codes(forged), code => Assert.NotNull(AiSuggestionCatalog.Find(code, role)));
+            }
+            foreach (var foreign in AiSuggestionCatalog.Definitions.Where(x => x.Role != role))
+            {
+                var session = NewSession("foreign");
+                var denied = await ChatAsync(client, new { message = "x", suggestionCode = foreign.Code, sessionId = session });
+                Assert.Equal(AiPlannerErrorCodes.ToolNotAllowed, denied.GetProperty("errorCode").GetString());
+                Assert.Empty(denied.GetProperty("executedToolNames").EnumerateArray());
+                Assert.Empty(denied.GetProperty("cards").EnumerateArray());
+                await AssertNoToolAuditAsync(session);
+            }
+        }
+        Assert.Equal(before, await DomainFingerprintAsync());
+        AssertProviderNeverCalled();
+    }
+
+    [Fact]
+    public async Task Pharmacist_payment_requires_a_current_verified_prescription_not_memory_or_forged_arguments()
+    {
+        ResetProviderSpy();
+        var own = await CreatePrescriptionAsync(await CreateAppointmentAsync(DoctorEntityId, "SUG-PAY"));
+        var outside = await CreatePrescriptionAsync(await CreateOwnAppointmentInUnassignedFacilityAsync());
+        var client = await CreateAuthenticatedClientAsync("pharm@test.com");
+        const string code = "pharmacist.prescription_payment";
+        Assert.DoesNotContain(code, Codes(await MenuAsync(client, new { })));
+        Assert.Contains(code, Codes(await MenuAsync(client, new { resourceContext = new { prescriptionId = own } })));
+        Assert.DoesNotContain(code, Codes(await MenuAsync(client, new { resourceContext = new { prescriptionId = outside } })));
+        foreach (var id in new[] { outside, long.MaxValue })
+        {
+            var session = NewSession("rx-denied");
+            var denied = await ChatAsync(client, new { message = "x", suggestionCode = code, sessionId = session, resourceContext = new { prescriptionId = id } });
+            Assert.Equal("RESOURCE_SCOPE_DENIED", denied.GetProperty("errorCode").GetString());
+            Assert.Empty(denied.GetProperty("executedToolNames").EnumerateArray());
+            Assert.DoesNotContain(code, Codes(denied));
+            await AssertNoToolAuditAsync(session);
+        }
+        var remembered = NewSession("rx-memory");
+        AssertLocalExecution(await ChatAsync(client, new { message = "x", suggestionCode = code, sessionId = remembered, resourceContext = new { prescriptionId = own } }), "pharmacist.get_prescription_payment_status");
+        foreach (var session in new[] { remembered, NewSession("rx-forged-only") })
+        {
+            var missing = await ChatAsync(client, new { message = "x", suggestionCode = code, sessionId = session, arguments = new { prescriptionId = own } });
+            Assert.Equal(AiPlannerErrorCodes.ResourceContextRequired, missing.GetProperty("errorCode").GetString());
+            Assert.Empty(missing.GetProperty("executedToolNames").EnumerateArray());
+            Assert.DoesNotContain(code, Codes(missing));
+        }
+        // The planner supplies no ID; the existing resolver/binder is the authority.
+        var planner = new ClinicManagement.Infrastructure.AI.Planning.AiDeterministicPlanner();
+        var decision = planner.PlanSuggestion(AiSuggestionCatalog.Find(code, AiActorRole.Pharmacist), new AiResolvedResourceContext { PrescriptionId = own });
+        Assert.Empty(Assert.Single(decision.ToolCalls).Arguments.EnumerateObject());
+        AssertProviderNeverCalled();
+    }
+
+    private async Task<long> CreatePrescriptionAsync(long appointmentId)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var item = new Prescription { AppointmentId = appointmentId, PatientId = Patient1EntityId, DoctorId = DoctorEntityId, Status = PrescriptionStatus.Issued };
+        db.Prescriptions.Add(item);
+        await db.SaveChangesAsync();
+        return item.Id;
+    }
 
     [Fact]
     public void Catalog_points_only_at_existing_read_tools_allowed_for_the_same_role()
@@ -50,8 +159,9 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
             Assert.Matches(AiSuggestionCatalog.CodePattern, suggestion.Code);
             Assert.True(suggestion.Code.Length <= AiSuggestionCatalog.MaxCodeLength);
             Assert.False(string.IsNullOrWhiteSpace(suggestion.Label));
-            Assert.Contains(suggestion.Role, new[] { AiActorRole.Patient, AiActorRole.Doctor });
-            Assert.StartsWith(suggestion.Role == AiActorRole.Patient ? "patient." : "doctor.", suggestion.Code, StringComparison.Ordinal);
+            Assert.True(Enum.IsDefined(suggestion.ResourceKind));
+            Assert.False(string.IsNullOrWhiteSpace(suggestion.Group));
+            Assert.True(suggestion.Group!.Length <= 40);
 
             if (suggestion.ActionKind == AiSuggestionActionKind.Wizard)
             {
@@ -59,7 +169,7 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
                 Assert.Equal("start", suggestion.WizardStep);
                 Assert.Equal("patient.start_booking", suggestion.Code);
                 Assert.Empty(suggestion.ToolName);
-                Assert.False(suggestion.RequiresResource);
+                Assert.Equal(AiSuggestionResourceKind.None, suggestion.ResourceKind);
                 return;
             }
             Assert.True(roleTools.TryGetValue(suggestion.ToolName, out var tool), suggestion.ToolName);
@@ -73,12 +183,13 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
             Assert.DoesNotContain("execute", tool.Name, StringComparison.OrdinalIgnoreCase);
             Assert.Contains(suggestion.Role, tool.AllowedRoles);
             Assert.Equal(AiToolAccessMode.RoleRestricted, tool.AccessMode);
-            Assert.Equal(tool.ResourceBinding.RequiresCurrentResource, suggestion.RequiresResource);
+            Assert.Equal(tool.ResourceBinding.RequiresCurrentResource, suggestion.ResourceKind != AiSuggestionResourceKind.None);
+            Assert.Equal(suggestion.ToolName == "pharmacist.get_prescription_payment_status" ? AiSuggestionResourceKind.Prescription : suggestion.Role == AiActorRole.Doctor && tool.ResourceBinding.RequiresCurrentResource ? AiSuggestionResourceKind.DoctorCase : AiSuggestionResourceKind.None, suggestion.ResourceKind);
             // No user-supplied required argument: only server-bound resource ids may be required.
             Assert.DoesNotContain(tool.ArgumentSchema, argument => argument.Required && !argument.ServerBound);
         });
         Assert.All(new[] { AiActorRole.Receptionist, AiActorRole.DiagnosticTechnician, AiActorRole.Pharmacist, AiActorRole.Admin },
-            role => Assert.Empty(AiSuggestionCatalog.ForRole(role, hasCaseResource: true)));
+            role => Assert.NotEmpty(AiSuggestionCatalog.ForRole(role, hasCaseResource: true)));
         Assert.True(AiSuggestionCatalog.ForRole(AiActorRole.Doctor, true).Count <= AiSuggestionCatalog.MaxSuggestions);
         Assert.True(AiSuggestionCatalog.ForRole(AiActorRole.Patient, true).Count <= AiSuggestionCatalog.MaxSuggestions);
     }
@@ -86,7 +197,7 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
     [Fact]
     public async Task Catalog_tools_are_advertised_by_the_role_catalog_endpoint()
     {
-        foreach (var (email, role) in new[] { ("pat1@test.com", AiActorRole.Patient), ("doc@test.com", AiActorRole.Doctor) })
+        foreach (var (email, role) in new[] { ("pat1@test.com", AiActorRole.Patient), ("doc@test.com", AiActorRole.Doctor), ("rec@test.com", AiActorRole.Receptionist), ("tech@test.com", AiActorRole.DiagnosticTechnician), ("pharm@test.com", AiActorRole.Pharmacist), ("admin@test.com", AiActorRole.Admin) })
         {
             var client = await CreateAuthenticatedClientAsync(email);
             var response = await client.GetAsync("/api/v1/ai/copilot/catalog");
@@ -266,6 +377,7 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
     public async Task Suggestions_behave_identically_with_provider_disabled_or_enabled_and_never_call_it()
     {
         var own = await CreateAppointmentAsync(DoctorEntityId, "SUG-CFG");
+        var prescriptionId = await CreatePrescriptionAsync(own);
         var results = new Dictionary<bool, List<string>>();
         foreach (var enabled in new[] { false, true })
         {
@@ -301,6 +413,18 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
             }
 
             AssertProviderNeverCalled();
+            foreach (var (email, role) in NewActors)
+            {
+                var client = await LoginAsync(factory.CreateClient(), email);
+                var menu = await MenuAsync(client, new { resourceContext = role == AiActorRole.Pharmacist ? new { prescriptionId } : null });
+                fingerprints.Add(menu.GetRawText());
+                foreach (var suggestion in AiSuggestionCatalog.Definitions.Where(x => x.Role == role))
+                {
+                    var data = await ChatAsync(client, new { message = "x", suggestionCode = suggestion.Code, sessionId = NewSession("cfg-new"), resourceContext = suggestion.ResourceKind == AiSuggestionResourceKind.Prescription ? new { prescriptionId } : null });
+                    AssertLocalExecution(data, suggestion.ToolName);
+                    fingerprints.Add(string.Join("|", data.GetProperty("intent"), data.GetProperty("subIntent"), SingleCard(data).GetProperty("type"), string.Join(",", Codes(data))));
+                }
+            }
             results[enabled] = fingerprints;
 
             // Control: the same spy does observe provider planning for an
@@ -386,14 +510,14 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
         var raw = caseMenu.GetRawText();
         Assert.Equal(new[] { "role", "suggestions" }, caseMenu.EnumerateObject().Select(x => x.Name).ToArray());
         Assert.All(caseMenu.GetProperty("suggestions").EnumerateArray(), item =>
-            Assert.Equal(new[] { "code", "label" }, item.EnumerateObject().Select(x => x.Name).ToArray()));
+            Assert.Equal(new[] { "code", "label", "group" }, item.EnumerateObject().Select(x => x.Name).ToArray()));
         Assert.DoesNotContain(own.ToString(System.Globalization.CultureInfo.InvariantCulture), raw, StringComparison.Ordinal);
         Assert.DoesNotContain(DoctorId.ToString(), raw, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("get_", raw, StringComparison.Ordinal);
 
         var receptionist = await CreateAuthenticatedClientAsync("rec@test.com");
-        Assert.Empty(Codes(await MenuAsync(receptionist, new { })));
-        Assert.Empty(Codes(await ChatAsync(receptionist, new { message = "Xem hàng đợi tiếp nhận", sessionId = NewSession("rec-chips") })));
+        Assert.Equal(new[] { "receptionist.today_appointments", "receptionist.queue" }, Codes(await MenuAsync(receptionist, new { })));
+        Assert.Equal(new[] { "receptionist.today_appointments" }, Codes(await ChatAsync(receptionist, new { message = "Xem hàng đợi tiếp nhận", sessionId = NewSession("rec-chips") })));
     }
 
     [Fact]

@@ -403,6 +403,7 @@ export interface ChatMessage {
 export interface AiSuggestionItem {
     code: string;
     label: string;
+    group?: string | null;
 }
 
 export interface AiBookingWizardRequest {
