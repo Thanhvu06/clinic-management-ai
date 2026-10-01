@@ -660,7 +660,7 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
         Assert.True(foreignFactory.Services.GetRequiredService<IConfiguration>().GetValue<bool>("AiProvider:IsEnabled"));
         var foreignEmail = role switch
         {
-            AiActorRole.Doctor => "pat1@test.com",
+            AiActorRole.Doctor => "tech@test.com",
             AiActorRole.Pharmacist => "rec@test.com",
             AiActorRole.Admin => "tech@test.com",
             _ => "admin@test.com"
@@ -679,6 +679,36 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
             Assert.Equal(0, data.GetProperty("providerAttemptCount").GetInt32());
             await AssertNoToolAuditAsync(session);
         }
+        AssertProviderNeverCalled();
+    }
+
+    [Theory]
+    [InlineData("rec@test.com", AiActorRole.Receptionist, "hàng đợi", "reception.get_queue", "doctor.get_my_queue")]
+    [InlineData("rec@test.com", AiActorRole.Receptionist, "danh sách phiếu đang chờ", "reception.get_queue", "technician.get_worklist")]
+    [InlineData("doc@test.com", AiActorRole.Doctor, "danh sách chờ tiếp nhận", "doctor.get_my_queue", "reception.get_queue")]
+    [InlineData("doc@test.com", AiActorRole.Doctor, "xem hàng đợi lễ tân", "doctor.get_my_queue", "reception.get_queue")]
+    [InlineData("pharm@test.com", AiActorRole.Pharmacist, "xem đơn thuốc của tôi", "pharmacist.get_prescription_queue", "patient.get_my_prescriptions")]
+    [InlineData("pharm@test.com", AiActorRole.Pharmacist, "đơn thuốc của ca đang mở", "pharmacist.get_prescription_queue", "doctor.get_prescription_status")]
+    [InlineData("pat1@test.com", AiActorRole.Patient, "đơn thuốc của ca đang mở", "patient.get_my_prescriptions", "doctor.get_prescription_status")]
+    [InlineData("pat1@test.com", AiActorRole.Patient, "xem trạng thái toa thuốc của ca", "patient.get_my_prescriptions", "doctor.get_prescription_status")]
+    [InlineData("pat1@test.com", AiActorRole.Patient, "các lịch hẹn trong ngày", "patient.get_my_appointments", "reception.get_today_appointments")]
+    [InlineData("pat1@test.com", AiActorRole.Patient, "đơn đang mở đã thanh toán chưa", "patient.get_my_bills", "pharmacist.get_prescription_payment_status")]
+    [InlineData("pat1@test.com", AiActorRole.Patient, "đối chiếu thanh toán toa hiện tại", "patient.get_my_bills", "pharmacist.get_prescription_payment_status")]
+    public async Task Foreign_alias_with_a_valid_local_role_read_uses_only_that_roles_tool(string email, AiActorRole role, string phrase, string expectedTool, string aliasOwnerTool)
+    {
+        using var factory = CreateProviderConfiguredFactory(true);
+        ResetProviderSpy();
+        Assert.True(factory.Services.GetRequiredService<IConfiguration>().GetValue<bool>("AiProvider:IsEnabled"));
+        var client = await LoginAsync(factory.CreateClient(), email);
+        var before = await DomainFingerprintAsync();
+        foreach (var message in new[] { phrase, ClinicManagement.Application.AI.Conversation.AiTextNormalizer.NormalizeForComparison(phrase).ToUpperInvariant() + "?" })
+        {
+            var data = await ChatAsync(client, new { message, sessionId = NewSession("alias-role-read") });
+            Assert.Equal(role.ToString(), data.GetProperty("role").GetString());
+            AssertLocalExecution(data, expectedTool);
+            Assert.DoesNotContain(aliasOwnerTool, data.GetProperty("executedToolNames").EnumerateArray().Select(item => item.GetString()));
+        }
+        Assert.Equal(before, await DomainFingerprintAsync());
         AssertProviderNeverCalled();
     }
 
