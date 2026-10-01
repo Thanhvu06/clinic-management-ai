@@ -53,6 +53,9 @@ describe('patient button booking wizard', () => {
         fireEvent.change(reason, { target: { value: 'Khám tổng quát' } });
         fireEvent.click(within(wizard()).getByRole('button', { name: 'Xem lại thông tin khám' }));
         await screen.findByText('Tóm tắt thông tin đặt lịch');
+        expect(wizard().querySelectorAll('[data-completed-step]')).toHaveLength(5);
+        expect(within(wizard()).getByText('Chuyên khoa: Khoa tổng hợp ✓')).toBeInTheDocument();
+        expect(within(wizard()).getByText('Bác sĩ: Bác sĩ kiểm thử ✓')).toBeInTheDocument();
         expect(document.body.innerHTML).not.toMatch(/981001|981002|981003|encrypted-|conf-opaque|snap-opaque/);
         const calls = post.mock.calls.slice(0, 6).map(call => call[1] as AiBookingWizardRequest);
         expect(calls.map(call => call.step)).toEqual(['start', 'pick', 'pick', 'pick', 'pick', 'reason']);

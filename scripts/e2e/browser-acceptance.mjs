@@ -161,7 +161,7 @@ async function sendStaff(page, actor) {
         throw new Error(`${actor.name} assistant did not render a verified result; current=${page.url()}; body=${body}; cause=${error.message}`);
     }
     const body = await page.locator('body').innerText();
-    assert.match(body, /ClinicCare domain database|clinic_public_catalog/, `${actor.name} must show a verified source`);
+    assert.match(body, /Dữ liệu phòng khám|Danh mục phòng khám/, `${actor.name} must show a verified source`);
     assert.doesNotMatch(body, /CANARY-APT-002|Synthetic Patient B|CANARY-BETA/i, `${actor.name} must stay within facility A synthetic scope`);
     assert.equal(await page.getByLabel('Công cụ được phép').count(), 0, 'technical tool tray is removed');
     assert.ok(!body.includes(actor.tool), 'raw tool name must not be visible');
@@ -575,7 +575,7 @@ async function runLocalSuggestionAndWizardAcceptance(browser) {
                 console.log(`Local browser acceptance PASS: ${scenario}`);
             } catch (error) {
                 // Do not print payloads, identifiers, tokens or DOM dumps on failure.
-                const location = error.stack?.match(/browser-acceptance\.mjs:(\d+):\d+/)?.[1];
+                const location = error.stack?.match(/(?:browser-acceptance|review-ui)\.mjs:(\d+):\d+/)?.[1];
                 results.push({ scenario, status: 'FAIL', evidence: error instanceof assert.AssertionError ? error.message.split('\n')[0] : `${error.name ?? 'Browser error'} at acceptance script line ${location ?? 'unknown'}; no payload/DOM recorded` });
                 console.log(`Local browser acceptance FAIL: ${scenario}; ${results.at(-1).evidence}`);
             } finally {
@@ -586,6 +586,190 @@ async function runLocalSuggestionAndWizardAcceptance(browser) {
         db.close();
         stop(host);
     }
+}
+
+
+const screenshotsRoot = join(repoRoot, 'TestResults', 'ui-screenshots');
+
+async function assertChatLayout(dialog, mobile, stepNumber) {
+    const metrics = await dialog.evaluate((root, narrow) => {
+        const visible = element => { const box = element.getBoundingClientRect(); return box.width > 0 && box.height > 0; };
+        const nodes = [...root.querySelectorAll('*')];
+        const nestedScroll = nodes.filter(element => element.closest('[data-chat-bubble], [data-wizard-step], article') && /auto|scroll/.test(getComputedStyle(element).overflowX + getComputedStyle(element).overflowY)).length;
+        const verticalScrollers = nodes.filter(element => visible(element) && /auto|scroll/.test(getComputedStyle(element).overflowY)).length;
+        const strips = nodes.filter(element => element.hasAttribute('data-suggestion-strip'));
+        const buttons = nodes.filter(element => element.matches('button, a[href="tel:115"]') && visible(element));
+        const rgb = value => { const parts = value.match(/[\d.]+/g)?.map(Number) ?? [255, 255, 255]; return [parts[0], parts[1], parts[2], parts[3] ?? 1]; };
+        const background = element => {
+            if (!element) return [255, 255, 255];
+            const [r, g, b, alpha] = rgb(getComputedStyle(element).backgroundColor);
+            if (alpha >= 1) return [r, g, b];
+            const behind = background(element.parentElement);
+            return [r, g, b].map((channel, index) => channel * alpha + behind[index] * (1 - alpha));
+        };
+        const luminance = channels => channels.slice(0, 3).map(channel => channel / 255).map(channel => channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4).reduce((sum, channel, index) => sum + channel * [.2126, .7152, .0722][index], 0);
+        const contrast = element => { const foreground = luminance(rgb(getComputedStyle(element).color)); const behind = luminance(background(element)); return (Math.max(foreground, behind) + .05) / (Math.min(foreground, behind) + .05); };
+        const status = root.querySelector('[data-provider-status]');
+        const slotGrid = root.querySelector('[data-wizard-step="slot"] [class*="slotGrid"]');
+        const wizard = root.querySelector('[data-wizard-step]');
+        const messages = root.querySelector('[data-chat-messages]');
+        return {
+            nestedScroll, verticalScrollers, stripCount: strips.length,
+            stripsInComposer: strips.every(element => element.closest('[data-chat-composer]')),
+            stripHeight: strips.filter(element => !element.className.includes('grid')).every(element => element.clientHeight <= 96),
+            minimumButtonContrast: Math.min(...buttons.map(contrast)),
+            buttonsMeetTarget: buttons.every(element => element.getBoundingClientRect().height >= (narrow ? 44 : 40) - .1),
+            noOverflow: root.scrollWidth <= root.clientWidth,
+            withinViewport: root.getBoundingClientRect().top >= -1 && root.getBoundingClientRect().bottom <= window.innerHeight + 1,
+            wizardCount: root.querySelectorAll('[data-wizard-step]').length,
+            summaries: root.querySelectorAll('[data-completed-step]').length,
+            progress: wizard?.querySelector('[aria-label^="Bước"]')?.getAttribute('aria-label'),
+            slotColumns: slotGrid ? getComputedStyle(slotGrid).gridTemplateColumns.split(' ').length : null,
+            cardTopVisible: !wizard || wizard.getBoundingClientRect().top >= messages.getBoundingClientRect().top - 1,
+            statusLocal: status?.textContent.trim() === 'Chế độ nội bộ' && status?.dataset.tone === 'local',
+            technicalText: /(?:doctor|patient|reception|technician|pharmacist|admin)\.get_|PROVIDER_[A-Z_]+|RESOURCE_SCOPE_DENIED|Deterministic|RequiresProvider|NotCalled|Disabled/.test(root.innerText)
+        };
+    }, mobile);
+    assert.equal(metrics.nestedScroll, 0, 'no scrolling descendants in bubbles/cards');
+    assert.equal(metrics.verticalScrollers, 1, 'messages must be the only vertical scroller');
+    assert.equal(metrics.stripCount, 1, 'exactly one suggestion strip');
+    assert.ok(metrics.stripsInComposer, 'suggestions belong to the composer');
+    assert.ok(metrics.stripHeight, 'compact suggestions stay within 96 pixels');
+    assert.ok(metrics.buttonsMeetTarget, 'every visible button meets the desktop/mobile height target');
+    assert.ok(metrics.minimumButtonContrast >= 4.5, 'every visible button has at least 4.5:1 text contrast');
+    assert.ok(metrics.noOverflow, 'chat panel has no horizontal overflow');
+    assert.ok(metrics.withinViewport, 'header and composer stay inside the viewport');
+    assert.ok(metrics.statusLocal, 'disabled provider uses the neutral local label');
+    assert.equal(metrics.technicalText, false, 'normal UI must hide raw technical values');
+    if (stepNumber) {
+        assert.equal(metrics.wizardCount, 1, 'exactly one active wizard');
+        assert.ok(metrics.progress?.startsWith('Bước ' + stepNumber + '/6'), 'wizard progress reflects the active step');
+        assert.equal(metrics.summaries, stepNumber - 1, 'previous steps are collapsed summary lines');
+        assert.ok(metrics.cardTopVisible, 'new step starts at the top of the message viewport');
+        if (stepNumber === 4) assert.equal(metrics.slotColumns, 3, 'hours use three columns');
+    }
+    return metrics;
+}
+
+async function runVisualAcceptance(browser) {
+    // Capture only to a path Git already ignores; never modify repository ignore rules.
+    const ignored = spawnSync('git', ['check-ignore', '--quiet', 'TestResults/ui-screenshots/probe.png'], { cwd: repoRoot, windowsHide: true });
+    assert.equal(ignored.status, 0, 'screenshots must be ignored before capture');
+    mkdirSync(screenshotsRoot, { recursive: true });
+    const host = await startHost('disabled', true);
+    try {
+        for (const [name, viewport] of [['desktop', { width: 1280, height: 800 }], ['mobile', { width: 390, height: 844 }]]) {
+            const mobile = name === 'mobile';
+            const context = await browser.newContext({ viewport });
+            const page = await context.newPage();
+            let captured = 0;
+            let minimumContrast = Infinity;
+            const capture = async (dialog, label, step) => {
+                await dialog.locator('[data-suggestion-strip]').waitFor({ state: 'visible' });
+                await dialog.locator('[data-suggestion-strip][aria-busy="true"]').waitFor({ state: 'hidden' });
+                await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+                await page.screenshot({ path: join(screenshotsRoot, name + '-' + label + '.png'), animations: 'disabled' });
+                minimumContrast = Math.min(minimumContrast, (await assertChatLayout(dialog, mobile, step)).minimumButtonContrast);
+                captured++;
+            };
+            try {
+                await login(page, { ...actorCases[0], route: '/patient' });
+                await page.getByRole('button', { name: 'Mở Trợ lý ClinicCare AI' }).click();
+                let dialog = page.getByRole('dialog', { name: /ClinicCare AI/i });
+                await capture(dialog, 'patient-empty');
+                await clickCopilotSuggestion(page, dialog, 'Lịch hẹn của tôi', 'patient.my_appointments', 'patient.get_my_appointments', 'appointments');
+                await capture(dialog, 'patient-appointments');
+                await dialog.getByRole('textbox').fill('Lịch hẹn của mình');
+                const aliasResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/ai/copilot/chat') && response.request().method() === 'POST');
+                await dialog.getByRole('button', { name: 'Gửi tin nhắn' }).click();
+                const aliasData = (await (await aliasResponse).json()).data;
+                assertLocalResponse(aliasData);
+                assert.deepEqual(aliasData.executedToolNames, ['patient.get_my_appointments'], 'typed patient alias must use the same real authorized read');
+                await dialog.locator('[data-suggestion-strip][aria-busy="true"]').waitFor({ state: 'hidden' });
+                const wizard = dialog.getByRole('region', { name: 'Đặt lịch khám từng bước' });
+                const clickStep = async (button, expected) => {
+                    const pending = page.waitForResponse(response => response.url().endsWith('/api/v1/ai/booking-wizard') && response.request().method() === 'POST');
+                    await button.click();
+                    const response = await pending;
+                    assert.equal(response.status(), 200);
+                    const state = (await response.json()).data;
+                    assert.equal(state.step, expected);
+                    assert.equal(state.providerWasCalled, false);
+                    await wizard.getByRole('heading', { name: state.title, exact: true }).waitFor({ state: 'visible' });
+                    await assertNoRawWizardValues(dialog, state);
+                    return state;
+                };
+                let state = await clickStep(dialog.getByRole('button', { name: 'Gợi ý: Đặt lịch khám', exact: true }), 'specialty');
+                await capture(dialog, 'patient-wizard-specialty', 1);
+                for (const [step, number] of [['doctor', 2], ['day', 3], ['slot', 4], ['reason', 5]]) {
+                    state = await clickStep(wizard.getByRole('button', { name: state.options[0].label, exact: true }), step);
+                    await capture(dialog, 'patient-wizard-' + step, number);
+                    if (step === 'reason') {
+                        await wizard.getByRole('button', { name: 'Bắt đầu lại đặt lịch', exact: true }).scrollIntoViewIfNeeded();
+                        await capture(dialog, 'patient-wizard-reason-input');
+                    }
+                }
+                // Preset reason uses the real existing tokenized step, without any writes.
+                state = await clickStep(wizard.getByRole('button', { name: 'Khám tổng quát', exact: true }), 'review');
+                await capture(dialog, 'patient-wizard-review', 6);
+                await dialog.getByRole('button', { name: 'Bắt đầu lại đặt lịch', exact: true }).scrollIntoViewIfNeeded();
+                await capture(dialog, 'patient-wizard-review-summary');
+                await dialog.getByRole('button', { name: 'Làm mới cuộc trò chuyện' }).click();
+                await dialog.getByRole('textbox').fill('tôi có quyền hạn gì');
+                const help = page.waitForResponse(response => response.url().endsWith('/api/v1/ai/copilot/chat') && response.request().method() === 'POST');
+                await dialog.getByRole('button', { name: 'Gửi tin nhắn' }).click();
+                const helpData = (await (await help).json()).data;
+                assertLocalResponse(helpData);
+                assert.equal(helpData.intent, 'Help');
+                assert.equal(helpData.executedToolNames.length, 0);
+                await dialog.getByText('Bạn chọn một gợi ý bên dưới nhé.', { exact: false }).waitFor({ state: 'visible' });
+                await capture(dialog, 'patient-help');
+                await context.close();
+                const staffContext = await browser.newContext({ viewport });
+                const staffPage = await staffContext.newPage();
+                try {
+                    await login(staffPage, actorCases[2]);
+                    await staffPage.getByRole('button', { name: 'Mở Copilot Bác sĩ' }).click();
+                    dialog = staffPage.getByRole('dialog', { name: 'Copilot Bác sĩ', exact: true });
+                    // The capture function below uses this staff page, with the same DOM assertions.
+                    const staffCapture = async label => {
+                        await dialog.locator('[data-suggestion-strip]').waitFor({ state: 'visible' });
+                        await dialog.locator('[data-suggestion-strip][aria-busy="true"]').waitFor({ state: 'hidden' });
+                        await staffPage.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+                        await staffPage.screenshot({ path: join(screenshotsRoot, name + '-' + label + '.png'), animations: 'disabled' });
+                        minimumContrast = Math.min(minimumContrast, (await assertChatLayout(dialog, mobile)).minimumButtonContrast);
+                        captured++;
+                    };
+                    await staffCapture('doctor-empty');
+                    await clickCopilotSuggestion(staffPage, dialog, 'Hôm nay tôi khám ai?', 'doctor.my_queue', 'doctor.get_my_queue', 'doctor_queue');
+                    await staffCapture('doctor-queue');
+                    await dialog.locator('summary').filter({ hasText: 'Thao tác có xác nhận' }).click();
+                    await dialog.locator('details[open]').waitFor({ state: 'visible' });
+                    await dialog.getByRole('button', { name: 'Xem trước' }).first().waitFor({ state: 'visible' });
+                    await dialog.getByRole('button', { name: 'Xem trước' }).last().scrollIntoViewIfNeeded();
+                    await staffCapture('doctor-actions-open');
+                    const receptionContext = await browser.newContext({ viewport });
+                    try {
+                        const receptionPage = await receptionContext.newPage();
+                        await login(receptionPage, actorCases[1]);
+                        await receptionPage.getByRole('button', { name: 'Mở Copilot Lễ tân' }).click();
+                        const receptionDialog = receptionPage.getByRole('dialog', { name: 'Copilot Lễ tân', exact: true });
+                        await receptionDialog.locator('[data-suggestion-strip]').waitFor({ state: 'visible' });
+                        minimumContrast = Math.min(minimumContrast, (await assertChatLayout(receptionDialog, mobile)).minimumButtonContrast);
+                        await receptionPage.screenshot({ path: join(screenshotsRoot, name + '-receptionist-empty.png'), animations: 'disabled' });
+                        captured++;
+                    } finally { await receptionContext.close(); }
+                } finally { await staffContext.close(); }
+                assert.equal(captured, 15, 'all requested visual states and reason/review detail views must be captured');
+                results.push({ scenario: name + ' visual layout', status: 'PASS', minimumButtonContrast: Number(minimumContrast.toFixed(4)), evidence: '15 ignored screenshots; real local help/read/wizard flows; single scroller/composer strip, target heights, no overflow, progress/summary/time grid, neutral status, technical values hidden' });
+                console.log('Visual browser acceptance PASS: ' + name);
+            } catch (error) {
+                const line = error.stack?.match(/browser-acceptance\.mjs:(\d+):\d+/)?.[1];
+                results.push({ scenario: name + ' visual layout', status: 'FAIL', evidence: error instanceof assert.AssertionError ? error.message.split('\n')[0] : (error.name ?? 'Browser error') + ' at line ' + (line ?? 'unknown') + '; no payload/DOM recorded' });
+                console.log('Visual browser acceptance FAIL: ' + name + '; ' + results.at(-1).evidence);
+            } finally { await context.close(); }
+        }
+    } finally { stop(host); }
 }
 
 async function main() {
@@ -601,12 +785,13 @@ async function main() {
 
     const browser = await chromium.launch({ headless: true });
     try {
+        await runVisualAcceptance(browser);
         await runLocalSuggestionAndWizardAcceptance(browser);
         for (let runNumber = 1; runNumber <= 3; runNumber++) await runOnlineActors(browser, runNumber);
-        await runProviderMode(browser, 'recover', 'Gemini đã phản hồi', true);
-        await runProviderMode(browser, 'server-error', 'Đang dùng chế độ dự phòng');
-        await runProviderMode(browser, 'rate-limited', 'Đang dùng chế độ dự phòng');
-        await runProviderMode(browser, 'disabled', 'AI bị tắt cấu hình; đang dùng hỗ trợ cơ bản');
+        await runProviderMode(browser, 'recover', 'Trực tuyến', true);
+        await runProviderMode(browser, 'server-error', 'Đang dùng chế độ nội bộ');
+        await runProviderMode(browser, 'rate-limited', 'Đang dùng chế độ nội bộ');
+        await runProviderMode(browser, 'disabled', 'Chế độ nội bộ');
         await runCancellation(browser);
         await runRouteIsolation(browser);
         await runPendingActionCancellation(browser);

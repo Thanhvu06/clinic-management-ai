@@ -337,7 +337,7 @@ export interface AiChatResponse {
     manualSelectionRequired: boolean;
     assistantStatus?: "Unchecked" | "Online" | "Degraded" | "Offline";
     providerStatus?: string;
-    providerState?: "NotCalled" | "Online" | "Degraded" | "Unavailable" | "Disabled" | "SafetyBlocked";
+    providerState?: "NotCalled" | "Online" | "Degraded" | "Unavailable" | "Disabled" | "NotConfigured" | "SafetyBlocked";
     providerFailureCode?: string;
     executionMode?: "ProviderAssisted" | "DeterministicFallback" | "ManualHandoff" | string;
     fallbackActive?: boolean;
@@ -379,7 +379,7 @@ export interface ChatMessage {
     bookingDraft?: AiBookingDraft;
     missingFields?: string[];
     assistantStatus?: "Unchecked" | "Online" | "Degraded" | "Offline";
-    providerState?: "NotCalled" | "Online" | "Degraded" | "Unavailable" | "Disabled" | "SafetyBlocked";
+    providerState?: "NotCalled" | "Online" | "Degraded" | "Unavailable" | "Disabled" | "NotConfigured" | "SafetyBlocked";
     providerFailureCode?: string;
     executionMode?: "ProviderAssisted" | "DeterministicFallback" | "ManualHandoff" | string;
     fallbackActive?: boolean;

@@ -65,6 +65,25 @@ const deferred = <T,>() => {
 const menuGroup = (name: string) => screen.findByRole('group', { name });
 
 describe('Role suggestion buttons', () => {
+    it.each([[false, 'TÔI CÓ QUYỀN HẠN GÌ?', 'Help'], [true, 'TÔI CÓ QUYỀN HẠN GÌ?', 'Help'], [false, 'Lịch hẹn của mình', 'ViewAppointments'], [true, 'Lịch hẹn của mình', 'ViewAppointments']] as const)('routes patient help/read aliases through the existing read-only endpoint (widget=%s, text=%s)', async (widget, text, intent) => {
+        mockUser = { userId: 'synthetic-patient', fullName: 'Synthetic', role: 'Patient' };
+        menuMock.mockResolvedValue({ role: 'Patient', suggestions: PATIENT_MENU });
+        sendMock.mockResolvedValueOnce(copilotResponse({ role: 'Patient', intent, message: 'Bạn chọn một gợi ý bên dưới nhé.', suggestions: PATIENT_MENU, cards: [] }));
+        render(<MemoryRouter><ChatProvider>{widget ? <MedicalChatWidget /> : <PatientAiConsultation />}</ChatProvider></MemoryRouter>);
+        if (widget) fireEvent.click(screen.getByRole('button', { name: 'Mở Trợ lý ClinicCare AI' }));
+        await menuGroup('Tra cứu nhanh dữ liệu của bạn');
+        fireEvent.change(screen.getByRole('textbox'), { target: { value: text } });
+        fireEvent.click(screen.getByRole('button', { name: 'Gửi tin nhắn' }));
+        await screen.findByText('Bạn chọn một gợi ý bên dưới nhé.');
+        expect(sendMock).toHaveBeenCalledTimes(1);
+        expect(sendMock.mock.calls[0][0]).toMatchObject({ message: text });
+        expect(sendMock.mock.calls[0][0]).toHaveProperty('suggestionCode', undefined);
+        const group = await menuGroup('Gợi ý tiếp theo');
+        expect(group.closest('[data-chat-composer]')).not.toBeNull();
+        expect(group.closest('[data-chat-bubble]')).toBeNull();
+        expect(screen.getAllByRole('group')).toHaveLength(1);
+    });
+
     beforeEach(() => {
         vi.unstubAllEnvs();
         sendMock.mockReset();
@@ -98,6 +117,7 @@ describe('Role suggestion buttons', () => {
         await screen.findByText('Câu trả lời thứ hai');
         expect(screen.getAllByRole('group')).toHaveLength(1);
         expect(screen.getByRole('group').parentElement).toHaveAttribute('aria-describedby', 'copilot-latest-reply');
+        expect(screen.getByRole('group').closest('[data-chat-composer]')).not.toBeNull();
         expect(document.getElementById('copilot-latest-reply')).toContainElement(screen.getByText('Câu trả lời thứ hai'));
         expect(screen.getByText('Câu trả lời thứ nhất').parentElement).not.toContainElement(screen.getByRole('group'));
         expect(screen.queryByLabelText('Công cụ được phép')).not.toBeInTheDocument();
@@ -118,7 +138,7 @@ describe('Role suggestion buttons', () => {
         expect(await screen.findByText('Bạn muốn tra cứu gì?')).toBeInTheDocument();
         expect(screen.getAllByText(/bạn muốn tra cứu gì\?/i)).toHaveLength(1);
         expect(screen.queryByText(/Mã xử lý|LOCAL_CLARIFICATION/)).not.toBeInTheDocument();
-        expect(screen.getByText('Đang chờ bạn làm rõ')).toHaveAttribute('title', 'Clarifying · Deterministic');
+        expect(screen.getByText('Chế độ nội bộ').closest('[data-provider-status]')).toHaveAttribute('title', 'Clarifying · Deterministic');
         expect(screen.queryByText('Clarifying · Deterministic')).not.toBeInTheDocument();
         expect(screen.getByText('Bạn có thể chọn một trong các gợi ý bên dưới.')).toBeInTheDocument();
         expect(within(await menuGroup('Gợi ý tiếp theo')).getAllByRole('button')).toHaveLength(1);
@@ -191,8 +211,8 @@ describe('Role suggestion buttons', () => {
         expect(within(menu).queryByText(/Lịch hẹn của tôi/)).not.toBeInTheDocument();
 
         fireEvent.click(within(menu).getByRole('button', { name: 'Gợi ý: Hôm nay tôi khám ai?' }));
-        await waitFor(() => expect(within(menu).getByRole('button', { name: 'Gợi ý: Hôm nay tôi khám ai?' })).toBeDisabled());
-        fireEvent.click(within(menu).getByRole('button', { name: 'Gợi ý: Hôm nay tôi khám ai?' }));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Gợi ý: Hôm nay tôi khám ai?' })).toBeDisabled());
+        fireEvent.click(screen.getByRole('button', { name: 'Gợi ý: Hôm nay tôi khám ai?' }));
         expect(sendMock).toHaveBeenCalledTimes(1);
 
         const request = sendMock.mock.calls[0][0] as Record<string, unknown>;

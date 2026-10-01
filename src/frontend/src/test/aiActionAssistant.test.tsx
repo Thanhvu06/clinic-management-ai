@@ -964,43 +964,24 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         expect(container.querySelector('img')).not.toBeInTheDocument();
     });
 
-    it('TC14: MedicalChatWidget displays dynamic status pill matching AI assistant status', async () => {
+    it('TC14: MedicalChatWidget presents the current response status and keeps local mode neutral', async () => {
         const StatusController = () => {
-            const { setAiAssistantStatus } = useChatContext();
-            return (
-                <div>
-                    <button onClick={() => setAiAssistantStatus("Online")}>Set Online</button>
-                    <button onClick={() => setAiAssistantStatus("Degraded")}>Set Degraded</button>
-                    <button onClick={() => setAiAssistantStatus("Offline")}>Set Offline</button>
-                </div>
-            );
+            const { setMessages } = useChatContext();
+            return <div>
+                <button onClick={() => setMessages([{ role: 'model', content: 'Đã trả lời.', providerState: 'Online' }])}>Set Online</button>
+                <button onClick={() => setMessages([{ role: 'model', content: 'Đã trả lời.', providerState: 'Degraded' }])}>Set Degraded</button>
+                <button onClick={() => setMessages([{ role: 'model', content: 'Không thể kết nối máy chủ lúc này.', assistantStatus: 'Offline' }])}>Set Offline</button>
+            </div>;
         };
-
-        render(
-            <MemoryRouter initialEntries={['/patient']}>
-                <ChatProvider>
-                    <MedicalChatWidget />
-                    <StatusController />
-                </ChatProvider>
-            </MemoryRouter>
-        );
-
+        render(<MemoryRouter initialEntries={['/patient']}><ChatProvider><MedicalChatWidget /><StatusController /></ChatProvider></MemoryRouter>);
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
-
-        // Default status is Unchecked ("Chưa kiểm tra AI") before Gemini is verified
-        expect(screen.getByText('Chưa kiểm tra AI')).toBeInTheDocument();
-
-        // Switch to Online ("Trực tuyến")
+        expect(screen.getByText('Chế độ nội bộ').closest('[data-provider-status]')).toHaveAttribute('data-tone', 'local');
         fireEvent.click(screen.getByText('Set Online'));
         expect(screen.getByText('Trực tuyến')).toBeInTheDocument();
-
-        // Switch to Degraded ("Chế độ rút gọn")
         fireEvent.click(screen.getByText('Set Degraded'));
-        expect(screen.getByText('Chế độ rút gọn')).toBeInTheDocument();
-
-        // Switch to Offline ("Ngoại tuyến")
+        expect(screen.getByText('Đang dùng chế độ nội bộ')).toBeInTheDocument();
         fireEvent.click(screen.getByText('Set Offline'));
-        expect(screen.getByText('Ngoại tuyến')).toBeInTheDocument();
+        expect(screen.getByText('Không thể kết nối. Vui lòng thử lại.').closest('[data-provider-status]')).toHaveAttribute('data-tone', 'error');
     });
 
     it('TC16: Clearing conversation clears messages and active draft from state and storage', async () => {
@@ -1367,15 +1348,14 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
             expect(screen.getByText(/Đã hủy bản nháp đặt lịch hiện tại/i)).toBeInTheDocument();
         });
 
-        // Clicking old SelectDoctor button after cancellation must be blocked
-        fireEvent.click(screen.getByText('Chọn BS Trần Văn B'));
-        await waitFor(() => {
-            expect(screen.getByText(/Bản nháp đặt lịch trước đó đã bị hủy/i)).toBeInTheDocument();
-        });
+        // Completed choice lists are collapsed: cancelled history cannot be selected.
+        expect(screen.queryByRole('button', { name: 'Chọn BS Trần Văn B' })).not.toBeInTheDocument();
+        expect(screen.getByText('Lựa chọn ở bước trước ✓')).toBeInTheDocument();
         expect(axiosClient.post).toHaveBeenCalledTimes(2);
+        expect(vi.mocked(axiosClient.post).mock.calls.filter(call => call[0] === '/appointments')).toHaveLength(0);
     });
 
-    it('Phase0_ProviderStatus_503Degraded_NotPromotedByNotCalled_UntilHealthy', async () => {
+    it('Phase0_ProviderStatus_CurrentTurn_LocalNeutral_AfterDegraded_UntilHealthy', async () => {
         vi.mocked(axiosClient.post)
             .mockResolvedValueOnce({
                 success: true,
@@ -1420,7 +1400,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         );
 
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
-        expect(screen.getByText('Chưa kiểm tra AI')).toBeInTheDocument();
+        expect(screen.getByText('Chế độ nội bộ')).toBeInTheDocument();
 
         const chatInput = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
 
@@ -1428,18 +1408,18 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.change(chatInput, { target: { value: 'Tôi bị đau đầu' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
         await waitFor(() => {
-            expect(screen.getByText('Chế độ rút gọn')).toBeInTheDocument();
+            expect(screen.getByText('Đang dùng chế độ nội bộ')).toBeInTheDocument();
         });
 
-        // 2. Local turn with providerStatus: NotCalled -> must STAY Degraded ("Chế độ rút gọn")
+        // 2. A new NotCalled response is neutral, independent of earlier provider health.
         fireEvent.change(chatInput, { target: { value: 'Giá khám bao nhiêu' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
         await waitFor(() => {
             expect(screen.getByText(/150\.000đ/i)).toBeInTheDocument();
         });
-        expect(screen.getByText('Chế độ rút gọn')).toBeInTheDocument();
+        expect(screen.getByText('Chế độ nội bộ')).toBeInTheDocument();
 
-        // 3. Real Gemini success with providerStatus: Healthy -> Online ("Trực tuyến")
+        // 3. Fake provider success with providerStatus: Healthy -> Online ("Trực tuyến")
         fireEvent.change(chatInput, { target: { value: 'Tư vấn thêm giúp tôi' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
         await waitFor(() => {

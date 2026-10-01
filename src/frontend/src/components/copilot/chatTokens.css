@@ -1,0 +1,17 @@
+:root {
+    --chat-accent: #0f766e;
+    --chat-ink: #134e4a;
+    --chat-chip: #f0fdfa;
+    --chat-disabled: #ccfbf1;
+    --chat-border: #99c7c2;
+    --chat-muted: #42615e;
+    --chat-surface: #ffffff;
+    --chat-space-1: 4px;
+    --chat-space-2: 8px;
+    --chat-space-3: 12px;
+    --chat-space-4: 16px;
+    --chat-space-6: 24px;
+    --chat-radius: 12px;
+    --chat-target: 40px;
+}
+@media (max-width: 600px) { :root { --chat-target: 44px; } }

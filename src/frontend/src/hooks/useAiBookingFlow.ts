@@ -10,6 +10,7 @@ import {
 } from "../contexts/ChatContext";
 import { useAuth } from "../auth/AuthContext";
 import axiosClient from "../api/axiosClient";
+import { isLocalHelpPhrase, isPatientReadAlias } from "../components/copilot/patientPresentation";
 import { aiChatFailureMessage } from "../api/aiErrorMessages";
 import { sendRoleCopilotMessage } from "../api/aiCopilotApi";
 import type { ApiResponse } from "../types";
@@ -304,6 +305,14 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             return;
         }
 
+        // Explicit help and read aliases use the existing read-only role
+        // endpoint; legacy booking requests and payloads keep their own path.
+        if (!pendingPayload && !prefixMessage && (isLocalHelpPhrase(trimmed) || isPatientReadAlias(trimmed))) {
+            setInput('');
+            await handleSuggestion({ code: '', label: trimmed }, true);
+            return;
+        }
+
         const userMsg: ChatMessage = { role: "user", content: trimmed };
         const newMessages = prefixMessage
             ? [...messages, prefixMessage, userMsg]
@@ -443,7 +452,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     providerWasCalled: data.providerWasCalled,
                     providerAttemptCount: data.providerAttemptCount,
                     primaryIntent: data.primaryIntent,
-                    providerState: data.providerState,
+                    providerState: data.providerState ?? (data.providerStatus === 'Healthy' ? 'Online' :
+                        data.providerStatus === 'Unavailable' || data.providerStatus === 'Degraded' || data.providerStatus === 'FallbackToLocal' ? 'Degraded' :
+                        data.providerStatus === 'Disabled' ? 'Disabled' : 'NotCalled'),
                     dialogueOutcome: data.dialogueOutcome,
                     clarificationPrompt: data.clarificationPrompt,
                     toolResults: data.toolResults
@@ -662,13 +673,13 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     };
 
     // Only the code is authoritative; the label is shown as the user's turn.
-    const handleSuggestion = async (suggestion: AiSuggestionItem): Promise<void> => {
+    const handleSuggestion = async (suggestion: AiSuggestionItem, freeText = false): Promise<void> => {
         if (suggestion.code === 'patient.start_booking') {
             await handleWizardStep('start');
             return;
         }
         const label = suggestion.label.trim();
-        if (!label || !suggestion.code || loading) return;
+        if (!label || (!freeText && !suggestion.code) || loading) return;
 
         setMessages(previous => [...previous, { role: "user", content: label }]);
         setErrorMsg("");
@@ -687,7 +698,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         try {
             const response = await sendRoleCopilotMessage({
                 message: label,
-                suggestionCode: suggestion.code,
+                suggestionCode: freeText ? undefined : suggestion.code,
                 sessionId: copilotSessionRef.current.id,
                 currentRoute: location.pathname,
                 clientTurnId: `turn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -1560,7 +1571,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         setErrorMsg,
         messages,
         activeDraft,
-        clearChat,
+        clearChat: () => { setWizard(null); clearChat(); },
         handleSendMessage,
         handleSuggestion,
         wizard,

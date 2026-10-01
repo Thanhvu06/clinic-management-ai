@@ -39,9 +39,21 @@ const valueLabel = (value: unknown): string | null => {
     return text(value);
 };
 
+const statusLabels: Record<string, string> = {
+    Pending: 'Chờ xử lý', Confirmed: 'Đã xác nhận', PendingReschedule: 'Chờ đổi lịch', PendingCancellation: 'Chờ hủy',
+    Cancelled: 'Đã hủy', Completed: 'Đã hoàn tất', NoShow: 'Không đến', CheckedIn: 'Đã tiếp nhận', Registered: 'Đã đăng ký',
+    WaitingForDoctor: 'Chờ bác sĩ', WaitingDoctor: 'Chờ bác sĩ', InConsultation: 'Đang khám',
+    WaitingForDiagnostics: 'Chờ cận lâm sàng', InDiagnostics: 'Đang làm cận lâm sàng', ResultsReady: 'Đã có kết quả',
+    Transferred: 'Đã chuyển', ConsultationCompleted: 'Đã kết thúc khám', InPharmacy: 'Đang tại quầy thuốc', InBilling: 'Đang thanh toán',
+    Draft: 'Bản nháp', Issued: 'Đã phát hành', Dispensed: 'Đã cấp phát', ReservedForPurchase: 'Đã giữ thuốc',
+    Ordered: 'Đã chỉ định', InProgress: 'Đang thực hiện', Unpaid: 'Chưa thanh toán', Paid: 'Đã thanh toán',
+    PartiallyPaid: 'Thanh toán một phần', Succeeded: 'Thành công', Voided: 'Đã hủy giao dịch'
+};
+
 const StatusLine: React.FC<{ label: string; value: unknown; date?: boolean }> = ({ label, value, date = false }) => {
     const rendered = date ? formatDateTime(value) : valueLabel(value);
-    return rendered ? <div className={styles.typedLine}><strong>{label}:</strong> {rendered}</div> : null;
+    const localized = rendered && /trạng thái|thanh toán/i.test(label) ? statusLabels[rendered] : undefined;
+    return rendered ? <div className={styles.typedLine} title={localized ? rendered : undefined}><strong>{label}:</strong> {localized ?? rendered}</div> : null;
 };
 
 const EmptyData: React.FC<{ message: string }> = ({ message }) => <p className={styles.typedNotice} role="status">{message}</p>;
@@ -325,7 +337,7 @@ const ActionResultCard: React.FC<{ type: string; data: unknown }> = ({ type, dat
     }
     if (type === 'pending_action') return <List><article className={styles.typedItem}><strong>Thao tác đang chờ xác nhận</strong><StatusLine label="Lịch hẹn" value={item?.appointmentCode} /><StatusLine label="Hết hạn" value={item?.expiresAtUtc} date /><StatusLine label="Trạng thái" value="Chờ người dùng xác nhận rõ ràng" /></article></List>;
     if (type === 'change_request') return <List><article className={styles.typedItem}><strong>Yêu cầu thay đổi đã được tạo</strong><StatusLine label="Thao tác" value={item?.operation === 'cancel' ? 'Hủy lịch' : item?.operation === 'reschedule' ? 'Đổi lịch' : item?.operation} /><StatusLine label="Trạng thái" value="Đã tiếp nhận" /></article></List>;
-    return <List><article className={styles.typedItem}><strong>Thao tác đã hoàn tất trước đó</strong><StatusLine label="Trạng thái" value="Đã xử lý; không tạo side effect mới" /></article></List>;
+    return <List><article className={styles.typedItem}><strong>Thao tác đã hoàn tất trước đó</strong><StatusLine label="Trạng thái" value="Đã xử lý; không ghi lặp dữ liệu" /></article></List>;
 };
 
 export const renderCopilotCardData = (card: AiCopilotCard): React.ReactNode => {

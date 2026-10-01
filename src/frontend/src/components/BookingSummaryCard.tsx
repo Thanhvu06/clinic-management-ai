@@ -6,7 +6,7 @@ export const BookingSummaryCard = ({ draft, formatVietnameseDate }: { draft: AiB
 <div className={styles.cardContainer}>
                                             <div className={styles.bookingSummaryCard}>
                                                 <h4 className={styles.bookingSummaryTitle}>
-                                                    <Calendar size={18} color="#0d9488" />
+                                                    <Calendar size={18} color="var(--chat-accent)" />
                                                     Tóm tắt thông tin đặt lịch
                                                 </h4>
                                                 <div className={styles.summaryTable}>

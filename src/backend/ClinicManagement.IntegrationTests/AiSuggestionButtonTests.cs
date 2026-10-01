@@ -551,6 +551,125 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+
+    public static IEnumerable<object[]> HelpRoles() => new[]
+    {
+        ("pat1@test.com", AiActorRole.Patient), ("doc@test.com", AiActorRole.Doctor),
+        ("rec@test.com", AiActorRole.Receptionist), ("tech@test.com", AiActorRole.DiagnosticTechnician),
+        ("pharm@test.com", AiActorRole.Pharmacist), ("admin@test.com", AiActorRole.Admin)
+    }.SelectMany(actor => new[] { false, true }.Select(enabled => new object[] { actor.Item1, actor.Item2, enabled }));
+
+    [Theory]
+    [MemberData(nameof(HelpRoles))]
+    public async Task Help_is_role_scoped_accent_insensitive_and_never_calls_tools_or_provider(string email, AiActorRole role, bool enabled)
+    {
+        using var factory = CreateProviderConfiguredFactory(enabled);
+        ResetProviderSpy();
+        var client = await LoginAsync(factory.CreateClient(), email);
+        var phrases = new[] { "bạn làm được gì", "giúp gì", "hướng dẫn", "menu", "trợ giúp", "tôi có quyền hạn gì", "tôi làm được gì", "cách dùng" };
+        var labels = AiSuggestionCatalog.ForRole(role, true, hasPrescriptionResource: true).Select(item => item.Label).ToArray();
+        var before = await DomainFingerprintAsync();
+        foreach (var phrase in phrases.SelectMany(phrase => new[] { phrase, ClinicManagement.Application.AI.Conversation.AiTextNormalizer.NormalizeForComparison(phrase).ToUpperInvariant() + "?" }))
+        {
+            var decision = new ClinicManagement.Infrastructure.AI.Planning.AiDeterministicPlanner().Plan(new AiCopilotPlanningContext { Role = role, NormalizedMessage = phrase });
+            Assert.False(decision.RequiresProvider);
+            Assert.Empty(decision.ToolCalls);
+            var session = NewSession("help");
+            var data = await ChatAsync(client, new { message = phrase, sessionId = session });
+            Assert.Equal(AiChatIntentTypes.Help, data.GetProperty("intent").GetString());
+            Assert.Equal("Deterministic", data.GetProperty("plannerMode").GetString());
+            Assert.False(data.GetProperty("providerWasCalled").GetBoolean());
+            Assert.Equal(0, data.GetProperty("providerAttemptCount").GetInt32());
+            Assert.Empty(data.GetProperty("executedToolNames").EnumerateArray());
+            Assert.Empty(data.GetProperty("cards").EnumerateArray());
+            var message = data.GetProperty("message").GetString()!;
+            Assert.Contains("Bạn chọn một gợi ý bên dưới nhé.", message);
+            Assert.All(labels, label => Assert.Contains(label, message));
+            Assert.All(AiSuggestionCatalog.Definitions.Where(item => item.Role != role), item => Assert.DoesNotContain(item.Label, message));
+            Assert.DoesNotContain("get_", message);
+            await AssertNoToolAuditAsync(session);
+        }
+        Assert.Equal(before, await DomainFingerprintAsync());
+        AssertProviderNeverCalled();
+    }
+
+    public static IEnumerable<object[]> AliasCases() => new (string Email, AiActorRole Role, string Code, string[] Phrases)[]
+    {
+        ("pat1@test.com", AiActorRole.Patient, "patient.my_appointments", ["lịch hẹn của mình", "lịch của tôi"]),
+        ("pat1@test.com", AiActorRole.Patient, "patient.my_visits", ["các lượt khám của tôi", "lịch sử khám của mình"]),
+        ("pat1@test.com", AiActorRole.Patient, "patient.my_diagnostic_results", ["kết quả xét nghiệm của mình", "xem kết quả của tôi"]),
+        ("pat1@test.com", AiActorRole.Patient, "patient.my_prescriptions", ["toa thuốc của mình", "xem đơn thuốc của tôi"]),
+        ("pat1@test.com", AiActorRole.Patient, "patient.my_bills", ["biên lai của tôi", "hóa đơn của mình"]),
+        ("doc@test.com", AiActorRole.Doctor, "doctor.my_queue", ["hôm nay khám ai", "hàng đợi", "danh sách chờ khám"]),
+        ("doc@test.com", AiActorRole.Doctor, "doctor.patient_summary", ["tóm lược ca đang mở", "tóm tắt bệnh nhân hiện tại"]),
+        ("doc@test.com", AiActorRole.Doctor, "doctor.diagnostic_orders", ["xem chỉ định của ca đang mở", "cận lâm sàng của ca hiện tại"]),
+        ("doc@test.com", AiActorRole.Doctor, "doctor.prescription_status", ["đơn thuốc của ca đang mở", "xem trạng thái toa thuốc của ca"]),
+        ("rec@test.com", AiActorRole.Receptionist, "receptionist.today_appointments", ["các lịch hẹn trong ngày", "lịch tiếp nhận hôm nay"]),
+        ("rec@test.com", AiActorRole.Receptionist, "receptionist.queue", ["danh sách chờ tiếp nhận", "xem hàng đợi lễ tân"]),
+        ("tech@test.com", AiActorRole.DiagnosticTechnician, "technician.worklist", ["các chỉ định cần làm", "danh sách phiếu đang chờ"]),
+        ("pharm@test.com", AiActorRole.Pharmacist, "pharmacist.prescription_queue", ["các đơn chờ cấp thuốc", "danh sách toa chờ xử lý"]),
+        ("pharm@test.com", AiActorRole.Pharmacist, "pharmacist.inventory", ["kiểm tra kho thuốc", "thuốc còn trong kho"]),
+        ("pharm@test.com", AiActorRole.Pharmacist, "pharmacist.prescription_payment", ["đơn đang mở đã thanh toán chưa", "đối chiếu thanh toán toa hiện tại"]),
+        ("admin@test.com", AiActorRole.Admin, "admin.dashboard_metrics", ["số liệu hôm nay", "báo cáo tổng hợp trong ngày"]),
+        ("admin@test.com", AiActorRole.Admin, "admin.ai_health", ["kiểm tra hoạt động trợ lý", "trạng thái trợ lý nội bộ"])
+    }.Select(item => new object[] { item.Email, item.Role, item.Code, item.Phrases });
+
+    [Theory]
+    [MemberData(nameof(AliasCases))]
+    public async Task Aliases_reuse_existing_tools_and_resource_authorization(string email, AiActorRole role, string code, string[] phrases)
+    {
+        var definition = AiSuggestionCatalog.Find(code, role)!;
+        Assert.InRange(phrases.Length, 1, 5);
+        using var factory = CreateProviderConfiguredFactory(true);
+        ResetProviderSpy();
+        var client = await LoginAsync(factory.CreateClient(), email);
+        object? resourceContext = null;
+        object? deniedContext = null;
+        if (definition.ResourceKind != AiSuggestionResourceKind.None)
+        {
+            var own = await CreateAppointmentAsync(DoctorEntityId, "HELP-OWN");
+            var outside = await CreateOwnAppointmentInUnassignedFacilityAsync();
+            resourceContext = definition.ResourceKind == AiSuggestionResourceKind.Prescription ? new { prescriptionId = await CreatePrescriptionAsync(own) } : (object)new { appointmentId = own };
+            deniedContext = definition.ResourceKind == AiSuggestionResourceKind.Prescription ? new { prescriptionId = await CreatePrescriptionAsync(outside) } : (object)new { appointmentId = outside };
+        }
+        var before = await DomainFingerprintAsync();
+        foreach (var phrase in phrases.SelectMany(phrase => new[] { phrase, ClinicManagement.Application.AI.Conversation.AiTextNormalizer.NormalizeForComparison(phrase).ToUpperInvariant() + "?" }))
+        {
+            var data = await ChatAsync(client, new { message = phrase, sessionId = NewSession("alias"), resourceContext });
+            if (definition.ActionKind == AiSuggestionActionKind.Wizard)
+            {
+                Assert.Equal(AiChatIntentTypes.StartBooking, data.GetProperty("intent").GetString());
+                Assert.Empty(data.GetProperty("executedToolNames").EnumerateArray());
+                Assert.False(data.GetProperty("providerWasCalled").GetBoolean());
+            }
+            else AssertLocalExecution(data, definition.ToolName);
+            if (deniedContext is not null)
+            {
+                foreach (var supplied in new object?[] { null, deniedContext })
+                {
+                    var denied = await ChatAsync(client, new { message = phrase, sessionId = NewSession("alias-denied"), resourceContext = supplied });
+                    Assert.Empty(denied.GetProperty("executedToolNames").EnumerateArray());
+                    Assert.Empty(denied.GetProperty("cards").EnumerateArray());
+                    Assert.False(denied.GetProperty("providerWasCalled").GetBoolean());
+                }
+            }
+        }
+        Assert.Equal(before, await DomainFingerprintAsync());
+        AssertProviderNeverCalled();
+        // A foreign phrase may clarify or match a different legitimate read,
+        // but it can never execute this role's tool as another actor.
+        using var disabled = CreateProviderConfiguredFactory(false);
+        var foreignRole = role == AiActorRole.Admin ? AiActorRole.Patient : AiActorRole.Admin;
+        var foreign = await LoginAsync(disabled.CreateClient(), foreignRole == AiActorRole.Patient ? "pat1@test.com" : "admin@test.com");
+        foreach (var phrase in phrases)
+        {
+            var data = await ChatAsync(foreign, new { message = phrase, sessionId = NewSession("alias-foreign") });
+            if (!string.IsNullOrEmpty(definition.ToolName))
+                Assert.DoesNotContain(definition.ToolName, data.GetProperty("executedToolNames").EnumerateArray().Select(item => item.GetString()));
+        }
+        AssertProviderNeverCalled();
+    }
+
     private void ResetProviderSpy()
     {
         Factory.MockAiProvider.Reset();

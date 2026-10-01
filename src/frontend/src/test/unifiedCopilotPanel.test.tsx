@@ -140,11 +140,11 @@ describe('UnifiedCopilotPanel', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Bác sĩ/i }));
         expect(screen.getByText('Tóm tắt bệnh nhân hiện tại')).toBeInTheDocument();
-        expect(screen.getByText('Xử lý nội bộ')).toBeInTheDocument();
+        expect(screen.getByText('Chế độ nội bộ')).toBeInTheDocument();
         fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'Tóm tắt ca này' } });
         fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
 
-        await waitFor(() => expect(screen.getByText('Gemini đã phản hồi')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Trực tuyến')).toBeInTheDocument());
         expect(screen.getByText('Doctor 1')).toBeInTheDocument();
         expect(screen.getAllByText(/appointments · database/)).toHaveLength(1);
         expect(screen.queryByText('must-not-render')).not.toBeInTheDocument();
@@ -174,7 +174,7 @@ describe('UnifiedCopilotPanel', () => {
         fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'yêu cầu mơ hồ' } });
         fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
 
-        await waitFor(() => expect(screen.getByText('Đang dùng chế độ dự phòng')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Đang dùng chế độ nội bộ')).toBeInTheDocument());
         expect(screen.getByText('Dịch vụ AI phản hồi quá lâu; dữ liệu chưa được xác định.')).toBeInTheDocument();
         expect(screen.getByText('Mã xử lý: PROVIDER_TIMEOUT')).toBeInTheDocument();
         expect(screen.queryByText('Dữ liệu đã kiểm chứng.')).not.toBeInTheDocument();
@@ -295,7 +295,7 @@ describe('UnifiedCopilotPanel', () => {
         fireEvent.click(screen.getByRole('button', { name: /Mở Copilot Dược sĩ/i }));
         fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'Xem đơn thuốc' } });
         fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
-        await waitFor(() => expect(screen.getAllByText('PartiallyPaid')).toHaveLength(2));
+        await waitFor(() => expect(screen.getAllByText('Thanh toán một phần')).toHaveLength(2));
         expect(screen.getByText('Paracetamol')).toBeInTheDocument();
         expect(screen.getByText('2')).toBeInTheDocument();
         expect(screen.getByText('1')).toBeInTheDocument();
@@ -459,11 +459,11 @@ describe('UnifiedCopilotPanel', () => {
 
     it('keeps provider mapping separate from assistant mode for every supported role', () => {
         expect(Object.keys(COPILOT_ROLE_CONFIG)).toHaveLength(6);
-        expect(providerStateLabel('NotCalled')).toBe('Xử lý nội bộ');
-        expect(providerStateLabel('Online')).toBe('Gemini đã phản hồi');
-        expect(providerStateLabel('Degraded')).toBe('Đang dùng chế độ dự phòng');
-        expect(providerStateLabel('Unavailable')).toBe('Dịch vụ AI chưa cấu hình/không khả dụng');
-        expect(providerStateLabel('Disabled')).toMatch(/tắt cấu hình/i);
+        expect(providerStateLabel('NotCalled')).toBe('Chế độ nội bộ');
+        expect(providerStateLabel('Online')).toBe('Trực tuyến');
+        expect(providerStateLabel('Degraded')).toBe('Đang dùng chế độ nội bộ');
+        expect(providerStateLabel('Unavailable')).toBe('Đang dùng chế độ nội bộ');
+        expect(providerStateLabel('Disabled')).toBe('Chế độ nội bộ');
         expect(providerStateLabel('SafetyBlocked')).toBe('Đã chặn vì an toàn');
     });
 
@@ -647,7 +647,7 @@ describe('UnifiedCopilotPanel', () => {
 
         await act(async () => { vi.advanceTimersByTime(10001); });
         expect(screen.getByRole('button', { name: /Xác nhận thao tác/i })).toBeDisabled();
-        expect(screen.getByRole('alert')).toHaveTextContent('Preview đã hết hạn');
+        expect(screen.getByRole('alert')).toHaveTextContent('Thông tin xem trước đã hết hạn');
         fireEvent.click(screen.getByRole('button', { name: /Xác nhận thao tác/i }));
         expect(confirmActionMock).not.toHaveBeenCalled();
 

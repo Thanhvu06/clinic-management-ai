@@ -16,7 +16,49 @@ namespace ClinicManagement.Infrastructure.AI.Planning;
 public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
 {
     private static readonly Regex Greeting = new(@"^(?:xin\s+)?(?:chao|hello|hi|cam on|cảm ơn)(?:\s+(?:ban|bạn|ai|tro ly|trợ lý))?[!.?]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex Help = new(@"\b(?:giup|huong dan|lam duoc gi|co the lam gi)\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex Help = new(@"^(?:ban lam duoc gi|ban co the lam gi|lam duoc gi|co the lam gi|giup gi|huong dan|menu|tro giup|toi co quyen han gi|toi lam duoc gi|cach dung)[!.?]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+
+    // Exact phrases, scoped by the existing catalog. Resource resolution and
+    // authorization remain in the same execution pipeline as suggestion clicks.
+    private static readonly IReadOnlyDictionary<string, string[]> SuggestionAliases = new Dictionary<string, string[]>
+    {
+        ["patient.my_appointments"] = ["lịch hẹn của mình", "lịch của tôi"],
+        ["patient.my_visits"] = ["các lượt khám của tôi", "lịch sử khám của mình"],
+        ["patient.my_diagnostic_results"] = ["kết quả xét nghiệm của mình", "xem kết quả của tôi"],
+        ["patient.my_prescriptions"] = ["toa thuốc của mình", "xem đơn thuốc của tôi"],
+        ["patient.my_bills"] = ["biên lai của tôi", "hóa đơn của mình"],
+        ["doctor.my_queue"] = ["hôm nay khám ai", "hàng đợi", "danh sách chờ khám"],
+        ["doctor.patient_summary"] = ["tóm lược ca đang mở", "tóm tắt bệnh nhân hiện tại"],
+        ["doctor.diagnostic_orders"] = ["xem chỉ định của ca đang mở", "cận lâm sàng của ca hiện tại"],
+        ["doctor.prescription_status"] = ["đơn thuốc của ca đang mở", "xem trạng thái toa thuốc của ca"],
+        ["receptionist.today_appointments"] = ["các lịch hẹn trong ngày", "lịch tiếp nhận hôm nay"],
+        ["receptionist.queue"] = ["danh sách chờ tiếp nhận", "xem hàng đợi lễ tân"],
+        ["technician.worklist"] = ["các chỉ định cần làm", "danh sách phiếu đang chờ"],
+        ["pharmacist.prescription_queue"] = ["các đơn chờ cấp thuốc", "danh sách toa chờ xử lý"],
+        ["pharmacist.inventory"] = ["kiểm tra kho thuốc", "thuốc còn trong kho"],
+        ["pharmacist.prescription_payment"] = ["đơn đang mở đã thanh toán chưa", "đối chiếu thanh toán toa hiện tại"],
+        ["admin.dashboard_metrics"] = ["số liệu hôm nay", "báo cáo tổng hợp trong ngày"],
+        ["admin.ai_health"] = ["kiểm tra hoạt động trợ lý", "trạng thái trợ lý nội bộ"]
+    };
+
+    private static string RoleHelp(AiActorRole role)
+    {
+        var roleLabel = role switch
+        {
+            AiActorRole.Patient => "bệnh nhân", AiActorRole.Doctor => "bác sĩ",
+            AiActorRole.Receptionist => "lễ tân", AiActorRole.DiagnosticTechnician => "kỹ thuật viên",
+            AiActorRole.Pharmacist => "dược sĩ", AiActorRole.Admin => "quản trị viên", _ => "tài khoản hiện tại"
+        };
+        var menu = AiSuggestionCatalog.ForRole(role, hasCaseResource: true, hasPrescriptionResource: true);
+        var groups = menu.GroupBy(item => AiSuggestionCatalog.Find(item.Code, role)!.ResourceKind);
+        var capabilities = groups.Select(group => (group.Key switch
+        {
+            AiSuggestionResourceKind.DoctorCase => "khi bạn mở một ca khám được phân công: ",
+            AiSuggestionResourceKind.Prescription => "khi bạn mở đúng đơn thuốc: ",
+            _ => ""
+        }) + string.Join(", ", group.Select(item => item.Label)));
+        return $"Tôi giúp bạn tra cứu theo quyền của {roleLabel}: {string.Join("; ", capabilities)}. Bạn chọn một gợi ý bên dưới nhé.";
+    }
 
     // Single-tool read routes shared by the free-text rules and suggestion
     // buttons, so both paths report the same intent, sub-intent and route.
@@ -117,9 +159,9 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             return Local(AiChatIntentTypes.Greeting, "Greeting", "Xin chào. Tôi có thể hỗ trợ tra cứu dữ liệu trong phạm vi công việc và quyền hiện tại của bạn.", 1m);
         }
 
-        if (Help.IsMatch(text) && !knowledgeRequest)
+        if (Help.IsMatch(text))
         {
-            return Local(AiChatIntentTypes.Help, "RoleHelp", "Bạn có thể dùng các gợi ý bên dưới hoặc mô tả rõ dữ liệu cần tra cứu. Tôi sẽ không thực hiện thao tác ghi trong cuộc hội thoại này.", .99m);
+            return Local(AiChatIntentTypes.Help, "RoleHelp", RoleHelp(context.Role), 1m);
         }
 
         var containsReadRequest = Regex.IsMatch(text,
@@ -133,6 +175,17 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
                 "MixedReadWritePlan");
         }
 
+        var aliasText = text.TrimEnd('.', '!', '?');
+        var foreignAlias = false;
+        foreach (var (code, aliases) in SuggestionAliases)
+        {
+            if (!aliases.Any(alias => AiTextNormalizer.NormalizeForComparison(alias) == aliasText)) continue;
+            var suggestion = AiSuggestionCatalog.Find(code, context.Role);
+            if (suggestion is not null)
+                return PlanSuggestion(suggestion, context.Resource);
+            foreignAlias = true;
+        }
+
         var roleDecision = context.Role switch
         {
             AiActorRole.Receptionist => PlanReception(text),
@@ -143,6 +196,8 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             AiActorRole.Patient => PlanPatient(text),
             _ => ProviderRequired(context.Analysis.Intent.Intent)
         };
+
+        if (foreignAlias && roleDecision.RequiresProvider) return SuggestionRejected();
 
         if (knowledgeRequest && roleDecision.ToolCalls.Count == 0 && roleDecision.Clarification is null && IsAmbiguousCatalogRequest(text))
             return Clarify("Bạn muốn xem danh sách hay tra cứu tên chuyên khoa, bác sĩ, dịch vụ hoặc cơ sở nào?", "AmbiguousCatalogQuery", AiChatIntentTypes.FacilityInquiry, "/locations");

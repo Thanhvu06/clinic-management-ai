@@ -1,5 +1,8 @@
 import { BookingSummaryCard } from "./BookingSummaryCard";
 import { BookingWizard } from "./BookingWizard";
+import { BookingActionChoices } from "./BookingActionChoices";
+import { ProviderStatus } from "./copilot/ProviderStatus";
+import { patientSuggestions, isAdditionalCopy } from "./copilot/patientPresentation";
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -90,7 +93,7 @@ const PatientMedicalChatWidget: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { user } = useAuth();
-    const { setPendingSpecialtyId, aiAssistantStatus } = useChatContext();
+    const { setPendingSpecialtyId } = useChatContext();
 
     const {
         input,
@@ -118,7 +121,7 @@ const PatientMedicalChatWidget: React.FC = () => {
     });
     const latestAssistantIndex = messages.map(message => message.role).lastIndexOf("model");
     const emptySuggestions = messages.length <= 1;
-    const activeSuggestions = emptySuggestions ? suggestionMenu : messages[latestAssistantIndex]?.suggestionChips ?? suggestionMenu;
+    const activeSuggestions = patientSuggestions(messages[latestAssistantIndex], suggestionMenu, emptySuggestions);
     const suggestionsBusy = loading || submittingBooking || executingActionId !== null;
     const onSuggestion = (suggestion: Parameters<typeof handleSuggestion>[0]) => {
         if (suggestionsBusy) return;
@@ -126,13 +129,13 @@ const PatientMedicalChatWidget: React.FC = () => {
     };
 
     useEffect(() => {
-        if (isOpen) {
-            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        if (isOpen && !wizard) {
+            messagesEndRef.current?.scrollIntoView({ behavior: "instant", block: 'end' });
             requestAnimationFrame(() => {
                 inputRef.current?.focus();
             });
         }
-    }, [messages, isOpen]);
+    }, [messages, isOpen, wizard]);
 
     // Accessible keyboard handling: Escape and Tab Focus Trap
     useEffect(() => {
@@ -196,133 +199,15 @@ const PatientMedicalChatWidget: React.FC = () => {
         }
     };
 
-    const widgetContent = (
-        <div className={styles.widgetContainer}>
-            {!isOpen && (
-                <button
-                    ref={launcherRef}
-                    className={styles.launcher}
-                    onClick={() => setIsOpen(true)}
-                    aria-label="Mở Trợ lý ClinicCare AI"
-                    type="button"
-                >
-                    <MessageCircle size={28} />
-                </button>
-            )}
-
-            {isOpen && (
-                <div
-                    ref={chatWindowRef}
-                    className={styles.chatWindow}
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="cliniccare-chat-title"
-                >
-                    <div className={styles.header}>
-                        <div className={styles.headerTitle} id="cliniccare-chat-title">
-                            <Stethoscope size={22} />
-                            <span>ClinicCare AI</span>
-                            <span className={`${styles.statusPill} ${
-                                aiAssistantStatus === "Degraded" || aiAssistantStatus === "Unchecked"
-                                    ? styles.statusPillDegraded
-                                    : aiAssistantStatus === "Offline"
-                                    ? styles.statusPillOffline
-                                    : styles.statusPillOnline
-                            }`}>
-                                <span className={`${styles.statusDot} ${
-                                    aiAssistantStatus === "Degraded" || aiAssistantStatus === "Unchecked"
-                                        ? styles.statusDotDegraded
-                                        : aiAssistantStatus === "Offline"
-                                        ? styles.statusDotOffline
-                                        : styles.statusDotOnline
-                                }`} />
-                                {aiAssistantStatus === "Degraded"
-                                    ? "Chế độ rút gọn"
-                                    : aiAssistantStatus === "Offline"
-                                    ? "Ngoại tuyến"
-                                    : aiAssistantStatus === "Unchecked"
-                                    ? "Chưa kiểm tra AI"
-                                    : "Trực tuyến"}
-                            </span>
-                        </div>
-                        <div className={styles.headerActions}>
-                            <button
-                                type="button"
-                                className={styles.iconBtn}
-                                onClick={clearChat}
-                                title="Bắt đầu cuộc trò chuyện mới"
-                                aria-label="Làm mới cuộc trò chuyện"
-                            >
-                                <Trash2 size={17} />
-                            </button>
-                            <button
-                                type="button"
-                                className={styles.iconBtn}
-                                onClick={() => {
-                                    setIsOpen(false);
-                                    setTimeout(() => launcherRef.current?.focus(), 50);
-                                }}
-                                title="Thu nhỏ"
-                                aria-label="Thu nhỏ"
-                            >
-                                <Minus size={18} />
-                            </button>
-                            <button
-                                type="button"
-                                className={styles.iconBtn}
-                                onClick={() => {
-                                    setIsOpen(false);
-                                    setTimeout(() => launcherRef.current?.focus(), 50);
-                                }}
-                                title="Đóng"
-                                aria-label="Đóng"
-                            >
-                                <X size={18} />
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className={styles.messageArea} aria-live="polite">
-                        {/* Welcome Disclaimer on top */}
-                        <div className={styles.welcomeContainer}>
-                            <div className={styles.disclaimerBadge}>
-                                <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
-                                <span>Trợ lý hỗ trợ định hướng chuyên khoa và đặt lịch khám. Thông tin chỉ mang tính tham khảo, không thay thế chẩn đoán y khoa.</span>
-                            </div>
-
-                            {emptySuggestions && (
-                                <>
-                                    {!activeSuggestions?.length && <p className={styles.quickPromptsTitle}>Gợi ý câu hỏi nhanh:</p>}
-                                    {!activeSuggestions?.length && <div className={styles.quickPrompts}>
-                                        {QUICK_PROMPTS.map((qp) => (
-                                            <button
-                                                key={qp.label}
-                                                type="button"
-                                                className={styles.quickPromptChip}
-                                                onClick={() => handleSendMessage(qp.label, { intent: qp.intent })}
-                                            >
-                                                {qp.label}
-                                            </button>
-                                        ))}
-                                    </div>}
-                                    <SuggestionChips
-                                        variant="grid"
-                                        suggestions={activeSuggestions}
-                                        disabled={suggestionsBusy}
-                                        onSelect={onSuggestion}
-                                        ariaLabel="Tra cứu nhanh dữ liệu của bạn"
-                                    />
-                                </>
-                            )}
-                        </div>
-
-                        {messages.map((msg, idx) => (
+    const reviewIndex = wizard?.step === 'review' ? messages.findLastIndex(message => message.bookingDraft?.isComplete) : -1;
+    const renderMessage = (msg: typeof messages[number], idx: number) => (
                             <div
                                 key={idx}
+                                data-review={wizard?.step === "review" && idx === latestAssistantIndex && msg.bookingDraft?.isComplete || undefined}
                                 className={`${styles.messageRow} ${msg.role === "user" ? styles.rowUser : styles.rowModel}`}
                             >
-                                <div className={`${styles.bubble} ${msg.role === "user" ? styles.bubbleUser : styles.bubbleModel}`}>
-                                    <SafeMarkdown content={msg.content} />
+                                <div data-chat-bubble className={`${styles.bubble} ${msg.role === "user" ? styles.bubbleUser : styles.bubbleModel}`}>
+                                    <SafeMarkdown content={idx === reviewIndex ? "" : msg.content} />
 
                                     {/* Emergency Card */}
                                     {msg.urgency === "EMERGENCY" && (
@@ -343,7 +228,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                                         <div key={`${toolResult.actionId ?? "tool"}-${toolIndex}`} className={styles.cardContainer}>
                                             <div className={styles.bookingSummaryCard} role="status" aria-label="Trạng thái thao tác AI">
                                                 <h4 className={styles.bookingSummaryTitle}>
-                                                    <CheckCircle2 size={18} color={toolResult.status === "failed" ? "#b91c1c" : "#0d9488"} />
+                                                    <CheckCircle2 size={18} color={toolResult.status === "failed" ? "#b91c1c" : "var(--chat-accent)"} />
                                                     {toolResult.status === "pending_confirmation" ? "Đang chờ xác nhận" : toolResult.status === "completed" ? "Dữ liệu từ hệ thống ClinicCare" : "Không thể thực hiện thao tác"}
                                                 </h4>
                                                 <p className={styles.specialtyReason}>
@@ -396,23 +281,14 @@ const PatientMedicalChatWidget: React.FC = () => {
                                         <div key={`${card.type}-${cardIndex}`} className={styles.cardContainer}>
                                             <div className={styles.bookingSummaryCard} role="status" aria-label="Dữ liệu từ hệ thống ClinicCare">
                                                 <h4 className={styles.bookingSummaryTitle}>
-                                                    <CheckCircle2 size={18} color={card.data === null || card.data === undefined ? "#b91c1c" : "#0d9488"} />
+                                                    <CheckCircle2 size={18} color={card.data === null || card.data === undefined ? "#b91c1c" : "var(--chat-accent)"} />
                                                     {card.title}
                                                 </h4>
-                                                {card.description && <p className={styles.specialtyReason}>{card.description}</p>}
+                                                {isAdditionalCopy(card.description, msg.content) && <p className={styles.specialtyReason}>{card.description}</p>}
                                                 {renderCopilotCardData(card)}
                                             </div>
                                         </div>
                                     ))}
-
-                                    {!emptySuggestions && idx === latestAssistantIndex && (
-                                        <SuggestionChips
-                                            suggestions={activeSuggestions}
-                                            disabled={suggestionsBusy}
-                                            onSelect={onSuggestion}
-                                            ariaLabel="Gợi ý tiếp theo"
-                                        />
-                                    )}
 
                                     {/* Specialty Suggestions */}
                                     {msg.suggestions && msg.suggestions.length > 0 && msg.urgency !== "EMERGENCY" && (
@@ -456,8 +332,7 @@ const PatientMedicalChatWidget: React.FC = () => {
 
 {/* Action Buttons */}
                                     {msg.actions && msg.actions.length > 0 && msg.urgency !== "EMERGENCY" && (
-                                        <div className={styles.cardContainer}>
-                                            {msg.actions.map(act => {
+                                        <BookingActionChoices actions={msg.actions} latest={idx === latestAssistantIndex} renderAction={act => {
                                                 const isPrimary = act.style === "primary";
                                                 const isDanger = act.style === "danger";
 
@@ -506,21 +381,118 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                         {isStale && <span className={styles.staleTag}> (Lựa chọn đã cũ)</span>}
                                                     </button>
                                                 );
-                                            })}
-                                        </div>
+                                            }} />
                                     )}
                                 </div>
                             </div>
-                        ))}
 
-                    <BookingWizard state={wizard} busy={loading || submittingBooking} onStep={handleWizardStep} />
+    );
+
+    const widgetContent = (
+        <div className={styles.widgetContainer}>
+            {!isOpen && (
+                <button
+                    ref={launcherRef}
+                    className={styles.launcher}
+                    onClick={() => setIsOpen(true)}
+                    aria-label="Mở Trợ lý ClinicCare AI"
+                    type="button"
+                >
+                    <MessageCircle size={28} />
+                </button>
+            )}
+
+            {isOpen && (
+                <div
+                    ref={chatWindowRef}
+                    className={styles.chatWindow}
+                    data-chat-panel
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="cliniccare-chat-title"
+                >
+                    <div className={styles.header}>
+                        <div className={styles.headerTitle} id="cliniccare-chat-title">
+                            <Stethoscope size={22} />
+                            <span>ClinicCare AI</span>
+                                                    </div>
+                        <div className={styles.headerActions}>
+                            <button
+                                type="button"
+                                className={styles.iconBtn}
+                                onClick={clearChat}
+                                title="Bắt đầu cuộc trò chuyện mới"
+                                aria-label="Làm mới cuộc trò chuyện"
+                            >
+                                <Trash2 size={17} />
+                            </button>
+                            <button
+                                type="button"
+                                className={styles.iconBtn}
+                                onClick={() => {
+                                    setIsOpen(false);
+                                    setTimeout(() => launcherRef.current?.focus(), 50);
+                                }}
+                                title="Thu nhỏ"
+                                aria-label="Thu nhỏ"
+                            >
+                                <Minus size={18} />
+                            </button>
+                            <button
+                                type="button"
+                                className={styles.iconBtn}
+                                onClick={() => {
+                                    setIsOpen(false);
+                                    setTimeout(() => launcherRef.current?.focus(), 50);
+                                }}
+                                title="Đóng"
+                                aria-label="Đóng"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                    </div>
+
+                    <ProviderStatus state={wizard ? 'NotCalled' : messages[latestAssistantIndex]?.providerState} error={errorMsg || (messages[latestAssistantIndex]?.assistantStatus === 'Offline' ? messages[latestAssistantIndex]?.content : undefined)} detail={messages[latestAssistantIndex]?.executionMode} />
+
+                    <div className={styles.messageArea} aria-live="polite" data-chat-messages>
+                        {/* Welcome Disclaimer on top */}
+                        <div className={styles.welcomeContainer}>
+                            <div className={styles.disclaimerBadge}>
+                                <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+                                <span>Trợ lý hỗ trợ định hướng chuyên khoa và đặt lịch khám. Thông tin chỉ mang tính tham khảo, không thay thế chẩn đoán y khoa.</span>
+                            </div>
+
+                            {emptySuggestions && (
+                                <>
+                                    {!activeSuggestions?.length && <p className={styles.quickPromptsTitle}>Gợi ý câu hỏi nhanh:</p>}
+                                    {!activeSuggestions?.length && <div className={styles.quickPrompts}>
+                                        {QUICK_PROMPTS.map((qp) => (
+                                            <button
+                                                key={qp.label}
+                                                type="button"
+                                                className={styles.quickPromptChip}
+                                                onClick={() => handleSendMessage(qp.label, { intent: qp.intent })}
+                                            >
+                                                {qp.label}
+                                            </button>
+                                        ))}
+                                    </div>}
+
+                                </>
+                            )}
+                        </div>
+
+                        {messages.map((msg, idx) => idx === reviewIndex ? null : renderMessage(msg, idx))}
+
+                    <BookingWizard state={wizard} busy={loading || submittingBooking} onStep={handleWizardStep} reviewContent={reviewIndex >= 0 ? renderMessage(messages[reviewIndex], reviewIndex) : undefined} />
                         {loading && (
                             <div className={`${styles.messageRow} ${styles.rowModel}`}>
                                 <div className={`${styles.bubble} ${styles.bubbleModel}`}>
                                     <div style={{ display: "flex", gap: "5px", padding: "6px" }}>
-                                        <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#0d9488", animation: "pulse 1.4s infinite" }} />
-                                        <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#0d9488", animation: "pulse 1.4s infinite 0.2s" }} />
-                                        <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#0d9488", animation: "pulse 1.4s infinite 0.4s" }} />
+                                        <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "var(--chat-accent)", animation: "pulse 1.4s infinite" }} />
+                                        <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "var(--chat-accent)", animation: "pulse 1.4s infinite 0.2s" }} />
+                                        <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "var(--chat-accent)", animation: "pulse 1.4s infinite 0.4s" }} />
                                     </div>
                                 </div>
                             </div>
@@ -528,6 +500,8 @@ const PatientMedicalChatWidget: React.FC = () => {
                         <div ref={messagesEndRef} />
                     </div>
 
+                    <div className={styles.composer} data-chat-composer>
+                        <SuggestionChips variant={emptySuggestions && !wizard ? "grid" : "compact"} suggestions={activeSuggestions} disabled={suggestionsBusy} onSelect={onSuggestion} ariaLabel={emptySuggestions ? "Tra cứu nhanh dữ liệu của bạn" : "Gợi ý tiếp theo"} />
                     <div className={styles.inputArea}>
                         <textarea
                             ref={inputRef}
@@ -551,6 +525,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                         </button>
                     </div>
                     {errorMsg && <div className={styles.errorText}>{errorMsg}</div>}
+                    </div>
                 </div>
             )}
 
@@ -604,7 +579,7 @@ const GuestMedicalChatNoticeWidget: React.FC = () => {
                     </div>
 
                     <div className={styles.noticeCard}>
-                        <div style={{ width: 48, height: 48, borderRadius: "50%", backgroundColor: "#ccfbf1", display: "flex", alignItems: "center", justifyContent: "center", color: "#0d9488" }}>
+                        <div style={{ width: 48, height: 48, borderRadius: "50%", backgroundColor: "#ccfbf1", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--chat-accent)" }}>
                             <Stethoscope size={28} />
                         </div>
                         <h3 className={styles.noticeTitle}>Chào mừng bạn đến với ClinicCare AI</h3>

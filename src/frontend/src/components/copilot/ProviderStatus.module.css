@@ -1,0 +1,9 @@
+.status { display: flex; align-items: center; flex-wrap: wrap; gap: var(--chat-space-2); padding: var(--chat-space-2) var(--chat-space-4); background: #edf5f4; color: var(--chat-ink); font-size: 13px; flex-shrink: 0; }
+.dot { width: 8px; height: 8px; border-radius: 999px; background: #42615e; }
+.status[data-tone="online"] { color: #166534; background: #ecfdf5; }
+.status[data-tone="online"] .dot { background: #166534; }
+.status[data-tone="amber"] { color: #78350f; background: #fffbeb; }
+.status[data-tone="amber"] .dot { background: #92400e; }
+.status[data-tone="error"] { color: #991b1b; background: #fef2f2; }
+.status[data-tone="error"] .dot { background: #991b1b; }
+.status small { font-size: 11px; overflow-wrap: anywhere; }

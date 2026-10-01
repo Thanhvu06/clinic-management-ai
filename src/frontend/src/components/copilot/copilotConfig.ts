@@ -61,13 +61,22 @@ export const getCopilotRoleConfig = (role?: string): CopilotRoleConfig =>
     COPILOT_ROLE_CONFIG[(role as CopilotRole) || 'Patient'] ?? COPILOT_ROLE_CONFIG.Patient;
 
 export const providerStateLabel = (state?: string): string => ({
-    NotCalled: 'Xử lý nội bộ',
-    Online: 'Gemini đã phản hồi',
-    Degraded: 'Đang dùng chế độ dự phòng',
-    Unavailable: 'Dịch vụ AI chưa cấu hình/không khả dụng',
-    Disabled: 'AI bị tắt cấu hình; đang dùng hỗ trợ cơ bản',
-    SafetyBlocked: 'Đã chặn vì an toàn'
-}[state ?? 'NotCalled'] ?? 'Trạng thái AI chưa xác định');
+    NotCalled: 'Chế độ nội bộ',
+    NotConfigured: 'Chế độ nội bộ',
+    Disabled: 'Chế độ nội bộ',
+    Online: 'Trực tuyến',
+    Degraded: 'Đang dùng chế độ nội bộ',
+    Unavailable: 'Đang dùng chế độ nội bộ',
+    Timeout: 'Đang dùng chế độ nội bộ',
+    RateLimited: 'Đang dùng chế độ nội bộ',
+    '429': 'Đang dùng chế độ nội bộ',
+    SafetyBlocked: 'Đã chặn vì an toàn',
+    RequestError: 'Không thể kết nối. Vui lòng thử lại.'
+}[state ?? 'NotCalled'] ?? 'Chế độ nội bộ');
+
+export const providerStateTone = (state?: string): 'local' | 'online' | 'amber' | 'error' =>
+    state === 'RequestError' ? 'error' : state === 'Online' ? 'online' :
+        ['Degraded', 'Unavailable', 'Timeout', 'RateLimited', '429', 'SafetyBlocked'].includes(state ?? '') ? 'amber' : 'local';
 
 export const toolDisplayName = (tool: AiCopilotTool | string): string => {
     const name = typeof tool === 'string' ? tool : tool.name;
