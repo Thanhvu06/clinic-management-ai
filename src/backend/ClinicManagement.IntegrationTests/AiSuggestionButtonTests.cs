@@ -656,17 +656,69 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
         }
         Assert.Equal(before, await DomainFingerprintAsync());
         AssertProviderNeverCalled();
-        // A foreign phrase may clarify or match a different legitimate read,
-        // but it can never execute this role's tool as another actor.
-        using var disabled = CreateProviderConfiguredFactory(false);
-        var foreignRole = role == AiActorRole.Admin ? AiActorRole.Patient : AiActorRole.Admin;
-        var foreign = await LoginAsync(disabled.CreateClient(), foreignRole == AiActorRole.Patient ? "pat1@test.com" : "admin@test.com");
-        foreach (var phrase in phrases)
+        using var foreignFactory = CreateProviderConfiguredFactory(true);
+        Assert.True(foreignFactory.Services.GetRequiredService<IConfiguration>().GetValue<bool>("AiProvider:IsEnabled"));
+        var foreignEmail = role switch
         {
-            var data = await ChatAsync(foreign, new { message = phrase, sessionId = NewSession("alias-foreign") });
-            if (!string.IsNullOrEmpty(definition.ToolName))
-                Assert.DoesNotContain(definition.ToolName, data.GetProperty("executedToolNames").EnumerateArray().Select(item => item.GetString()));
+            AiActorRole.Doctor => "pat1@test.com",
+            AiActorRole.Pharmacist => "rec@test.com",
+            AiActorRole.Admin => "tech@test.com",
+            _ => "admin@test.com"
+        };
+        var foreign = await LoginAsync(foreignFactory.CreateClient(), foreignEmail);
+        foreach (var phrase in phrases.SelectMany(phrase => new[] { phrase, ClinicManagement.Application.AI.Conversation.AiTextNormalizer.NormalizeForComparison(phrase).ToUpperInvariant() + "?" }))
+        {
+            var session = NewSession("alias-foreign");
+            var data = await ChatAsync(foreign, new { message = phrase, sessionId = session });
+            Assert.Equal(AiPlannerErrorCodes.ToolNotAllowed, data.GetProperty("errorCode").GetString());
+            Assert.Equal(AiChatIntentTypes.ClarificationRequired, data.GetProperty("intent").GetString());
+            Assert.Equal("Deterministic", data.GetProperty("plannerMode").GetString());
+            Assert.Empty(data.GetProperty("executedToolNames").EnumerateArray());
+            Assert.Empty(data.GetProperty("cards").EnumerateArray());
+            Assert.False(data.GetProperty("providerWasCalled").GetBoolean());
+            Assert.Equal(0, data.GetProperty("providerAttemptCount").GetInt32());
+            await AssertNoToolAuditAsync(session);
         }
+        AssertProviderNeverCalled();
+    }
+
+    [Theory]
+    [InlineData("doc@test.com", AiActorRole.Doctor, "doctor.patient_summary", "tóm lược ca đang mở")]
+    [InlineData("pharm@test.com", AiActorRole.Pharmacist, "pharmacist.prescription_payment", "đơn đang mở đã thanh toán chưa")]
+    public async Task Typed_resource_alias_requires_current_turn_resource_even_when_memory_remembers_it(string email, AiActorRole role, string code, string phrase)
+    {
+        using var factory = CreateProviderConfiguredFactory(true);
+        ResetProviderSpy();
+        var client = await LoginAsync(factory.CreateClient(), email);
+        var definition = AiSuggestionCatalog.Find(code, role)!;
+        var appointment = await CreateAppointmentAsync(DoctorEntityId, "ALIAS-MEMORY");
+        var prescription = role == AiActorRole.Pharmacist ? await CreatePrescriptionAsync(appointment) : (long?)null;
+        object resourceContext = prescription.HasValue ? new { prescriptionId = prescription.Value } : (object)new { appointmentId = appointment };
+        var session = NewSession("alias-memory");
+        AssertLocalExecution(await ChatAsync(client, new { message = "x", suggestionCode = code, sessionId = session, resourceContext }), definition.ToolName);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var actorId = await db.Users.Where(user => user.Email == email).Select(user => user.Id).SingleAsync();
+            var memory = await scope.ServiceProvider.GetRequiredService<IAiConversationMemoryStore>().LoadAsync(session, actorId, role);
+            var remembered = Assert.IsType<AiResolvedResourceContext>(memory?.CurrentResource);
+            if (prescription.HasValue) Assert.Equal(prescription, remembered.PrescriptionId);
+            else Assert.Equal(appointment, remembered.AppointmentId);
+        }
+        var before = await DomainFingerprintAsync();
+        var typed = await ChatAsync(client, new { message = phrase, sessionId = session });
+        var clicked = await ChatAsync(client, new { message = "x", suggestionCode = code, sessionId = session });
+        foreach (var data in new[] { typed, clicked })
+        {
+            Assert.Equal(AiPlannerErrorCodes.ResourceContextRequired, data.GetProperty("errorCode").GetString());
+            Assert.Empty(data.GetProperty("executedToolNames").EnumerateArray());
+            Assert.Empty(data.GetProperty("cards").EnumerateArray());
+            Assert.False(data.GetProperty("providerWasCalled").GetBoolean());
+            Assert.Equal(0, data.GetProperty("providerAttemptCount").GetInt32());
+        }
+        foreach (var field in new[] { "intent", "subIntent", "errorCode", "message", "clarification", "navigationRoute", "plannerMode", "providerState" })
+            Assert.Equal(clicked.GetProperty(field).GetRawText(), typed.GetProperty(field).GetRawText());
+        Assert.Equal(before, await DomainFingerprintAsync());
         AssertProviderNeverCalled();
     }
 

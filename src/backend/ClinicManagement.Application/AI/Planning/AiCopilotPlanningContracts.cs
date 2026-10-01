@@ -50,6 +50,8 @@ public sealed class AiCopilotPlanningContext
     public string NormalizedMessage { get; init; } = string.Empty;
     public AiConversationAnalysis Analysis { get; init; } = new();
     public AiResolvedResourceContext Resource { get; init; } = new();
+    // The same explicit, verified resource used by suggestion clicks; excludes memory.
+    public AiResolvedResourceContext CurrentTurnResource { get; init; } = new();
     public AiConversationMemoryState? Memory { get; init; }
 }
 

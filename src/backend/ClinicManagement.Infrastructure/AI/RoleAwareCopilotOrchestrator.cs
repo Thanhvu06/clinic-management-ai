@@ -145,12 +145,13 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         var hasCaseResource = HasExplicitCaseResource(request.ResourceContext) &&
                               (resolved.Context.AppointmentId.HasValue || resolved.Context.VisitId.HasValue);
         var hasPrescriptionResource = request.ResourceContext?.PrescriptionId.HasValue == true && resolved.Context.PrescriptionId.HasValue;
+        var currentTurnResource = hasCaseResource || hasPrescriptionResource
+            ? resolved.Context
+            : new AiResolvedResourceContext { CurrentRoute = resolved.Context.CurrentRoute };
         AiPlannerDecision decision;
         if (suggestionRequested)
         {
-            decision = _deterministicPlanner.PlanSuggestion(suggestion, hasCaseResource || hasPrescriptionResource
-                    ? resolved.Context
-                    : new AiResolvedResourceContext { CurrentRoute = resolved.Context.CurrentRoute });
+            decision = _deterministicPlanner.PlanSuggestion(suggestion, currentTurnResource);
         }
         else
         {
@@ -160,6 +161,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 NormalizedMessage = analysis.NormalizedText,
                 Analysis = analysis,
                 Resource = resolved.Context,
+                CurrentTurnResource = currentTurnResource,
                 Memory = memory
             });
         }

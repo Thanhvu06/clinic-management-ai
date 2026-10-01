@@ -182,9 +182,11 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             if (!aliases.Any(alias => AiTextNormalizer.NormalizeForComparison(alias) == aliasText)) continue;
             var suggestion = AiSuggestionCatalog.Find(code, context.Role);
             if (suggestion is not null)
-                return PlanSuggestion(suggestion, context.Resource);
+                return PlanSuggestion(suggestion, context.CurrentTurnResource);
             foreignAlias = true;
         }
+
+        if (foreignAlias) return SuggestionRejected();
 
         var roleDecision = context.Role switch
         {
@@ -196,8 +198,6 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             AiActorRole.Patient => PlanPatient(text),
             _ => ProviderRequired(context.Analysis.Intent.Intent)
         };
-
-        if (foreignAlias && roleDecision.RequiresProvider) return SuggestionRejected();
 
         if (knowledgeRequest && roleDecision.ToolCalls.Count == 0 && roleDecision.Clarification is null && IsAmbiguousCatalogRequest(text))
             return Clarify("Bạn muốn xem danh sách hay tra cứu tên chuyên khoa, bác sĩ, dịch vụ hoặc cơ sở nào?", "AmbiguousCatalogQuery", AiChatIntentTypes.FacilityInquiry, "/locations");
