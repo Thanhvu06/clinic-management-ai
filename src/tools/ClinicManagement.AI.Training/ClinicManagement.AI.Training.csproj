@@ -15,6 +15,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="RoleIntentDatasetGenerator.cs" />
+    <ProjectReference Include="..\..\shared\ClinicManagement.RoleIntent.Shared\ClinicManagement.RoleIntent.Shared.csproj" />
     <ProjectReference Include="..\..\backend\ClinicManagement.Application\ClinicManagement.Application.csproj" />
     <ProjectReference Include="..\..\backend\ClinicManagement.Infrastructure\ClinicManagement.Infrastructure.csproj" />
   </ItemGroup>

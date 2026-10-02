@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <ProjectReference Include="..\..\shared\ClinicManagement.RoleIntent.Shared\ClinicManagement.RoleIntent.Shared.csproj" />
     <ProjectReference Include="..\ClinicManagement.Application\ClinicManagement.Application.csproj" />
     <ProjectReference Include="..\ClinicManagement.Domain\ClinicManagement.Domain.csproj" />
   </ItemGroup>
@@ -24,5 +25,8 @@
 
   <ItemGroup>
     <Content Include="models\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\tools\ClinicManagement.AI.Training\models\role-intent-v2\role_intent_model_v2.zip" Link="models\role-intent-v2\role_intent_model_v2.zip" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\tools\ClinicManagement.AI.Training\models\role-intent-v2\role_intent_model_meta_v2.json" Link="models\role-intent-v2\role_intent_model_meta_v2.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\tools\ClinicManagement.AI.Training\data\role_intent_labels_v1.json" Link="models\role-intent-v2\role_intent_labels_v1.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

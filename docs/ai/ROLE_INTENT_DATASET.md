@@ -310,3 +310,136 @@ Build Release 0 lỗi; 37 test trọng tâm (v2 6, v1 6, dataset 8, eval set 6, 
 Eval do AI viết, cùng nguồn tổng hợp với seeds, đã nhìn ở v1 và các lỗi v1 là động lực thiết kế v2, nên số đo có thể lạc quan dù v2 chọn tham số/ngưỡng chỉ trên validation. Chưa có tập blind độc lập do người viết hoặc traffic thật; 10 câu/nhãn eval còn nhiều bất định. Train 100% không chứng minh generalization. OutOfScope vẫn F1=0 trên validation và yếu trên eval; còn nhầm ActionRequest với PrescriptionPayment. Xác suất chưa calibrated trên người dùng thật, threshold cần role mask. Model chưa nối runtime/API và chưa chứng minh chất lượng fallback luật. Không gọi LLM live, không promote model production.
 
 Model v2 SHA-256: cb62d5995617065a26c5e8facffb662fbc5ab319b8932582b623981da37074ba. Hash xác suất validation: 7dfcb8ed5a55aac25aab7cc6765ece5a0d82bc519dce3740f4f3c17f3b074961. Metadata ghi catalog/score labels, seed/package, hashes train/validation/labels, mọi trial, tiêu chí/tolerance tái lập và mọi ngưỡng.
+
+## Runtime lai
+
+### Khảo sát trước khi nối
+
+VietnameseIntentClassifier được gọi trong AiConversationPipeline.Analyze; AiSpecialtyService.ChatAsync cũng có đường gọi trực tiếp khi không có pipeline. Classifier dùng IsClear=true và intent khác UnclearOrOutOfScope cho kết quả rõ; IsClear=false/UnclearOrOutOfScope cần làm rõ. Production classifier hiện chạy Shadow: model cũ chỉ cung cấp telemetry, kết quả luật giữ nguyên. Không sửa logic hoặc hash artifact của classifier đó.
+
+Copilot lấy role từ ClaimTypes.Role của người đăng nhập qua IHttpContextAccessor (ResolveRole), không từ message hoặc role do client gửi. Context/resource được resolver xác minh trước planner. Luồng /api/v1/ai/copilot/chat hỗ trợ đủ sáu vai trò; /api/v1/ai/specialties/chat là luồng booking legacy riêng và giữ nguyên trong thay đổi này.
+
+Fallback copilot cũ: deterministic planner trả RequiresProvider, structured planner xử lý nếu được phép; khi disabled/degraded/unavailable dùng phản hồi làm rõ/handoff hiện có. Safety, quyền, resource, pending confirmation và tool preflight vẫn nằm trước/bao quanh thực thi. Legacy không hiểu câu thì trả UnclearInput và giữ draft, không đổi đường này.
+
+### Luồng và cấu hình
+
+```mermaid
+flowchart TD
+  A[Chat và claims đăng nhập] --> B[Safety và resolver hiện có]
+  B --> C[VietnameseIntentClassifier và planner luật]
+  C -->|Khớp rõ hoặc có quyết định local| D[Xử lý luật hiện có]
+  C -->|Không rõ| E{Model khả dụng?}
+  E -->|Không| F[Fallback cũ]
+  E -->|Có| G[Chuẩn hóa chung và model v2]
+  G --> H[Lọc nhãn theo role và chuẩn hóa xác suất]
+  H --> I{Điểm >= 0.75 và có handler?}
+  I -->|Không| F
+  I -->|Có| J[Suggestion hoặc handler đọc hiện có]
+  J --> K[Binding, quyền và executor hiện có]
+```
+
+HybridIntentRouter bọc planner luật; không thay đổi VietnameseIntentClassifier. Nếu classifier rõ, planner có quyết định local/clarification, hoặc guard chặn, model v2 không được gọi. Nếu không rõ, model mới chọn nhãn đã lọc role. Nhãn có handler và điểm đạt ngưỡng được đưa vào planner/suggestion hiện có; dưới ngưỡng, lỗi, nhãn không hỗ trợ hoặc model tắt trả chính quyết định fallback cũ. Hành động ghi không có trong mapping model; không có tool mới hoặc gọi execute/prepare từ model.
+
+RoleIntentModel là singleton được nạp lúc app khởi động. ZIP phải khớp SHA-256 cb62d5995617065a26c5e8facffb662fbc5ab319b8932582b623981da37074ba; metadata/model version/score labels và catalog phải khớp. Thiếu hoặc sai file/cấu hình: cảnh báo và tắt model, app vẫn chạy. PredictionEngine được bảo vệ bằng lock; mỗi kết quả có dictionary riêng. Runtime dùng Microsoft.ML 4.0.3 đã có; chỉ nạp, không train artifact. Build/publish copy nguyên tên ZIP, meta và catalog từ source được bảo vệ.
+
+Để dùng đúng cùng code chuẩn hóa mà không sửa generator/pipeline, project RoleIntent.Shared compile source RoleIntentDatasetGenerator.cs nguyên vẹn; training và backend tham chiếu cùng assembly. Runtime gọi chính RoleIntentDatasetGenerator.Normalize, không viết bản khác.
+
+| Cấu hình | Mặc định | Ý nghĩa |
+|---|---|---|
+| RoleIntentModel:Enabled | true | false giữ kết quả điều phối cũ |
+| RoleIntentModel:Threshold | từ meta: 0.75 | override hữu hạn trong [0,1]; các phép đo này giữ 0.75 |
+| RoleIntentModel:Directory | models/role-intent-v2 trong AppContext.BaseDirectory | vị trí artifact đã copy |
+| RoleIntentModel:LabelsPath | catalog trong thư mục model | catalog phải khớp hash metadata |
+
+Mỗi lượt copilot log nguồn rule/model/fallback, nhãn, điểm và role; không log nguyên văn input. Guard/resource rejection trước router cũng có log quyết định. Log không phải câu trả lời UI.
+
+### Ánh xạ 24 nhãn
+
+| Nhãn | Runtime hiện có |
+|---|---|
+| Greeting | local Greeting |
+| Help | local RoleHelp theo role |
+| ClinicKnowledge | clinic.search_knowledge |
+| ActionRequest | Không có handler model riêng chung; fallback cũ. Luật/action gateway hiện có giữ bước xác nhận |
+| OutOfScope | Không có handler model riêng chung; fallback cũ |
+| StartBooking | patient.start_booking / BookingWizard; nút mở wizard, targetTool=null; không tự đặt lịch |
+| MyAppointments | patient.get_my_appointments |
+| MyVisits | patient.get_my_visits |
+| MyDiagnosticResults | patient.get_my_diagnostic_results |
+| MyPrescriptions | patient.get_my_prescriptions |
+| MyBills | patient.get_my_bills |
+| TodayAppointments | reception.get_today_appointments |
+| ReceptionQueue | reception.get_queue |
+| LookupAppointment | reception.lookup_appointment; thiếu mã thì handler cũ hỏi lại |
+| DoctorQueue | doctor.get_my_queue |
+| PatientSummary | doctor.get_patient_summary; cần ca được xác minh |
+| DiagnosticOrders | doctor.get_diagnostic_orders; cần ca được xác minh |
+| PrescriptionStatus | doctor.get_prescription_status; cần ca được xác minh |
+| TechnicianWorklist | technician.get_worklist |
+| PrescriptionQueue | pharmacist.get_prescription_queue |
+| InventoryStatus | pharmacist.get_inventory_status |
+| PrescriptionPayment | pharmacist.get_prescription_payment_status; đọc trạng thái, cần prescription được xác minh |
+| DashboardMetrics | admin.get_dashboard_metrics |
+| AiHealth | admin.get_ai_health |
+
+### Phương pháp đo offline
+
+Benchmark chạy toàn bộ RoleAwareCopilotOrchestrator, classifier/pipeline/safety, planner, preflight và composer. Provider luôn là mock disabled, không gọi Gemini. Resolver/memory/audit/read-result là fixture offline, không chứng minh grounding trên dữ liệu thật hoặc tỷ lệ hoàn tất hành động. Câu không cung cấp resource vẫn đi qua handler hỏi lại hiện có. Accuracy eval là nhãn handler điều phối, không phải accuracy của riêng model hay tỷ lệ ghi/đọc thành công. Fallback không ánh xạ được nhãn được tính là Unresolved (sai), không tự quy thành OutOfScope.
+
+Phase5 baseline được đo trước code: 3/21 intent khớp chính xác trong copilot offline. Không sửa holdout. Prompt nhắc cảnh báo 10/12 ca StartBooking là câu nhân viên; đối chiếu file hiện tại cho thấy **11/12 actor là nhân viên**, chỉ P5-BLIND-005 là Patient. Các câu hàng đợi, check-in, phiếu xét nghiệm, nhà thuốc và dashboard gắn StartBooking làm exact-intent accuracy khó diễn giải. Không chỉnh logic/ngưỡng theo kết quả này.
+
+Eval do AI viết và đã được nhìn ở v1/v2, không phải blind chưa thấy. Logic runtime và threshold 0.75 được freeze trước khi đo; không tune sau đo. Latency chỉ đo phần model thêm (normalize, Predict và mask) nối tiếp, 50 warmup + 1000 mẫu seed cố định; không gồm HTTP, provider, database hoặc chờ lock khi có tải.
+### Kết quả sau khi freeze
+
+50 câu eval có role Chung được đo ở đủ 6 role, mỗi lượt trọng số 1/6: 240 câu gốc, 490 lượt runtime. Các số sau là có trọng số; không sửa TSV hoặc cho runtime một role Chung giả.
+
+| Luồng | Accuracy nhãn điều phối | Rule | Model | Fallback |
+|---|---:|---:|---:|---:|
+| Chỉ luật (Enabled=false) | 25.00% | 57.85% | 0.00% | 42.15% |
+| Lai (Enabled=true) | 43.33% | 57.85% | 18.96% | 23.19% |
+
+| Nhãn (10 câu gốc) | Accuracy chỉ luật | Accuracy lai |
+|---|---:|---:|
+| Greeting | 40.00% | 50.00% |
+| Help | 0.00% | 18.33% |
+| ClinicKnowledge | 40.00% | 51.67% |
+| ActionRequest | 0.00% | 0.00% |
+| OutOfScope | 0.00% | 0.00% |
+| StartBooking | 0.00% | 0.00% |
+| MyAppointments | 50.00% | 50.00% |
+| MyVisits | 20.00% | 40.00% |
+| MyDiagnosticResults | 80.00% | 90.00% |
+| MyPrescriptions | 60.00% | 80.00% |
+| MyBills | 70.00% | 70.00% |
+| TodayAppointments | 30.00% | 50.00% |
+| ReceptionQueue | 20.00% | 60.00% |
+| LookupAppointment | 30.00% | 70.00% |
+| DoctorQueue | 10.00% | 40.00% |
+| PatientSummary | 0.00% | 0.00% |
+| DiagnosticOrders | 0.00% | 0.00% |
+| PrescriptionStatus | 0.00% | 10.00% |
+| TechnicianWorklist | 20.00% | 50.00% |
+| PrescriptionQueue | 50.00% | 100.00% |
+| InventoryStatus | 30.00% | 70.00% |
+| PrescriptionPayment | 0.00% | 0.00% |
+| DashboardMetrics | 30.00% | 50.00% |
+| AiHealth | 20.00% | 90.00% |
+
+Phase5: trước code 3/21 = 14.29%; flag tắt sau code khớp cả 21 output intent của baseline; lai vẫn 3/21 = 14.29%. Nguồn lai: rule 19/21 (90.48%), model 1/21 (4.76%), fallback 1/21 (4.76%). Không dùng kết quả này để sửa ngưỡng hoặc logic.
+
+Model warm 1000 lần: mean 0.0575 ms, p95 0.0760 ms; load startup 189.74 ms. Trên các lượt eval runtime, thời gian model thêm (0 khi bỏ qua) có weighted mean 0.0499 ms và p95 0.1480 ms. Máy Windows local, chạy nối tiếp; không suy ra p95 dưới tải.
+
+Build Release 0 lỗi; baseline 957 pass; 32 test mới (22 router/model, 10 API), focused 96 pass; full backend 989/989, 0 fail/skip. Fixture provider cũ tắt model để tiếp tục kiểm tra nhánh provider; test hybrid riêng bật model. Gate B IsValid=true, NOT_PROMOTED. 31 file protected giữ nguyên SHA-256; runtime source hashes khớp freeze trước đo. Không train lại artifact role-intent hoặc gọi LLM live.
+
+Chi tiết từng lượt, protocol, hashes và baseline nằm ở RUNTIME_HYBRID_MEASUREMENTS.json. Các test model cũ và Gate B vẫn dựng fixture/candidate tạm như suite hiện có; không đổi artifact repo.
+
+Tái chạy phép đo offline (không train):
+
+```powershell
+dotnet run --project src/tools/ClinicManagement.AI.RuntimeBenchmark -c Release -- disabled
+dotnet run --project src/tools/ClinicManagement.AI.RuntimeBenchmark -c Release -- enabled
+```
+
+### Giới hạn runtime
+
+Eval đã nhìn và do AI viết; chưa có blind do người viết/traffic thực. Source rule bao gồm quyết định rõ của classifier dù đường xử lý cũ có thể cần provider; provider offline disabled làm nhiều ca còn Unresolved. StartBooking 0% trong phép đo thực không phủ nhận test mapping: model giả lập chọn StartBooking đã chứng minh chỉ hiện wizard, nhưng các câu luật đã rõ vẫn giữ đường cũ. Handler theo ca/đơn cần resource đã xác minh; benchmark không có resource thật, nên PatientSummary/DiagnosticOrders/PrescriptionPayment thấp. Không triển khai handler mới cho ActionRequest/OutOfScope. Phép đo chưa chứng minh grounding, xác nhận ghi, hoặc latency concurrent/production; API tests kiểm tra gateway/quyền hiện có bằng dữ liệu SQLite fixture.
