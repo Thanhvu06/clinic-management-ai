@@ -109,6 +109,17 @@ public class Program
                 ? 0
                 : 1;
         }
+        else if (command == "--gen-role-intent")
+        {
+            // Reuse the existing repository-root resolution without changing older commands.
+            var modelsDirectory = ResolveIntentOutputDirectory(null, Directory.GetCurrentDirectory());
+            var repoRoot = Path.GetFullPath(Path.Combine(modelsDirectory, "..", "..", "..", ".."));
+            var defaultData = Path.Combine(repoRoot, "src", "tools", "ClinicManagement.AI.Training", "data");
+            var dataDirectory = OptionOrDefault(args, "--data-dir", defaultData);
+            var manifest = RoleIntentDatasetGenerator.Generate(dataDirectory);
+            Console.WriteLine(JsonSerializer.Serialize(manifest.Totals));
+            return 0;
+        }
         else if (command == "--gateb")
         {
             return RunGateB(args);
@@ -135,6 +146,7 @@ public class Program
         Console.WriteLine("  ClinicManagement.AI.Training --validate-phase4 [datasetPath] [--train trainDatasetPath]");
         Console.WriteLine("  ClinicManagement.AI.Training --phase4-self-test");
         Console.WriteLine("  ClinicManagement.AI.Training --benchmark-phase4 [datasetPath] [--train trainDatasetPath] [--report reportPath]");
+        Console.WriteLine("  ClinicManagement.AI.Training --gen-role-intent [--data-dir directory]");
         Console.WriteLine("  ClinicManagement.AI.Training --gateb [--report reportPath] [--promotion promotionPath]");
     }
 
