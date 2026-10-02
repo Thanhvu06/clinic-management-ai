@@ -263,7 +263,16 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.NotFound, wrongUser.StatusCode);
         var wrongToken = await receptionist.PostAsJsonAsync($"/api/v1/ai/copilot/actions/{identityAction.ActionId}/confirm", new { sessionId = identityAction.SessionId, concurrencyToken = new string('A', 43) });
         Assert.Equal(HttpStatusCode.Conflict, wrongToken.StatusCode);
+        Assert.Equal("CONCURRENCY_CONFLICT", (await wrongToken.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Error?.Code);
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(AiPendingToolActionState.PendingConfirmation, (await db.AiPendingToolActions.SingleAsync(x => x.ActionId == identityAction.ActionId)).State);
+        }
         await AssertNoVisitAsync(identityAppointment.AppointmentId);
+        var correctToken = await ConfirmAsync(receptionist, identityAction);
+        Assert.Equal(HttpStatusCode.OK, correctToken.StatusCode);
+        Assert.Equal("completed", (await correctToken.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Status);
 
         foreach (var mutation in new Action<AiPendingToolAction>[]
         {
@@ -442,6 +451,7 @@ public sealed class AiPhase2RoleActionGatewayTests : IntegrationTestBase
 
         var confirm = await ConfirmAsync(receptionist, first);
         Assert.Equal(HttpStatusCode.Gone, confirm.StatusCode);
+        Assert.Equal("ACTION_CANCELLED", (await confirm.Content.ReadFromJsonAsync<AiToolExecutionResult>())?.Error?.Code);
         await AssertNoVisitAsync(appointment.AppointmentId);
 
         var second = await PrepareAsync(receptionist, "reception.prepare_check_in_appointment",

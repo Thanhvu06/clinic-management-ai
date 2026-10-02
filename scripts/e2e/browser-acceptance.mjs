@@ -412,7 +412,11 @@ async function runStaffConfirmationIdempotency(browser) {
             await page.getByText(`Thông tin đã chọn: ${result.preview.resource.identity}`, { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
             return result;
         };
+        const firstPrepareResponsePromise = page.waitForResponse(response => response.url().endsWith('/api/v1/ai/copilot/actions/prepare') && response.request().method() === 'POST');
         await prepare();
+        const firstPrepareResponse = await firstPrepareResponsePromise;
+        const firstPending = await firstPrepareResponse.json();
+        const firstPrepareRequest = firstPrepareResponse.request().postDataJSON();
         assert.deepEqual(await readOrder(), before, 'preview must not change domain state');
         const cancelPromise = page.waitForResponse(response => response.url().includes('/api/v1/ai/copilot/actions/') && response.url().endsWith('/cancel') && response.request().method() === 'POST');
         await page.getByRole('button', { name: 'Hủy thao tác' }).click();
@@ -423,8 +427,29 @@ async function runStaffConfirmationIdempotency(browser) {
         assert.deepEqual(await readOrder(), before, 'cancel must not change domain state');
         assert.deepEqual(await sideEffectIds(), initialIds, 'cancel must not create domain records');
 
+        const cancelledConfirm = await page.request.post(`${apiBase}/api/v1/ai/copilot/actions/${firstPending.actionId}/confirm`, {
+            headers, data: { sessionId: firstPrepareRequest.sessionId, concurrencyToken: firstPending.data.confirmationToken }
+        });
+        const cancelledConfirmResult = await cancelledConfirm.json();
+        assert.equal(cancelledConfirm.status(), 410, JSON.stringify(cancelledConfirmResult));
+        assert.equal(cancelledConfirmResult.error.code, 'ACTION_CANCELLED', JSON.stringify(cancelledConfirmResult));
+        assert.deepEqual(await readOrder(), before, 'confirm after cancel must not change domain state');
+        assert.deepEqual(await sideEffectIds(), initialIds, 'confirm after cancel must not create domain records');
+
+        const secondPrepareRequestPromise = page.waitForRequest(request => request.url().endsWith('/api/v1/ai/copilot/actions/prepare') && request.method() === 'POST');
         const pending = await prepare();
         const confirmUrl = `${apiBase}/api/v1/ai/copilot/actions/${pending.actionId}/confirm`;
+        const secondPrepareRequest = (await secondPrepareRequestPromise).postDataJSON();
+        const pendingToken = pending.data.confirmationToken;
+        const wrongPendingToken = (pendingToken[0] === 'A' ? 'B' : 'A') + pendingToken.slice(1);
+        const pendingWrongConfirm = await page.request.post(confirmUrl, {
+            headers, data: { sessionId: secondPrepareRequest.sessionId, concurrencyToken: wrongPendingToken }
+        });
+        const pendingWrongResult = await pendingWrongConfirm.json();
+        assert.equal(pendingWrongConfirm.status(), 409, JSON.stringify(pendingWrongResult));
+        assert.equal(pendingWrongResult.error.code, 'CONCURRENCY_CONFLICT', JSON.stringify(pendingWrongResult));
+        assert.deepEqual(await readOrder(), before, 'wrong pending token must not change domain state');
+        assert.deepEqual(await sideEffectIds(), initialIds, 'wrong pending token must not create domain records');
         const requestPromise = page.waitForRequest(request => request.url() === confirmUrl && request.method() === 'POST');
         const responsePromise = page.waitForResponse(response => response.url() === confirmUrl && response.request().method() === 'POST');
         await page.getByRole('button', { name: /Xác nhận thao tác/ }).click();
