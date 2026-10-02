@@ -1,0 +1,241 @@
+vai_tro	cau	nhan	nguon
+Chung	chào buổi chiều nha	Greeting	claude_eval_v1
+Chung	alo alo có ai không	Greeting	claude_eval_v1
+Chung	xin chào, mình mới dùng lần đầu	Greeting	claude_eval_v1
+Chung	hii	Greeting	claude_eval_v1
+Chung	chao ban	Greeting	claude_eval_v1
+Chung	ê bot ơi	Greeting	claude_eval_v1
+Chung	good morning	Greeting	claude_eval_v1
+Chung	chào bạn nha	Greeting	claude_eval_v1
+Chung	helu	Greeting	claude_eval_v1
+Chung	Dạ chào ạ	Greeting	claude_eval_v1
+Chung	mình không biết bắt đầu từ đâu hết	Help	claude_eval_v1
+Chung	app này dùng sao vậy	Help	claude_eval_v1
+Chung	bạn trả lời được những câu gì thế	Help	claude_eval_v1
+Chung	giúp mình với	Help	claude_eval_v1
+Chung	cách dùng chatbot này là gì	Help	claude_eval_v1
+Chung	toi can huong dan thao tac	Help	claude_eval_v1
+Chung	có thể hỏi bạn những gì	Help	claude_eval_v1
+Chung	mình bị rối quá, chỉ mình cách dùng với	Help	claude_eval_v1
+Chung	chuc nang cua bot gom nhung gi	Help	claude_eval_v1
+Chung	hướng dẫn nhanh giúp mình nhé	Help	claude_eval_v1
+Chung	cuối tuần phòng khám có làm việc không	ClinicKnowledge	claude_eval_v1
+Chung	mấy giờ thì phòng khám đóng cửa	ClinicKnowledge	claude_eval_v1
+Chung	khám nội tổng quát giá nhiêu vậy	ClinicKnowledge	claude_eval_v1
+Chung	phong kham o duong nao	ClinicKnowledge	claude_eval_v1
+Chung	bên mình có khám nhi không	ClinicKnowledge	claude_eval_v1
+Chung	có bảo hiểm y tế không ạ	ClinicKnowledge	claude_eval_v1
+Chung	đi khám cần mang theo giấy tờ gì	ClinicKnowledge	claude_eval_v1
+Chung	quy trinh dat kham nhu the nao	ClinicKnowledge	claude_eval_v1
+Chung	có nhận khám cấp cứu ban đêm không	ClinicKnowledge	claude_eval_v1
+Chung	phi sieu am bung bao nhieu	ClinicKnowledge	claude_eval_v1
+Chung	hủy cái hẹn ngày mai giúp mình	ActionRequest	claude_eval_v1
+Chung	xoa don thuoc hom qua di	ActionRequest	claude_eval_v1
+Chung	đổi giờ khám sang chiều nha	ActionRequest	claude_eval_v1
+Chung	thanh toan luon hoa don nay	ActionRequest	claude_eval_v1
+Chung	sửa số điện thoại của mình thành số mới	ActionRequest	claude_eval_v1
+Chung	gửi lại kết quả xét nghiệm qua email cho mình	ActionRequest	claude_eval_v1
+Chung	xac nhan lich hen nay giup toi	ActionRequest	claude_eval_v1
+Chung	đặt lại mật khẩu cho mình đi	ActionRequest	claude_eval_v1
+Chung	cho mình in đơn thuốc	ActionRequest	claude_eval_v1
+Chung	huy lich kham tuan sau	ActionRequest	claude_eval_v1
+Chung	hôm nay trời có mưa không	OutOfScope	claude_eval_v1
+Chung	bạn biết hát không hát thử đi	OutOfScope	claude_eval_v1
+Chung	giải giúp mình bài toán lớp 9	OutOfScope	claude_eval_v1
+Chung	tỷ giá đô la hôm nay	OutOfScope	claude_eval_v1
+Chung	mua giùm mình cái áo	OutOfScope	claude_eval_v1
+Chung	viet cho minh bai tho ve mua thu	OutOfScope	claude_eval_v1
+Chung	ai vô địch world cup 2022	OutOfScope	claude_eval_v1
+Chung	gợi ý quán cà phê gần đây	OutOfScope	claude_eval_v1
+Chung	dịch câu này sang tiếng Nhật	OutOfScope	claude_eval_v1
+Chung	kể chuyện ma đi	OutOfScope	claude_eval_v1
+BenhNhan	mình muốn khám da liễu thứ bảy này	StartBooking	claude_eval_v1
+BenhNhan	dat lich cho me minh di kham	StartBooking	claude_eval_v1
+BenhNhan	cho mình hẹn bác sĩ nhi sáng mai	StartBooking	claude_eval_v1
+BenhNhan	đặt hẹn khám tai mũi họng	StartBooking	claude_eval_v1
+BenhNhan	toi muon kham tong quat tuan sau	StartBooking	claude_eval_v1
+BenhNhan	book giúp mình lịch khám mắt	StartBooking	claude_eval_v1
+BenhNhan	cần đặt khám sớm nhất có thể	StartBooking	claude_eval_v1
+BenhNhan	dang ky kham xet nghiem mau	StartBooking	claude_eval_v1
+BenhNhan	mình muốn đi khám răng, đặt giờ sao	StartBooking	claude_eval_v1
+BenhNhan	e muon hen bs tim mach chieu mai	StartBooking	claude_eval_v1
+BenhNhan	mai mình có hẹn khám không	MyAppointments	claude_eval_v1
+BenhNhan	xem giùm mình lịch khám sắp tới	MyAppointments	claude_eval_v1
+BenhNhan	lich kham cua toi tuan nay	MyAppointments	claude_eval_v1
+BenhNhan	mình đặt hẹn lúc mấy giờ ấy nhỉ	MyAppointments	claude_eval_v1
+BenhNhan	còn lịch hẹn nào chưa khám không	MyAppointments	claude_eval_v1
+BenhNhan	cho toi coi cac lich hen da dat	MyAppointments	claude_eval_v1
+BenhNhan	tuần sau mình có lịch khám nào	MyAppointments	claude_eval_v1
+BenhNhan	nhắc mình lịch hẹn gần nhất	MyAppointments	claude_eval_v1
+BenhNhan	toi dat may cuoc hen roi	MyAppointments	claude_eval_v1
+BenhNhan	kiểm tra giúp mình hẹn khám ngày mai	MyAppointments	claude_eval_v1
+BenhNhan	lần trước mình khám ngày nào	MyVisits	claude_eval_v1
+BenhNhan	cho xem lại các lần đi khám cũ	MyVisits	claude_eval_v1
+BenhNhan	tôi từng khám ở đây mấy lần	MyVisits	claude_eval_v1
+BenhNhan	lich su di kham cua toi	MyVisits	claude_eval_v1
+BenhNhan	lần khám gần đây bác sĩ kết luận gì	MyVisits	claude_eval_v1
+BenhNhan	xem lại hồ sơ khám tháng trước	MyVisits	claude_eval_v1
+BenhNhan	toi kham lan cuoi ngay may	MyVisits	claude_eval_v1
+BenhNhan	mình đã khám khoa nào rồi	MyVisits	claude_eval_v1
+BenhNhan	liet ke cac lan kham cua toi	MyVisits	claude_eval_v1
+BenhNhan	bữa trước mình khám bệnh gì nhỉ	MyVisits	claude_eval_v1
+BenhNhan	có kết quả siêu âm chưa	MyDiagnosticResults	claude_eval_v1
+BenhNhan	kết quả xét nghiệm máu của mình ra chưa	MyDiagnosticResults	claude_eval_v1
+BenhNhan	xem ket qua chup x quang	MyDiagnosticResults	claude_eval_v1
+BenhNhan	mình đi chụp CT hôm qua có kết quả chưa	MyDiagnosticResults	claude_eval_v1
+BenhNhan	cho xem kết quả xét nghiệm nước tiểu	MyDiagnosticResults	claude_eval_v1
+BenhNhan	ket qua noi soi cua toi	MyDiagnosticResults	claude_eval_v1
+BenhNhan	xét nghiệm đường huyết của mình thế nào	MyDiagnosticResults	claude_eval_v1
+BenhNhan	kq xn của mình đâu rồi	MyDiagnosticResults	claude_eval_v1
+BenhNhan	bao giờ có kết quả cận lâm sàng	MyDiagnosticResults	claude_eval_v1
+BenhNhan	tra ket qua chan doan cua minh	MyDiagnosticResults	claude_eval_v1
+BenhNhan	đơn thuốc bác sĩ kê lần gần nhất	MyPrescriptions	claude_eval_v1
+BenhNhan	mình được kê thuốc gì hôm qua	MyPrescriptions	claude_eval_v1
+BenhNhan	xem lai don thuoc thang truoc	MyPrescriptions	claude_eval_v1
+BenhNhan	thuốc này uống ngày mấy lần, đơn của mình	MyPrescriptions	claude_eval_v1
+BenhNhan	toi quen don thuoc roi, cho xem lai	MyPrescriptions	claude_eval_v1
+BenhNhan	liệt kê các đơn thuốc của mình	MyPrescriptions	claude_eval_v1
+BenhNhan	don thuoc hom nay cua minh co nhung gi	MyPrescriptions	claude_eval_v1
+BenhNhan	bác sĩ cho mình thuốc gì để uống	MyPrescriptions	claude_eval_v1
+BenhNhan	mình cần xem toa thuốc	MyPrescriptions	claude_eval_v1
+BenhNhan	xem thuoc ke gan day nhat	MyPrescriptions	claude_eval_v1
+BenhNhan	mình còn nợ viện phí bao nhiêu	MyBills	claude_eval_v1
+BenhNhan	hóa đơn lần khám trước hết bao nhiêu tiền	MyBills	claude_eval_v1
+BenhNhan	xem hoa don cua toi	MyBills	claude_eval_v1
+BenhNhan	lần khám vừa rồi mình đóng bao nhiêu	MyBills	claude_eval_v1
+BenhNhan	tổng chi phí khám của mình tháng này	MyBills	claude_eval_v1
+BenhNhan	toi chua thanh toan khoan nao khong	MyBills	claude_eval_v1
+BenhNhan	cho xem lịch sử đóng tiền	MyBills	claude_eval_v1
+BenhNhan	hoa don thang truoc cua minh	MyBills	claude_eval_v1
+BenhNhan	mình đã trả tiền hóa đơn chưa	MyBills	claude_eval_v1
+BenhNhan	phi kham lan nay het bao nhieu	MyBills	claude_eval_v1
+LeTan	sáng nay có mấy người hẹn	TodayAppointments	claude_eval_v1
+LeTan	hôm nay ai có hẹn khám	TodayAppointments	claude_eval_v1
+LeTan	cho xem danh sách lịch hẹn trong ngày	TodayAppointments	claude_eval_v1
+LeTan	hom nay co bao nhieu ca dat truoc	TodayAppointments	claude_eval_v1
+LeTan	chiều nay còn lịch hẹn nào không	TodayAppointments	claude_eval_v1
+LeTan	tong lich hen hom nay la may	TodayAppointments	claude_eval_v1
+LeTan	liệt kê hẹn khám hôm nay giúp	TodayAppointments	claude_eval_v1
+LeTan	ngay hom nay co hen nhung ai	TodayAppointments	claude_eval_v1
+LeTan	mấy giờ có bệnh nhân hẹn đầu tiên hôm nay	TodayAppointments	claude_eval_v1
+LeTan	check lich hen hom nay	TodayAppointments	claude_eval_v1
+LeTan	ngoài sảnh đang chờ mấy người	ReceptionQueue	claude_eval_v1
+LeTan	ai dang ngoi cho check in	ReceptionQueue	claude_eval_v1
+LeTan	còn bao nhiêu người chưa được tiếp nhận	ReceptionQueue	claude_eval_v1
+LeTan	danh sach cho o quay le tan	ReceptionQueue	claude_eval_v1
+LeTan	có bệnh nhân nào đến chưa làm thủ tục không	ReceptionQueue	claude_eval_v1
+LeTan	xem hàng chờ tiếp nhận hiện tại	ReceptionQueue	claude_eval_v1
+LeTan	benh nhan nao den roi chua check-in	ReceptionQueue	claude_eval_v1
+LeTan	quầy mình đang có mấy lượt chờ	ReceptionQueue	claude_eval_v1
+LeTan	hang cho tiep don bay gio	ReceptionQueue	claude_eval_v1
+LeTan	người tiếp theo cần tiếp đón là ai	ReceptionQueue	claude_eval_v1
+LeTan	tra lịch hẹn mã LH-4821	LookupAppointment	claude_eval_v1
+LeTan	cho mình xem lh 3307	LookupAppointment	claude_eval_v1
+LeTan	tim giup lich hen LH5590	LookupAppointment	claude_eval_v1
+LeTan	kiem tra ma hen LH-1186 voi	LookupAppointment	claude_eval_v1
+LeTan	mã lh 9042 là của ai vậy	LookupAppointment	claude_eval_v1
+LeTan	LH-7215 hẹn ngày nào	LookupAppointment	claude_eval_v1
+LeTan	xem chi tiết lh 6634 giúp	LookupAppointment	claude_eval_v1
+LeTan	tra cuu lich hen ma LH2290	LookupAppointment	claude_eval_v1
+LeTan	lịch hẹn lh-8471 còn hiệu lực không	LookupAppointment	claude_eval_v1
+LeTan	check hộ mình mã LH 5163	LookupAppointment	claude_eval_v1
+BacSi	còn mấy bệnh nhân đang chờ mình	DoctorQueue	claude_eval_v1
+BacSi	ai là ca kế tiếp	DoctorQueue	claude_eval_v1
+BacSi	hang doi kham hom nay cua toi	DoctorQueue	claude_eval_v1
+BacSi	danh sách ca chờ khám của tôi	DoctorQueue	claude_eval_v1
+BacSi	toi con bao nhieu ca chua kham	DoctorQueue	claude_eval_v1
+BacSi	bác sĩ đang có ai chờ vậy	DoctorQueue	claude_eval_v1
+BacSi	bệnh nhân nào vào khám tiếp theo	DoctorQueue	claude_eval_v1
+BacSi	hom nay toi co may ca cho	DoctorQueue	claude_eval_v1
+BacSi	cho mình xem danh sách người đang đợi	DoctorQueue	claude_eval_v1
+BacSi	ca nao dang cho toi	DoctorQueue	claude_eval_v1
+BacSi	cho mình tóm tắt tình trạng bệnh nhân này	PatientSummary	claude_eval_v1
+BacSi	benh nhan nay co tien su gi	PatientSummary	claude_eval_v1
+BacSi	xem nhanh hồ sơ bệnh nhân đang khám	PatientSummary	claude_eval_v1
+BacSi	tom tat benh an giup toi	PatientSummary	claude_eval_v1
+BacSi	người này từng bị phản ứng thuốc chưa	PatientSummary	claude_eval_v1
+BacSi	lan kham truoc cua nguoi nay ra sao	PatientSummary	claude_eval_v1
+BacSi	tổng hợp thông tin bệnh nhân hiện tại	PatientSummary	claude_eval_v1
+BacSi	ca này có bệnh nền gì không	PatientSummary	claude_eval_v1
+BacSi	bn nay truoc kia kham gi	PatientSummary	claude_eval_v1
+BacSi	tóm tắt nhanh ca mình đang khám	PatientSummary	claude_eval_v1
+BacSi	mình đã chỉ định những xét nghiệm gì cho ca này	DiagnosticOrders	claude_eval_v1
+BacSi	chi dinh sieu am cua benh nhan da xong chua	DiagnosticOrders	claude_eval_v1
+BacSi	xem các phiếu chỉ định đang chờ	DiagnosticOrders	claude_eval_v1
+BacSi	liệt kê chỉ định cận lâm sàng hôm nay	DiagnosticOrders	claude_eval_v1
+BacSi	ca nay co chi dinh gi roi	DiagnosticOrders	claude_eval_v1
+BacSi	đã ra chỉ định X-quang chưa	DiagnosticOrders	claude_eval_v1
+BacSi	kiem tra phieu chi dinh xet nghiem	DiagnosticOrders	claude_eval_v1
+BacSi	danh sách chỉ định của bệnh nhân	DiagnosticOrders	claude_eval_v1
+BacSi	chỉ định nào chưa có kết quả	DiagnosticOrders	claude_eval_v1
+BacSi	xem lai cac chi dinh minh vua ra	DiagnosticOrders	claude_eval_v1
+BacSi	đơn thuốc mình kê đã được phát chưa	PrescriptionStatus	claude_eval_v1
+BacSi	duoc si cap thuoc cho benh nhan chua	PrescriptionStatus	claude_eval_v1
+BacSi	đơn của ca này tới đâu rồi	PrescriptionStatus	claude_eval_v1
+BacSi	kiem tra tinh trang don thuoc da ke	PrescriptionStatus	claude_eval_v1
+BacSi	thuốc đã giao cho bệnh nhân chưa	PrescriptionStatus	claude_eval_v1
+BacSi	toa thuoc toi ke dang o buoc nao	PrescriptionStatus	claude_eval_v1
+BacSi	đơn thuốc đã xử lý xong chưa	PrescriptionStatus	claude_eval_v1
+BacSi	xem trạng thái cấp phát thuốc	PrescriptionStatus	claude_eval_v1
+BacSi	don thuoc nay da phat chua vay	PrescriptionStatus	claude_eval_v1
+BacSi	nhà thuốc đã xuất thuốc chưa	PrescriptionStatus	claude_eval_v1
+KTV	hôm nay mình phải làm những ca nào	TechnicianWorklist	claude_eval_v1
+KTV	danh sach ca can chup	TechnicianWorklist	claude_eval_v1
+KTV	còn mấy phiếu xét nghiệm chờ mình	TechnicianWorklist	claude_eval_v1
+KTV	xem viec can lam trong ngay	TechnicianWorklist	claude_eval_v1
+KTV	ca nao toi can thuc hien tiep	TechnicianWorklist	claude_eval_v1
+KTV	liệt kê các chỉ định đang đợi kỹ thuật viên	TechnicianWorklist	claude_eval_v1
+KTV	cho xem hàng chờ thực hiện	TechnicianWorklist	claude_eval_v1
+KTV	toi co bao nhieu phieu chua lam	TechnicianWorklist	claude_eval_v1
+KTV	phiếu nào cần xử lý trước	TechnicianWorklist	claude_eval_v1
+KTV	công việc kỹ thuật hôm nay	TechnicianWorklist	claude_eval_v1
+DuocSi	còn bao nhiêu đơn đang đợi phát thuốc	PrescriptionQueue	claude_eval_v1
+DuocSi	don nao cho cap phat	PrescriptionQueue	claude_eval_v1
+DuocSi	xem hàng chờ ở nhà thuốc	PrescriptionQueue	claude_eval_v1
+DuocSi	có đơn thuốc mới nào cần soạn không	PrescriptionQueue	claude_eval_v1
+DuocSi	danh sach don thuoc dang cho xu ly	PrescriptionQueue	claude_eval_v1
+DuocSi	đơn kế tiếp cần phát là đơn nào	PrescriptionQueue	claude_eval_v1
+DuocSi	toi con may don chua phat	PrescriptionQueue	claude_eval_v1
+DuocSi	liệt kê các đơn đang chờ	PrescriptionQueue	claude_eval_v1
+DuocSi	hang cho phat thuoc hien tai	PrescriptionQueue	claude_eval_v1
+DuocSi	đơn nào mới về	PrescriptionQueue	claude_eval_v1
+DuocSi	thuốc nào sắp hết trong kho	InventoryStatus	claude_eval_v1
+DuocSi	còn bao nhiêu hộp amoxicillin	InventoryStatus	claude_eval_v1
+DuocSi	xem ton kho hien tai	InventoryStatus	claude_eval_v1
+DuocSi	kiểm tra giúp mình hàng tồn	InventoryStatus	claude_eval_v1
+DuocSi	thuoc nao duoi muc toi thieu	InventoryStatus	claude_eval_v1
+DuocSi	kho còn đủ paracetamol không	InventoryStatus	claude_eval_v1
+DuocSi	tinh trang kho thuoc the nao	InventoryStatus	claude_eval_v1
+DuocSi	liệt kê thuốc sắp cạn	InventoryStatus	claude_eval_v1
+DuocSi	con bao nhieu vi thuoc ho	InventoryStatus	claude_eval_v1
+DuocSi	thuốc nào đã hết hàng	InventoryStatus	claude_eval_v1
+DuocSi	khách thanh toán đơn vừa rồi chưa	PrescriptionPayment	claude_eval_v1
+DuocSi	kiem tra don thuoc da thu tien chua	PrescriptionPayment	claude_eval_v1
+DuocSi	xem đơn thuốc nào chưa thanh toán	PrescriptionPayment	claude_eval_v1
+DuocSi	benh nhan da dong tien don nay chua	PrescriptionPayment	claude_eval_v1
+DuocSi	trạng thái thanh toán đơn thuốc này	PrescriptionPayment	claude_eval_v1
+DuocSi	don nao con no tien thuoc	PrescriptionPayment	claude_eval_v1
+DuocSi	liệt kê đơn chờ thanh toán	PrescriptionPayment	claude_eval_v1
+DuocSi	đơn thuốc đã được thanh toán chưa vậy	PrescriptionPayment	claude_eval_v1
+DuocSi	tra tinh trang thanh toan cua don thuoc	PrescriptionPayment	claude_eval_v1
+DuocSi	đã thu tiền đơn thuốc nào rồi	PrescriptionPayment	claude_eval_v1
+Admin	hôm nay phòng khám đón bao nhiêu bệnh nhân	DashboardMetrics	claude_eval_v1
+Admin	cho xem so lieu tong quan	DashboardMetrics	claude_eval_v1
+Admin	thống kê hôm nay thế nào	DashboardMetrics	claude_eval_v1
+Admin	so luot kham trong ngay	DashboardMetrics	claude_eval_v1
+Admin	báo cáo nhanh hoạt động hôm nay	DashboardMetrics	claude_eval_v1
+Admin	dashboard hom nay co gi	DashboardMetrics	claude_eval_v1
+Admin	hôm nay có bao nhiêu lịch hẹn mới	DashboardMetrics	claude_eval_v1
+Admin	tong ket ngay hom nay giup toi	DashboardMetrics	claude_eval_v1
+Admin	xem chỉ số vận hành trong ngày	DashboardMetrics	claude_eval_v1
+Admin	luot dat lich hom nay	DashboardMetrics	claude_eval_v1
+Admin	chatbot ai có đang chạy tốt không	AiHealth	claude_eval_v1
+Admin	he thong ai on dinh khong	AiHealth	claude_eval_v1
+Admin	kiểm tra tình trạng mô hình AI	AiHealth	claude_eval_v1
+Admin	ai co bi loi gi khong	AiHealth	claude_eval_v1
+Admin	mô hình ý định còn hoạt động không	AiHealth	claude_eval_v1
+Admin	tinh trang dich vu ai hien tai	AiHealth	claude_eval_v1
+Admin	AI đang sống hay chết vậy	AiHealth	claude_eval_v1
+Admin	xem sức khỏe hệ thống trợ lý ảo	AiHealth	claude_eval_v1
+Admin	bot co phan hoi binh thuong khong	AiHealth	claude_eval_v1
+Admin	dịch vụ AI có sự cố nào không	AiHealth	claude_eval_v1

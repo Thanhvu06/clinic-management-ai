@@ -1,0 +1,33 @@
+{
+  "file": "role_intent_eval_ai_v1.tsv",
+  "sha256": "4104b49e57d2f82758602faa63c255cdddf5a6ec2e895d045c27e04382dd4686",
+  "byteSize": 17253,
+  "rowCount": 240,
+  "countsByLabel": {
+    "Greeting": 10,
+    "Help": 10,
+    "ClinicKnowledge": 10,
+    "ActionRequest": 10,
+    "OutOfScope": 10,
+    "StartBooking": 10,
+    "MyAppointments": 10,
+    "MyVisits": 10,
+    "MyDiagnosticResults": 10,
+    "MyPrescriptions": 10,
+    "MyBills": 10,
+    "TodayAppointments": 10,
+    "ReceptionQueue": 10,
+    "LookupAppointment": 10,
+    "DoctorQueue": 10,
+    "PatientSummary": 10,
+    "DiagnosticOrders": 10,
+    "PrescriptionStatus": 10,
+    "TechnicianWorklist": 10,
+    "PrescriptionQueue": 10,
+    "InventoryStatus": 10,
+    "PrescriptionPayment": 10,
+    "DashboardMetrics": 10,
+    "AiHealth": 10
+  },
+  "provenance": "Written by AI (Claude) in a single pass on 2026-10-02 as a supplementary evaluation set. Not written by human authors and NOT a blind test set by independent people. Never used for training or model selection. Frozen: do not edit after commit."
+}
