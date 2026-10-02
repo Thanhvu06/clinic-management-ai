@@ -349,6 +349,35 @@ public sealed class AiBookingWizardTests(CustomWebApplicationFactory factory) : 
         Assert.Null(tokens.Read(token, Patient1Id, session, "pick"));
     }
 
+    [Fact]
+    public void Wizard_token_survives_independent_providers_with_shared_keys_and_application_name()
+    {
+        var directory = new DirectoryInfo(Path.Combine(Path.GetTempPath(), $"cliniccare-wizard-keys-{Guid.NewGuid():N}"));
+        try
+        {
+            directory.Create();
+            var clock = new Mock<IDateTimeProvider>();
+            clock.SetupGet(x => x.UtcNow).Returns(DateTime.UtcNow);
+            var session = Session();
+            var state = new BookingWizardSelection(Guid.NewGuid(), BookingWizardStage.Doctor, SpecialtyEntityId);
+            var firstProvider = DataProtectionProvider.Create(directory, builder => builder.SetApplicationName("ClinicCareAI"));
+            var firstTokens = new AiBookingWizardTokens(firstProvider, clock.Object);
+            var token = firstTokens.Issue(Patient1Id, session, state, BookingWizardOperation.Pick);
+
+            var secondProvider = DataProtectionProvider.Create(directory, builder => builder.SetApplicationName("ClinicCareAI"));
+            var secondTokens = new AiBookingWizardTokens(secondProvider, clock.Object);
+            Assert.Equal(state, secondTokens.Read(token, Patient1Id, session, "pick"));
+
+            var differentProvider = DataProtectionProvider.Create(directory, builder => builder.SetApplicationName("OtherApplication"));
+            var differentTokens = new AiBookingWizardTokens(differentProvider, clock.Object);
+            Assert.Null(differentTokens.Read(token, Patient1Id, session, "pick"));
+        }
+        finally
+        {
+            if (directory.Exists) directory.Delete(recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData(null, HttpStatusCode.Unauthorized)]
     [InlineData("doc@test.com", HttpStatusCode.Forbidden)]
