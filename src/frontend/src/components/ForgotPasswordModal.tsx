@@ -1,11 +1,23 @@
 import React, { useState } from 'react';
 import { Mail, Lock, KeyRound, X, CheckCircle, AlertCircle } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
-import type { ApiResponse } from '../types';
+import type { ApiResponse, ForgotPasswordRequest, ForgotPasswordResponse, ResetPasswordRequest } from '../types';
 
 interface ForgotPasswordModalProps {
     isOpen: boolean;
     onClose: () => void;
+}
+
+function getErrorMessage(err: unknown, fallback: string): string {
+    if (typeof err === 'object' && err !== null) {
+        if ('message' in err && typeof (err as { message: unknown }).message === 'string') {
+            return (err as { message: string }).message;
+        }
+    }
+    if (err instanceof Error) {
+        return err.message;
+    }
+    return fallback;
 }
 
 export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen, onClose }) => {
@@ -25,26 +37,30 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
         setErrorMsg('');
         setSuccessMsg('');
 
-        if (!email.trim()) {
+        const trimmedEmail = email.trim();
+        if (!trimmedEmail) {
             setErrorMsg('Vui lòng nhập địa chỉ email.');
             return;
         }
 
         setLoading(true);
         try {
-            const res = await axiosClient.post<any, ApiResponse<{ message: string; resetToken: string }>>('/auth/forgot-password', {
-                email: email.trim()
+            const res = await axiosClient.post<ForgotPasswordRequest, ApiResponse<ForgotPasswordResponse>>('/auth/forgot-password', {
+                email: trimmedEmail
             });
 
-            if (res.success && res.data) {
-                setToken(res.data.resetToken);
-                setSuccessMsg('Mã xác thực đặt lại mật khẩu đã được tạo thành công.');
+            const resetToken = res.data?.resetToken;
+            if (res.success && typeof resetToken === 'string' && resetToken.trim().length > 0) {
+                setToken(resetToken.trim());
+                setSuccessMsg(res.message || 'Mã xác thực đặt lại mật khẩu đã được tạo thành công.');
                 setStep('reset');
+            } else if (res.success) {
+                setSuccessMsg(res.message || 'Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu đã được xử lý.');
             } else {
                 setErrorMsg(res.message || 'Không thể gửi yêu cầu đặt lại mật khẩu.');
             }
-        } catch (err: any) {
-            setErrorMsg(err?.message || 'Đã có lỗi xảy ra. Vui lòng kiểm tra lại email.');
+        } catch (err: unknown) {
+            setErrorMsg(getErrorMessage(err, 'Đã có lỗi xảy ra. Vui lòng kiểm tra lại email.'));
         } finally {
             setLoading(false);
         }
@@ -55,13 +71,14 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
         setErrorMsg('');
         setSuccessMsg('');
 
-        if (!token.trim()) {
+        const trimmedToken = (token ?? '').trim();
+        if (!trimmedToken) {
             setErrorMsg('Vui lòng nhập mã token đặt lại mật khẩu.');
             return;
         }
 
-        if (!newPassword || newPassword.length < 6) {
-            setErrorMsg('Mật khẩu mới phải có ít nhất 6 ký tự.');
+        if (!newPassword || newPassword.length < 8) {
+            setErrorMsg('Mật khẩu mới phải có ít nhất 8 ký tự.');
             return;
         }
 
@@ -72,22 +89,22 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
 
         setLoading(true);
         try {
-            const res = await axiosClient.post<any, ApiResponse<boolean>>('/auth/reset-password', {
+            const res = await axiosClient.post<ResetPasswordRequest, ApiResponse<void>>('/auth/reset-password', {
                 email: email.trim(),
-                token: token.trim(),
+                token: trimmedToken,
                 newPassword
             });
 
             if (res.success) {
-                setSuccessMsg('Đặt lại mật khẩu thành công! Bạn có thể đóng cửa sổ và đăng nhập ngay.');
+                setSuccessMsg(res.message || 'Đặt lại mật khẩu thành công! Bạn có thể đóng cửa sổ và đăng nhập ngay.');
                 setTimeout(() => {
                     handleClose();
                 }, 2000);
             } else {
                 setErrorMsg(res.message || 'Đặt lại mật khẩu thất bại.');
             }
-        } catch (err: any) {
-            setErrorMsg(err?.message || 'Đặt lại mật khẩu thất bại. Token có thể đã hết hạn.');
+        } catch (err: unknown) {
+            setErrorMsg(getErrorMessage(err, 'Đặt lại mật khẩu thất bại. Token có thể đã hết hạn.'));
         } finally {
             setLoading(false);
         }
@@ -213,12 +230,13 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
                     {step === 'request' ? (
                         <form onSubmit={handleRequestToken}>
                             <div style={{ marginBottom: '20px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
+                                <label htmlFor="forgot-email" style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
                                     Địa chỉ Email tài khoản
                                 </label>
                                 <div style={{ position: 'relative' }}>
                                     <Mail size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: '#94a3b8' }} />
                                     <input
+                                        id="forgot-email"
                                         type="email"
                                         required
                                         value={email}
@@ -256,10 +274,11 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
                     ) : (
                         <form onSubmit={handleResetPassword}>
                             <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
+                                <label htmlFor="forgot-token" style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
                                     Mã xác thực (Token)
                                 </label>
                                 <input
+                                    id="forgot-token"
                                     type="text"
                                     required
                                     value={token}
@@ -278,15 +297,16 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
                             </div>
 
                             <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
-                                    Mật khẩu mới (tối thiểu 6 ký tự)
+                                <label htmlFor="forgot-newPassword" style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
+                                    Mật khẩu mới (tối thiểu 8 ký tự)
                                 </label>
                                 <div style={{ position: 'relative' }}>
                                     <Lock size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: '#94a3b8' }} />
                                     <input
+                                        id="forgot-newPassword"
                                         type="password"
                                         required
-                                        minLength={6}
+                                        minLength={8}
                                         value={newPassword}
                                         onChange={(e) => setNewPassword(e.target.value)}
                                         placeholder="••••••••"
@@ -303,15 +323,16 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen
                             </div>
 
                             <div style={{ marginBottom: '22px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
+                                <label htmlFor="forgot-confirmPassword" style={{ display: 'block', marginBottom: '6px', fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>
                                     Xác nhận mật khẩu mới
                                 </label>
                                 <div style={{ position: 'relative' }}>
                                     <Lock size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: '#94a3b8' }} />
                                     <input
+                                        id="forgot-confirmPassword"
                                         type="password"
                                         required
-                                        minLength={6}
+                                        minLength={8}
                                         value={confirmPassword}
                                         onChange={(e) => setConfirmPassword(e.target.value)}
                                         placeholder="••••••••"

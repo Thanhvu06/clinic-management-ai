@@ -38,8 +38,10 @@ public class CreatePrescriptionItemDto
 public class PrescriptionDetailDto
 {
     public long Id { get; set; }
-    public long AppointmentId { get; set; }
+    public long? AppointmentId { get; set; }
     public string AppointmentCode { get; set; } = string.Empty;
+    public long? PatientVisitId { get; set; }
+    public string? VisitCode { get; set; }
     public long PatientId { get; set; }
     public string PatientName { get; set; } = string.Empty;
     public string PatientPhone { get; set; } = string.Empty;
@@ -60,6 +62,7 @@ public class PrescriptionDetailItemDto
     public string Unit { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public int AvailableStock { get; set; }
+    public bool IsActive { get; set; } = true;
     public string Dosage { get; set; } = string.Empty;
     public string Frequency { get; set; } = string.Empty;
     public int? DurationDays { get; set; }

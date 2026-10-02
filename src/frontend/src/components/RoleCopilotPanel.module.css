@@ -1,0 +1,12 @@
+.container { position: fixed; right: 24px; bottom: 24px; z-index: 30; font-size: .86rem; }
+.launcher { display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 999px; padding: 10px 15px; background: var(--c-primary, #0d9488); color: #fff; box-shadow: 0 8px 24px #0f766e44; cursor: pointer; font-weight: 700; }
+.panel { width: min(370px, calc(100vw - 32px)); overflow: hidden; border: 1px solid #d6e5e5; border-radius: 14px; background: #fff; box-shadow: 0 18px 50px #123b3b2e; }
+.header { display: flex; justify-content: space-between; align-items: center; padding: 13px 15px; background: #f0fbfa; color: #123b3b; }
+.header strong { display: block; } .header span { display: flex; align-items: center; gap: 4px; margin-top: 3px; color: #35706d; font-size: .73rem; }
+.header button { border: 0; background: transparent; color: #557; cursor: pointer; }
+.body { max-height: 340px; overflow: auto; padding: 14px 15px; color: #254848; } .notice { margin: 0 0 10px; color: #587070; font-size: .76rem; }
+.provider { display: inline-block; border-radius: 999px; padding: 3px 8px; background: #e7f7f4; color: #176b63; font-size: .72rem; font-weight: 700; } .warning, .error { color: #a33b25; }
+.route { display: inline-flex; align-items: center; gap: 4px; color: #0b7770; font-weight: 700; } .card { display: grid; gap: 4px; margin-top: 9px; padding: 9px; border-radius: 9px; background: #f7faf9; } .card span { color: #607474; font-size: .77rem; }
+.prompts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 11px; } .prompts button { border: 1px solid #bcd8d5; border-radius: 999px; padding: 5px 8px; background: #fff; color: #146a65; cursor: pointer; font-size: .73rem; }
+.form { display: flex; gap: 7px; padding: 10px; border-top: 1px solid #e2eeee; } .form input { min-width: 0; flex: 1; border: 1px solid #c8dddd; border-radius: 8px; padding: 9px; } .form button { width: 36px; border: 0; border-radius: 8px; background: #0d9488; color: #fff; cursor: pointer; } .form button:disabled { opacity: .5; }
+@media (max-width: 600px) { .container { right: 12px; bottom: 12px; } .panel { width: calc(100vw - 24px); } }

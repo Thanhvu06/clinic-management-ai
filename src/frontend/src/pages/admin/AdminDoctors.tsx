@@ -3,6 +3,7 @@ import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { Search, Plus, XCircle, Edit, Stethoscope, Briefcase, Award, X } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
+import { formatDoctorName } from '../../utils/doctorNameHelper';
 
 interface DoctorSpecialty {
     specialtyId: number;
@@ -15,7 +16,7 @@ interface Doctor {
     userId: string;
     fullName: string;
     email: string;
-    academicTitle: string;
+    academicTitle?: string;
     experienceYears: number;
     description: string;
     isActive: boolean;
@@ -294,7 +295,7 @@ export const AdminDoctors: React.FC = () => {
                                                 {d.fullName.charAt(0)}
                                             </div>
                                             <div>
-                                                <div style={{ fontWeight: 600 }}>{d.academicTitle ? `${d.academicTitle} ` : ''}{d.fullName}</div>
+                                                <div style={{ fontWeight: 600 }}>{formatDoctorName(d.academicTitle, d.fullName)}</div>
                                                 <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>{d.email}</div>
                                             </div>
                                         </div>

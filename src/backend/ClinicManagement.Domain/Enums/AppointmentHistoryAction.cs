@@ -4,6 +4,8 @@ public enum AppointmentHistoryAction
 {
     Created,
     Confirmed,
+    CheckedIn,
+    InConsultation,
     RescheduleRequested,
     Rescheduled,
     CancelRequested,

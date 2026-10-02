@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using ClinicManagement.Application.Common.Constants;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.Leaves.DTOs;
 using ClinicManagement.Application.Leaves.Interfaces;
@@ -10,14 +11,19 @@ namespace ClinicManagement.Api.Controllers.Leaves;
 
 [ApiController]
 [Route("api/v1/doctor/leave-requests")]
+[Route("api/v1/doctor/leaves")]
 [Authorize(Roles = RoleNames.Doctor)]
 public class DoctorLeaveController : ControllerBase
 {
     private readonly IDoctorLeaveService _doctorLeaveService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public DoctorLeaveController(IDoctorLeaveService doctorLeaveService)
+    public DoctorLeaveController(
+        IDoctorLeaveService doctorLeaveService,
+        IDateTimeProvider dateTimeProvider)
     {
         _doctorLeaveService = doctorLeaveService;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     [HttpGet]
@@ -32,6 +38,24 @@ public class DoctorLeaveController : ControllerBase
     {
         var result = await _doctorLeaveService.GetLeaveRequestByIdAsync(id);
         return Ok(ApiResponse<LeaveRequestDto>.Ok(result));
+    }
+
+    [HttpGet("preview")]
+    [HttpGet("preview-impact")]
+    public async Task<IActionResult> PreviewLeave(
+        [FromQuery] DateTime? start, 
+        [FromQuery] DateTime? end,
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate)
+    {
+        var actualStart = startDate ?? start ?? _dateTimeProvider.VietnamToday.ToDateTime(TimeOnly.MinValue);
+        var actualEnd = endDate ?? end ?? actualStart;
+        if (actualEnd.TimeOfDay == TimeSpan.Zero)
+        {
+            actualEnd = actualEnd.Date.AddDays(1).AddTicks(-1);
+        }
+        var result = await _doctorLeaveService.PreviewLeaveAffectedAppointmentsAsync(actualStart, actualEnd);
+        return Ok(ApiResponse<LeavePreviewDto>.Ok(result));
     }
 
     [HttpPost]

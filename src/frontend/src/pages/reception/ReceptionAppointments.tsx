@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axiosClient from '../../api/axiosClient';
-import type { ApiResponse } from '../../types';
-import { Search, CalendarDays, Eye, X, Clock, RefreshCw } from 'lucide-react';
+import { patientVisitApi } from '../../api/patientVisitApi';
+import { organizationApi, type DepartmentDto } from '../../api/organizationApi';
+import type { ApiResponse, CheckInTicketDto } from '../../types';
+import { Search, CalendarDays, Eye, X, Clock, RefreshCw, UserCheck } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
+import { CheckInTicketModal } from '../../components/CheckInTicketModal';
+import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 
 interface ReceptionAppointment {
     id: number;
@@ -19,9 +23,12 @@ interface ReceptionAppointment {
     endTime: string;
     reason: string | null;
     status: string;
+    facilityId?: number | null;
+    facilityName?: string | null;
 }
 
 export const ReceptionAppointments: React.FC = () => {
+    const { setSelection } = useCopilotResource();
     const [appointments, setAppointments] = useState<ReceptionAppointment[]>([]);
     const [loading, setLoading] = useState(true);
     const [totalItems, setTotalItems] = useState(0);
@@ -35,6 +42,16 @@ export const ReceptionAppointments: React.FC = () => {
     const [history, setHistory] = useState<any[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
     const [historyError, setHistoryError] = useState('');
+    const [departments, setDepartments] = useState<DepartmentDto[]>([]);
+    const [departmentsLoading, setDepartmentsLoading] = useState(false);
+    const [departmentsError, setDepartmentsError] = useState('');
+    const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null);
+    const departmentRequestRef = useRef<{ generation: number; controller: AbortController | null }>({ generation: 0, controller: null });
+
+    // Check-in Ticket Modal state
+    const [ticketModalOpen, setTicketModalOpen] = useState(false);
+    const [currentTicket, setCurrentTicket] = useState<CheckInTicketDto | null>(null);
+    const [checkingInId, setCheckingInId] = useState<number | null>(null);
 
     const fetchAppointments = async () => {
         setLoading(true);
@@ -62,6 +79,21 @@ export const ReceptionAppointments: React.FC = () => {
         fetchAppointments();
     }, [page, statusFilter]);
 
+    useEffect(() => {
+        setSelection(null);
+    }, [page, statusFilter, search, setSelection]);
+
+    useEffect(() => {
+        const refresh = () => { void fetchAppointments(); };
+        window.addEventListener('cliniccare:copilot-action-completed', refresh);
+        return () => window.removeEventListener('cliniccare:copilot-action-completed', refresh);
+    }, [page, statusFilter, search]);
+
+    useEffect(() => () => {
+        departmentRequestRef.current.controller?.abort();
+        departmentRequestRef.current.generation += 1;
+    }, []);
+
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setPage(1);
@@ -85,10 +117,89 @@ export const ReceptionAppointments: React.FC = () => {
         }
     };
 
+    const cancelDepartmentRequest = () => {
+        departmentRequestRef.current.controller?.abort();
+        departmentRequestRef.current = {
+            generation: departmentRequestRef.current.generation + 1,
+            controller: null
+        };
+    };
+
     const openDetail = (apt: ReceptionAppointment) => {
+        cancelDepartmentRequest();
+        const generation = departmentRequestRef.current.generation;
+        const facilityId = apt.facilityId && apt.facilityId > 0 ? apt.facilityId : null;
+        setSelectedDepartmentId(null);
+        setDepartments([]);
+        setDepartmentsError(facilityId ? '' : 'Không xác định được cơ sở của lịch hẹn nên Copilot chưa thể chuẩn bị thao tác.');
+        setDepartmentsLoading(Boolean(facilityId));
+        setSelection({
+            context: { appointmentId: apt.id },
+            source: 'reception-appointments',
+            label: `Lịch hẹn ${apt.appointmentCode}`
+        });
         setModal({ isOpen: true, apt });
         fetchHistory(apt.id);
+        if (facilityId) {
+            const controller = new AbortController();
+            departmentRequestRef.current.controller = controller;
+            void organizationApi.getDepartments(facilityId, controller.signal)
+                .then(result => {
+                    if (controller.signal.aborted || departmentRequestRef.current.generation !== generation) return;
+                    if (result.success && result.data) {
+                        setDepartments(result.data.filter(department => department.isActive && department.facilityId === facilityId));
+                        setDepartmentsError('');
+                    } else {
+                        setDepartments([]);
+                        setDepartmentsError(result.message || 'Không thể tải khoa thuộc cơ sở của lịch hẹn.');
+                    }
+                })
+                .catch(error => {
+                    if (controller.signal.aborted || departmentRequestRef.current.generation !== generation) return;
+                    setDepartments([]);
+                    setDepartmentsError(error?.message || 'Không thể tải khoa thuộc cơ sở của lịch hẹn.');
+                })
+                .finally(() => {
+                    if (!controller.signal.aborted && departmentRequestRef.current.generation === generation) {
+                        setDepartmentsLoading(false);
+                        departmentRequestRef.current.controller = null;
+                    }
+                });
+        }
     };
+
+    const closeDetail = () => {
+        cancelDepartmentRequest();
+        setSelection(null);
+        setSelectedDepartmentId(null);
+        setDepartments([]);
+        setDepartmentsError('');
+        setDepartmentsLoading(false);
+        setModal({ isOpen: false, apt: null });
+    };
+
+    useEffect(() => {
+        if (!modal.isOpen || !modal.apt) {
+            setSelection(null);
+            return;
+        }
+        const department = selectedDepartmentId === null ? undefined : departments.find(item =>
+            item.id === selectedDepartmentId && item.isActive && item.facilityId === modal.apt?.facilityId
+        );
+        if (!department) {
+            setSelection({
+                context: { appointmentId: modal.apt.id },
+                source: 'reception-appointments',
+                label: `Lịch hẹn ${modal.apt.appointmentCode}`
+            });
+            return;
+        }
+        setSelection({
+            context: { appointmentId: modal.apt.id, departmentId: department.id },
+            source: 'reception-appointments',
+            label: `Lịch hẹn ${modal.apt.appointmentCode} · ${department.name}`
+        });
+    }, [departments, modal, selectedDepartmentId, setSelection]);
 
     const { showAlert, showConfirm } = useDialog();
 
@@ -121,6 +232,38 @@ export const ReceptionAppointments: React.FC = () => {
         });
     };
 
+    const handleCheckIn = async (apt: ReceptionAppointment) => {
+        setSelection({
+            context: { appointmentId: apt.id },
+            source: 'reception-appointments',
+            label: `Lịch hẹn ${apt.appointmentCode}`
+        });
+        setCheckingInId(apt.id);
+        try {
+            const res = await patientVisitApi.receptionCheckInAppointment(apt.id);
+            if (res.success && res.data) {
+                setCurrentTicket(res.data);
+                setTicketModalOpen(true);
+                showAlert(
+                    'Tiếp nhận thành công!',
+                    `Bệnh nhân ${res.data.patientName} đã được cấp STT ${res.data.queueNumber} tại ${res.data.departmentName || 'phòng khám'}.`,
+                    'success'
+                );
+                if (modal.isOpen && modal.apt?.id === apt.id) {
+                    setModal({ ...modal, apt: { ...apt, status: 'CheckedIn' } });
+                    fetchHistory(apt.id);
+                }
+                fetchAppointments();
+            } else {
+                showAlert(res.message || 'Không thể tiếp nhận bệnh nhân.', 'Lỗi tiếp nhận', 'error');
+            }
+        } catch (error: any) {
+            showAlert(error?.message || 'Có lỗi xảy ra khi tiếp nhận bệnh nhân.', 'Lỗi tiếp nhận', 'error');
+        } finally {
+            setCheckingInId(null);
+        }
+    };
+
     const formatDate = (dateString: string) => {
         try {
             return new Intl.DateTimeFormat('vi-VN').format(new Date(dateString));
@@ -144,6 +287,7 @@ export const ReceptionAppointments: React.FC = () => {
         switch (status) {
             case 'Pending': return 'Chờ xác nhận';
             case 'Confirmed': return 'Đã xác nhận';
+            case 'CheckedIn': return 'Đã tiếp nhận (Chờ khám)';
             case 'Completed': return 'Đã hoàn thành';
             case 'Cancelled': return 'Đã hủy';
             case 'NoShow': return 'Không đến khám';
@@ -155,6 +299,7 @@ export const ReceptionAppointments: React.FC = () => {
         switch(status) {
             case 'Pending': return <span className="badge badge-warning">{translateStatus(status)}</span>;
             case 'Confirmed': return <span className="badge badge-info">{translateStatus(status)}</span>;
+            case 'CheckedIn': return <span className="badge badge-success">{translateStatus(status)}</span>;
             case 'Completed': return <span className="badge badge-success">{translateStatus(status)}</span>;
             case 'Cancelled': return <span className="badge badge-danger">{translateStatus(status)}</span>;
             case 'NoShow': return <span className="badge badge-muted">{translateStatus(status)}</span>;
@@ -166,6 +311,7 @@ export const ReceptionAppointments: React.FC = () => {
         switch (action) {
             case 'Created': return 'Tạo lịch hẹn';
             case 'Confirmed': return 'Xác nhận lịch';
+            case 'CheckedIn': return 'Tiếp nhận khám';
             case 'Cancelled': return 'Hủy lịch';
             case 'Rescheduled': return 'Đổi lịch';
             case 'Completed': return 'Hoàn thành khám';
@@ -253,7 +399,18 @@ export const ReceptionAppointments: React.FC = () => {
                                     <td style={{ padding: '16px' }}>
                                         {getStatusBadge(apt.status)}
                                     </td>
-                                    <td style={{ padding: '16px', textAlign: 'right' }}>
+                                    <td style={{ padding: '16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                        {apt.status === 'Confirmed' && (
+                                            <button 
+                                                className="btn-primary" 
+                                                style={{ padding: '6px 12px', fontSize: '0.85rem', marginRight: '8px', backgroundColor: '#059669', borderColor: '#059669' }} 
+                                                onClick={() => handleCheckIn(apt)}
+                                                disabled={checkingInId === apt.id}
+                                            >
+                                                <UserCheck size={14} style={{ marginRight: '4px' }} />
+                                                {checkingInId === apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận'}
+                                            </button>
+                                        )}
                                         <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => openDetail(apt)}>
                                             <Eye size={14} style={{ marginRight: '4px' }}/> Chi tiết
                                         </button>
@@ -278,7 +435,7 @@ export const ReceptionAppointments: React.FC = () => {
                             <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 Chi tiết lịch hẹn <span style={{ color: 'var(--c-teal)' }}>#{modal.apt.appointmentCode}</span>
                             </h3>
-                            <button onClick={() => setModal({ isOpen: false, apt: null })} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
+                            <button aria-label="Đóng chi tiết lịch hẹn" onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
@@ -306,6 +463,26 @@ export const ReceptionAppointments: React.FC = () => {
                             <div style={{ background: 'var(--c-bg)', padding: '12px', borderRadius: '6px', fontSize: '0.95rem' }}>
                                 {modal.apt.reason || <span style={{ color: 'var(--c-muted)' }}>Không có ghi chú</span>}
                             </div>
+                        </div>
+
+                        <div style={{ marginBottom: '24px', padding: '14px', border: '1px solid var(--c-border)', borderRadius: '8px' }}>
+                            <label htmlFor="copilot-checkin-department" style={{ display: 'block', fontWeight: 600, marginBottom: '8px' }}>
+                                Khoa tiếp nhận cho Copilot *
+                            </label>
+                            <select
+                                id="copilot-checkin-department"
+                                className="form-select"
+                                value={selectedDepartmentId ?? ''}
+                                onChange={event => setSelectedDepartmentId(event.target.value ? Number(event.target.value) : null)}
+                                disabled={!modal.apt.facilityId || departmentsLoading}
+                            >
+                                <option value="">{departmentsLoading ? 'Đang tải khoa theo cơ sở…' : 'Chọn khoa từ cơ sở của lịch hẹn'}</option>
+                                {departments.map(department => <option key={department.id} value={department.id}>{department.name} ({department.code})</option>)}
+                            </select>
+                            {departmentsError && <div role="alert" style={{ color: 'var(--c-danger, #b91c1c)', marginTop: '8px' }}>{departmentsError}</div>}
+                            <small style={{ display: 'block', color: 'var(--c-muted)', marginTop: '8px' }}>
+                                Danh sách lấy từ API khoa của cơ sở {modal.apt.facilityName ? `“${modal.apt.facilityName}”` : 'đang gắn với lịch hẹn'}. Không tự chọn khoa; backend sẽ kiểm tra lại cơ sở, quyền và lịch hẹn khi chuẩn bị/xác nhận.
+                            </small>
                         </div>
 
                         <div style={{ marginBottom: '24px' }}>
@@ -336,7 +513,7 @@ export const ReceptionAppointments: React.FC = () => {
 
                         {modal.apt.status === 'Pending' && (
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid var(--c-border)' }}>
-                                <button className="btn-secondary" onClick={() => setModal({ isOpen: false, apt: null })}>Đóng</button>
+                                <button className="btn-secondary" onClick={closeDetail}>Đóng</button>
                                 <button 
                                     className="btn-primary" 
                                     onClick={handleConfirm}
@@ -346,14 +523,35 @@ export const ReceptionAppointments: React.FC = () => {
                                 </button>
                             </div>
                         )}
-                        {modal.apt.status !== 'Pending' && (
+                        {modal.apt.status === 'Confirmed' && (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid var(--c-border)' }}>
+                                <button className="btn-secondary" onClick={closeDetail}>Đóng</button>
+                                <button 
+                                    className="btn-primary" 
+                                    style={{ backgroundColor: '#059669', borderColor: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                    onClick={() => handleCheckIn(modal.apt!)}
+                                    disabled={checkingInId === modal.apt.id}
+                                >
+                                    <UserCheck size={16} />
+                                    {checkingInId === modal.apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận & Cấp phiếu STT'}
+                                </button>
+                            </div>
+                        )}
+                        {modal.apt.status !== 'Pending' && modal.apt.status !== 'Confirmed' && (
                             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                <button className="btn-secondary" onClick={() => setModal({ isOpen: false, apt: null })}>Đóng</button>
+                                <button className="btn-secondary" onClick={closeDetail}>Đóng</button>
                             </div>
                         )}
                     </div>
                 </div>
             )}
+
+            {/* Check-In Ticket Printable Modal */}
+            <CheckInTicketModal
+                isOpen={ticketModalOpen}
+                ticket={currentTicket}
+                onClose={() => setTicketModalOpen(false)}
+            />
         </div>
     );
 };

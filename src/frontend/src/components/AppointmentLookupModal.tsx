@@ -140,6 +140,7 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
                     </div>
                     <button
                         onClick={onClose}
+                        aria-label="Đóng cửa sổ tra cứu"
                         style={{
                             background: 'none',
                             border: 'none',
@@ -163,6 +164,7 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
                             <Search size={18} style={{ position: 'absolute', left: '14px', top: '13px', color: '#94a3b8' }} />
                             <input
                                 type="text"
+                                aria-label="Mã lịch hẹn hoặc số điện thoại"
                                 placeholder="Ví dụ: APT-260829-0001 hoặc 0900000004"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}

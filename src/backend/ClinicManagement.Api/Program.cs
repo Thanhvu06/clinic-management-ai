@@ -1,4 +1,5 @@
 using ClinicManagement.Api.Middlewares;
+using ClinicManagement.Api;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Patients.Interfaces;
 using ClinicManagement.Application.Specialties.Interfaces;
@@ -21,6 +22,13 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+var aiRateLimitOptions = builder.Configuration
+    .GetSection(AiRateLimitOptions.SectionName)
+    .Get<AiRateLimitOptions>() ?? new AiRateLimitOptions();
+var aiRateLimitWindow = TimeSpan.FromSeconds(Math.Max(1, aiRateLimitOptions.WindowSeconds));
+var aiTestingPermitLimit = Math.Max(1, aiRateLimitOptions.TestingPermitLimit);
+var aiChatPermitLimit = Math.Max(1, aiRateLimitOptions.ChatPermitLimit);
+var aiEndpointPermitLimit = Math.Max(1, aiRateLimitOptions.EndpointPermitLimit);
 
 var connectionString = builder.Configuration.GetConnectionString("ClinicManagementDb")
     ?? "Server=(localdb)\\mssqllocaldb;Database=ClinicManagementDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True";
@@ -102,11 +110,14 @@ builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<ISpecialtyService, SpecialtyService>();
+builder.Services.AddSingleton<ClinicManagement.Application.Common.Interfaces.IDateTimeProvider, ClinicManagement.Infrastructure.Services.DateTimeProvider>();
 builder.Services.AddScoped<IDoctorService, DoctorService>();
 builder.Services.AddScoped<IScheduleService, ScheduleService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
+builder.Services.AddScoped<ClinicManagement.Application.Appointments.Interfaces.IAppointmentAvailabilityPolicy, ClinicManagement.Infrastructure.Appointments.AppointmentAvailabilityPolicy>();
 builder.Services.AddScoped<IChangeRequestService, ChangeRequestService>();
 builder.Services.AddScoped<IReceptionService, ReceptionService>();
+builder.Services.AddScoped<ClinicManagement.Application.Doctors.Interfaces.IDoctorContextService, ClinicManagement.Infrastructure.Doctors.DoctorContextService>();
 builder.Services.AddScoped<IDoctorAppointmentService, DoctorAppointmentService>();
 builder.Services.AddScoped<IRevisitService, RevisitService>();
 builder.Services.AddScoped<ClinicManagement.Application.Admin.Interfaces.IAdminUserService, ClinicManagement.Infrastructure.Admin.AdminUserService>();
@@ -115,12 +126,72 @@ builder.Services.AddScoped<ClinicManagement.Application.Admin.Interfaces.IAdminD
 builder.Services.AddScoped<ClinicManagement.Application.Leaves.Interfaces.IDoctorLeaveService, ClinicManagement.Infrastructure.Leaves.DoctorLeaveService>();
 builder.Services.AddScoped<ClinicManagement.Application.Leaves.Interfaces.IAdminLeaveService, ClinicManagement.Infrastructure.Leaves.AdminLeaveService>();
 builder.Services.Configure<ClinicManagement.Infrastructure.AI.AiProviderOptions>(builder.Configuration.GetSection(ClinicManagement.Infrastructure.AI.AiProviderOptions.SectionName));
+builder.Services.AddSingleton<ClinicManagement.Application.AI.IAiProviderConfigurationInspector, ClinicManagement.Infrastructure.AI.AiProviderConfigurationInspector>();
+builder.Services.Configure<ClinicManagement.Infrastructure.AI.AiClassifierOptions>(builder.Configuration.GetSection(ClinicManagement.Infrastructure.AI.AiClassifierOptions.SectionName));
+builder.Services.AddSingleton<ClinicManagement.Application.AI.Interfaces.IAiSpecialtyClassifier, ClinicManagement.Infrastructure.AI.MlNetSpecialtyClassifier>();
+builder.Services.AddSingleton<ClinicManagement.Application.AI.Interfaces.IVietnameseIntentClassifier, ClinicManagement.Infrastructure.AI.VietnameseIntentClassifier>();
 builder.Services.AddHttpClient<ClinicManagement.Application.AI.Interfaces.IAiSpecialtySuggestionProvider, ClinicManagement.Infrastructure.AI.GeminiAiProvider>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSessionSnapshotStore, ClinicManagement.Infrastructure.AI.Persistence.EfAiSessionSnapshotStore>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiAuditService, ClinicManagement.Infrastructure.AI.Persistence.EfAiAuditService>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiBookingConfirmationStore, ClinicManagement.Infrastructure.AI.Persistence.EfAiBookingConfirmationStore>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSpecialtyService, ClinicManagement.Infrastructure.AI.AiSpecialtyService>();
+builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.AiBookingReviewIssuer>();
+builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.AiBookingWizardTokens>();
+builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.AiBookingWizardService>();
+builder.Services.AddDataProtection();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiRoleCopilotService, ClinicManagement.Infrastructure.AI.RoleAwareCopilotOrchestrator>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IClinicAiContextService, ClinicManagement.Infrastructure.AI.ClinicAiContextService>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiSafetyGuard, ClinicManagement.Infrastructure.AI.AiSafetyGuard>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiDeterministicPlanner, ClinicManagement.Infrastructure.AI.Planning.AiDeterministicPlanner>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiStructuredPlanner, ClinicManagement.Infrastructure.AI.Planning.GeminiStructuredPlanner>();
+builder.Services.AddSingleton<ClinicManagement.Application.AI.Planning.IAiProviderHealth, ClinicManagement.Infrastructure.AI.Planning.AiProviderHealth>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiCopilotContextResolver, ClinicManagement.Infrastructure.AI.Planning.AiCopilotContextResolver>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiConversationMemoryStore, ClinicManagement.Infrastructure.AI.Persistence.EfAiConversationMemoryStore>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiGroundedResponseComposer, ClinicManagement.Infrastructure.AI.Planning.AiGroundedResponseComposer>();
+builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.Tools.PatientCopilotToolHandler>();
+builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.Tools.RoleCopilotToolHandler>();
+builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.Tools.RoleConfirmedActionToolHandler>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Conversation.IAiConversationPipeline, ClinicManagement.Infrastructure.AI.AiConversationPipeline>();
+foreach (var toolDefinition in ClinicManagement.Infrastructure.AI.Tools.PatientCopilotToolHandler.Definitions())
+{
+    var registeredDefinition = toolDefinition;
+    builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolHandler>(sp =>
+        new ClinicManagement.Infrastructure.AI.Tools.AiToolHandlerAdapter(
+            sp.GetRequiredService<ClinicManagement.Infrastructure.AI.Tools.PatientCopilotToolHandler>(), registeredDefinition));
+}
+foreach (var toolDefinition in ClinicManagement.Application.AI.Tools.AiRoleToolCatalog.Definitions)
+{
+    var registeredDefinition = toolDefinition;
+    builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolHandler>(sp =>
+        new ClinicManagement.Infrastructure.AI.Tools.AiToolHandlerAdapter(
+            sp.GetRequiredService<ClinicManagement.Infrastructure.AI.Tools.RoleCopilotToolHandler>(), registeredDefinition));
+}
+foreach (var toolDefinition in ClinicManagement.Application.AI.Tools.AiRoleActionCatalog.Definitions)
+{
+    var registeredDefinition = toolDefinition;
+    builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolHandler>(sp =>
+        new ClinicManagement.Infrastructure.AI.Tools.AiToolHandlerAdapter(
+            sp.GetRequiredService<ClinicManagement.Infrastructure.AI.Tools.RoleConfirmedActionToolHandler>(), registeredDefinition));
+}
+builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolRegistry, ClinicManagement.Infrastructure.AI.Tools.AiToolRegistry>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiCapabilityResolver, ClinicManagement.Infrastructure.AI.Tools.AiCapabilityResolver>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolExecutor, ClinicManagement.Infrastructure.AI.Tools.AiToolExecutor>();
+builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiPendingActionCancellationService, ClinicManagement.Infrastructure.AI.Tools.AiPendingActionCancellationService>();
 builder.Services.AddScoped<ClinicManagement.Application.HealthPackages.Interfaces.IHealthPackageService, ClinicManagement.Infrastructure.HealthPackages.HealthPackageService>();
+builder.Services.AddScoped<ClinicManagement.Application.HealthPackages.Interfaces.IHealthPackageRegistrationService, ClinicManagement.Infrastructure.HealthPackages.HealthPackageRegistrationService>();
+builder.Services.AddScoped<ClinicManagement.Application.Locations.Interfaces.ILocationService, ClinicManagement.Infrastructure.Locations.LocationService>();
 builder.Services.AddScoped<ClinicManagement.Application.Medicines.Interfaces.IMedicineService, ClinicManagement.Infrastructure.Medicines.MedicineService>();
 builder.Services.AddScoped<ClinicManagement.Application.Pharmacy.Interfaces.IPharmacyService, ClinicManagement.Infrastructure.Pharmacy.PharmacyService>();
+builder.Services.AddScoped<ClinicManagement.Application.Pharmacy.Interfaces.IPrescriptionPaymentEligibilityService, ClinicManagement.Infrastructure.Pharmacy.PrescriptionPaymentEligibilityService>();
+builder.Services.AddScoped<ClinicManagement.Application.Notifications.Interfaces.INotificationService, ClinicManagement.Infrastructure.Notifications.NotificationService>();
+builder.Services.AddScoped<ClinicManagement.Application.Billing.Interfaces.IBillingService, ClinicManagement.Infrastructure.Billing.BillingService>();
+builder.Services.AddScoped<ClinicManagement.Application.Diagnostics.Interfaces.IDiagnosticWorkflowService, ClinicManagement.Infrastructure.Diagnostics.DiagnosticWorkflowService>();
+builder.Services.AddScoped<ClinicManagement.Application.Organization.Interfaces.IOrganizationService, ClinicManagement.Infrastructure.Organization.OrganizationService>();
+builder.Services.AddScoped<ClinicManagement.Application.Mpi.Interfaces.IMpiPatientService, ClinicManagement.Infrastructure.Mpi.MpiPatientService>();
+builder.Services.AddScoped<ClinicManagement.Application.Mpi.Interfaces.IMrnGenerator, ClinicManagement.Infrastructure.Mpi.MrnGenerator>();
+builder.Services.AddScoped<ClinicManagement.Application.Common.Interfaces.IFacilityAuthorizationService, ClinicManagement.Infrastructure.Common.FacilityAuthorizationService>();
+builder.Services.AddScoped<ClinicManagement.Application.Visits.Interfaces.IPatientVisitService, ClinicManagement.Infrastructure.Visits.PatientVisitService>();
+builder.Services.AddHostedService<ClinicManagement.Infrastructure.AI.AiSessionCleanupWorker>();
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -134,22 +205,28 @@ builder.Services.AddRateLimiter(options =>
 
     options.AddPolicy("AiChatPolicy", httpContext =>
     {
-        var userId = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(userId, _ =>
+        var partitionKey = AiRateLimitPartitioning.GetPartitionKey(httpContext);
+        return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ =>
             new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
             {
-                PermitLimit = 8,
-                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = builder.Environment.IsEnvironment("Testing") ? aiTestingPermitLimit : aiChatPermitLimit,
+                Window = aiRateLimitWindow,
                 QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             });
     });
 
-    options.AddFixedWindowLimiter("ai_endpoint", opt =>
+    options.AddPolicy("ai_endpoint", httpContext =>
     {
-        opt.Window = TimeSpan.FromMinutes(1);
-        opt.PermitLimit = 10;
-        opt.QueueLimit = 0;
+        var partitionKey = AiRateLimitPartitioning.GetPartitionKey(httpContext);
+        return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ =>
+            new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = builder.Environment.IsEnvironment("Testing") ? aiTestingPermitLimit : aiEndpointPermitLimit,
+                Window = aiRateLimitWindow,
+                QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
     });
 });
 
@@ -182,6 +259,8 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseHttpsRedirection();
+app.UseRouting();
 app.UseCors(corsBuilder => 
 {
     if (app.Environment.IsDevelopment())
@@ -205,9 +284,8 @@ app.UseCors(corsBuilder =>
     }
 });
 
-app.UseHttpsRedirection();
-app.UseRateLimiter();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();

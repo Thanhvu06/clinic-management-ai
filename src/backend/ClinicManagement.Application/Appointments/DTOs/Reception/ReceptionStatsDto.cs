@@ -7,4 +7,5 @@ public class ReceptionStatsDto
     public int ConfirmedAppointmentsToday { get; set; }
     public int CompletedAppointmentsToday { get; set; }
     public int PendingChangeRequests { get; set; }
+    public int UnbilledCount { get; set; }
 }

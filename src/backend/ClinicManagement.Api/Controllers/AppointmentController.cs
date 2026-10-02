@@ -30,8 +30,15 @@ public class AppointmentController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateAppointment([FromBody] CreateAppointmentRequest request)
+    public async Task<IActionResult> CreateAppointment(
+        [FromBody] CreateAppointmentRequest request,
+        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKeyHeader)
     {
+        if (string.IsNullOrWhiteSpace(request.IdempotencyKey) && !string.IsNullOrWhiteSpace(idempotencyKeyHeader))
+        {
+            request.IdempotencyKey = idempotencyKeyHeader.Trim();
+        }
+
         var appointment = await _appointmentService.CreateAppointmentAsync(request);
         return StatusCode(201, ApiResponse<AppointmentDto>.Ok(appointment, "Đặt lịch khám thành công."));
     }

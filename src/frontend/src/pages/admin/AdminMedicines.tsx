@@ -11,6 +11,7 @@ interface Medicine {
     unit: string;
     stockQuantity: number;
     reorderLevel: number;
+    unitPrice?: number | null;
     isActive: boolean;
     createdAt: string;
     updatedAt?: string;
@@ -79,6 +80,7 @@ export const AdminMedicines: React.FC = () => {
                     name: modal.data.name,
                     unit: modal.data.unit,
                     reorderLevel: Number(modal.data.reorderLevel) || 10,
+                    unitPrice: modal.data.unitPrice !== undefined && modal.data.unitPrice !== null ? Number(modal.data.unitPrice) : null,
                     isActive: modal.data.isActive ?? true
                 });
                 if (res.success) {
@@ -93,6 +95,7 @@ export const AdminMedicines: React.FC = () => {
                     unit: modal.data.unit,
                     stockQuantity: Number(modal.data.stockQuantity) || 0,
                     reorderLevel: Number(modal.data.reorderLevel) || 10,
+                    unitPrice: modal.data.unitPrice !== undefined && modal.data.unitPrice !== null ? Number(modal.data.unitPrice) : null,
                     isActive: modal.data.isActive ?? true
                 });
                 if (res.success) {
@@ -174,6 +177,7 @@ export const AdminMedicines: React.FC = () => {
                                 <th>Mã thuốc</th>
                                 <th>Tên thuốc</th>
                                 <th>Đơn vị tính</th>
+                                <th>Đơn giá (VNĐ)</th>
                                 <th>Tồn kho hiện tại</th>
                                 <th>Mức cảnh báo</th>
                                 <th>Trạng thái</th>
@@ -183,11 +187,11 @@ export const AdminMedicines: React.FC = () => {
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={7} style={{ textAlign: 'center', padding: '32px' }}>Đang tải danh mục thuốc...</td>
+                                    <td colSpan={8} style={{ textAlign: 'center', padding: '32px' }}>Đang tải danh mục thuốc...</td>
                                 </tr>
                             ) : medicines.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} style={{ textAlign: 'center', padding: '32px', color: 'var(--c-muted)' }}>
+                                    <td colSpan={8} style={{ textAlign: 'center', padding: '32px', color: 'var(--c-muted)' }}>
                                         Không tìm thấy thuốc nào trong danh mục.
                                     </td>
                                 </tr>
@@ -202,6 +206,9 @@ export const AdminMedicines: React.FC = () => {
                                                 <span style={{ backgroundColor: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', fontSize: '0.825rem', color: '#475569' }}>
                                                     {med.unit}
                                                 </span>
+                                            </td>
+                                            <td style={{ fontWeight: 600, color: med.unitPrice ? '#0284c7' : '#94a3b8' }}>
+                                                {med.unitPrice ? `${med.unitPrice.toLocaleString('vi-VN')} đ` : 'Chưa định giá'}
                                             </td>
                                             <td>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -369,6 +376,19 @@ export const AdminMedicines: React.FC = () => {
                                         onChange={e => setModal({ ...modal, data: { ...modal.data, reorderLevel: Number(e.target.value) } })}
                                     />
                                 </div>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.875rem' }}>Đơn giá bán (VNĐ)</label>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    step={500}
+                                    className="form-input"
+                                    value={modal.data.unitPrice ?? ''}
+                                    onChange={e => setModal({ ...modal, data: { ...modal.data, unitPrice: e.target.value ? Number(e.target.value) : null } })}
+                                    placeholder="VD: 5000"
+                                />
                             </div>
 
                             {!modal.isEdit && (

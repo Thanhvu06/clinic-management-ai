@@ -1,0 +1,20 @@
+[
+  {
+    "caseId": "CASE-017",
+    "text": "Răng hàm dưới bên phải bị sâu đau buốt lên tận óc khi uống nước lạnh hoặc ăn đồ ngọt.",
+    "originalSpecialtyCode": "SP-09",
+    "quarantineReason": "Specialty Răng Hàm Mặt does not exist in ClinicCare canonical database catalog (SP01-SP11). Quarantined to prevent invalid code injection.",
+    "sourceType": "SIMULATED_TEST_DATA",
+    "scenarioFamily": "dental_pulpitis_pain",
+    "datasetVersion": "1.0.0"
+  },
+  {
+    "caseId": "CASE-018",
+    "text": "Nướu răng bị sưng đỏ, dễ chảy máu chân răng khi đánh răng buổi sáng và có mùi hôi miệng.",
+    "originalSpecialtyCode": "SP-09",
+    "quarantineReason": "Specialty Răng Hàm Mặt does not exist in ClinicCare canonical database catalog (SP01-SP11). Quarantined to prevent invalid code injection.",
+    "sourceType": "SIMULATED_TEST_DATA",
+    "scenarioFamily": "gingivitis_bleeding",
+    "datasetVersion": "1.0.0"
+  }
+]

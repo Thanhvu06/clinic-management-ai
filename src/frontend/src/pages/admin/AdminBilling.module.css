@@ -1,0 +1,160 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.headerRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.titleArea {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.titleArea h2 {
+    margin: 0;
+    color: var(--c-navy-dark);
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.sectionTitle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--c-navy-dark);
+    margin-bottom: 16px;
+}
+
+.kpiGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.kpiCard {
+    background: #ffffff;
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.kpiCard:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.kpiIconWrapper {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.kpiContent {
+    display: flex;
+    flex-direction: column;
+}
+
+.kpiLabel {
+    font-size: 0.78rem;
+    color: var(--c-text-light);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 4px;
+}
+
+.kpiValue {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--c-text-dark);
+    line-height: 1.2;
+}
+
+.filterCard {
+    background: #ffffff;
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 20px;
+}
+
+.filterForm {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 16px;
+}
+
+.modalContent {
+    background: #ffffff;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 460px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.modalHeader {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--c-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8fafc;
+}
+
+.modalHeader h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--c-text-dark);
+}
+
+.modalBody {
+    padding: 20px;
+}
+
+.modalFooter {
+    padding: 14px 20px;
+    border-top: 1px solid var(--c-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background: #f8fafc;
+}

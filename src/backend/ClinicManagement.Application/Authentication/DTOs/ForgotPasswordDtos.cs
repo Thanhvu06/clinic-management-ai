@@ -9,6 +9,11 @@ public class ForgotPasswordRequest
     public string Email { get; set; } = string.Empty;
 }
 
+public sealed class ForgotPasswordResponse
+{
+    public string? ResetToken { get; init; }
+}
+
 public class ResetPasswordRequest
 {
     [Required]

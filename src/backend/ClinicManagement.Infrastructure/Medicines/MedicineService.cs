@@ -37,7 +37,8 @@ public class MedicineService : IMedicineService
                 Code = m.Code,
                 Name = m.Name,
                 Unit = m.Unit,
-                StockQuantity = m.StockQuantity
+                StockQuantity = m.StockQuantity,
+                UnitPrice = m.UnitPrice
             })
             .ToListAsync();
     }
@@ -71,6 +72,7 @@ public class MedicineService : IMedicineService
                 Unit = m.Unit,
                 StockQuantity = m.StockQuantity,
                 ReorderLevel = m.ReorderLevel,
+                UnitPrice = m.UnitPrice,
                 IsActive = m.IsActive,
                 CreatedAt = m.CreatedAt,
                 UpdatedAt = m.UpdatedAt
@@ -93,6 +95,7 @@ public class MedicineService : IMedicineService
             Unit = m.Unit,
             StockQuantity = m.StockQuantity,
             ReorderLevel = m.ReorderLevel,
+            UnitPrice = m.UnitPrice,
             IsActive = m.IsActive,
             CreatedAt = m.CreatedAt,
             UpdatedAt = m.UpdatedAt
@@ -111,6 +114,7 @@ public class MedicineService : IMedicineService
             Unit = dto.Unit.Trim(),
             StockQuantity = dto.StockQuantity,
             ReorderLevel = dto.ReorderLevel,
+            UnitPrice = dto.UnitPrice,
             IsActive = dto.IsActive,
             CreatedAt = DateTime.UtcNow
         };
@@ -145,6 +149,7 @@ public class MedicineService : IMedicineService
         medicine.Name = dto.Name.Trim();
         medicine.Unit = dto.Unit.Trim();
         medicine.ReorderLevel = dto.ReorderLevel;
+        medicine.UnitPrice = dto.UnitPrice;
         medicine.IsActive = dto.IsActive;
         medicine.UpdatedAt = DateTime.UtcNow;
 

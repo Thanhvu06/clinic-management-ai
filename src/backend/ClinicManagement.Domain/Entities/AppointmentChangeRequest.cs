@@ -11,7 +11,9 @@ public class AppointmentChangeRequest
     public long? RequestedSlotId { get; set; }
     public string? Reason { get; set; }
     public AppointmentChangeRequestStatus Status { get; set; } = AppointmentChangeRequestStatus.Pending;
+    public AppointmentStatus? OriginalAppointmentStatus { get; set; }
     public Guid RequestedByUserId { get; set; }
+    public Guid? SourceAiActionId { get; set; }
     public Guid? ProcessedByUserId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ProcessedAt { get; set; }

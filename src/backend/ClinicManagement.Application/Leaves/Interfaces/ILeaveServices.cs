@@ -8,6 +8,7 @@ public interface IDoctorLeaveService
 {
     Task<PagedResult<LeaveRequestDto>> GetMyLeaveRequestsAsync(string? status, int page, int pageSize);
     Task<LeaveRequestDto> GetLeaveRequestByIdAsync(long id);
+    Task<LeavePreviewDto> PreviewLeaveAffectedAppointmentsAsync(System.DateTime start, System.DateTime end);
     Task<LeaveRequestDto> CreateLeaveRequestAsync(CreateLeaveRequestDto request);
     Task WithdrawLeaveRequestAsync(long id);
 }

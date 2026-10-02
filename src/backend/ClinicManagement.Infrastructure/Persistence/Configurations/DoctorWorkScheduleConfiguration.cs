@@ -26,5 +26,8 @@ public class DoctorWorkScheduleConfiguration : IEntityTypeConfiguration<DoctorWo
         builder.Property(ws => ws.IsActive)
             .IsRequired()
             .HasDefaultValue(true);
+
+        builder.HasIndex(ws => new { ws.DoctorId, ws.WorkDate, ws.StartTime, ws.EndTime })
+            .IsUnique();
     }
 }

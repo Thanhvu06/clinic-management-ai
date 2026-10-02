@@ -7,13 +7,13 @@ namespace ClinicManagement.Application.Appointments.Interfaces;
 public interface IChangeRequestService
 {
     // For Patients
-    Task<ChangeRequestDto> CreateRescheduleRequestAsync(long appointmentId, CreateRescheduleRequestDto request);
-    Task<ChangeRequestDto> CreateCancellationRequestAsync(long appointmentId, CreateCancellationRequestDto request);
+    Task<ChangeRequestDto> CreateRescheduleRequestAsync(long appointmentId, CreateRescheduleRequestDto request, Guid? sourceAiActionId = null);
+    Task<ChangeRequestDto> CreateCancellationRequestAsync(long appointmentId, CreateCancellationRequestDto request, Guid? sourceAiActionId = null);
     Task WithdrawRequestAsync(long requestId);
     Task<PagedResult<ChangeRequestDto>> GetMyChangeRequestsAsync(string? status, int page, int pageSize);
     
     // For Receptionists
-    Task<PagedResult<ChangeRequestDto>> GetAllChangeRequestsAsync(string? status, int page, int pageSize);
+    Task<PagedResult<ChangeRequestDto>> GetAllChangeRequestsAsync(string? requestType, string? status, int page, int pageSize);
     Task<ChangeRequestDto> GetChangeRequestByIdAsync(long requestId);
     Task ApproveRescheduleAsync(long requestId, ProcessChangeRequestDto request);
     Task ApproveCancellationAsync(long requestId, ProcessChangeRequestDto request);

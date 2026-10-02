@@ -37,8 +37,10 @@ public class RevisitRequestController : ControllerBase
     [HttpPost("{id}/accept")]
     public async Task<IActionResult> AcceptRevisitRequest(long id, [FromBody] AcceptRevisitRequestDto request)
     {
-        await _revisitService.AcceptRevisitRequestAsync(id, request);
-        return Ok(ApiResponse.Ok("Đã đồng ý và đặt lịch tái khám thành công."));
+        var appointment = await _revisitService.AcceptRevisitRequestAsync(id, request);
+        return Ok(ApiResponse<ClinicManagement.Application.Appointments.DTOs.AppointmentDto>.Ok(
+            appointment,
+            "Đã đồng ý và đặt lịch tái khám thành công."));
     }
 
     [HttpPost("{id}/reject")]

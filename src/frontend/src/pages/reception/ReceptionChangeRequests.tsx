@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { History, Eye, X, CheckCircle, XCircle, ArrowRight, RefreshCw } from 'lucide-react';
+import { History, Eye, X, CheckCircle, XCircle, ArrowRight, RefreshCw, Filter } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
 
 interface ChangeRequest {
@@ -12,14 +12,47 @@ interface ChangeRequest {
     reason: string | null;
     status: string;
     createdAt: string;
+    appointmentCode?: string;
+    patientName?: string;
+    doctorName?: string;
+    specialtyName?: string;
+    currentSlotDate?: string;
+    currentStartTime?: string;
+    currentEndTime?: string;
+    requestedSlotDate?: string;
+    requestedStartTime?: string;
+    requestedEndTime?: string;
+}
+
+interface AppointmentInfo {
+    id: number;
+    appointmentCode: string;
+    patientName: string;
+    patientPhone?: string;
+    doctorName: string;
+    specialtyName: string;
+    appointmentDate: string;
+    startTime: string;
+    endTime: string;
+    status: string;
+}
+
+interface ChangeRequestPagedResult {
+    items: ChangeRequest[];
+    totalItems: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
 }
 
 export const ReceptionChangeRequests: React.FC = () => {
     const [requests, setRequests] = useState<ChangeRequest[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [totalItems, setTotalItems] = useState(0);
     const [page, setPage] = useState(1);
     const [statusFilter, setStatusFilter] = useState('');
+    const [typeFilter, setTypeFilter] = useState('');
 
     // Detail Modal
     const [modal, setModal] = useState<{ isOpen: boolean, req: ChangeRequest | null }>({ isOpen: false, req: null });
@@ -27,25 +60,30 @@ export const ReceptionChangeRequests: React.FC = () => {
     const [adminNote, setAdminNote] = useState('');
 
     // Additional data for Modal
-    const [appointmentInfo, setAppointmentInfo] = useState<any>(null);
+    const [appointmentInfo, setAppointmentInfo] = useState<AppointmentInfo | null>(null);
     const [aptLoading, setAptLoading] = useState(false);
 
     const fetchRequests = async () => {
         setLoading(true);
+        setError(null);
         try {
             const params = new URLSearchParams({
                 page: page.toString(),
                 pageSize: '10'
             });
             if (statusFilter) params.append('status', statusFilter);
+            if (typeFilter) params.append('requestType', typeFilter);
 
-            const res = await axiosClient.get<any, ApiResponse<any>>(`/reception/change-requests?${params.toString()}`);
+            const res = await axiosClient.get<unknown, ApiResponse<ChangeRequestPagedResult>>(`/reception/change-requests?${params.toString()}`);
             if (res.success && res.data) {
                 setRequests(res.data.items);
                 setTotalItems(res.data.totalItems);
+            } else {
+                setError(res.message || 'Không thể tải danh sách yêu cầu thay đổi.');
             }
-        } catch (error) {
-            //
+        } catch (err: unknown) {
+            const errorObj = err as { message?: string; response?: { data?: { message?: string } } };
+            setError(errorObj?.response?.data?.message || errorObj?.message || 'Có lỗi xảy ra khi kết nối máy chủ.');
         } finally {
             setLoading(false);
         }
@@ -53,7 +91,7 @@ export const ReceptionChangeRequests: React.FC = () => {
 
     useEffect(() => {
         fetchRequests();
-    }, [page, statusFilter]);
+    }, [page, statusFilter, typeFilter]);
 
     const openDetail = async (req: ChangeRequest) => {
         setModal({ isOpen: true, req });
@@ -63,12 +101,12 @@ export const ReceptionChangeRequests: React.FC = () => {
         // Fetch original appointment to display details
         setAptLoading(true);
         try {
-            const res = await axiosClient.get<any, ApiResponse<any>>(`/reception/appointments/${req.appointmentId}`);
-            if (res.success) {
+            const res = await axiosClient.get<unknown, ApiResponse<AppointmentInfo>>(`/reception/appointments/${req.appointmentId}`);
+            if (res.success && res.data) {
                 setAppointmentInfo(res.data);
             }
-        } catch (error) {
-            //
+        } catch (_) {
+            // Optional appointment info fetch
         } finally {
             setAptLoading(false);
         }
@@ -79,35 +117,56 @@ export const ReceptionChangeRequests: React.FC = () => {
     const handleAction = async (action: 'approve-reschedule' | 'approve-cancellation' | 'reject') => {
         const req = modal.req;
         if (!req) return;
+
+        if (action === 'reject' && (!adminNote.trim() || adminNote.trim().length < 5)) {
+            showAlert('Lý do từ chối phải có ít nhất 5 ký tự.', 'Lỗi', 'error');
+            return;
+        }
         
         let confirmMsg = '';
         if (action === 'approve-reschedule') confirmMsg = 'Hệ thống sẽ chuyển lịch hẹn sang ca khám mới và giải phóng ca khám cũ. Xác nhận đổi lịch?';
-        else if (action === 'approve-cancellation') confirmMsg = 'Xác nhận hủy lịch hẹn này? Hành động này không thể hoàn tác.';
-        else confirmMsg = 'Từ chối yêu cầu của bệnh nhân? Lịch hẹn cũ vẫn sẽ được giữ nguyên.';
+        else if (action === 'approve-cancellation') confirmMsg = 'Xác nhận hủy lịch hẹn này và giải phóng ca khám? Hành động này không thể hoàn tác.';
+        else confirmMsg = 'Từ chối yêu cầu của bệnh nhân? Lịch hẹn và ca khám cũ vẫn sẽ được giữ nguyên.';
 
         showConfirm(confirmMsg, async () => {
             setActionLoading(true);
             try {
-                const res = await axiosClient.post<any, ApiResponse<any>>(`/reception/change-requests/${req.id}/${action}`, {
-                    reason: adminNote
+                const res = await axiosClient.post<unknown, ApiResponse<null>>(`/reception/change-requests/${req.id}/${action}`, {
+                    reason: adminNote.trim(),
+                    note: adminNote.trim()
                 });
                 if (res.success) {
                     showAlert('Xử lý yêu cầu thành công.', 'Thành công', 'success');
                     fetchRequests();
                     setModal({ isOpen: false, req: null });
                 }
-            } catch (error: any) {
-                const code = error?.errorCode;
-                if (code === 'SLOT_TAKEN') showAlert('Khung giờ mới vừa được người khác chọn. Vui lòng liên hệ bệnh nhân để chọn lịch khác.', 'Lỗi', 'error');
-                else if (code === 'INVALID_CHANGE_REQUEST') showAlert('Yêu cầu không còn hợp lệ hoặc đã được xử lý.', 'Lỗi', 'error');
-                else if (code === 'ACTIVE_CHANGE_REQUEST_EXISTS') showAlert('Lịch hẹn đang có yêu cầu chờ xử lý.', 'Lỗi', 'error');
-                else if (code === 'DOCTOR_NOT_AVAILABLE') showAlert('Bác sĩ không còn làm việc trong khung giờ này.', 'Lỗi', 'error');
-                else if (code === 'RESOURCE_NOT_FOUND') showAlert('Không tìm thấy dữ liệu yêu cầu.', 'Lỗi', 'error');
-                else if (code === 'FORBIDDEN') showAlert('Bạn không có quyền thực hiện thao tác này.', 'Lỗi', 'error');
-                else showAlert(error?.message || 'Có lỗi xảy ra.', 'Lỗi', 'error');
+            } catch (err: unknown) {
+                const errorObj = err as { errorCode?: string; message?: string; response?: { data?: { errorCode?: string; message?: string } } };
+                const code = errorObj?.response?.data?.errorCode || errorObj?.errorCode;
+                const msg = errorObj?.response?.data?.message || errorObj?.message;
+
+                if (code === 'CHANGE_REQUEST_ALREADY_PROCESSED') {
+                    showAlert('Yêu cầu này đã được người khác xử lý hoặc đã rút.', 'Thông báo', 'warning');
+                } else if (code === 'SLOT_TAKEN' || code === 'TARGET_SLOT_ALREADY_BOOKED' || code === 'SLOT_ALREADY_BOOKED') {
+                    showAlert('Khung giờ mới vừa được người khác chọn hoặc đã bị khóa. Vui lòng liên hệ bệnh nhân để chọn lịch khác.', 'Lỗi', 'error');
+                } else if (code === 'INVALID_CHANGE_REQUEST') {
+                    showAlert('Yêu cầu không còn hợp lệ hoặc đã được xử lý.', 'Lỗi', 'error');
+                } else if (code === 'ACTIVE_CHANGE_REQUEST_EXISTS') {
+                    showAlert('Lịch hẹn đang có yêu cầu chờ xử lý.', 'Lỗi', 'error');
+                } else if (code === 'DOCTOR_NOT_AVAILABLE' || code === 'DOCTOR_MISMATCH') {
+                    showAlert(msg || 'Bác sĩ không khả dụng cho khung giờ này.', 'Lỗi', 'error');
+                } else if (code === 'PATIENT_TIME_CONFLICT') {
+                    showAlert('Bệnh nhân đã có lịch khám khác trùng thời gian với ca khám mới.', 'Lỗi', 'error');
+                } else if (code === 'RESOURCE_NOT_FOUND') {
+                    showAlert('Không tìm thấy dữ liệu yêu cầu.', 'Lỗi', 'error');
+                } else if (code === 'FORBIDDEN') {
+                    showAlert('Bạn không có quyền thực hiện thao tác này.', 'Lỗi', 'error');
+                } else {
+                    showAlert(msg || 'Có lỗi xảy ra khi xử lý yêu cầu.', 'Lỗi', 'error');
+                }
                 
-                // Reload if conflict
-                if (['SLOT_TAKEN', 'INVALID_CHANGE_REQUEST'].includes(code)) {
+                // Reload if conflict or state mismatch
+                if (['SLOT_TAKEN', 'TARGET_SLOT_ALREADY_BOOKED', 'SLOT_ALREADY_BOOKED', 'INVALID_CHANGE_REQUEST', 'INVALID_STATE', 'CHANGE_REQUEST_ALREADY_PROCESSED'].includes(code || '')) {
                     fetchRequests();
                     setModal({ isOpen: false, req: null });
                 }
@@ -139,9 +198,12 @@ export const ReceptionChangeRequests: React.FC = () => {
             case 'Pending': return <span className="badge badge-warning">Chờ xử lý</span>;
             case 'Approved': return <span className="badge badge-success">Đã duyệt</span>;
             case 'Rejected': return <span className="badge badge-danger">Đã từ chối</span>;
+            case 'Withdrawn': return <span className="badge badge-muted">Đã rút</span>;
             default: return <span className="badge badge-muted">{status}</span>;
         }
     };
+
+    const totalPages = Math.max(1, Math.ceil(totalItems / 10));
 
     return (
         <div>
@@ -155,20 +217,38 @@ export const ReceptionChangeRequests: React.FC = () => {
             </div>
 
             <div className="card" style={{ marginBottom: '24px' }}>
-                <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                    <div style={{ width: '250px' }}>
+                <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--c-muted)', fontSize: '0.9rem' }}>
+                        <Filter size={16} /> Bộ lọc:
+                    </div>
+                    <div style={{ width: '200px' }}>
+                        <select className="form-select" value={typeFilter} onChange={e => { setTypeFilter(e.target.value); setPage(1); }}>
+                            <option value="">Tất cả loại yêu cầu</option>
+                            <option value="Reschedule">Đổi lịch</option>
+                            <option value="Cancellation">Hủy lịch</option>
+                        </select>
+                    </div>
+                    <div style={{ width: '200px' }}>
                         <select className="form-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
                             <option value="">Tất cả trạng thái</option>
                             <option value="Pending">Chờ xử lý</option>
                             <option value="Approved">Đã duyệt</option>
                             <option value="Rejected">Đã từ chối</option>
+                            <option value="Withdrawn">Đã rút</option>
                         </select>
                     </div>
                 </div>
             </div>
 
             <div className="card" style={{ padding: 0 }}>
-                {loading ? (
+                {error ? (
+                    <div style={{ padding: '40px', textAlign: 'center' }}>
+                        <p style={{ color: 'var(--c-danger)', marginBottom: '16px' }}>{error}</p>
+                        <button className="btn-primary" onClick={() => fetchRequests()} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <RefreshCw size={14} /> Thử lại
+                        </button>
+                    </div>
+                ) : loading ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
                 ) : (
                     <div className="table-responsive">
@@ -176,7 +256,7 @@ export const ReceptionChangeRequests: React.FC = () => {
                             <thead>
                                 <tr>
                                     <th>Lịch gốc</th>
-                                    <th>Loại Y/C</th>
+                                    <th>Loại Y/C & Chi tiết</th>
                                     <th>Thời điểm tạo</th>
                                     <th>Trạng thái</th>
                                     <th style={{ textAlign: 'right' }}>Thao tác</th>
@@ -192,18 +272,36 @@ export const ReceptionChangeRequests: React.FC = () => {
                             ) : requests.map(req => (
                                 <tr key={req.id} style={{ borderBottom: '1px solid var(--c-border)' }}>
                                     <td style={{ padding: '16px' }}>
-                                        <div style={{ fontWeight: 600 }}>ID Lịch: #{req.appointmentId}</div>
-                                        <div style={{ fontSize: '0.9rem', color: 'var(--c-muted)', marginTop: '4px', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            Lý do: {req.reason || 'Không ghi chú'}
+                                        <div style={{ fontWeight: 600, color: 'var(--c-primary)' }}>
+                                            {req.appointmentCode ? `#${req.appointmentCode}` : `ID: #${req.appointmentId}`}
                                         </div>
-                                    </td>
-                                    <td style={{ padding: '16px' }}>
-                                        {translateType(req.requestType)}
-                                        {req.requestType === 'Reschedule' && req.requestedSlotId && (
-                                            <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', marginTop: '4px' }}>
-                                                Slot mong muốn: #{req.requestedSlotId}
+                                        {req.patientName && (
+                                            <div style={{ fontSize: '0.9rem', color: 'var(--c-navy-dark)', marginTop: '2px' }}>
+                                                BN: <strong>{req.patientName}</strong>
                                             </div>
                                         )}
+                                        {req.doctorName && (
+                                            <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>
+                                                BS: {req.doctorName}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td style={{ padding: '16px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                            {translateType(req.requestType)}
+                                        </div>
+                                        {req.requestType === 'Reschedule' && (
+                                            <div style={{ fontSize: '0.85rem', color: 'var(--c-text)', marginTop: '4px' }}>
+                                                {req.requestedSlotDate ? (
+                                                    <span>Đổi sang: <strong>{req.requestedSlotDate}</strong> ({req.requestedStartTime?.substring(0, 5)} - {req.requestedEndTime?.substring(0, 5)})</span>
+                                                ) : (
+                                                    <span>Slot mong muốn: #{req.requestedSlotId}</span>
+                                                )}
+                                            </div>
+                                        )}
+                                        <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', marginTop: '2px', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            Lý do: {req.reason || 'Không ghi chú'}
+                                        </div>
                                     </td>
                                     <td style={{ padding: '16px', fontSize: '0.9rem' }}>
                                         {formatDateTime(req.createdAt)}
@@ -224,17 +322,37 @@ export const ReceptionChangeRequests: React.FC = () => {
                 )}
             </div>
 
-            <div style={{ marginTop: '16px', color: 'var(--c-muted)', fontSize: '0.9rem' }}>
-                Tổng cộng: {totalItems} yêu cầu
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ color: 'var(--c-muted)', fontSize: '0.9rem' }}>
+                    Trang {page} / {totalPages} (Tổng cộng: {totalItems} yêu cầu)
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                        className="btn-secondary"
+                        style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={page <= 1 || loading}
+                    >
+                        Trước
+                    </button>
+                    <button
+                        className="btn-secondary"
+                        style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        disabled={page >= totalPages || loading}
+                    >
+                        Sau
+                    </button>
+                </div>
             </div>
 
             {/* Detail Modal */}
             {modal.isOpen && modal.req && (
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-                    <div style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
+                    <div style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '620px', maxHeight: '90vh', overflowY: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                             <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                Chi tiết yêu cầu {translateType(modal.req.requestType)}
+                                Chi tiết yêu cầu {translateType(modal.req.requestType)} #{modal.req.id}
                             </h3>
                             <button onClick={() => setModal({ isOpen: false, req: null })} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
                         </div>
@@ -244,37 +362,50 @@ export const ReceptionChangeRequests: React.FC = () => {
                         ) : appointmentInfo ? (
                             <div style={{ marginBottom: '20px', padding: '16px', background: 'var(--c-bg)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <div style={{ fontWeight: 600, color: 'var(--c-navy-dark)' }}>Thông tin bệnh nhân</div>
-                                <div><span style={{ color: 'var(--c-muted)' }}>Tên:</span> {appointmentInfo.patientName} - <span style={{ color: 'var(--c-muted)' }}>SĐT:</span> {appointmentInfo.patientPhone}</div>
+                                <div><span style={{ color: 'var(--c-muted)' }}>Tên:</span> <strong>{appointmentInfo.patientName}</strong> {appointmentInfo.patientPhone ? <>- <span style={{ color: 'var(--c-muted)' }}>SĐT:</span> {appointmentInfo.patientPhone}</> : null}</div>
                                 <hr style={{ border: 'none', borderTop: '1px dashed var(--c-border)', margin: '8px 0' }} />
                                 <div style={{ fontWeight: 600, color: 'var(--c-navy-dark)' }}>Lịch hiện tại</div>
                                 <div><span style={{ color: 'var(--c-muted)' }}>Bác sĩ:</span> {appointmentInfo.doctorName} ({appointmentInfo.specialtyName})</div>
                                 <div>
-                                    <span style={{ color: 'var(--c-muted)' }}>Thời gian:</span> {appointmentInfo.appointmentDate} ({appointmentInfo.startTime.substring(0,5)} - {appointmentInfo.endTime.substring(0,5)})
+                                    <span style={{ color: 'var(--c-muted)' }}>Thời gian:</span> <strong>{appointmentInfo.appointmentDate}</strong> ({appointmentInfo.startTime?.substring(0,5)} - {appointmentInfo.endTime?.substring(0,5)})
                                 </div>
                             </div>
-                        ) : (
-                            <div style={{ padding: '12px', background: 'var(--c-warning-bg)', color: 'var(--c-warning)', borderRadius: '6px', marginBottom: '20px' }}>
-                                Không thể lấy chi tiết lịch hẹn gốc. (ID: {modal.req.appointmentId})
+                        ) : modal.req.patientName ? (
+                            <div style={{ marginBottom: '20px', padding: '16px', background: 'var(--c-bg)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ fontWeight: 600, color: 'var(--c-navy-dark)' }}>Thông tin lịch hẹn #{modal.req.appointmentCode || modal.req.appointmentId}</div>
+                                <div><span style={{ color: 'var(--c-muted)' }}>Bệnh nhân:</span> <strong>{modal.req.patientName}</strong></div>
+                                <div><span style={{ color: 'var(--c-muted)' }}>Bác sĩ:</span> {modal.req.doctorName} ({modal.req.specialtyName})</div>
+                                <div>
+                                    <span style={{ color: 'var(--c-muted)' }}>Thời gian hiện tại:</span> <strong>{modal.req.currentSlotDate}</strong> ({modal.req.currentStartTime?.substring(0,5)} - {modal.req.currentEndTime?.substring(0,5)})
+                                </div>
                             </div>
-                        )}
+                        ) : null}
 
-                        <div style={{ marginBottom: '24px' }}>
+                        <div style={{ marginBottom: '20px' }}>
                             <div style={{ fontWeight: 500, marginBottom: '8px' }}>Lý do của bệnh nhân:</div>
-                            <div style={{ background: 'var(--c-bg)', padding: '12px', borderRadius: '6px', fontSize: '0.95rem' }}>
+                            <div style={{ background: 'var(--c-bg)', padding: '12px', borderRadius: '6px', fontSize: '0.95rem', borderLeft: '3px solid var(--c-primary)' }}>
                                 {modal.req.reason || <span style={{ color: 'var(--c-muted)' }}>Không có ghi chú</span>}
                             </div>
                         </div>
 
-                        {modal.req.requestType === 'Reschedule' && modal.req.status === 'Pending' && (
-                            <div style={{ marginBottom: '24px', padding: '12px', border: '1px solid var(--c-info)', borderRadius: '8px', background: 'var(--c-info-bg)', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        {modal.req.requestType === 'Reschedule' && (
+                            <div style={{ marginBottom: '20px', padding: '14px', border: '1px solid var(--c-info)', borderRadius: '8px', background: 'var(--c-info-bg)', display: 'flex', alignItems: 'center', gap: '16px' }}>
                                 <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--c-info)' }}>Đang chọn lịch cũ</div>
-                                    <div style={{ fontWeight: 500 }}>ID Lịch: #{modal.req.appointmentId}</div>
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--c-info)', fontWeight: 600 }}>Lịch hiện tại</div>
+                                    <div style={{ fontSize: '0.95rem', marginTop: '2px' }}>
+                                        {modal.req.currentSlotDate || appointmentInfo?.appointmentDate} ({modal.req.currentStartTime?.substring(0, 5) || appointmentInfo?.startTime?.substring(0, 5)} - {modal.req.currentEndTime?.substring(0, 5) || appointmentInfo?.endTime?.substring(0, 5)})
+                                    </div>
                                 </div>
                                 <ArrowRight size={20} color="var(--c-info)" />
                                 <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--c-info)' }}>Muốn đổi sang</div>
-                                    <div style={{ fontWeight: 500 }}>Slot mới: #{modal.req.requestedSlotId}</div>
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--c-info)', fontWeight: 600 }}>Ca khám mong muốn</div>
+                                    <div style={{ fontSize: '0.95rem', fontWeight: 600, marginTop: '2px', color: 'var(--c-primary)' }}>
+                                        {modal.req.requestedSlotDate ? (
+                                            <span>{modal.req.requestedSlotDate} ({modal.req.requestedStartTime?.substring(0, 5)} - {modal.req.requestedEndTime?.substring(0, 5)})</span>
+                                        ) : (
+                                            <span>Slot #{modal.req.requestedSlotId}</span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -282,13 +413,14 @@ export const ReceptionChangeRequests: React.FC = () => {
                         {modal.req.status === 'Pending' && (
                             <>
                                 <div style={{ marginBottom: '16px' }}>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Ghi chú xử lý (Tùy chọn)</label>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Ghi chú xử lý (Gửi đến bệnh nhân)</label>
                                     <textarea 
-                                        className="form-textarea" 
+                                        className="form-input" 
                                         rows={2}
                                         value={adminNote} 
                                         onChange={e => setAdminNote(e.target.value)} 
-                                        placeholder="Ghi chú khi duyệt/từ chối..."
+                                        placeholder="Nhập ghi chú khi duyệt hoặc lý do từ chối (tối thiểu 5 ký tự khi từ chối)..."
+                                        style={{ resize: 'none' }}
                                     />
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid var(--c-border)' }}>
@@ -312,7 +444,7 @@ export const ReceptionChangeRequests: React.FC = () => {
                         )}
                         
                         {modal.req.status !== 'Pending' && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '16px', borderTop: '1px solid var(--c-border)' }}>
                                 <div>Trạng thái: {translateStatus(modal.req.status)}</div>
                                 <button className="btn-secondary" onClick={() => setModal({ isOpen: false, req: null })}>Đóng</button>
                             </div>

@@ -20,7 +20,7 @@ public class MedicineController : ControllerBase
     }
 
     [HttpGet("api/v1/medicines/active")]
-    [Authorize]
+    [Authorize(Roles = RoleNames.Doctor + "," + RoleNames.Pharmacist + "," + RoleNames.Admin)]
     public async Task<IActionResult> GetActiveMedicines()
     {
         var result = await _medicineService.GetActiveMedicinesAsync();

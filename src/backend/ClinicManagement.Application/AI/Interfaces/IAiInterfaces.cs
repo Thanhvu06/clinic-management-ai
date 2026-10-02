@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.AI.DTOs;
+using ClinicManagement.Application.AI.Planning;
 
 namespace ClinicManagement.Application.AI.Interfaces;
 
@@ -15,9 +16,83 @@ public interface IAiSpecialtySuggestionProvider
 {
     Task<List<AiProviderSuggestionResult>> GetSuggestionsFromAiAsync(string symptomDescription, List<WhitelistItemDto> whitelist, CancellationToken cancellationToken = default);
     Task<AiChatProviderResult> ChatWithAiAsync(string message, List<ChatMessageDto> context, List<WhitelistItemDto> whitelist, string clinicContextJson, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Role Copilot read planner. A separate, server-selected contract: a
+    /// role-specific prompt and a response schema built from the granted tools.
+    /// </summary>
+    Task<AiRolePlannerProviderResult> PlanRoleCopilotAsync(AiRolePlannerProviderRequest request, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Optional, caller-owned budget for outbound provider attempts. Production
+/// traffic does not register this service; the live canary does so it can
+/// reserve each HTTP attempt before it is sent, including retries.
+/// </summary>
+public interface IAiProviderAttemptBudget
+{
+    bool TryReserveAttempt();
+    int Consumed { get; }
+    int Remaining { get; }
 }
 
 public interface IClinicAiContextService
 {
     Task<string> GetClinicContextJsonAsync(CancellationToken cancellationToken = default);
+}
+
+public interface IAiSpecialtyClassifier
+{
+    SpecialtyClassificationResult? ClassifySymptom(string symptomDescription);
+}
+
+public enum IntentClassificationMode
+{
+    Off,
+    Shadow,
+    Active
+}
+
+public interface IVietnameseIntentClassifier
+{
+    float OptimalThreshold { get; }
+    IntentClassificationResult Classify(string? message, IntentClassificationContext? context = null);
+}
+
+public class IntentClassificationContext
+{
+    public bool HasActiveDraft { get; set; }
+    public bool HasDoctor { get; set; }
+    public bool HasSlot { get; set; }
+    public bool HasReason { get; set; }
+    public string? LastModelQuestion { get; set; }
+    public List<string>? DisplayedDoctorNames { get; set; }
+    public List<string>? DisplayedSlotLabels { get; set; }
+    public List<long>? DisplayedDoctorIds { get; set; }
+    public List<long>? DisplayedSlotIds { get; set; }
+    public string? ContextSnapshotId { get; set; }
+}
+
+public class IntentClassificationResult
+{
+    public string Intent { get; set; } = AiChatIntentTypes.UnclearOrOutOfScope;
+    public float Confidence { get; set; } = 1.0f;
+    public bool IsClear { get; set; } = true;
+    public string? ClarificationPrompt { get; set; }
+    public bool IsCorrection { get; set; }
+    public string? NegatedDoctorName { get; set; }
+    public string? NegatedSymptom { get; set; }
+    public string? CorrectionTarget { get; set; }
+    public string? ExtractedDoctorName { get; set; }
+    public string? ExtractedDate { get; set; }
+    public string? ExtractedTimePreference { get; set; }
+    public string? ExtractedReason { get; set; }
+    public int? ExtractedRelativeDoctorIndex { get; set; }
+    public int? ExtractedRelativeSlotIndex { get; set; }
+    public string Method { get; set; } = "RuleBased";
+    public string? ShadowIntent { get; set; }
+    public float? ShadowConfidence { get; set; }
+    public float? ShadowTop2Score { get; set; }
+    public float? ShadowMargin { get; set; }
+    public bool? ShadowAbstained { get; set; }
 }

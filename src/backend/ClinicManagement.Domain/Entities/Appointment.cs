@@ -11,6 +11,12 @@ public class Appointment
     public long PatientId { get; set; }
     public long DoctorId { get; set; }
     public long SpecialtyId { get; set; }
+    /// <summary>
+    /// The facility selected when this appointment was created. This is not
+    /// inferred from a doctor's current assignments because those assignments
+    /// can change or a doctor can work at more than one facility.
+    /// </summary>
+    public long? FacilityId { get; set; }
     public long AppointmentSlotId { get; set; }
     public DateOnly AppointmentDate { get; set; }
     public TimeOnly StartTime { get; set; }
@@ -21,12 +27,16 @@ public class Appointment
     public Patient Patient { get; set; } = null!;
     public Doctor Doctor { get; set; } = null!;
     public Specialty Specialty { get; set; } = null!;
+    public Facility? Facility { get; set; }
     public AppointmentSlot AppointmentSlot { get; set; } = null!;
     
     public ICollection<AppointmentHistory> Histories { get; set; } = new List<AppointmentHistory>();
     public ICollection<AppointmentChangeRequest> ChangeRequests { get; set; } = new List<AppointmentChangeRequest>();
 
     public VisitSummary? VisitSummary { get; set; }
+    public AppointmentVitalSigns? VitalSigns { get; set; }
+    public Prescription? Prescription { get; set; }
+    public PatientVisit? PatientVisit { get; set; }
     public RevisitRequest? RevisitRequest { get; set; }
     public RevisitRequest? SourceRevisitRequest { get; set; }
 }

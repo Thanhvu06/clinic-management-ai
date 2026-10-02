@@ -136,6 +136,28 @@ public class AdminLeaveService : IAdminLeaveService
             leave.Status = DoctorLeaveRequestStatus.Approved;
             leave.AdminNote = request.AdminNote;
 
+            var doctorUserId = await _dbContext.Doctors
+                .Where(d => d.Id == leave.DoctorId)
+                .Select(d => d.UserId)
+                .FirstOrDefaultAsync();
+
+            if (doctorUserId != Guid.Empty)
+            {
+                _dbContext.Notifications.Add(new ClinicManagement.Domain.Entities.Notification
+                {
+                    UserId = doctorUserId,
+                    Type = NotificationType.LeaveRequest,
+                    Title = "Đơn nghỉ phép đã được duyệt",
+                    Message = $"Đơn nghỉ phép từ {leave.StartDateTime:dd/MM/yyyy HH\\:mm} đến {leave.EndDateTime:dd/MM/yyyy HH\\:mm} của bạn đã được chấp thuận.",
+                    Route = "/doctor/schedule",
+                    RelatedEntityType = "DoctorLeaveRequest",
+                    RelatedEntityId = leave.Id.ToString(),
+                    DedupeKey = $"leave_proc_{leave.Id}_approved",
+                    IsRead = false,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+            }
+
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
         }
@@ -156,6 +178,28 @@ public class AdminLeaveService : IAdminLeaveService
 
         leave.Status = DoctorLeaveRequestStatus.Rejected;
         leave.AdminNote = request.AdminNote;
+
+        var doctorUserId = await _dbContext.Doctors
+            .Where(d => d.Id == leave.DoctorId)
+            .Select(d => d.UserId)
+            .FirstOrDefaultAsync();
+
+        if (doctorUserId != Guid.Empty)
+        {
+            _dbContext.Notifications.Add(new ClinicManagement.Domain.Entities.Notification
+            {
+                UserId = doctorUserId,
+                Type = NotificationType.LeaveRequest,
+                Title = "Đơn nghỉ phép bị từ chối",
+                Message = $"Đơn nghỉ phép từ {leave.StartDateTime:dd/MM/yyyy HH\\:mm} đến {leave.EndDateTime:dd/MM/yyyy HH\\:mm} của bạn đã bị từ chối. Lý do: {request.AdminNote ?? "Không có lý do cụ thể"}.",
+                Route = "/doctor/schedule",
+                RelatedEntityType = "DoctorLeaveRequest",
+                RelatedEntityId = leave.Id.ToString(),
+                DedupeKey = $"leave_proc_{leave.Id}_rejected",
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
 
         await _dbContext.SaveChangesAsync();
     }

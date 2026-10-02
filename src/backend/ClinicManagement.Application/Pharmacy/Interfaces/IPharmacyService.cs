@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.Pharmacy.DTOs;
@@ -10,7 +11,9 @@ public interface IPharmacyService
     Task<PharmacyDashboardDto> GetDashboardStatsAsync();
     Task<PagedResult<PharmacyPrescriptionListDto>> GetPrescriptionsAsync(string? status, string? search, int page, int pageSize);
     Task<PrescriptionDetailDto> GetPrescriptionByIdAsync(long id);
+    Task<PrescriptionDetailDto> ConfirmPurchaseAsync(long prescriptionId);
     Task<DispensePrescriptionResultDto> DispensePrescriptionAsync(long prescriptionId);
+    Task<PrescriptionPaymentEligibilityDto> EvaluatePrescriptionPaymentAsync(long prescriptionId, CancellationToken cancellationToken = default);
     Task<PagedResult<StockTransactionDto>> GetStockTransactionsAsync(long? medicineId, int page, int pageSize);
     Task AdjustStockAsync(AdjustStockDto request);
 }

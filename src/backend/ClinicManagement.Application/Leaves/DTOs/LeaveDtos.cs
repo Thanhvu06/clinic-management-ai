@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace ClinicManagement.Application.Leaves.DTOs;
@@ -31,4 +32,23 @@ public class CreateLeaveRequestDto
 public class AdminProcessLeaveRequestDto
 {
     public string? AdminNote { get; set; }
+}
+
+public class LeavePreviewDto
+{
+    public DateTime StartDateTime { get; set; }
+    public DateTime EndDateTime { get; set; }
+    public int AffectedAppointmentsCount { get; set; }
+    public List<AffectedAppointmentDto> AffectedAppointments { get; set; } = new();
+}
+
+public class AffectedAppointmentDto
+{
+    public long Id { get; set; }
+    public string AppointmentCode { get; set; } = string.Empty;
+    public DateOnly Date { get; set; }
+    public TimeOnly StartTime { get; set; }
+    public TimeOnly EndTime { get; set; }
+    public string PatientName { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
 }

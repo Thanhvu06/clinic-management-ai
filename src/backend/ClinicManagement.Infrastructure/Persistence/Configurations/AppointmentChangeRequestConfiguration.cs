@@ -44,6 +44,9 @@ public class AppointmentChangeRequestConfiguration : IEntityTypeConfiguration<Ap
             .HasConversion<string>()
             .HasDefaultValue(AppointmentChangeRequestStatus.Pending);
 
+        builder.Property(acr => acr.OriginalAppointmentStatus)
+            .HasConversion<string>();
+
         builder.Property(acr => acr.CreatedAt)
             .IsRequired()
             .HasColumnType("datetime2");
@@ -54,5 +57,9 @@ public class AppointmentChangeRequestConfiguration : IEntityTypeConfiguration<Ap
         builder.HasIndex(acr => acr.AppointmentId)
             .IsUnique()
             .HasFilter("[Status] = 'Pending'");
+
+        builder.HasIndex(acr => acr.SourceAiActionId)
+            .IsUnique()
+            .HasFilter("[SourceAiActionId] IS NOT NULL");
     }
 }

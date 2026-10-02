@@ -10,6 +10,7 @@ public class Specialty
     public string? Description { get; set; }
     public bool IsActive { get; set; }
     public bool AiEnabled { get; set; }
+    public decimal ConsultationFee { get; set; }
 
     public ICollection<DoctorSpecialty> DoctorSpecialties { get; set; } = new List<DoctorSpecialty>();
     public ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();

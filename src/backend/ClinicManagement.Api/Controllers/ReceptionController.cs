@@ -18,24 +18,35 @@ public class ReceptionController : ControllerBase
 {
     private readonly IReceptionService _receptionService;
     private readonly IChangeRequestService _changeRequestService;
+    private readonly ClinicManagement.Application.Visits.Interfaces.IPatientVisitService _patientVisitService;
 
-    public ReceptionController(IReceptionService receptionService, IChangeRequestService changeRequestService)
+    public ReceptionController(
+        IReceptionService receptionService,
+        IChangeRequestService changeRequestService,
+        ClinicManagement.Application.Visits.Interfaces.IPatientVisitService patientVisitService)
     {
         _receptionService = receptionService;
         _changeRequestService = changeRequestService;
+        _patientVisitService = patientVisitService;
     }
 
     [HttpGet("stats")]
-    public async Task<IActionResult> GetStats()
+    public async Task<IActionResult> GetStats([FromQuery] long? facilityId = null)
     {
-        var result = await _receptionService.GetStatsAsync();
+        var result = await _receptionService.GetStatsAsync(facilityId);
         return Ok(ApiResponse<ReceptionStatsDto>.Ok(result));
     }
 
     [HttpGet("appointments")]
-    public async Task<IActionResult> GetAppointments([FromQuery] string? status, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    public async Task<IActionResult> GetAppointments(
+        [FromQuery] string? status,
+        [FromQuery] string? tab,
+        [FromQuery] long? facilityId,
+        [FromQuery] string? search,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var result = await _receptionService.GetAppointmentsAsync(status, search, page, pageSize);
+        var result = await _receptionService.GetAppointmentsAsync(status, tab, facilityId, search, page, pageSize);
         return Ok(ApiResponse<PagedResult<ReceptionAppointmentDto>>.Ok(result));
     }
 
@@ -60,10 +71,24 @@ public class ReceptionController : ControllerBase
         return Ok(ApiResponse.Ok("Xác nhận lịch khám thành công."));
     }
 
-    [HttpGet("change-requests")]
-    public async Task<IActionResult> GetChangeRequests([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    [HttpPost("appointments/{id}/check-in")]
+    public async Task<IActionResult> CheckInAppointment(long id, System.Threading.CancellationToken cancellationToken)
     {
-        var result = await _changeRequestService.GetAllChangeRequestsAsync(status, page, pageSize);
+        var ticket = await _patientVisitService.CheckInAppointmentAsync(new ClinicManagement.Application.Visits.DTOs.AppointmentCheckInRequest { AppointmentId = id }, cancellationToken);
+        return Ok(ApiResponse<ClinicManagement.Application.Visits.DTOs.CheckInTicketDto>.Ok(ticket, "Tiếp nhận và check-in bệnh nhân thành công."));
+    }
+
+    [HttpPost("walk-in")]
+    public async Task<IActionResult> RegisterWalkIn([FromBody] ClinicManagement.Application.Visits.DTOs.WalkInRegistrationRequest request, System.Threading.CancellationToken cancellationToken)
+    {
+        var ticket = await _patientVisitService.CreateWalkInVisitAsync(request, cancellationToken);
+        return Ok(ApiResponse<ClinicManagement.Application.Visits.DTOs.CheckInTicketDto>.Ok(ticket, "Tiếp nhận bệnh nhân vãng lai thành công."));
+    }
+
+    [HttpGet("change-requests")]
+    public async Task<IActionResult> GetChangeRequests([FromQuery] string? requestType, [FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    {
+        var result = await _changeRequestService.GetAllChangeRequestsAsync(requestType, status, page, pageSize);
         return Ok(ApiResponse<PagedResult<ChangeRequestDto>>.Ok(result));
     }
 

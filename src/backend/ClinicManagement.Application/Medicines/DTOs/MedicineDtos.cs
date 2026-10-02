@@ -11,6 +11,7 @@ public class MedicineDto
     public string Unit { get; set; } = string.Empty;
     public int StockQuantity { get; set; }
     public int ReorderLevel { get; set; }
+    public decimal? UnitPrice { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -23,6 +24,7 @@ public class ActiveMedicineDto
     public string Name { get; set; } = string.Empty;
     public string Unit { get; set; } = string.Empty;
     public int StockQuantity { get; set; }
+    public decimal? UnitPrice { get; set; }
 }
 
 public class CreateMedicineDto
@@ -41,6 +43,7 @@ public class CreateMedicineDto
 
     public int StockQuantity { get; set; } = 0;
     public int ReorderLevel { get; set; } = 10;
+    public decimal? UnitPrice { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -55,5 +58,6 @@ public class UpdateMedicineDto
     public string Unit { get; set; } = string.Empty;
 
     public int ReorderLevel { get; set; } = 10;
+    public decimal? UnitPrice { get; set; }
     public bool IsActive { get; set; } = true;
 }

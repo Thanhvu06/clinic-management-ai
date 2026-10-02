@@ -36,6 +36,13 @@ public class AppointmentConfiguration : IEntityTypeConfiguration<Appointment>
             .HasForeignKey(a => a.SpecialtyId)
             .OnDelete(DeleteBehavior.NoAction);
 
+        builder.HasOne(a => a.Facility)
+            .WithMany(f => f.Appointments)
+            .HasForeignKey(a => a.FacilityId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.HasIndex(a => new { a.FacilityId, a.AppointmentDate });
+
         builder.HasOne(a => a.AppointmentSlot)
             .WithMany(slot => slot.Appointments)
             .HasForeignKey(a => a.AppointmentSlotId)

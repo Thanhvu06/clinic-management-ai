@@ -20,6 +20,7 @@ public class Medicine
     
     public int StockQuantity { get; set; }
     public int ReorderLevel { get; set; }
+    public decimal? UnitPrice { get; set; }
     public bool IsActive { get; set; } = true;
     
     [Timestamp]
