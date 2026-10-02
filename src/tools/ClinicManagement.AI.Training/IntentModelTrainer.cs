@@ -277,9 +277,8 @@ public class IntentModelTrainer
 
         // c) Hybrid Pipeline (Active mode: Rules + ML.NET fallback above threshold)
         // Temporarily save model to disk for hybrid test
-        var intentOutputDirectory = Path.GetFullPath(Path.Combine(outputDirectory, "..", "..", "..", "backend", "ClinicManagement.Infrastructure", "models"));
-        Directory.CreateDirectory(intentOutputDirectory);
-        var tempModelPath = Path.Combine(intentOutputDirectory, "vietnamese_intent_classifier_v1.zip");
+        Directory.CreateDirectory(outputDirectory);
+        var tempModelPath = Path.Combine(outputDirectory, "vietnamese_intent_classifier_v1.zip");
         mlContext.Model.Save(model, trainDataView.Schema, tempModelPath);
 
         var hybridClassifier = new VietnameseIntentClassifier(IntentClassificationMode.Active, tempModelPath, (float)bestThreshold);
@@ -335,7 +334,7 @@ public class IntentModelTrainer
         };
 
         // 6. Save Metadata
-        var metadataPath = Path.Combine(intentOutputDirectory, "intent_model_metadata.json");
+        var metadataPath = Path.Combine(outputDirectory, "intent_model_metadata.json");
         var metadataObj = new
         {
             ModelVersion = "1.1.0",

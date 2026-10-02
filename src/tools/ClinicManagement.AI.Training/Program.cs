@@ -48,7 +48,7 @@ public class Program
         else if (command == "--train-intent" || command == "--eval-intent")
         {
             string dataPath = "data/vietnamese_intent_dataset.json";
-            string outDir = "models";
+            string? outDir = null;
 
             for (int i = 1; i < args.Length; i++)
             {
@@ -268,7 +268,25 @@ public class Program
         return 0;
     }
 
-    private static int RunTrainIntent(string dataPath, string outDir)
+    public static string ResolveIntentOutputDirectory(string? explicitOut, string startDirectory)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitOut))
+            return Path.GetFullPath(explicitOut, startDirectory);
+
+        var directory = new DirectoryInfo(Path.GetFullPath(startDirectory));
+        while (directory is not null)
+        {
+            if (Directory.Exists(Path.Combine(directory.FullName, ".git")) ||
+                File.Exists(Path.Combine(directory.FullName, ".git")) ||
+                directory.EnumerateFiles("*.sln").Any())
+                return Path.Combine(directory.FullName, "src", "backend", "ClinicManagement.Infrastructure", "models");
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Cannot find the repository root for the default intent model output.");
+    }
+
+    private static int RunTrainIntent(string dataPath, string? explicitOut)
     {
         if (!File.Exists(dataPath))
         {
@@ -276,10 +294,7 @@ public class Program
             if (File.Exists(alt)) dataPath = alt;
         }
 
-        if (!Directory.Exists(outDir) && Directory.Exists(Path.Combine("src", "tools", "ClinicManagement.AI.Training", outDir)))
-        {
-            outDir = Path.Combine("src", "tools", "ClinicManagement.AI.Training", outDir);
-        }
+        var outDir = ResolveIntentOutputDirectory(explicitOut, Directory.GetCurrentDirectory());
 
         if (!File.Exists(dataPath))
         {
