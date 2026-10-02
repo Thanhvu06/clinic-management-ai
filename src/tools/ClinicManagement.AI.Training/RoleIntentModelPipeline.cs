@@ -249,7 +249,7 @@ public static class RoleIntentModelPipeline
     {
         Text = RoleIntentDatasetGenerator.Normalize(row.Text), Label = row.Label, Weight = weight
     };
-    private static RoleIntentRecord[] ReadRecords(string directory, string file, string split, RoleIntentLabel[] labels)
+    internal static RoleIntentRecord[] ReadRecords(string directory, string file, string split, RoleIntentLabel[] labels)
     {
         var rows = Read<RoleIntentRecord[]>(Path.Combine(directory, file));
         if (rows.Length == 0 || rows.Any(row => row.Split != split || !labels.Any(label => label.Label == row.Label) || string.IsNullOrWhiteSpace(row.Text)))
@@ -262,13 +262,13 @@ public static class RoleIntentModelPipeline
         view.Schema["Score"].Annotations.GetValue("SlotNames", ref slots);
         return slots.DenseValues().Select(x => x.ToString()).ToArray();
     }
-    private static RoleIntentMetricsPair MetricsPair(RoleIntentRecord[] rows, RoleIntentPredictions predictions, string[] labels) =>
+    internal static RoleIntentMetricsPair MetricsPair(RoleIntentRecord[] rows, RoleIntentPredictions predictions, string[] labels) =>
         new(Measure(rows, predictions.Unfiltered, labels), Measure(rows, predictions.Filtered, labels));
-    private static RoleIntentError[] Errors(RoleIntentRecord[] rows, RoleIntentPrediction[] predictions) =>
+    internal static RoleIntentError[] Errors(RoleIntentRecord[] rows, RoleIntentPrediction[] predictions) =>
         rows.Select((row, index) => new RoleIntentError(row.Id, row.Role, row.Text, row.Label, predictions[index].TopLabel,
             predictions[index].DecisionLabel, predictions[index].Confidence, predictions[index].IsUncertain))
             .Where(x => x.Actual != x.Predicted).ToArray();
-    private static void SaveDeterministic(RoleIntentFittedModel fitted, string path)
+    internal static void SaveDeterministic(RoleIntentFittedModel fitted, string path)
     {
         using var buffer = new MemoryStream();
         fitted.Context.Model.Save(fitted.Transformer, fitted.InputSchema, buffer);

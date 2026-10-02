@@ -159,3 +159,154 @@ Build Release 0 lỗi. Sáu xUnit mới kiểm tra lặp seed/xác suất, metad
 Model mới SHA-256 `2462a7ec63bcd5a461c629840f2cd92aef8c78d41c1ae541a41f6714f68e30ba`; hash xác suất validation `6055a91b89645475e00b912eec68a196ba129f5a233d25b94c62e72bddaad1ac`. Metadata lưu hash train/validation/labels, catalog/score labels, seed, package, cấu hình, trial/ngưỡng và metric. ZIP dùng thứ tự entry và timestamp cố định.
 
 Eval do AI Claude viết, cùng nguồn tổng hợp với seeds nên số đo có thể lạc quan; không có tập blind độc lập do người viết và chưa đo trên câu thật từ người dùng. Validation chứa biến thể tương quan trong cùng family; mỗi nhãn eval chỉ 10 câu nên P/R/F1 còn nhiều bất định. Ba nhãn F1=0 và hơn nửa eval bị abstain sau lọc cho thấy model này chưa đủ bằng chứng để triển khai. Xác suất chưa calibrated trên traffic thật. Model chưa nối runtime, chưa thay classifier luật và chưa chứng minh hiệu quả của fallback.
+
+## Model v2
+
+V2 là thí nghiệm offline song song, không nối runtime/API. Dữ liệu role-intent v1, generator, model/metadata/report v1, model production và ci.yml giữ nguyên. Microsoft.ML 4.0.3/net10.0, seed 20261002, một luồng, cùng thứ tự train; dùng lại đúng RoleIntentDatasetGenerator.Normalize và word n-gram 1–2 + char n-gram 2–4. Nhánh có chuẩn hóa L2 dùng L2 ở từng bộ featurizer và ở vector ghép; nhánh không L2 tắt cả hai. Trọng số lớp vẫn là N/(24*số_mẫu_lớp).
+
+### Cách chạy và bảo vệ v1
+
+Hai lệnh nhận --version v1|v2, **mặc định v2** từ thay đổi này. Vì vậy các lệnh không có --version trong mục v1 cũ cần thêm --version v1 khi sử dụng v1.
+
+```powershell
+dotnet run --project src/tools/ClinicManagement.AI.Training -c Release -- --train-role-intent --version v2
+dotnet run --project src/tools/ClinicManagement.AI.Training -c Release -- --eval-role-intent --version v2
+dotnet run --project src/tools/ClinicManagement.AI.Training -c Release -- --train-role-intent --version v1
+dotnet run --project src/tools/ClinicManagement.AI.Training -c Release -- --eval-role-intent --version v1
+```
+
+Có thể truyền --data-dir và --out-dir cho thí nghiệm chưa đo. V2 mặc định ghi ba file role_intent_model_v2.zip, role_intent_model_meta_v2.json, role_intent_eval_report_v2.json vào models/role-intent-v2/, cạnh thư mục v1. Report v2 đã tồn tại thì train/eval v2 dừng; không xóa report hay đổi thư mục để đo lại cùng cấu hình. Artifact v2 đã commit là thí nghiệm đã chốt, nên hai lệnh v2 mặc định sẽ bảo vệ nó. Với v1 đã chốt, CLI kiểm tra ZIP/metadata rồi trả metadata/report lịch sử (frozen/cached), không train hay scoring eval lại; API pipeline v1 và ý nghĩa sáu test v1 giữ nguyên.
+
+### Chọn cấu hình và tái lập
+
+Grid 24 cấu hình được định trước, chỉ train bằng 866 câu train và chọn bằng 283 câu validation. Mỗi cấu hình train hai lần; SDCA dùng Shuffle=false, ConvergenceCheckFrequency=0, số vòng cố định; cả hai trainer dùng một luồng và cùng seed/thứ tự. Các lệnh giữ tiến trình scalar DOTNET_EnableHWIntrinsic=0, DOTNET_TieredCompilation=0 như v1.
+
+Tiêu chí tái lập: ở cả không lọc và có lọc vai trò, nhãn top-1 phải giống hệt và chênh xác suất tuyệt đối lớn nhất của mọi nhãn phải ≤1e-6. Cả 24 cấu hình, gồm 12 SDCA, đạt; chênh quan sát bằng 0. SDCA được tranh chọn cùng L-BFGS. Hai lần chạy toàn bộ train độc lập cũng chọn cùng cấu hình/ngưỡng, metadata và ZIP khớp byte, hash toàn bộ xác suất validation giống nhau; đây là bằng chứng mạnh hơn dung sai yêu cầu trong môi trường này, không phải cam kết hash giữa mọi OS/CPU.
+
+Chọn macro-F1 validation sau lọc role cao nhất; hòa thì ưu tiên ít bước normalization/weighting hơn, ít vòng hơn, rồi thứ tự trainer/tên cấu hình cố định. Bảng dưới ghi mọi cấu hình thử trên dữ liệu thật; train accuracy là không lọc, hai cột macro-F1 là không lọc/có lọc. Test fixture nhỏ không tham gia lựa chọn.
+
+| # | Trainer | L2 norm | Trọng số | Vòng tối đa | L1/L2 reg | Accuracy train | Macro-F1 val không lọc | Macro-F1 val lọc role | Tái lập |
+|---|---|---|---|---:|---|---:|---:|---:|---|
+| 1 | lbfgs | Không | Không | 500 | 0/0.01 | 100.00% | 0.4112 | 0.6682 | Đạt, Δ=0 |
+| 2 | lbfgs | Không | Không | 1000 | 0/0.001 | 100.00% | 0.4155 | 0.6734 | Đạt, Δ=0 |
+| 3 | lbfgs | Không | Không | 1000 | 0.01/0.001 | 100.00% | 0.4230 | 0.6320 | Đạt, Δ=0 |
+| 4 | sdca | Không | Không | 500 | 0/0.01 | 100.00% | 0.4174 | 0.6491 | Đạt, Δ=0 |
+| 5 | sdca | Không | Không | 1000 | 0/0.001 | 100.00% | 0.4042 | 0.6468 | Đạt, Δ=0 |
+| 6 | sdca | Không | Không | 1000 | 0.01/0.001 | 100.00% | 0.3985 | 0.6402 | Đạt, Δ=0 |
+| 7 | lbfgs | Không | Có | 500 | 0/0.01 | 100.00% | 0.4112 | 0.6644 | Đạt, Δ=0 |
+| 8 | lbfgs | Không | Có | 1000 | 0/0.001 | 100.00% | 0.4096 | 0.6644 | Đạt, Δ=0 |
+| 9 | lbfgs | Không | Có | 1000 | 0.01/0.001 | 100.00% | 0.4194 | 0.6245 | Đạt, Δ=0 |
+| 10 | sdca | Không | Có | 500 | 0/0.01 | 100.00% | 0.3990 | 0.6354 | Đạt, Δ=0 |
+| 11 | sdca | Không | Có | 1000 | 0/0.001 | 100.00% | 0.4023 | 0.6497 | Đạt, Δ=0 |
+| 12 | sdca | Không | Có | 1000 | 0.01/0.001 | 100.00% | 0.3985 | 0.6425 | Đạt, Δ=0 |
+| 13 | lbfgs | Có | Không | 500 | 0/0.01 | 100.00% | 0.4736 | 0.6955 | Đạt, Δ=0 |
+| 14 | lbfgs | Có | Không | 1000 | 0/0.001 | 100.00% | 0.4650 | 0.6915 | Đạt, Δ=0 |
+| 15 | lbfgs | Có | Không | 1000 | 0.01/0.001 | 100.00% | 0.4333 | 0.6154 | Đạt, Δ=0 |
+| 16 | sdca | Có | Không | 500 | 0/0.01 | 99.19% | 0.4384 | 0.6380 | Đạt, Δ=0 |
+| 17 | sdca | Có | Không | 1000 | 0/0.001 | 100.00% | 0.4545 | 0.6715 | Đạt, Δ=0 |
+| 18 | sdca | Có | Không | 1000 | 0.01/0.001 | 100.00% | 0.4530 | 0.6672 | Đạt, Δ=0 |
+| 19 | lbfgs | Có | Có | 500 | 0/0.01 | 100.00% | 0.4635 | 0.6877 | Đạt, Δ=0 |
+| 20 | lbfgs | Có | Có | 1000 | 0/0.001 | 100.00% | 0.4631 | 0.6880 | Đạt, Δ=0 |
+| 21 | lbfgs | Có | Có | 1000 | 0.01/0.001 | 100.00% | 0.4349 | 0.6150 | Đạt, Δ=0 |
+| 22 | sdca | Có | Có | 500 | 0/0.01 | 98.38% | 0.4363 | 0.6428 | Đạt, Δ=0 |
+| 23 | sdca | Có | Có | 1000 | 0/0.001 | 100.00% | 0.4489 | 0.6643 | Đạt, Δ=0 |
+| 24 | sdca | Có | Có | 1000 | 0.01/0.001 | 100.00% | 0.4464 | 0.6621 | Đạt, Δ=0 |
+
+Chọn **#13: L-BFGS, L2 normalization, không trọng số, 500 vòng tối đa, L1=0, L2=0.01**. Train accuracy đạt 100% nhưng validation vẫn thấp hơn: underfit train của v1 giảm, khoảng cách generalization còn rõ; không kết luận từng thay đổi là nguyên nhân riêng vì grid chưa phải ablation đầy đủ độc lập mọi tham số.
+
+### Ngưỡng sau khi chốt cấu hình
+
+Chọn coverage cao nhất trong grid 0.00–0.95 bước 0.05 có accepted accuracy ≥90% và ít nhất một câu được giữ; hòa chọn ngưỡng thấp. Nếu không có ngưỡng đạt 90%, chọn accepted accuracy cao nhất, rồi coverage, và báo mục tiêu chưa đạt. V2 không thêm hạn chế minimum support 29 câu của v1; số câu giữ lại luôn được báo. Chọn **0.75**: 133/283 câu, coverage 47.00%, accepted accuracy 93.23%. Dưới ngưỡng trả không chắc; không thực thi fallback luật trong tool.
+
+| Ngưỡng | Số câu giữ / 283 | Coverage lọc role | Accepted accuracy lọc role |
+|---:|---:|---:|---:|
+| 0.00 | 283 | 100.00% | 73.14% |
+| 0.05 | 283 | 100.00% | 73.14% |
+| 0.10 | 283 | 100.00% | 73.14% |
+| 0.15 | 279 | 98.59% | 73.84% |
+| 0.20 | 275 | 97.17% | 74.91% |
+| 0.25 | 260 | 91.87% | 77.31% |
+| 0.30 | 250 | 88.34% | 79.20% |
+| 0.35 | 242 | 85.51% | 80.99% |
+| 0.40 | 224 | 79.15% | 84.38% |
+| 0.45 | 209 | 73.85% | 86.60% |
+| 0.50 | 190 | 67.14% | 86.32% |
+| 0.55 | 178 | 62.90% | 87.64% |
+| 0.60 | 169 | 59.72% | 88.17% |
+| 0.65 | 156 | 55.12% | 89.10% |
+| 0.70 | 147 | 51.94% | 89.12% |
+| 0.75 | 133 | 47.00% | 93.23% |
+| 0.80 | 120 | 42.40% | 95.00% |
+| 0.85 | 97 | 34.28% | 94.85% |
+| 0.90 | 84 | 29.68% | 95.24% |
+| 0.95 | 58 | 20.49% | 100.00% |
+
+### So sánh v1/v2
+
+Accuracy/macro-F1 dùng toàn bộ câu, top-1 trước abstention; accepted accuracy và uncertainty báo riêng. **Eval do AI Claude viết và đã được nhìn ở v1 nên không còn là dữ liệu chưa thấy.** Train không đọc eval hay report v1; report v1 chỉ được đọc trong bước eval v2 sau khi chốt. Eval v2 được đo đúng một lần, sau kiểm tra train lặp. Các câu sai và 2 ma trận 24×24 nằm trong report v2; so sánh v1 lấy từ report lịch sử, không scoring v1 lại.
+
+| Version | Tập | N | Accuracy không lọc | Macro-F1 không lọc | Accuracy lọc role | Macro-F1 lọc role |
+|---|---|---:|---:|---:|---:|---:|
+| v1 | train | 866 | 71.82% | 0.6778 | 80.83% | 0.7742 |
+| v1 | validation | 283 | 44.88% | 0.3743 | 61.13% | 0.5546 |
+| v1 | eval | 240 | 57.08% | 0.5246 | 68.33% | 0.6524 |
+| v2 | train | 866 | 100.00% | 1.0000 | 100.00% | 1.0000 |
+| v2 | validation | 283 | 51.59% | 0.4736 | 73.14% | 0.6955 |
+| v2 | eval | 240 | 74.17% | 0.7374 | 81.25% | 0.8123 |
+
+Validation F1 của ba nhãn được yêu cầu; các ô là không lọc / lọc role. Không dùng eval để chỉnh riêng các nhãn này.
+
+| Nhãn | V1 | V2 |
+|---|---|---|
+| ActionRequest | 0.0000/0.0000 | 0.3448/0.5263 |
+| DoctorQueue | 0.0000/0.0000 | 0.4000/0.6286 |
+| OutOfScope | 0.0000/0.0000 | 0.0000/0.0000 |
+
+Eval v2 có 10 câu/nhãn; ô dưới là precision/recall/F1.
+
+| Nhãn | Không lọc | Lọc role |
+|---|---|---|
+| ActionRequest | 0.462/0.600/0.522 | 0.429/0.600/0.500 |
+| AiHealth | 0.643/0.900/0.750 | 0.714/1.000/0.833 |
+| ClinicKnowledge | 0.667/0.800/0.727 | 0.533/0.800/0.640 |
+| DashboardMetrics | 0.615/0.800/0.696 | 0.750/0.900/0.818 |
+| DiagnosticOrders | 0.833/1.000/0.909 | 0.833/1.000/0.909 |
+| DoctorQueue | 0.667/0.600/0.632 | 0.889/0.800/0.842 |
+| Greeting | 1.000/0.700/0.824 | 0.875/0.700/0.778 |
+| Help | 0.778/0.700/0.737 | 0.636/0.700/0.667 |
+| InventoryStatus | 0.900/0.900/0.900 | 0.909/1.000/0.952 |
+| LookupAppointment | 0.778/0.700/0.737 | 1.000/0.800/0.889 |
+| MyAppointments | 0.700/0.700/0.700 | 0.875/0.700/0.778 |
+| MyBills | 0.833/0.500/0.625 | 0.875/0.700/0.778 |
+| MyDiagnosticResults | 0.750/0.900/0.818 | 0.900/0.900/0.900 |
+| MyPrescriptions | 0.889/0.800/0.842 | 1.000/1.000/1.000 |
+| MyVisits | 0.692/0.900/0.783 | 0.818/0.900/0.857 |
+| OutOfScope | 0.750/0.300/0.429 | 0.500/0.300/0.375 |
+| PatientSummary | 0.700/0.700/0.700 | 0.875/0.700/0.778 |
+| PrescriptionPayment | 0.875/0.700/0.778 | 1.000/0.700/0.824 |
+| PrescriptionQueue | 0.692/0.900/0.783 | 0.909/1.000/0.952 |
+| PrescriptionStatus | 0.727/0.800/0.762 | 0.900/0.900/0.900 |
+| ReceptionQueue | 0.889/0.800/0.842 | 1.000/0.900/0.947 |
+| StartBooking | 0.778/0.700/0.737 | 0.778/0.700/0.737 |
+| TechnicianWorklist | 0.750/0.600/0.667 | 1.000/0.800/0.889 |
+| TodayAppointments | 0.800/0.800/0.800 | 0.909/1.000/0.952 |
+
+Ở cả hai chế độ, ActionRequest→PrescriptionPayment = 0, PrescriptionPayment→ActionRequest = 2; chiều ngược tăng so với v1 (0), nên không khẳng định mọi cặp nhầm đã tốt hơn. Cặp lớn nhất OutOfScope→ActionRequest = 3. Sau lọc role, các cặp 2 câu: Greeting→AiHealth, MyBills→MyVisits, OutOfScope→DashboardMetrics, PatientSummary→ClinicKnowledge, PrescriptionPayment→ActionRequest, StartBooking→ActionRequest. Report có 62 câu sai không lọc, 45 câu sai lọc role, kèm nhãn thật/dự đoán/decision/confidence.
+
+### Không chắc và accepted accuracy v2
+
+Ngưỡng 0.75 được chọn trên validation lọc role; không có đảm bảo accepted accuracy ≥90% khi bỏ lọc role. Các ô uncertainty có mẫu số toàn tập; accepted accuracy chỉ có mẫu số các câu giữ lại.
+
+| Tập | Không chắc không lọc | Giữ không lọc | Accepted accuracy không lọc | Không chắc lọc role | Giữ lọc role | Accepted accuracy lọc role |
+|---|---:|---:|---:|---:|---:|---:|
+| train | 0.00% (0/866) | 866 | 100.00% | 0.00% (0/866) | 866 | 100.00% |
+| validation | 64.66% (183/283) | 100 | 74.00% | 53.00% (150/283) | 133 | 93.23% |
+| eval | 52.08% (125/240) | 115 | 93.91% | 38.75% (93/240) | 147 | 95.24% |
+
+### Kiểm tra và giới hạn v2
+
+Build Release 0 lỗi; 37 test trọng tâm (v2 6, v1 6, dataset 8, eval set 6, Gate B 11), full backend 957/957, 0 fail/skip. Gate B như ci.yml: IsValid=true, NOT_PROMOTED. V1 tests không sửa; fixture v2 dùng 72 câu train gốc, 48 câu validation gốc, không có eval TSV trong test chọn model/save/load. Test kiểm tra cả hai trainer, save/load, role mask, dung sai/nhãn, ngưỡng đạt/chưa đạt và guard report. SHA-256 của 25 file dữ liệu/model/metadata/report/generator/CI cũ giữ nguyên.
+
+Eval do AI viết, cùng nguồn tổng hợp với seeds, đã nhìn ở v1 và các lỗi v1 là động lực thiết kế v2, nên số đo có thể lạc quan dù v2 chọn tham số/ngưỡng chỉ trên validation. Chưa có tập blind độc lập do người viết hoặc traffic thật; 10 câu/nhãn eval còn nhiều bất định. Train 100% không chứng minh generalization. OutOfScope vẫn F1=0 trên validation và yếu trên eval; còn nhầm ActionRequest với PrescriptionPayment. Xác suất chưa calibrated trên người dùng thật, threshold cần role mask. Model chưa nối runtime/API và chưa chứng minh chất lượng fallback luật. Không gọi LLM live, không promote model production.
+
+Model v2 SHA-256: cb62d5995617065a26c5e8facffb662fbc5ab319b8932582b623981da37074ba. Hash xác suất validation: 7dfcb8ed5a55aac25aab7cc6765ece5a0d82bc519dce3740f4f3c17f3b074961. Metadata ghi catalog/score labels, seed/package, hashes train/validation/labels, mọi trial, tiêu chí/tolerance tái lập và mọi ngưỡng.
