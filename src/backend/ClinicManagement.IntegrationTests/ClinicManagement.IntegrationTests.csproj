@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- Match the offline training tool when verifying exact model reproducibility. -->
+    <TieredCompilation>false</TieredCompilation>
+    <RunSettingsFilePath>$(MSBuildProjectDirectory)\role-intent.runsettings</RunSettingsFilePath>
   </PropertyGroup>
 
   <ItemGroup>

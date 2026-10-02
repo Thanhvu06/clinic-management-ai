@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <!-- Scalar CPU reductions keep exact offline ML predictions reproducible. -->
+    <EnvironmentVariables>
+      <DOTNET_EnableHWIntrinsic>0</DOTNET_EnableHWIntrinsic>
+      <DOTNET_TieredCompilation>0</DOTNET_TieredCompilation>
+    </EnvironmentVariables>
+  </RunConfiguration>
+</RunSettings>

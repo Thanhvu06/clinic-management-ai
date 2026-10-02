@@ -120,6 +120,35 @@ public class Program
             Console.WriteLine(JsonSerializer.Serialize(manifest.Totals));
             return 0;
         }
+        else if (command is "--train-role-intent" or "--eval-role-intent")
+        {
+            var scalarExit = RoleIntentModelPipeline.RunScalarCommand(args);
+            if (scalarExit.HasValue) return scalarExit.Value;
+            var modelsDirectory = ResolveIntentOutputDirectory(null, Directory.GetCurrentDirectory());
+            var repoRoot = Path.GetFullPath(Path.Combine(modelsDirectory, "..", "..", "..", ".."));
+            var projectDirectory = Path.Combine(repoRoot, "src", "tools", "ClinicManagement.AI.Training");
+            var dataDirectory = OptionOrDefault(args, "--data-dir", Path.Combine(projectDirectory, "data"));
+            var outputDirectory = OptionOrDefault(args, "--out-dir", Path.Combine(projectDirectory, "models", "role-intent-v1"));
+            try
+            {
+                if (command == "--train-role-intent")
+                {
+                    var metadata = RoleIntentModelPipeline.Train(dataDirectory, outputDirectory);
+                    Console.WriteLine(JsonSerializer.Serialize(new { metadata.Configuration, metadata.ThresholdPolicy.Threshold, metadata.ValidationPredictionSha256 }));
+                }
+                else
+                {
+                    var report = RoleIntentModelPipeline.EvaluateOnce(dataDirectory, outputDirectory);
+                    Console.WriteLine(JsonSerializer.Serialize(new { report.Eval.Unfiltered.Accuracy, report.Eval.Unfiltered.MacroF1, filteredAccuracy = report.Eval.Filtered.Accuracy, filteredMacroF1 = report.Eval.Filtered.MacroF1, report.Provenance }));
+                }
+                return 0;
+            }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine(exception.Message);
+                return 1;
+            }
+        }
         else if (command == "--gateb")
         {
             return RunGateB(args);
@@ -147,6 +176,8 @@ public class Program
         Console.WriteLine("  ClinicManagement.AI.Training --phase4-self-test");
         Console.WriteLine("  ClinicManagement.AI.Training --benchmark-phase4 [datasetPath] [--train trainDatasetPath] [--report reportPath]");
         Console.WriteLine("  ClinicManagement.AI.Training --gen-role-intent [--data-dir directory]");
+        Console.WriteLine("  ClinicManagement.AI.Training --train-role-intent [--data-dir directory] [--out-dir directory]");
+        Console.WriteLine("  ClinicManagement.AI.Training --eval-role-intent [--data-dir directory] [--out-dir directory]");
         Console.WriteLine("  ClinicManagement.AI.Training --gateb [--report reportPath] [--promotion promotionPath]");
     }
 
