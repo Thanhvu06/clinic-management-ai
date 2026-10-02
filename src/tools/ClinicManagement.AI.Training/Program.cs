@@ -338,8 +338,8 @@ public class Program
         var manifestPath = OptionOrDefault(args, "--manifest", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data", "phase5_blind_holdout_manifest.json"));
         var reportPath = OptionOrDefault(args, "--report", Path.Combine("docs", "ai", "GATE_B_MODEL_REPORT.json"));
         var promotionPath = OptionOrDefault(args, "--promotion", Path.Combine("docs", "ai", "GATE_B_PROMOTION_DECISION.json"));
-        var productionModelPath = OptionOrDefault(args, "--production-model", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "models", "vietnamese_intent_classifier_v1.zip"));
-        var productionMetadataPath = OptionOrDefault(args, "--production-metadata", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "models", "intent_model_metadata.json"));
+        var productionModelPath = OptionOrDefault(args, "--production-model", Path.Combine("src", "backend", "ClinicManagement.Infrastructure", "models", "vietnamese_intent_classifier_v1.zip"));
+        var productionMetadataPath = OptionOrDefault(args, "--production-metadata", Path.Combine("src", "backend", "ClinicManagement.Infrastructure", "models", "intent_model_metadata.json"));
 
         var report = GateBModelPipeline.Run(
             legacyPath,
