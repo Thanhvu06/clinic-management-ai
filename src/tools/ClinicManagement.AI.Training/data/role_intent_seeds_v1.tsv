@@ -1,0 +1,195 @@
+vai_tro	cau	nhan	nguon
+Chung	Xin chào	Greeting	claude_v1
+Chung	hello bạn	Greeting	claude_v1
+Chung	chao ban oi	Greeting	claude_v1
+Chung	hi	Greeting	claude_v1
+Chung	alo	Greeting	claude_v1
+Chung	Chào buổi sáng	Greeting	claude_v1
+Chung	hey	Greeting	claude_v1
+Chung	chao buoi toi	Greeting	claude_v1
+Chung	Bạn giúp được gì cho tôi?	Help	claude_v1
+Chung	huong dan su dung	Help	claude_v1
+Chung	bạn làm được những gì	Help	claude_v1
+Chung	help	Help	claude_v1
+Chung	cho minh hoi chuc nang cua he thong	Help	claude_v1
+Chung	Tôi cần trợ giúp	Help	claude_v1
+Chung	ban co the lam gi vay	Help	claude_v1
+Chung	hướng dẫn mình dùng chatbot với	Help	claude_v1
+Chung	Phòng khám mở cửa lúc mấy giờ?	ClinicKnowledge	claude_v1
+Chung	phong kham co kham ngoai gio khong	ClinicKnowledge	claude_v1
+Chung	Địa chỉ phòng khám ở đâu?	ClinicKnowledge	claude_v1
+Chung	gia kham tong quat bao nhieu	ClinicKnowledge	claude_v1
+Chung	phòng khám có những chuyên khoa nào	ClinicKnowledge	claude_v1
+Chung	co nhan bao hiem y te khong	ClinicKnowledge	claude_v1
+Chung	Quy trình khám bệnh như thế nào?	ClinicKnowledge	claude_v1
+Chung	huy lich hen thi co mat phi khong	ClinicKnowledge	claude_v1
+Chung	Hủy lịch hẹn giúp tôi	ActionRequest	claude_v1
+Chung	xoa don thuoc nay di	ActionRequest	claude_v1
+Chung	Thanh toán hóa đơn cho mình	ActionRequest	claude_v1
+Chung	doi lich kham sang mai	ActionRequest	claude_v1
+Chung	cập nhật số điện thoại của tôi	ActionRequest	claude_v1
+Chung	gửi kết quả cho bác sĩ giúp mình	ActionRequest	claude_v1
+Chung	xac nhan thanh toan di	ActionRequest	claude_v1
+Chung	in hoa don giup toi	ActionRequest	claude_v1
+DuocSi	thu tiền đơn thuốc	ActionRequest	claude_v1_sua
+DuocSi	thu tien thuoc cua benh nhan	ActionRequest	claude_v1_sua
+Chung	Thời tiết hôm nay thế nào?	OutOfScope	claude_v1
+Chung	ke chuyen cuoi di	OutOfScope	claude_v1
+Chung	Giá vàng hôm nay bao nhiêu	OutOfScope	claude_v1
+Chung	viet code python giup toi	OutOfScope	claude_v1
+Chung	ai la tong thong my	OutOfScope	claude_v1
+Chung	cách nấu phở ngon	OutOfScope	claude_v1
+Chung	tran bong da toi nay may gio	OutOfScope	claude_v1
+Chung	dịch sang tiếng Anh giúp mình	OutOfScope	claude_v1
+BenhNhan	Tôi muốn đặt lịch khám	StartBooking	claude_v1
+BenhNhan	dat lich kham ngay mai	StartBooking	claude_v1
+BenhNhan	cho mình đăng ký khám tim mạch	StartBooking	claude_v1
+BenhNhan	muon hen bac si noi khoa	StartBooking	claude_v1
+BenhNhan	đặt lịch khám răng thứ sáu	StartBooking	claude_v1
+BenhNhan	book lich kham giup toi	StartBooking	claude_v1
+BenhNhan	toi can kham da lieu tuan sau	StartBooking	claude_v1
+BenhNhan	Đăng ký khám bệnh giúp tôi	StartBooking	claude_v1
+BenhNhan	Lịch hẹn của tôi	MyAppointments	claude_v1
+BenhNhan	lich hen sap toi cua minh	MyAppointments	claude_v1
+BenhNhan	tôi có lịch khám nào không	MyAppointments	claude_v1
+BenhNhan	xem lich hen cua toi	MyAppointments	claude_v1
+BenhNhan	khi nào tôi có hẹn	MyAppointments	claude_v1
+BenhNhan	mình đã đặt những lịch nào	MyAppointments	claude_v1
+BenhNhan	lich kham tuan nay cua toi	MyAppointments	claude_v1
+BenhNhan	kiểm tra lịch hẹn sắp tới	MyAppointments	claude_v1
+BenhNhan	Lịch sử khám bệnh của tôi	MyVisits	claude_v1
+BenhNhan	lan kham gan nhat cua toi	MyVisits	claude_v1
+BenhNhan	tôi đã khám những lần nào	MyVisits	claude_v1
+BenhNhan	xem lai cac lan kham truoc	MyVisits	claude_v1
+BenhNhan	lần khám trước bác sĩ nói gì	MyVisits	claude_v1
+BenhNhan	ho so kham benh cua minh	MyVisits	claude_v1
+BenhNhan	mình đã đi khám mấy lần rồi	MyVisits	claude_v1
+BenhNhan	xem lich su kham	MyVisits	claude_v1
+BenhNhan	Kết quả xét nghiệm của tôi	MyDiagnosticResults	claude_v1
+BenhNhan	ket qua sieu am cua minh	MyDiagnosticResults	claude_v1
+BenhNhan	có kết quả chụp X-quang chưa	MyDiagnosticResults	claude_v1
+BenhNhan	xem ket qua xet nghiem mau	MyDiagnosticResults	claude_v1
+BenhNhan	kết quả cận lâm sàng của tôi	MyDiagnosticResults	claude_v1
+BenhNhan	ket qua chan doan hinh anh	MyDiagnosticResults	claude_v1
+BenhNhan	xét nghiệm của mình xong chưa	MyDiagnosticResults	claude_v1
+BenhNhan	cho xem ket qua kham	MyDiagnosticResults	claude_v1
+BenhNhan	Đơn thuốc của tôi	MyPrescriptions	claude_v1
+BenhNhan	don thuoc lan truoc	MyPrescriptions	claude_v1
+BenhNhan	tôi được kê thuốc gì	MyPrescriptions	claude_v1
+BenhNhan	xem don thuoc cua minh	MyPrescriptions	claude_v1
+BenhNhan	thuốc bác sĩ kê hôm qua	MyPrescriptions	claude_v1
+BenhNhan	toi can xem lai don thuoc	MyPrescriptions	claude_v1
+BenhNhan	đơn thuốc mới nhất của mình	MyPrescriptions	claude_v1
+BenhNhan	bac si ke cho minh thuoc gi	MyPrescriptions	claude_v1_sua
+BenhNhan	Hóa đơn của tôi	MyBills	claude_v1
+BenhNhan	toi con no vien phi khong	MyBills	claude_v1
+BenhNhan	xem hoa don thanh toan	MyBills	claude_v1
+BenhNhan	tôi phải trả bao nhiêu tiền	MyBills	claude_v1
+BenhNhan	lich su thanh toan cua minh	MyBills	claude_v1
+BenhNhan	hóa đơn lần khám gần nhất	MyBills	claude_v1
+BenhNhan	chi phi kham cua toi	MyBills	claude_v1
+BenhNhan	mình đã thanh toán những khoản nào	MyBills	claude_v1
+LeTan	Lịch hẹn hôm nay	TodayAppointments	claude_v1
+LeTan	lich hen hom nay co may ca	TodayAppointments	claude_v1
+LeTan	hôm nay có bao nhiêu bệnh nhân hẹn	TodayAppointments	claude_v1
+LeTan	danh sach hen hom nay	TodayAppointments	claude_v1
+LeTan	xem lịch khám hôm nay	TodayAppointments	claude_v1
+LeTan	hom nay ai dat lich	TodayAppointments	claude_v1
+LeTan	tổng số lịch hẹn trong ngày	TodayAppointments	claude_v1
+LeTan	lich hen ngay hom nay	TodayAppointments	claude_v1
+LeTan	Hàng đợi tiếp đón	ReceptionQueue	claude_v1
+LeTan	ai dang cho tiep nhan	ReceptionQueue	claude_v1
+LeTan	bệnh nhân đang chờ check-in	ReceptionQueue	claude_v1
+LeTan	danh sach cho tiep don	ReceptionQueue	claude_v1
+LeTan	còn bao nhiêu người chờ ở quầy	ReceptionQueue	claude_v1
+LeTan	xem hang cho le tan	ReceptionQueue	claude_v1
+LeTan	bệnh nhân vừa đến chưa check-in	ReceptionQueue	claude_v1
+LeTan	ai chua duoc tiep don	ReceptionQueue	claude_v1
+LeTan	Tra cứu lịch hẹn LH-1234	LookupAppointment	claude_v1
+LeTan	tim lich hen ma LH-5821	LookupAppointment	claude_v1
+LeTan	kiểm tra mã hẹn LH-0907	LookupAppointment	claude_v1
+LeTan	tra lich hen lh 4471	LookupAppointment	claude_v1_sua
+LeTan	mã LH-6093 hẹn mấy giờ	LookupAppointment	claude_v1_sua
+LeTan	lich hen LH-3340 the nao	LookupAppointment	claude_v1
+LeTan	xem chi tiết lịch hẹn LH-2216	LookupAppointment	claude_v1
+LeTan	tra cuu ma LH-7788	LookupAppointment	claude_v1
+BacSi	Danh sách bệnh nhân chờ khám	DoctorQueue	claude_v1
+BacSi	hang doi kham cua toi	DoctorQueue	claude_v1
+BacSi	hôm nay tôi còn mấy bệnh nhân	DoctorQueue	claude_v1
+BacSi	ai la benh nhan tiep theo	DoctorQueue	claude_v1
+BacSi	bệnh nhân đang chờ tôi	DoctorQueue	claude_v1
+BacSi	xem hang cho bac si	DoctorQueue	claude_v1
+BacSi	còn bao nhiêu ca chưa khám	DoctorQueue	claude_v1
+BacSi	benh nhan ke tiep	DoctorQueue	claude_v1
+BacSi	Tóm tắt bệnh án bệnh nhân này	PatientSummary	claude_v1
+BacSi	tom tat ho so benh nhan	PatientSummary	claude_v1
+BacSi	cho tôi xem tiền sử bệnh nhân	PatientSummary	claude_v1
+BacSi	benh nhan nay bi gi truoc day	PatientSummary	claude_v1
+BacSi	tổng quan tình trạng bệnh nhân	PatientSummary	claude_v1
+BacSi	tom tat lan kham truoc cua benh nhan	PatientSummary	claude_v1
+BacSi	xem bệnh án tóm tắt	PatientSummary	claude_v1
+BacSi	benh nhan nay co di ung gi khong	PatientSummary	claude_v1
+BacSi	Các chỉ định cận lâm sàng	DiagnosticOrders	claude_v1
+BacSi	chi dinh xet nghiem cua benh nhan	DiagnosticOrders	claude_v1
+BacSi	xem chỉ định đã ra	DiagnosticOrders	claude_v1
+BacSi	benh nhan nay da chi dinh gi	DiagnosticOrders	claude_v1
+BacSi	danh sách chỉ định chẩn đoán	DiagnosticOrders	claude_v1
+BacSi	chi dinh sieu am da lam chua	DiagnosticOrders	claude_v1
+BacSi	chỉ định xét nghiệm đang chờ	DiagnosticOrders	claude_v1
+BacSi	kiem tra cac chi dinh	DiagnosticOrders	claude_v1
+BacSi	Đơn thuốc đã phát chưa	PrescriptionStatus	claude_v1
+BacSi	trang thai don thuoc cua benh nhan	PrescriptionStatus	claude_v1
+BacSi	dược sĩ đã cấp thuốc chưa	PrescriptionStatus	claude_v1
+BacSi	don thuoc toi ke da xu ly chua	PrescriptionStatus	claude_v1
+BacSi	kiểm tra trạng thái đơn thuốc	PrescriptionStatus	claude_v1
+BacSi	thuoc da phat cho benh nhan chua	PrescriptionStatus	claude_v1
+BacSi	đơn thuốc đang ở bước nào	PrescriptionStatus	claude_v1
+BacSi	xem tinh trang don thuoc	PrescriptionStatus	claude_v1
+KTV	Danh sách việc cần làm của kỹ thuật viên	TechnicianWorklist	claude_v1
+KTV	ca xet nghiem can thuc hien	TechnicianWorklist	claude_v1
+KTV	hôm nay tôi có chỉ định nào cần làm	TechnicianWorklist	claude_v1
+KTV	cong viec ky thuat vien	TechnicianWorklist	claude_v1
+KTV	xem danh sách ca chờ chụp	TechnicianWorklist	claude_v1
+KTV	chi dinh dang cho thuc hien	TechnicianWorklist	claude_v1
+KTV	việc cần làm hôm nay	TechnicianWorklist	claude_v1
+KTV	ds ca can lam	TechnicianWorklist	claude_v1
+DuocSi	Đơn thuốc chờ cấp phát	PrescriptionQueue	claude_v1
+DuocSi	hang doi don thuoc	PrescriptionQueue	claude_v1
+DuocSi	có bao nhiêu đơn cần phát thuốc	PrescriptionQueue	claude_v1
+DuocSi	danh sach don cho phat	PrescriptionQueue	claude_v1
+DuocSi	đơn thuốc nào đang chờ	PrescriptionQueue	claude_v1
+DuocSi	xem hàng đợi cấp thuốc	PrescriptionQueue	claude_v1
+DuocSi	don thuoc moi can xu ly	PrescriptionQueue	claude_v1
+DuocSi	còn đơn nào chưa phát	PrescriptionQueue	claude_v1
+DuocSi	Tình trạng tồn kho thuốc	InventoryStatus	claude_v1
+DuocSi	thuoc nao sap het hang	InventoryStatus	claude_v1
+DuocSi	kiểm tra tồn kho	InventoryStatus	claude_v1
+DuocSi	con bao nhieu paracetamol	InventoryStatus	claude_v1
+DuocSi	thuốc sắp hết hàng	InventoryStatus	claude_v1
+DuocSi	xem ton kho thuoc	InventoryStatus	claude_v1
+DuocSi	danh sách thuốc dưới mức tối thiểu	InventoryStatus	claude_v1
+DuocSi	thuoc nao het roi	InventoryStatus	claude_v1
+DuocSi	đơn đang mở thanh toán chưa	PrescriptionPayment	claude_v1_sua
+DuocSi	don thuoc nay da thanh toan chua	PrescriptionPayment	claude_v1
+DuocSi	kiem tra thanh toan don thuoc	PrescriptionPayment	claude_v1
+DuocSi	đơn thuốc chưa thanh toán	PrescriptionPayment	claude_v1
+DuocSi	xem trang thai thanh toan thuoc	PrescriptionPayment	claude_v1
+DuocSi	kiem tra don nay da tra tien chua	PrescriptionPayment	claude_v1_sua
+DuocSi	đơn này trả tiền chưa	PrescriptionPayment	claude_v1_sua
+DuocSi	bn da dong tien thuoc chua	PrescriptionPayment	claude_v1_sua
+Admin	Số liệu hôm nay	DashboardMetrics	claude_v1
+Admin	thong ke tong quan hom nay	DashboardMetrics	claude_v1
+Admin	hôm nay có bao nhiêu lượt khám	DashboardMetrics	claude_v1
+Admin	bao cao tong hop hom nay	DashboardMetrics	claude_v1
+Admin	xem dashboard	DashboardMetrics	claude_v1
+Admin	số bệnh nhân hôm nay	DashboardMetrics	claude_v1
+Admin	thong ke lich hen hom nay	DashboardMetrics	claude_v1
+Admin	tổng quan hoạt động phòng khám hôm nay	DashboardMetrics	claude_v1
+Admin	Trạng thái hệ thống AI	AiHealth	claude_v1
+Admin	ai co dang hoat dong khong	AiHealth	claude_v1
+Admin	kiểm tra sức khỏe AI	AiHealth	claude_v1
+Admin	chatbot co bi loi khong	AiHealth	claude_v1
+Admin	mô hình AI đang chạy bình thường không	AiHealth	claude_v1
+Admin	trang thai mo hinh y dinh	AiHealth	claude_v1
+Admin	xem tình trạng dịch vụ AI	AiHealth	claude_v1
+Admin	ai dang on khong	AiHealth	claude_v1

@@ -1,0 +1,2832 @@
+[
+  {
+    "id": "RI-Greeting-04-V01",
+    "seedId": "RI-Greeting-04",
+    "role": "Chung",
+    "label": "Greeting",
+    "text": "hi",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Greeting-06-V01",
+    "seedId": "RI-Greeting-06",
+    "role": "Chung",
+    "label": "Greeting",
+    "text": "Chào buổi sáng",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Greeting-06-V02",
+    "seedId": "RI-Greeting-06",
+    "role": "Chung",
+    "label": "Greeting",
+    "text": "Chao buoi sang",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Greeting-06-V03",
+    "seedId": "RI-Greeting-06",
+    "role": "Chung",
+    "label": "Greeting",
+    "text": "chào buổi sáng",
+    "split": "validation",
+    "variant": "lower_trim",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Greeting-06-V04",
+    "seedId": "RI-Greeting-06",
+    "role": "Chung",
+    "label": "Greeting",
+    "text": "Chào buổi ásng",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Greeting-06-V05",
+    "seedId": "RI-Greeting-06",
+    "role": "Chung",
+    "label": "Greeting",
+    "text": "Chaao buoi sang",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Help-03-V01",
+    "seedId": "RI-Help-03",
+    "role": "Chung",
+    "label": "Help",
+    "text": "bạn làm được những gì",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Help-03-V02",
+    "seedId": "RI-Help-03",
+    "role": "Chung",
+    "label": "Help",
+    "text": "ban lam duoc nhung gi",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Help-03-V03",
+    "seedId": "RI-Help-03",
+    "role": "Chung",
+    "label": "Help",
+    "text": "bạn làm dc những j",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Help-03-V04",
+    "seedId": "RI-Help-03",
+    "role": "Chung",
+    "label": "Help",
+    "text": "bạn làm đợưc những gì",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Help-03-V05",
+    "seedId": "RI-Help-03",
+    "role": "Chung",
+    "label": "Help",
+    "text": "cho hỏi bạn làm được những gì",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Help-03-V06",
+    "seedId": "RI-Help-03",
+    "role": "Chung",
+    "label": "Help",
+    "text": "ban lam dc nhung j",
+    "split": "validation",
+    "variant": "accent_fold_abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Help-03-V07",
+    "seedId": "RI-Help-03",
+    "role": "Chung",
+    "label": "Help",
+    "text": "ban lam duoc nung gi",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Help-03-V08",
+    "seedId": "RI-Help-03",
+    "role": "Chung",
+    "label": "Help",
+    "text": "ban lam duoc nhung gi giúp mình",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Help-07-V01",
+    "seedId": "RI-Help-07",
+    "role": "Chung",
+    "label": "Help",
+    "text": "ban co the lam gi vay",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Help-07-V02",
+    "seedId": "RI-Help-07",
+    "role": "Chung",
+    "label": "Help",
+    "text": "ban co the lam j v",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Help-07-V03",
+    "seedId": "RI-Help-07",
+    "role": "Chung",
+    "label": "Help",
+    "text": "ban co the lam gi vay ạ",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-Help-07-V04",
+    "seedId": "RI-Help-07",
+    "role": "Chung",
+    "label": "Help",
+    "text": "ơi ban co the lam gi vay",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ClinicKnowledge-06-V01",
+    "seedId": "RI-ClinicKnowledge-06",
+    "role": "Chung",
+    "label": "ClinicKnowledge",
+    "text": "co nhan bao hiem y te khong",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ClinicKnowledge-06-V02",
+    "seedId": "RI-ClinicKnowledge-06",
+    "role": "Chung",
+    "label": "ClinicKnowledge",
+    "text": "co nhan bao hiem y te ko",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ClinicKnowledge-06-V03",
+    "seedId": "RI-ClinicKnowledge-06",
+    "role": "Chung",
+    "label": "ClinicKnowledge",
+    "text": "co nhan bao hiem y te k",
+    "split": "validation",
+    "variant": "abbreviation_k",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ClinicKnowledge-06-V04",
+    "seedId": "RI-ClinicKnowledge-06",
+    "role": "Chung",
+    "label": "ClinicKnowledge",
+    "text": "co nhan bao hiiem y te khong",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ClinicKnowledge-06-V05",
+    "seedId": "RI-ClinicKnowledge-06",
+    "role": "Chung",
+    "label": "ClinicKnowledge",
+    "text": "cho hỏi co nhan bao hiem y te khong",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ClinicKnowledge-06-V06",
+    "seedId": "RI-ClinicKnowledge-06",
+    "role": "Chung",
+    "label": "ClinicKnowledge",
+    "text": "co nhaan bao hiem y te khong",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ClinicKnowledge-06-V07",
+    "seedId": "RI-ClinicKnowledge-06",
+    "role": "Chung",
+    "label": "ClinicKnowledge",
+    "text": "co nhan bao hiem y te khong với",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ClinicKnowledge-08-V01",
+    "seedId": "RI-ClinicKnowledge-08",
+    "role": "Chung",
+    "label": "ClinicKnowledge",
+    "text": "huy lich hen thi co mat phi khong",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ClinicKnowledge-08-V02",
+    "seedId": "RI-ClinicKnowledge-08",
+    "role": "Chung",
+    "label": "ClinicKnowledge",
+    "text": "huy lich hen thi co mat phi ko",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ClinicKnowledge-08-V03",
+    "seedId": "RI-ClinicKnowledge-08",
+    "role": "Chung",
+    "label": "ClinicKnowledge",
+    "text": "huy lich hen thi co mat phi k",
+    "split": "validation",
+    "variant": "abbreviation_k",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ClinicKnowledge-08-V04",
+    "seedId": "RI-ClinicKnowledge-08",
+    "role": "Chung",
+    "label": "ClinicKnowledge",
+    "text": "huy lic hen thi co mat phi khong",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ClinicKnowledge-08-V05",
+    "seedId": "RI-ClinicKnowledge-08",
+    "role": "Chung",
+    "label": "ClinicKnowledge",
+    "text": "huy lich hen thi co mat phi khong ạ",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ClinicKnowledge-08-V06",
+    "seedId": "RI-ClinicKnowledge-08",
+    "role": "Chung",
+    "label": "ClinicKnowledge",
+    "text": "huy ilch hen thi co mat phi khong",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ActionRequest-08-V01",
+    "seedId": "RI-ActionRequest-08",
+    "role": "Chung",
+    "label": "ActionRequest",
+    "text": "in hoa don giup toi",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ActionRequest-08-V02",
+    "seedId": "RI-ActionRequest-08",
+    "role": "Chung",
+    "label": "ActionRequest",
+    "text": "in hoa don giupp toi",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ActionRequest-08-V03",
+    "seedId": "RI-ActionRequest-08",
+    "role": "Chung",
+    "label": "ActionRequest",
+    "text": "cho mình hỏi in hoa don giup toi",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ActionRequest-08-V04",
+    "seedId": "RI-ActionRequest-08",
+    "role": "Chung",
+    "label": "ActionRequest",
+    "text": "in hoa don ggiup toi",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ActionRequest-10-V01",
+    "seedId": "RI-ActionRequest-10",
+    "role": "Pharmacist",
+    "label": "ActionRequest",
+    "text": "thu tien thuoc cua benh nhan",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-ActionRequest-10-V02",
+    "seedId": "RI-ActionRequest-10",
+    "role": "Pharmacist",
+    "label": "ActionRequest",
+    "text": "thu tien thuoc cua bn",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-ActionRequest-10-V03",
+    "seedId": "RI-ActionRequest-10",
+    "role": "Pharmacist",
+    "label": "ActionRequest",
+    "text": "thu tien thuoc cua beenh nhan",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-ActionRequest-10-V04",
+    "seedId": "RI-ActionRequest-10",
+    "role": "Pharmacist",
+    "label": "ActionRequest",
+    "text": "ơi thu tien thuoc cua benh nhan",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-ActionRequest-10-V05",
+    "seedId": "RI-ActionRequest-10",
+    "role": "Pharmacist",
+    "label": "ActionRequest",
+    "text": "thu tein thuoc cua benh nhan",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-ActionRequest-10-V06",
+    "seedId": "RI-ActionRequest-10",
+    "role": "Pharmacist",
+    "label": "ActionRequest",
+    "text": "thu tien thuoc cua benh nhan với",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-OutOfScope-03-V01",
+    "seedId": "RI-OutOfScope-03",
+    "role": "Chung",
+    "label": "OutOfScope",
+    "text": "Giá vàng hôm nay bao nhiêu",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-OutOfScope-03-V02",
+    "seedId": "RI-OutOfScope-03",
+    "role": "Chung",
+    "label": "OutOfScope",
+    "text": "Gia vang hom nay bao nhieu",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-OutOfScope-03-V03",
+    "seedId": "RI-OutOfScope-03",
+    "role": "Chung",
+    "label": "OutOfScope",
+    "text": "giá vàng hôm nay bao nhiêu",
+    "split": "validation",
+    "variant": "lower_trim",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-OutOfScope-03-V04",
+    "seedId": "RI-OutOfScope-03",
+    "role": "Chung",
+    "label": "OutOfScope",
+    "text": "Giá vàng hôm nay bao nhiiêu",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-OutOfScope-03-V05",
+    "seedId": "RI-OutOfScope-03",
+    "role": "Chung",
+    "label": "OutOfScope",
+    "text": "Gia vang hom nay bao nheiu",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-OutOfScope-07-V01",
+    "seedId": "RI-OutOfScope-07",
+    "role": "Chung",
+    "label": "OutOfScope",
+    "text": "tran bong da toi nay may gio",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-OutOfScope-07-V02",
+    "seedId": "RI-OutOfScope-07",
+    "role": "Chung",
+    "label": "OutOfScope",
+    "text": "tran ong da toi nay may gio",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-OutOfScope-07-V03",
+    "seedId": "RI-OutOfScope-07",
+    "role": "Chung",
+    "label": "OutOfScope",
+    "text": "trann bong da toi nay may gio",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-StartBooking-01-V01",
+    "seedId": "RI-StartBooking-01",
+    "role": "Patient",
+    "label": "StartBooking",
+    "text": "Tôi muốn đặt lịch khám",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-StartBooking-01-V02",
+    "seedId": "RI-StartBooking-01",
+    "role": "Patient",
+    "label": "StartBooking",
+    "text": "Toi muon dat lich kham",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-StartBooking-01-V03",
+    "seedId": "RI-StartBooking-01",
+    "role": "Patient",
+    "label": "StartBooking",
+    "text": "tôi muốn đặt lịch khám",
+    "split": "validation",
+    "variant": "lower_trim",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-StartBooking-01-V04",
+    "seedId": "RI-StartBooking-01",
+    "role": "Patient",
+    "label": "StartBooking",
+    "text": "Tôi mốn đặt lịch khám",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-StartBooking-01-V05",
+    "seedId": "RI-StartBooking-01",
+    "role": "Patient",
+    "label": "StartBooking",
+    "text": "Tôi muốn đặt lịch khám nhé",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-StartBooking-01-V06",
+    "seedId": "RI-StartBooking-01",
+    "role": "Patient",
+    "label": "StartBooking",
+    "text": "Toi muon dat lih kham",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-StartBooking-01-V07",
+    "seedId": "RI-StartBooking-01",
+    "role": "Patient",
+    "label": "StartBooking",
+    "text": "Toi muon dat lich kham nhé",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-StartBooking-04-V01",
+    "seedId": "RI-StartBooking-04",
+    "role": "Patient",
+    "label": "StartBooking",
+    "text": "muon hen bac si noi khoa",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-StartBooking-04-V02",
+    "seedId": "RI-StartBooking-04",
+    "role": "Patient",
+    "label": "StartBooking",
+    "text": "umon hen bac si noi khoa",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-StartBooking-04-V03",
+    "seedId": "RI-StartBooking-04",
+    "role": "Patient",
+    "label": "StartBooking",
+    "text": "ơi muon hen bac si noi khoa",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-StartBooking-04-V04",
+    "seedId": "RI-StartBooking-04",
+    "role": "Patient",
+    "label": "StartBooking",
+    "text": "mmuon hen bac si noi khoa",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-StartBooking-04-V05",
+    "seedId": "RI-StartBooking-04",
+    "role": "Patient",
+    "label": "StartBooking",
+    "text": "muon hen bac si noi khoa với",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyAppointments-06-V01",
+    "seedId": "RI-MyAppointments-06",
+    "role": "Patient",
+    "label": "MyAppointments",
+    "text": "mình đã đặt những lịch nào",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyAppointments-06-V02",
+    "seedId": "RI-MyAppointments-06",
+    "role": "Patient",
+    "label": "MyAppointments",
+    "text": "minh da dat nhung lich nao",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyAppointments-06-V03",
+    "seedId": "RI-MyAppointments-06",
+    "role": "Patient",
+    "label": "MyAppointments",
+    "text": "mmình đã đặt những lịch nào",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyAppointments-06-V04",
+    "seedId": "RI-MyAppointments-06",
+    "role": "Patient",
+    "label": "MyAppointments",
+    "text": "cho mình hỏi mình đã đặt những lịch nào",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyAppointments-06-V05",
+    "seedId": "RI-MyAppointments-06",
+    "role": "Patient",
+    "label": "MyAppointments",
+    "text": "imnh da dat nhung lich nao",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyAppointments-06-V06",
+    "seedId": "RI-MyAppointments-06",
+    "role": "Patient",
+    "label": "MyAppointments",
+    "text": "minh da dat nhung lich nao ạ",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyAppointments-07-V01",
+    "seedId": "RI-MyAppointments-07",
+    "role": "Patient",
+    "label": "MyAppointments",
+    "text": "lich kham tuan nay cua toi",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyAppointments-07-V02",
+    "seedId": "RI-MyAppointments-07",
+    "role": "Patient",
+    "label": "MyAppointments",
+    "text": "lich khamm tuan nay cua toi",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyAppointments-07-V03",
+    "seedId": "RI-MyAppointments-07",
+    "role": "Patient",
+    "label": "MyAppointments",
+    "text": "lich kham tuan nay cua toi nhé",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyAppointments-07-V04",
+    "seedId": "RI-MyAppointments-07",
+    "role": "Patient",
+    "label": "MyAppointments",
+    "text": "liich kham tuan nay cua toi",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyVisits-01-V01",
+    "seedId": "RI-MyVisits-01",
+    "role": "Patient",
+    "label": "MyVisits",
+    "text": "Lịch sử khám bệnh của tôi",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyVisits-01-V02",
+    "seedId": "RI-MyVisits-01",
+    "role": "Patient",
+    "label": "MyVisits",
+    "text": "Lich su kham benh cua toi",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyVisits-01-V03",
+    "seedId": "RI-MyVisits-01",
+    "role": "Patient",
+    "label": "MyVisits",
+    "text": "lịch sử khám bệnh của tôi",
+    "split": "validation",
+    "variant": "lower_trim",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyVisits-01-V04",
+    "seedId": "RI-MyVisits-01",
+    "role": "Patient",
+    "label": "MyVisits",
+    "text": "Lịch sử hám bệnh của tôi",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyVisits-01-V05",
+    "seedId": "RI-MyVisits-01",
+    "role": "Patient",
+    "label": "MyVisits",
+    "text": "cho mình hỏi Lịch sử khám bệnh của tôi",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyVisits-01-V06",
+    "seedId": "RI-MyVisits-01",
+    "role": "Patient",
+    "label": "MyVisits",
+    "text": "LLich su kham benh cua toi",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyVisits-01-V07",
+    "seedId": "RI-MyVisits-01",
+    "role": "Patient",
+    "label": "MyVisits",
+    "text": "ơi Lich su kham benh cua toi",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyVisits-08-V01",
+    "seedId": "RI-MyVisits-08",
+    "role": "Patient",
+    "label": "MyVisits",
+    "text": "xem lich su kham",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyVisits-08-V02",
+    "seedId": "RI-MyVisits-08",
+    "role": "Patient",
+    "label": "MyVisits",
+    "text": "xem lich su khamm",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyVisits-08-V03",
+    "seedId": "RI-MyVisits-08",
+    "role": "Patient",
+    "label": "MyVisits",
+    "text": "xem lich su kham giúp mình",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyVisits-08-V04",
+    "seedId": "RI-MyVisits-08",
+    "role": "Patient",
+    "label": "MyVisits",
+    "text": "xem liich su kham",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyVisits-08-V05",
+    "seedId": "RI-MyVisits-08",
+    "role": "Patient",
+    "label": "MyVisits",
+    "text": "ơi xem lich su kham",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-03-V01",
+    "seedId": "RI-MyDiagnosticResults-03",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "có kết quả chụp X-quang chưa",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-03-V02",
+    "seedId": "RI-MyDiagnosticResults-03",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "co ket qua chup X-quang chua",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-03-V03",
+    "seedId": "RI-MyDiagnosticResults-03",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "có kết quả chụp x-quang chưa",
+    "split": "validation",
+    "variant": "lower_trim",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-03-V04",
+    "seedId": "RI-MyDiagnosticResults-03",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "có kq chụp X-quang chưa",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-03-V05",
+    "seedId": "RI-MyDiagnosticResults-03",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "có kết quả chpụ X-quang chưa",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-03-V06",
+    "seedId": "RI-MyDiagnosticResults-03",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "có kết quả chụp X-quang chưa giúp mình",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-03-V07",
+    "seedId": "RI-MyDiagnosticResults-03",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "co kq chup X-quang chua",
+    "split": "validation",
+    "variant": "accent_fold_abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-03-V08",
+    "seedId": "RI-MyDiagnosticResults-03",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "co ket qua chup X-quang chhua",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-03-V09",
+    "seedId": "RI-MyDiagnosticResults-03",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "co ket qua chup X-quang chua với",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-07-V01",
+    "seedId": "RI-MyDiagnosticResults-07",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "xét nghiệm của mình xong chưa",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-07-V02",
+    "seedId": "RI-MyDiagnosticResults-07",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "xet nghiem cua minh xong chua",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-07-V03",
+    "seedId": "RI-MyDiagnosticResults-07",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "xn của mình xong chưa",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-07-V04",
+    "seedId": "RI-MyDiagnosticResults-07",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "xét nghiệm của mình xong chư",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-07-V05",
+    "seedId": "RI-MyDiagnosticResults-07",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "xét nghiệm của mình xong chưa giúp mình",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-07-V06",
+    "seedId": "RI-MyDiagnosticResults-07",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "xn cua minh xong chua",
+    "split": "validation",
+    "variant": "accent_fold_abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-07-V07",
+    "seedId": "RI-MyDiagnosticResults-07",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "xet nghiem cua minh xong cha",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyDiagnosticResults-07-V08",
+    "seedId": "RI-MyDiagnosticResults-07",
+    "role": "Patient",
+    "label": "MyDiagnosticResults",
+    "text": "cho hỏi xet nghiem cua minh xong chua",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyPrescriptions-06-V01",
+    "seedId": "RI-MyPrescriptions-06",
+    "role": "Patient",
+    "label": "MyPrescriptions",
+    "text": "toi can xem lai don thuoc",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyPrescriptions-06-V02",
+    "seedId": "RI-MyPrescriptions-06",
+    "role": "Patient",
+    "label": "MyPrescriptions",
+    "text": "toi can xem lai don thhuoc",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyPrescriptions-06-V03",
+    "seedId": "RI-MyPrescriptions-06",
+    "role": "Patient",
+    "label": "MyPrescriptions",
+    "text": "toi can xem lai don thuoc với",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyPrescriptions-06-V04",
+    "seedId": "RI-MyPrescriptions-06",
+    "role": "Patient",
+    "label": "MyPrescriptions",
+    "text": "toi can xem lai don htuoc",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyPrescriptions-06-V05",
+    "seedId": "RI-MyPrescriptions-06",
+    "role": "Patient",
+    "label": "MyPrescriptions",
+    "text": "toi can xem lai don thuoc nhé",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyPrescriptions-08-V01",
+    "seedId": "RI-MyPrescriptions-08",
+    "role": "Patient",
+    "label": "MyPrescriptions",
+    "text": "bac si ke cho minh thuoc gi",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-MyPrescriptions-08-V02",
+    "seedId": "RI-MyPrescriptions-08",
+    "role": "Patient",
+    "label": "MyPrescriptions",
+    "text": "bac si ke cho minh thuoc j",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-MyPrescriptions-08-V03",
+    "seedId": "RI-MyPrescriptions-08",
+    "role": "Patient",
+    "label": "MyPrescriptions",
+    "text": "bac si ke cho minh thuo gi",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-MyPrescriptions-08-V04",
+    "seedId": "RI-MyPrescriptions-08",
+    "role": "Patient",
+    "label": "MyPrescriptions",
+    "text": "bac si ke cho minh thuoc gi giúp mình",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-MyPrescriptions-08-V05",
+    "seedId": "RI-MyPrescriptions-08",
+    "role": "Patient",
+    "label": "MyPrescriptions",
+    "text": "bac si ke cho mnh thuoc gi",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-MyPrescriptions-08-V06",
+    "seedId": "RI-MyPrescriptions-08",
+    "role": "Patient",
+    "label": "MyPrescriptions",
+    "text": "bac si ke cho minh thuoc gi nhé",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-MyBills-04-V01",
+    "seedId": "RI-MyBills-04",
+    "role": "Patient",
+    "label": "MyBills",
+    "text": "tôi phải trả bao nhiêu tiền",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyBills-04-V02",
+    "seedId": "RI-MyBills-04",
+    "role": "Patient",
+    "label": "MyBills",
+    "text": "toi phai tra bao nhieu tien",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyBills-04-V03",
+    "seedId": "RI-MyBills-04",
+    "role": "Patient",
+    "label": "MyBills",
+    "text": "tôi phải trả bao nhiêu itền",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyBills-04-V04",
+    "seedId": "RI-MyBills-04",
+    "role": "Patient",
+    "label": "MyBills",
+    "text": "cho mình hỏi tôi phải trả bao nhiêu tiền",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyBills-04-V05",
+    "seedId": "RI-MyBills-04",
+    "role": "Patient",
+    "label": "MyBills",
+    "text": "toi phai tra bao nhiu tien",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyBills-04-V06",
+    "seedId": "RI-MyBills-04",
+    "role": "Patient",
+    "label": "MyBills",
+    "text": "cho mình hỏi toi phai tra bao nhieu tien",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyBills-07-V01",
+    "seedId": "RI-MyBills-07",
+    "role": "Patient",
+    "label": "MyBills",
+    "text": "chi phi kham cua toi",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyBills-07-V02",
+    "seedId": "RI-MyBills-07",
+    "role": "Patient",
+    "label": "MyBills",
+    "text": "chi phi kahm cua toi",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyBills-07-V03",
+    "seedId": "RI-MyBills-07",
+    "role": "Patient",
+    "label": "MyBills",
+    "text": "chi phi kham cua toi ạ",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-MyBills-07-V04",
+    "seedId": "RI-MyBills-07",
+    "role": "Patient",
+    "label": "MyBills",
+    "text": "chi phi ham cua toi",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TodayAppointments-03-V01",
+    "seedId": "RI-TodayAppointments-03",
+    "role": "Receptionist",
+    "label": "TodayAppointments",
+    "text": "hôm nay có bao nhiêu bệnh nhân hẹn",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TodayAppointments-03-V02",
+    "seedId": "RI-TodayAppointments-03",
+    "role": "Receptionist",
+    "label": "TodayAppointments",
+    "text": "hom nay co bao nhieu benh nhan hen",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TodayAppointments-03-V03",
+    "seedId": "RI-TodayAppointments-03",
+    "role": "Receptionist",
+    "label": "TodayAppointments",
+    "text": "hôm nay có bao nhiêu bn hẹn",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TodayAppointments-03-V04",
+    "seedId": "RI-TodayAppointments-03",
+    "role": "Receptionist",
+    "label": "TodayAppointments",
+    "text": "hôm nay có bao nhiêu bệnhh nhân hẹn",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TodayAppointments-03-V05",
+    "seedId": "RI-TodayAppointments-03",
+    "role": "Receptionist",
+    "label": "TodayAppointments",
+    "text": "cho mình hỏi hôm nay có bao nhiêu bệnh nhân hẹn",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TodayAppointments-03-V06",
+    "seedId": "RI-TodayAppointments-03",
+    "role": "Receptionist",
+    "label": "TodayAppointments",
+    "text": "hom nay co bao nhieu bn hen",
+    "split": "validation",
+    "variant": "accent_fold_abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TodayAppointments-03-V07",
+    "seedId": "RI-TodayAppointments-03",
+    "role": "Receptionist",
+    "label": "TodayAppointments",
+    "text": "hom nay co bao nheiu benh nhan hen",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TodayAppointments-03-V08",
+    "seedId": "RI-TodayAppointments-03",
+    "role": "Receptionist",
+    "label": "TodayAppointments",
+    "text": "ơi hom nay co bao nhieu benh nhan hen",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TodayAppointments-06-V01",
+    "seedId": "RI-TodayAppointments-06",
+    "role": "Receptionist",
+    "label": "TodayAppointments",
+    "text": "hom nay ai dat lich",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TodayAppointments-06-V02",
+    "seedId": "RI-TodayAppointments-06",
+    "role": "Receptionist",
+    "label": "TodayAppointments",
+    "text": "hom nay ai dat llich",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TodayAppointments-06-V03",
+    "seedId": "RI-TodayAppointments-06",
+    "role": "Receptionist",
+    "label": "TodayAppointments",
+    "text": "hom nay ai dat lich giúp mình",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TodayAppointments-06-V04",
+    "seedId": "RI-TodayAppointments-06",
+    "role": "Receptionist",
+    "label": "TodayAppointments",
+    "text": "hom nay ai dat lihc",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TodayAppointments-06-V05",
+    "seedId": "RI-TodayAppointments-06",
+    "role": "Receptionist",
+    "label": "TodayAppointments",
+    "text": "hom nay ai dat lich nhé",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ReceptionQueue-06-V01",
+    "seedId": "RI-ReceptionQueue-06",
+    "role": "Receptionist",
+    "label": "ReceptionQueue",
+    "text": "xem hang cho le tan",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ReceptionQueue-06-V02",
+    "seedId": "RI-ReceptionQueue-06",
+    "role": "Receptionist",
+    "label": "ReceptionQueue",
+    "text": "xem hag cho le tan",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ReceptionQueue-06-V03",
+    "seedId": "RI-ReceptionQueue-06",
+    "role": "Receptionist",
+    "label": "ReceptionQueue",
+    "text": "xem hang cho le tan với",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ReceptionQueue-06-V04",
+    "seedId": "RI-ReceptionQueue-06",
+    "role": "Receptionist",
+    "label": "ReceptionQueue",
+    "text": "xem hangg cho le tan",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ReceptionQueue-06-V05",
+    "seedId": "RI-ReceptionQueue-06",
+    "role": "Receptionist",
+    "label": "ReceptionQueue",
+    "text": "xem hang cho le tan ạ",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ReceptionQueue-08-V01",
+    "seedId": "RI-ReceptionQueue-08",
+    "role": "Receptionist",
+    "label": "ReceptionQueue",
+    "text": "ai chua duoc tiep don",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ReceptionQueue-08-V02",
+    "seedId": "RI-ReceptionQueue-08",
+    "role": "Receptionist",
+    "label": "ReceptionQueue",
+    "text": "ai chua dc tiep don",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ReceptionQueue-08-V03",
+    "seedId": "RI-ReceptionQueue-08",
+    "role": "Receptionist",
+    "label": "ReceptionQueue",
+    "text": "ai chua duco tiep don",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ReceptionQueue-08-V04",
+    "seedId": "RI-ReceptionQueue-08",
+    "role": "Receptionist",
+    "label": "ReceptionQueue",
+    "text": "ai chua duoc tiep don giúp mình",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ReceptionQueue-08-V05",
+    "seedId": "RI-ReceptionQueue-08",
+    "role": "Receptionist",
+    "label": "ReceptionQueue",
+    "text": "ai chua uoc tiep don",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-ReceptionQueue-08-V06",
+    "seedId": "RI-ReceptionQueue-08",
+    "role": "Receptionist",
+    "label": "ReceptionQueue",
+    "text": "cho mình hỏi ai chua duoc tiep don",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-LookupAppointment-05-V01",
+    "seedId": "RI-LookupAppointment-05",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "mã LH-6093 hẹn mấy giờ",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-LookupAppointment-05-V02",
+    "seedId": "RI-LookupAppointment-05",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "ma LH-664 hen may gio",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-LookupAppointment-05-V03",
+    "seedId": "RI-LookupAppointment-05",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "mã lh 6899 hẹn mấy giờ",
+    "split": "validation",
+    "variant": "lower_trim",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-LookupAppointment-05-V04",
+    "seedId": "RI-LookupAppointment-05",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "mã LH-4755 hẹn mấy giờ",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-LookupAppointment-05-V05",
+    "seedId": "RI-LookupAppointment-05",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "ơi mã LH-4791 hẹn mấy giờ",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-LookupAppointment-05-V06",
+    "seedId": "RI-LookupAppointment-05",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "ma lh 5086 hen may gio",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-LookupAppointment-05-V07",
+    "seedId": "RI-LookupAppointment-05",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "cho mình hỏi ma LH718 hen may gio",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-LookupAppointment-07-V01",
+    "seedId": "RI-LookupAppointment-07",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "xem chi tiết lịch hẹn LH-2216",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-LookupAppointment-07-V02",
+    "seedId": "RI-LookupAppointment-07",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "xem chi tiet lich hen lh 91081",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-LookupAppointment-07-V03",
+    "seedId": "RI-LookupAppointment-07",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "xem chi tiết lịch hẹn lh 674",
+    "split": "validation",
+    "variant": "lower_trim",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-LookupAppointment-07-V04",
+    "seedId": "RI-LookupAppointment-07",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "xem chi tiết llịch hẹn LH-425",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-LookupAppointment-07-V05",
+    "seedId": "RI-LookupAppointment-07",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "xem chi tiết lịch hẹn LH-51941 với",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-LookupAppointment-07-V06",
+    "seedId": "RI-LookupAppointment-07",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "xem chi tieet lich hen LH814",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-LookupAppointment-07-V07",
+    "seedId": "RI-LookupAppointment-07",
+    "role": "Receptionist",
+    "label": "LookupAppointment",
+    "text": "ơi xem chi tiet lich hen LH-399",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-01-V01",
+    "seedId": "RI-DoctorQueue-01",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "Danh sách bệnh nhân chờ khám",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-01-V02",
+    "seedId": "RI-DoctorQueue-01",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "Danh sach benh nhan cho kham",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-01-V03",
+    "seedId": "RI-DoctorQueue-01",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "danh sách bệnh nhân chờ khám",
+    "split": "validation",
+    "variant": "lower_trim",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-01-V04",
+    "seedId": "RI-DoctorQueue-01",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "ds bn chờ khám",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-01-V05",
+    "seedId": "RI-DoctorQueue-01",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "Daanh sách bệnh nhân chờ khám",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-01-V06",
+    "seedId": "RI-DoctorQueue-01",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "Danh sách bệnh nhân chờ khám ạ",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-01-V07",
+    "seedId": "RI-DoctorQueue-01",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "ds bn cho kham",
+    "split": "validation",
+    "variant": "accent_fold_abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-01-V08",
+    "seedId": "RI-DoctorQueue-01",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "Danh sach benh nhan cho khaam",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-01-V09",
+    "seedId": "RI-DoctorQueue-01",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "Danh sach benh nhan cho kham ạ",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-05-V01",
+    "seedId": "RI-DoctorQueue-05",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "bệnh nhân đang chờ tôi",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-05-V02",
+    "seedId": "RI-DoctorQueue-05",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "benh nhan dang cho toi",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-05-V03",
+    "seedId": "RI-DoctorQueue-05",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "bn đang chờ tôi",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-05-V04",
+    "seedId": "RI-DoctorQueue-05",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "bệnh nhân đđang chờ tôi",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-05-V05",
+    "seedId": "RI-DoctorQueue-05",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "bệnh nhân đang chờ tôi với",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-05-V06",
+    "seedId": "RI-DoctorQueue-05",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "bn dang cho toi",
+    "split": "validation",
+    "variant": "accent_fold_abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-05-V07",
+    "seedId": "RI-DoctorQueue-05",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "benh nahn dang cho toi",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DoctorQueue-05-V08",
+    "seedId": "RI-DoctorQueue-05",
+    "role": "Doctor",
+    "label": "DoctorQueue",
+    "text": "benh nhan dang cho toi giúp mình",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PatientSummary-06-V01",
+    "seedId": "RI-PatientSummary-06",
+    "role": "Doctor",
+    "label": "PatientSummary",
+    "text": "tom tat lan kham truoc cua benh nhan",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PatientSummary-06-V02",
+    "seedId": "RI-PatientSummary-06",
+    "role": "Doctor",
+    "label": "PatientSummary",
+    "text": "tom tat lan kham truoc cua bn",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PatientSummary-06-V03",
+    "seedId": "RI-PatientSummary-06",
+    "role": "Doctor",
+    "label": "PatientSummary",
+    "text": "tom tat lan kham truoc cua benh nha",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PatientSummary-06-V04",
+    "seedId": "RI-PatientSummary-06",
+    "role": "Doctor",
+    "label": "PatientSummary",
+    "text": "cho mình hỏi tom tat lan kham truoc cua benh nhan",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PatientSummary-06-V05",
+    "seedId": "RI-PatientSummary-06",
+    "role": "Doctor",
+    "label": "PatientSummary",
+    "text": "tom tat lan kham truoc cua benh hnan",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PatientSummary-06-V06",
+    "seedId": "RI-PatientSummary-06",
+    "role": "Doctor",
+    "label": "PatientSummary",
+    "text": "ơi tom tat lan kham truoc cua benh nhan",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PatientSummary-08-V01",
+    "seedId": "RI-PatientSummary-08",
+    "role": "Doctor",
+    "label": "PatientSummary",
+    "text": "benh nhan nay co di ung gi khong",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PatientSummary-08-V02",
+    "seedId": "RI-PatientSummary-08",
+    "role": "Doctor",
+    "label": "PatientSummary",
+    "text": "bn nay co di ung j ko",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PatientSummary-08-V03",
+    "seedId": "RI-PatientSummary-08",
+    "role": "Doctor",
+    "label": "PatientSummary",
+    "text": "bn nay co di ung j k",
+    "split": "validation",
+    "variant": "abbreviation_k",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PatientSummary-08-V04",
+    "seedId": "RI-PatientSummary-08",
+    "role": "Doctor",
+    "label": "PatientSummary",
+    "text": "benh nhan nay co di ung gi khongg",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PatientSummary-08-V05",
+    "seedId": "RI-PatientSummary-08",
+    "role": "Doctor",
+    "label": "PatientSummary",
+    "text": "benh nhan nay co di ung gi khong nhé",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PatientSummary-08-V06",
+    "seedId": "RI-PatientSummary-08",
+    "role": "Doctor",
+    "label": "PatientSummary",
+    "text": "benh nan nay co di ung gi khong",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PatientSummary-08-V07",
+    "seedId": "RI-PatientSummary-08",
+    "role": "Doctor",
+    "label": "PatientSummary",
+    "text": "ơi benh nhan nay co di ung gi khong",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DiagnosticOrders-05-V01",
+    "seedId": "RI-DiagnosticOrders-05",
+    "role": "Doctor",
+    "label": "DiagnosticOrders",
+    "text": "danh sách chỉ định chẩn đoán",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DiagnosticOrders-05-V02",
+    "seedId": "RI-DiagnosticOrders-05",
+    "role": "Doctor",
+    "label": "DiagnosticOrders",
+    "text": "danh sach chi dinh chan doan",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DiagnosticOrders-05-V03",
+    "seedId": "RI-DiagnosticOrders-05",
+    "role": "Doctor",
+    "label": "DiagnosticOrders",
+    "text": "ds chỉ định chẩn đoán",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DiagnosticOrders-05-V04",
+    "seedId": "RI-DiagnosticOrders-05",
+    "role": "Doctor",
+    "label": "DiagnosticOrders",
+    "text": "anh sách chỉ định chẩn đoán",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DiagnosticOrders-05-V05",
+    "seedId": "RI-DiagnosticOrders-05",
+    "role": "Doctor",
+    "label": "DiagnosticOrders",
+    "text": "danh sách chỉ định chẩn đoán với",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DiagnosticOrders-05-V06",
+    "seedId": "RI-DiagnosticOrders-05",
+    "role": "Doctor",
+    "label": "DiagnosticOrders",
+    "text": "ds chi dinh chan doan",
+    "split": "validation",
+    "variant": "accent_fold_abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DiagnosticOrders-05-V07",
+    "seedId": "RI-DiagnosticOrders-05",
+    "role": "Doctor",
+    "label": "DiagnosticOrders",
+    "text": "danh sach chi dinh hcan doan",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DiagnosticOrders-05-V08",
+    "seedId": "RI-DiagnosticOrders-05",
+    "role": "Doctor",
+    "label": "DiagnosticOrders",
+    "text": "danh sach chi dinh chan doan với",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DiagnosticOrders-08-V01",
+    "seedId": "RI-DiagnosticOrders-08",
+    "role": "Doctor",
+    "label": "DiagnosticOrders",
+    "text": "kiem tra cac chi dinh",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DiagnosticOrders-08-V02",
+    "seedId": "RI-DiagnosticOrders-08",
+    "role": "Doctor",
+    "label": "DiagnosticOrders",
+    "text": "kkiem tra cac chi dinh",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DiagnosticOrders-08-V03",
+    "seedId": "RI-DiagnosticOrders-08",
+    "role": "Doctor",
+    "label": "DiagnosticOrders",
+    "text": "kiem tra cac chi dinh nhé",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DiagnosticOrders-08-V04",
+    "seedId": "RI-DiagnosticOrders-08",
+    "role": "Doctor",
+    "label": "DiagnosticOrders",
+    "text": "kiem tra cac chi dnh",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DiagnosticOrders-08-V05",
+    "seedId": "RI-DiagnosticOrders-08",
+    "role": "Doctor",
+    "label": "DiagnosticOrders",
+    "text": "ơi kiem tra cac chi dinh",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionStatus-01-V01",
+    "seedId": "RI-PrescriptionStatus-01",
+    "role": "Doctor",
+    "label": "PrescriptionStatus",
+    "text": "Đơn thuốc đã phát chưa",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionStatus-01-V02",
+    "seedId": "RI-PrescriptionStatus-01",
+    "role": "Doctor",
+    "label": "PrescriptionStatus",
+    "text": "Don thuoc da phat chua",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionStatus-01-V03",
+    "seedId": "RI-PrescriptionStatus-01",
+    "role": "Doctor",
+    "label": "PrescriptionStatus",
+    "text": "đơn thuốc đã phát chưa",
+    "split": "validation",
+    "variant": "lower_trim",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionStatus-01-V04",
+    "seedId": "RI-PrescriptionStatus-01",
+    "role": "Doctor",
+    "label": "PrescriptionStatus",
+    "text": "Đơn thốc đã phát chưa",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionStatus-01-V05",
+    "seedId": "RI-PrescriptionStatus-01",
+    "role": "Doctor",
+    "label": "PrescriptionStatus",
+    "text": "cho hỏi Đơn thuốc đã phát chưa",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionStatus-01-V06",
+    "seedId": "RI-PrescriptionStatus-01",
+    "role": "Doctor",
+    "label": "PrescriptionStatus",
+    "text": "Don thuoc da phat cua",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionStatus-01-V07",
+    "seedId": "RI-PrescriptionStatus-01",
+    "role": "Doctor",
+    "label": "PrescriptionStatus",
+    "text": "ơi Don thuoc da phat chua",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionStatus-05-V01",
+    "seedId": "RI-PrescriptionStatus-05",
+    "role": "Doctor",
+    "label": "PrescriptionStatus",
+    "text": "kiểm tra trạng thái đơn thuốc",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionStatus-05-V02",
+    "seedId": "RI-PrescriptionStatus-05",
+    "role": "Doctor",
+    "label": "PrescriptionStatus",
+    "text": "kiem tra trang thai don thuoc",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionStatus-05-V03",
+    "seedId": "RI-PrescriptionStatus-05",
+    "role": "Doctor",
+    "label": "PrescriptionStatus",
+    "text": "kiểm tra trạng hái đơn thuốc",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionStatus-05-V04",
+    "seedId": "RI-PrescriptionStatus-05",
+    "role": "Doctor",
+    "label": "PrescriptionStatus",
+    "text": "kiểm tra trạng thái đơn thuốc ạ",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionStatus-05-V05",
+    "seedId": "RI-PrescriptionStatus-05",
+    "role": "Doctor",
+    "label": "PrescriptionStatus",
+    "text": "kiem tra trang thhai don thuoc",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionStatus-05-V06",
+    "seedId": "RI-PrescriptionStatus-05",
+    "role": "Doctor",
+    "label": "PrescriptionStatus",
+    "text": "cho hỏi kiem tra trang thai don thuoc",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TechnicianWorklist-03-V01",
+    "seedId": "RI-TechnicianWorklist-03",
+    "role": "DiagnosticTechnician",
+    "label": "TechnicianWorklist",
+    "text": "hôm nay tôi có chỉ định nào cần làm",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TechnicianWorklist-03-V02",
+    "seedId": "RI-TechnicianWorklist-03",
+    "role": "DiagnosticTechnician",
+    "label": "TechnicianWorklist",
+    "text": "hom nay toi co chi dinh nao can lam",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TechnicianWorklist-03-V03",
+    "seedId": "RI-TechnicianWorklist-03",
+    "role": "DiagnosticTechnician",
+    "label": "TechnicianWorklist",
+    "text": "hôm nay tôi có chỉ địịnh nào cần làm",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TechnicianWorklist-03-V04",
+    "seedId": "RI-TechnicianWorklist-03",
+    "role": "DiagnosticTechnician",
+    "label": "TechnicianWorklist",
+    "text": "hôm nay tôi có chỉ định nào cần làm giúp mình",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TechnicianWorklist-03-V05",
+    "seedId": "RI-TechnicianWorklist-03",
+    "role": "DiagnosticTechnician",
+    "label": "TechnicianWorklist",
+    "text": "hom nay toi co chi dihn nao can lam",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TechnicianWorklist-03-V06",
+    "seedId": "RI-TechnicianWorklist-03",
+    "role": "DiagnosticTechnician",
+    "label": "TechnicianWorklist",
+    "text": "hom nay toi co chi dinh nao can lam ạ",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TechnicianWorklist-07-V01",
+    "seedId": "RI-TechnicianWorklist-07",
+    "role": "DiagnosticTechnician",
+    "label": "TechnicianWorklist",
+    "text": "việc cần làm hôm nay",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TechnicianWorklist-07-V02",
+    "seedId": "RI-TechnicianWorklist-07",
+    "role": "DiagnosticTechnician",
+    "label": "TechnicianWorklist",
+    "text": "viec can lam hom nay",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TechnicianWorklist-07-V03",
+    "seedId": "RI-TechnicianWorklist-07",
+    "role": "DiagnosticTechnician",
+    "label": "TechnicianWorklist",
+    "text": "việệc cần làm hôm nay",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TechnicianWorklist-07-V04",
+    "seedId": "RI-TechnicianWorklist-07",
+    "role": "DiagnosticTechnician",
+    "label": "TechnicianWorklist",
+    "text": "cho hỏi việc cần làm hôm nay",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TechnicianWorklist-07-V05",
+    "seedId": "RI-TechnicianWorklist-07",
+    "role": "DiagnosticTechnician",
+    "label": "TechnicianWorklist",
+    "text": "iec can lam hom nay",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-TechnicianWorklist-07-V06",
+    "seedId": "RI-TechnicianWorklist-07",
+    "role": "DiagnosticTechnician",
+    "label": "TechnicianWorklist",
+    "text": "viec can lam hom nay nhé",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionQueue-04-V01",
+    "seedId": "RI-PrescriptionQueue-04",
+    "role": "Pharmacist",
+    "label": "PrescriptionQueue",
+    "text": "danh sach don cho phat",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionQueue-04-V02",
+    "seedId": "RI-PrescriptionQueue-04",
+    "role": "Pharmacist",
+    "label": "PrescriptionQueue",
+    "text": "ds don cho phat",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionQueue-04-V03",
+    "seedId": "RI-PrescriptionQueue-04",
+    "role": "Pharmacist",
+    "label": "PrescriptionQueue",
+    "text": "danh sach don cho hpat",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionQueue-04-V04",
+    "seedId": "RI-PrescriptionQueue-04",
+    "role": "Pharmacist",
+    "label": "PrescriptionQueue",
+    "text": "danh sach don cho phat giúp mình",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionQueue-04-V05",
+    "seedId": "RI-PrescriptionQueue-04",
+    "role": "Pharmacist",
+    "label": "PrescriptionQueue",
+    "text": "danh asch don cho phat",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionQueue-04-V06",
+    "seedId": "RI-PrescriptionQueue-04",
+    "role": "Pharmacist",
+    "label": "PrescriptionQueue",
+    "text": "danh sach don cho phat với",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionQueue-07-V01",
+    "seedId": "RI-PrescriptionQueue-07",
+    "role": "Pharmacist",
+    "label": "PrescriptionQueue",
+    "text": "don thuoc moi can xu ly",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionQueue-07-V02",
+    "seedId": "RI-PrescriptionQueue-07",
+    "role": "Pharmacist",
+    "label": "PrescriptionQueue",
+    "text": "don thuuoc moi can xu ly",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionQueue-07-V03",
+    "seedId": "RI-PrescriptionQueue-07",
+    "role": "Pharmacist",
+    "label": "PrescriptionQueue",
+    "text": "don thuoc moi can xu ly với",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionQueue-07-V04",
+    "seedId": "RI-PrescriptionQueue-07",
+    "role": "Pharmacist",
+    "label": "PrescriptionQueue",
+    "text": "don thuc moi can xu ly",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionQueue-07-V05",
+    "seedId": "RI-PrescriptionQueue-07",
+    "role": "Pharmacist",
+    "label": "PrescriptionQueue",
+    "text": "don thuoc moi can xu ly ạ",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-InventoryStatus-02-V01",
+    "seedId": "RI-InventoryStatus-02",
+    "role": "Pharmacist",
+    "label": "InventoryStatus",
+    "text": "thuoc nao sap het hang",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-InventoryStatus-02-V02",
+    "seedId": "RI-InventoryStatus-02",
+    "role": "Pharmacist",
+    "label": "InventoryStatus",
+    "text": "htuoc nao sap het hang",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-InventoryStatus-02-V03",
+    "seedId": "RI-InventoryStatus-02",
+    "role": "Pharmacist",
+    "label": "InventoryStatus",
+    "text": "thuoc nao sap het hang ạ",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-InventoryStatus-02-V04",
+    "seedId": "RI-InventoryStatus-02",
+    "role": "Pharmacist",
+    "label": "InventoryStatus",
+    "text": "thuoc nao sap het han",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-InventoryStatus-02-V05",
+    "seedId": "RI-InventoryStatus-02",
+    "role": "Pharmacist",
+    "label": "InventoryStatus",
+    "text": "thuoc nao sap het hang với",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-InventoryStatus-06-V01",
+    "seedId": "RI-InventoryStatus-06",
+    "role": "Pharmacist",
+    "label": "InventoryStatus",
+    "text": "xem ton kho thuoc",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-InventoryStatus-06-V02",
+    "seedId": "RI-InventoryStatus-06",
+    "role": "Pharmacist",
+    "label": "InventoryStatus",
+    "text": "xem ton kho thoc",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-InventoryStatus-06-V03",
+    "seedId": "RI-InventoryStatus-06",
+    "role": "Pharmacist",
+    "label": "InventoryStatus",
+    "text": "xem ton kho thuoc ạ",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-InventoryStatus-06-V04",
+    "seedId": "RI-InventoryStatus-06",
+    "role": "Pharmacist",
+    "label": "InventoryStatus",
+    "text": "xem ton kho thouc",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-InventoryStatus-06-V05",
+    "seedId": "RI-InventoryStatus-06",
+    "role": "Pharmacist",
+    "label": "InventoryStatus",
+    "text": "cho mình hỏi xem ton kho thuoc",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionPayment-04-V01",
+    "seedId": "RI-PrescriptionPayment-04",
+    "role": "Pharmacist",
+    "label": "PrescriptionPayment",
+    "text": "đơn thuốc chưa thanh toán",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionPayment-04-V02",
+    "seedId": "RI-PrescriptionPayment-04",
+    "role": "Pharmacist",
+    "label": "PrescriptionPayment",
+    "text": "don thuoc chua thanh toan",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionPayment-04-V03",
+    "seedId": "RI-PrescriptionPayment-04",
+    "role": "Pharmacist",
+    "label": "PrescriptionPayment",
+    "text": "đơn thuốc chưa thnh toán",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionPayment-04-V04",
+    "seedId": "RI-PrescriptionPayment-04",
+    "role": "Pharmacist",
+    "label": "PrescriptionPayment",
+    "text": "đơn thuốc chưa thanh toán giúp mình",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionPayment-04-V05",
+    "seedId": "RI-PrescriptionPayment-04",
+    "role": "Pharmacist",
+    "label": "PrescriptionPayment",
+    "text": "don thuooc chua thanh toan",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionPayment-04-V06",
+    "seedId": "RI-PrescriptionPayment-04",
+    "role": "Pharmacist",
+    "label": "PrescriptionPayment",
+    "text": "don thuoc chua thanh toan nhé",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-PrescriptionPayment-08-V01",
+    "seedId": "RI-PrescriptionPayment-08",
+    "role": "Pharmacist",
+    "label": "PrescriptionPayment",
+    "text": "bn da dong tien thuoc chua",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-PrescriptionPayment-08-V02",
+    "seedId": "RI-PrescriptionPayment-08",
+    "role": "Pharmacist",
+    "label": "PrescriptionPayment",
+    "text": "bn da dong tien thuo chua",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-PrescriptionPayment-08-V03",
+    "seedId": "RI-PrescriptionPayment-08",
+    "role": "Pharmacist",
+    "label": "PrescriptionPayment",
+    "text": "bn da dong tien thuoc chua giúp mình",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-PrescriptionPayment-08-V04",
+    "seedId": "RI-PrescriptionPayment-08",
+    "role": "Pharmacist",
+    "label": "PrescriptionPayment",
+    "text": "bn da dong iten thuoc chua",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-PrescriptionPayment-08-V05",
+    "seedId": "RI-PrescriptionPayment-08",
+    "role": "Pharmacist",
+    "label": "PrescriptionPayment",
+    "text": "bn da dong tien thuoc chua với",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1_sua"
+  },
+  {
+    "id": "RI-DashboardMetrics-02-V01",
+    "seedId": "RI-DashboardMetrics-02",
+    "role": "Admin",
+    "label": "DashboardMetrics",
+    "text": "thong ke tong quan hom nay",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DashboardMetrics-02-V02",
+    "seedId": "RI-DashboardMetrics-02",
+    "role": "Admin",
+    "label": "DashboardMetrics",
+    "text": "thong ke tonng quan hom nay",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DashboardMetrics-02-V03",
+    "seedId": "RI-DashboardMetrics-02",
+    "role": "Admin",
+    "label": "DashboardMetrics",
+    "text": "thong ke tong quan hom nay với",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DashboardMetrics-02-V04",
+    "seedId": "RI-DashboardMetrics-02",
+    "role": "Admin",
+    "label": "DashboardMetrics",
+    "text": "thnog ke tong quan hom nay",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DashboardMetrics-02-V05",
+    "seedId": "RI-DashboardMetrics-02",
+    "role": "Admin",
+    "label": "DashboardMetrics",
+    "text": "cho hỏi thong ke tong quan hom nay",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DashboardMetrics-05-V01",
+    "seedId": "RI-DashboardMetrics-05",
+    "role": "Admin",
+    "label": "DashboardMetrics",
+    "text": "xem dashboard",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DashboardMetrics-05-V02",
+    "seedId": "RI-DashboardMetrics-05",
+    "role": "Admin",
+    "label": "DashboardMetrics",
+    "text": "xem dashhboard",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DashboardMetrics-05-V03",
+    "seedId": "RI-DashboardMetrics-05",
+    "role": "Admin",
+    "label": "DashboardMetrics",
+    "text": "cho mình hỏi xem dashboard",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DashboardMetrics-05-V04",
+    "seedId": "RI-DashboardMetrics-05",
+    "role": "Admin",
+    "label": "DashboardMetrics",
+    "text": "xem dashbboard",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-DashboardMetrics-05-V05",
+    "seedId": "RI-DashboardMetrics-05",
+    "role": "Admin",
+    "label": "DashboardMetrics",
+    "text": "xem dashboard với",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-04-V01",
+    "seedId": "RI-AiHealth-04",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "chatbot co bi loi khong",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-04-V02",
+    "seedId": "RI-AiHealth-04",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "chatbot co bi loi ko",
+    "split": "validation",
+    "variant": "abbreviation_ko",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-04-V03",
+    "seedId": "RI-AiHealth-04",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "chatbot co bi loi k",
+    "split": "validation",
+    "variant": "abbreviation_k",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-04-V04",
+    "seedId": "RI-AiHealth-04",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "cchatbot co bi loi khong",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-04-V05",
+    "seedId": "RI-AiHealth-04",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "ơi chatbot co bi loi khong",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-04-V06",
+    "seedId": "RI-AiHealth-04",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "chatbot co bi loi hong",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-04-V07",
+    "seedId": "RI-AiHealth-04",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "cho mình hỏi chatbot co bi loi khong",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-07-V01",
+    "seedId": "RI-AiHealth-07",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "xem tình trạng dịch vụ AI",
+    "split": "validation",
+    "variant": "original",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-07-V02",
+    "seedId": "RI-AiHealth-07",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "xem tinh trang dich vu AI",
+    "split": "validation",
+    "variant": "accent_fold",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-07-V03",
+    "seedId": "RI-AiHealth-07",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "xem tình trạng dịch vụ ai",
+    "split": "validation",
+    "variant": "lower_trim",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-07-V04",
+    "seedId": "RI-AiHealth-07",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "xem tình trạngg dịch vụ AI",
+    "split": "validation",
+    "variant": "typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-07-V05",
+    "seedId": "RI-AiHealth-07",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "cho hỏi xem tình trạng dịch vụ AI",
+    "split": "validation",
+    "variant": "affix",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-07-V06",
+    "seedId": "RI-AiHealth-07",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "xem tinh trang dihc vu AI",
+    "split": "validation",
+    "variant": "accent_fold_typo",
+    "source": "claude_v1"
+  },
+  {
+    "id": "RI-AiHealth-07-V07",
+    "seedId": "RI-AiHealth-07",
+    "role": "Admin",
+    "label": "AiHealth",
+    "text": "xem tinh trang dich vu AI với",
+    "split": "validation",
+    "variant": "accent_fold_affix",
+    "source": "claude_v1"
+  }
+]
