@@ -1,0 +1,243 @@
+[
+  {
+    "label": "Greeting",
+    "group": "Shared",
+    "roles": [
+      "Patient",
+      "Receptionist",
+      "Doctor",
+      "DiagnosticTechnician",
+      "Pharmacist",
+      "Admin"
+    ],
+    "targetTool": null,
+    "note": ""
+  },
+  {
+    "label": "Help",
+    "group": "Shared",
+    "roles": [
+      "Patient",
+      "Receptionist",
+      "Doctor",
+      "DiagnosticTechnician",
+      "Pharmacist",
+      "Admin"
+    ],
+    "targetTool": null,
+    "note": ""
+  },
+  {
+    "label": "ClinicKnowledge",
+    "group": "Shared",
+    "roles": [
+      "Patient",
+      "Receptionist",
+      "Doctor",
+      "DiagnosticTechnician",
+      "Pharmacist",
+      "Admin"
+    ],
+    "targetTool": "clinic.search_knowledge",
+    "note": ""
+  },
+  {
+    "label": "ActionRequest",
+    "group": "Shared",
+    "roles": [
+      "Patient",
+      "Receptionist",
+      "Doctor",
+      "DiagnosticTechnician",
+      "Pharmacist",
+      "Admin"
+    ],
+    "targetTool": null,
+    "note": ""
+  },
+  {
+    "label": "OutOfScope",
+    "group": "Shared",
+    "roles": [
+      "Patient",
+      "Receptionist",
+      "Doctor",
+      "DiagnosticTechnician",
+      "Pharmacist",
+      "Admin"
+    ],
+    "targetTool": null,
+    "note": ""
+  },
+  {
+    "label": "StartBooking",
+    "group": "Patient",
+    "roles": [
+      "Patient"
+    ],
+    "targetTool": null,
+    "note": "patient.start_booking suggestion button opens the booking wizard; not a tool"
+  },
+  {
+    "label": "MyAppointments",
+    "group": "Patient",
+    "roles": [
+      "Patient"
+    ],
+    "targetTool": "patient.get_my_appointments",
+    "note": ""
+  },
+  {
+    "label": "MyVisits",
+    "group": "Patient",
+    "roles": [
+      "Patient"
+    ],
+    "targetTool": "patient.get_my_visits",
+    "note": ""
+  },
+  {
+    "label": "MyDiagnosticResults",
+    "group": "Patient",
+    "roles": [
+      "Patient"
+    ],
+    "targetTool": "patient.get_my_diagnostic_results",
+    "note": ""
+  },
+  {
+    "label": "MyPrescriptions",
+    "group": "Patient",
+    "roles": [
+      "Patient"
+    ],
+    "targetTool": "patient.get_my_prescriptions",
+    "note": ""
+  },
+  {
+    "label": "MyBills",
+    "group": "Patient",
+    "roles": [
+      "Patient"
+    ],
+    "targetTool": "patient.get_my_bills",
+    "note": ""
+  },
+  {
+    "label": "TodayAppointments",
+    "group": "Receptionist",
+    "roles": [
+      "Receptionist"
+    ],
+    "targetTool": "reception.get_today_appointments",
+    "note": ""
+  },
+  {
+    "label": "ReceptionQueue",
+    "group": "Receptionist",
+    "roles": [
+      "Receptionist"
+    ],
+    "targetTool": "reception.get_queue",
+    "note": ""
+  },
+  {
+    "label": "LookupAppointment",
+    "group": "Receptionist",
+    "roles": [
+      "Receptionist"
+    ],
+    "targetTool": "reception.lookup_appointment",
+    "note": ""
+  },
+  {
+    "label": "DoctorQueue",
+    "group": "Doctor",
+    "roles": [
+      "Doctor"
+    ],
+    "targetTool": "doctor.get_my_queue",
+    "note": ""
+  },
+  {
+    "label": "PatientSummary",
+    "group": "Doctor",
+    "roles": [
+      "Doctor"
+    ],
+    "targetTool": "doctor.get_patient_summary",
+    "note": ""
+  },
+  {
+    "label": "DiagnosticOrders",
+    "group": "Doctor",
+    "roles": [
+      "Doctor"
+    ],
+    "targetTool": "doctor.get_diagnostic_orders",
+    "note": ""
+  },
+  {
+    "label": "PrescriptionStatus",
+    "group": "Doctor",
+    "roles": [
+      "Doctor"
+    ],
+    "targetTool": "doctor.get_prescription_status",
+    "note": ""
+  },
+  {
+    "label": "TechnicianWorklist",
+    "group": "DiagnosticTechnician",
+    "roles": [
+      "DiagnosticTechnician"
+    ],
+    "targetTool": "technician.get_worklist",
+    "note": ""
+  },
+  {
+    "label": "PrescriptionQueue",
+    "group": "Pharmacist",
+    "roles": [
+      "Pharmacist"
+    ],
+    "targetTool": "pharmacist.get_prescription_queue",
+    "note": ""
+  },
+  {
+    "label": "InventoryStatus",
+    "group": "Pharmacist",
+    "roles": [
+      "Pharmacist"
+    ],
+    "targetTool": "pharmacist.get_inventory_status",
+    "note": ""
+  },
+  {
+    "label": "PrescriptionPayment",
+    "group": "Pharmacist",
+    "roles": [
+      "Pharmacist"
+    ],
+    "targetTool": "pharmacist.get_prescription_payment_status",
+    "note": ""
+  },
+  {
+    "label": "DashboardMetrics",
+    "group": "Admin",
+    "roles": [
+      "Admin"
+    ],
+    "targetTool": "admin.get_dashboard_metrics",
+    "note": ""
+  },
+  {
+    "label": "AiHealth",
+    "group": "Admin",
+    "roles": [
+      "Admin"
+    ],
+    "targetTool": "admin.get_ai_health",
+    "note": ""
+  }
+]
