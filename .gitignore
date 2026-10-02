@@ -409,6 +409,7 @@ dist-ssr/
 !.env.example
 
 # Database
+App_Data/
 *.db
 *.db-shm
 *.db-wal

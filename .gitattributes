@@ -1,2 +1,3 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+src/tools/ClinicManagement.AI.Training/data/*.json text eol=lf
