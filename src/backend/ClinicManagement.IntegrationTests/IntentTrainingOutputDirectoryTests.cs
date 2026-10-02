@@ -26,4 +26,22 @@ public sealed class IntentTrainingOutputDirectoryTests
         var expected = Path.Combine(root, "src", "backend", "ClinicManagement.Infrastructure", "models");
         Assert.Equal(expected, TrainingProgram.ResolveIntentOutputDirectory(null, start));
     }
+
+    [Theory]
+    [InlineData("src/backend")]
+    [InlineData("src/backend/ClinicManagement.Api")]
+    public void Default_output_directory_is_infrastructure_models_from_backend_directories(string relativeDirectory)
+    {
+        var root = RepositoryRoot;
+        var start = Path.Combine(root, relativeDirectory);
+        var expected = Path.Combine(root, "src", "backend", "ClinicManagement.Infrastructure", "models");
+        Assert.Equal(expected, TrainingProgram.ResolveIntentOutputDirectory(null, start));
+    }
+
+    [Fact]
+    public void Explicit_relative_output_directory_is_resolved_from_start_directory()
+    {
+        var root = RepositoryRoot;
+        Assert.Equal(Path.Combine(root, "x", "y"), TrainingProgram.ResolveIntentOutputDirectory("x/y", root));
+    }
 }

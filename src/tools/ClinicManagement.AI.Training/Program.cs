@@ -278,7 +278,7 @@ public class Program
         {
             if (Directory.Exists(Path.Combine(directory.FullName, ".git")) ||
                 File.Exists(Path.Combine(directory.FullName, ".git")) ||
-                directory.EnumerateFiles("*.sln").Any())
+                File.Exists(Path.Combine(directory.FullName, "src", "backend", "ClinicManagement.sln")))
                 return Path.Combine(directory.FullName, "src", "backend", "ClinicManagement.Infrastructure", "models");
             directory = directory.Parent;
         }
