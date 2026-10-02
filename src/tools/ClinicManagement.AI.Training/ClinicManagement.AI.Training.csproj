@@ -5,6 +5,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Keep offline ML floating-point calculations on one JIT tier for reproducibility. -->
+    <TieredCompilation>false</TieredCompilation>
     <RootNamespace>ClinicManagement.AI.Training</RootNamespace>
   </PropertyGroup>
 
