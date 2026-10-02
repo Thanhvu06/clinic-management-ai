@@ -122,16 +122,43 @@ public class Program
         }
         else if (command is "--train-role-intent" or "--eval-role-intent")
         {
+            var version = OptionOrDefault(args, "--version", "v2");
+            if (version is not ("v1" or "v2"))
+            {
+                Console.Error.WriteLine("Role-intent --version must be v1 or v2.");
+                return 1;
+            }
             var scalarExit = RoleIntentModelPipeline.RunScalarCommand(args);
             if (scalarExit.HasValue) return scalarExit.Value;
             var modelsDirectory = ResolveIntentOutputDirectory(null, Directory.GetCurrentDirectory());
             var repoRoot = Path.GetFullPath(Path.Combine(modelsDirectory, "..", "..", "..", ".."));
             var projectDirectory = Path.Combine(repoRoot, "src", "tools", "ClinicManagement.AI.Training");
             var dataDirectory = OptionOrDefault(args, "--data-dir", Path.Combine(projectDirectory, "data"));
-            var outputDirectory = OptionOrDefault(args, "--out-dir", Path.Combine(projectDirectory, "models", "role-intent-v1"));
+            var outputDirectory = OptionOrDefault(args, "--out-dir", Path.Combine(projectDirectory, "models", $"role-intent-{version}"));
             try
             {
-                if (command == "--train-role-intent")
+                if (version == "v2" && command == "--train-role-intent")
+                {
+                    var metadata = RoleIntentModelV2Pipeline.Train(dataDirectory, outputDirectory);
+                    Console.WriteLine(JsonSerializer.Serialize(new { metadata.Configuration, metadata.ThresholdPolicy.Threshold, metadata.ValidationPredictionSha256 }));
+                }
+                else if (version == "v2")
+                {
+                    var report = RoleIntentModelV2Pipeline.EvaluateOnce(dataDirectory, outputDirectory, Path.Combine(projectDirectory, "models", "role-intent-v1"));
+                    Console.WriteLine(JsonSerializer.Serialize(new { report.Eval.Unfiltered.Accuracy, report.Eval.Unfiltered.MacroF1, filteredAccuracy = report.Eval.Filtered.Accuracy, filteredMacroF1 = report.Eval.Filtered.MacroF1, report.Provenance }));
+                }
+                else if (File.Exists(Path.Combine(outputDirectory, RoleIntentModelPipeline.ReportFile)))
+                {
+                    // Frozen v1 is read-only: return its recorded result without training or rescoring eval.
+                    RoleIntentModelPipeline.Load(outputDirectory, out var metadata);
+                    var report = RoleIntentModelPipeline.Read<RoleIntentEvaluationReport>(Path.Combine(outputDirectory, RoleIntentModelPipeline.ReportFile));
+                    if (report.ModelSha256 != metadata.ModelSha256) throw new InvalidDataException("Frozen v1 report checksum mismatch.");
+                    if (command == "--train-role-intent")
+                        Console.WriteLine(JsonSerializer.Serialize(new { metadata.Configuration, metadata.ThresholdPolicy.Threshold, metadata.ValidationPredictionSha256, frozen = true }));
+                    else
+                        Console.WriteLine(JsonSerializer.Serialize(new { report.Eval.Unfiltered.Accuracy, report.Eval.Unfiltered.MacroF1, filteredAccuracy = report.Eval.Filtered.Accuracy, filteredMacroF1 = report.Eval.Filtered.MacroF1, report.Provenance, cached = true }));
+                }
+                else if (command == "--train-role-intent")
                 {
                     var metadata = RoleIntentModelPipeline.Train(dataDirectory, outputDirectory);
                     Console.WriteLine(JsonSerializer.Serialize(new { metadata.Configuration, metadata.ThresholdPolicy.Threshold, metadata.ValidationPredictionSha256 }));
@@ -176,8 +203,8 @@ public class Program
         Console.WriteLine("  ClinicManagement.AI.Training --phase4-self-test");
         Console.WriteLine("  ClinicManagement.AI.Training --benchmark-phase4 [datasetPath] [--train trainDatasetPath] [--report reportPath]");
         Console.WriteLine("  ClinicManagement.AI.Training --gen-role-intent [--data-dir directory]");
-        Console.WriteLine("  ClinicManagement.AI.Training --train-role-intent [--data-dir directory] [--out-dir directory]");
-        Console.WriteLine("  ClinicManagement.AI.Training --eval-role-intent [--data-dir directory] [--out-dir directory]");
+        Console.WriteLine("  ClinicManagement.AI.Training --train-role-intent [--version v1|v2 (default v2)] [--data-dir directory] [--out-dir directory]");
+        Console.WriteLine("  ClinicManagement.AI.Training --eval-role-intent [--version v1|v2 (default v2)] [--data-dir directory] [--out-dir directory]");
         Console.WriteLine("  ClinicManagement.AI.Training --gateb [--report reportPath] [--promotion promotionPath]");
     }
 
