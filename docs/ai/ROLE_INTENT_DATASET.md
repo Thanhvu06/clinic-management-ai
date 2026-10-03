@@ -443,3 +443,101 @@ dotnet run --project src/tools/ClinicManagement.AI.RuntimeBenchmark -c Release -
 ### Giới hạn runtime
 
 Eval đã nhìn và do AI viết; chưa có blind do người viết/traffic thực. Source rule bao gồm quyết định rõ của classifier dù đường xử lý cũ có thể cần provider; provider offline disabled làm nhiều ca còn Unresolved. StartBooking 0% trong phép đo thực không phủ nhận test mapping: model giả lập chọn StartBooking đã chứng minh chỉ hiện wizard, nhưng các câu luật đã rõ vẫn giữ đường cũ. Handler theo ca/đơn cần resource đã xác minh; benchmark không có resource thật, nên PatientSummary/DiagnosticOrders/PrescriptionPayment thấp. Không triển khai handler mới cho ActionRequest/OutOfScope. Phép đo chưa chứng minh grounding, xác nhận ghi, hoặc latency concurrent/production; API tests kiểm tra gateway/quyền hiện có bằng dữ liệu SQLite fixture.
+
+### Bổ sung phân rã lỗi runtime (PR #13, chỉ đo)
+
+Đối chiếu 490 lượt với commit `4e55d307cf224a0e6c555ef080cc7beef3cf8449`: output intent, nhãn kết quả cũ, nguồn, provider state và trọng số đều giữ nguyên. Accuracy chỉ luật 25,00%, lai 43,33% không đổi. Có 326 lượt sai thực tế, tổng trọng số 136/240 (56,67%). Năm nhãn Chung vẫn chạy đủ sáu role, mỗi lượt 1/6; các nhãn còn lại mỗi lượt 1. Tất cả phần trăm bên dưới dùng trọng số, không lấy 326/490 làm error rate.
+
+Sai ở đây theo đúng proxy nhãn handler trong phép đo cũ, không phải kiểm chứng hoàn tất đọc dữ liệu thật. Sáu nhóm a–f phân hoạch các lượt sai của proxy này, mỗi lượt đúng một nhóm. Nhãn chẩn đoán được đối chiếu riêng với expected: nhãn tool/subintent hiện có của luật, nhãn đã nhận của model; fallback không nhận nhãn. Không dùng expected để suy ra nhãn dự đoán.
+
+Với clarification thiếu resource, benchmark gọi riêng planner luật không thay đổi, cùng câu/analysis nhưng có ID sentinel, sau khi lượt thật đã trả lời, để xác định tác vụ đọc mà luật nhận diện. Đây chỉ là probe kế hoạch; không gọi resolver/tool/executor, không tạo dữ liệu, không xác minh quyền/grounding, không đưa resource đó vào lượt runtime. Giữ cả RawRouteLabel và ResourceProbeLabel trong JSON: nhãn log có thể là UnclearOrOutOfScope dù planner nhận ra tác vụ đọc. Không đổi router, classifier, ngưỡng 0.75, thứ tự rule/model, fixture của lượt thật hay artifact.
+
+| Nhóm | Diễn giải | Lượt thực | Trọng số | % toàn bộ 240 | % trong 136 sai |
+|---|---|---:|---:|---:|---:|
+| a | Luật chọn sai nhãn | 106 | 51.83 | 21.60% | 38.11% |
+| b | Luật đúng nhãn, provider tắt/thiếu resource | 27 | 27 | 11.25% | 19.85% |
+| c | Model chọn sai nhãn | 4 | 1.5 | 0.63% | 1.10% |
+| d | Model đúng nhãn, cần provider/resource | 0 | 0 | 0.00% | 0.00% |
+| e | Fallback dù nhãn đúng có handler | 112 | 42.83 | 17.85% | 31.50% |
+| f | Fallback đúng thiết kế ActionRequest/OutOfScope | 77 | 12.83 | 5.35% | 9.44% |
+| Tổng sai | | 326 | 136 | 56.67% | 100.00% |
+
+Theo nhãn: mỗi ô là **lượt thực / trọng số (% của 10 trọng số của nhãn)**; 0 nghĩa cả ba đều 0. JSON còn có % trong lỗi của từng nhãn. Nhóm d bằng 0 trong mọi nhãn ở proxy này; không chứng minh model luôn hoàn tất handler.
+
+| Nhãn | a | b | c | d | e | f |
+|---|---:|---:|---:|---:|---:|---:|
+| Greeting | 0 | 0 | 1/0.17 (1.67%) | 0 | 29/4.83 (48.33%) | 0 |
+| Help | 12/2 (20.00%) | 0 | 0 | 0 | 37/6.17 (61.67%) | 0 |
+| ClinicKnowledge | 12/2 (20.00%) | 0 | 0 | 0 | 17/2.83 (28.33%) | 0 |
+| ActionRequest | 35/5.83 (58.33%) | 0 | 1/0.17 (1.67%) | 0 | 0 | 24/4 (40.00%) |
+| OutOfScope | 6/1 (10.00%) | 0 | 1/0.17 (1.67%) | 0 | 0 | 53/8.83 (88.33%) |
+| StartBooking | 8/8 (80.00%) | 1/1 (10.00%) | 0 | 0 | 1/1 (10.00%) | 0 |
+| MyAppointments | 5/5 (50.00%) | 0 | 0 | 0 | 0 | 0 |
+| MyVisits | 3/3 (30.00%) | 0 | 0 | 0 | 3/3 (30.00%) | 0 |
+| MyDiagnosticResults | 0 | 0 | 0 | 0 | 1/1 (10.00%) | 0 |
+| MyPrescriptions | 1/1 (10.00%) | 0 | 0 | 0 | 1/1 (10.00%) | 0 |
+| MyBills | 3/3 (30.00%) | 0 | 0 | 0 | 0 | 0 |
+| TodayAppointments | 2/2 (20.00%) | 0 | 0 | 0 | 3/3 (30.00%) | 0 |
+| ReceptionQueue | 2/2 (20.00%) | 0 | 0 | 0 | 2/2 (20.00%) | 0 |
+| LookupAppointment | 0 | 0 | 0 | 0 | 3/3 (30.00%) | 0 |
+| DoctorQueue | 5/5 (50.00%) | 0 | 0 | 0 | 1/1 (10.00%) | 0 |
+| PatientSummary | 1/1 (10.00%) | 5/5 (50.00%) | 0 | 0 | 4/4 (40.00%) | 0 |
+| DiagnosticOrders | 0 | 10/10 (100.00%) | 0 | 0 | 0 | 0 |
+| PrescriptionStatus | 3/3 (30.00%) | 5/5 (50.00%) | 0 | 0 | 1/1 (10.00%) | 0 |
+| TechnicianWorklist | 2/2 (20.00%) | 0 | 0 | 0 | 3/3 (30.00%) | 0 |
+| PrescriptionQueue | 0 | 0 | 0 | 0 | 0 | 0 |
+| InventoryStatus | 2/2 (20.00%) | 0 | 0 | 0 | 1/1 (10.00%) | 0 |
+| PrescriptionPayment | 2/2 (20.00%) | 6/6 (60.00%) | 1/1 (10.00%) | 0 | 1/1 (10.00%) | 0 |
+| DashboardMetrics | 2/2 (20.00%) | 0 | 0 | 0 | 3/3 (30.00%) | 0 |
+| AiHealth | 0 | 0 | 0 | 0 | 1/1 (10.00%) | 0 |
+
+#### Accuracy nhãn theo nguồn
+
+| Nguồn | Lượt thực | Trọng số | Đúng nhãn (lượt / trọng số) | Accuracy nhãn nhận | Accuracy nhãn log router |
+|---|---:|---:|---:|---:|---:|
+| rule | 233 | 138.83 | 127/87 | 62.67% | 43.94% |
+| fallback | 189 | 55.67 | 0/0 | 0.00% | 62.87% |
+| model | 68 | 45.5 | 64/44 | 96.70% | 96.70% |
+
+Fallback từ chối chọn nhãn: accuracy nhãn đã nhận 0% (coverage 0); 62,87% nhãn log là candidate bị từ chối, không phải nhãn runtime đã nhận. Model 96,70% chỉ tính các lượt được nhận sau ngưỡng, không phải toàn tập. Rule 62,67% dùng nhãn tác vụ từ probe thiếu resource; nhãn log nguyên bản chỉ 43,94%. Tổng accuracy nhãn đã nhận: 131/240 = 54,58%. Standalone v2 81,25% dùng mask Chung là hợp các role; runtime dùng sáu role riêng, trọng số 1/6, giữ luật trước và abstention. Hai số không có cùng điều kiện chấm.
+
+#### Model v2 đối chiếu các lượt nhóm a
+
+Chỉ inference sau khi mọi lượt runtime đã xong, dùng cùng normalized text và role; không chèn vào router hay latency lượt. Trong 106 lượt nhóm a (51,83 trọng số), model top-1 đúng 85 lượt (40 trọng số), accuracy đối chiếu 77,17% có trọng số (80,19% lượt thực). Từng nhãn, score chính xác và input được ghi trong JSON; đây không phải đề xuất đổi thứ tự rule/model.
+
+| Điểm top-1 | Tổng lượt / trọng số | Đúng lượt / trọng số | Sai lượt / trọng số |
+|---|---:|---:|---:|
+| >=0.75 | 72/32.83 | 65/29.17 | 7/3.67 |
+| <0.75 | 34/19 | 20/10.83 | 14/8.17 |
+
+#### Bốn nhãn có accuracy kết quả cũ bằng 0%
+
+**StartBooking**: 8a + 1b + 1e. Sub-intent đặt lịch cũ ProvideReason/FindEarliestAvailableSlot/SelectDoctor, guard mixed read/write hoặc ClinicKnowledge không khớp catalog StartBooking. Một lượt StartBooking đúng nhưng nhánh cũ cần provider tắt; một candidate StartBooking dưới 0.75 bị từ chối. Không có lượt model StartBooking được nhận.
+
+- `eval-51`: “mình muốn khám da liễu thứ bảy này” → nhóm a, nhãn Unresolved, planner UnclearOrOutOfScope/, block ProviderDisabled; score router 0.000000.
+- `eval-58`: “dang ky kham xet nghiem mau” → nhóm b, nhãn StartBooking, planner UnclearOrOutOfScope/, block ProviderDisabled; score router 0.000000.
+
+**PatientSummary**: 1a + 5b + 4e. Năm lượt luật nhận tác vụ tóm tắt nhưng thiếu AppointmentId/VisitId nên MissingAssignedCase; proxy cũ gán Unresolved. Một lượt sang ClinicKnowledge, bốn lượt fallback.
+
+- `eval-151`: “cho mình tóm tắt tình trạng bệnh nhân này” → nhóm b, nhãn PatientSummary, planner PatientSummary/MissingAssignedCase, block MissingFixtureResource; score router 1.000000.
+- `eval-154`: “tom tat benh an giup toi” → nhóm a, nhãn ClinicKnowledge, planner FacilityInquiry/ClinicKnowledge, block ; score router 0.990000.
+
+**DiagnosticOrders**: 10b. Cả mười lượt luật nhận doctor.get_diagnostic_orders theo probe, nhưng fixture không có ca khám nên trả MissingAssignedCase/PatientSummary và proxy Unresolved. 0% kết quả cũ không phải 0% nhận diện ý định.
+
+- `eval-161`: “mình đã chỉ định những xét nghiệm gì cho ca này” → nhóm b, nhãn DiagnosticOrders, planner PatientSummary/MissingAssignedCase, block MissingFixtureResource; score router 1.000000.
+- `eval-162`: “chi dinh sieu am cua benh nhan da xong chua” → nhóm b, nhãn DiagnosticOrders, planner PatientSummary/MissingAssignedCase, block MissingFixtureResource; score router 1.000000.
+
+**PrescriptionPayment**: 2a + 6b + 1c + 1e. Sáu lượt thiếu PrescriptionId, hai lượt luật và một lượt model sang PrescriptionQueue; một candidate PrescriptionPayment dưới 0.75 bị từ chối.
+
+- `eval-211`: “khách thanh toán đơn vừa rồi chưa” → nhóm b, nhãn PrescriptionPayment, planner PrescriptionLookup/MissingPrescriptionForPayment, block MissingFixtureResource; score router 1.000000.
+- `eval-216`: “don nao con no tien thuoc” → nhóm c, nhãn PrescriptionQueue, planner PrescriptionLookup/PrescriptionQueue, block ; score router 0.897792.
+
+#### Quy nguyên nhân và Phase5
+
+Trong 136 trọng số sai: luật sai nhãn (a) **38,11%**, model sai nhãn (c) **1,10%**, provider/resource fixture (b+d) **19,85%**. Fallback đúng thiết kế nhưng proxy tính sai (f) **9,44%**; cộng b+d+f là **29,29%** sai do giới hạn/cách diễn giải phép đo. Fallback dù có handler (e) còn **31,50%**; không quy toàn bộ e cho model sai nhãn vì có abstention do ngưỡng. Tính trên toàn tập: a 21,60%, c 0,63%, b+d 11,25%, f 5,35%, e 17,85%. Đây là phân rã quan sát, không dự đoán accuracy nếu đổi router.
+
+Phase5 đối chiếu file: **11/12** ca expected StartBooking có actor nhân viên, **1/12** Patient (P5-BLIND-005). 10/12 trong prompt cũ là nhầm; không sửa holdout. Eval do AI viết và đã nhìn ở v1/v2; không đổi dữ liệu, ngưỡng, logic hay model theo các số này.
+
+Tái chạy (không train): `dotnet run --project src/tools/ClinicManagement.AI.RuntimeBenchmark -c Release -- enabled diagnostics`. Báo cáo tạm ở `%TEMP%/clinic-role-runtime-enabled.json`; kết quả được thêm vào SupplementalDiagnostics trong RUNTIME_HYBRID_MEASUREMENTS.json. Benchmark kiểm tra đủ 490 khóa id/role, tổng trọng số 240, mọi lượt sai thuộc đúng một nhóm và mọi lượt a có prediction đối chiếu.
+
+Kiểm tra bổ sung: build Release 0 lỗi; focused GateBModelPipelineTests 11/11; full backend 989/989, 0 fail/skip; Gate B IsValid=true, NOT_PROMOTED. 31 SHA-256 protected giữ nguyên; toàn bộ 789 file tracked ngoài ba file benchmark/báo cáo/tài liệu khớp snapshot trước bổ sung. Nội dung tài liệu cũ và số đo JSON cũ được giữ nguyên. Không train role-intent, không đổi production model/metadata.
