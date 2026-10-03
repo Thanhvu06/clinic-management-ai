@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Authentication.Interfaces;
+using ClinicManagement.Application.Common.Constants;
 using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Mpi.Interfaces;
@@ -233,6 +234,8 @@ public class PatientVisitService : IPatientVisitService
                     Gender = newProfile.Gender,
                     Address = newProfile.Address?.Trim(),
                     NationalId = cleanCccd,
+                    BhytNumber = string.IsNullOrWhiteSpace(newProfile.BhytNumber) ? null : newProfile.BhytNumber.Trim(),
+                    Email = string.IsNullOrWhiteSpace(newProfile.Email) ? null : newProfile.Email.Trim(),
                     MedicalRecordNumber = mrn,
                     PrimaryFacilityId = request.FacilityId
                 };
@@ -820,11 +823,19 @@ public class PatientVisitService : IPatientVisitService
         if (visit == null)
             throw new NotFoundException("Lượt khám không tồn tại.");
 
+        await _facilityAuthService.ValidateUserFacilityAccessAsync(GetUserId(), visit.FacilityId, cancellationToken);
+
         var doctor = await _dbContext.Doctors
             .FirstOrDefaultAsync(d => d.Id == request.DoctorId && d.IsActive, cancellationToken);
 
         if (doctor == null)
             throw new NotFoundException("Bác sĩ không tồn tại hoặc đã ngừng hoạt động.");
+
+        var hasDoctorAssignment = await _dbContext.StaffFacilityAssignments
+            .AnyAsync(a => a.UserId == doctor.UserId && a.FacilityId == visit.FacilityId &&
+                a.IsActive && a.Role == RoleNames.Doctor, cancellationToken);
+        if (!hasDoctorAssignment)
+            throw new BusinessException("FACILITY_SCOPE_DENIED", "Bác sĩ không được phân quyền tại cơ sở của lượt khám.");
 
         Room? room = null;
         if (request.RoomId.HasValue)
