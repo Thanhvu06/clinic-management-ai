@@ -541,3 +541,127 @@ Phase5 đối chiếu file: **11/12** ca expected StartBooking có actor nhân v
 Tái chạy (không train): `dotnet run --project src/tools/ClinicManagement.AI.RuntimeBenchmark -c Release -- enabled diagnostics`. Báo cáo tạm ở `%TEMP%/clinic-role-runtime-enabled.json`; kết quả được thêm vào SupplementalDiagnostics trong RUNTIME_HYBRID_MEASUREMENTS.json. Benchmark kiểm tra đủ 490 khóa id/role, tổng trọng số 240, mọi lượt sai thuộc đúng một nhóm và mọi lượt a có prediction đối chiếu.
 
 Kiểm tra bổ sung: build Release 0 lỗi; focused GateBModelPipelineTests 11/11; full backend 989/989, 0 fail/skip; Gate B IsValid=true, NOT_PROMOTED. 31 SHA-256 protected giữ nguyên; toàn bộ 789 file tracked ngoài ba file benchmark/báo cáo/tài liệu khớp snapshot trước bổ sung. Nội dung tài liệu cũ và số đo JSON cũ được giữ nguyên. Không train role-intent, không đổi production model/metadata.
+
+### Hiệu chỉnh runtime lai sau PR #13
+
+Chỉ validation quyết định cấu hình: 283 bản ghi, 498 lượt runtime (43 bản ghi Chung chạy đủ 6 role, mỗi lượt 1/6; các role riêng mỗi lượt 1), tổng trọng số 283. Pipeline train và artifact/meta v2 không đổi. Đối chiếu code pipeline cho thấy mask Chung cũ là hợp các role (toàn bộ nhãn), không phải chỉ nhãn Chung; mask runtime luôn gồm nhãn chung và nhãn riêng của role đăng nhập. Các trial đều chạy qua router/orchestrator offline với đúng mask này; ghi riêng accepted accuracy của toàn bộ score model và accepted accuracy của các nhãn thực sự được router nhận.
+
+Định nghĩa cũ: proxy nhãn handler; clarification thiếu resource không ánh xạ được thường là Unresolved; fallback ActionRequest/OutOfScope bị tính sai. Định nghĩa mới giữ tất cả lượt cũ đã đúng và bổ sung đúng cho (1) nhãn tác vụ đúng + hỏi lại thiếu resource, (2) nguồn fallback đúng thiết kế cho expected ActionRequest/OutOfScope. ProviderDisabled đơn thuần vẫn sai. Không coi sai nhãn + thiếu resource là đúng. Phase5 giữ riêng exact canonical-intent match; expected UnclearOrOutOfScope tương ứng fallback ngoài phạm vi. Nhãn tác vụ thiếu resource dùng probe planner thuần như PR #13, không gọi tool, không tạo resource hay vượt quyền.
+
+PR #13 eval tính lại từ 490 dòng đã lưu: 104/240 = 43.33% cũ; 142.8333/240 = 59.51% mới. Phần được sửa cách tính gồm 26 trọng số hỏi lại resource và 12.8333 trọng số fallback đúng thiết kế; lượt StartBooking cần provider tắt vẫn sai. Không chạy lại baseline eval qua router.
+
+#### Ngưỡng nhận model theo mask runtime
+
+Giữ grid v2 0.00–0.95, bước 0.05 và tiêu chí: coverage cao nhất trong các ngưỡng có accepted label accuracy ≥90%; hòa chọn ngưỡng thấp hơn. Bảng accepted toàn bộ model có trọng số, cùng mẫu số 283 như criterion v2; cột router chỉ các quyết định nguồn model được nhận. Không thay criterion sang riêng nhóm dễ/khó của router.
+
+| Ngưỡng | Accepted lượt / trọng số | Accepted accuracy | Coverage | Router accepted trọng số | Router accepted accuracy |
+|---|---:|---:|---:|---:|---:|
+| 0 | 498/283 | 74.32% | 100.00% | 107 | 76.95% |
+| 0.05 | 498/283 | 74.32% | 100.00% | 107 | 76.95% |
+| 0.1 | 498/283 | 74.32% | 100.00% | 107 | 76.95% |
+| 0.15 | 498/283 | 74.32% | 100.00% | 107 | 76.95% |
+| 0.2 | 495/280 | 75.12% | 98.94% | 105 | 78.41% |
+| 0.25 | 483/272.17 | 76.85% | 96.17% | 103.5 | 79.39% |
+| 0.3 | 466/263.5 | 78.75% | 93.11% | 99.33 | 81.04% |
+| 0.35 | 441/252.67 | 81.00% | 89.28% | 93.5 | 83.07% |
+| 0.4 | 395/232.5 | 84.73% | 82.16% | 85.67 | 88.33% |
+| 0.45 | 356/215.17 | 86.83% | 76.03% | 75 | 91.33% |
+| 0.5 | 325/195.83 | 87.15% | 69.20% | 63.83 | 90.60% |
+| 0.55 | 296/183.5 | 88.37% | 64.84% | 58.17 | 90.26% |
+| 0.6 | 281/174.33 | 89.48% | 61.60% | 52.67 | 93.67% |
+| 0.65 | 263/162.17 | 89.52% | 57.30% | 46.83 | 92.88% |
+| 0.7 | 247/152.83 | 89.86% | 54.00% | 41.17 | 91.90% |
+| 0.75 | 223/138.83 | 94.12% | 49.06% | 34.33 | 97.09% |
+| 0.8 | 201/126 | 95.24% | 44.52% | 28.67 | 96.51% |
+| 0.85 | 164/100.67 | 95.36% | 35.57% | 17.67 | 100.00% |
+| 0.9 | 136/86 | 95.93% | 30.39% | 16 | 100.00% |
+| 0.95 | 113/67.17 | 96.03% | 23.73% | 12 | 100.00% |
+
+Chọn lại **Threshold=0.75** (giá trị số vẫn như meta): accepted accuracy **94.12%**, coverage **49.06%**. 0.70 đạt 89.86%, chưa đủ 90%; không làm tròn để coi là đạt. Cấu hình runtime ghi rõ 0.75, ưu tiên hơn meta; thiếu cấu hình thì RoleIntentModel vẫn đọc 0.75 từ meta đóng băng.
+
+#### Chính sách ghi đè và lựa chọn validation
+
+Cờ `RoleIntentModel:OverrideEnabled` mặc định false khi thiếu cấu hình. Khi bật, ở nhánh luật chắc chắn, model sau mask chọn nhãn khác với score ≥ OverrideThreshold và có handler hiện có thì nguồn là override. Nhãn không có handler, ngoài role hoặc score không hợp lệ không được ghi đè. Model chỉ chọn handler đọc/wizard hiện có; không chọn action gateway ghi.
+
+Không gọi model ghi đè cho safety/emergency/prompt injection, Method kết thúc Guard, xác nhận/mixed read-write, lỗi quyền/resource, clarification MissingAssignedCase/MissingPrescriptionForPayment/MissingAppointmentCode, intent booking legacy, BookingWizard, correction/relative selection hoặc memory có LastIntent/LastSubIntent/PendingClarification/MissingFields/ConfirmedEntities/CurrentResource/SanitizedSummary. Luồng suggestion hiện có cũng giữ nguyên. Tắt cờ giữ nhánh PR #13, kể cả hợp đồng không gọi model khi luật chắc chắn.
+
+| OverrideThreshold | Ghi đè lượt / trọng số | Sửa đúng lượt / trọng số | Làm hỏng lượt / trọng số | Lợi ích ròng trọng số | Đạt giới hạn hỏng |
+|---|---:|---:|---:|---:|---|
+| 0.8 | 18/13.83 | 13/13 | 0/0 | 13 | True |
+| 0.85 | 14/9.83 | 9/9 | 0/0 | 9 | True |
+| 0.9 | 8/3.83 | 3/3 | 0/0 | 3 | True |
+| 0.95 | 5/0.83 | 0/0 | 0/0 | 0 | True |
+| 0.99 | 0/0 | 0/0 | 0/0 | 0 | True |
+
+Luật đang đúng nhãn: 91 trọng số; mức làm hỏng cho phép ≤0.91 (1%). Chọn **OverrideThreshold=0.80, OverrideEnabled=true**: lợi ích ròng 13, làm hỏng 0. Hòa lợi ích chọn ngưỡng cao hơn; không có trial đạt điều kiện thì tắt. Chỉ validation tham gia lựa chọn.
+
+Cấu hình runtime trong appsettings.json:
+
+```json
+"RoleIntentModel": {
+  "Threshold": 0.75,
+  "OverrideEnabled": true,
+  "OverrideThreshold": 0.8
+}
+```
+
+#### Validation và eval trước/sau
+
+Tất cả accuracy/tỷ lệ nguồn dùng trọng số. Thứ tự nguồn: rule / model / override / fallback.
+
+| Tập / bản | Accuracy cũ | Accuracy mới | Rule | Model | Override | Fallback |
+|---|---:|---:|---:|---:|---:|---:|
+| Validation PR #13 | 31.21% | 47.59% | 54.53% | 12.13% | 0.00% | 33.33% |
+| Validation mới | 35.81% | 52.18% | 49.65% | 12.13% | 4.89% | 33.33% |
+| Eval PR #13 (archive) | 43.33% | 59.51% | 57.85% | 18.96% | 0.00% | 23.19% |
+| Eval mới (một pass) | 47.50% | 63.68% | 53.54% | 18.96% | 4.31% | 23.19% |
+
+Eval 240 câu, 490 lượt, tổng trọng số 240: **chỉ một pass runtime mới sau freeze**, có receipt và journal từng dòng; baseline lấy từ archive PR #13. Eval do AI viết, đã nhìn ở v1/v2/PR #13; không sửa code/ngưỡng/chính sách theo các số này. SHA-256 code/cấu hình đã đóng băng được lưu trong báo cáo và khớp lại sau eval. Giá trị threshold/config sẽ không thay theo accuracy eval.
+
+| Nhãn | PR #13 cũ | PR #13 mới | Bản mới: cũ | Bản mới: mới |
+|---|---:|---:|---:|---:|
+| Greeting | 50.00% | 50.00% | 50.00% | 50.00% |
+| Help | 18.33% | 18.33% | 38.33% | 38.33% |
+| ClinicKnowledge | 51.67% | 51.67% | 51.67% | 51.67% |
+| ActionRequest | 0.00% | 40.00% | 0.00% | 40.00% |
+| OutOfScope | 0.00% | 88.33% | 0.00% | 88.33% |
+| StartBooking | 0.00% | 0.00% | 0.00% | 0.00% |
+| MyAppointments | 50.00% | 50.00% | 50.00% | 50.00% |
+| MyVisits | 40.00% | 40.00% | 40.00% | 40.00% |
+| MyDiagnosticResults | 90.00% | 90.00% | 90.00% | 90.00% |
+| MyPrescriptions | 80.00% | 80.00% | 80.00% | 80.00% |
+| MyBills | 70.00% | 70.00% | 70.00% | 70.00% |
+| TodayAppointments | 50.00% | 50.00% | 50.00% | 50.00% |
+| ReceptionQueue | 60.00% | 60.00% | 80.00% | 80.00% |
+| LookupAppointment | 70.00% | 70.00% | 70.00% | 70.00% |
+| DoctorQueue | 40.00% | 40.00% | 50.00% | 50.00% |
+| PatientSummary | 0.00% | 50.00% | 10.00% | 60.00% |
+| DiagnosticOrders | 0.00% | 100.00% | 0.00% | 100.00% |
+| PrescriptionStatus | 10.00% | 60.00% | 10.00% | 60.00% |
+| TechnicianWorklist | 50.00% | 50.00% | 60.00% | 60.00% |
+| PrescriptionQueue | 100.00% | 100.00% | 100.00% | 100.00% |
+| InventoryStatus | 70.00% | 70.00% | 80.00% | 80.00% |
+| PrescriptionPayment | 0.00% | 60.00% | 10.00% | 70.00% |
+| DashboardMetrics | 50.00% | 50.00% | 60.00% | 60.00% |
+| AiHealth | 90.00% | 90.00% | 90.00% | 90.00% |
+
+#### Nhóm lỗi eval a–f
+
+a=luật sai nhãn; b=luật đúng nhãn nhưng provider/resource chặn kết quả; c=model/override sai nhãn; d=model/override đúng nhãn nhưng provider/resource chặn; e=fallback dù nhãn đúng có handler; f=fallback đúng thiết kế. Các trường hợp b/d thiếu resource đúng tác vụ và f trở thành đúng theo định nghĩa mới nên không còn trong bảng lỗi mới. Mỗi ô: **lượt thực / trọng số (% toàn tập 240)**. JSON chứa cả nhóm theo từng nhãn và từng dòng, cho hai định nghĩa trước/sau.
+
+| Nhóm | PR #13 cũ | PR #13 mới | Bản mới: cũ | Bản mới: mới |
+|---|---:|---:|---:|---:|
+| a | 106/51.83 (21.60%) | 106/51.83 (21.60%) | 84/41.5 (17.29%) | 84/41.5 (17.29%) |
+| b | 27/27 (11.25%) | 1/1 (0.42%) | 27/27 (11.25%) | 1/1 (0.42%) |
+| c | 4/1.5 (0.63%) | 4/1.5 (0.63%) | 6/1.83 (0.76%) | 6/1.83 (0.76%) |
+| d | 0/0 (0.00%) | 0/0 (0.00%) | 0/0 (0.00%) | 0/0 (0.00%) |
+| e | 112/42.83 (17.85%) | 112/42.83 (17.85%) | 112/42.83 (17.85%) | 112/42.83 (17.85%) |
+| f | 77/12.83 (5.35%) | 0/0 (0.00%) | 77/12.83 (5.35%) | 0/0 (0.00%) |
+
+Phase5: cả PR #13 và bản mới **3/21 = 14.29%**, cả exact intent và định nghĩa mới. 11/12 ca expected StartBooking có actor nhân viên; chỉ P5-BLIND-005 là Patient. Không sửa holdout, không bỏ nhãn booking legacy khỏi guard để nâng điểm.
+
+Kiểm tra: Release build 0 lỗi; 44 test mới; focused router/API 76/76; focused Gate B 11/11; full backend 1033/1033, 0 fail/skip; Gate B IsValid=true, NOT_PROMOTED. 32 hash protected giữ nguyên, gồm classifier, planner luật gốc, dữ liệu, pipelines, artifact/meta/report v1/v2, production và ci.yml. Test/Gate B dùng fixture/candidate tạm như suite hiện có; không train lại artifact role-intent, không gọi LLM live.
+
+Giới hạn: validation nhỏ, do AI/synthetic; 91 trọng số luật đúng và không có damage quan sát không bảo đảm an toàn thống kê trên traffic thật. Override chỉ áp dụng lượt stateless ngoài các guard, không thay legacy booking/hội thoại có context. Clarification đúng tác vụ được tính đúng nhưng không chứng minh grounding trên dữ liệu thật; provider offline vẫn tắt. Eval đã thấy không phải blind. Không có tool/hành động ghi mới; quyền và xác nhận vẫn do gateway cũ kiểm soát.
+
+Reproduce validation only: `dotnet run --project src/tools/ClinicManagement.AI.RuntimeBenchmark -c Release -- calibrate`. Phép eval một lần đã thực hiện bằng `measure-calibration` sau freeze; guard CreateNew ở TEMP từ chối chạy lại. Báo cáo/receipt/journal được lưu để đọc lại mà không rerun eval. Chi tiết ở RUNTIME_CALIBRATION_MEASUREMENTS.json.

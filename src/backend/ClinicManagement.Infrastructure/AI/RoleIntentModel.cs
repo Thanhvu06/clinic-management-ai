@@ -14,6 +14,8 @@ public sealed class RoleIntentModelOptions
 {
     public bool Enabled { get; set; } = true;
     public double? Threshold { get; set; }
+    public bool OverrideEnabled { get; set; }
+    public double? OverrideThreshold { get; set; }
     public string Directory { get; set; } = Path.Combine(AppContext.BaseDirectory, "models", "role-intent-v2");
     public string? LabelsPath { get; set; }
 }

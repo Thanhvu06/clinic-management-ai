@@ -96,7 +96,9 @@ public sealed class HybridIntentApiTests(CustomWebApplicationFactory factory) : 
     }
 
     private static void EnableModel(IWebHostBuilder builder) => builder.ConfigureAppConfiguration((_, configuration) =>
-        configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["RoleIntentModel:Enabled"] = "true" }));
+        configuration.AddInMemoryCollection(new Dictionary<string, string?> {
+            ["RoleIntentModel:Enabled"] = "true", ["RoleIntentModel:Threshold"] = "0.75",
+            ["RoleIntentModel:OverrideEnabled"] = "false" }));
 
     [Theory]
     [InlineData(false)]

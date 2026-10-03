@@ -18,6 +18,10 @@ using Moq;
 var search=new DirectoryInfo(Directory.GetCurrentDirectory());
 while(search is not null && !File.Exists(Path.Combine(search.FullName,"src","backend","ClinicManagement.sln"))) search=search.Parent;
 var root=search?.FullName ?? throw new DirectoryNotFoundException("Run from the repository.");
+if(args.Contains("calibrate") || args.Contains("measure-calibration")){
+ await RuntimeCalibrationBenchmark.RunAsync(root,args);
+ return;
+}
 var data=root+"/src/tools/ClinicManagement.AI.Training/data/";
 var before=args.Contains("before");
 var enabled=args.Contains("enabled");
