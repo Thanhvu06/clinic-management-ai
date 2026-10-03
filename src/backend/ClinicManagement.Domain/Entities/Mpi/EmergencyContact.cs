@@ -9,6 +9,7 @@ public class EmergencyContact
     public string PhoneNumber { get; set; } = string.Empty;
     public string? Address { get; set; }
     public bool IsPrimary { get; set; } = true;
+    public bool IsGuardian { get; set; }
 
     public Patient Patient { get; set; } = null!;
 }
