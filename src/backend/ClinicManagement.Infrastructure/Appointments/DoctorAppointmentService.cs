@@ -1424,7 +1424,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         var maxLegacy = (prescription.Id + 1) * 100000L - 1;
 
         var isBilled = await _dbContext.InvoiceItems.AnyAsync(ii =>
-            !ii.IsCancelled &&
+            !ii.IsCancelled && ii.Invoice.Status != InvoiceStatus.Cancelled &&
             ((ii.ReferenceType == PrescriptionItemBillingReference.ModernReferenceType && ii.ReferenceId >= minModern && ii.ReferenceId <= maxModern) ||
              (ii.ReferenceType == PrescriptionItemBillingReference.LegacyReferenceType && (ii.ReferenceId == prescription.Id || (ii.ReferenceId >= minLegacy && ii.ReferenceId <= maxLegacy)))));
 

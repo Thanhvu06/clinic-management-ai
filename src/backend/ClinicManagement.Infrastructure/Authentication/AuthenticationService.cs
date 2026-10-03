@@ -49,7 +49,7 @@ public class AuthenticationService : IAuthenticationService
         if (user == null || !user.IsActive)
             throw new UnauthorizedException("Email/Số điện thoại hoặc mật khẩu không chính xác.");
 
-        var result = await _signInManager.CheckPasswordSignInAsync(user, request.Password, false);
+        var result = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
 
         if (!result.Succeeded)
             throw new UnauthorizedException("Email/Số điện thoại hoặc mật khẩu không chính xác.");
@@ -185,10 +185,10 @@ public class AuthenticationService : IAuthenticationService
 
     private (string Token, DateTime ExpiresAt) GenerateJwtToken(ApplicationUser user, IList<string> roles)
     {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
+        var jwt = JwtConfiguration.Read(_configuration, _environment);
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Key));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        var expiryMinutes = Convert.ToDouble(_configuration["Jwt:ExpiryMinutes"]);
-        var expiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes);
+        var expiresAt = DateTime.UtcNow.AddMinutes(jwt.ExpiryMinutes);
 
         var claims = new List<Claim>
         {
@@ -204,8 +204,8 @@ public class AuthenticationService : IAuthenticationService
         }
 
         var token = new JwtSecurityToken(
-            issuer: _configuration["Jwt:Issuer"],
-            audience: _configuration["Jwt:Audience"],
+            issuer: jwt.Issuer,
+            audience: jwt.Audience,
             claims: claims,
             expires: expiresAt,
             signingCredentials: creds

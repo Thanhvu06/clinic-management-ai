@@ -14,6 +14,7 @@ using ClinicManagement.Application.Visits.Interfaces;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
+using ClinicManagement.Infrastructure.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClinicManagement.Infrastructure.Visits;
@@ -178,6 +179,7 @@ public class PatientVisitService : IPatientVisitService
                 .FirstOrDefaultAsync(d => d.Id == doctorIdToAssign.Value && d.IsActive, cancellationToken);
             if (doctor == null)
                 throw new NotFoundException("Bác sĩ được chỉ định không tồn tại hoặc không hoạt động.");
+            await ValidateDoctorFacilityAssignmentAsync(doctor, request.FacilityId, cancellationToken);
         }
 
         // Verify Room
@@ -383,9 +385,6 @@ public class PatientVisitService : IPatientVisitService
         var facilityId = request.FacilityId ?? department.FacilityId;
         await _facilityAuthService.ValidateUserFacilityAccessAsync(currentUserId, facilityId, cancellationToken);
 
-        // Resolve or create patient
-        var patient = await ResolveOrCreatePatientAsync(request, facilityId, cancellationToken);
-
         // Verify doctor if assigned
         Doctor? doctor = null;
         if (request.AssignedDoctorId.HasValue)
@@ -394,7 +393,10 @@ public class PatientVisitService : IPatientVisitService
                 .FirstOrDefaultAsync(d => d.Id == request.AssignedDoctorId.Value && d.IsActive, cancellationToken);
             if (doctor == null)
                 throw new NotFoundException("Bác sĩ được chỉ định không tồn tại hoặc không hoạt động.");
+            await ValidateDoctorFacilityAssignmentAsync(doctor, facilityId, cancellationToken);
         }
+
+        var patient = await ResolveOrCreatePatientAsync(request, facilityId, cancellationToken);
 
         // Verify room if specified
         Room? room = null;
@@ -694,6 +696,8 @@ public class PatientVisitService : IPatientVisitService
         if (visit == null)
             throw new NotFoundException("Lượt khám không tồn tại.");
 
+        await ValidateVisitReadAccessAsync(visit, cancellationToken);
+
         var activeOrders = visit.DiagnosticOrders.Where(o => o.Status != DiagnosticOrderStatus.Cancelled).ToList();
         var pendingOrdersCount = activeOrders.Count(o => o.Status == DiagnosticOrderStatus.Ordered || o.Status == DiagnosticOrderStatus.InProgress);
         var latestPrescription = visit.Prescriptions.OrderByDescending(p => p.CreatedAt).FirstOrDefault();
@@ -752,6 +756,16 @@ public class PatientVisitService : IPatientVisitService
 
     public async Task<List<DepartmentQueueItemDto>> GetDepartmentQueueAsync(long departmentId, DateOnly? date = null, CancellationToken cancellationToken = default)
     {
+        var userId = GetUserId();
+        Doctor? doctor = null;
+        if (userId != Guid.Empty)
+        {
+            var department = await _dbContext.Departments.AsNoTracking()
+                .FirstOrDefaultAsync(d => d.Id == departmentId, cancellationToken)
+                ?? throw new NotFoundException("Khoa tiếp nhận không tồn tại.");
+            await _facilityAuthService.ValidateUserFacilityAccessAsync(userId, department.FacilityId, cancellationToken);
+            doctor = await GetReadDoctorAsync(userId, cancellationToken);
+        }
         var targetDate = date ?? _dateTimeProvider.VietnamToday;
 
         var visits = await _dbContext.PatientVisits
@@ -768,6 +782,13 @@ public class PatientVisitService : IPatientVisitService
                         v.Status != VisitStatus.Completed &&
                         v.Status != VisitStatus.NoShow)
             .ToListAsync(cancellationToken);
+
+        if (doctor != null)
+        {
+            var departmentIds = await VisitDoctorAuthorizationGuard.GetUnassignedDepartmentIdsAsync(_dbContext, doctor);
+            visits = visits.Where(v => v.AssignedDoctorId == doctor.Id ||
+                (!v.AssignedDoctorId.HasValue && departmentIds.Contains(v.DepartmentId))).ToList();
+        }
 
         visits = visits
             .OrderByDescending(v => (int)v.Priority)
@@ -825,6 +846,11 @@ public class PatientVisitService : IPatientVisitService
             throw new NotFoundException("Lượt khám không tồn tại.");
 
         await _facilityAuthService.ValidateUserFacilityAccessAsync(GetUserId(), visit.FacilityId, cancellationToken);
+        // This operation returns visit detail; validate that read before persisting a reassignment.
+        await ValidateVisitReadAccessAsync(visit, cancellationToken);
+        var readDoctor = await GetReadDoctorAsync(GetUserId(), cancellationToken);
+        if (readDoctor != null && request.DoctorId != readDoctor.Id)
+            throw new NotFoundException("Lượt khám không tồn tại hoặc không thuộc quyền quản lý.");
 
         var doctor = await _dbContext.Doctors
             .FirstOrDefaultAsync(d => d.Id == request.DoctorId && d.IsActive, cancellationToken);
@@ -871,6 +897,9 @@ public class PatientVisitService : IPatientVisitService
         var visit = await _dbContext.PatientVisits.FirstOrDefaultAsync(v => v.Id == visitId, cancellationToken);
         if (visit == null)
             throw new NotFoundException("Lượt khám không tồn tại.");
+
+        // Avoid saving a status change and then rejecting the returned detail.
+        await ValidateVisitReadAccessAsync(visit, cancellationToken);
 
         if (visit.Status == VisitStatus.Cancelled)
             throw new BusinessException("VISIT_ALREADY_CANCELLED", "Lượt khám đã bị hủy, không thể thay đổi trạng thái.");
@@ -932,9 +961,44 @@ public class PatientVisitService : IPatientVisitService
         if (visit == null)
             throw new NotFoundException("Lượt khám không tồn tại.");
 
+        await ValidateVisitReadAccessAsync(visit, cancellationToken);
+
         var rName = await GetUserNameAsync(visit.CreatedByUserId, cancellationToken);
         var docName = await GetDoctorNameAsync(visit.AssignedDoctorId, cancellationToken);
         return MapToTicket(visit, rName, docName);
+    }
+
+    private async Task ValidateDoctorFacilityAssignmentAsync(Doctor doctor, long facilityId, CancellationToken cancellationToken)
+    {
+        if (!await _dbContext.StaffFacilityAssignments.AsNoTracking().AnyAsync(
+            a => a.UserId == doctor.UserId && a.FacilityId == facilityId && a.IsActive && a.Role == RoleNames.Doctor,
+            cancellationToken))
+            throw new BusinessException("FACILITY_SCOPE_DENIED", "Bác sĩ không được phân quyền tại cơ sở của lượt khám.");
+    }
+
+    private async Task<Doctor?> GetReadDoctorAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        if (await _facilityAuthService.HasFullFacilityAccessAsync(userId, cancellationToken)) return null;
+        var isDoctor = await (from ur in _dbContext.UserRoles
+                              join role in _dbContext.Roles on ur.RoleId equals role.Id
+                              where ur.UserId == userId && role.Name == RoleNames.Doctor
+                              select ur).AnyAsync(cancellationToken);
+        if (!isDoctor) return null;
+        return await _dbContext.Doctors.AsNoTracking().FirstOrDefaultAsync(d => d.UserId == userId && d.IsActive, cancellationToken)
+            ?? throw new NotFoundException("Bác sĩ không tồn tại hoặc không hoạt động.");
+    }
+
+    private async Task ValidateVisitReadAccessAsync(PatientVisit visit, CancellationToken cancellationToken)
+    {
+        var userId = GetUserId();
+        if (userId == Guid.Empty) return;
+        await _facilityAuthService.ValidateUserFacilityAccessAsync(userId, visit.FacilityId, cancellationToken);
+        var doctor = await GetReadDoctorAsync(userId, cancellationToken);
+        if (doctor != null)
+        {
+            VisitDoctorAuthorizationGuard.ValidateAssignedDoctor(visit, doctor, allowUnassigned: true);
+            await VisitDoctorAuthorizationGuard.ValidateUnassignedDepartmentAsync(_dbContext, visit, doctor);
+        }
     }
 
     private CheckInTicketDto MapToTicket(PatientVisit visit, string receptionistName, string? doctorName = null)

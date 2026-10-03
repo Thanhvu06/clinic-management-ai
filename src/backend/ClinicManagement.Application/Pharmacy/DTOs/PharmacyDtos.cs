@@ -61,7 +61,7 @@ public class AdjustStockDto
     [Required]
     public MedicineStockTransactionType Type { get; set; } = MedicineStockTransactionType.StockIn;
 
-    [Range(1, 100000, ErrorMessage = "Số lượng phải lớn hơn 0.")]
+    [Range(-100000, 100000, ErrorMessage = "Số lượng điều chỉnh phải từ -100000 đến 100000.")]
     public int Quantity { get; set; }
 
     public string? Reason { get; set; }

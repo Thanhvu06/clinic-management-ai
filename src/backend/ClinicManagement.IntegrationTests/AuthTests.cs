@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace ClinicManagement.IntegrationTests;
@@ -197,6 +198,12 @@ public class AuthTests : IntegrationTestBase
         using var prodFactory = Factory.WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Production");
+            builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["Jwt:Key"] = "ProductionFixtureSecretKeyAtLeastThirtyTwoBytesLong!",
+                    ["Jwt:ExpiryMinutes"] = "60"
+                }));
         });
 
         var hostEnvironment = prodFactory.Services.GetRequiredService<IHostEnvironment>();

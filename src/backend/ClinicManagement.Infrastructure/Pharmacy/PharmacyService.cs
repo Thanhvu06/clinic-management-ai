@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.Pharmacy.DTOs;
 using ClinicManagement.Application.Pharmacy.Interfaces;
@@ -14,6 +15,8 @@ using ClinicManagement.Infrastructure.Common;
 using ClinicManagement.Infrastructure.Persistence;
 using ClinicManagement.Infrastructure.Visits;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
+using Microsoft.Data.Sqlite;
 
 namespace ClinicManagement.Infrastructure.Pharmacy;
 
@@ -22,15 +25,21 @@ public class PharmacyService : IPharmacyService
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly IPrescriptionPaymentEligibilityService _paymentEligibility;
+    private readonly IFacilityAuthorizationService _facilityAuthService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public PharmacyService(
         AppDbContext dbContext,
         ICurrentUserService currentUserService,
-        IPrescriptionPaymentEligibilityService paymentEligibility)
+        IPrescriptionPaymentEligibilityService paymentEligibility,
+        IFacilityAuthorizationService facilityAuthService,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _paymentEligibility = paymentEligibility;
+        _facilityAuthService = facilityAuthService;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public Task<PrescriptionPaymentEligibilityDto> EvaluatePrescriptionPaymentAsync(long prescriptionId, CancellationToken cancellationToken = default) =>
@@ -38,9 +47,11 @@ public class PharmacyService : IPharmacyService
 
     public async Task<PharmacyDashboardDto> GetDashboardStatsAsync()
     {
-        var today = DateTime.UtcNow.Date;
+        var vietnamDate = _dateTimeProvider.VietnamToday;
+        var today = _dateTimeProvider.ConvertVietnamToUtc(vietnamDate.ToDateTime(TimeOnly.MinValue));
+        var tomorrow = _dateTimeProvider.ConvertVietnamToUtc(vietnamDate.AddDays(1).ToDateTime(TimeOnly.MinValue));
         var pendingCount = await _dbContext.Prescriptions.CountAsync(p => p.Status == PrescriptionStatus.Issued);
-        var dispensedTodayCount = await _dbContext.Prescriptions.CountAsync(p => p.Status == PrescriptionStatus.Dispensed && p.DispensedAt >= today);
+        var dispensedTodayCount = await _dbContext.Prescriptions.CountAsync(p => p.Status == PrescriptionStatus.Dispensed && p.DispensedAt >= today && p.DispensedAt < tomorrow);
         var lowStockCount = await _dbContext.Medicines.CountAsync(m => m.IsActive && m.StockQuantity <= m.ReorderLevel);
         var totalActiveMedicines = await _dbContext.Medicines.CountAsync(m => m.IsActive);
 
@@ -55,6 +66,8 @@ public class PharmacyService : IPharmacyService
 
     public async Task<PagedResult<PharmacyPrescriptionListDto>> GetPrescriptionsAsync(string? status, string? search, int page, int pageSize)
     {
+        page = Math.Max(1, page);
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
         var query = from p in _dbContext.Prescriptions.AsNoTracking()
                     join a in _dbContext.Appointments.AsNoTracking() on p.AppointmentId equals a.Id into apts
                     from a in apts.DefaultIfEmpty()
@@ -76,6 +89,17 @@ public class PharmacyService : IPharmacyService
                         PatientPhone = ptu != null ? (ptu.PhoneNumber ?? "") : (pt.PhoneNumber ?? ""),
                         DoctorName = docu != null ? docu.FullName : "Bác sĩ"
                     };
+
+        var userId = _currentUserService.UserId ?? Guid.Empty;
+        if (userId != Guid.Empty && !await _facilityAuthService.HasFullFacilityAccessAsync(userId))
+        {
+            var facilities = await _facilityAuthService.GetUserAccessibleFacilityIdsAsync(userId);
+            query = query.Where(x => x.PatientVisit != null
+                ? facilities.Contains(x.PatientVisit.FacilityId)
+                : x.Appointment != null && x.Appointment.FacilityId.HasValue
+                    ? facilities.Contains(x.Appointment.FacilityId.Value)
+                    : true);
+        }
 
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<PrescriptionStatus>(status, true, out var parsedStatus))
         {
@@ -126,6 +150,7 @@ public class PharmacyService : IPharmacyService
 
     public async Task<PrescriptionDetailDto> GetPrescriptionByIdAsync(long id)
     {
+        await ValidatePrescriptionAccessAsync(id);
         var prescription = await _dbContext.Prescriptions
             .AsNoTracking()
             .Include(p => p.Items)
@@ -180,6 +205,7 @@ public class PharmacyService : IPharmacyService
 
     public async Task<PrescriptionDetailDto> ConfirmPurchaseAsync(long prescriptionId)
     {
+        await ValidatePrescriptionAccessAsync(prescriptionId);
         var actorUserId = _currentUserService.UserId ?? Guid.Empty;
 
         using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
@@ -286,6 +312,7 @@ public class PharmacyService : IPharmacyService
 
     public async Task<DispensePrescriptionResultDto> DispensePrescriptionAsync(long prescriptionId)
     {
+        await ValidatePrescriptionAccessAsync(prescriptionId);
         var actorUserId = _currentUserService.UserId ?? Guid.Empty;
 
         try
@@ -465,34 +492,21 @@ public class PharmacyService : IPharmacyService
 
     private static bool IsConcurrencyOrLockException(Exception ex)
     {
-        var current = ex;
+        Exception? current = ex;
         while (current != null)
         {
             if (current is DbUpdateConcurrencyException) return true;
-            if (current is InvalidOperationException) return true;
-            var typeName = current.GetType().Name;
-            var msg = current.Message;
-            if (typeName.Contains("SqliteException", StringComparison.OrdinalIgnoreCase) ||
-                typeName.Contains("DbException", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-            if (msg.Contains("deadlock", StringComparison.OrdinalIgnoreCase) ||
-                msg.Contains("locked", StringComparison.OrdinalIgnoreCase) ||
-                msg.Contains("busy", StringComparison.OrdinalIgnoreCase) ||
-                msg.Contains("concurrency", StringComparison.OrdinalIgnoreCase) ||
-                msg.Contains("transaction", StringComparison.OrdinalIgnoreCase) ||
-                msg.Contains("connection", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-            current = current.InnerException!;
+            if (current is SqlException sql && sql.Number is 1205 or 1222 or 3960 or 3961) return true;
+            if (current is SqliteException sqlite && sqlite.SqliteErrorCode is 5 or 6) return true;
+            current = current.InnerException;
         }
         return false;
     }
 
     public async Task<PagedResult<StockTransactionDto>> GetStockTransactionsAsync(long? medicineId, int page, int pageSize)
     {
+        page = Math.Max(1, page);
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
         var query = from t in _dbContext.MedicineStockTransactions.AsNoTracking()
                     join m in _dbContext.Medicines.AsNoTracking() on t.MedicineId equals m.Id
                     join u in _dbContext.Users.AsNoTracking() on t.ActorUserId equals u.Id into uJoin
@@ -539,6 +553,10 @@ public class PharmacyService : IPharmacyService
 
     public async Task AdjustStockAsync(AdjustStockDto request)
     {
+        if (request.Type is not (MedicineStockTransactionType.StockIn or MedicineStockTransactionType.Adjustment))
+            throw new BusinessException("INVALID_STOCK_TRANSACTION_TYPE", "Loại giao dịch không được phép điều chỉnh thủ công.");
+        if (request.Quantity == 0 || (request.Type == MedicineStockTransactionType.StockIn && request.Quantity < 0))
+            throw new BusinessException("INVALID_QUANTITY", "Số lượng điều chỉnh phải khác 0; nhập kho phải lớn hơn 0.");
         var actorUserId = _currentUserService.UserId ?? Guid.Empty;
 
         using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
@@ -547,9 +565,7 @@ public class PharmacyService : IPharmacyService
             var med = await _dbContext.Medicines.FirstOrDefaultAsync(m => m.Id == request.MedicineId);
             if (med == null) throw new NotFoundException("Thuốc không tồn tại.");
 
-            int qtyChange = request.Type == MedicineStockTransactionType.StockIn 
-                ? request.Quantity 
-                : request.Quantity; // In case of manual adjustment, can be positive
+            var qtyChange = request.Quantity;
 
             med.StockQuantity += qtyChange;
             if (med.StockQuantity < 0)
@@ -578,5 +594,16 @@ public class PharmacyService : IPharmacyService
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    private async Task ValidatePrescriptionAccessAsync(long prescriptionId)
+    {
+        var scope = await _dbContext.Prescriptions.AsNoTracking()
+            .Where(p => p.Id == prescriptionId)
+            .Select(p => new { FacilityId = p.PatientVisit != null ? (long?)p.PatientVisit.FacilityId : p.Appointment != null ? p.Appointment.FacilityId : null })
+            .FirstOrDefaultAsync() ?? throw new NotFoundException("Đơn thuốc không tồn tại.");
+        var userId = _currentUserService.UserId ?? Guid.Empty;
+        if (scope.FacilityId.HasValue && userId != Guid.Empty)
+            await _facilityAuthService.ValidateUserFacilityAccessAsync(userId, scope.FacilityId.Value);
     }
 }
