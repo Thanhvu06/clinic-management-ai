@@ -16,7 +16,6 @@ public static class AiPlannerPolicy
         "doctor.get_my_appointments_today",
         "technician.get_completed_today",
         "pharmacist.get_low_stock",
-        "patient.get_my_invoices",
         "clinic.search_specialties",
         "clinic.search_doctors",
         "clinic.get_available_slots",

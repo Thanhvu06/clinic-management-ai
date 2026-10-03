@@ -84,7 +84,6 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
             ["patient.get_my_diagnostic_results"] = (new[] { "page", "pageSize" }, Array.Empty<string>()),
             ["patient.get_my_prescriptions"] = (new[] { "page", "pageSize" }, Array.Empty<string>()),
             ["patient.get_my_bills"] = (new[] { "page", "pageSize" }, Array.Empty<string>()),
-            ["patient.get_my_invoices"] = (Array.Empty<string>(), Array.Empty<string>()),
             ["patient.prepare_booking"] = (new[] { "specialtyId", "doctorId", "slotId", "reason" }, new[] { "specialtyId", "doctorId", "slotId" }),
             ["patient.prepare_cancel_appointment"] = (new[] { "appointmentId", "reason" }, new[] { "appointmentId", "reason" }),
             ["patient.prepare_reschedule_appointment"] = (new[] { "appointmentId", "requestedSlotId", "reason" }, new[] { "appointmentId", "requestedSlotId", "reason" }),
@@ -103,8 +102,6 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
                 property.Name.Equals("channel", StringComparison.OrdinalIgnoreCase) ||
                 property.Name.Equals("facilityAuthorization", StringComparison.OrdinalIgnoreCase))
                 return AiToolArgumentValidationResult.Invalid("FORBIDDEN_TOOL_ARGUMENT", "Tham số quyền hạn chỉ được xác định phía server.");
-            if (name == "patient.get_my_invoices" && property.Name.Equals("facilityId", StringComparison.OrdinalIgnoreCase))
-                return AiToolArgumentValidationResult.Invalid("FORBIDDEN_TOOL_ARGUMENT", "Phạm vi quyền chỉ do server xác định.");
             if (!allowed.Contains(property.Name))
                 return AiToolArgumentValidationResult.Invalid("UNKNOWN_TOOL_ARGUMENT", $"Tham số '{property.Name}' không được phép.");
         }
@@ -138,7 +135,6 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
             "patient.get_my_diagnostic_results" => GetMyDiagnosticResultsAsync(invocation, context, cancellationToken),
             "patient.get_my_prescriptions" => GetMyPrescriptionsAsync(invocation, context, cancellationToken),
             "patient.get_my_bills" => GetMyBillsAsync(invocation, context, cancellationToken),
-            "patient.get_my_invoices" => GetMyInvoicesAsync(context, cancellationToken),
             "patient.prepare_booking" => PrepareBookingAsync(invocation, context, cancellationToken),
             "patient.prepare_cancel_appointment" => PrepareChangeAsync("cancel", invocation, context, cancellationToken),
             "patient.prepare_reschedule_appointment" => PrepareChangeAsync("reschedule", invocation, context, cancellationToken),
@@ -402,19 +398,6 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
                 items = i.Items.Where(x => !x.IsCancelled).Select(x => new { x.Description, x.Quantity, x.LineTotal }).ToList()
             }).ToListAsync(cancellationToken);
         return Completed(items, "patient_bills", items.Count == 0 ? "Bạn chưa có hóa đơn nào." : $"Có {items.Count} hóa đơn của bạn.");
-    }
-
-    private async Task<AiToolExecutionResult> GetMyInvoicesAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
-    {
-        var patientId = await ResolvePatientIdAsync(context.ActorId, cancellationToken);
-        if (!patientId.HasValue)
-            return AiToolExecutionResult.Failed("FACILITY_SCOPE_REQUIRED", "Không xác định được phạm vi hồ sơ bệnh nhân hiện tại.");
-        var items = await _db.Invoices.AsNoTracking()
-            .Where(i => i.PatientId == patientId.Value)
-            .OrderByDescending(i => i.CreatedAtUtc).ThenByDescending(i => i.Id).Take(20)
-            .Select(i => new { i.InvoiceCode, status = i.Status.ToString(), i.TotalAmount, i.CreatedAtUtc, i.PaidAtUtc })
-            .ToListAsync(cancellationToken);
-        return Completed(items, "patient_invoices", items.Count == 0 ? "Bạn chưa có hóa đơn nào." : $"Có {items.Count} hóa đơn gần nhất của bạn.");
     }
 
     private async Task<AiToolExecutionResult> PrepareBookingAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken)
@@ -748,7 +731,6 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
             new[] { Arg("page", AiToolArgumentType.Integer), Arg("pageSize", AiToolArgumentType.Integer) }),
         Def("patient.get_my_bills", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc hóa đơn của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly,
             new[] { Arg("page", AiToolArgumentType.Integer), Arg("pageSize", AiToolArgumentType.Integer) }),
-        Def("patient.get_my_invoices", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Low, AiToolConfirmationRequirement.None, "Đọc tối đa 20 hóa đơn gần nhất của chính bệnh nhân", new[] { AiActorCapability.ReadOwnAppointments }, PatientOnly),
         Def("patient.prepare_booking", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.Medium, AiToolConfirmationRequirement.ExistingBookingConfirmation, "Kiểm tra và chuẩn bị bản nháp đặt lịch", new[] { AiActorCapability.PrepareBooking }, PatientOnly),
         Def("patient.prepare_cancel_appointment", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.High, AiToolConfirmationRequirement.ExplicitUserConfirmation, "Tạo pending action yêu cầu hủy lịch", new[] { AiActorCapability.PrepareAppointmentChange }, PatientOnly),
         Def("patient.prepare_reschedule_appointment", AiToolAccessMode.RoleRestricted, AiToolRiskLevel.High, AiToolConfirmationRequirement.ExplicitUserConfirmation, "Tạo pending action yêu cầu đổi lịch", new[] { AiActorCapability.PrepareAppointmentChange }, PatientOnly),

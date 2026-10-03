@@ -29,8 +29,7 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
         ("reception.get_pending_payments", AiActorRole.Receptionist, "reception_pending_payments", "QueueLookup"),
         ("doctor.get_my_appointments_today", AiActorRole.Doctor, "doctor_appointments_today", "ViewAppointments"),
         ("technician.get_completed_today", AiActorRole.DiagnosticTechnician, "technician_completed_today", "DiagnosticLookup"),
-        ("pharmacist.get_low_stock", AiActorRole.Pharmacist, "pharmacy_low_stock", "PharmacyInventory"),
-        ("patient.get_my_invoices", AiActorRole.Patient, "patient_invoices", "ViewAppointments")
+        ("pharmacist.get_low_stock", AiActorRole.Pharmacist, "pharmacy_low_stock", "PharmacyInventory")
     ];
 
     public AiRoleReadToolTests(CustomWebApplicationFactory factory) : base(factory) { }
@@ -85,7 +84,7 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
                 AiActorRole.Doctor => new[] { "appointmentCode", "startTime", "endTime", "status", "patientName", "reason" },
                 AiActorRole.DiagnosticTechnician => new[] { "orderCode", "services", "status", "completedAtUtc" },
                 AiActorRole.Pharmacist => new[] { "code", "name", "unit", "stockQuantity", "reorderLevel" },
-                _ => new[] { "invoiceCode", "status", "totalAmount", "createdAtUtc", "paidAtUtc" }
+                _ => throw new InvalidOperationException("Unexpected role in role read-tool test.")
             };
             Assert.All(json.EnumerateArray(), row => Assert.Equal(fields.Order(), row.EnumerateObject().Select(p => p.Name).Order()));
             if (role is AiActorRole.Receptionist or AiActorRole.Doctor or AiActorRole.DiagnosticTechnician)
@@ -128,12 +127,11 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
 
     [Theory]
     [MemberData(nameof(ToolRoles))]
-    public async Task Missing_facility_or_patient_owner_fails_closed(string name, AiActorRole role)
+    public async Task Missing_facility_fails_closed(string name, AiActorRole role)
     {
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var actor = role == AiActorRole.Patient ? Guid.NewGuid() : Actor(role);
-        var result = await Executor(scope, db, role, actor, long.MaxValue).ExecuteAsync(Invocation(name));
+        var result = await Executor(scope, db, role, Actor(role), long.MaxValue).ExecuteAsync(Invocation(name));
         Assert.Equal("FACILITY_SCOPE_REQUIRED", result.Error?.Code);
         Assert.Null(result.Data);
     }
@@ -199,7 +197,6 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
     [InlineData("doctor.get_my_appointments_today", AiActorRole.Doctor, 100)]
     [InlineData("technician.get_completed_today", AiActorRole.DiagnosticTechnician, 100)]
     [InlineData("pharmacist.get_low_stock", AiActorRole.Pharmacist, 100)]
-    [InlineData("patient.get_my_invoices", AiActorRole.Patient, 20)]
     public async Task Read_lists_enforce_server_limits(string name, AiActorRole role, int limit)
     {
         using var scope = Factory.Services.CreateScope();
@@ -213,7 +210,6 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
             switch (role)
             {
                 case AiActorRole.Receptionist:
-                case AiActorRole.Patient:
                     var invoice = Invoice(visit.Id, InvoiceStatus.Unpaid, null);
                     invoice.CreatedAtUtc = new DateTime(2101, 1, 1, 0, 0, i, DateTimeKind.Utc);
                     db.Invoices.Add(invoice);
@@ -233,11 +229,6 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
         Assert.True(result.Status == "completed", JsonSerializer.Serialize(result.Error));
         var rows = JsonSerializer.SerializeToElement(result.Data, JsonOptions).EnumerateArray().ToArray();
         Assert.Equal(limit, rows.Length);
-        if (role == AiActorRole.Patient)
-        {
-            Assert.All(rows, row => Assert.Equal(2101, row.GetProperty("createdAtUtc").GetDateTime().Year));
-            Assert.True(rows[0].GetProperty("createdAtUtc").GetDateTime() >= rows[^1].GetProperty("createdAtUtc").GetDateTime());
-        }
     }
 
     [Fact]
@@ -337,7 +328,7 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
     private static async Task<string> SeedToolDataAsync(AppDbContext db, ScopeData data, string name)
     {
         var expected = Code();
-        if (name.Contains("revenue") || name.Contains("payments") || name.Contains("invoices"))
+        if (name.Contains("revenue") || name.Contains("payments"))
         {
             var visit = Visit(data.Facility.Id, data.Department.Id);
             var foreign = Visit(data.ForeignFacility.Id, data.ForeignDepartment.Id);

@@ -11,7 +11,6 @@ results with a source label; no tool accepts authorization fields from a model.
 | `doctor.get_my_appointments_today` | Doctor | Read | Own doctor + active doctor facility scope | No | Today's non-cancelled/non-completed appointments |
 | `technician.get_completed_today` | DiagnosticTechnician | Read | Active technician department and facility assignment | No | Today's completed diagnostic orders |
 | `pharmacist.get_low_stock` | Pharmacist | Read | Active pharmacist facility assignment; global stock, not separated by facility | No | Active low-stock medicines, maximum 100 |
-| `patient.get_my_invoices` | Patient | Read | Own patient derived from authenticated user | No | Latest 20 own invoices |
 | `clinic.search_specialties` | All | Read | Public catalog | No | Specialty service |
 | `clinic.search_doctors` | All | Read | Public catalog | No | Doctor service |
 | `clinic.get_available_slots` | All | Read | Availability policy | No | Slot/leave/appointment policy |
