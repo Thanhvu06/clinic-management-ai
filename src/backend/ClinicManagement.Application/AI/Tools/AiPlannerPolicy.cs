@@ -11,6 +11,12 @@ public static class AiPlannerPolicy
     public static IReadOnlySet<string> AllowedToolNames { get; } = new[]
     {
         "clinic.search_knowledge",
+        "admin.get_revenue_summary",
+        "reception.get_pending_payments",
+        "doctor.get_my_appointments_today",
+        "technician.get_completed_today",
+        "pharmacist.get_low_stock",
+        "patient.get_my_invoices",
         "clinic.search_specialties",
         "clinic.search_doctors",
         "clinic.get_available_slots",

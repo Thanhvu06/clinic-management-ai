@@ -61,6 +61,12 @@ public sealed class AiPhase12ContractTests : IntegrationTestBase
         Assert.Contains("technician.get_worklist", AiPlannerPolicy.AllowedToolNames);
         Assert.Contains("pharmacist.get_prescription_queue", AiPlannerPolicy.AllowedToolNames);
         Assert.Contains("admin.get_dashboard_metrics", AiPlannerPolicy.AllowedToolNames);
+        Assert.Contains("admin.get_revenue_summary", AiPlannerPolicy.AllowedToolNames);
+        Assert.Contains("reception.get_pending_payments", AiPlannerPolicy.AllowedToolNames);
+        Assert.Contains("doctor.get_my_appointments_today", AiPlannerPolicy.AllowedToolNames);
+        Assert.Contains("technician.get_completed_today", AiPlannerPolicy.AllowedToolNames);
+        Assert.Contains("pharmacist.get_low_stock", AiPlannerPolicy.AllowedToolNames);
+        Assert.Contains("patient.get_my_invoices", AiPlannerPolicy.AllowedToolNames);
         Assert.DoesNotContain(AiPlannerPolicy.AllowedToolNames, name => name.Contains("prepare", StringComparison.OrdinalIgnoreCase) || name.Contains("execute", StringComparison.OrdinalIgnoreCase));
         Assert.False(AiPlannerPolicy.IsAllowed("patient.prepare_cancel_appointment"));
         Assert.True(AiPlannerPolicy.IsAllowed("CLINIC.GET_PRICING"));

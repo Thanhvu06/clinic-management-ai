@@ -212,8 +212,8 @@ public sealed class AiProviderHttpDiagnosticTests
     }
 
     [Theory]
-    [InlineData(AiActorRole.Patient, 12)]
-    [InlineData(AiActorRole.DiagnosticTechnician, 2)]
+    [InlineData(AiActorRole.Patient, 13)]
+    [InlineData(AiActorRole.DiagnosticTechnician, 3)]
     public async Task Schema_metrics_match_the_schema_actually_sent_and_appear_only_on_http_rejection(AiActorRole role, int expectedTools)
     {
         using var handler = new CapturingHandler(HttpStatusCode.BadRequest, GoogleError(400, "INVALID_ARGUMENT", ResponseFormatField));
@@ -292,7 +292,7 @@ public sealed class AiProviderHttpDiagnosticTests
             Assert.True(roleCase.RequestSchemaMaxDepth > 0);
         }
         var patient = Assert.Single(report.Cases, x => x.CaseId == "patient-http-read");
-        Assert.Equal(12, patient.RequestSchemaToolBranches);
+        Assert.Equal(13, patient.RequestSchemaToolBranches);
         Assert.Equal(10, patient.RequestSchemaMaxDepth);
 
         var legacy = Assert.Single(report.Cases, x => x.CaseId == "patient-legacy-http-read");
@@ -328,7 +328,7 @@ public sealed class AiProviderHttpDiagnosticTests
         Assert.Equal("UnknownField", diagnostic.GetProperty("providerRejectionKind").GetString());
         Assert.Equal("additionalProperties", diagnostic.GetProperty("providerRejectedName").GetString());
         Assert.Equal(sanitizedPath, diagnostic.GetProperty("providerRejectedFieldPath").GetString());
-        Assert.Equal(12, diagnostic.GetProperty("requestSchemaToolBranches").GetInt32());
+        Assert.Equal(13, diagnostic.GetProperty("requestSchemaToolBranches").GetInt32());
 
         var providerLog = new ListLogger<GeminiAiProvider>();
         var planned = await CreateProvider(handler, 1, providerLog).PlanRoleCopilotAsync(new AiRolePlannerProviderRequest
