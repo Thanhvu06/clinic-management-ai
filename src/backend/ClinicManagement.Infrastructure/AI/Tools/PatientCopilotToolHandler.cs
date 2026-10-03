@@ -243,7 +243,7 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
     private async Task<AiToolExecutionResult> GetAvailableSlotsAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken)
     {
         var args = Parse(invocation.ArgumentsJson);
-        var from = GetDate(args, "fromDate") ?? DateOnly.FromDateTime(_dateTimeProvider.UtcNow);
+        var from = GetDate(args, "fromDate") ?? _dateTimeProvider.VietnamToday;
         var to = GetDate(args, "toDate") ?? from.AddDays(14);
         if (to < from || to.DayNumber - from.DayNumber > 31) return AiToolExecutionResult.Failed("INVALID_DATE_RANGE", "Khoảng ngày tìm slot không hợp lệ.");
         var patientId = await ResolvePatientIdAsync(context.ActorId, cancellationToken);
@@ -509,7 +509,7 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
             ActionId = Guid.NewGuid(), UserId = context.ActorId.Value, ActorRole = AiActorRole.Patient.ToString(), SessionId = context.SessionId!.Trim(),
             ToolName = $"patient.prepare_{operation}_appointment", ToolVersion = "1.0",
             RequestHash = requestHash, ResourceType = "appointment", ResourceId = appointment.Id.ToString(),
-            NormalizedArgumentsJson = JsonSerializer.Serialize(new { appointmentId = appointment.Id, requestedSlotId }),
+            NormalizedArgumentsJson = JsonSerializer.Serialize(new { appointmentId = appointment.Id, requestedSlotId, reason = GetString(args, "reason") }),
             CreatedAtUtc = now, ExpiresAtUtc = now.AddMinutes(12), State = AiPendingToolActionState.PendingConfirmation,
             IdempotencyKeyHash = string.IsNullOrWhiteSpace(invocation.IdempotencyKey) ? null : idempotencyHash
         };
@@ -605,8 +605,8 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
             // Revalidate through the canonical appointment/change-request services.
             await _appointments.GetPatientAppointmentByIdAsync(appointmentId.Value);
             var result = isReschedule
-                ? await _changeRequests.CreateRescheduleRequestAsync(appointmentId.Value, new CreateRescheduleRequestDto { RequestedSlotId = GetLong(stored, "requestedSlotId") ?? 0, Reason = "Yêu cầu đổi lịch từ Patient Copilot" }, action.ActionId)
-                : await _changeRequests.CreateCancellationRequestAsync(appointmentId.Value, new CreateCancellationRequestDto { Reason = "Yêu cầu hủy lịch từ Patient Copilot" }, action.ActionId);
+                ? await _changeRequests.CreateRescheduleRequestAsync(appointmentId.Value, new CreateRescheduleRequestDto { RequestedSlotId = GetLong(stored, "requestedSlotId") ?? 0, Reason = GetString(stored, "reason") ?? "Yêu cầu đổi lịch từ Patient Copilot" }, action.ActionId)
+                : await _changeRequests.CreateCancellationRequestAsync(appointmentId.Value, new CreateCancellationRequestDto { Reason = GetString(stored, "reason") ?? "Yêu cầu hủy lịch từ Patient Copilot" }, action.ActionId);
 
             var completed = await _db.AiPendingToolActions
                 .Where(x => x.ActionId == actionId && x.ExecutionLeaseId == leaseId && x.State == AiPendingToolActionState.Executing)

@@ -46,6 +46,9 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     options.Password.RequireUppercase = true;
     options.Password.RequireNonAlphanumeric = true;
     options.Password.RequiredLength = 8;
+    options.Lockout.AllowedForNewUsers = true;
+    options.Lockout.MaxFailedAccessAttempts = 5;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
 })
 .AddRoles<IdentityRole<Guid>>()
 .AddEntityFrameworkStores<AppDbContext>()
@@ -60,6 +63,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    var jwt = JwtConfiguration.Read(builder.Configuration, builder.Environment);
     options.RequireHttpsMetadata = false;
     options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
@@ -68,14 +72,27 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "ClinicCareServer",
-        ValidAudience = builder.Configuration["Jwt:Audience"] ?? "ClinicCareClient",
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? "ClinicCareDevelopmentSecretKey2026MustBeAtLeast32BytesLong!")),
+        ValidIssuer = jwt.Issuer,
+        ValidAudience = jwt.Audience,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Key)),
         ClockSkew = TimeSpan.Zero
     };
 
     options.Events = new JwtBearerEvents
     {
+        OnTokenValidated = async context =>
+        {
+            var subject = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? context.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+            if (!Guid.TryParse(subject, out var userId))
+            {
+                context.Fail("Invalid user.");
+                return;
+            }
+            var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+            if (!await db.Users.AsNoTracking().AnyAsync(u => u.Id == userId && u.IsActive, context.HttpContext.RequestAborted))
+                context.Fail("Invalid user.");
+        },
         OnChallenge = context =>
         {
             context.HandleResponse();
@@ -209,6 +226,19 @@ builder.Services.AddRateLimiter(options =>
         await context.HttpContext.Response.WriteAsync("{\"success\":false,\"message\":\"Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.\",\"data\":null}", token);
     };
 
+    options.AddPolicy("AuthPolicy", httpContext =>
+        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ =>
+                new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = builder.Environment.IsEnvironment("Testing")
+                        ? Math.Max(1, builder.Configuration.GetValue<int?>("AuthRateLimiting:TestingPermitLimit") ?? 10000)
+                        : 10,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst
+                }));
+
     options.AddPolicy("AiChatPolicy", httpContext =>
     {
         var partitionKey = AiRateLimitPartitioning.GetPartitionKey(httpContext);
@@ -241,6 +271,8 @@ builder.Services.AddOpenApi();
 builder.Services.AddCors();
 
 var app = builder.Build();
+// Validate configuration before database work or accepting any requests.
+JwtConfiguration.Read(app.Configuration, app.Environment);
 // Eager singleton validation: a missing/mismatched artifact disables only the model.
 app.Services.GetRequiredService<ClinicManagement.Infrastructure.AI.RoleIntentModel>();
 

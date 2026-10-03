@@ -159,16 +159,18 @@ public class FacilityAuthorizationService : IFacilityAuthorizationService
             .Where(i => i.Id == invoiceId)
             .Select(i => new { 
                 i.Id, 
-                VisitFacilityId = (long?)(i.PatientVisit != null ? i.PatientVisit.FacilityId : null)
+                VisitFacilityId = (long?)(i.PatientVisit != null ? i.PatientVisit.FacilityId : null),
+                AppointmentFacilityId = i.Appointment != null ? i.Appointment.FacilityId : null
             })
             .FirstOrDefaultAsync(cancellationToken);
 
         if (invoice == null)
             throw new NotFoundException("Hóa đơn không tồn tại.");
 
-        if (invoice.VisitFacilityId.HasValue && invoice.VisitFacilityId.Value > 0)
+        var facilityId = invoice.VisitFacilityId ?? invoice.AppointmentFacilityId;
+        if (facilityId.HasValue && facilityId.Value > 0)
         {
-            await ValidateUserFacilityAccessAsync(userId, invoice.VisitFacilityId.Value, cancellationToken);
+            await ValidateUserFacilityAccessAsync(userId, facilityId.Value, cancellationToken);
         }
     }
 

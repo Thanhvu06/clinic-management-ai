@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Billing.DTOs;
 using ClinicManagement.Application.Billing.Interfaces;
+using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
@@ -28,23 +29,27 @@ public class BillingService : IBillingService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<BillingService> _logger;
     private readonly IFacilityAuthorizationService _facilityAuthService;
+    private readonly ICurrentUserService _currentUserService;
 
     public BillingService(
         AppDbContext dbContext,
         INotificationService notificationService,
         IDateTimeProvider dateTimeProvider,
         ILogger<BillingService> logger,
-        IFacilityAuthorizationService facilityAuthService)
+        IFacilityAuthorizationService facilityAuthService,
+        ICurrentUserService currentUserService)
     {
         _dbContext = dbContext;
         _notificationService = notificationService;
         _dateTimeProvider = dateTimeProvider;
         _logger = logger;
         _facilityAuthService = facilityAuthService;
+        _currentUserService = currentUserService;
     }
 
     public async Task<InvoiceDetailDto> CreateInvoiceFromAppointmentAsync(long appointmentId, Guid createdByUserId, CancellationToken cancellationToken = default)
     {
+        await _facilityAuthService.ValidateAppointmentAccessAsync(createdByUserId, appointmentId, cancellationToken);
         var appointment = await _dbContext.Appointments
             .Include(a => a.Patient)
             .Include(a => a.Doctor)
@@ -161,6 +166,7 @@ public class BillingService : IBillingService
 
     public async Task<InvoiceDetailDto> CreateInvoiceFromVisitAsync(long visitId, Guid createdByUserId, CancellationToken cancellationToken = default)
     {
+        await _facilityAuthService.ValidateVisitAccessAsync(createdByUserId, visitId, cancellationToken);
         var visit = await _dbContext.PatientVisits
             .Include(v => v.Patient)
             .Include(v => v.Department)
@@ -186,7 +192,7 @@ public class BillingService : IBillingService
             throw new BusinessException("PENDING_INVOICE_EXISTS", "Lượt khám đang có hóa đơn chưa thanh toán. Vui lòng thanh toán hoặc hủy hóa đơn trước khi lập hóa đơn mới.");
 
         var alreadyBilledItems = await _dbContext.InvoiceItems
-            .Where(ii => !ii.IsCancelled)
+            .Where(ii => !ii.IsCancelled && ii.Invoice.Status != InvoiceStatus.Cancelled)
             .Where(ii => ii.Invoice.PatientVisitId == visitId || (visit.AppointmentId.HasValue && ii.Invoice.AppointmentId == visit.AppointmentId.Value))
             .Select(ii => new { ii.ReferenceType, ii.ReferenceId })
             .ToListAsync(cancellationToken);
@@ -312,6 +318,14 @@ public class BillingService : IBillingService
 
             try
             {
+                // Older cancelled invoices may still hold the filtered unique charge index.
+                // Release those rows in the same transaction as re-billing this visit.
+                await _dbContext.InvoiceItems
+                    .Where(ii => !ii.IsCancelled && ii.Invoice.Status == InvoiceStatus.Cancelled &&
+                        (ii.Invoice.PatientVisitId == visitId ||
+                         (visit.AppointmentId.HasValue && ii.Invoice.AppointmentId == visit.AppointmentId.Value)))
+                    .ExecuteUpdateAsync(setters => setters.SetProperty(ii => ii.IsCancelled, true), cancellationToken);
+
                 var invoice = new Invoice
                 {
                     InvoiceCode = GenerateInvoiceCode(),
@@ -419,9 +433,9 @@ public class BillingService : IBillingService
             v.Status == VisitStatus.InBilling
             || _dbContext.Invoices.Any(i => i.PatientVisitId == v.Id && i.Status == InvoiceStatus.Unpaid)
             || ((v.Department != null && v.Department.Specialty != null && v.Department.Specialty.ConsultationFee > 0)
-                && !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "Consultation" && ii.ReferenceId == v.Id))
-            || v.DiagnosticOrders.Any(o => o.Status != DiagnosticOrderStatus.Cancelled && o.Items.Any(i => i.Status != DiagnosticItemStatus.Cancelled && !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.ReferenceType == "DiagnosticItem" && ii.ReferenceId == i.Id)))
-            || v.Prescriptions.Any(p => (p.Status == PrescriptionStatus.ReservedForPurchase || p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.Dispensed) && p.Items.Any(pi => !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && (((ii.ReferenceType == "PrescriptionItem:v2" || ii.ReferenceType == "PrescriptionItem") && ii.ReferenceId == p.Id * 4294967296L + pi.MedicineId) || (ii.ReferenceType == "PrescriptionItem" && (ii.ReferenceId == p.Id * 100000L + pi.MedicineId || ii.ReferenceId == p.Id))))))
+                && !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.Invoice.Status != InvoiceStatus.Cancelled && ii.ReferenceType == "Consultation" && ii.ReferenceId == v.Id))
+            || v.DiagnosticOrders.Any(o => o.Status != DiagnosticOrderStatus.Cancelled && o.Items.Any(i => i.Status != DiagnosticItemStatus.Cancelled && !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.Invoice.Status != InvoiceStatus.Cancelled && ii.ReferenceType == "DiagnosticItem" && ii.ReferenceId == i.Id)))
+            || v.Prescriptions.Any(p => (p.Status == PrescriptionStatus.ReservedForPurchase || p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.Dispensed) && p.Items.Any(pi => !_dbContext.InvoiceItems.Any(ii => !ii.IsCancelled && ii.Invoice.Status != InvoiceStatus.Cancelled && (((ii.ReferenceType == "PrescriptionItem:v2" || ii.ReferenceType == "PrescriptionItem") && ii.ReferenceId == p.Id * 4294967296L + pi.MedicineId) || (ii.ReferenceType == "PrescriptionItem" && (ii.ReferenceId == p.Id * 100000L + pi.MedicineId || ii.ReferenceId == p.Id))))))
         );
 
         var totalCount = await baseQuery.CountAsync(cancellationToken);
@@ -447,7 +461,7 @@ public class BillingService : IBillingService
         var visitIds = visits.Select(v => v.Id).ToList();
 
         var billedItemKeys = await _dbContext.InvoiceItems
-            .Where(ii => !ii.IsCancelled)
+            .Where(ii => !ii.IsCancelled && ii.Invoice.Status != InvoiceStatus.Cancelled)
             .Where(ii => ii.Invoice.PatientVisitId.HasValue && visitIds.Contains(ii.Invoice.PatientVisitId.Value))
             .Select(ii => new { VisitId = ii.Invoice.PatientVisitId!.Value, Key = $"{ii.ReferenceType}:{ii.ReferenceId}" })
             .ToListAsync(cancellationToken);
@@ -684,6 +698,7 @@ public class BillingService : IBillingService
 
     public async Task<PaymentDto> ProcessPaymentAsync(long invoiceId, ProcessPaymentRequest request, Guid receivedByUserId, CancellationToken cancellationToken = default)
     {
+        await _facilityAuthService.ValidateInvoiceAccessAsync(receivedByUserId, invoiceId, cancellationToken);
         if (!Enum.IsDefined(typeof(PaymentMethod), request.Method))
             throw new BusinessException("INVALID_PAYMENT_METHOD", "Phương thức thanh toán không hợp lệ.");
 
@@ -832,12 +847,14 @@ public class BillingService : IBillingService
 
     public async Task<InvoiceDetailDto> CancelInvoiceAsync(long invoiceId, string reason, Guid cancelledByUserId, CancellationToken cancellationToken = default)
     {
+        await _facilityAuthService.ValidateInvoiceAccessAsync(cancelledByUserId, invoiceId, cancellationToken);
         if (string.IsNullOrWhiteSpace(reason))
             throw new BusinessException("REASON_REQUIRED", "Vui lòng nhập lý do hủy hóa đơn.");
 
         var invoice = await _dbContext.Invoices
             .Include(i => i.Patient)
             .Include(i => i.Payments)
+            .Include(i => i.Items)
             .FirstOrDefaultAsync(i => i.Id == invoiceId, cancellationToken);
 
         if (invoice == null)
@@ -850,6 +867,8 @@ public class BillingService : IBillingService
             throw new BusinessException("ALREADY_CANCELLED", "Hóa đơn này đã bị hủy trước đó.");
 
         invoice.Status = InvoiceStatus.Cancelled;
+        // Release the filtered unique charge index together with cancellation.
+        foreach (var item in invoice.Items) item.IsCancelled = true;
         invoice.CancelledAtUtc = DateTime.UtcNow;
         invoice.CancellationReason = reason.Trim();
 
@@ -885,7 +904,7 @@ public class BillingService : IBillingService
 
     public async Task<PagedResult<InvoiceDto>> GetReceptionInvoicesAsync(InvoiceFilterParams filters, CancellationToken cancellationToken = default)
     {
-        var query = _dbContext.Invoices
+        var query = (await GetAccessibleInvoicesAsync(cancellationToken))
             .Include(i => i.Patient)
             .Include(i => i.Appointment)
             .Include(i => i.PatientVisit)
@@ -959,6 +978,8 @@ public class BillingService : IBillingService
 
     public async Task<InvoiceDetailDto> GetInvoiceDetailAsync(long invoiceId, CancellationToken cancellationToken = default)
     {
+        if (_currentUserService.UserId is Guid userId && userId != Guid.Empty)
+            await _facilityAuthService.ValidateInvoiceAccessAsync(userId, invoiceId, cancellationToken);
         var invoice = await _dbContext.Invoices
             .Include(i => i.Patient)
             .Include(i => i.Appointment)
@@ -1053,20 +1074,22 @@ public class BillingService : IBillingService
 
     public async Task<BillingKpiDto> GetTodayKpiAsync(CancellationToken cancellationToken = default)
     {
+        var invoices = await GetAccessibleInvoicesAsync(cancellationToken);
         var todayVn = _dateTimeProvider.VietnamToday;
         var startUtc = _dateTimeProvider.ConvertVietnamToUtc(todayVn.ToDateTime(TimeOnly.MinValue));
         var endUtc = _dateTimeProvider.ConvertVietnamToUtc(todayVn.ToDateTime(TimeOnly.MaxValue));
 
-        var unpaidCount = await _dbContext.Invoices
+        var unpaidCount = await invoices
             .CountAsync(i => i.Status == InvoiceStatus.Unpaid && i.CreatedAtUtc >= startUtc && i.CreatedAtUtc <= endUtc, cancellationToken);
 
-        var paidCount = await _dbContext.Invoices
+        var paidCount = await invoices
             .CountAsync(i => i.Status == InvoiceStatus.Paid && i.PaidAtUtc.HasValue && i.PaidAtUtc >= startUtc && i.PaidAtUtc <= endUtc, cancellationToken);
 
-        var cancelledCount = await _dbContext.Invoices
+        var cancelledCount = await invoices
             .CountAsync(i => i.Status == InvoiceStatus.Cancelled && i.CancelledAtUtc.HasValue && i.CancelledAtUtc >= startUtc && i.CancelledAtUtc <= endUtc, cancellationToken);
 
         var todayRevenue = await _dbContext.Payments
+            .Where(p => invoices.Any(i => i.Id == p.InvoiceId))
             .Where(p => p.Status == PaymentStatus.Succeeded && p.ReceivedAtUtc >= startUtc && p.ReceivedAtUtc <= endUtc)
             .SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0m;
 
@@ -1081,6 +1104,7 @@ public class BillingService : IBillingService
 
     public async Task<RevenueReportDto> GetRevenueReportAsync(DateOnly? fromDate, DateOnly? toDate, CancellationToken cancellationToken = default)
     {
+        var invoices = await GetAccessibleInvoicesAsync(cancellationToken);
         var end = toDate ?? _dateTimeProvider.VietnamToday;
         var start = fromDate ?? end.AddDays(-29);
 
@@ -1097,6 +1121,7 @@ public class BillingService : IBillingService
 
         var succeededPayments = await _dbContext.Payments
             .AsNoTracking()
+            .Where(p => invoices.Any(i => i.Id == p.InvoiceId))
             .Where(p => p.Status == PaymentStatus.Succeeded && p.ReceivedAtUtc >= startUtc && p.ReceivedAtUtc <= endUtc)
             .ToListAsync(cancellationToken);
 
@@ -1125,7 +1150,7 @@ public class BillingService : IBillingService
         }
 
         // Status breakdown of invoices created in this range
-        var invoicesInRange = await _dbContext.Invoices
+        var invoicesInRange = await invoices
             .AsNoTracking()
             .Where(i => i.CreatedAtUtc >= startUtc && i.CreatedAtUtc <= endUtc)
             .ToListAsync(cancellationToken);
@@ -1201,6 +1226,20 @@ public class BillingService : IBillingService
             ConsultationFee = specialty.ConsultationFee,
             IsActive = specialty.IsActive
         };
+    }
+
+    private async Task<IQueryable<Invoice>> GetAccessibleInvoicesAsync(CancellationToken cancellationToken)
+    {
+        var query = _dbContext.Invoices.AsQueryable();
+        var userId = _currentUserService.UserId ?? Guid.Empty;
+        // Background seed/service calls have no HTTP actor. HTTP endpoints require authentication.
+        if (userId == Guid.Empty || await _facilityAuthService.HasFullFacilityAccessAsync(userId, cancellationToken)) return query;
+        var facilities = await _facilityAuthService.GetUserAccessibleFacilityIdsAsync(userId, cancellationToken);
+        return query.Where(i => i.PatientVisit != null
+            ? facilities.Contains(i.PatientVisit.FacilityId)
+            : i.Appointment != null && i.Appointment.FacilityId.HasValue
+                ? facilities.Contains(i.Appointment.FacilityId.Value)
+                : true); // Preserve package/legacy invoices with no determinable facility.
     }
 
     private static void ValidatePayableInvoice(Invoice invoice, decimal amount)
