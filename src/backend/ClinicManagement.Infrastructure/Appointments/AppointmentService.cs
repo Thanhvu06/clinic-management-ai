@@ -56,6 +56,15 @@ public class AppointmentService : IAppointmentService
         if (!ClinicManagement.Application.AI.DTOs.AiActionValidator.IsValidBookingReason(normalizedReason))
             throw new BusinessException("VALIDATION_ERROR", "Lý do khám không hợp lệ. Vui lòng nhập triệu chứng hoặc nhu cầu khám cụ thể.");
 
+        // Validate the doctor account before either idempotency return path.
+        var bookingDoctorUserId = await _dbContext.Doctors
+            .AsNoTracking()
+            .Where(d => d.Id == request.DoctorId && d.IsActive && _dbContext.Users.Any(u => u.Id == d.UserId && u.IsActive))
+            .Select(d => (Guid?)d.UserId)
+            .FirstOrDefaultAsync();
+        if (!bookingDoctorUserId.HasValue || bookingDoctorUserId.Value == Guid.Empty)
+            throw new NotFoundException("Bác sĩ không tồn tại hoặc đã ngừng hoạt động.");
+
         // Idempotency Key check: Return existing appointment if retry with identical payload; Conflict if payload changed
         string? idempotencyKey = request.IdempotencyKey?.Trim();
         var payloadHash = ComputePayloadHash(request);
@@ -96,14 +105,6 @@ public class AppointmentService : IAppointmentService
 
         if (patient.Gender == null || patient.DateOfBirth == null)
             throw new BusinessException("VALIDATION_ERROR", "Vui lòng cập nhật đầy đủ Giới tính và Ngày sinh trước khi đặt lịch.");
-
-        var bookingDoctorUserId = await _dbContext.Doctors
-            .AsNoTracking()
-            .Where(d => d.Id == request.DoctorId && d.IsActive)
-            .Select(d => (Guid?)d.UserId)
-            .FirstOrDefaultAsync();
-        if (!bookingDoctorUserId.HasValue || bookingDoctorUserId.Value == Guid.Empty)
-            throw new NotFoundException("Bác sĩ không tồn tại hoặc đã ngừng hoạt động.");
 
         // A doctor can have active assignments at several facilities. Bind the
         // appointment to a real facility now; do not infer it later from an
@@ -855,28 +856,23 @@ public class AppointmentService : IAppointmentService
             if (curr is DbUpdateConcurrencyException)
                 return true;
 
-            var typeName = curr.GetType().FullName ?? string.Empty;
-            if (typeName.Contains("SqliteException", StringComparison.OrdinalIgnoreCase) ||
-                typeName.Contains("SqlException", StringComparison.OrdinalIgnoreCase))
-            {
+            if (curr is Microsoft.Data.SqlClient.SqlException sql && sql.Number is 1205 or 1222 or 3960 or 3961)
                 return true;
-            }
+            if (curr is Microsoft.Data.Sqlite.SqliteException sqlite && sqlite.SqliteErrorCode is 5 or 6)
+                return true;
 
-            var msg = curr.Message;
-            if (msg.Contains("concurrency", StringComparison.OrdinalIgnoreCase) ||
-                msg.Contains("conflict", StringComparison.OrdinalIgnoreCase) ||
-                msg.Contains("deadlock", StringComparison.OrdinalIgnoreCase) ||
-                msg.Contains("database is locked", StringComparison.OrdinalIgnoreCase) ||
-                msg.Contains("busy", StringComparison.OrdinalIgnoreCase) ||
-                msg.Contains("snapshot", StringComparison.OrdinalIgnoreCase) ||
-                msg.Contains("unique constraint", StringComparison.OrdinalIgnoreCase))
+            // EF entries identify the affected aggregate; unrelated unique failures
+            // (for example notification/idempotency rows) are not slot conflicts.
+            if (curr is DbUpdateException update && update.Entries.Count > 0 && update.Entries.All(e => e.Entity is Appointment or AppointmentSlot))
             {
-                return true;
-            }
-
-            if (curr is DbUpdateException)
-            {
-                return true;
+                for (var cause = update.InnerException; cause != null; cause = cause.InnerException)
+                {
+                    if (cause is Microsoft.Data.SqlClient.SqlException uniqueSql && uniqueSql.Number is 2601 or 2627)
+                        return true;
+                    if (cause is Microsoft.Data.Sqlite.SqliteException uniqueSqlite &&
+                        uniqueSqlite.SqliteErrorCode == 19 && uniqueSqlite.SqliteExtendedErrorCode is 1555 or 2067)
+                        return true;
+                }
             }
 
             curr = curr.InnerException;

@@ -1,5 +1,7 @@
 using ClinicManagement.Application.AI.Tools;
+using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Models;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,12 +15,17 @@ public sealed class AiToolGatewayController : ControllerBase
     private readonly IAiToolRegistry _registry;
     private readonly IAiToolExecutor _executor;
     private readonly IAiPendingActionCancellationService _cancellation;
+    private readonly IAiCapabilityResolver _capabilityResolver;
+    private readonly ICurrentUserService _currentUser;
 
-    public AiToolGatewayController(IAiToolRegistry registry, IAiToolExecutor executor, IAiPendingActionCancellationService cancellation)
+    public AiToolGatewayController(IAiToolRegistry registry, IAiToolExecutor executor, IAiPendingActionCancellationService cancellation,
+        IAiCapabilityResolver capabilityResolver, ICurrentUserService currentUser)
     {
         _registry = registry;
         _executor = executor;
         _cancellation = cancellation;
+        _capabilityResolver = capabilityResolver;
+        _currentUser = currentUser;
     }
 
     [HttpPost("/api/v1/ai/tool-actions/{actionId:guid}/cancel")]
@@ -31,7 +38,31 @@ public sealed class AiToolGatewayController : ControllerBase
 
     [HttpGet]
     [AllowAnonymous]
-    public IActionResult Catalog() => Ok(ApiResponse<IReadOnlyCollection<AiToolDefinition>>.Ok(_registry.GetDefinitions()));
+    public async Task<IActionResult> Catalog(CancellationToken cancellationToken)
+    {
+        var definitions = _registry.GetDefinitions();
+        var actorId = _currentUser.UserId;
+        if (User.Identity?.IsAuthenticated != true || !actorId.HasValue || actorId.Value == Guid.Empty)
+            return Ok(ApiResponse<IReadOnlyCollection<AiToolDefinition>>.Ok(definitions.Where(d => d.AccessMode == AiToolAccessMode.Public).ToArray()));
+
+        var roles = new HashSet<AiActorRole>();
+        foreach (var claim in User.FindAll(ClaimTypes.Role))
+        {
+            if (Enum.TryParse<AiActorRole>(claim.Value, true, out var role)) roles.Add(role);
+            else if (string.Equals(claim.Value, "Diagnostic Technician", StringComparison.OrdinalIgnoreCase)) roles.Add(AiActorRole.DiagnosticTechnician);
+        }
+        var facilityClaim = User.FindFirst("facility_id")?.Value;
+        var capabilities = await _capabilityResolver.ResolveAsync(new AiToolExecutionContext
+        {
+            ActorId = actorId,
+            IsAuthenticated = true,
+            Roles = roles,
+            FacilityId = long.TryParse(facilityClaim, out var facilityId) && facilityId > 0 ? facilityId : null
+        }, cancellationToken);
+        return Ok(ApiResponse<IReadOnlyCollection<AiToolDefinition>>.Ok(definitions
+            .Where(d => (d.AccessMode != AiToolAccessMode.RoleRestricted || d.AllowedRoles.Any(roles.Contains)) &&
+                        d.Capabilities.All(capabilities.Contains)).ToArray()));
+    }
 
     [HttpPost("execute")]
     [AllowAnonymous]

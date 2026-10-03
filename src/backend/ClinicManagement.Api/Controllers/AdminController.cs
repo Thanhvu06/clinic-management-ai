@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using ClinicManagement.Application.Admin.DTOs;
 using ClinicManagement.Application.Admin.Interfaces;
 using ClinicManagement.Application.Common.Constants;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -30,9 +31,9 @@ public class AdminController : ControllerBase
     }
 
     [HttpGet("stats")]
-    public async Task<IActionResult> GetStats([FromServices] AppDbContext dbContext)
+    public async Task<IActionResult> GetStats([FromServices] AppDbContext dbContext, [FromServices] IDateTimeProvider dateTimeProvider)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = dateTimeProvider.VietnamToday;
         var totalPatients = await dbContext.Patients.CountAsync();
         var totalDoctors = await dbContext.Doctors.CountAsync();
         var totalAppointmentsToday = await dbContext.Appointments.CountAsync(a => a.AppointmentDate == today);
@@ -63,6 +64,8 @@ public class AdminController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 15)
     {
+        page = Math.Max(1, page);
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
         var query = from l in dbContext.SystemAuditLogs.AsNoTracking()
                     join u in dbContext.Users.AsNoTracking() on l.UserId equals u.Id into uJoin
                     from user in uJoin.DefaultIfEmpty()

@@ -32,6 +32,8 @@ public class AdminUserService : IAdminUserService
 
     public async Task<PagedResult<UserDto>> GetUsersAsync(string? role, bool? isActive, string? search, int page, int pageSize)
     {
+        page = Math.Max(1, page);
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
         var query = _userManager.Users.AsNoTracking();
 
         if (isActive.HasValue)
@@ -109,8 +111,7 @@ public class AdminUserService : IAdminUserService
 
     public async Task<UserDto> CreateStaffUserAsync(CreateStaffUserDto request)
     {
-        // Only allow creating Doctor, Receptionist, Admin
-        if (request.Role != RoleNames.Doctor && request.Role != RoleNames.Receptionist && request.Role != RoleNames.Admin)
+        if (request.Role is not (RoleNames.Doctor or RoleNames.Receptionist or RoleNames.Admin or RoleNames.Pharmacist or RoleNames.DiagnosticTechnician))
         {
             throw new BusinessException("INVALID_ROLE", "Vai trò không hợp lệ để tạo tài khoản nhân sự.");
         }
@@ -118,6 +119,10 @@ public class AdminUserService : IAdminUserService
         var existingUser = await _userManager.FindByEmailAsync(request.Email);
         if (existingUser != null)
             throw new BusinessException("EMAIL_EXISTS", "Email đã tồn tại.");
+
+        if (!string.IsNullOrWhiteSpace(request.PhoneNumber) &&
+            await _userManager.Users.AnyAsync(u => u.PhoneNumber == request.PhoneNumber))
+            throw new ValidationException("PhoneNumber", "Số điện thoại đã được sử dụng.");
 
         var user = new ApplicationUser
         {
@@ -134,7 +139,13 @@ public class AdminUserService : IAdminUserService
         if (!result.Succeeded)
             throw new BusinessException("CREATE_FAILED", string.Join("; ", result.Errors.Select(e => e.Description)));
 
-        await _userManager.AddToRoleAsync(user, request.Role);
+        var roleResult = await _userManager.AddToRoleAsync(user, request.Role);
+        if (!roleResult.Succeeded)
+        {
+            var deleteResult = await _userManager.DeleteAsync(user);
+            var errors = roleResult.Errors.Concat(deleteResult.Errors);
+            throw new BusinessException("CREATE_FAILED", string.Join("; ", errors.Select(e => e.Description)));
+        }
 
         return new UserDto
         {

@@ -40,6 +40,7 @@ public class NotificationService : INotificationService
 
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 20;
+        pageSize = Math.Min(pageSize, 100);
 
         var query = _dbContext.Notifications
             .AsNoTracking()

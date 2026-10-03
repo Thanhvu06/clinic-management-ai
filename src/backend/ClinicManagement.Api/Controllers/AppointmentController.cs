@@ -23,6 +23,7 @@ public class AppointmentController : ControllerBase
 
     [AllowAnonymous]
     [HttpGet("lookup")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("AppointmentLookupPolicy")]
     public async Task<IActionResult> LookupAppointments([FromQuery] string query)
     {
         var results = await _appointmentService.LookupAppointmentsAsync(query);
