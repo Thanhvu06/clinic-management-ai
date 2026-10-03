@@ -263,7 +263,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                     phoneNumber: newPhone.trim() || undefined,
                     dateOfBirth: newDateOfBirth,
                     gender: newGender,
-                    identityCardNumber: newIdentityCard.trim() || undefined,
+                    nationalId: newIdentityCard.trim() || undefined,
                     address: newAddress.trim() || undefined,
                     allergies: allergies.filter(a => a.allergen.trim()).map(a => ({
                         allergen: a.allergen.trim(),
