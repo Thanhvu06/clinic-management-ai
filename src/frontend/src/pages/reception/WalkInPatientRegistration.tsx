@@ -665,6 +665,23 @@ export const WalkInPatientRegistration: React.FC = () => {
                                         />
                                     </div>
                                 </div>
+                                <div className="form-group">
+                                    <label htmlFor="emergency-contact-is-guardian" className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <input
+                                            id="emergency-contact-is-guardian"
+                                            type="checkbox"
+                                            checked={isGuardian}
+                                            onChange={(e) => setIsGuardian(e.target.checked)}
+                                            disabled={!contactPhone.trim()}
+                                        />
+                                        Người liên hệ này là người giám hộ của người bệnh
+                                    </label>
+                                    {!contactPhone.trim() && (
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--c-muted)', display: 'block' }}>
+                                            Nhập số điện thoại liên hệ để chọn.
+                                        </span>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Allergies list */}
