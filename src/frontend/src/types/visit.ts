@@ -60,7 +60,7 @@ export interface NewPatientProfileDto {
     dateOfBirth: string;
     gender: number;
     address?: string;
-    identityCardNumber?: string;
+    nationalId?: string;
     allergies?: PatientAllergyInputDto[];
     emergencyContact?: EmergencyContactInputDto;
 }

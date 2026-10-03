@@ -331,6 +331,50 @@ describe('Reception Workspace Rebuild', () => {
         });
     });
 
+    it('sends nationalId without identityCardNumber for new patient intake', async () => {
+        vi.mocked(patientVisitApi.receptionIntake).mockResolvedValue({
+            success: false,
+            message: 'Payload captured',
+        });
+
+        const { container } = render(
+            <MemoryRouter>
+                <DialogProvider>
+                    <WalkInPatientRegistration />
+                </DialogProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.click(screen.getByText(/Đăng ký hồ sơ người bệnh mới/i));
+        fireEvent.change(screen.getByPlaceholderText('VD: NGUYỄN VĂN A'), {
+            target: { value: 'Nguyễn Văn CCCD' },
+        });
+        fireEvent.change(screen.getByPlaceholderText('12 chữ số CCCD...'), {
+            target: { value: '079199001234' },
+        });
+        fireEvent.change(container.querySelector('input[type="date"]')!, {
+            target: { value: '1990-01-01' },
+        });
+        fireEvent.change(screen.getAllByPlaceholderText('09xx xxx xxx')[0], {
+            target: { value: '0901234567' },
+        });
+        fireEvent.click(screen.getByText(/Tiếp tục: Chuẩn bị lượt khám/i));
+
+        await waitFor(() => expect(screen.getByText('Chuẩn Bị Lượt Khám')).toBeInTheDocument());
+        fireEvent.change(screen.getByPlaceholderText(/Mô tả lý do đến khám/i), {
+            target: { value: 'Khám sức khỏe định kỳ' },
+        });
+        fireEvent.click(screen.getByText(/Tiếp tục: Xác nhận thông tin/i));
+
+        await waitFor(() => expect(screen.getByText('Xác Nhận & Cấp STT')).toBeInTheDocument());
+        fireEvent.click(screen.getByText(/Xác nhận tiếp nhận & Cấp STT/i));
+
+        await waitFor(() => expect(patientVisitApi.receptionIntake).toHaveBeenCalledTimes(1));
+        const [payload] = vi.mocked(patientVisitApi.receptionIntake).mock.calls[0];
+        expect(payload.newPatient).toHaveProperty('nationalId', '079199001234');
+        expect(payload.newPatient).not.toHaveProperty('identityCardNumber');
+    });
+
     it('handles 0 facilities by displaying unassigned banner and notice', async () => {
         vi.mocked(organizationApi.getMyFacilities).mockResolvedValue({
             success: true,
