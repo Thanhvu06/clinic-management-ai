@@ -291,6 +291,109 @@ public class ReceptionWorkspaceRebuildTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Intake_NewPatient_WithoutEmergencyContact_DoesNotCreateContact()
+    {
+        var client = await CreateAuthenticatedClientAsync("rec@test.com");
+        var (facility, department, _) = await EnsureFacilityStructureAsync("GUARDIAN-NONE");
+        var request = CreateGuardianIntakeRequest(facility.Id, department.Id, null);
+
+        var response = await client.PostAsJsonAsync("/api/v1/patient-visits/intake", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<CheckInTicketDto>>();
+        Assert.NotNull(body?.Data);
+        var ticket = body!.Data!;
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.False(await db.EmergencyContacts.AnyAsync(c => c.PatientId == ticket.PatientId));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [InlineData(null)]
+    public async Task Intake_NewPatient_PersistsEmergencyContactGuardianFlag(bool? isGuardian)
+    {
+        var client = await CreateAuthenticatedClientAsync("rec@test.com");
+        var (facility, department, _) = await EnsureFacilityStructureAsync($"GUARDIAN-{isGuardian?.ToString() ?? "OMITTED"}");
+        var request = CreateGuardianIntakeRequest(facility.Id, department.Id, new EmergencyContactInputDto
+        {
+            ContactName = "Nguyễn Văn Người Thân",
+            Relationship = "Cha",
+            PhoneNumber = "0987002233",
+            IsGuardian = isGuardian.GetValueOrDefault()
+        });
+        var payload = JsonSerializer.SerializeToNode(request, new JsonSerializerOptions(JsonSerializerDefaults.Web))!.AsObject();
+        if (!isGuardian.HasValue)
+        {
+            payload["newPatient"]!.AsObject()["emergencyContact"]!.AsObject().Remove("isGuardian");
+        }
+
+        var response = await client.PostAsJsonAsync("/api/v1/patient-visits/intake", payload);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ApiResponse<CheckInTicketDto>>();
+        Assert.NotNull(body?.Data);
+        var ticket = body!.Data!;
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var contact = await db.EmergencyContacts.AsNoTracking().SingleAsync(c => c.PatientId == ticket.PatientId);
+        Assert.Equal(isGuardian.GetValueOrDefault(), contact.IsGuardian);
+    }
+
+    [Fact]
+    public async Task Intake_NewPatient_SameIdempotencyKey_DoesNotDuplicateEmergencyContact()
+    {
+        var client = await CreateAuthenticatedClientAsync("rec@test.com");
+        var (facility, department, _) = await EnsureFacilityStructureAsync("GUARDIAN-IDEMPOTENT");
+        var request = CreateGuardianIntakeRequest(facility.Id, department.Id, new EmergencyContactInputDto
+        {
+            ContactName = "Nguyễn Thị Người Giám Hộ",
+            Relationship = "Mẹ",
+            PhoneNumber = "0987003344",
+            IsGuardian = true
+        });
+
+        var firstResponse = await client.PostAsJsonAsync("/api/v1/patient-visits/intake", request);
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        var firstBody = await firstResponse.Content.ReadFromJsonAsync<ApiResponse<CheckInTicketDto>>();
+        Assert.NotNull(firstBody?.Data);
+        var firstTicket = firstBody!.Data!;
+
+        var secondResponse = await client.PostAsJsonAsync("/api/v1/patient-visits/intake", request);
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+        var secondBody = await secondResponse.Content.ReadFromJsonAsync<ApiResponse<CheckInTicketDto>>();
+        Assert.NotNull(secondBody?.Data);
+        var secondTicket = secondBody!.Data!;
+        Assert.Equal(firstTicket.PatientId, secondTicket.PatientId);
+        Assert.Equal(firstTicket.VisitId, secondTicket.VisitId);
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var contacts = await db.EmergencyContacts.AsNoTracking()
+            .Where(c => c.PatientId == firstTicket.PatientId).ToListAsync();
+        Assert.True(Assert.Single(contacts).IsGuardian);
+    }
+
+    private static ReceptionIntakeRequest CreateGuardianIntakeRequest(
+        long facilityId, long departmentId, EmergencyContactInputDto? emergencyContact)
+    {
+        return new ReceptionIntakeRequest
+        {
+            IdempotencyKey = $"GUARDIAN-{Guid.NewGuid()}",
+            FacilityId = facilityId,
+            DepartmentId = departmentId,
+            ChiefComplaint = "Khám sức khỏe",
+            NewPatient = new NewPatientProfileDto
+            {
+                FullName = $"Bệnh nhân kiểm tra giám hộ {Guid.NewGuid():N}",
+                PhoneNumber = "0987001122",
+                EmergencyContact = emergencyContact
+            }
+        };
+    }
+
+    [Fact]
     public async Task Intake_WithoutFacilityId_ThrowsFacilityRequired()
     {
         var client = await CreateAuthenticatedClientAsync("rec@test.com");

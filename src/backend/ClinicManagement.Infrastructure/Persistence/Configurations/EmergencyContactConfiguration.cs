@@ -17,6 +17,7 @@ public class EmergencyContactConfiguration : IEntityTypeConfiguration<EmergencyC
         builder.Property(c => c.Relationship).HasMaxLength(100).IsRequired();
         builder.Property(c => c.PhoneNumber).HasMaxLength(50).IsRequired();
         builder.Property(c => c.Address).HasMaxLength(500);
+        builder.Property(c => c.IsGuardian).IsRequired().HasDefaultValue(false);
 
         builder.HasOne(c => c.Patient)
             .WithMany(p => p.EmergencyContacts)

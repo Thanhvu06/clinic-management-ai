@@ -267,6 +267,7 @@ public class PatientVisitService : IPatientVisitService
                         FullName = newProfile.EmergencyContact.ContactName.Trim(),
                         Relationship = newProfile.EmergencyContact.Relationship.Trim(),
                         PhoneNumber = newProfile.EmergencyContact.PhoneNumber.Trim(),
+                        IsGuardian = newProfile.EmergencyContact.IsGuardian,
                         IsPrimary = true
                     });
                     await _dbContext.SaveChangesAsync(cancellationToken);
