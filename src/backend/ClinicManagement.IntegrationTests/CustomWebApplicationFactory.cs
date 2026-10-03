@@ -11,6 +11,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using Moq;
 
 namespace ClinicManagement.IntegrationTests;
@@ -23,6 +24,10 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        // Existing provider-contract fixtures intentionally exercise the old fallback.
+        // Hybrid runtime fixtures explicitly opt in; production defaults stay enabled.
+        builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
+            new Dictionary<string, string?> { ["RoleIntentModel:Enabled"] = "false" }));
         builder.ConfigureLogging(logging =>
         {
             // The Windows EventLog provider can throw while reporting expected

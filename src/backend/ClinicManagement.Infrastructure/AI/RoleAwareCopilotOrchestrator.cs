@@ -10,6 +10,7 @@ using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Infrastructure.AI.Planning;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace ClinicManagement.Infrastructure.AI;
 
@@ -29,6 +30,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
     private readonly IAiGroundedResponseComposer _composer;
     private readonly IAiToolExecutor _executor;
     private readonly IAiAuditService _audit;
+    private readonly ILogger<RoleAwareCopilotOrchestrator>? _logger;
 
     public RoleAwareCopilotOrchestrator(
         IHttpContextAccessor http,
@@ -40,7 +42,8 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         IAiConversationMemoryStore memoryStore,
         IAiGroundedResponseComposer composer,
         IAiToolExecutor executor,
-        IAiAuditService audit)
+        IAiAuditService audit,
+        ILogger<RoleAwareCopilotOrchestrator>? logger = null)
     {
         _http = http;
         _currentUser = currentUser;
@@ -52,6 +55,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         _composer = composer;
         _executor = executor;
         _audit = audit;
+        _logger = logger;
     }
 
     public IReadOnlyList<AiToolDefinition> GetToolsForCurrentRole()
@@ -72,6 +76,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
     {
         var role = ResolveRole();
         var tools = ToolsForRole(role);
+        (_deterministicPlanner as HybridIntentRouter)?.Reset();
         var conversationId = NormalizeId(request.ConversationId ?? request.SessionId, "conv");
         var sessionId = NormalizeId(request.SessionId ?? request.ConversationId, "sess");
         var turnId = NormalizeId(request.ClientTurnId, "turn");
@@ -344,6 +349,9 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
 
     private async Task PersistAndAudit(AiCopilotResponseDto response, string sessionId, AiActorRole role, AiResolvedResourceContext? resource, int toolCount, CancellationToken ct, string source = FreeTextAuditSource)
     {
+        if (_deterministicPlanner is HybridIntentRouter { LastRoute: null })
+            _logger?.LogInformation("Role-intent decision Source={Source} Label={Label} Score={Score} Role={Role}",
+                response.AssistantMode == AiAssistantModes.SafetyBlocked ? "rule" : "fallback", response.Intent, response.Confidence, role);
         var memory = await _memoryStore.SaveTurnAsync(new AiConversationMemoryWriteRequest
         {
             UserId = _currentUser.UserId,

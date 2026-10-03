@@ -148,7 +148,7 @@ builder.Services.AddDataProtection()
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiRoleCopilotService, ClinicManagement.Infrastructure.AI.RoleAwareCopilotOrchestrator>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IClinicAiContextService, ClinicManagement.Infrastructure.AI.ClinicAiContextService>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiSafetyGuard, ClinicManagement.Infrastructure.AI.AiSafetyGuard>();
-builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiDeterministicPlanner, ClinicManagement.Infrastructure.AI.Planning.AiDeterministicPlanner>();
+ClinicManagement.Infrastructure.AI.RoleIntentRuntimeRegistration.AddRoleIntentRuntime(builder.Services, builder.Configuration);
 builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiStructuredPlanner, ClinicManagement.Infrastructure.AI.Planning.GeminiStructuredPlanner>();
 builder.Services.AddSingleton<ClinicManagement.Application.AI.Planning.IAiProviderHealth, ClinicManagement.Infrastructure.AI.Planning.AiProviderHealth>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Planning.IAiCopilotContextResolver, ClinicManagement.Infrastructure.AI.Planning.AiCopilotContextResolver>();
@@ -241,6 +241,8 @@ builder.Services.AddOpenApi();
 builder.Services.AddCors();
 
 var app = builder.Build();
+// Eager singleton validation: a missing/mismatched artifact disables only the model.
+app.Services.GetRequiredService<ClinicManagement.Infrastructure.AI.RoleIntentModel>();
 
 using (var scope = app.Services.CreateScope())
 {
