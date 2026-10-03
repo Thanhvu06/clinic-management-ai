@@ -20,7 +20,7 @@ public class MrnGenerator : IMrnGenerator
     public async Task<string> GenerateNextMrnAsync(CancellationToken cancellationToken = default)
     {
         var currentYear = DateTime.UtcNow.Year;
-        const int maxRetries = 10;
+        const int maxRetries = 30;
 
         for (var attempt = 0; attempt < maxRetries; attempt++)
         {

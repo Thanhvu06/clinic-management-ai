@@ -387,6 +387,48 @@ public class HospitalCorePhase1FoundationsTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task WalkInRegistration_FortyConcurrentRequests_AllSucceedWithUniqueMrns()
+    {
+        await AuthenticateAsync("rec@test.com");
+
+        const int concurrency = 40;
+        var nationalIdPrefix = $"088{Random.Shared.Next(1000000, 10000000):D7}";
+        var startBarrier = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var tasks = Enumerable.Range(0, concurrency).Select(async i =>
+        {
+            await startBarrier.Task;
+            var request = new RegisterWalkInPatientRequest
+            {
+                FullName = $"Bệnh Nhân Đồng Thời Bốn Mươi {i:D2}",
+                PhoneNumber = $"081234{i:D4}",
+                NationalId = $"{nationalIdPrefix}{i:D2}",
+                Gender = Gender.Male,
+                DateOfBirth = new DateOnly(1990, 1, 1),
+                Address = $"Địa chỉ test bốn mươi {i}"
+            };
+
+            var response = await Client.PostAsJsonAsync("/api/v1/mpi/patients/walk-in", request);
+            var content = await response.Content.ReadAsStringAsync();
+            Assert.True(response.StatusCode == HttpStatusCode.Created,
+                $"Expected Created but got {response.StatusCode}: {content}");
+            var dto = await response.Content.ReadFromJsonAsync<ApiResponse<MpiPatientDto>>();
+            return dto!.Data!.MedicalRecordNumber;
+        }).ToList();
+
+        startBarrier.SetResult(true);
+        var mrns = await Task.WhenAll(tasks);
+
+        Assert.Equal(concurrency, mrns.Length);
+        Assert.Equal(concurrency, mrns.Distinct().Count());
+        var currentYear = DateTime.UtcNow.Year;
+        foreach (var mrn in mrns)
+        {
+            Assert.Matches($@"^BN-{currentYear}-\d{{6}}$", mrn);
+        }
+    }
+
+    [Fact]
     public async Task WalkInRegistration_SqlServerConcurrency_SameCccd_ExactlyOneSucceedsOthersGet409()
     {
         if (!await SqlServerTestHelper.IsSqlServerAvailableAsync())
