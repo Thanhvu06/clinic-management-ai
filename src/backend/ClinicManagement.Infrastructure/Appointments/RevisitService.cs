@@ -217,6 +217,7 @@ public class RevisitService : IRevisitService
                 PatientId = patient.Id,
                 DoctorId = doctor.Id,
                 SpecialtyId = specialtyId,
+                FacilityId = revisitReq.OriginalAppointment.FacilityId,
                 AppointmentSlotId = targetSlot.Id,
                 AppointmentDate = targetSlot.SlotDate,
                 StartTime = targetSlot.StartTime,

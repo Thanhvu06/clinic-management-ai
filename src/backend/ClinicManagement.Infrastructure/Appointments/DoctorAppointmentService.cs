@@ -1628,6 +1628,24 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         }).ToList()
     };
 
+    private async Task<PatientVisit> ValidateVisitDoctorAccessAsync(PatientVisit? visit, Doctor doctor)
+    {
+        // Department queues allow doctors to claim an unassigned visit.
+        visit = VisitDoctorAuthorizationGuard.ValidateAssignedDoctor(visit, doctor, allowUnassigned: true);
+        if (visit.AppointmentId.HasValue && visit.Appointment == null)
+            await _dbContext.Entry(visit).Reference(v => v.Appointment).LoadAsync();
+        await VisitDoctorAuthorizationGuard.ResolveFacilityAsync(_dbContext, doctor, visit);
+        return visit;
+    }
+
+    private async Task ValidateVisitDoctorAccessAsync(long visitId, Doctor doctor)
+    {
+        var visit = await _dbContext.PatientVisits
+            .Include(v => v.Appointment)
+            .FirstOrDefaultAsync(v => v.Id == visitId);
+        await ValidateVisitDoctorAccessAsync(visit, doctor);
+    }
+
     public async Task<PatientClinicalContextDto> GetVisitClinicalContextAsync(long visitId)
     {
         var doctor = await GetCurrentDoctorAsync();
@@ -1645,8 +1663,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                     .ThenInclude(i => i.Medicine)
             .FirstOrDefaultAsync(v => v.Id == visitId);
 
-        if (visit == null)
-            throw new NotFoundException("Lượt khám không tồn tại.");
+        visit = await ValidateVisitDoctorAccessAsync(visit, doctor);
 
         if (!visit.AssignedDoctorId.HasValue)
         {
@@ -1997,7 +2014,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             .Include(v => v.VisitSummary)
             .FirstOrDefaultAsync(v => v.Id == visitId);
 
-        if (visit == null) throw new NotFoundException("Lượt khám không tồn tại.");
+        visit = await ValidateVisitDoctorAccessAsync(visit, doctor);
 
         if (visit.Status != VisitStatus.WaitingDoctor &&
             visit.Status != VisitStatus.InConsultation &&
@@ -2056,7 +2073,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 .ThenInclude(p => p.Items)
             .FirstOrDefaultAsync(v => v.Id == visitId);
 
-        if (visit == null) throw new NotFoundException("Lượt khám không tồn tại.");
+        visit = await ValidateVisitDoctorAccessAsync(visit, doctor);
 
         if (string.IsNullOrWhiteSpace(request.Summary) && string.IsNullOrWhiteSpace(request.Diagnosis))
             throw new BusinessException("VALIDATION_ERROR", "Tóm tắt kết luận khám không được để trống.");
@@ -2241,6 +2258,11 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync();
+            throw new ConflictException("Hồ sơ khám đã được cập nhật bởi một phiên làm việc khác. Vui lòng tải lại trang.");
+        }
         catch
         {
             await transaction.RollbackAsync();
@@ -2251,6 +2273,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
     public async Task<ClinicalEncounterDto?> GetVisitEncounterAsync(long visitId)
     {
         var doctor = await GetCurrentDoctorAsync();
+        await ValidateVisitDoctorAccessAsync(visitId, doctor);
 
         var encounter = await _dbContext.VisitSummaries
             .AsNoTracking()
@@ -2283,7 +2306,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             .Include(v => v.VisitSummary)
             .FirstOrDefaultAsync(v => v.Id == visitId);
 
-        if (visit == null) throw new NotFoundException("Lượt khám không tồn tại.");
+        visit = await ValidateVisitDoctorAccessAsync(visit, doctor);
 
         if (visit.Status != VisitStatus.InConsultation &&
             visit.Status != VisitStatus.WaitingDoctor &&
@@ -2345,6 +2368,9 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
     public async Task<VitalSignsDto?> GetVisitVitalSignsAsync(long visitId)
     {
+        var doctor = await GetCurrentDoctorAsync();
+        await ValidateVisitDoctorAccessAsync(visitId, doctor);
+
         var vitals = await _dbContext.AppointmentVitalSigns
             .AsNoTracking()
             .Include(v => v.PatientVisit)
@@ -2370,13 +2396,14 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
     public async Task<VitalSignsDto> SaveVisitVitalSignsAsync(long visitId, SaveVitalSignsRequest request)
     {
+        var doctor = await GetCurrentDoctorAsync();
         var userId = GetUserId();
 
         var visit = await _dbContext.PatientVisits
             .Include(v => v.VitalSigns)
             .FirstOrDefaultAsync(v => v.Id == visitId);
 
-        if (visit == null) throw new NotFoundException("Lượt khám không tồn tại.");
+        visit = await ValidateVisitDoctorAccessAsync(visit, doctor);
 
         if (visit.Status == VisitStatus.Completed || visit.Status == VisitStatus.Cancelled)
             throw new BusinessException("INVALID_STATE", "Không thể chỉnh sửa dấu hiệu sinh tồn cho lượt khám đã kết thúc.");
@@ -2454,6 +2481,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
     public async Task<PrescriptionDraftDto?> GetVisitPrescriptionDraftAsync(long visitId)
     {
         var doctor = await GetCurrentDoctorAsync();
+        await ValidateVisitDoctorAccessAsync(visitId, doctor);
 
         var prescription = await _dbContext.Prescriptions
             .Include(p => p.Items)
@@ -2496,7 +2524,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 .ThenInclude(p => p.Items)
             .FirstOrDefaultAsync(v => v.Id == visitId);
 
-        if (visit == null) throw new NotFoundException("Lượt khám không tồn tại.");
+        visit = await ValidateVisitDoctorAccessAsync(visit, doctor);
 
         if (visit.Status != VisitStatus.InConsultation &&
             visit.Status != VisitStatus.WaitingDoctor &&

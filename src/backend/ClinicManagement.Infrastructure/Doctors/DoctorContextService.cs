@@ -31,15 +31,15 @@ public class DoctorContextService : IDoctorContextService
     {
         var currentUserId = _currentUserService.UserId;
         if (currentUserId == null || currentUserId == Guid.Empty)
-            throw new UnauthorizedException("Chýa ðãng nh?p.");
+            throw new UnauthorizedException("ChÆ°a Ä‘Äƒng nháº­p.");
 
         var user = await _userManager.FindByIdAsync(currentUserId.Value.ToString());
         if (user == null || !user.IsActive)
-            throw new ForbiddenException("DOCTOR_ACCOUNT_INACTIVE", "Tài kho?n ngý?i dùng ð? b? vô hi?u hóa.");
+            throw new ForbiddenException("DOCTOR_ACCOUNT_INACTIVE", "TÃ i khoáº£n ngÆ°á»i dÃ¹ng Ä‘Ã£ bá»‹ vÃ´ hiá»‡u hÃ³a.");
 
         var isDoctor = await _userManager.IsInRoleAsync(user, "Doctor");
         if (!isDoctor)
-            throw new ForbiddenException("FORBIDDEN", "Ngý?i dùng không có quy?n Bác s?.");
+            throw new ForbiddenException("FORBIDDEN", "NgÆ°á»i dÃ¹ng khÃ´ng cÃ³ quyá»n BÃ¡c sÄ©.");
 
         var doctor = await _dbContext.Doctors
             .Include(d => d.DoctorSpecialties)
@@ -47,10 +47,10 @@ public class DoctorContextService : IDoctorContextService
             .FirstOrDefaultAsync(d => d.UserId == currentUserId.Value);
 
         if (doctor == null)
-            throw new NotFoundException("H? sõ bác s? không t?n t?i.");
+            throw new NotFoundException("Há»“ sÆ¡ bÃ¡c sÄ© khÃ´ng tá»“n táº¡i.");
 
         if (!doctor.IsActive)
-            throw new ForbiddenException("DOCTOR_ACCOUNT_INACTIVE", "H? sõ bác s? ð? b? vô hi?u hóa.");
+            throw new ForbiddenException("DOCTOR_ACCOUNT_INACTIVE", "Há»“ sÆ¡ bÃ¡c sÄ© Ä‘Ã£ bá»‹ vÃ´ hiá»‡u hÃ³a.");
 
         return doctor;
     }

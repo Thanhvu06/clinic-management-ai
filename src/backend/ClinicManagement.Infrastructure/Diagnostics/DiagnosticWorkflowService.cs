@@ -14,6 +14,7 @@ using ClinicManagement.Application.Doctors.Interfaces;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Domain.Policies;
+using ClinicManagement.Infrastructure.Common;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -129,23 +130,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
     private async Task<long> ResolveVisitFacilityAsync(Doctor doctor, PatientVisit visit, long? explicitFacilityId)
     {
-        if (visit.AppointmentId.HasValue && visit.Appointment == null)
-            throw new BusinessException("FACILITY_SCOPE_DENIED", "Không thể xác minh cơ sở của lịch hẹn liên kết.");
-
-        if (visit.Appointment?.FacilityId is long appointmentFacilityId && appointmentFacilityId != visit.FacilityId)
-            throw new BusinessException("FACILITY_SCOPE_DENIED", "Các nguồn cơ sở của lượt khám không nhất quán.");
-
-        if (explicitFacilityId.HasValue && explicitFacilityId.Value != visit.FacilityId)
-            throw new BusinessException("FACILITY_SCOPE_DENIED", "Lượt khám không thuộc cơ sở chỉ định.");
-
-        var hasExactDoctorAssignment = await _dbContext.StaffFacilityAssignments
-            .AsNoTracking()
-            .AnyAsync(x => x.UserId == doctor.UserId && x.IsActive && x.Role == RoleNames.Doctor && x.FacilityId == visit.FacilityId);
-
-        if (!hasExactDoctorAssignment)
-            throw new BusinessException("FACILITY_SCOPE_DENIED", "Bác sĩ không được phân quyền tại cơ sở của lượt khám.");
-
-        return visit.FacilityId;
+        return await VisitDoctorAuthorizationGuard.ResolveFacilityAsync(_dbContext, doctor, visit, explicitFacilityId);
     }
 
     private static bool TryResolveEffectiveFacility(DiagnosticOrder order, out long facilityId)
@@ -587,10 +572,9 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         var visit = await _dbContext.PatientVisits
             .Include(v => v.Patient)
             .Include(v => v.Appointment)
-            .FirstOrDefaultAsync(v => v.Id == visitId && v.AssignedDoctorId == doctor.Id);
+            .FirstOrDefaultAsync(v => v.Id == visitId);
 
-        if (visit == null)
-            throw new NotFoundException("Lượt khám không tồn tại hoặc không thuộc quyền quản lý.");
+        visit = VisitDoctorAuthorizationGuard.ValidateAssignedDoctor(visit, doctor);
 
         if (visit.Status != VisitStatus.InConsultation && visit.Status != VisitStatus.WaitingForDoctor && visit.Status != VisitStatus.WaitingForDiagnostics)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể tạo phiếu chỉ định cận lâm sàng khi lượt khám đang trong phiên khám.");
