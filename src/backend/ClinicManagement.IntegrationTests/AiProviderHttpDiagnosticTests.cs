@@ -213,7 +213,7 @@ public sealed class AiProviderHttpDiagnosticTests
 
     [Theory]
     [InlineData(AiActorRole.Patient, 12)]
-    [InlineData(AiActorRole.DiagnosticTechnician, 2)]
+    [InlineData(AiActorRole.DiagnosticTechnician, 3)]
     public async Task Schema_metrics_match_the_schema_actually_sent_and_appear_only_on_http_rejection(AiActorRole role, int expectedTools)
     {
         using var handler = new CapturingHandler(HttpStatusCode.BadRequest, GoogleError(400, "INVALID_ARGUMENT", ResponseFormatField));

@@ -225,7 +225,13 @@ public sealed class AiToolExecutor : IAiToolExecutor
 
         var capabilities = await _capabilityResolver.ResolveAsync(context, cancellationToken);
         if (definition.Capabilities.Any(required => !capabilities.Contains(required)))
+        {
+            if (definition.Name is "admin.get_revenue_summary" or "reception.get_pending_payments" or
+                "doctor.get_my_appointments_today" or "technician.get_completed_today" or
+                "pharmacist.get_low_stock")
+                return AiToolExecutionResult.Failed("FACILITY_SCOPE_REQUIRED", "Không xác định được phạm vi được phân quyền cho công cụ đọc.");
             return AiToolExecutionResult.Failed("FORBIDDEN_CAPABILITY", "Tài khoản hiện tại không có capability cần thiết cho công cụ này.");
+        }
 
         AiToolArgumentValidationResult argumentValidation;
         try

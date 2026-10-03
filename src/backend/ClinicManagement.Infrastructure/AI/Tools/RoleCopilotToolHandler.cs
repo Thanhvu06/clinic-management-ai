@@ -24,6 +24,20 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
     private const int CatalogDefaultResultLimit = 10;
     private const int CatalogMaxResultLimit = 20;
 
+    private static readonly IReadOnlyDictionary<string, string[]> NewReadArguments = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["admin.get_revenue_summary"] = ["period"],
+        ["reception.get_pending_payments"] = [],
+        ["doctor.get_my_appointments_today"] = [],
+        ["technician.get_completed_today"] = [],
+        ["pharmacist.get_low_stock"] = []
+    };
+
+    private static readonly IReadOnlySet<string> RevenuePeriods = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "today", "yesterday", "last_7_days", "this_month", "last_month"
+    };
+
     private static readonly MethodInfo StringToLowerMethod = typeof(string).GetMethod(nameof(string.ToLower), Type.EmptyTypes)!;
     private static readonly MethodInfo StringReplaceMethod = typeof(string).GetMethod(nameof(string.Replace), new[] { typeof(string), typeof(string) })!;
     private static readonly MethodInfo LikeMethod = typeof(DbFunctionsExtensions).GetMethod(
@@ -103,6 +117,19 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
                 if (IsAuthorityProperty(property.Name))
                     return AiToolArgumentValidationResult.Invalid("FORBIDDEN_TOOL_ARGUMENT", "Phạm vi quyền chỉ do server xác định.");
             }
+            if (NewReadArguments.TryGetValue(invocation.ToolName.Trim(), out var allowed))
+            {
+                if (document.RootElement.EnumerateObject().Any(p => !allowed.Contains(p.Name, StringComparer.Ordinal)))
+                    return AiToolArgumentValidationResult.Invalid("UNKNOWN_TOOL_ARGUMENT", "Tham số không nằm trong danh sách cho phép của công cụ đọc.");
+                if (invocation.ToolName.Equals("admin.get_revenue_summary", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!document.RootElement.TryGetProperty("period", out var period))
+                        return AiToolArgumentValidationResult.Invalid("MISSING_TOOL_ARGUMENT", "Cần chọn kỳ doanh thu.");
+                    if (period.ValueKind != JsonValueKind.String || !RevenuePeriods.Contains(period.GetString()!))
+                        return AiToolArgumentValidationResult.Invalid("INVALID_TOOL_ARGUMENTS", "Kỳ doanh thu phải là today, yesterday, last_7_days, this_month hoặc last_month.");
+                }
+                return AiToolArgumentValidationResult.Valid();
+            }
             if (invocation.ToolName.Equals("clinic.search_knowledge", StringComparison.OrdinalIgnoreCase))
                 return ValidateCatalogArguments(document.RootElement);
             if (invocation.ToolName.Equals("reception.lookup_appointment", StringComparison.OrdinalIgnoreCase) &&
@@ -134,6 +161,11 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
     public Task<AiToolExecutionResult> ExecuteAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken = default) =>
         invocation.ToolName.Trim().ToLowerInvariant() switch
         {
+            "admin.get_revenue_summary" => GetRevenueSummaryAsync(context, invocation.ArgumentsJson, cancellationToken),
+            "reception.get_pending_payments" => GetPendingPaymentsAsync(context, cancellationToken),
+            "doctor.get_my_appointments_today" => GetDoctorAppointmentsTodayAsync(context, cancellationToken),
+            "technician.get_completed_today" => GetTechnicianCompletedTodayAsync(context, cancellationToken),
+            "pharmacist.get_low_stock" => GetLowStockAsync(context, cancellationToken),
             "clinic.search_knowledge" => SearchKnowledgeAsync(invocation.ArgumentsJson, cancellationToken),
             "reception.get_today_appointments" => GetReceptionAppointmentsAsync(context, cancellationToken),
             "reception.get_queue" => GetReceptionQueueAsync(context, cancellationToken),
@@ -873,12 +905,8 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
     private async Task<AiToolExecutionResult> GetTechnicianWorklistAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
     {
         if (!context.ActorId.HasValue || context.ActorId == Guid.Empty) return ScopeDenied();
-        var items = await _db.DiagnosticOrders.AsNoTracking()
-            .Where(o => o.FacilityId.HasValue && o.PerformingDepartmentId.HasValue &&
-                        _db.StaffFacilityAssignments.Any(a => a.UserId == context.ActorId.Value && a.IsActive && a.Role == nameof(AiActorRole.DiagnosticTechnician) &&
-                            a.FacilityId == o.FacilityId.Value && a.DepartmentId == o.PerformingDepartmentId.Value) &&
-                        (!context.FacilityId.HasValue || o.FacilityId == context.FacilityId.Value) &&
-                        (o.Status == DiagnosticOrderStatus.Ordered || o.Status == DiagnosticOrderStatus.InProgress))
+        var items = await TechnicianOrdersInScope(context)
+            .Where(o => o.Status == DiagnosticOrderStatus.Ordered || o.Status == DiagnosticOrderStatus.InProgress)
             .OrderBy(o => o.OrderedAtUtc).Take(100)
             .Select(o => new
             {
@@ -970,6 +998,123 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         var medicines = await _db.Medicines.AsNoTracking().Where(m => m.IsActive).OrderBy(m => m.Name).Take(200)
             .Select(m => new { m.Id, m.Code, m.Name, m.Unit, m.StockQuantity, reorderLevel = m.ReorderLevel }).ToListAsync(cancellationToken);
         return Completed(medicines, "pharmacy_inventory", "Tồn kho toàn hệ thống được lấy từ danh mục thuốc hiện tại; mô hình dữ liệu chưa phân tách tồn kho theo cơ sở.");
+    }
+
+    private IQueryable<ClinicManagement.Domain.Entities.DiagnosticOrder> TechnicianOrdersInScope(AiToolExecutionContext context) =>
+        _db.DiagnosticOrders.AsNoTracking()
+            .Where(o => o.FacilityId.HasValue && o.PerformingDepartmentId.HasValue &&
+                        _db.StaffFacilityAssignments.Any(a => a.UserId == context.ActorId!.Value && a.IsActive && a.Role == nameof(AiActorRole.DiagnosticTechnician) &&
+                            a.FacilityId == o.FacilityId.Value && a.DepartmentId == o.PerformingDepartmentId.Value) &&
+                        (!context.FacilityId.HasValue || o.FacilityId == context.FacilityId.Value));
+
+    private async Task<AiToolExecutionResult> GetTechnicianCompletedTodayAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
+    {
+        if (!context.ActorId.HasValue || context.ActorId == Guid.Empty) return ScopeDenied();
+        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.DiagnosticTechnician), cancellationToken);
+        if (facilities.Count == 0 || !await _db.StaffFacilityAssignments.AsNoTracking().AnyAsync(a =>
+                a.UserId == context.ActorId.Value && a.IsActive && a.Role == nameof(AiActorRole.DiagnosticTechnician) &&
+                facilities.Contains(a.FacilityId) && a.DepartmentId.HasValue, cancellationToken))
+            return ScopeDenied();
+        var start = _clock.ConvertVietnamToUtc(_clock.VietnamToday.ToDateTime(TimeOnly.MinValue));
+        var end = _clock.ConvertVietnamToUtc(_clock.VietnamToday.AddDays(1).ToDateTime(TimeOnly.MinValue));
+        var items = await TechnicianOrdersInScope(context)
+            .Where(o => o.Status == DiagnosticOrderStatus.Completed && o.CompletedAtUtc >= start && o.CompletedAtUtc < end)
+            .OrderByDescending(o => o.CompletedAtUtc).ThenByDescending(o => o.Id).Take(100)
+            .Select(o => new
+            {
+                o.OrderCode, status = o.Status.ToString(), o.CompletedAtUtc,
+                services = o.Items.OrderBy(i => i.Id).Select(i => i.DiagnosticService.Name).ToList()
+            }).ToListAsync(cancellationToken);
+        return Completed(items, "technician_completed_today", $"Có {items.Count} chỉ định hoàn tất hôm nay trong khoa được phân công.");
+    }
+
+    private async Task<AiToolExecutionResult> GetPendingPaymentsAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
+    {
+        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Receptionist), cancellationToken);
+        if (facilities.Count == 0) return ScopeDenied();
+        var items = await _db.Invoices.AsNoTracking()
+            .Where(i => i.Status == InvoiceStatus.Unpaid && i.PatientVisit != null && facilities.Contains(i.PatientVisit.FacilityId))
+            .OrderBy(i => i.CreatedAtUtc).ThenBy(i => i.Id).Take(50)
+            .Select(i => new { i.InvoiceCode, patientName = i.Patient.FullName, i.TotalAmount, status = i.Status.ToString(), i.CreatedAtUtc })
+            .ToListAsync(cancellationToken);
+        return Completed(items, "reception_pending_payments", $"Có {items.Count} hóa đơn chưa thanh toán trong phạm vi cơ sở.");
+    }
+
+    private async Task<AiToolExecutionResult> GetDoctorAppointmentsTodayAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
+    {
+        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Doctor), cancellationToken);
+        if (facilities.Count == 0) return ScopeDenied();
+        var doctorId = await _db.Doctors.AsNoTracking().Where(d => d.UserId == context.ActorId).Select(d => (long?)d.Id).SingleOrDefaultAsync(cancellationToken);
+        if (!doctorId.HasValue) return ScopeDenied();
+        var items = await _db.Appointments.AsNoTracking()
+            .Where(a => a.DoctorId == doctorId.Value && a.FacilityId.HasValue && facilities.Contains(a.FacilityId.Value) &&
+                        a.AppointmentDate == _clock.VietnamToday && a.Status != AppointmentStatus.Cancelled && a.Status != AppointmentStatus.Completed)
+            .OrderBy(a => a.StartTime).ThenBy(a => a.Id).Take(100)
+            .Select(a => new { a.AppointmentCode, a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName, a.Reason })
+            .ToListAsync(cancellationToken);
+        return Completed(items, "doctor_appointments_today", $"Có {items.Count} lịch hẹn hôm nay của bạn chưa hủy hoặc hoàn tất.");
+    }
+
+    private async Task<AiToolExecutionResult> GetLowStockAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
+    {
+        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Pharmacist), cancellationToken);
+        if (facilities.Count == 0) return ScopeDenied();
+        var items = await _db.Medicines.AsNoTracking()
+            .Where(m => m.IsActive && m.StockQuantity <= m.ReorderLevel)
+            .OrderBy(m => m.StockQuantity).ThenBy(m => m.Id).Take(100)
+            .Select(m => new { m.Code, m.Name, m.Unit, m.StockQuantity, m.ReorderLevel })
+            .ToListAsync(cancellationToken);
+        return Completed(items, "pharmacy_low_stock", "Tồn kho toàn hệ thống được lấy từ danh mục thuốc hiện tại; mô hình dữ liệu chưa phân tách tồn kho theo cơ sở.");
+    }
+
+    private async Task<AiToolExecutionResult> GetRevenueSummaryAsync(AiToolExecutionContext context, string json, CancellationToken cancellationToken)
+    {
+        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Admin), cancellationToken);
+        if (facilities.Count == 0) return ScopeDenied();
+        using var document = JsonDocument.Parse(json);
+        var period = document.RootElement.GetProperty("period").GetString()!;
+        var today = _clock.VietnamToday;
+        var monthStart = new DateOnly(today.Year, today.Month, 1);
+        var (from, until) = period switch
+        {
+            "today" => (today, today.AddDays(1)),
+            "yesterday" => (today.AddDays(-1), today),
+            "last_7_days" => (today.AddDays(-6), today.AddDays(1)),
+            "this_month" => (monthStart, monthStart.AddMonths(1)),
+            "last_month" => (monthStart.AddMonths(-1), monthStart),
+            _ => throw new InvalidOperationException("Revenue period must be validated before execution.")
+        };
+        var start = _clock.ConvertVietnamToUtc(from.ToDateTime(TimeOnly.MinValue));
+        var end = _clock.ConvertVietnamToUtc(until.ToDateTime(TimeOnly.MinValue));
+        var query = _db.Invoices.AsNoTracking()
+            .Where(i => i.Status == InvoiceStatus.Paid && i.PaidAtUtc >= start && i.PaidAtUtc < end &&
+                        ((i.PatientVisit != null && facilities.Contains(i.PatientVisit.FacilityId)) ||
+                         (i.PatientVisit == null && i.Appointment != null && i.Appointment.FacilityId.HasValue && facilities.Contains(i.Appointment.FacilityId.Value))));
+        var totals = new Dictionary<long, (decimal Revenue, int Count)>();
+        long lastId = 0;
+        // Bounded pages keep decimal arithmetic exact on SQL Server and SQLite,
+        // without truncating the aggregate to the first page of invoices.
+        while (true)
+        {
+            var page = await query.Where(i => i.Id > lastId).OrderBy(i => i.Id).Take(500)
+                .Select(i => new { i.Id, i.TotalAmount, facilityId = i.PatientVisit != null ? i.PatientVisit.FacilityId : i.Appointment!.FacilityId!.Value })
+                .ToListAsync(cancellationToken);
+            if (page.Count == 0) break;
+            foreach (var invoice in page)
+            {
+                var total = totals.GetValueOrDefault(invoice.facilityId);
+                totals[invoice.facilityId] = (total.Revenue + invoice.TotalAmount, total.Count + 1);
+            }
+            lastId = page[^1].Id;
+        }
+        var result = new
+        {
+            period,
+            totalRevenue = totals.Values.Sum(t => t.Revenue),
+            invoiceCount = totals.Values.Sum(t => t.Count),
+            byFacility = totals.OrderBy(t => t.Key).Select(t => new { facilityId = t.Key, totalRevenue = t.Value.Revenue, invoiceCount = t.Value.Count }).ToArray()
+        };
+        return Completed(result, "admin_revenue_summary", "Doanh thu hóa đơn Paid theo thời điểm thanh toán trong kỳ giờ Việt Nam, chỉ trong cơ sở được phân quyền.");
     }
 
     private async Task<AiToolExecutionResult> GetAdminMetricsAsync(AiToolExecutionContext context, CancellationToken cancellationToken)

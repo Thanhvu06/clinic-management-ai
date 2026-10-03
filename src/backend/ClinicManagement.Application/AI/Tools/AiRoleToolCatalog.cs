@@ -21,6 +21,12 @@ public static class AiRoleToolCatalog
 
     public static IReadOnlyList<AiToolDefinition> Definitions { get; } = new[]
     {
+        RoleToolWithSchema("admin.get_revenue_summary", "Tổng doanh thu hóa đơn Paid trong cơ sở được phân quyền; period: today, yesterday, last_7_days, this_month, last_month", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics,
+            new[] { Arg("period", AiToolArgumentType.String, required: true) }),
+        RoleTool("reception.get_pending_payments", "Xem tối đa 50 hóa đơn chưa thanh toán của cơ sở được phân quyền", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),
+        RoleTool("doctor.get_my_appointments_today", "Xem lịch hẹn hôm nay chưa hủy/hoàn tất của chính bác sĩ tại cơ sở được phân quyền", AiActorRole.Doctor, AiActorCapability.ReadDoctorWorkspace),
+        RoleTool("technician.get_completed_today", "Xem chỉ định hoàn tất hôm nay trong khoa và cơ sở được phân công", AiActorRole.DiagnosticTechnician, AiActorCapability.ReadDiagnosticWorkspace),
+        RoleTool("pharmacist.get_low_stock", "Xem tối đa 100 thuốc hoạt động có tồn kho không vượt mức đặt lại; tồn kho toàn hệ thống, chưa tách theo cơ sở", AiActorRole.Pharmacist, AiActorCapability.ReadPharmacyWorkspace),
         RoleTool("reception.get_today_appointments", "Xem lịch hẹn trong ngày của cơ sở được phân quyền", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),
         RoleTool("reception.get_queue", "Xem hàng đợi tiếp nhận của cơ sở được phân quyền", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),
         RoleToolWithSchema("reception.lookup_appointment", "Tra cứu lịch hẹn bằng mã đối soát", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace,
