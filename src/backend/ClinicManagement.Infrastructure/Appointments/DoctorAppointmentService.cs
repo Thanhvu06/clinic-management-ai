@@ -117,22 +117,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         var startOfDay = targetDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var endOfDay = targetDate.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
-        var doctorSpecialtyIds = await _dbContext.DoctorSpecialties
-            .Where(ds => ds.DoctorId == doctor.Id)
-            .Select(ds => ds.SpecialtyId)
-            .ToListAsync();
-
-        var doctorDeptIds = await _dbContext.Departments
-            .Where(d => d.SpecialtyId.HasValue && doctorSpecialtyIds.Contains(d.SpecialtyId.Value))
-            .Select(d => d.Id)
-            .ToListAsync();
-
-        var staffDeptIds = await _dbContext.StaffFacilityAssignments
-            .Where(s => s.UserId == doctor.UserId && s.IsActive && s.DepartmentId.HasValue)
-            .Select(s => s.DepartmentId!.Value)
-            .ToListAsync();
-
-        var allDoctorDeptIds = doctorDeptIds.Concat(staffDeptIds).Distinct().ToList();
+        var allDoctorDeptIds = await VisitDoctorAuthorizationGuard.GetUnassignedDepartmentIdsAsync(_dbContext, doctor);
 
         var walkInVisits = await _dbContext.PatientVisits
             .AsNoTracking()
@@ -1635,6 +1620,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         if (visit.AppointmentId.HasValue && visit.Appointment == null)
             await _dbContext.Entry(visit).Reference(v => v.Appointment).LoadAsync();
         await VisitDoctorAuthorizationGuard.ResolveFacilityAsync(_dbContext, doctor, visit);
+        await VisitDoctorAuthorizationGuard.ValidateUnassignedDepartmentAsync(_dbContext, visit, doctor);
         return visit;
     }
 
