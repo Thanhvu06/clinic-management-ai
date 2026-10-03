@@ -16,6 +16,7 @@ namespace ClinicManagement.Infrastructure.Mpi;
 
 public class MpiPatientService : IMpiPatientService
 {
+    private static readonly SemaphoreSlim WalkInMrnAllocationSemaphore = new(1, 1);
     private readonly AppDbContext _dbContext;
     private readonly IMrnGenerator _mrnGenerator;
 
@@ -138,70 +139,78 @@ public class MpiPatientService : IMpiPatientService
         }
 
         // 2. Generate new MRN and persist Patient inside transaction
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await WalkInMrnAllocationSemaphore.WaitAsync(cancellationToken);
         try
         {
-            var mrn = await _mrnGenerator.GenerateNextMrnAsync(cancellationToken);
-
-            var patient = new Patient
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+            try
             {
-                UserId = null,
-                MedicalRecordNumber = mrn,
-                FullName = request.FullName.Trim(),
-                PhoneNumber = request.PhoneNumber?.Trim(),
-                Email = request.Email?.Trim(),
-                Gender = request.Gender,
-                DateOfBirth = request.DateOfBirth,
-                Address = request.Address?.Trim(),
-                NationalId = cleanNid,
-                BhytNumber = request.BhytNumber?.Trim(),
-                BloodType = request.BloodType?.Trim(),
-                RhFactor = request.RhFactor?.Trim(),
-                PrimaryFacilityId = request.PrimaryFacilityId
-            };
+                var mrn = await _mrnGenerator.GenerateNextMrnAsync(cancellationToken);
 
-            if (request.Allergies != null && request.Allergies.Count > 0)
-            {
-                foreach (var a in request.Allergies)
+                var patient = new Patient
                 {
-                    patient.Allergies.Add(new PatientAllergy
+                    UserId = null,
+                    MedicalRecordNumber = mrn,
+                    FullName = request.FullName.Trim(),
+                    PhoneNumber = request.PhoneNumber?.Trim(),
+                    Email = request.Email?.Trim(),
+                    Gender = request.Gender,
+                    DateOfBirth = request.DateOfBirth,
+                    Address = request.Address?.Trim(),
+                    NationalId = cleanNid,
+                    BhytNumber = request.BhytNumber?.Trim(),
+                    BloodType = request.BloodType?.Trim(),
+                    RhFactor = request.RhFactor?.Trim(),
+                    PrimaryFacilityId = request.PrimaryFacilityId
+                };
+
+                if (request.Allergies != null && request.Allergies.Count > 0)
+                {
+                    foreach (var a in request.Allergies)
                     {
-                        AllergenType = a.AllergenType,
-                        AllergenName = a.AllergenName.Trim(),
-                        Severity = a.Severity,
-                        ReactionDescription = a.ReactionDescription?.Trim(),
-                        RecordedAtUtc = DateTime.UtcNow
+                        patient.Allergies.Add(new PatientAllergy
+                        {
+                            AllergenType = a.AllergenType,
+                            AllergenName = a.AllergenName.Trim(),
+                            Severity = a.Severity,
+                            ReactionDescription = a.ReactionDescription?.Trim(),
+                            RecordedAtUtc = DateTime.UtcNow
+                        });
+                    }
+                }
+
+                if (request.EmergencyContact != null && !string.IsNullOrWhiteSpace(request.EmergencyContact.FullName))
+                {
+                    patient.EmergencyContacts.Add(new EmergencyContact
+                    {
+                        FullName = request.EmergencyContact.FullName.Trim(),
+                        Relationship = request.EmergencyContact.Relationship.Trim(),
+                        PhoneNumber = request.EmergencyContact.PhoneNumber.Trim(),
+                        Address = request.EmergencyContact.Address?.Trim(),
+                        IsPrimary = true
                     });
                 }
-            }
 
-            if (request.EmergencyContact != null && !string.IsNullOrWhiteSpace(request.EmergencyContact.FullName))
+                _dbContext.Patients.Add(patient);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                return await GetPatientByIdAsync(patient.Id, cancellationToken);
+            }
+            catch (DbUpdateException ex) when (IsNationalIdUniqueViolation(ex))
             {
-                patient.EmergencyContacts.Add(new EmergencyContact
-                {
-                    FullName = request.EmergencyContact.FullName.Trim(),
-                    Relationship = request.EmergencyContact.Relationship.Trim(),
-                    PhoneNumber = request.EmergencyContact.PhoneNumber.Trim(),
-                    Address = request.EmergencyContact.Address?.Trim(),
-                    IsPrimary = true
-                });
+                await transaction.RollbackAsync(cancellationToken);
+                throw new ConflictException($"Bệnh nhân với số CCCD/Định danh '{cleanNid}' đã tồn tại trong hệ thống.");
             }
-
-            _dbContext.Patients.Add(patient);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-
-            return await GetPatientByIdAsync(patient.Id, cancellationToken);
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
         }
-        catch (DbUpdateException ex) when (IsNationalIdUniqueViolation(ex))
+        finally
         {
-            await transaction.RollbackAsync(cancellationToken);
-            throw new ConflictException($"Bệnh nhân với số CCCD/Định danh '{cleanNid}' đã tồn tại trong hệ thống.");
-        }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
+            WalkInMrnAllocationSemaphore.Release();
         }
     }
 
