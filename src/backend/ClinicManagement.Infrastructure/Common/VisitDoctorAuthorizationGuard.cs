@@ -8,6 +8,36 @@ namespace ClinicManagement.Infrastructure.Common;
 
 internal static class VisitDoctorAuthorizationGuard
 {
+    public static async Task<List<long>> GetUnassignedDepartmentIdsAsync(AppDbContext dbContext, Doctor doctor)
+    {
+        var doctorSpecialtyIds = await dbContext.DoctorSpecialties
+            .Where(ds => ds.DoctorId == doctor.Id)
+            .Select(ds => ds.SpecialtyId)
+            .ToListAsync();
+
+        var doctorDeptIds = await dbContext.Departments
+            .Where(d => d.SpecialtyId.HasValue && doctorSpecialtyIds.Contains(d.SpecialtyId.Value))
+            .Select(d => d.Id)
+            .ToListAsync();
+
+        var staffDeptIds = await dbContext.StaffFacilityAssignments
+            .Where(s => s.UserId == doctor.UserId && s.IsActive && s.DepartmentId.HasValue)
+            .Select(s => s.DepartmentId!.Value)
+            .ToListAsync();
+
+        return doctorDeptIds.Concat(staffDeptIds).Distinct().ToList();
+    }
+
+    public static async Task ValidateUnassignedDepartmentAsync(AppDbContext dbContext, PatientVisit visit, Doctor doctor)
+    {
+        if (!visit.AssignedDoctorId.HasValue)
+        {
+            var departmentIds = await GetUnassignedDepartmentIdsAsync(dbContext, doctor);
+            if (!departmentIds.Contains(visit.DepartmentId))
+                throw new NotFoundException("Lượt khám không tồn tại hoặc không thuộc quyền quản lý.");
+        }
+    }
+
     public static PatientVisit ValidateAssignedDoctor(PatientVisit? visit, Doctor doctor, bool allowUnassigned = false)
     {
         if (visit == null || (visit.AssignedDoctorId != doctor.Id &&
