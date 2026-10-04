@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.Leaves.DTOs;
 using ClinicManagement.Application.Leaves.Interfaces;
@@ -14,14 +15,18 @@ namespace ClinicManagement.Infrastructure.Leaves;
 public class AdminLeaveService : IAdminLeaveService
 {
     private readonly AppDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public AdminLeaveService(AppDbContext dbContext)
+    public AdminLeaveService(AppDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<PagedResult<LeaveRequestDto>> GetLeaveRequestsAsync(long? doctorId, string? status, int page, int pageSize)
     {
+        page = Math.Max(1, page);
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
         var query = from l in _dbContext.DoctorLeaveRequests
                     join d in _dbContext.Doctors on l.DoctorId equals d.Id
                     join u in _dbContext.Users on d.UserId equals u.Id
@@ -92,7 +97,7 @@ public class AdminLeaveService : IAdminLeaveService
             if (leave.Status != DoctorLeaveRequestStatus.Pending)
                 throw new BusinessException("INVALID_STATE", "Chỉ có thể duyệt yêu cầu đang chờ duyệt.");
 
-            if (leave.StartDateTime < DateTime.Now)
+            if (leave.StartDateTime < _dateTimeProvider.VietnamNow)
                 throw new BusinessException("INVALID_TIME", "Thời gian bắt đầu đã qua, không thể duyệt.");
 
             var overlap = await _dbContext.DoctorLeaveRequests.AnyAsync(l => 
@@ -105,17 +110,9 @@ public class AdminLeaveService : IAdminLeaveService
                 throw new BusinessException("LEAVE_OVERLAP", "Bác sĩ đã có lịch nghỉ được duyệt trong thời gian này.");
 
             // Check affected active appointments
-            var activeStatuses = new[] 
-            { 
-                AppointmentStatus.Pending, 
-                AppointmentStatus.Confirmed, 
-                AppointmentStatus.PendingReschedule, 
-                AppointmentStatus.PendingCancellation 
-            };
-
             var affectedAppointments = await _dbContext.Appointments
                 .Where(a => a.DoctorId == leave.DoctorId 
-                         && activeStatuses.Contains(a.Status)
+                         && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status)
                          && a.AppointmentDate >= DateOnly.FromDateTime(leave.StartDateTime.Date)
                          && a.AppointmentDate <= DateOnly.FromDateTime(leave.EndDateTime.Date))
                 .ToListAsync();

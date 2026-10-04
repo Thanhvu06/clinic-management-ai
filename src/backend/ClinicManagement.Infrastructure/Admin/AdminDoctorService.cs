@@ -5,8 +5,10 @@ using System.Threading.Tasks;
 using ClinicManagement.Application.Admin.DTOs;
 using ClinicManagement.Application.Admin.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Domain.Entities;
+using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,14 +17,18 @@ namespace ClinicManagement.Infrastructure.Admin;
 public class AdminDoctorService : IAdminDoctorService
 {
     private readonly AppDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public AdminDoctorService(AppDbContext dbContext)
+    public AdminDoctorService(AppDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<PagedResult<AdminDoctorDto>> GetDoctorsAsync(bool? isActive, string? search, int page, int pageSize)
     {
+        page = Math.Max(1, page);
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
         var query = from d in _dbContext.Doctors
                     join u in _dbContext.Users on d.UserId equals u.Id
                     select new
@@ -177,6 +183,15 @@ public class AdminDoctorService : IAdminDoctorService
         var doctor = await _dbContext.Doctors.FirstOrDefaultAsync(d => d.Id == id);
         if (doctor == null) throw new NotFoundException("Bác sĩ không tồn tại.");
 
+        if (doctor.IsActive && !request.IsActive)
+        {
+            var today = _dateTimeProvider.VietnamToday;
+            var count = await _dbContext.Appointments.CountAsync(a => a.DoctorId == id && a.AppointmentDate >= today &&
+                AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status));
+            if (count > 0)
+                throw new BusinessException("DOCTOR_HAS_ACTIVE_APPOINTMENTS", $"Bác sĩ còn {count} lịch hẹn cần xử lý trước khi ngừng hoạt động.");
+        }
+
         doctor.AcademicTitle = request.AcademicTitle;
         doctor.ExperienceYears = request.ExperienceYears;
         doctor.Description = request.Description;
@@ -216,10 +231,7 @@ public class AdminDoctorService : IAdminDoctorService
             var hasActiveAppointments = await _dbContext.Appointments
                 .AnyAsync(a => a.DoctorId == doctorId 
                             && removedSpecialtyIds.Contains(a.SpecialtyId)
-                            && (a.Status == ClinicManagement.Domain.Enums.AppointmentStatus.Pending || 
-                                a.Status == ClinicManagement.Domain.Enums.AppointmentStatus.Confirmed ||
-                                a.Status == ClinicManagement.Domain.Enums.AppointmentStatus.PendingReschedule ||
-                                a.Status == ClinicManagement.Domain.Enums.AppointmentStatus.PendingCancellation));
+                            && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status));
             if (hasActiveAppointments)
                 throw new BusinessException("CANNOT_REMOVE_SPECIALTY", "Không thể gỡ chuyên khoa đang có lịch hẹn chưa hoàn thành.");
         }

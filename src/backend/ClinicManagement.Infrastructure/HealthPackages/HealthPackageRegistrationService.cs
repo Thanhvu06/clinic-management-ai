@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.HealthPackages.DTOs;
 using ClinicManagement.Application.HealthPackages.Interfaces;
@@ -19,11 +20,13 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
 {
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public HealthPackageRegistrationService(AppDbContext dbContext, ICurrentUserService currentUserService)
+    public HealthPackageRegistrationService(AppDbContext dbContext, ICurrentUserService currentUserService, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<HealthPackageRegistrationDto> RegisterPackageAsync(CreatePackageRegistrationRequest request, CancellationToken cancellationToken = default)
@@ -41,7 +44,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
         if (package == null)
             throw new BusinessException("PACKAGE_NOT_FOUND", "Gói khám không tồn tại hoặc đã ngừng hoạt động.");
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = _dateTimeProvider.VietnamToday;
         if (request.PreferredDate < today)
             throw new BusinessException("INVALID_DATE", "Ngày mong muốn khám không được nằm trong quá khứ.");
 
@@ -82,7 +85,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
             Type = NotificationType.HealthPackage,
             Title = "Đăng ký gói khám thành công",
             Message = $"Bạn đã gửi đăng ký gói khám '{package.Name}'. Lễ tân sẽ liên hệ xác nhận sớm nhất.",
-            Route = "/patient/health-packages",
+            Route = "/patient/health-package-registrations",
             RelatedEntityType = "HealthPackageRegistration",
             RelatedEntityId = registrationCode,
             DedupeKey = $"pkg_reg_pat_{registrationCode}",
@@ -112,7 +115,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
                     Type = NotificationType.HealthPackage,
                     Title = "Đăng ký gói khám mới",
                     Message = $"Khách hàng đăng ký gói khám '{package.Name}' cần được tiếp nhận.",
-                    Route = "/receptionist/health-packages",
+                    Route = "/reception/package-registrations",
                     RelatedEntityType = "HealthPackageRegistration",
                     RelatedEntityId = registrationCode,
                     DedupeKey = $"pkg_reg_rec_{registrationCode}_{recUserId}",
@@ -394,7 +397,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
                 Type = NotificationType.HealthPackage,
                 Title = "Gói khám đã được xác nhận",
                 Message = $"Đăng ký gói khám '{reg.HealthPackage.Name}' của bạn đã được xác nhận thành công.",
-                Route = "/patient/health-packages",
+                Route = "/patient/health-package-registrations",
                 RelatedEntityType = "HealthPackageRegistration",
                 RelatedEntityId = reg.Id.ToString(),
                 DedupeKey = $"pkg_reg_proc_{reg.Id}_confirmed",
@@ -446,6 +449,11 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
         if (reg.Status == HealthPackageRegistrationStatus.Cancelled)
             throw new BusinessException("ALREADY_CANCELLED", "Đăng ký gói khám này đã được hủy trước đó.");
 
+        if (await _dbContext.Invoices.AnyAsync(i => i.HealthPackageRegistrationId == id && i.Status == InvoiceStatus.Paid, cancellationToken))
+            throw new BusinessException("PACKAGE_INVOICE_PAID", "Không thể hủy đăng ký gói khám đã có hóa đơn thanh toán.");
+        if (await _dbContext.Invoices.AnyAsync(i => i.HealthPackageRegistrationId == id && i.Status == InvoiceStatus.Unpaid, cancellationToken))
+            throw new BusinessException("PACKAGE_INVOICE_ACTIVE", "Vui lòng hủy hóa đơn chưa thanh toán trước khi hủy đăng ký gói khám.");
+
         reg.Status = HealthPackageRegistrationStatus.Cancelled;
         if (!string.IsNullOrWhiteSpace(request?.CancellationReason))
         {
@@ -472,7 +480,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
                 Type = NotificationType.HealthPackage,
                 Title = "Đăng ký gói khám đã bị hủy",
                 Message = $"Đăng ký gói khám '{reg.HealthPackage.Name}' của bạn đã bị hủy. Lý do: {reg.CancellationReason ?? "Không có lý do cụ thể"}.",
-                Route = "/patient/health-packages",
+                Route = "/patient/health-package-registrations",
                 RelatedEntityType = "HealthPackageRegistration",
                 RelatedEntityId = reg.Id.ToString(),
                 DedupeKey = $"pkg_reg_proc_{reg.Id}_cancelled",

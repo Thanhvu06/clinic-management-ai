@@ -2232,7 +2232,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                     Type = NotificationType.Appointment,
                     Title = "Buổi khám đã hoàn tất",
                     Message = $"Lượt khám #{visit.VisitCode} đã được bác sĩ hoàn tất. Chẩn đoán: {request.Diagnosis}",
-                    Route = "/patient/medical-records",
+                    Route = "/patient/appointments",
                     RelatedEntityType = "PatientVisit",
                     RelatedEntityId = visit.Id.ToString(),
                     DedupeKey = $"visit_complete_{visit.Id}",

@@ -52,6 +52,9 @@ public class ScheduleService : IScheduleService
 
     public async Task<WorkScheduleDto> CreateWorkScheduleAsync(long doctorId, CreateWorkScheduleRequest request)
     {
+        if (request.WorkDate.DayOfWeek == DayOfWeek.Sunday)
+            throw new BusinessException("SUNDAY_CLOSED", "Phòng khám không làm việc vào Chủ nhật.");
+
         var doctor = await _dbContext.Doctors
             .Include(d => d.WorkSchedules)
             .Join(_dbContext.Users, d => d.UserId, u => u.Id, (d, u) => new { Doctor = d, User = u })
@@ -125,6 +128,9 @@ public class ScheduleService : IScheduleService
         if (schedule == null)
             throw new NotFoundException("Lịch làm việc không tồn tại.");
 
+        if (request.WorkDate.DayOfWeek == DayOfWeek.Sunday)
+            throw new BusinessException("SUNDAY_CLOSED", "Phòng khám không làm việc vào Chủ nhật.");
+
         if (request.StartTime >= request.EndTime)
             throw new ValidationException("StartTime", "Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc.");
 
@@ -147,21 +153,13 @@ public class ScheduleService : IScheduleService
             throw new BusinessException("SCHEDULE_OVERLAP", "Khung giờ làm việc bị trùng lặp với ca làm việc khác của bác sĩ trong cùng ngày.");
 
         // Check if existing booked appointments conflict with the changed schedule
-        var activeStatuses = new[]
-        {
-            AppointmentStatus.Pending,
-            AppointmentStatus.Confirmed,
-            AppointmentStatus.PendingReschedule,
-            AppointmentStatus.PendingCancellation
-        };
-
         var hasConflictingAppointments = await _dbContext.Appointments
             .AnyAsync(a => a.AppointmentSlot.DoctorId == schedule.DoctorId
                         && a.AppointmentDate == schedule.WorkDate
                         && a.AppointmentSlot.StartTime >= schedule.StartTime
                         && a.AppointmentSlot.EndTime <= schedule.EndTime
                         && (a.AppointmentDate != request.WorkDate || a.AppointmentSlot.StartTime < request.StartTime || a.AppointmentSlot.EndTime > request.EndTime)
-                        && activeStatuses.Contains(a.Status));
+                        && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status));
 
         if (hasConflictingAppointments)
             throw new BusinessException("CONFLICT_APPOINTMENTS", "Không thể thay đổi lịch làm việc vì đã có lịch hẹn của bệnh nhân trong khung giờ này.");

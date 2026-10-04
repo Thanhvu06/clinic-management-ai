@@ -111,15 +111,7 @@ public class AuthenticationService : IAuthenticationService
             var result = await _userManager.CreateAsync(user, request.Password);
             if (!result.Succeeded)
             {
-                var errorMessages = result.Errors.Select(e => e.Code switch
-                {
-                    "PasswordRequiresNonAlphanumeric" => "Mật khẩu phải chứa ít nhất một ký tự đặc biệt.",
-                    "PasswordRequiresDigit" => "Mật khẩu phải chứa ít nhất một chữ số.",
-                    "PasswordRequiresLower" => "Mật khẩu phải chứa ít nhất một chữ cái thường.",
-                    "PasswordRequiresUpper" => "Mật khẩu phải chứa ít nhất một chữ cái hoa.",
-                    "PasswordTooShort" => "Mật khẩu quá ngắn.",
-                    _ => e.Description
-                });
+                var errorMessages = result.Errors.Select(IdentityErrorMessages.ToVietnamese);
                 var errors = string.Join(" ", errorMessages);
                 throw new ValidationException("Password", errors);
             }
