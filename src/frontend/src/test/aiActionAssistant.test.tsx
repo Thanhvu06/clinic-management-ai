@@ -46,6 +46,22 @@ vi.mock('../api/axiosClient', () => ({
 }));
 
 describe('AI Action Assistant - Frontend Widget & Flow', () => {
+    it.each(['UNKNOWN_TOOL_ARGUMENT', 'FORBIDDEN_TOOL_ARGUMENT', 'MISSING_TOOL_ARGUMENT', 'INVALID_DATE'])(
+        'hides internal parameter details in a %s error card', async code => {
+            vi.mocked(axiosClient.post).mockResolvedValueOnce({ success: true, data: {
+                message: 'Không thể kiểm tra dữ liệu.', primaryIntent: 'DoctorSearch', actions: [],
+                toolResults: [{ status: 'failed', error: { code, message: "Tham số 'keyword' không được phép." } }],
+            } });
+            render(<MemoryRouter><ChatProvider><MedicalChatWidget /></ChatProvider></MemoryRouter>);
+            fireEvent.click(screen.getByRole('button', { name: 'Mở Trợ lý ClinicCare AI' }));
+            fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Tìm lịch khám khoa Tai mũi họng' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Gửi tin nhắn' }));
+            expect(await screen.findByText('ClinicCare chưa xử lý được yêu cầu này. Bạn thử diễn đạt lại hoặc chọn một gợi ý bên dưới.')).toBeInTheDocument();
+            expect(screen.queryByText(/keyword/)).not.toBeInTheDocument();
+            expect(screen.queryByText('Không thể thực hiện thao tác')).not.toBeInTheDocument();
+        },
+    );
+
     beforeEach(() => {
         vi.mocked(axiosClient.post).mockReset();
         vi.mocked(axiosClient.get).mockReset();

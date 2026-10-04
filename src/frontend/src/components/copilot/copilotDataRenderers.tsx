@@ -24,6 +24,8 @@ const numberValue = (value: unknown): number | null =>
 const formatDateTime = (value: unknown): string | null => {
     const raw = text(value);
     if (!raw) return null;
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+    if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
     const date = new Date(raw);
     return Number.isNaN(date.valueOf()) ? raw : date.toLocaleString('vi-VN');
 };

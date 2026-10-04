@@ -23,6 +23,7 @@ namespace ClinicManagement.Infrastructure.AI;
 public class AiSpecialtyService : IAiSpecialtyService
 {
     private const int EarliestSlotSearchHorizonDays = 7;
+    private const string GroundedReplyFallback = "Thông tin tư vấn định hướng đã được đối soát an toàn với hệ thống phòng khám. Vui lòng tham khảo các gợi ý chuyên khoa và thao tác hỗ trợ bên dưới.";
     private readonly AppDbContext _dbContext;
     private readonly IAiSpecialtySuggestionProvider _aiProvider;
     private readonly IClinicAiContextService _clinicAiContextService;
@@ -608,6 +609,8 @@ public class AiSpecialtyService : IAiSpecialtyService
             : "ROUTINE";
 
         var sanitizedReply = await ComposeGroundedReplyAsync(aiResult.Reply, whitelistData, cancellationToken);
+        if (effectivePrimaryIntent == AiChatIntentTypes.Greeting && sanitizedReply == GroundedReplyFallback)
+            sanitizedReply = "Xin chào! ClinicCare có thể giúp bạn tra cứu thông tin và đặt lịch khám.";
 
         var responseDto = new AiChatResponseDto
         {
@@ -718,7 +721,9 @@ public class AiSpecialtyService : IAiSpecialtyService
         }
 
         // 7.2 Synthesize Quick Navigation Actions if requested
-        await AddNavigationActionsIfRequestedAsync(cleanMessage, lowerMsg, aiResult.RequestedActionType, responseDto, cancellationToken);
+        await AddNavigationActionsIfRequestedAsync(cleanMessage, lowerMsg,
+            aiResult.RequestedActionType ?? (effectivePrimaryIntent == AiChatIntentTypes.StartBooking ? AiActionTypes.StartBooking : null),
+            responseDto, cancellationToken);
 
         // 7.3 Ground Booking Flow: Resolve Specialty, Doctor, Date, Slots
         await GroundBookingFlowAsync(request, cleanMessage, lowerMsg, aiResult, localClassification, whitelistData, responseDto, cancellationToken);
@@ -2923,6 +2928,8 @@ public class AiSpecialtyService : IAiSpecialtyService
             "Cancelled" => "Yêu cầu AI đã được dừng theo thao tác của bạn. Bản nháp đặt lịch vẫn được giữ nguyên.",
             _ => "Không thể hoàn tất yêu cầu AI do lỗi mạng tạm thời. Hệ thống đã chuyển sang chế độ hỗ trợ cơ bản để bạn có thể tiếp tục tra cứu và đặt lịch trực tiếp."
         };
+        if (providerStatus == "Disabled" && _intentClassifier.Classify(cleanMessage).Intent == AiChatIntentTypes.Greeting)
+            userMessage = "Xin chào! ClinicCare có thể giúp bạn tra cứu thông tin và đặt lịch khám.";
 
         var response = new AiChatResponseDto
         {
@@ -3320,7 +3327,7 @@ public class AiSpecialtyService : IAiSpecialtyService
         List<WhitelistItemDto> activeSpecialties,
         CancellationToken cancellationToken)
     {
-        const string neutralFallback = "Thông tin tư vấn định hướng đã được đối soát an toàn với hệ thống phòng khám. Vui lòng tham khảo các gợi ý chuyên khoa và thao tác hỗ trợ bên dưới.";
+        const string neutralFallback = GroundedReplyFallback;
 
         if (string.IsNullOrWhiteSpace(rawReply))
         {

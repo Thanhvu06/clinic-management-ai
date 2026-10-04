@@ -13,6 +13,7 @@ using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.AI.Planning;
 using ClinicManagement.Application.AI.Tools;
+using ClinicManagement.Infrastructure.AI.Tools;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -191,7 +192,16 @@ PATIENT SYMPTOM DESCRIPTION:
         var sw = Stopwatch.StartNew();
 
         var whitelistJson = JsonSerializer.Serialize(whitelist.Select(w => new { w.Code, w.Name }));
-        var plannerToolNames = string.Join(", ", AiPlannerPolicy.AllowedToolNames.OrderBy(x => x, StringComparer.Ordinal));
+        var plannerTools = AiRolePlannerContract.BuildToolContracts(PatientCopilotToolHandler.Definitions(), AiPlannerPolicy.AllowedToolNames);
+        var plannerToolNames = string.Join(", ", plannerTools.Select(x => x.Name));
+        var plannerToolContractsJson = JsonSerializer.Serialize(plannerTools.Select(tool => new
+        {
+            name = tool.Name, version = tool.Version,
+            arguments = tool.Arguments.Select(argument => new
+            {
+                name = argument.Name, type = argument.Type.ToString(), required = argument.Required
+            })
+        }));
 
         var prompt = $$"""
 Bạn là trợ lý y tế AI thông minh của Phòng khám ClinicCare (Phiên bản prompt: {{CurrentPromptVersion}}).
@@ -278,6 +288,8 @@ FORMAT ĐẦU RA (BẮT BUỘC JSON object thuần túy):
 }
 
 TOOL PLANNER CONTRACT:
+- Hợp đồng công cụ và tham số do server cấp: {{plannerToolContractsJson}}.
+- arguments chỉ chứa đúng các tên trong arguments của công cụ tương ứng; công cụ không có tham số dùng {}. Tìm chuyên khoa/bác sĩ dùng query.
 - toolCalls tối đa 3 phần tử; mỗi phần tử chỉ có name, version và arguments.
 - Chỉ được dùng các tên canonical đã cho phép: {{plannerToolNames}}. Các tool prepare/ghi chỉ được gọi qua luồng backend xác nhận riêng và không được xuất hiện trong toolCalls của planner.
 - Không tự thêm actorId, role, userId, facility authorization hoặc quyền xác nhận vào arguments.
