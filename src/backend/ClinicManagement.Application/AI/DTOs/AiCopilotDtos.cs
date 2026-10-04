@@ -59,6 +59,8 @@ public sealed class AiCopilotSuggestionsResponseDto
 {
     public string Role { get; init; } = string.Empty;
     public IReadOnlyList<AiSuggestionItemDto> Suggestions { get; init; } = Array.Empty<AiSuggestionItemDto>();
+    /// <summary>Role-owned codes accepted for recognised typed requests; never rendered as chips.</summary>
+    public IReadOnlyList<AiSuggestionItemDto> TypedSuggestions { get; init; } = Array.Empty<AiSuggestionItemDto>();
 }
 
 public sealed class AiCopilotResourceContextDto

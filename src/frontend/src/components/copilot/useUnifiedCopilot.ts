@@ -18,7 +18,8 @@ import { aiChatFailureMessage } from '../../api/aiErrorMessages';
 import type { AiSuggestionItem } from '../../types/ai';
 import { getCopilotRoleConfig, type CopilotRole } from './copilotConfig';
 import { useCopilotResource, type CopilotResourceSelection } from './copilotResourceContext';
-import { useSuggestionMenu } from './useSuggestionMenu';
+import { classifyStaffTypedIntent } from './staffTypedIntent';
+import { useSuggestionMenuState } from './useSuggestionMenu';
 
 export interface UnifiedCopilotMessage {
     id: string;
@@ -289,7 +290,9 @@ export const useUnifiedCopilot = () => {
     const retryTextRef = useRef<string | null>(null);
     const retrySuggestionCodeRef = useRef<string | null>(null);
     const actionBusyRef = useRef(false);
-    const menuSuggestions = useSuggestionMenu({ enabled: open, role, identityKey, currentRoute: location.pathname, resourceContext });
+    const menuState = useSuggestionMenuState({ enabled: open, role, identityKey, currentRoute: location.pathname, resourceContext });
+    const menuSuggestions = menuState.chips;
+    const typedMenuCodes = useMemo(() => [...menuState.chips, ...menuState.typed].map(item => item.code), [menuState]);
 
     const reset = useCallback(() => {
         controllerRef.current?.abort();
@@ -396,10 +399,13 @@ export const useUnifiedCopilot = () => {
     }, [identityKey]);
 
     // A suggestion button sends its server-owned code; the label is only
-    // the visible history text. Free text keeps the original behaviour.
+    // the visible history text. A typed staff question that clearly matches
+    // a code in the current menu is sent the same way, with the typed text as
+    // its label. Anything else keeps the original free-text behaviour.
     const submit = useCallback(async (value: string, suggestionCode?: string) => {
         const message = value.trim();
         if (!message || loading || message.length > 500) return;
+        const code = suggestionCode ?? classifyStaffTypedIntent(role, message, typedMenuCodes) ?? undefined;
         const requestNumber = ++requestNumberRef.current;
         const controller = new AbortController();
         controllerRef.current?.abort();
@@ -419,7 +425,7 @@ export const useUnifiedCopilot = () => {
             clientTurnId: makeId('turn'),
             locale: 'vi-VN',
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            ...(suggestionCode ? { suggestionCode } : {})
+            ...(code ? { suggestionCode: code } : {})
         };
 
         try {
@@ -431,12 +437,12 @@ export const useUnifiedCopilot = () => {
         } catch (error) {
             if (controller.signal.aborted || requestNumber !== requestNumberRef.current) return;
             retryTextRef.current = message;
-            retrySuggestionCodeRef.current = suggestionCode ?? null;
-            setMessages(previous => [...previous, { id: makeId('error'), role: 'assistant', error: true, retryText: message, retrySuggestionCode: suggestionCode, content: aiChatFailureMessage(error) }]);
+            retrySuggestionCodeRef.current = code ?? null;
+            setMessages(previous => [...previous, { id: makeId('error'), role: 'assistant', error: true, retryText: message, retrySuggestionCode: code, content: aiChatFailureMessage(error) }]);
         } finally {
             if (requestNumber === requestNumberRef.current) setLoading(false);
         }
-    }, [loading, location.pathname, resourceContext, resourceVersion]);
+    }, [loading, location.pathname, resourceContext, resourceVersion, role, typedMenuCodes]);
 
     const send = useCallback((value = input) => submit(value), [input, submit]);
 

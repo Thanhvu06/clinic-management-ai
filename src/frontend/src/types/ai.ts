@@ -424,6 +424,8 @@ export interface AiBookingWizardRequest {
     reason?: string;
     currentRoute?: string;
     locale?: string;
+    /** Typed doctor/specialty name; sent only with a typed "start". Never an ID. */
+    hint?: string;
 }
 
 export interface AiBookingWizardResponse {
@@ -457,4 +459,6 @@ export interface AiSuggestionMenuRequest {
 export interface AiSuggestionMenu {
     role: string;
     suggestions: AiSuggestionItem[];
+    /** Role-owned codes accepted for recognised typed requests; never shown as chips. */
+    typedSuggestions?: AiSuggestionItem[];
 }

@@ -1,33 +1,14 @@
-export type PatientTypedIntent = 'booking' | 'appointments' | 'visits' | 'prescriptions' | 'results' | 'bills';
+import { findPhrase, normalizeTypedText, typedTokens } from './typedIntentText';
 
-// Short tokens must match exactly; longer keywords tolerate one edit.
-function matchesToken(token: string, keyword: string): boolean {
-    if (token === keyword) return true;
-    if (Math.max(keyword.length, token.length) < 4 || Math.abs(token.length - keyword.length) > 1) return false;
-    let previous = Array.from({ length: keyword.length + 1 }, (_, index) => index);
-    for (let i = 1; i <= token.length; i++) {
-        const current = [i];
-        for (let j = 1; j <= keyword.length; j++) {
-            current[j] = Math.min(current[j - 1] + 1, previous[j] + 1,
-                previous[j - 1] + (token[i - 1] === keyword[j - 1] ? 0 : 1));
-        }
-        previous = current;
-    }
-    return previous[keyword.length] <= 1;
-}
+export type PatientTypedIntent = 'booking' | 'appointments' | 'visits' | 'prescriptions' | 'results' | 'bills';
 
 export function classifyPatientTypedIntent(text: string): PatientTypedIntent | null {
     if (text.length > 120) return null;
-    const normalized = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd')
-        .toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim().replace(/\s+/g, ' ');
-    const tokens = normalized ? normalized.split(' ') : [];
+    const tokens = typedTokens(text);
     // Keep the question word "đâu" distinct from the pain keyword "đau".
     const originalTokens = text.normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').trim().split(/\s+/);
-    const has = (phrase: string, fuzzy = true) => {
-        const keywords = phrase.split(' ');
-        return tokens.some((_, start) => !(phrase === 'dau' && originalTokens[start] === 'đâu') && keywords.every((keyword, offset) =>
-            tokens[start + offset] !== undefined && (fuzzy ? matchesToken(tokens[start + offset], keyword) : tokens[start + offset] === keyword)));
-    };
+    const has = (phrase: string, fuzzy = true) =>
+        findPhrase(tokens, phrase, fuzzy, start => phrase === 'dau' && originalTokens[start] === 'đâu') >= 0;
     const any = (phrases: string[]) => phrases.some(phrase => has(phrase));
 
     // Guards use whole words, avoiding false positives such as "sàng" -> "sưng".
@@ -50,4 +31,51 @@ export function classifyPatientTypedIntent(text: string): PatientTypedIntent | n
         (has('cua toi') && !has('kham benh')))) return 'results';
     if (any(['hoa don', 'bien lai', 'vien phi'])) return 'bills';
     return null;
+}
+
+// Words around a typed doctor/specialty name that are not part of it. They
+// are compared with their accents; unaccented forms are listed only when they
+// cannot also start a name (so "tai" in "tai mũi họng" is kept).
+const HINT_ANCHORS = ['bac si', 'bsi', 'bs', 'doctor', 'chuyen khoa', 'khoa', 'kham'];
+const HINT_EDGE_WORDS = new Set(['với', 'voi', 'cho', 'tôi', 'toi', 'tối', 'mình', 'muốn', 'muon', 'giúp', 'giup', 'nhé', 'nhe', 'nha', 'ạ',
+    'vào', 'vao', 'lúc', 'luc', 'ở', 'tại', 'đi', 'được', 'duoc', 'không', 'khong', 'nào', 'nao',
+    'sđt', 'sdt', 'số', 'đặt', 'dat', 'lịch', 'lich', 'hẹn', 'hen', 'khám', 'kham', 'book', 'đăng', 'ký', 'em', 'con']);
+const HINT_TIME_PHRASES = ['ngay mai', 'hom nay', 'tuan sau', 'tuan toi', 'tuan nay', 'sang mai', 'chieu mai', 'sang nay',
+    'chieu nay', 'toi nay', 'cuoi tuan', 'ngay kia', 'som nhat', 'gan nhat', 'dien thoai'];
+const MAX_HINT_WORDS = 6;
+
+/**
+ * Extracts a doctor or specialty name typed after "bác sĩ", "bs", "khoa",
+ * "chuyên khoa" or "khám" (e.g. "đặt khám với bác sĩ Lan" -> "Lan"). Returns
+ * null when nothing usable remains. Phone numbers, record codes and long
+ * numbers are never included; the server matches the name itself.
+ */
+export function extractBookingHint(text: string): string | null {
+    if (text.length > 120) return null;
+    const cleaned = text.normalize('NFC')
+        .replace(/\b[A-Za-z]{2,}-[A-Za-z0-9-]+\b/g, ' ')
+        .replace(/\+?\d[\d\s.-]{4,}\d/g, ' ')
+        .replace(/[^\p{L}\p{N}\s]/gu, ' ');
+    const words = cleaned.trim().split(/\s+/).filter(word => word && !/\d/.test(word));
+    const tokens = words.map(word => normalizeTypedText(word));
+
+    let start = -1;
+    for (const anchor of HINT_ANCHORS) {
+        const index = findPhrase(tokens, anchor, false);
+        if (index >= 0) { start = index + anchor.split(' ').length; break; }
+    }
+    if (start < 0) return null;
+
+    let end = words.length;
+    for (let index = start; index < words.length; index++) {
+        if (HINT_ANCHORS.some(anchor => findPhrase(tokens.slice(index), anchor, false) === 0)) { end = index; break; }
+        const time = HINT_TIME_PHRASES.find(phrase => findPhrase(tokens.slice(index), phrase, false) === 0);
+        if (time) { end = index; break; }
+    }
+    let name = words.slice(start, end);
+    const isEdge = (word: string) => HINT_EDGE_WORDS.has(word.toLowerCase());
+    while (name.length && isEdge(name[0])) name = name.slice(1);
+    while (name.length && isEdge(name[name.length - 1])) name = name.slice(0, -1);
+    if (name.length === 0 || name.length > MAX_HINT_WORDS) return null;
+    return name.join(' ');
 }

@@ -4,7 +4,7 @@ import { useUnifiedCopilot, type UnifiedCopilotMessage } from './useUnifiedCopil
 import { ProviderStatus } from './ProviderStatus';
 import './chatTokens.css';
 import { toolDisplayName } from './copilotConfig';
-import { renderCopilotCardData } from './copilotDataRenderers';
+import { copilotCardEmptyMessage, renderCopilotCardData } from './copilotDataRenderers';
 import { SuggestionChips } from './SuggestionChips';
 import { sanitizeSuggestions } from './useSuggestionMenu';
 import styles from './UnifiedCopilotPanel.module.css';
@@ -28,6 +28,11 @@ const MessageBubble: React.FC<{
                 {response?.clarification && normalizeText(response.clarification) !== normalizeText(item.content) && <div className={styles.clarification}>{response.clarification}</div>}
                 {response?.safetyNotice && normalizeText(response.safetyNotice) !== normalizeText(item.content) && normalizeText(response.safetyNotice) !== normalizeText(response.clarification) && <div className={styles.clarification}>{response.safetyNotice}</div>}
                 {cards.map((card, index) => {
+                    // An empty card shows no frame, title or sources: only one
+                    // secondary line, and only when it adds to the reply.
+                    const emptyMessage = copilotCardEmptyMessage(card);
+                    if (emptyMessage !== null) return normalizeText(emptyMessage) !== normalizeText(item.content)
+                        ? <p className={styles.cardDescription} key={`${card.type}-${index}`}>{emptyMessage}</p> : null;
                     const sources = Array.from(new Map(
                         [...(card.sources ?? []), ...(index === 0 ? (response?.sources ?? []) : [])]
                             .map(source => [`${source.name}:${source.kind}`, source] as const)

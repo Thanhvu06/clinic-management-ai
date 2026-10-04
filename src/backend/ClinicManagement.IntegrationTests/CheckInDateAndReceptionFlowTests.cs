@@ -79,7 +79,7 @@ public class CheckInDateAndReceptionFlowTests : IntegrationTestBase
         var actor = Actor(entry == "doctor" ? DoctorId : ReceptionistId);
         var visits = new PatientVisitService(db, actor, clock.Object, scope.ServiceProvider.GetRequiredService<IMrnGenerator>(), access.Object);
         var reception = new ReceptionService(db, actor, clock.Object, access.Object);
-        var doctor = new DoctorAppointmentService(db, DoctorContext(), clock.Object, actor);
+        var doctor = new DoctorAppointmentService(db, DoctorContext(), clock.Object, actor, visits);
         async Task CheckInAsync(long id)
         {
             if (entry == "visit") await visits.CheckInAppointmentAsync(new AppointmentCheckInRequest { AppointmentId = id });
@@ -119,7 +119,7 @@ public class CheckInDateAndReceptionFlowTests : IntegrationTestBase
     {
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var service = new DoctorAppointmentService(db, DoctorContext(), Clock().Object, Actor(DoctorId));
+        var service = new DoctorAppointmentService(db, DoctorContext(), Clock().Object, Actor(DoctorId), new Mock<ClinicManagement.Application.Visits.Interfaces.IPatientVisitService>().Object);
         var department = await db.Departments.FirstAsync(x => x.SpecialtyId == SpecialtyEntityId && x.IsActive);
         foreach (var status in new[] { AppointmentStatus.CheckedIn, AppointmentStatus.Confirmed, AppointmentStatus.Pending })
         {

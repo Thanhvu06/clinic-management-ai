@@ -52,9 +52,18 @@ export interface SuggestionMenuOptions {
     resourceContext?: object | null;
 }
 
-/** Loads the initial suggestion menu when a chat opens or its route/resource changes. */
-export const useSuggestionMenu = ({ enabled, role, identityKey, currentRoute, resourceContext }: SuggestionMenuOptions): AiSuggestionItem[] => {
-    const [menu, setMenu] = useState<{ key: string; items: AiSuggestionItem[] }>({ key: '', items: [] });
+export interface SuggestionMenuState {
+    /** Chips to render. */
+    chips: AiSuggestionItem[];
+    /** Extra server-owned codes a recognised typed request may use; never rendered. */
+    typed: AiSuggestionItem[];
+}
+
+const EMPTY_MENU: SuggestionMenuState = { chips: [], typed: [] };
+
+/** Loads the menu when a chat opens or its route/resource changes, including typed-only codes. */
+export const useSuggestionMenuState = ({ enabled, role, identityKey, currentRoute, resourceContext }: SuggestionMenuOptions): SuggestionMenuState => {
+    const [menu, setMenu] = useState<{ key: string } & SuggestionMenuState>({ key: '', ...EMPTY_MENU });
     const resourceKey = JSON.stringify(pickResource(resourceContext as Record<string, unknown> | null | undefined) ?? null);
     const active = enabled && SUGGESTION_ROLES.has(role ?? '');
     const requestKey = useMemo(() => JSON.stringify([identityKey, role, currentRoute, resourceKey]), [identityKey, role, currentRoute, resourceKey]);
@@ -64,11 +73,14 @@ export const useSuggestionMenu = ({ enabled, role, identityKey, currentRoute, re
         const controller = new AbortController();
         const parsed = JSON.parse(resourceKey) as ResourceHint | null;
         void getCopilotSuggestions({ currentRoute, ...(parsed ? { resourceContext: parsed } : {}) }, controller.signal)
-            .then(result => { if (!controller.signal.aborted) setMenu({ key: requestKey, items: sanitizeSuggestions(result?.suggestions) }); })
-            .catch(() => { if (!controller.signal.aborted) setMenu({ key: requestKey, items: [] }); });
+            .then(result => { if (!controller.signal.aborted) setMenu({ key: requestKey, chips: sanitizeSuggestions(result?.suggestions), typed: sanitizeSuggestions(result?.typedSuggestions) }); })
+            .catch(() => { if (!controller.signal.aborted) setMenu({ key: requestKey, ...EMPTY_MENU }); });
         return () => controller.abort();
     }, [active, currentRoute, requestKey, resourceKey]);
 
-    // A menu fetched for another identity/route/resource is never shown.
-    return active && menu.key === requestKey ? menu.items : [];
+    // A menu fetched for another identity/route/resource is never used.
+    return active && menu.key === requestKey ? menu : EMPTY_MENU;
 };
+
+/** Loads the initial suggestion menu when a chat opens or its route/resource changes. */
+export const useSuggestionMenu = (options: SuggestionMenuOptions): AiSuggestionItem[] => useSuggestionMenuState(options).chips;

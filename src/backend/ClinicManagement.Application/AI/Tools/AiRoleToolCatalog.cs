@@ -28,6 +28,7 @@ public static class AiRoleToolCatalog
         RoleTool("technician.get_completed_today", "Xem chỉ định hoàn tất hôm nay trong khoa và cơ sở được phân công", AiActorRole.DiagnosticTechnician, AiActorCapability.ReadDiagnosticWorkspace),
         RoleTool("pharmacist.get_low_stock", "Xem tối đa 100 thuốc hoạt động có tồn kho không vượt mức đặt lại; tồn kho toàn hệ thống, chưa tách theo cơ sở", AiActorRole.Pharmacist, AiActorCapability.ReadPharmacyWorkspace),
         RoleTool("reception.get_today_appointments", "Xem lịch hẹn trong ngày của cơ sở được phân quyền", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),
+        RoleTool("reception.get_upcoming_appointments", "Xem tối đa 100 lịch hẹn còn giữ chỗ từ ngày mai đến hết 7 ngày tới của cơ sở được phân quyền", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),
         RoleTool("reception.get_queue", "Xem hàng đợi tiếp nhận của cơ sở được phân quyền", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),
         RoleToolWithSchema("reception.lookup_appointment", "Tra cứu lịch hẹn bằng mã đối soát", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace,
             new[] { Arg("appointmentCode", AiToolArgumentType.String, required: true) }),

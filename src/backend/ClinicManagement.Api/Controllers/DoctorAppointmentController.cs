@@ -62,8 +62,8 @@ public class DoctorAppointmentController : ControllerBase
     [HttpPost("{id}/check-in")]
     public async Task<IActionResult> CheckInAppointment(long id)
     {
-        await _doctorAppointmentService.CheckInAppointmentAsync(id);
-        return Ok(ApiResponse.Ok("Đã tiếp nhận bệnh nhân vào phòng khám."));
+        var ticket = await _doctorAppointmentService.CheckInAppointmentAsync(id);
+        return Ok(ApiResponse<ClinicManagement.Application.Visits.DTOs.CheckInTicketDto>.Ok(ticket, "Đã tiếp nhận bệnh nhân vào phòng khám."));
     }
 
     [HttpPost("{id}/start-consultation")]

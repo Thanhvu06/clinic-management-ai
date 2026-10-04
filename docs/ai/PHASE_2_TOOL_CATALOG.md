@@ -31,6 +31,7 @@ results with a source label; no tool accepts authorization fields from a model.
 | `patient.prepare_reschedule_appointment` | Patient | Prepare write | Own appointment + new slot | Explicit confirmation | Availability policy |
 | `patient.execute_confirmed_action` | Patient | Write | Dedicated endpoint only | Backend token | Pending action store + domain service |
 | `reception.get_today_appointments` | Receptionist | Read | Appointment's persisted facility + receptionist assignment | No | Appointment + facility binding |
+| `reception.get_upcoming_appointments` | Receptionist | Read | Appointment's persisted facility + receptionist assignment; tomorrow to day +7 (Vietnam time), holding statuses, max 100 | No | Appointment + facility binding |
 | `reception.get_queue` | Receptionist | Read | Assigned facility | No | Patient visit queue |
 | `reception.lookup_appointment` | Receptionist | Read | Appointment's persisted facility + receptionist assignment | No | Appointment code + facility binding |
 | `reception.prepare_check_in_appointment` | Receptionist | Prepare write | Persisted appointment facility + active doctor/reception scope | Explicit confirmation | PatientVisit domain service |

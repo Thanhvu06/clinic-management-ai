@@ -602,7 +602,9 @@ public class PatientVisitService : IPatientVisitService
             Action = AppointmentHistoryAction.CheckedIn,
             OldStatus = oldStatus,
             NewStatus = AppointmentStatus.CheckedIn,
-            Note = $"Tiếp nhận bệnh nhân tại quầy lễ tân. Mã lượt khám: {visitCode}, STT: {queueNumber}",
+            Note = doctor.UserId == currentUserId
+                ? $"Bác sĩ tiếp nhận bệnh nhân vào phòng khám. Mã lượt khám: {visitCode}, STT: {queueNumber}"
+                : $"Tiếp nhận bệnh nhân tại quầy lễ tân. Mã lượt khám: {visitCode}, STT: {queueNumber}",
             PerformedByUserId = currentUserId,
             CreatedAt = _dateTimeProvider.UtcNow
         });

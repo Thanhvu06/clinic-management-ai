@@ -15,6 +15,8 @@ using ClinicManagement.Application.Diagnostics.DTOs;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Application.Prescriptions.DTOs;
+using ClinicManagement.Application.Visits.DTOs;
+using ClinicManagement.Application.Visits.Interfaces;
 using ClinicManagement.Infrastructure.Common;
 using ClinicManagement.Infrastructure.Persistence;
 using ClinicManagement.Infrastructure.Visits;
@@ -28,17 +30,20 @@ public class DoctorAppointmentService : IDoctorAppointmentService
     private readonly IDoctorContextService _doctorContextService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IPatientVisitService _patientVisitService;
 
     public DoctorAppointmentService(
         AppDbContext dbContext, 
         IDoctorContextService doctorContextService,
         IDateTimeProvider dateTimeProvider,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IPatientVisitService patientVisitService)
     {
         _dbContext = dbContext;
         _doctorContextService = doctorContextService;
         _dateTimeProvider = dateTimeProvider;
         _currentUserService = currentUserService;
+        _patientVisitService = patientVisitService;
     }
 
     private Task<Doctor> GetCurrentDoctorAsync()
@@ -782,37 +787,34 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         };
     }
 
-    public async Task CheckInAppointmentAsync(long appointmentId)
+    public async Task<CheckInTicketDto> CheckInAppointmentAsync(long appointmentId)
     {
         var doctor = await GetCurrentDoctorAsync();
-        var userId = GetUserId();
+        GetUserId();
 
-        var appointment = await _dbContext.Appointments
-            .FirstOrDefaultAsync(a => a.Id == appointmentId && a.DoctorId == doctor.Id);
+        // Ownership is checked before the shared visit service runs, so another
+        // doctor's appointment stays NotFound and never creates a visit.
+        var appointment = await _dbContext.Appointments.AsNoTracking()
+            .Where(a => a.Id == appointmentId && a.DoctorId == doctor.Id)
+            .Select(a => new { a.Status, a.AppointmentDate, HasVisit = _dbContext.PatientVisits.Any(v => v.AppointmentId == a.Id) })
+            .FirstOrDefaultAsync();
 
         if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
 
-        if (appointment.Status != AppointmentStatus.Confirmed)
-            throw new BusinessException("INVALID_STATE_TRANSITION", "Chỉ có thể check-in lịch hẹn ở trạng thái Confirmed.");
-
-        if (appointment.AppointmentDate != _dateTimeProvider.VietnamToday)
-            throw new BusinessException("CHECKIN_NOT_TODAY", $"Lịch hẹn ngày {appointment.AppointmentDate:dd/MM/yyyy}; chỉ tiếp nhận được vào đúng ngày khám.");
-
-        var oldStatus = appointment.Status;
-        appointment.Status = AppointmentStatus.CheckedIn;
-
-        _dbContext.AppointmentHistories.Add(new AppointmentHistory
+        // A repeated tap returns the existing visit ticket: no second visit,
+        // queue number or history row. A first check-in keeps the doctor rule
+        // (Confirmed only), which is stricter than the reception desk.
+        if (!appointment.HasVisit)
         {
-            AppointmentId = appointment.Id,
-            Action = AppointmentHistoryAction.CheckedIn,
-            OldStatus = oldStatus,
-            NewStatus = AppointmentStatus.CheckedIn,
-            Note = "Bác sĩ xác nhận bệnh nhân đã có mặt và check-in vào phòng khám",
-            PerformedByUserId = userId,
-            CreatedAt = DateTime.UtcNow
-        });
+            if (appointment.Status != AppointmentStatus.Confirmed)
+                throw new BusinessException("INVALID_STATE_TRANSITION", "Chỉ có thể check-in lịch hẹn ở trạng thái Confirmed.");
 
-        await _dbContext.SaveChangesAsync();
+            if (appointment.AppointmentDate != _dateTimeProvider.VietnamToday)
+                throw new BusinessException("CHECKIN_NOT_TODAY", $"Lịch hẹn ngày {appointment.AppointmentDate:dd/MM/yyyy}; chỉ tiếp nhận được vào đúng ngày khám.");
+        }
+
+        // Same visit, queue number, status, history and notifications as reception check-in.
+        return await _patientVisitService.CheckInAppointmentAsync(new AppointmentCheckInRequest { AppointmentId = appointmentId });
     }
 
     public async Task StartConsultationAsync(long appointmentId)

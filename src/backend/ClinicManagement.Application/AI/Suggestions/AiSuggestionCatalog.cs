@@ -15,7 +15,8 @@ public sealed record AiSuggestionDefinition(
     AiSuggestionResourceKind ResourceKind,
     AiSuggestionActionKind ActionKind = AiSuggestionActionKind.ReadTool,
     string? WizardStep = null,
-    string? Group = null);
+    string? Group = null,
+    IReadOnlyDictionary<string, string>? FixedArguments = null);
 
 /// <summary>
 /// Server-owned suggestion buttons. The browser only ever sends a code; the
@@ -51,13 +52,41 @@ public static class AiSuggestionCatalog
         new AiSuggestionDefinition("admin.ai_health", "Hoạt động của trợ lý AI", AiActorRole.Admin, "admin.get_ai_health", AiSuggestionResourceKind.None, Group: "Tổng quan")
     };
 
+    /// <summary>
+    /// Codes the browser may send for a typed request it recognised, without a
+    /// chip in the menu. Each maps to one read tool; any argument is fixed here
+    /// and is never taken from the user's text.
+    /// </summary>
+    public static IReadOnlyList<AiSuggestionDefinition> TypedDefinitions { get; } = new[]
+    {
+        new AiSuggestionDefinition("receptionist.upcoming_appointments", "Lịch hẹn sắp tới", AiActorRole.Receptionist, "reception.get_upcoming_appointments", AiSuggestionResourceKind.None, Group: "Tra cứu nhanh"),
+        new AiSuggestionDefinition("receptionist.pending_payments", "Hóa đơn chờ thanh toán", AiActorRole.Receptionist, "reception.get_pending_payments", AiSuggestionResourceKind.None, Group: "Tra cứu nhanh"),
+        new AiSuggestionDefinition("doctor.today_appointments", "Lịch hẹn hôm nay của tôi", AiActorRole.Doctor, "doctor.get_my_appointments_today", AiSuggestionResourceKind.None, Group: "Tra cứu nhanh"),
+        new AiSuggestionDefinition("technician.completed_today", "Đã hoàn tất hôm nay", AiActorRole.DiagnosticTechnician, "technician.get_completed_today", AiSuggestionResourceKind.None, Group: "Tra cứu nhanh"),
+        new AiSuggestionDefinition("pharmacist.low_stock", "Thuốc sắp hết", AiActorRole.Pharmacist, "pharmacist.get_low_stock", AiSuggestionResourceKind.None, Group: "Tra cứu nhanh"),
+        new AiSuggestionDefinition("admin.revenue_today", "Doanh thu hôm nay", AiActorRole.Admin, "admin.get_revenue_summary", AiSuggestionResourceKind.None, Group: "Tra cứu nhanh",
+            FixedArguments: new Dictionary<string, string> { ["period"] = "today" }),
+        new AiSuggestionDefinition("admin.revenue_this_month", "Doanh thu tháng này", AiActorRole.Admin, "admin.get_revenue_summary", AiSuggestionResourceKind.None, Group: "Tra cứu nhanh",
+            FixedArguments: new Dictionary<string, string> { ["period"] = "this_month" })
+    };
+
     /// <summary>Finds a code only when it belongs to the caller's role.</summary>
     public static AiSuggestionDefinition? Find(string? code, AiActorRole role)
     {
         if (string.IsNullOrWhiteSpace(code)) return null;
         var normalized = code.Trim();
-        return Definitions.FirstOrDefault(x => x.Role == role && string.Equals(x.Code, normalized, StringComparison.Ordinal));
+        return Definitions.Concat(TypedDefinitions)
+            .FirstOrDefault(x => x.Role == role && string.Equals(x.Code, normalized, StringComparison.Ordinal));
     }
+
+    public static bool IsTyped(AiSuggestionDefinition? suggestion) =>
+        suggestion is not null && TypedDefinitions.Contains(suggestion);
+
+    public static IReadOnlyList<AiSuggestionItemDto> TypedForRole(AiActorRole role) =>
+        TypedDefinitions
+            .Where(x => x.Role == role)
+            .Select(x => new AiSuggestionItemDto { Code = x.Code, Label = x.Label, Group = x.Group })
+            .ToArray();
 
     public static IReadOnlyList<AiSuggestionItemDto> ForRole(
         AiActorRole role,
