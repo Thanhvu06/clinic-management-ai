@@ -21,7 +21,7 @@ ClinicCare AI là giải pháp phần mềm quản lý phòng khám đa khoa hi�
   - Node.js: Node 24 LTS (xác định qua `.nvmrc` và `package.json engines`).
   - GitHub Actions CI/CD pipeline tự động kiểm thử và build.
 - **AI Integration:** 
-  - Google Gemini AI (Mô hình gemini-1.5-flash) phân tích triệu chứng và định tuyến chuyên khoa theo dữ liệu phòng khám thực tế.
+  - Google Gemini AI: `AiProviderOptions` mặc định dùng `gemini-3.6-flash`; `appsettings.Development.json` hiện ghi đè thành `gemini-1.5-flash` và tắt provider (`IsEnabled=false`). Model thực tế theo `AiProvider:ModelName` sau khi áp dụng cấu hình/User Secrets.
   - Guardrails y tế nghiêm ngặt: không chẩn đoán, không kê đơn, lọc PII, đối chiếu whitelist chuyên khoa từ database, fallback chọn thủ công an toàn khi mất kết nối AI.
 - **Kiểm thử tự động:** 
   - xUnit, WebApplicationFactory (Integration Tests cho luồng đặt lịch, JWT, bảo mật dữ liệu, cấp phát thuốc).
@@ -60,14 +60,14 @@ clinic-management-ai/
 
 ---
 
-## Phân quyền hệ thống (5 Roles)
+## Phân quyền hệ thống (6 Roles)
 
 1. **Bệnh nhân (Patient):**
    - Đăng ký, đăng nhập, quên mật khẩu (demo-safe).
    - Quản lý hồ sơ cá nhân.
    - Tìm kiếm chuyên khoa, bác sĩ, khung giờ khám trống (slot 30 phút).
    - Đặt lịch khám trực tuyến với cơ chế chống trùng slot (Database Transaction).
-   - Tra cứu nhanh lịch hẹn cho khách vãng lai qua mã lịch hẹn hoặc số điện thoại.
+   - Tra cứu nhanh lịch hẹn cho khách vãng lai bằng mã lịch hẹn và số điện thoại chủ lịch hẹn cùng khớp.
    - Quản lý lịch hẹn, theo dõi timeline tiến trình, gửi yêu cầu dời lịch / hủy lịch.
    - Phản hồi đề xuất tái khám từ bác sĩ (Chấp nhận / Từ chối).
    - Xem kết quả khám bệnh, tóm tắt ca khám và danh sách đơn thuốc thật từ hệ thống.
@@ -106,6 +106,9 @@ clinic-management-ai/
    - Duyệt / từ chối yêu cầu nghỉ phép của bác sĩ có cảnh báo lịch khám bị ảnh hưởng.
    - Nhật ký kiểm toán hệ thống (Audit Log).
 
+6. **Kỹ thuật viên cận lâm sàng (DiagnosticTechnician):**
+   - Xử lý chỉ định, ghi nhận và hoàn tất kết quả cận lâm sàng tại khoa/cơ sở được phân công.
+
 ---
 
 ## Hướng dẫn cài đặt và chạy Local
@@ -125,7 +128,7 @@ cd src/backend/ClinicManagement.Api
 dotnet user-secrets set "AiProvider:ApiKey" "YOUR_API_KEY_HERE"
 dotnet user-secrets set "AiProvider:IsEnabled" "true"
 ```
-Hệ thống đã cấu hình sẵn chuỗi kết nối mặc định `Server=(localdb)\mssqllocaldb;Database=ClinicManagementDb;...` trong `appsettings.Development.json`. Khi khởi động lần đầu, backend tự động chạy migration EF Core để tạo bảng và seed dữ liệu demo.
+Hệ thống đã cấu hình sẵn chuỗi kết nối mặc định `Server=(localdb)\mssqllocaldb;Database=ClinicManagementDb;...` trong `appsettings.Development.json`. Backend tự động chạy migration EF Core. Dữ liệu mẫu chỉ được seed trong môi trường `Development` khi `DemoSeed:Enabled=true`; đặt thêm `DemoSeed:GenerateSlots=true` để sinh lịch/khung giờ và `DemoSeed:GenerateAppointments=true` để sinh lịch hẹn mẫu (cần bật GenerateSlots). Cấu hình Development hiện bật Enabled và tắt GenerateSlots.
 
 Chạy Backend:
 ```bash
@@ -150,7 +153,7 @@ Truy cập giao diện ứng dụng tại: `http://localhost:5173`
 
 ## Tài khoản Demo
 
-Khi chạy ở môi trường `Development`, hệ thống đã tự sinh sẵn các tài khoản demo sau với mật khẩu chung: **`Demo@12345`**
+Khi chạy ở môi trường `Development` với `DemoSeed:Enabled=true`, hệ thống sinh các tài khoản demo sau với mật khẩu chung: **`Demo@12345`**
 
 | Vai trò | Email đăng nhập | Mật khẩu |
 |---|---|---|
@@ -158,6 +161,7 @@ Khi chạy ở môi trường `Development`, hệ thống đã tự sinh sẵn c
 | **Bác sĩ** | `doctor@cliniccare.local` | `Demo@12345` |
 | **Lễ tân** | `reception@cliniccare.local` | `Demo@12345` |
 | **Dược sĩ** | `pharmacist@cliniccare.local` | `Demo@12345` |
+| **Kỹ thuật viên cận lâm sàng** | `technician@cliniccare.local` | `Demo@12345` |
 | **Bệnh nhân** | `patient@cliniccare.local` | `Demo@12345` |
 
 ---

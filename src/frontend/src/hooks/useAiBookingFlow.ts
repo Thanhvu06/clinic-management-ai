@@ -53,6 +53,7 @@ export interface AiChatRequestPayload {
 }
 
 export interface CreateAppointmentPayload {
+    facilityId?: number;
     doctorId: number;
     specialtyId: number;
     appointmentSlotId: number;
@@ -977,6 +978,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 const endTime = action.payload.endTime || activeDraft?.endTime;
                 const specName = action.payload.specialtyName || activeDraft?.specialtyName;
                 const docName = action.payload.doctorName || activeDraft?.doctorName;
+                const facilityId = action.payload.facilityId ?? activeDraft?.facilityId;
+                const facilityName = action.payload.facilityName ?? activeDraft?.facilityName;
                 const reason = normalizeBookingReason(action.payload.reason || activeDraft?.reason);
                 const currentVersion = activeDraft?.version ?? 1;
 
@@ -1021,7 +1024,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 const formattedDate = formatVietnameseDate(slotDate);
                 const reviewMsg: ChatMessage = {
                     role: "model",
-                    content: `📋 **Thông tin xác nhận lịch hẹn:**\n- **Chuyên khoa:** ${specName || "Chuyên khoa"}\n- **Bác sĩ:** ${docName || "Bác sĩ"}\n- **Thời gian:** ${startTime} ngày ${formattedDate}\n- **Lý do khám:** ${reason}\n\nBạn vui lòng xác nhận để hoàn tất đặt lịch.`,
+                    content: `📋 **Thông tin xác nhận lịch hẹn:**\n- **Chuyên khoa:** ${specName || "Chuyên khoa"}\n- **Bác sĩ:** ${docName || "Bác sĩ"}${facilityName ? `\n- **Cơ sở:** ${facilityName}` : ''}\n- **Thời gian:** ${startTime} ngày ${formattedDate}\n- **Lý do khám:** ${reason}\n\nBạn vui lòng xác nhận để hoàn tất đặt lịch.`,
                     urgency: "ROUTINE",
                     actions: [
                         {
@@ -1034,6 +1037,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                             draftVersion: currentVersion,
                             payload: {
                                 confirmationId: effectiveConfirmationId,
+                                facilityId,
+                                facilityName,
                                 specialtyId: specId,
                                 specialtyName: specName,
                                 doctorId: docId,
@@ -1157,9 +1162,11 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     action.payload.doctorId,
                     action.payload.slotDate,
                     action.payload.slotId,
-                    actionReason
+                    actionReason,
+                    null,
+                    action.payload.facilityId
                 );
-                const legacyWidgetFingerprint = `${action.payload.specialtyId}_${action.payload.doctorId}_${action.payload.slotId}_${action.payload.slotDate}_${action.payload.startTime}_${actionReason}`;
+                const legacyWidgetFingerprint = `${action.payload.specialtyId}_${action.payload.doctorId}_${action.payload.slotId}_${action.payload.slotDate}_${action.payload.startTime}_${actionReason}${action.payload.facilityId ? `_facility${action.payload.facilityId}` : ''}`;
 
                 const doesCandidateMatchTurn = (candidate: PendingBookingAttemptRecord | null): candidate is PendingBookingAttemptRecord => {
                     if (!candidate) return false;
@@ -1198,6 +1205,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         doctorId: action.payload.doctorId,
                         specialtyId: action.payload.specialtyId,
                         appointmentSlotId: action.payload.slotId,
+                        ...(action.payload.facilityId ? { facilityId: action.payload.facilityId } : {}),
                         reason: actionReason
                     };
                     // A server-issued confirmation carries the complete AI

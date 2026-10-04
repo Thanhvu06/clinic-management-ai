@@ -11,6 +11,7 @@ using ClinicManagement.Application.Doctors.DTOs;
 using ClinicManagement.Application.Doctors.Interfaces;
 using ClinicManagement.Application.Specialties.Interfaces;
 using ClinicManagement.Infrastructure.Persistence;
+using ClinicManagement.Infrastructure.Appointments;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClinicManagement.Infrastructure.AI;
@@ -56,6 +57,17 @@ public sealed class AiBookingWizardService(
 
     private async Task<AiBookingWizardResponseDto> RenderAsync(BookingWizardSelection state, Guid user, string session, CancellationToken ct)
     {
+        List<EligibleAppointmentFacility>? facilities = null;
+        if (state.Stage >= BookingWizardStage.Facility)
+        {
+            if (!(await EvaluateAsync(state, user, ct)).IsAvailable) return await RefreshSlotsAsync(state, user, session, ct);
+            facilities = await AppointmentFacilityResolver.GetEligibleAsync(db, state.DoctorId, state.SpecialtyId, ct);
+            if (facilities.Count == 0) return Error("FACILITY_NOT_AVAILABLE", "Bác sĩ không có cơ sở phù hợp còn hoạt động cho chuyên khoa này. Vui lòng chọn bác sĩ khác.");
+            if (state.FacilityId.HasValue && !facilities.Any(facility => facility.Id == state.FacilityId.Value))
+                return Error("FACILITY_SCOPE_DENIED", "Cơ sở đã chọn không còn phù hợp. Vui lòng bắt đầu lại đặt lịch.");
+            if (state.Stage == BookingWizardStage.Facility && facilities.Count == 1)
+                state = state with { Stage = BookingWizardStage.Reason, FacilityId = facilities[0].Id };
+        }
         var response = new AiBookingWizardResponseDto
         {
             Step = state.Stage.ToString().ToLowerInvariant(),
@@ -72,6 +84,8 @@ public sealed class AiBookingWizardService(
         response.Summary = state.Stage == BookingWizardStage.Specialty ? null : new AiBookingWizardSummaryDto
         {
             SpecialtyName = specialty?.SpecialtyName, DoctorName = doctor?.FullName,
+            FacilityName = facilities?.FirstOrDefault(facility => facility.Id == state.FacilityId)?.Name,
+            RequiresFacilitySelection = facilities?.Count > 1,
             SlotDate = state.Day > 0 ? DateOnly.FromDayNumber(state.Day).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null
         };
         switch (state.Stage)
@@ -105,10 +119,17 @@ public sealed class AiBookingWizardService(
                 foreach (var slot in slots)
                 {
                     var name = doctorList?.FirstOrDefault(x => x.Id == slot.DoctorId)?.FullName;
-                    Add(response, state with { Stage = BookingWizardStage.Reason, DoctorId = slot.DoctorId, SlotId = slot.SlotId },
+                    Add(response, state with { Stage = BookingWizardStage.Facility, DoctorId = slot.DoctorId, SlotId = slot.SlotId, FacilityId = null },
                         $"{slot.StartTime:HH:mm} – {slot.EndTime:HH:mm}", user, session, state.DoctorId == 0 ? name : null);
                 }
                 Back(response, state with { Stage = BookingWizardStage.Day, Day = 0, SlotId = 0 }, user, session);
+                break;
+            case BookingWizardStage.Facility:
+                response.Title = "Chọn cơ sở";
+                response.Message = "Bác sĩ có lịch khám tại nhiều cơ sở phù hợp. Vui lòng chọn cơ sở bạn muốn đến khám.";
+                foreach (var facility in facilities!)
+                    Add(response, state with { Stage = BookingWizardStage.Reason, FacilityId = facility.Id }, facility.Name, user, session);
+                Back(response, state with { Stage = BookingWizardStage.Slot, DoctorId = state.AnyDoctor ? 0 : state.DoctorId, SlotId = 0, FacilityId = null }, user, session);
                 break;
             case BookingWizardStage.Reason:
                 response.Title = "Lý do khám";
@@ -120,7 +141,9 @@ public sealed class AiBookingWizardService(
                 if (!check.IsAvailable) return await RefreshSlotsAsync(state, user, session, ct);
                 response.Summary!.StartTime = check.StartTime?.ToString("HH:mm", CultureInfo.InvariantCulture);
                 response.Summary.EndTime = check.EndTime?.ToString("HH:mm", CultureInfo.InvariantCulture);
-                Back(response, state with { Stage = BookingWizardStage.Slot, DoctorId = state.AnyDoctor ? 0 : state.DoctorId, SlotId = 0, Preset = 0 }, user, session);
+                Back(response, facilities?.Count > 1
+                    ? state with { Stage = BookingWizardStage.Facility, FacilityId = null, Preset = 0 }
+                    : state with { Stage = BookingWizardStage.Slot, DoctorId = state.AnyDoctor ? 0 : state.DoctorId, SlotId = 0, FacilityId = null, Preset = 0 }, user, session);
                 break;
             default: return Error("WIZARD_TOKEN_INVALID_OR_EXPIRED", "Lựa chọn không hợp lệ. Vui lòng bắt đầu lại.");
         }
@@ -152,11 +175,21 @@ public sealed class AiBookingWizardService(
             return await ReasonErrorAsync("INVALID_REASON", "Lý do khám phải hợp lệ và dài từ 10 đến 500 ký tự.", state, user, session, ct);
         var slot = await EvaluateAsync(state, user, ct);
         if (!slot.IsAvailable) return await RefreshSlotsAsync(state, user, session, ct);
+        var facilities = await AppointmentFacilityResolver.GetEligibleAsync(db, state.DoctorId, state.SpecialtyId, ct);
+        if (facilities.Count == 0) return Error("FACILITY_NOT_AVAILABLE", "Bác sĩ không có cơ sở phù hợp còn hoạt động cho chuyên khoa này. Vui lòng chọn bác sĩ khác.");
+        if (!state.FacilityId.HasValue)
+        {
+            if (facilities.Count > 1) return await RenderAsync(state with { Stage = BookingWizardStage.Facility }, user, session, ct);
+            state = state with { FacilityId = facilities[0].Id };
+        }
+        var facility = facilities.FirstOrDefault(item => item.Id == state.FacilityId);
+        if (facility is null) return Error("FACILITY_SCOPE_DENIED", "Cơ sở đã chọn không còn phù hợp. Vui lòng bắt đầu lại đặt lịch.");
         var draft = new AiBookingDraftDto
         {
             DraftId = $"draft_{state.DraftId:N}", SessionId = session, Version = 1,
             SpecialtyId = state.SpecialtyId, SpecialtyName = slot.SpecialtyName,
             DoctorId = state.DoctorId, DoctorName = slot.DoctorName, SlotId = state.SlotId,
+            FacilityId = facility.Id, FacilityName = facility.Name,
             SlotDate = slot.SlotDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             StartTime = slot.StartTime?.ToString("HH:mm", CultureInfo.InvariantCulture),
             EndTime = slot.EndTime?.ToString("HH:mm", CultureInfo.InvariantCulture), Reason = reason, IsComplete = true
@@ -169,6 +202,7 @@ public sealed class AiBookingWizardService(
             Step = "review", Title = "Xem lại thông tin khám", Message = chat.Message!,
             ReviewAction = chat.Actions.Single(x => x.Type == AiActionTypes.ReviewBooking),
             Summary = new() { SpecialtyName = draft.SpecialtyName, DoctorName = draft.DoctorName,
+                FacilityName = facility.Name, RequiresFacilitySelection = facilities.Count > 1,
                 SlotDate = draft.SlotDate, StartTime = draft.StartTime, EndTime = draft.EndTime, ReasonProvided = true }
         };
         Back(response, state with { Preset = 0 }, user, session);
@@ -184,7 +218,7 @@ public sealed class AiBookingWizardService(
 
     private async Task<AiBookingWizardResponseDto> RefreshSlotsAsync(BookingWizardSelection state, Guid user, string session, CancellationToken ct)
     {
-        var response = await RenderAsync(state with { Stage = BookingWizardStage.Slot, DoctorId = state.AnyDoctor ? 0 : state.DoctorId, SlotId = 0, Preset = 0 }, user, session, ct);
+        var response = await RenderAsync(state with { Stage = BookingWizardStage.Slot, DoctorId = state.AnyDoctor ? 0 : state.DoctorId, SlotId = 0, FacilityId = null, Preset = 0 }, user, session, ct);
         response.Message = "Khung giờ này vừa không còn khả dụng. Vui lòng chọn giờ mới hoặc quay lại chọn ngày khác.";
         response.ErrorCode = "SLOT_UNAVAILABLE";
         return response;

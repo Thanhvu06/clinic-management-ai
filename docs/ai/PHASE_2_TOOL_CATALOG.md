@@ -6,6 +6,14 @@ results with a source label; no tool accepts authorization fields from a model.
 
 | Tool | Actor | Read/Write | Permission | Confirmation | Data source |
 |---|---|---|---|---|---|
+| `clinic.search_knowledge` | Patient, Receptionist, Doctor, DiagnosticTechnician, Pharmacist, Admin | Read | Active actor + ReadClinicCatalog; approved public catalog criteria | No | Specialty, doctor, diagnostic service, facility and published pricing catalog |
+| `doctor.get_prescription_status` | Doctor | Read | Own assigned appointment/visit + active doctor facility scope; exactly one case resource | No | Prescription + appointment/visit binding |
+| `patient.get_my_bills` | Patient | Read | Own patient; paged, maximum 50 | No | Invoice + non-cancelled invoice lines |
+| `patient.get_my_diagnostic_results` | Patient | Read | Own patient; unpublished result details redacted until doctor review | No | Patient diagnostic workflow projection |
+| `patient.get_my_prescriptions` | Patient | Read | Own patient; excludes Draft and Cancelled prescriptions | No | Prescription + medicine items |
+| `patient.get_my_visits` | Patient | Read | Own patient; paged, maximum 50 | No | PatientVisit + visit summary |
+| `pharmacist.get_prescription_payment_status` | Pharmacist | Read | Active pharmacist facility scope + server-bound current prescription | No | Prescription + invoice line payment status |
+| `role.execute_confirmed_action` | Receptionist, Doctor, DiagnosticTechnician, Pharmacist | Write (internal dispatcher) | Dedicated human confirmation endpoint; fresh actor/facility/resource validation; hidden from planner/UI catalog | Backend confirmation token | Pending role action store + domain service |
 | `admin.get_revenue_summary` | Admin | Read | Active Admin facility scope; Paid invoices within fixed Vietnam-time period | No | Invoice + visit/appointment facility binding |
 | `reception.get_pending_payments` | Receptionist | Read | Active receptionist facility scope via PatientVisit | No | Unpaid invoices, maximum 50 |
 | `doctor.get_my_appointments_today` | Doctor | Read | Own doctor + active doctor facility scope | No | Today's non-cancelled/non-completed appointments |

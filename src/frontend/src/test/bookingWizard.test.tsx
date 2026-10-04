@@ -68,6 +68,24 @@ describe('patient button booking wizard', () => {
         }), expect.objectContaining({ headers: { 'Idempotency-Key': expect.any(String) } })));
     });
 
+    it.each([false, true])('carries the chosen facility through review and booking (widget=%j)', async widget => {
+        const boundReview = { ...review, payload: { ...review.payload, facilityId: 991007, facilityName: 'Cơ sở B' } };
+        const boundFlow = [...flow.slice(0, 4), response('facility', 'Cơ sở B'), response('reason'),
+            { ...response('review'), reviewAction: boundReview, summary: { facilityName: 'Cơ sở B', requiresFacilitySelection: true, reasonProvided: true } }];
+        boundFlow.forEach(data => post.mockResolvedValueOnce({ success: true, data }));
+        post.mockResolvedValueOnce({ success: true, data: { id: 9911, appointmentCode: 'TEST-BOOKING', ...boundReview.payload } });
+        mount(widget);
+        if (widget) fireEvent.click(screen.getByRole('button', { name: /Mở.*trợ lý/i }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Gợi ý: Đặt lịch khám' }));
+        for (const label of ['Khoa tổng hợp', 'Bác sĩ kiểm thử', '02/10/2026', '08:00 – 08:30', 'Cơ sở B']) await choose(label);
+        fireEvent.change(await screen.findByRole('textbox', { name: 'Lý do khám từ 10 đến 500 ký tự' }), { target: { value: 'Khám tổng quát' } });
+        fireEvent.click(within(wizard()).getByRole('button', { name: 'Xem lại thông tin khám' }));
+        await screen.findByText('Cơ sở: Cơ sở B ✓');
+        fireEvent.click(screen.getByRole('button', { name: 'Xem tóm tắt thông tin khám' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận đặt lịch' }));
+        await waitFor(() => expect(post).toHaveBeenCalledWith('/appointments', expect.objectContaining({ facilityId: 991007, confirmationId: 'conf-opaque' }), expect.anything()));
+    });
+
     it('locks buttons and rejects double clicks until the pending request completes', async () => {
         let resolve: ((value: unknown) => void) | undefined;
         post.mockReturnValueOnce(new Promise(done => { resolve = done; }));

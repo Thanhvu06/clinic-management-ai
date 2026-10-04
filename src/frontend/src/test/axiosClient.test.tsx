@@ -133,16 +133,17 @@ describe('AppointmentLookupModal with the real response interceptor', () => {
         axiosClient.defaults.adapter = adapter;
         render(<AppointmentLookupModal isOpen onClose={vi.fn()} />);
 
-        fireEvent.change(screen.getByRole('textbox', { name: 'Mã lịch hẹn hoặc số điện thoại' }), {
+        fireEvent.change(screen.getByRole('textbox', { name: 'Mã lịch hẹn' }), {
             target: { value: 'APT-1234' },
         });
+        fireEvent.change(screen.getByRole('textbox', { name: 'Số điện thoại chủ lịch hẹn' }), { target: { value: '0901234567' } });
         fireEvent.click(screen.getByRole('button', { name: 'Tra cứu' }));
 
         expect(await screen.findByText(rateLimitMessage)).toBeInTheDocument();
         expect(screen.queryByText('Request failed with status code 429')).not.toBeInTheDocument();
         expect(adapter).toHaveBeenCalledWith(expect.objectContaining({
             method: 'get',
-            url: '/appointments/lookup?query=APT-1234',
+            url: '/appointments/lookup?query=APT-1234&phone=0901234567',
         }));
     });
 });

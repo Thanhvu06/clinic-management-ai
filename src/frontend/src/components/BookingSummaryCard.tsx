@@ -18,6 +18,10 @@ export const BookingSummaryCard = ({ draft, formatVietnameseDate }: { draft: AiB
                                                         <span className={styles.summaryLabel}>Bác sĩ:</span>
                                                         <span className={styles.summaryValue}>{draft.doctorName}</span>
                                                     </div>
+                                                    {draft.facilityName && <div className={styles.summaryRow}>
+                                                        <span className={styles.summaryLabel}>Cơ sở:</span>
+                                                        <span className={styles.summaryValue}>{draft.facilityName}</span>
+                                                    </div>}
                                                     <div className={styles.summaryRow}>
                                                         <span className={styles.summaryLabel}>Ngày khám:</span>
                                                         <span className={styles.summaryValue}>{formatVietnameseDate(draft.slotDate)}</span>
