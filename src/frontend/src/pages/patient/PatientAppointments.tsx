@@ -21,7 +21,7 @@ export const PatientAppointments: React.FC = () => {
     const [pendingRequests, setPendingRequests] = useState<Record<number, any>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState("All");
+    const [activeTab, setActiveTab] = useState(() => ({ upcoming: 'Upcoming', past: 'Past', all: 'All' }[searchParams.get('tab') ?? ''] ?? 'All'));
     const [highlightedAppId, setHighlightedAppId] = useState<number | null>(null);
 
     // Cancel modal state
@@ -96,7 +96,10 @@ export const PatientAppointments: React.FC = () => {
         finally { setLoading(false); }
     };
 
-    useEffect(() => { fetchData(); }, []);
+    useEffect(() => {
+        setActiveTab({ upcoming: 'Upcoming', past: 'Past', all: 'All' }[searchParams.get('tab') ?? ''] ?? 'All');
+        void fetchData();
+    }, [searchParams]);
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -321,6 +324,7 @@ export const PatientAppointments: React.FC = () => {
         if (activeTab === "Past") return ["Completed", "Cancelled", "NoShow"].includes(a.status);
         return true;
     });
+    if (activeTab === 'Upcoming') filtered.sort((a, b) => `${a.slotDate?.split('T')[0] ?? a.appointmentDate?.split('T')[0] ?? ''}T${a.startTime ?? ''}`.localeCompare(`${b.slotDate?.split('T')[0] ?? b.appointmentDate?.split('T')[0] ?? ''}T${b.startTime ?? ''}`));
 
     const tomorrowStr = (() => {
         const d = new Date();

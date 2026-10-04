@@ -44,6 +44,6 @@ describe('P5 facility step in the existing wizard', () => {
     it('includes the chosen facility in the review summary', () => {
         const state = { step: 'review', title: 'Xem lại', message: 'Thông tin đã chọn', options: [], canGoBack: false, summary: { specialtyName: 'Nội khoa', doctorName: 'Bác sĩ A', facilityName: 'Cơ sở A', reasonProvided: true }, actions: [], suggestions: [], assistantMode: 'Ready', providerWasCalled: false } as AiBookingWizardResponse;
         render(<BookingWizard state={state} busy={false} onStep={vi.fn()} />);
-        expect(screen.getByText('Cơ sở: Cơ sở A ✓')).toBeInTheDocument();
+        expect(screen.getByText('Cơ sở: Cơ sở A')).toBeInTheDocument();
     });
 });

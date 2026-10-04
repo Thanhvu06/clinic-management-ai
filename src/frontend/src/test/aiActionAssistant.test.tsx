@@ -346,7 +346,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         await waitFor(() => {
             expect(screen.getByText(/Dựa trên mô tả của bạn, tôi gợi ý chuyên khoa Tim Mạch/i)).toBeInTheDocument();
-            expect(screen.getByText('Phù hợp tham khảo')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Xem lịch khám khoa Tim Mạch' })).toBeInTheDocument();
             expect(screen.getByText('Xem chi tiết khoa Tim Mạch')).toBeInTheDocument();
         });
     });
@@ -488,7 +488,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
                     })
                 })
             );
-            expect(screen.getByText(/Đặt lịch khám thành công!/i)).toBeInTheDocument();
+            expect(screen.getByText(/Đặt lịch khám thành công/i)).toBeInTheDocument();
             expect(screen.getByText(/APPT-20260915-001/i)).toBeInTheDocument();
         });
     });
@@ -2851,10 +2851,11 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         const btnV2 = await screen.findByRole('button', { name: 'Xác nhận đặt lịch v2' });
 
-        // Clicking old v1 button is rejected without calling /appointments
+        // B3 hides the stale v1 choice; it cannot send another appointment request.
         fireEvent.click(btnV1);
         await waitFor(() => {
-            expect(screen.getByText(/phiên bản cũ \(v1\)/i)).toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: 'Xác nhận đặt lịch v1' })).not.toBeInTheDocument();
+            expect(screen.getByText('Lựa chọn ở bước trước ✓')).toBeInTheDocument();
         });
         expect(capturedKeys).toHaveLength(1);
 

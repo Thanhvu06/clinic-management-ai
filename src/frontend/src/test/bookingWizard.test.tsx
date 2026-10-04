@@ -54,8 +54,8 @@ describe('patient button booking wizard', () => {
         fireEvent.click(within(wizard()).getByRole('button', { name: 'Xem lại thông tin khám' }));
         await screen.findByText('Tóm tắt thông tin đặt lịch');
         expect(wizard().querySelectorAll('[data-completed-step]')).toHaveLength(5);
-        expect(within(wizard()).getByText('Chuyên khoa: Khoa tổng hợp ✓')).toBeInTheDocument();
-        expect(within(wizard()).getByText('Bác sĩ: Bác sĩ kiểm thử ✓')).toBeInTheDocument();
+        expect(within(wizard()).getByText('Chuyên khoa: Khoa tổng hợp')).toBeInTheDocument();
+        expect(within(wizard()).getByText('Bác sĩ: Bác sĩ kiểm thử')).toBeInTheDocument();
         expect(document.body.innerHTML).not.toMatch(/981001|981002|981003|encrypted-|conf-opaque|snap-opaque/);
         const calls = post.mock.calls.slice(0, 6).map(call => call[1] as AiBookingWizardRequest);
         expect(calls.map(call => call.step)).toEqual(['start', 'pick', 'pick', 'pick', 'pick', 'reason']);
@@ -80,7 +80,7 @@ describe('patient button booking wizard', () => {
         for (const label of ['Khoa tổng hợp', 'Bác sĩ kiểm thử', '02/10/2026', '08:00 – 08:30', 'Cơ sở B']) await choose(label);
         fireEvent.change(await screen.findByRole('textbox', { name: 'Lý do khám từ 10 đến 500 ký tự' }), { target: { value: 'Khám tổng quát' } });
         fireEvent.click(within(wizard()).getByRole('button', { name: 'Xem lại thông tin khám' }));
-        await screen.findByText('Cơ sở: Cơ sở B ✓');
+        await screen.findByText('Cơ sở: Cơ sở B');
         fireEvent.click(screen.getByRole('button', { name: 'Xem tóm tắt thông tin khám' }));
         fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận đặt lịch' }));
         await waitFor(() => expect(post).toHaveBeenCalledWith('/appointments', expect.objectContaining({ facilityId: 991007, confirmationId: 'conf-opaque' }), expect.anything()));

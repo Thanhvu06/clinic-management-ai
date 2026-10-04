@@ -71,7 +71,7 @@ describe('chat presentation contracts', () => {
         rerender(<BookingWizard state={{ ...state, step: 'doctor', title: 'Chọn bác sĩ', options: [] }} busy={false} onStep={onStep} />);
         expect(screen.getByLabelText(/Bước 2\/6/)).toBeInTheDocument();
         expect(screen.getAllByRole('region')).toHaveLength(1);
-        expect(screen.getByText('Chuyên khoa: Khoa kiểm thử ✓')).toBeInTheDocument();
+        expect(screen.getByText('Chuyên khoa: Khoa kiểm thử')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Khoa kiểm thử' })).not.toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'Chọn bác sĩ' })).toHaveFocus();
         expect(HTMLElement.prototype.scrollIntoView).toHaveBeenLastCalledWith({ block: 'start', behavior: 'instant' });

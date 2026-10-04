@@ -349,7 +349,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
                 }),
                 expect.any(Object)
             );
-            expect(screen.getByText(/Đặt lịch khám thành công!/i)).toBeInTheDocument();
+            expect(screen.getByText(/Đặt lịch khám thành công/i)).toBeInTheDocument();
             expect(screen.getByText(/APPT-20260925-888/i)).toBeInTheDocument();
         });
     });
@@ -402,7 +402,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
             const btn = screen.getByText(/BS Minh Khải/i).closest('button');
             expect(btn).toHaveAttribute('data-stale', 'true');
             expect(btn).toHaveAttribute('aria-disabled', 'true');
-            expect(screen.getByText('(Lựa chọn đã cũ)')).toBeInTheDocument();
+            expect(screen.queryByText('(Lựa chọn đã cũ)')).not.toBeInTheDocument();
         });
     });
 
@@ -684,7 +684,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
         });
 
         await waitFor(() => {
-            expect(screen.getByText(/Đặt lịch khám thành công!/i)).toBeInTheDocument();
+            expect(screen.getByText(/Đặt lịch khám thành công/i)).toBeInTheDocument();
         });
     });
 

@@ -347,7 +347,7 @@ describe('Role suggestion buttons', () => {
 
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
         fireEvent.click(within(await menuGroup('Tra cứu nhanh dữ liệu của bạn')).getByRole('button', { name: 'Gợi ý: Lượt khám của tôi' }));
-        expect(await screen.findByText(/quá nhiều|giới hạn|thử lại/i)).toBeInTheDocument();
+        expect(await screen.findByText(/quá nhiều|giới hạn/i)).toBeInTheDocument();
         expect(screen.getAllByText('Lượt khám của tôi').length).toBeGreaterThanOrEqual(1);
     });
 });

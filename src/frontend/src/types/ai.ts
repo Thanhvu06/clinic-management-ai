@@ -374,6 +374,11 @@ export interface AiToolExecutionResult {
 }
 
 export interface ChatMessage {
+    isError?: boolean;
+    bookingResult?: {
+        appointmentId: number; appointmentCode?: string; doctorName?: string; specialtyName?: string;
+        facilityName?: string; slotDate?: string; startTime?: string; endTime?: string; reason?: string;
+    };
     id?: string;
     role: "user" | "model";
     content: string;
