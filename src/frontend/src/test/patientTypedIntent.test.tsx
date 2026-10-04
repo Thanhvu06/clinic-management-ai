@@ -17,7 +17,7 @@ export const typedCases: [string, Intent][] = [
     ['tôi bị đau đầu muốn đặt lịch', null], ['đau ngực dữ dội khó thở', null],
     ['lịch khám của bác sĩ Lan', null], ['xin chào', null], ['a'.repeat(150), null],
     ['ĐẶT, LỊCH!', 'booking'], ['đăng ký khám', 'booking'], ['muốn khám', 'booking'],
-    ['hẹn khám', 'booking'], ['khám bệnh', 'booking'], ['book lịch', 'booking'],
+    ['hẹn khám', 'booking'], ['khám bệnh', null], ['book lịch', 'booking'],
     ['lượt khám gần nhất', 'visits'], ['đơn thuốc hôm qua', 'prescriptions'],
     ['kết quả cận lâm sàng', 'results'], ['kết quả siêu âm', 'results'], ['kết quả chụp', 'results'],
     ['kết quả của tôi', 'results'], ['kết quả bóng đá', null], ['biên lai mới', 'bills'],
@@ -33,6 +33,12 @@ export const typedCases: [string, Intent][] = [
     ['xem hoa doon', 'bills'], ['lịch hẹn'.padEnd(120, ' '), 'appointments'],
     ['lịch hẹn'.padEnd(121, ' '), null], ['thuốc', null], ['nôn muốn khám', null],
     ['hôm nay muốn khám vì đau', null], ['lichx hen', 'appointments'], ['lichxx hen', null],
+    ['lịch sử khám bệnh của tôi', 'visits'], ['kết quả khám bệnh của tôi', null],
+    ['giá khám bệnh bao nhiêu', null], ['khám bệnh ở đâu', null],
+    ['huỷ đặt lịch', null], ['hủy lịch hẹn', null], ['đổi lịch hẹn sang thứ 6', null],
+    ['dời lịch khám', null], ['cách đặt lịch khám', null], ['thanh toán hóa đơn thế nào', null],
+    ['tôi muốn đặt lịch', 'booking'], ['đặt lịch cho con tôi', 'booking'],
+    ['tôi muốn xem lịch hẹn', 'appointments'], ['hôm nay tôi có lịch khám khồn', 'appointments'],
 ];
 it.each(typedCases)('T classify %s -> %s', (text, intent) => {
     expect(classify, 'typed classifier must exist').toBeTypeOf('function');
@@ -40,18 +46,18 @@ it.each(typedCases)('T classify %s -> %s', (text, intent) => {
 });
 
 // Preserve legacy contract tests through null inputs, and separately prove
-// that every original input now reaches its specified typed-intent endpoint.
+// that each original input reaches its currently specified endpoint.
 export const migratedLegacyInputs = [
     { line: 625, original: 'Tôi muốn xem hóa đơn', replacement: 'Cho tôi xem thông tin thanh toán', intent: 'bills' },
     { line: 1283, original: 'Đặt lịch tim mạch', replacement: 'Tôi đau đầu, Đặt lịch tim mạch', intent: 'booking' },
     { line: 1352, original: 'Đặt lịch khám tim', replacement: 'Tôi đau đầu, Đặt lịch khám tim', intent: 'booking' },
-    { line: 1360, original: 'Hủy đặt lịch', replacement: 'Hủy bản nháp hiện tại', intent: 'booking' },
+    { line: 1360, original: 'Hủy đặt lịch', replacement: 'Hủy bản nháp hiện tại', intent: null },
     { line: 1542, original: 'Đặt lịch khám tim mạch', replacement: 'Tôi đau đầu, Đặt lịch khám tim mạch', intent: 'booking' },
     { line: 1700, original: 'Đặt lịch A', replacement: 'Tôi đau đầu, Đặt lịch A', intent: 'booking' },
-    { line: 1709, original: 'Hủy đặt lịch', replacement: 'Hủy bản nháp hiện tại', intent: 'booking' },
+    { line: 1709, original: 'Hủy đặt lịch', replacement: 'Hủy bản nháp hiện tại', intent: null },
     { line: 2222, original: 'Tôi muốn đặt lịch khám tim mạch', replacement: 'Tôi đau đầu, Tôi muốn đặt lịch khám tim mạch', intent: 'booking' },
     { line: 2416, original: 'Đặt lịch khám', replacement: 'Tôi đau đầu, Đặt lịch khám', intent: 'booking' },
-    { line: 2426, original: 'Hủy đặt lịch', replacement: 'Hủy bản nháp hiện tại', intent: 'booking' },
+    { line: 2426, original: 'Hủy đặt lịch', replacement: 'Hủy bản nháp hiện tại', intent: null },
     { line: 2435, original: 'Đặt lịch khám lại', replacement: 'Tôi đau đầu, Đặt lịch khám lại', intent: 'booking' },
     { line: 2517, original: 'Đặt lịch', replacement: 'Tôi đau đầu, Đặt lịch', intent: 'booking' },
     { line: 2683, original: 'Đặt lịch khám', replacement: 'Tôi đau đầu, Đặt lịch khám', intent: 'booking' },
@@ -68,8 +74,8 @@ it.each(migratedLegacyInputs)('T legacy line $line: null replacement, original $
     post.mockClear();
     await act(async () => result.current.handleSendMessage(original));
     expect(post).toHaveBeenCalledTimes(1);
-    expect(post).toHaveBeenCalledWith(intent === 'booking' ? '/ai/booking-wizard' : '/ai/copilot/chat',
-        expect.objectContaining(intent === 'booking' ? { step: 'start' } : { message: original, suggestionCode: 'patient.my_bills' }), expect.anything());
+    expect(post).toHaveBeenCalledWith(intent === 'booking' ? '/ai/booking-wizard' : intent === 'bills' ? '/ai/copilot/chat' : '/ai/chat',
+        expect.objectContaining(intent === 'booking' ? { step: 'start' } : intent === 'bills' ? { message: original, suggestionCode: 'patient.my_bills' } : { message: original }), expect.anything());
 });
 
 const post = vi.hoisted(() => vi.fn());
@@ -79,6 +85,13 @@ const wrapper = ({ children }: { children: ReactNode }) => <MemoryRouter><ChatPr
 beforeEach(() => {
     localStorage.clear(); sessionStorage.clear(); post.mockReset();
     post.mockResolvedValue({ success: true, data: { message: 'Đã tải', actions: [], cards: [], suggestions: [], step: 'specialty' } });
+});
+it('T cancellation hủy lịch hẹn keeps /ai/chat without copilot or wizard', async () => {
+    const { result } = renderHook(() => useAiBookingFlow(), { wrapper });
+    await act(async () => result.current.handleSendMessage('hủy lịch hẹn'));
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith('/ai/chat', expect.objectContaining({ message: 'hủy lịch hẹn' }), expect.anything());
+    expect(post.mock.calls.some(([url]) => url === '/ai/copilot/chat' || url === '/ai/booking-wizard')).toBe(false);
 });
 it.each([
     ['Tôi muốn đặt khám với bác sĩ Lan', 'booking', undefined],

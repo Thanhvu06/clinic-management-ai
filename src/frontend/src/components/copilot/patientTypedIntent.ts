@@ -35,13 +35,19 @@ export function classifyPatientTypedIntent(text: string): PatientTypedIntent | n
         'dau', 'sot', 'ho', 'met', 'chong mat', 'buon non', 'non', 'ngua', 'sung', 'tieu chay', 'tuc nguc', 'nhuc dau']
         .some(phrase => has(phrase, false))) return null;
 
+    if (['huy', 'hoan', 'khong den'].some(phrase => has(phrase, false)) ||
+        (has('doi', false) && ['lich', 'gio', 'ngay', 'sang'].some(phrase => has(phrase, false)))) return null;
+    if (['gia', 'bao nhieu', 'o dau', 'the nao', 'nhu the nao', 'cach', 'mo cua', 'gio lam viec', 'dia chi']
+        .some(phrase => has(phrase, false))) return null;
+
     // Explicit booking wins over the doctor/specialty schedule-question guard.
-    if (any(['dat lich', 'dat kham', 'dang ky kham', 'muon kham', 'hen kham', 'kham benh', 'book lich'])) return 'booking';
+    if (any(['dat lich', 'dat kham', 'dang ky kham', 'muon kham', 'hen kham', 'book lich'])) return 'booking';
     if ((has('bac si', false) || has('khoa', false)) && (has('lich', false) || has('kham', false))) return null;
     if (any(['lich hen', 'lich kham', 'lich cua toi'])) return 'appointments';
     if (any(['luot kham', 'lich su kham'])) return 'visits';
     if (any(['don thuoc', 'toa thuoc'])) return 'prescriptions';
-    if (has('ket qua') && any(['xet nghiem', 'can lam sang', 'sieu am', 'chup', 'cua toi'])) return 'results';
+    if (has('ket qua') && (any(['xet nghiem', 'can lam sang', 'sieu am', 'chup']) ||
+        (has('cua toi') && !has('kham benh')))) return 'results';
     if (any(['hoa don', 'bien lai', 'vien phi'])) return 'bills';
     return null;
 }
