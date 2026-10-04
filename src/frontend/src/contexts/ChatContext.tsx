@@ -71,6 +71,8 @@ export function validateActionSchema(action: unknown): action is AiAction {
 export function validateBookingDraftSchema(item: unknown): item is AiBookingDraft {
     if (!item || typeof item !== "object") return false;
     const draft = item as Record<string, unknown>;
+    if (draft.facilityId !== undefined && draft.facilityId !== null && (typeof draft.facilityId !== 'number' || !Number.isSafeInteger(draft.facilityId) || draft.facilityId <= 0)) return false;
+    if (draft.facilityName !== undefined && draft.facilityName !== null && typeof draft.facilityName !== 'string') return false;
     if (typeof draft.isComplete !== "boolean") return false;
     if (draft.specialtyId !== undefined && draft.specialtyId !== null && typeof draft.specialtyId !== "number") return false;
     if (draft.doctorId !== undefined && draft.doctorId !== null && typeof draft.doctorId !== "number") return false;
@@ -223,8 +225,9 @@ export const buildStandardBookingPayloadFingerprint = (
     slotDate: string,
     slotId: number | string,
     reason: string,
-    revisitRequestId?: number | string | null
-): string => `${revisitRequestId ?? "std"}_${specialtyId}_${doctorId}_${slotDate}_${slotId}_${reason.trim()}`;
+    revisitRequestId?: number | string | null,
+    facilityId?: number | null
+): string => `${revisitRequestId ?? "std"}_${specialtyId}_${doctorId}_${slotDate}_${slotId}_${reason.trim()}${facilityId ? `_facility${facilityId}` : ''}`;
 
 export function validatePendingBookingAttempt(
     raw: unknown,

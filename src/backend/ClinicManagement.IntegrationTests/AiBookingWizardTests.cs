@@ -37,7 +37,7 @@ public sealed class AiBookingWizardTests(CustomWebApplicationFactory factory) : 
     private static int _sequence;
 
     [Fact]
-    public async Task Multi_facility_wizard_exposes_missing_facility_binding_in_review_contract()
+    public async Task Multi_facility_wizard_binds_the_selected_facility_and_books_successfully()
     {
         Factory.MockAiProvider.Invocations.Clear();
         var client = await CreateAuthenticatedClientAsync("pat1@test.com");
@@ -61,11 +61,10 @@ public sealed class AiBookingWizardTests(CustomWebApplicationFactory factory) : 
             var reason = await ToReasonAsync(client, session, slot);
             var review = await StepAsync(client, session, "reason", reason.ReasonToken, Reason);
             Assert.Equal("review", review.Step);
-            Assert.DoesNotContain("facilityId", JsonSerializer.Serialize(review.ReviewAction!.Payload, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            Assert.NotNull(review.ReviewAction!.Payload.FacilityId);
             var result = await ConfirmAsync(client, review.ReviewAction.Payload, Guid.NewGuid().ToString("N"));
-            Assert.False(result.IsSuccessStatusCode);
-            Assert.Contains("FACILITY_SELECTION_REQUIRED", await result.Content.ReadAsStringAsync());
-            Assert.False(await db.Appointments.AnyAsync(x => x.AppointmentSlotId == slot.Id));
+            Assert.Equal(HttpStatusCode.Created, result.StatusCode);
+            Assert.Equal(review.ReviewAction.Payload.FacilityId, (await db.Appointments.SingleAsync(x => x.AppointmentSlotId == slot.Id)).FacilityId);
         }
         finally
         {
@@ -525,6 +524,7 @@ public sealed class AiBookingWizardTests(CustomWebApplicationFactory factory) : 
         var day = await StepAsync(client, session, "pick", doctor.Options.Single(x => x.Label == doctorName).Token);
         var time = await StepAsync(client, session, "pick", day.Options.Single(x => x.Label == slot.SlotDate.ToString("dd/MM/yyyy")).Token);
         var reason = await StepAsync(client, session, "pick", time.Options.Single(x => x.Label == $"{slot.StartTime:HH:mm} – {slot.EndTime:HH:mm}").Token);
+        if (reason.Step == "facility") reason = await StepAsync(client, session, "pick", reason.Options[0].Token);
         Assert.Equal("reason", reason.Step);
         return reason;
     }
@@ -551,7 +551,7 @@ public sealed class AiBookingWizardTests(CustomWebApplicationFactory factory) : 
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/appointments")
         {
             Content = JsonContent.Create(new { doctorId = p.DoctorId, specialtyId = p.SpecialtyId, appointmentSlotId = p.SlotId,
-                reason = p.Reason, confirmationId = p.ConfirmationId, contextSnapshotId = p.ContextSnapshotId,
+                reason = p.Reason, facilityId = p.FacilityId, confirmationId = p.ConfirmationId, contextSnapshotId = p.ContextSnapshotId,
                 sessionId = p.SessionId, draftId = p.DraftId, draftVersion = p.DraftVersion })
         };
         request.Headers.Add("Idempotency-Key", key);

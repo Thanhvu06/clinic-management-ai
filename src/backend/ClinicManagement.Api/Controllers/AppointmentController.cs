@@ -24,9 +24,9 @@ public class AppointmentController : ControllerBase
     [AllowAnonymous]
     [HttpGet("lookup")]
     [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("AppointmentLookupPolicy")]
-    public async Task<IActionResult> LookupAppointments([FromQuery] string query)
+    public async Task<IActionResult> LookupAppointments([FromQuery] string? query, [FromQuery] string? phone = null)
     {
-        var results = await _appointmentService.LookupAppointmentsAsync(query);
+        var results = await _appointmentService.LookupAppointmentsAsync(query ?? string.Empty, phone);
         return Ok(ApiResponse<List<AppointmentLookupDto>>.Ok(results));
     }
 

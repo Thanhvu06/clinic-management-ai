@@ -20,6 +20,8 @@ public sealed class AiBookingWizardSummaryDto
 {
     public string? SpecialtyName { get; set; }
     public string? DoctorName { get; set; }
+    public string? FacilityName { get; set; }
+    public bool RequiresFacilitySelection { get; set; }
     public string? SlotDate { get; set; }
     public string? StartTime { get; set; }
     public string? EndTime { get; set; }

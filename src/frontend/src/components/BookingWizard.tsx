@@ -2,8 +2,8 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { AiBookingWizardRequest, AiBookingWizardResponse } from "../types/ai";
 import styles from "./MedicalChatWidget.module.css";
 
-const steps = ['specialty', 'doctor', 'day', 'slot', 'reason', 'review'] as const;
-const labels = ['Chuyên khoa', 'Bác sĩ', 'Ngày', 'Giờ', 'Lý do', 'Xem lại'];
+const allSteps = ['specialty', 'doctor', 'day', 'slot', 'facility', 'reason', 'review'] as const;
+const allLabels = ['Chuyên khoa', 'Bác sĩ', 'Ngày', 'Giờ', 'Cơ sở', 'Lý do', 'Xem lại'];
 
 interface Props {
     state: AiBookingWizardResponse | null;
@@ -23,25 +23,31 @@ export const BookingWizard = ({ state, busy, onStep, reviewContent }: Props) => 
         heading.current?.focus({ preventScroll: true });
     }, [state?.step]);
     if (!state) return null;
+    const hasFacilityStep = state.step === 'facility' || state.summary?.requiresFacilitySelection === true;
+    const steps = allSteps.filter(step => hasFacilityStep || step !== 'facility');
+    const labels = allLabels.filter(label => hasFacilityStep || label !== 'Cơ sở');
     const index = steps.indexOf(state.step as typeof steps[number]);
-    const completed = [state.summary?.specialtyName ?? selections[0], state.summary?.doctorName ?? selections[1],
-        state.summary?.slotDate ?? selections[2], state.summary?.startTime ? `${state.summary.startTime} – ${state.summary.endTime}` : selections[3],
-        reason ? 'Đã nhập lý do' : selections[4]];
+    const selected = (step: string) => selections[allSteps.indexOf(step as typeof allSteps[number])];
+    const completed = [state.summary?.specialtyName ?? selected('specialty'), state.summary?.doctorName ?? selected('doctor'),
+        state.summary?.slotDate ?? selected('day'), state.summary?.startTime ? `${state.summary.startTime} – ${state.summary.endTime}` : selected('slot'),
+        ...(hasFacilityStep ? [state.summary?.facilityName ?? selected('facility')] : []),
+        reason ? 'Đã nhập lý do' : selected('reason')];
     return <section ref={card} className={styles.wizard} data-wizard-step={state.step} aria-label="Đặt lịch khám từng bước" aria-busy={busy}>
-        {index >= 0 && <div className={styles.wizardProgress} aria-label={`Bước ${index + 1}/6: ${labels.join(' → ')}`}>
-            <strong>Bước {index + 1}/6:</strong><span className={styles.progressLabels}>{labels.join(' → ')}</span>
+        {index >= 0 && <div className={styles.wizardProgress} aria-label={`Bước ${index + 1}/${steps.length}: ${labels.join(' → ')}`}>
+            <strong>Bước {index + 1}/{steps.length}:</strong><span className={styles.progressLabels}>{labels.join(' → ')}</span>
             <div className={styles.progressDots} aria-hidden="true">{steps.map((step, position) => <i key={step} data-completed={position <= index} />)}</div>
         </div>}
         {completed.slice(0, Math.max(0, index)).map((value, position) => value && <p className={styles.completedStep} data-completed-step key={labels[position]}>{labels[position]}: {value} ✓</p>)}
+        {!hasFacilityStep && state.summary?.facilityName && <p className={styles.completedStep}>Cơ sở: {state.summary.facilityName} ✓</p>}
         {state.canGoBack && state.backToken && <button type="button" className={styles.textLink} aria-label="Quay lại bước trước" disabled={busy}
             onClick={() => { setReason(""); void onStep("back", state.backToken); }}>← Quay lại</button>}
         <h4 ref={heading} tabIndex={-1}>{state.title}</h4>
         <p role={state.errorCode ? "alert" : "status"}>{state.message}</p>
         {state.step === 'review' && reviewContent}
-        <div className={`${styles.wizardOptions} ${state.step === 'slot' ? styles.slotGrid : ['specialty', 'doctor'].includes(state.step) ? styles.choiceGrid : styles.quickPrompts}`}>
+        <div className={`${styles.wizardOptions} ${state.step === 'slot' ? styles.slotGrid : ['specialty', 'doctor', 'facility'].includes(state.step) ? styles.choiceGrid : styles.quickPrompts}`}>
             {state.options.map(option => <button key={option.token} type="button" className={styles.quickPromptChip}
                 aria-label={option.hint ? `${option.label}, ${option.hint}` : option.label} disabled={busy}
-                onClick={() => { setSelections(previous => { const next = [...previous]; next[index] = option.label; return next; }); void onStep("pick", option.token); }}>
+                onClick={() => { setSelections(previous => { const next = [...previous]; next[allSteps.indexOf(state.step as typeof allSteps[number])] = option.label; return next; }); void onStep("pick", option.token); }}>
                 {option.label}{option.hint && <small> · {option.hint}</small>}
             </button>)}
         </div>

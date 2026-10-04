@@ -119,6 +119,8 @@ export interface SelectSlotAction extends BaseAiAction {
 export interface ReviewBookingAction extends BaseAiAction {
     type: "ReviewBooking";
     payload: {
+        facilityId?: number;
+        facilityName?: string;
         specialtyId?: number;
         specialtyName?: string;
         doctorId?: number;
@@ -139,6 +141,8 @@ export interface ReviewBookingAction extends BaseAiAction {
 export interface ConfirmBookingAction extends BaseAiAction {
     type: "ConfirmBooking";
     payload: {
+        facilityId?: number;
+        facilityName?: string;
         specialtyId: number;
         specialtyName?: string;
         doctorId: number;
@@ -305,6 +309,8 @@ export interface AiSpecialtySuggestion {
 }
 
 export interface AiBookingDraft {
+    facilityId?: number;
+    facilityName?: string;
     draftId?: string;
     sessionId?: string;
     contextSnapshotId?: string;
@@ -416,14 +422,14 @@ export interface AiBookingWizardRequest {
 }
 
 export interface AiBookingWizardResponse {
-    step: "specialty" | "doctor" | "day" | "slot" | "reason" | "review" | "stopped" | "error";
+    step: "specialty" | "doctor" | "day" | "slot" | "facility" | "reason" | "review" | "stopped" | "error";
     title: string;
     message: string;
     options: Array<{ token: string; label: string; hint?: string }>;
     canGoBack: boolean;
     backToken?: string;
     reasonToken?: string;
-    summary?: { specialtyName?: string; doctorName?: string; slotDate?: string; startTime?: string; endTime?: string; reasonProvided: boolean };
+    summary?: { specialtyName?: string; doctorName?: string; facilityName?: string; requiresFacilitySelection?: boolean; slotDate?: string; startTime?: string; endTime?: string; reasonProvided: boolean };
     reviewAction?: ReviewBookingAction;
     actions: AiAction[];
     suggestions: AiSuggestionItem[];
