@@ -11,7 +11,7 @@ namespace ClinicManagement.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/pharmacy")]
-[Authorize(Roles = RoleNames.Pharmacist + "," + RoleNames.Admin)]
+[Authorize(Roles = RoleNames.Pharmacist + "," + RoleNames.Receptionist + "," + RoleNames.Admin)]
 public class PharmacyController : ControllerBase
 {
     private readonly IPharmacyService _pharmacyService;
@@ -22,6 +22,7 @@ public class PharmacyController : ControllerBase
     }
 
     [HttpGet("dashboard")]
+    [Authorize(Roles = RoleNames.Pharmacist + "," + RoleNames.Admin)]
     public async Task<IActionResult> GetDashboardStats()
     {
         var result = await _pharmacyService.GetDashboardStatsAsync();
@@ -29,6 +30,7 @@ public class PharmacyController : ControllerBase
     }
 
     [HttpGet("prescriptions")]
+    [Authorize(Roles = RoleNames.Pharmacist + "," + RoleNames.Admin)]
     public async Task<IActionResult> GetPrescriptions([FromQuery] string? status, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
         var result = await _pharmacyService.GetPrescriptionsAsync(status, search, page, pageSize);
@@ -36,6 +38,7 @@ public class PharmacyController : ControllerBase
     }
 
     [HttpGet("prescriptions/{id}")]
+    [Authorize(Roles = RoleNames.Pharmacist + "," + RoleNames.Admin)]
     public async Task<IActionResult> GetPrescriptionById(long id)
     {
         var result = await _pharmacyService.GetPrescriptionByIdAsync(id);
@@ -51,6 +54,7 @@ public class PharmacyController : ControllerBase
     }
 
     [HttpPost("prescriptions/{id}/dispense")]
+    [Authorize(Roles = RoleNames.Pharmacist + "," + RoleNames.Admin)]
     public async Task<IActionResult> DispensePrescription(long id)
     {
         var result = await _pharmacyService.DispensePrescriptionAsync(id);
@@ -58,6 +62,7 @@ public class PharmacyController : ControllerBase
     }
 
     [HttpGet("inventory-transactions")]
+    [Authorize(Roles = RoleNames.Pharmacist + "," + RoleNames.Admin)]
     public async Task<IActionResult> GetInventoryTransactions([FromQuery] long? medicineId, [FromQuery] int page = 1, [FromQuery] int pageSize = 15)
     {
         var result = await _pharmacyService.GetStockTransactionsAsync(medicineId, page, pageSize);
@@ -65,6 +70,7 @@ public class PharmacyController : ControllerBase
     }
 
     [HttpPost("inventory/adjust")]
+    [Authorize(Roles = RoleNames.Pharmacist + "," + RoleNames.Admin)]
     public async Task<IActionResult> AdjustStock([FromBody] AdjustStockDto request)
     {
         await _pharmacyService.AdjustStockAsync(request);

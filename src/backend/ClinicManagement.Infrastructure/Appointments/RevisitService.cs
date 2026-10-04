@@ -336,7 +336,28 @@ public class RevisitService : IRevisitService
             throw new BusinessException("INVALID_STATE", "Chỉ có thể từ chối đề xuất đang chờ phản hồi.");
 
         revisitReq.Status = RevisitRequestStatus.Rejected;
-        // Optionally store the reason if RevisitRequest entity supports it, else ignored.
+        var doctorUserId = await (from doctor in _dbContext.Doctors
+                                  join user in _dbContext.Users on doctor.UserId equals user.Id
+                                  where doctor.Id == revisitReq.DoctorId && user.IsActive
+                                  select (Guid?)user.Id).FirstOrDefaultAsync();
+        if (doctorUserId.HasValue)
+        {
+            var appointmentCode = await _dbContext.Appointments.Where(a => a.Id == revisitReq.AppointmentId)
+                .Select(a => a.AppointmentCode).FirstAsync();
+            var reason = string.IsNullOrWhiteSpace(request.Reason) ? "Không nêu lý do" : request.Reason.Trim();
+            var message = $"Bệnh nhân từ chối đề xuất tái khám từ lịch hẹn #{appointmentCode}. Lý do: {reason}";
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = doctorUserId.Value,
+                Type = NotificationType.Appointment,
+                Title = "Bệnh nhân từ chối đề xuất tái khám",
+                Message = message.Length > 500 ? message[..500] : message,
+                Route = $"/doctor/appointments/{revisitReq.AppointmentId}",
+                RelatedEntityType = "RevisitRequest",
+                RelatedEntityId = revisitReq.Id.ToString(),
+                DedupeKey = $"revisit_rejected_{revisitReq.Id}"
+            });
+        }
         
         await _dbContext.SaveChangesAsync();
     }
