@@ -154,7 +154,8 @@ public class RevisitService : IRevisitService
                 throw new BusinessException("INVALID_TARGET", "Khung giờ tái khám phải ở trong tương lai.");
 
             var doctor = await _dbContext.Doctors.AsNoTracking()
-                .FirstOrDefaultAsync(d => d.Id == targetSlot.DoctorId && d.IsActive);
+                .FirstOrDefaultAsync(d => d.Id == targetSlot.DoctorId && d.IsActive &&
+                    _dbContext.Users.Any(user => user.Id == d.UserId && user.IsActive));
             if (doctor == null)
                 throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ không tồn tại hoặc đã ngừng hoạt động.");
 
@@ -267,7 +268,10 @@ public class RevisitService : IRevisitService
                     .ToListAsync();
 
                 var activeReceptionistIds = await _dbContext.Users
-                    .Where(user => receptionistUserIds.Contains(user.Id) && user.IsActive)
+                    .Where(user => receptionistUserIds.Contains(user.Id) && user.IsActive &&
+                        (!newAppointment.FacilityId.HasValue || _dbContext.StaffFacilityAssignments.Any(assignment =>
+                            assignment.UserId == user.Id && assignment.IsActive && assignment.Role == ClinicManagement.Application.Common.Constants.RoleNames.Receptionist &&
+                            assignment.FacilityId == newAppointment.FacilityId.Value)))
                     .Select(user => user.Id)
                     .ToListAsync();
 

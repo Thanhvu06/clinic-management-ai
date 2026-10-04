@@ -27,11 +27,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     if (res.success && res.data) {
                         setUser(res.data);
                         setIdentityVersion(version => version + 1);
-                    } else {
-                        localStorage.removeItem('token');
                     }
                 } catch (error) {
-                    localStorage.removeItem('token');
+                    if ((error as { status?: number } | null)?.status === 401) {
+                        localStorage.removeItem('token');
+                    }
                 }
             }
             setLoading(false);

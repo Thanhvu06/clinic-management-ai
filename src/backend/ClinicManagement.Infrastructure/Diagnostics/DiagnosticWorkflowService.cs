@@ -690,7 +690,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                         Type = NotificationType.Diagnostic,
                         Title = "Có chỉ định cận lâm sàng mới",
                         Message = $"Bác sĩ đã tạo phiếu chỉ định #{order.OrderCode} gồm {services.Count} dịch vụ cận lâm sàng.",
-                        Route = "/patient/diagnostics",
+                        Route = "/patient/diagnostic-results",
                         RelatedEntityType = "DiagnosticOrder",
                         RelatedEntityId = order.Id.ToString(),
                         DedupeKey = $"diag_created_pat_{order.Id}_{visit.Patient.UserId.Value}",
@@ -914,6 +914,15 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             Description = $"Bác sĩ hủy phiếu chỉ định #{order.OrderCode}.",
             CreatedAt = DateTime.UtcNow
         });
+
+        var visit = await FindOrderVisitAsync(order);
+        if (visit?.Status == VisitStatus.WaitingForDiagnostics)
+        {
+            var remaining = await RemainingVisitOrderStatusesAsync(visit, order.Id);
+            if (remaining.Count == 0) visit.Status = VisitStatus.InConsultation;
+            else if (remaining.All(status => status == DiagnosticOrderStatus.Completed)) visit.Status = VisitStatus.ResultsReady;
+            visit.UpdatedAtUtc = _dateTimeProvider.UtcNow;
+        }
 
         try
         {
@@ -1243,7 +1252,9 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 Type = NotificationType.Diagnostic,
                 Title = "Có kết quả cận lâm sàng",
                 Message = $"Phiếu chỉ định #{order.OrderCode} cho bệnh nhân đã có đầy đủ kết quả.",
-                Route = $"/doctor/appointments/{order.AppointmentId}/examination",
+                Route = order.AppointmentId.HasValue
+                    ? $"/doctor/appointments/{order.AppointmentId}/examination"
+                    : $"/doctor/visits/{order.PatientVisitId}/examination",
                 RelatedEntityType = "DiagnosticOrder",
                 RelatedEntityId = order.Id.ToString(),
                 DedupeKey = $"diag_completed_doc_{order.Id}_{doctorUser.Id}",
@@ -1253,30 +1264,17 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         }
 
         // Update visit status to ResultsReady if connected to a PatientVisit
-        PatientVisit? visit = null;
-        if (order.PatientVisitId.HasValue)
-        {
-            visit = await _dbContext.PatientVisits
-                .Include(v => v.DiagnosticOrders)
-                .FirstOrDefaultAsync(v => v.Id == order.PatientVisitId.Value);
-        }
-        else if (order.AppointmentId.HasValue)
-        {
-            visit = await _dbContext.PatientVisits
-                .Include(v => v.DiagnosticOrders)
-                .FirstOrDefaultAsync(v => v.AppointmentId == order.AppointmentId.Value);
-        }
+        var visit = await FindOrderVisitAsync(order);
 
-        if (visit != null)
+        if (visit?.Status == VisitStatus.WaitingForDiagnostics)
         {
-            var otherPending = visit.DiagnosticOrders
-                .Where(o => o.Id != order.Id && o.Status != DiagnosticOrderStatus.Cancelled)
-                .Any(o => o.Status != DiagnosticOrderStatus.Completed);
+            var remaining = await RemainingVisitOrderStatusesAsync(visit, order.Id);
+            var otherPending = remaining.Any(status => status != DiagnosticOrderStatus.Completed);
 
             if (!otherPending)
             {
                 visit.Status = VisitStatus.ResultsReady;
-                visit.UpdatedAtUtc = DateTime.UtcNow;
+                visit.UpdatedAtUtc = _dateTimeProvider.UtcNow;
             }
         }
 
@@ -1291,6 +1289,17 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         return (await GetOrderDtoByIdAsync(orderId))!;
     }
+
+    private Task<PatientVisit?> FindOrderVisitAsync(DiagnosticOrder order) =>
+        _dbContext.PatientVisits.FirstOrDefaultAsync(visit =>
+            order.PatientVisitId.HasValue ? visit.Id == order.PatientVisitId.Value :
+            order.AppointmentId.HasValue && visit.AppointmentId == order.AppointmentId.Value);
+
+    private Task<List<DiagnosticOrderStatus>> RemainingVisitOrderStatusesAsync(PatientVisit visit, long currentOrderId) =>
+        _dbContext.DiagnosticOrders.AsNoTracking()
+            .Where(order => order.Id != currentOrderId && order.Status != DiagnosticOrderStatus.Cancelled &&
+                (order.PatientVisitId == visit.Id || (visit.AppointmentId.HasValue && order.AppointmentId == visit.AppointmentId)))
+            .Select(order => order.Status).ToListAsync();
 
     public async Task<PagedResult<DiagnosticOrderDto>> GetPatientOrdersAsync(int page, int pageSize)
     {
