@@ -1345,48 +1345,38 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
     private async Task<List<DiagnosticOrderDto>> GetOrderDtosByIdsAsync(List<long> orderIds)
     {
         if (orderIds.Count == 0) return new();
-        var orders = _dbContext.DiagnosticOrders.AsNoTrackingWithIdentityResolution().AsSingleQuery()
+        var orders = await _dbContext.DiagnosticOrders.AsNoTracking().AsSplitQuery()
             .Include(o => o.Appointment).Include(o => o.PatientVisit).Include(o => o.Patient)
             .Include(o => o.OrderingDoctor).ThenInclude(d => d.DoctorSpecialties).ThenInclude(ds => ds.Specialty)
             .Include(o => o.ReviewedByDoctor)
             .Include(o => o.Items).ThenInclude(i => i.DiagnosticService)
             .Include(o => o.Items).ThenInclude(i => i.Result)
-            .Where(o => orderIds.Contains(o.Id));
-        // Result recorders are joined in the same command; other user fields are scalar subqueries.
-        var rows = await (from order in orders
-                          join item in _dbContext.DiagnosticOrderItems on order.Id equals item.DiagnosticOrderId into orderItems
-                          from item in orderItems.DefaultIfEmpty()
-                          join result in _dbContext.DiagnosticResults on item.Id equals result.DiagnosticOrderItemId into itemResults
-                          from result in itemResults.DefaultIfEmpty()
-                          join recorder in _dbContext.Users on result.ResultedByUserId equals recorder.Id into recorders
-                          from recorder in recorders.DefaultIfEmpty()
-                          select new
-                          {
-                              Order = order,
-                              RecorderId = (Guid?)recorder.Id,
-                              RecorderName = recorder.FullName,
-                              PatientUserName = _dbContext.Users.Where(u => u.Id == order.Patient.UserId).Select(u => u.FullName).FirstOrDefault(),
-                              PatientUserPhone = _dbContext.Users.Where(u => u.Id == order.Patient.UserId).Select(u => u.PhoneNumber).FirstOrDefault(),
-                              OrderingDoctorName = _dbContext.Users.Where(u => u.Id == order.OrderingDoctor.UserId).Select(u => u.FullName).FirstOrDefault(),
-                              ReviewedDoctorName = _dbContext.Users.Where(u => order.ReviewedByDoctor != null && u.Id == order.ReviewedByDoctor.UserId).Select(u => u.FullName).FirstOrDefault(),
-                              StartedUserName = _dbContext.Users.Where(u => u.Id == order.StartedByUserId).Select(u => u.FullName).FirstOrDefault(),
-                              CompletedUserName = _dbContext.Users.Where(u => u.Id == order.CompletedByUserId).Select(u => u.FullName).FirstOrDefault()
-                          }).ToListAsync();
-        var byId = rows.GroupBy(row => row.Order.Id).ToDictionary(group => group.Key, group =>
-        {
-            var row = group.First();
-            var resultRecorders = group.Where(x => x.RecorderId.HasValue).DistinctBy(x => x.RecorderId)
-                .ToDictionary(x => x.RecorderId!.Value, x => x.RecorderName);
-            return MapBatchedOrder(row.Order, row.PatientUserName, row.PatientUserPhone, row.OrderingDoctorName,
-                row.ReviewedDoctorName, row.StartedUserName, row.CompletedUserName, resultRecorders);
-        });
+            .Where(o => orderIds.Contains(o.Id)).ToListAsync();
+        var userIds = orders.SelectMany(order => new Guid?[]
+            {
+                order.Patient.UserId, order.OrderingDoctor.UserId, order.ReviewedByDoctor?.UserId,
+                order.StartedByUserId, order.CompletedByUserId
+            }.Concat(order.Items.Where(item => item.Result != null)
+                .Select(item => (Guid?)item.Result!.ResultedByUserId)))
+            .Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
+        var users = (await _dbContext.Users.AsNoTracking().Where(user => userIds.Contains(user.Id))
+            .Select(user => new { user.Id, user.FullName, user.PhoneNumber }).ToListAsync())
+            .ToDictionary(user => user.Id, user => (user.FullName, user.PhoneNumber));
+        var byId = orders.ToDictionary(order => order.Id, order => MapBatchedOrder(order, users));
         return orderIds.Where(byId.ContainsKey).Select(id => byId[id]).ToList();
     }
 
-    private DiagnosticOrderDto MapBatchedOrder(DiagnosticOrder order, string? patientUserName, string? patientUserPhone,
-        string? orderingDoctorName, string? reviewedDoctorName, string? startedUserName, string? completedUserName,
-        Dictionary<Guid, string> resultRecorders)
+    private DiagnosticOrderDto MapBatchedOrder(DiagnosticOrder order,
+        IReadOnlyDictionary<Guid, (string FullName, string? PhoneNumber)> users)
     {
+        string? UserName(Guid? id) => id.HasValue && users.TryGetValue(id.Value, out var user) ? user.FullName : null;
+        var patientUserName = UserName(order.Patient.UserId);
+        var patientUserPhone = order.Patient.UserId.HasValue && users.TryGetValue(order.Patient.UserId.Value, out var patientUser)
+            ? patientUser.PhoneNumber : null;
+        var orderingDoctorName = UserName(order.OrderingDoctor.UserId);
+        var reviewedDoctorName = UserName(order.ReviewedByDoctor?.UserId);
+        var startedUserName = UserName(order.StartedByUserId);
+        var completedUserName = UserName(order.CompletedByUserId);
         int? patientAge = null;
         if (order.Patient.DateOfBirth.HasValue)
         {
@@ -1406,7 +1396,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             DiagnosticResultDto? resDto = null;
             if (i.Result != null)
             {
-                resultRecorders.TryGetValue(i.Result.ResultedByUserId, out var recorderName);
+                var recorderName = UserName(i.Result.ResultedByUserId);
                 resDto = new DiagnosticResultDto
                 {
                     Id = i.Result.Id,
