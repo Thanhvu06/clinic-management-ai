@@ -239,6 +239,19 @@ builder.Services.AddRateLimiter(options =>
                     QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst
                 }));
 
+    options.AddPolicy("AppointmentLookupPolicy", httpContext =>
+        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ =>
+                new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = builder.Environment.IsEnvironment("Testing")
+                        ? Math.Max(1, builder.Configuration.GetValue<int?>("AppointmentLookupRateLimiting:TestingPermitLimit") ?? 10000)
+                        : 10,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst
+                }));
+
     options.AddPolicy("AiChatPolicy", httpContext =>
     {
         var partitionKey = AiRateLimitPartitioning.GetPartitionKey(httpContext);

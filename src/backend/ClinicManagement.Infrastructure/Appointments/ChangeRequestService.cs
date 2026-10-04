@@ -20,15 +20,18 @@ public class ChangeRequestService : IChangeRequestService
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IFacilityAuthorizationService _facilityAuthService;
 
     public ChangeRequestService(
         AppDbContext dbContext,
         ICurrentUserService currentUserService,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IFacilityAuthorizationService facilityAuthService)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _dateTimeProvider = dateTimeProvider;
+        _facilityAuthService = facilityAuthService;
     }
 
     private Guid GetUserId()
@@ -114,7 +117,7 @@ public class ChangeRequestService : IChangeRequestService
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.SourceAiActionId == sourceAiActionId.Value && x.RequestedByUserId == userId);
             if (existing != null)
-                return await GetChangeRequestByIdAsync(existing.Id);
+                return await GetChangeRequestDetailAsync(existing.Id);
         }
 
         var normalizedReason = request.Reason?.Trim() ?? string.Empty;
@@ -216,7 +219,7 @@ public class ChangeRequestService : IChangeRequestService
                         .FirstOrDefaultAsync(x => x.SourceAiActionId == sourceAiActionId.Value && x.RequestedByUserId == userId)
                     : null;
                 if (existingBySource != null)
-                    return await GetChangeRequestByIdAsync(existingBySource.Id);
+                    return await GetChangeRequestDetailAsync(existingBySource.Id);
 
                 var changeRequest = new AppointmentChangeRequest
                 {
@@ -247,6 +250,7 @@ public class ChangeRequestService : IChangeRequestService
                 await _dbContext.SaveChangesAsync();
 
                 await NotifyReceptionistsAsync(
+                    appointment.Id,
                     "Yêu cầu dời lịch khám mới",
                     $"Bệnh nhân yêu cầu dời lịch khám #{appointment.AppointmentCode}.",
                     changeRequest.Id.ToString(),
@@ -255,7 +259,7 @@ public class ChangeRequestService : IChangeRequestService
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                return await GetChangeRequestByIdAsync(changeRequest.Id);
+                return await GetChangeRequestDetailAsync(changeRequest.Id);
             }
             catch
             {
@@ -278,7 +282,7 @@ public class ChangeRequestService : IChangeRequestService
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.SourceAiActionId == sourceAiActionId.Value && x.RequestedByUserId == userId);
             if (existing != null)
-                return await GetChangeRequestByIdAsync(existing.Id);
+                return await GetChangeRequestDetailAsync(existing.Id);
         }
 
         var normalizedReason = request.Reason?.Trim() ?? string.Empty;
@@ -323,7 +327,7 @@ public class ChangeRequestService : IChangeRequestService
                         .FirstOrDefaultAsync(x => x.SourceAiActionId == sourceAiActionId.Value && x.RequestedByUserId == userId)
                     : null;
                 if (existingBySource != null)
-                    return await GetChangeRequestByIdAsync(existingBySource.Id);
+                    return await GetChangeRequestDetailAsync(existingBySource.Id);
 
                 var changeRequest = new AppointmentChangeRequest
                 {
@@ -353,6 +357,7 @@ public class ChangeRequestService : IChangeRequestService
                 await _dbContext.SaveChangesAsync();
 
                 await NotifyReceptionistsAsync(
+                    appointment.Id,
                     "Yêu cầu hủy lịch khám mới",
                     $"Bệnh nhân yêu cầu hủy lịch khám #{appointment.AppointmentCode}.",
                     changeRequest.Id.ToString(),
@@ -361,7 +366,7 @@ public class ChangeRequestService : IChangeRequestService
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                return await GetChangeRequestByIdAsync(changeRequest.Id);
+                return await GetChangeRequestDetailAsync(changeRequest.Id);
             }
             catch
             {
@@ -499,10 +504,22 @@ public class ChangeRequestService : IChangeRequestService
 
     public async Task<PagedResult<ChangeRequestDto>> GetAllChangeRequestsAsync(string? requestType, string? status, int page, int pageSize)
     {
+        var userId = GetUserId();
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var query = from cr in _dbContext.AppointmentChangeRequests
+        var requests = _dbContext.AppointmentChangeRequests.AsNoTracking();
+        if (!await _facilityAuthService.HasFullFacilityAccessAsync(userId))
+        {
+            var facilities = await _facilityAuthService.GetUserAccessibleFacilityIdsAsync(userId);
+            requests = requests.Where(r => r.Appointment.FacilityId.HasValue
+                ? facilities.Contains(r.Appointment.FacilityId.Value)
+                : r.Appointment.PatientVisit != null
+                    ? facilities.Contains(r.Appointment.PatientVisit.FacilityId)
+                    : true); // Preserve legacy requests with no determinable facility.
+        }
+
+        var query = from cr in requests
                     join a in _dbContext.Appointments on cr.AppointmentId equals a.Id
                     join p in _dbContext.Patients on a.PatientId equals p.Id
                     join pu in _dbContext.Users on p.UserId equals pu.Id
@@ -562,6 +579,23 @@ public class ChangeRequestService : IChangeRequestService
 
     public async Task<ChangeRequestDto> GetChangeRequestByIdAsync(long requestId)
     {
+        await ValidateReceptionRequestAccessAsync(GetUserId(), requestId);
+        return await GetChangeRequestDetailAsync(requestId);
+    }
+
+    private async Task ValidateReceptionRequestAccessAsync(Guid userId, long requestId)
+    {
+        var request = await _dbContext.AppointmentChangeRequests.AsNoTracking()
+            .Where(r => r.Id == requestId)
+            .Select(r => new { r.AppointmentId, FacilityId = r.Appointment.FacilityId ?? (r.Appointment.PatientVisit != null ? (long?)r.Appointment.PatientVisit.FacilityId : null) })
+            .FirstOrDefaultAsync();
+        if (request == null) throw new NotFoundException("Yêu cầu không tồn tại.");
+        if (request.FacilityId.HasValue)
+            await _facilityAuthService.ValidateAppointmentAccessAsync(userId, request.AppointmentId);
+    }
+
+    private async Task<ChangeRequestDto> GetChangeRequestDetailAsync(long requestId)
+    {
         var query = from cr in _dbContext.AppointmentChangeRequests
                     join a in _dbContext.Appointments on cr.AppointmentId equals a.Id
                     join p in _dbContext.Patients on a.PatientId equals p.Id
@@ -605,6 +639,7 @@ public class ChangeRequestService : IChangeRequestService
     public async Task ApproveRescheduleAsync(long requestId, ProcessChangeRequestDto request)
     {
         var userId = GetUserId();
+        await ValidateReceptionRequestAccessAsync(userId, requestId);
 
         await ExecuteWithRetryAsync(async () =>
         {
@@ -744,6 +779,7 @@ public class ChangeRequestService : IChangeRequestService
     public async Task ApproveCancellationAsync(long requestId, ProcessChangeRequestDto request)
     {
         var userId = GetUserId();
+        await ValidateReceptionRequestAccessAsync(userId, requestId);
 
         await ExecuteWithRetryAsync(async () =>
         {
@@ -812,6 +848,7 @@ public class ChangeRequestService : IChangeRequestService
     public async Task RejectRequestAsync(long requestId, ProcessChangeRequestDto request)
     {
         var userId = GetUserId();
+        await ValidateReceptionRequestAccessAsync(userId, requestId);
 
         var rejectReason = !string.IsNullOrWhiteSpace(request.Note) ? request.Note.Trim() : (!string.IsNullOrWhiteSpace(request.Reason) ? request.Reason.Trim() : string.Empty);
         if (string.IsNullOrWhiteSpace(rejectReason) || rejectReason.Length < 5)
@@ -879,7 +916,7 @@ public class ChangeRequestService : IChangeRequestService
         }, "CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý bởi người dùng khác.");
     }
 
-    private async Task NotifyReceptionistsAsync(string title, string message, string relatedEntityId, string dedupeKeyPrefix)
+    private async Task NotifyReceptionistsAsync(long appointmentId, string title, string message, string relatedEntityId, string dedupeKeyPrefix)
     {
         var recRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Name == ClinicManagement.Application.Common.Constants.RoleNames.Receptionist);
         if (recRole == null) return;
@@ -889,8 +926,13 @@ public class ChangeRequestService : IChangeRequestService
             .Select(ur => ur.UserId)
             .ToListAsync();
 
+        var facilityId = await _dbContext.Appointments.AsNoTracking()
+            .Where(a => a.Id == appointmentId)
+            .Select(a => a.FacilityId ?? (a.PatientVisit != null ? (long?)a.PatientVisit.FacilityId : null))
+            .FirstOrDefaultAsync();
         var activeRecUserIds = await _dbContext.Users
-            .Where(u => recUserIds.Contains(u.Id) && u.IsActive)
+            .Where(u => recUserIds.Contains(u.Id) && u.IsActive &&
+                (!facilityId.HasValue || _dbContext.StaffFacilityAssignments.Any(s => s.UserId == u.Id && s.FacilityId == facilityId.Value && s.IsActive && s.Role == ClinicManagement.Application.Common.Constants.RoleNames.Receptionist)))
             .Select(u => u.Id)
             .ToListAsync();
 

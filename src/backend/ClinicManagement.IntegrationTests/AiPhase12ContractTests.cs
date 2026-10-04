@@ -78,7 +78,7 @@ public sealed class AiPhase12ContractTests : IntegrationTestBase
         var body = await response.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("clinic.search_specialties", body);
-        Assert.Contains("patient.execute_confirmed_action", body);
+        Assert.DoesNotContain("patient.execute_confirmed_action", body);
     }
 
     [Fact]

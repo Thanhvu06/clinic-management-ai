@@ -45,6 +45,8 @@ public class ReceptionService : IReceptionService
 
     public async Task<PagedResult<ReceptionAppointmentDto>> GetAppointmentsAsync(string? status, string? tab, long? facilityId, string? search, int page, int pageSize)
     {
+        page = Math.Max(1, page);
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
         var userId = GetUserId();
         var today = _dateTimeProvider.VietnamToday;
 
@@ -204,6 +206,7 @@ public class ReceptionService : IReceptionService
 
     public async Task<List<AppointmentHistoryDto>> GetAppointmentHistoryAsync(long appointmentId)
     {
+        await _facilityAuthService.ValidateAppointmentAccessAsync(GetUserId(), appointmentId);
         var appointmentExists = await _dbContext.Appointments
             .AnyAsync(a => a.Id == appointmentId);
 
@@ -393,8 +396,22 @@ public class ReceptionService : IReceptionService
             .Where(a => a.AppointmentDate == today)
             .ToListAsync();
 
-        var pendingChangeRequests = await _dbContext.AppointmentChangeRequests
-            .CountAsync(c => c.Status == AppointmentChangeRequestStatus.Pending);
+        var changeRequests = _dbContext.AppointmentChangeRequests.AsNoTracking()
+            .Where(c => c.Status == AppointmentChangeRequestStatus.Pending);
+        if (facilityId.HasValue && facilityId.Value > 0)
+        {
+            var facId = facilityId.Value;
+            changeRequests = changeRequests.Where(c => c.Appointment.FacilityId.HasValue
+                ? c.Appointment.FacilityId == facId
+                : c.Appointment.PatientVisit != null ? c.Appointment.PatientVisit.FacilityId == facId : true);
+        }
+        else if (!isGlobalAdmin)
+        {
+            changeRequests = changeRequests.Where(c => c.Appointment.FacilityId.HasValue
+                ? allowedFacilityIds.Contains(c.Appointment.FacilityId.Value)
+                : c.Appointment.PatientVisit != null ? allowedFacilityIds.Contains(c.Appointment.PatientVisit.FacilityId) : true);
+        }
+        var pendingChangeRequests = await changeRequests.CountAsync();
 
         var unbilledVisitsQuery = _dbContext.PatientVisits
             .AsNoTracking()
