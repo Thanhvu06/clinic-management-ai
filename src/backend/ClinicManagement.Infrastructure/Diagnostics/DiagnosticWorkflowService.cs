@@ -752,13 +752,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             .Select(o => o.Id)
             .ToListAsync();
 
-        var result = new List<DiagnosticOrderDto>();
-        foreach (var id in orderIds)
-        {
-            var dto = await GetOrderDtoByIdAsync(id);
-            if (dto != null) result.Add(dto);
-        }
-        return result;
+        return await GetOrderDtosByIdsAsync(orderIds);
     }
 
     public async Task<List<DiagnosticOrderDto>> GetOrdersByAppointmentForDoctorAsync(long appointmentId)
@@ -777,13 +771,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             .Select(o => o.Id)
             .ToListAsync();
 
-        var result = new List<DiagnosticOrderDto>();
-        foreach (var id in orderIds)
-        {
-            var dto = await GetOrderDtoByIdAsync(id);
-            if (dto != null) result.Add(dto);
-        }
-        return result;
+        return await GetOrderDtosByIdsAsync(orderIds);
     }
 
     public async Task<DiagnosticOrderDto> GetOrderByIdForDoctorAsync(long orderId)
@@ -989,12 +977,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             .Select(o => o.Id)
             .ToListAsync();
 
-        var items = new List<DiagnosticOrderDto>();
-        foreach (var id in orderIds)
-        {
-            var dto = await GetOrderDtoByIdAsync(id);
-            if (dto != null) items.Add(dto);
-        }
+        var items = await GetOrderDtosByIdsAsync(orderIds);
 
         return new PagedResult<DiagnosticOrderDto>(items, totalItems, page, pageSize);
     }
@@ -1031,13 +1014,15 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         var scopedOrders = _dbContext.DiagnosticOrders.AsQueryable();
         scopedOrders = WhereTechnicianFacilityScope(scopedOrders, facilityIds);
         var today = _dateTimeProvider.VietnamToday;
+        var startUtc = _dateTimeProvider.ConvertVietnamToUtc(today.ToDateTime(TimeOnly.MinValue));
+        var endUtc = _dateTimeProvider.ConvertVietnamToUtc(today.AddDays(1).ToDateTime(TimeOnly.MinValue));
         var orderedCount = await scopedOrders.CountAsync(o => o.Status == DiagnosticOrderStatus.Ordered);
         var inProgressCount = await scopedOrders.CountAsync(o => o.Status == DiagnosticOrderStatus.InProgress);
 
         var completedTodayCount = await scopedOrders
             .CountAsync(o => o.Status == DiagnosticOrderStatus.Completed &&
                              o.CompletedAtUtc.HasValue &&
-                             DateOnly.FromDateTime(o.CompletedAtUtc.Value.AddHours(7)) == today);
+                             o.CompletedAtUtc.Value >= startUtc && o.CompletedAtUtc.Value < endUtc);
 
         return new TechnicianDiagnosticStatsDto
         {
@@ -1323,12 +1308,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             .Select(o => o.Id)
             .ToListAsync();
 
-        var items = new List<DiagnosticOrderDto>();
-        foreach (var id in orderIds)
-        {
-            var dto = await GetOrderDtoByIdAsync(id);
-            if (dto != null) items.Add(RedactUnpublishedResultsForPatient(dto));
-        }
+        var items = (await GetOrderDtosByIdsAsync(orderIds))
+            .Select(RedactUnpublishedResultsForPatient).ToList();
 
         return new PagedResult<DiagnosticOrderDto>(items, totalItems, page, pageSize);
     }
@@ -1359,6 +1340,138 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         foreach (var item in order.Items)
             item.Result = null;
         return order;
+    }
+
+    private async Task<List<DiagnosticOrderDto>> GetOrderDtosByIdsAsync(List<long> orderIds)
+    {
+        if (orderIds.Count == 0) return new();
+        var orders = _dbContext.DiagnosticOrders.AsNoTrackingWithIdentityResolution().AsSingleQuery()
+            .Include(o => o.Appointment).Include(o => o.PatientVisit).Include(o => o.Patient)
+            .Include(o => o.OrderingDoctor).ThenInclude(d => d.DoctorSpecialties).ThenInclude(ds => ds.Specialty)
+            .Include(o => o.ReviewedByDoctor)
+            .Include(o => o.Items).ThenInclude(i => i.DiagnosticService)
+            .Include(o => o.Items).ThenInclude(i => i.Result)
+            .Where(o => orderIds.Contains(o.Id));
+        // Result recorders are joined in the same command; other user fields are scalar subqueries.
+        var rows = await (from order in orders
+                          join item in _dbContext.DiagnosticOrderItems on order.Id equals item.DiagnosticOrderId into orderItems
+                          from item in orderItems.DefaultIfEmpty()
+                          join result in _dbContext.DiagnosticResults on item.Id equals result.DiagnosticOrderItemId into itemResults
+                          from result in itemResults.DefaultIfEmpty()
+                          join recorder in _dbContext.Users on result.ResultedByUserId equals recorder.Id into recorders
+                          from recorder in recorders.DefaultIfEmpty()
+                          select new
+                          {
+                              Order = order,
+                              RecorderId = (Guid?)recorder.Id,
+                              RecorderName = recorder.FullName,
+                              PatientUserName = _dbContext.Users.Where(u => u.Id == order.Patient.UserId).Select(u => u.FullName).FirstOrDefault(),
+                              PatientUserPhone = _dbContext.Users.Where(u => u.Id == order.Patient.UserId).Select(u => u.PhoneNumber).FirstOrDefault(),
+                              OrderingDoctorName = _dbContext.Users.Where(u => u.Id == order.OrderingDoctor.UserId).Select(u => u.FullName).FirstOrDefault(),
+                              ReviewedDoctorName = _dbContext.Users.Where(u => order.ReviewedByDoctor != null && u.Id == order.ReviewedByDoctor.UserId).Select(u => u.FullName).FirstOrDefault(),
+                              StartedUserName = _dbContext.Users.Where(u => u.Id == order.StartedByUserId).Select(u => u.FullName).FirstOrDefault(),
+                              CompletedUserName = _dbContext.Users.Where(u => u.Id == order.CompletedByUserId).Select(u => u.FullName).FirstOrDefault()
+                          }).ToListAsync();
+        var byId = rows.GroupBy(row => row.Order.Id).ToDictionary(group => group.Key, group =>
+        {
+            var row = group.First();
+            var resultRecorders = group.Where(x => x.RecorderId.HasValue).DistinctBy(x => x.RecorderId)
+                .ToDictionary(x => x.RecorderId!.Value, x => x.RecorderName);
+            return MapBatchedOrder(row.Order, row.PatientUserName, row.PatientUserPhone, row.OrderingDoctorName,
+                row.ReviewedDoctorName, row.StartedUserName, row.CompletedUserName, resultRecorders);
+        });
+        return orderIds.Where(byId.ContainsKey).Select(id => byId[id]).ToList();
+    }
+
+    private DiagnosticOrderDto MapBatchedOrder(DiagnosticOrder order, string? patientUserName, string? patientUserPhone,
+        string? orderingDoctorName, string? reviewedDoctorName, string? startedUserName, string? completedUserName,
+        Dictionary<Guid, string> resultRecorders)
+    {
+        int? patientAge = null;
+        if (order.Patient.DateOfBirth.HasValue)
+        {
+            var today = _dateTimeProvider.VietnamToday;
+            var age = today.Year - order.Patient.DateOfBirth.Value.Year;
+            if (today < order.Patient.DateOfBirth.Value.AddYears(age)) age--;
+            patientAge = age;
+        }
+
+        var specialtyName = order.OrderingDoctor.DoctorSpecialties
+            .FirstOrDefault(ds => ds.IsPrimary)?.Specialty?.Name ??
+            order.OrderingDoctor.DoctorSpecialties.FirstOrDefault()?.Specialty?.Name ??
+            "Chuyên khoa";
+
+        var itemDtos = order.Items.Select(i =>
+        {
+            DiagnosticResultDto? resDto = null;
+            if (i.Result != null)
+            {
+                resultRecorders.TryGetValue(i.Result.ResultedByUserId, out var recorderName);
+                resDto = new DiagnosticResultDto
+                {
+                    Id = i.Result.Id,
+                    DiagnosticOrderItemId = i.Result.DiagnosticOrderItemId,
+                    ResultText = i.Result.ResultText,
+                    Conclusion = i.Result.Conclusion,
+                    ReferenceRange = i.Result.ReferenceRange,
+                    Unit = i.Result.Unit,
+                    ResultedAtUtc = i.Result.ResultedAtUtc,
+                    ResultedByUserId = i.Result.ResultedByUserId,
+                    ResultedByUserName = recorderName ?? "Kỹ thuật viên",
+                    RowVersion = i.Result.RowVersion != null ? Convert.ToBase64String(i.Result.RowVersion) : null
+                };
+            }
+
+            return new DiagnosticOrderItemDto
+            {
+                Id = i.Id,
+                DiagnosticOrderId = i.DiagnosticOrderId,
+                DiagnosticServiceId = i.DiagnosticServiceId,
+                ServiceCode = i.DiagnosticService?.Code ?? string.Empty,
+                ServiceName = i.DiagnosticService?.Name ?? string.Empty,
+                Category = i.DiagnosticService?.Category.ToString() ?? string.Empty,
+                PreparationInstructions = i.DiagnosticService?.PreparationInstructions,
+                Price = i.DiagnosticService?.Price,
+                IsPackageCovered = i.IsPackageCovered,
+                PackageRegistrationId = i.PackageRegistrationId,
+                Status = i.Status.ToString(),
+                RowVersion = i.RowVersion != null ? Convert.ToBase64String(i.RowVersion) : null,
+                Result = resDto
+            };
+        }).ToList();
+
+        return new DiagnosticOrderDto
+        {
+            Id = order.Id,
+            OrderCode = order.OrderCode,
+            AppointmentId = order.AppointmentId,
+            AppointmentCode = order.Appointment?.AppointmentCode ?? (order.PatientVisit != null ? order.PatientVisit.VisitCode : string.Empty),
+            PatientVisitId = order.PatientVisitId,
+            VisitCode = order.PatientVisit?.VisitCode,
+            AppointmentDate = order.Appointment?.AppointmentDate ?? (order.PatientVisit != null ? order.PatientVisit.VisitDate : DateOnly.FromDateTime(order.OrderedAtUtc)),
+            PatientId = order.PatientId,
+            PatientName = patientUserName ?? order.Patient.FullName ?? "Bệnh nhân",
+            PatientPhone = patientUserPhone ?? order.Patient.PhoneNumber ?? string.Empty,
+            PatientGender = order.Patient.Gender.HasValue ? order.Patient.Gender.Value.ToString() : string.Empty,
+            PatientDob = order.Patient.DateOfBirth,
+            PatientAge = patientAge,
+            OrderingDoctorId = order.OrderingDoctorId,
+            OrderingDoctorName = orderingDoctorName != null ? (string.IsNullOrWhiteSpace(order.OrderingDoctor.AcademicTitle) ? orderingDoctorName : $"{order.OrderingDoctor.AcademicTitle}. {orderingDoctorName}") : "Bác sĩ",
+            SpecialtyName = specialtyName,
+            ClinicalIndication = order.ClinicalIndication,
+            Note = order.Note,
+            Status = order.Status.ToString(),
+            OrderedAtUtc = order.OrderedAtUtc,
+            StartedAtUtc = order.StartedAtUtc,
+            CompletedAtUtc = order.CompletedAtUtc,
+            CancelledAtUtc = order.CancelledAtUtc,
+            StartedByUserName = startedUserName,
+            CompletedByUserName = completedUserName,
+            ReviewedAtUtc = order.ReviewedAtUtc,
+            ReviewedByDoctorName = reviewedDoctorName,
+            RowVersion = order.RowVersion != null ? Convert.ToBase64String(order.RowVersion) : null,
+            Items = itemDtos
+        };
     }
 
     private async Task<DiagnosticOrderDto?> GetOrderDtoByIdAsync(long orderId)

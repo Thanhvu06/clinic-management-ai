@@ -872,6 +872,8 @@ public class BillingService : IBillingService
         invoice.CancelledAtUtc = DateTime.UtcNow;
         invoice.CancellationReason = reason.Trim();
 
+        await ReleaseCancelledInvoiceReservationsAsync(invoice, cancelledByUserId, cancellationToken);
+
         _dbContext.SystemAuditLogs.Add(new SystemAuditLog
         {
             UserId = cancelledByUserId,
@@ -900,6 +902,48 @@ public class BillingService : IBillingService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return await GetInvoiceDetailAsync(invoice.Id, cancellationToken);
+    }
+
+    private async Task ReleaseCancelledInvoiceReservationsAsync(Invoice invoice, Guid actorUserId, CancellationToken cancellationToken)
+    {
+        var prescriptions = await _dbContext.Prescriptions
+            .Where(p => p.PatientId == invoice.PatientId && p.Status == PrescriptionStatus.ReservedForPurchase)
+            .ToListAsync(cancellationToken);
+        var affected = prescriptions.Where(p => invoice.Items.Any(item =>
+            PrescriptionItemBillingReference.MatchesPrescription(item.ReferenceType, item.ReferenceId, p.Id))).ToList();
+        if (affected.Count == 0) return;
+
+        // Exclude this invoice explicitly: its cancellation is still only tracked in memory.
+        var otherReferences = await _dbContext.InvoiceItems.AsNoTracking()
+            .Where(item => item.InvoiceId != invoice.Id && !item.IsCancelled && item.Invoice.Status != InvoiceStatus.Cancelled &&
+                (item.ReferenceType == PrescriptionItemBillingReference.ModernReferenceType || item.ReferenceType == PrescriptionItemBillingReference.LegacyReferenceType))
+            .Select(item => new { item.ReferenceType, item.ReferenceId }).ToListAsync(cancellationToken);
+        var releasable = affected.Where(p => !otherReferences.Any(item =>
+            PrescriptionItemBillingReference.MatchesPrescription(item.ReferenceType, item.ReferenceId, p.Id))).ToList();
+        var prescriptionIds = releasable.Select(p => p.Id).ToList();
+        var reservations = await _dbContext.MedicineStockTransactions
+            .Where(t => t.PrescriptionId.HasValue && prescriptionIds.Contains(t.PrescriptionId.Value) &&
+                (t.Type == MedicineStockTransactionType.Reservation || t.Type == MedicineStockTransactionType.ReservationCancelled))
+            .GroupBy(t => new { t.PrescriptionId, t.MedicineId })
+            .Select(group => new { group.Key.PrescriptionId, group.Key.MedicineId, Balance = group.Sum(t => t.QuantityChange) })
+            .Where(balance => balance.Balance < 0).ToListAsync(cancellationToken);
+        var medicineIds = reservations.Select(r => r.MedicineId).Distinct().ToList();
+        var medicines = await _dbContext.Medicines.Where(m => medicineIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id, cancellationToken);
+        foreach (var reservation in reservations)
+        {
+            var medicine = medicines[reservation.MedicineId];
+            var quantity = -reservation.Balance;
+            medicine.StockQuantity += quantity;
+            medicine.UpdatedAt = _dateTimeProvider.UtcNow;
+            _dbContext.MedicineStockTransactions.Add(new MedicineStockTransaction
+            {
+                MedicineId = medicine.Id, Type = MedicineStockTransactionType.ReservationCancelled,
+                QuantityChange = quantity, BalanceAfter = medicine.StockQuantity,
+                PrescriptionId = reservation.PrescriptionId, ActorUserId = actorUserId,
+                Reason = $"Trả thuốc giữ chỗ do hủy hóa đơn #{invoice.InvoiceCode}", CreatedAt = _dateTimeProvider.UtcNow
+            });
+        }
+        foreach (var prescription in releasable) prescription.Status = PrescriptionStatus.Issued;
     }
 
     public async Task<PagedResult<InvoiceDto>> GetReceptionInvoicesAsync(InvoiceFilterParams filters, CancellationToken cancellationToken = default)

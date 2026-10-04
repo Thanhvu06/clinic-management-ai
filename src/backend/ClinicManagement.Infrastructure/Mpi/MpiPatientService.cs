@@ -126,6 +126,13 @@ public class MpiPatientService : IMpiPatientService
 
     public async Task<MpiPatientDto> RegisterWalkInPatientAsync(RegisterWalkInPatientRequest request, CancellationToken cancellationToken = default)
     {
+        if (request.EmergencyContact is { } contact && !string.IsNullOrWhiteSpace(contact.FullName))
+        {
+            if (string.IsNullOrWhiteSpace(contact.Relationship))
+                throw new ValidationException("EmergencyContact.Relationship", "Vui lòng nhập mối quan hệ của người liên hệ.");
+            if (string.IsNullOrWhiteSpace(contact.PhoneNumber))
+                throw new ValidationException("EmergencyContact.PhoneNumber", "Vui lòng nhập số điện thoại của người liên hệ.");
+        }
         // 0. Validate Gender enum
         if (request.Gender.HasValue && !Enum.IsDefined(typeof(Gender), request.Gender.Value))
         {
@@ -191,6 +198,7 @@ public class MpiPatientService : IMpiPatientService
                         Relationship = request.EmergencyContact.Relationship.Trim(),
                         PhoneNumber = request.EmergencyContact.PhoneNumber.Trim(),
                         Address = request.EmergencyContact.Address?.Trim(),
+                        IsGuardian = request.EmergencyContact.IsGuardian,
                         IsPrimary = true
                     });
                 }
@@ -306,6 +314,9 @@ public class MpiPatientService : IMpiPatientService
 
     public async Task RemoveAllergyAsync(long patientId, long allergyId, CancellationToken cancellationToken = default)
     {
+        if (!await (await VisiblePatientsAsync(cancellationToken)).AnyAsync(p => p.Id == patientId, cancellationToken))
+            throw new NotFoundException($"Không tìm thấy bệnh nhân với ID: {patientId}");
+
         var allergy = await _dbContext.PatientAllergies
             .FirstOrDefaultAsync(a => a.Id == allergyId && a.PatientId == patientId, cancellationToken);
 
@@ -379,7 +390,8 @@ public class MpiPatientService : IMpiPatientService
                 Relationship = c.Relationship,
                 PhoneNumber = c.PhoneNumber,
                 Address = c.Address,
-                IsPrimary = c.IsPrimary
+                IsPrimary = c.IsPrimary,
+                IsGuardian = c.IsGuardian
             }).ToList()
         };
     }

@@ -350,7 +350,10 @@ public class PharmacyService : IPharmacyService
                 }
 
                 var wasReserved = prescription.Status == PrescriptionStatus.ReservedForPurchase ||
-                    await _dbContext.MedicineStockTransactions.AnyAsync(t => t.PrescriptionId == prescription.Id && t.Type == MedicineStockTransactionType.Reservation);
+                    await _dbContext.MedicineStockTransactions
+                        .Where(t => t.PrescriptionId == prescription.Id &&
+                            (t.Type == MedicineStockTransactionType.Reservation || t.Type == MedicineStockTransactionType.ReservationCancelled))
+                        .SumAsync(t => (int?)t.QuantityChange) < 0;
 
                 if (!wasReserved)
                 {

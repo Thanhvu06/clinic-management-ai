@@ -73,6 +73,7 @@ public class EmergencyContactDto
     public string PhoneNumber { get; set; } = string.Empty;
     public string? Address { get; set; }
     public bool IsPrimary { get; set; }
+    public bool IsGuardian { get; set; }
 }
 
 public class RegisterWalkInPatientRequest
