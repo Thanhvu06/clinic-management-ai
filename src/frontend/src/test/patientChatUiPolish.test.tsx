@@ -77,10 +77,12 @@ it('P2 uses one neutral not-understood reply, retains navigation, and excludes r
     expect(screen.queryByRole('button', { name: 'Thử lại' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Xem lịch hẹn của tôi' })).toBeInTheDocument();
 });
-it('P2 keeps the original content and tool error when a failure is not an argument error', () => {
-    const bubble = mount(message({ toolResults: [failedTool(), failedTool('NETWORK_ERROR')] }));
+it('P2 keeps mixed failures unchanged while normalizing the following argument-only turn', () => {
+    const bubble = mount(message({ toolResults: [failedTool(), failedTool('NETWORK_ERROR')] }), message({ toolResults: [failedTool()] }));
     expect(within(bubble).getByText('Đã kiểm tra.')).toBeInTheDocument();
     expect(within(bubble).getByText('Lỗi tra cứu')).toBeInTheDocument();
+    const latestBubble = document.querySelectorAll('[data-chat-bubble]')[1] as HTMLElement;
+    expect(within(latestBubble).getByText('ClinicCare chưa hiểu câu này. Bạn thử diễn đạt lại hoặc chọn một gợi ý bên dưới.')).toBeInTheDocument();
 });
 it('P3 hides the fallback explanation after a successful local reply and retains the status', () => {
     mount(message({ providerState: 'Disabled', fallbackActive: true }));
@@ -93,11 +95,20 @@ it.each([
 ])('P3 shows the explanation for an unsuccessful latest reply %j', overrides => {
     mount(message(overrides));
     expect(screen.getByText(/Trợ lý đang ở chế độ nội bộ nên chỉ hiểu/)).toBeInTheDocument();
+    mocks.flow.messages = [message({ providerState: 'Disabled', fallbackActive: true })];
+    fireEvent.click(screen.getByRole('button', { name: 'Thu nhỏ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mở Trợ lý ClinicCare AI' }));
+    expect(screen.queryByText(/Trợ lý đang ở chế độ nội bộ nên chỉ hiểu/)).toBeNull();
 });
 it('P3 explains rate limiting from the wizard error line', () => {
     mocks.flow.errorMsg = 'Dịch vụ AI đang giới hạn lưu lượng.';
     mount(message());
     expect(screen.getByText(/Trợ lý đang ở chế độ nội bộ nên chỉ hiểu/)).toBeInTheDocument();
+    mocks.flow.errorMsg = '';
+    mocks.flow.messages = [message({ providerState: 'Disabled', fallbackActive: true })];
+    fireEvent.click(screen.getByRole('button', { name: 'Thu nhỏ' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mở Trợ lý ClinicCare AI' }));
+    expect(screen.queryByText(/Trợ lý đang ở chế độ nội bộ nên chỉ hiểu/)).toBeNull();
 });
 it('P3 removes the explanation after a later successful reply', () => {
     mount(message({ isError: true }), message({ providerState: 'Disabled', fallbackActive: true }));
