@@ -4,6 +4,7 @@ using ClinicManagement.Application.Appointments.DTOs;
 using ClinicManagement.Application.Appointments.DTOs.Doctor;
 using ClinicManagement.Application.Appointments.DTOs.Revisit;
 using ClinicManagement.Application.Common.Models;
+using ClinicManagement.Application.Visits.DTOs;
 
 namespace ClinicManagement.Application.Appointments.Interfaces;
 
@@ -22,7 +23,7 @@ public interface IDoctorAppointmentService
     Task<PatientClinicalContextDto> GetPatientClinicalContextAsync(long appointmentId);
 
     // Workflow state transitions
-    Task CheckInAppointmentAsync(long appointmentId);
+    Task<CheckInTicketDto> CheckInAppointmentAsync(long appointmentId);
     Task StartConsultationAsync(long appointmentId);
     Task CompleteAppointmentAsync(long appointmentId, CompleteConsultationRequest request);
     Task MarkNoShowAsync(long appointmentId, NoShowAppointmentDto request);

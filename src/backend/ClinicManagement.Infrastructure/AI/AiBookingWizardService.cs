@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using ClinicManagement.Application.AI.Conversation;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.AI.Suggestions;
@@ -23,6 +25,8 @@ public sealed class AiBookingWizardService(
     IAiSafetyGuard safety, IAiAuditService audit, AiBookingWizardTokens tokens, AiBookingReviewIssuer review)
 {
     private static readonly string[] Reasons = { "Khám tổng quát", "Tái khám theo hẹn", "Tư vấn kết quả xét nghiệm" };
+    private static readonly Regex HintPrefix = new(@"^(?:(?:bac si|bs|bsi|doctor|dr|chuyen khoa|khoa|kham)\s+)+", RegexOptions.CultureInvariant);
+    private const int MaxListedOptions = 12;
 
     public async Task<AiBookingWizardResponseDto> StepAsync(AiBookingWizardRequestDto request, CancellationToken ct = default)
     {
@@ -30,7 +34,7 @@ public sealed class AiBookingWizardService(
         AiBookingWizardResponseDto response;
         if (!user.HasValue) response = Error("AUTHENTICATION_REQUIRED", "Bạn cần đăng nhập để đặt lịch.");
         else if (request.Step == "start")
-            response = await RenderAsync(new BookingWizardSelection(Guid.NewGuid()), user.Value, request.SessionId, ct);
+            response = await StartAsync(request.Hint, user.Value, request.SessionId, ct);
         else
         {
             var selection = tokens.Read(request.OptionToken, user.Value, request.SessionId, request.Step);
@@ -54,6 +58,67 @@ public sealed class AiBookingWizardService(
         }, ct);
         return response;
     }
+
+    // A hint only chooses where a normal wizard begins. Any miss, ambiguity or
+    // failure starts on the specialty step exactly as before, without an error.
+    private async Task<AiBookingWizardResponseDto> StartAsync(string? hint, Guid user, string session, CancellationToken ct)
+    {
+        var fresh = new BookingWizardSelection(Guid.NewGuid());
+        if (!string.IsNullOrWhiteSpace(hint))
+        {
+            try
+            {
+                var prefilled = await ResolveHintAsync(hint, fresh);
+                if (prefilled is not null)
+                {
+                    var response = await RenderAsync(prefilled, user, session, ct);
+                    if (response.ErrorCode is null) return response;
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // Fall through to the unchanged specialty start.
+            }
+        }
+        return await RenderAsync(fresh, user, session, ct);
+    }
+
+    private async Task<BookingWizardSelection?> ResolveHintAsync(string hint, BookingWizardSelection fresh)
+    {
+        var text = NormalizeHint(hint);
+        var name = HintPrefix.Replace(text, string.Empty).Trim();
+        if (name.Length == 0) return null;
+
+        // Same sources and visible lists as the specialty and doctor steps.
+        var aiSpecialties = (await specialties.GetSpecialtiesAsync()).Where(x => x.AiEnabled).OrderBy(x => x.Id).Take(MaxListedOptions).ToList();
+        var specialtyIds = aiSpecialties.Select(x => x.Id).ToHashSet();
+        var listedDoctors = (await doctors.GetAllActiveDoctorsAsync())
+            .Where(x => x.SpecialtyId.HasValue && specialtyIds.Contains(x.SpecialtyId.Value))
+            .GroupBy(x => x.SpecialtyId!.Value)
+            .SelectMany(group => group.OrderBy(x => x.Id).Take(MaxListedOptions))
+            .ToList();
+        var doctorMatches = listedDoctors.Where(doctor =>
+        {
+            var fullName = NormalizeHint(doctor.FullName);
+            return fullName.Length > 0 && (name == fullName || name == fullName.Split(' ')[^1]);
+        }).ToList();
+        if (doctorMatches.Count == 1)
+            return fresh with { Stage = BookingWizardStage.Day, SpecialtyId = doctorMatches[0].SpecialtyId!.Value, DoctorId = doctorMatches[0].Id, AnyDoctor = false };
+        if (doctorMatches.Count > 1) return null;
+
+        var specialtyMatches = aiSpecialties.Where(specialty =>
+        {
+            var specialtyName = NormalizeHint(specialty.SpecialtyName);
+            var core = string.Join(' ', specialtyName.Split(' ').Where(word => word != "khoa"));
+            return specialtyName.Length > 0 && (name == specialtyName || (core.Length > 0 && name == core));
+        }).ToList();
+        return specialtyMatches.Count == 1
+            ? fresh with { Stage = BookingWizardStage.Doctor, SpecialtyId = specialtyMatches[0].Id }
+            : null;
+    }
+
+    private static string NormalizeHint(string? value) =>
+        Regex.Replace(Regex.Replace(AiTextNormalizer.NormalizeForComparison(value), @"[^a-z0-9\s]", " "), @"\s+", " ").Trim();
 
     private async Task<AiBookingWizardResponseDto> RenderAsync(BookingWizardSelection state, Guid user, string session, CancellationToken ct)
     {

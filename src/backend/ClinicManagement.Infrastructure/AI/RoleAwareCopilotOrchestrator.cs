@@ -156,7 +156,9 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         AiPlannerDecision decision;
         if (suggestionRequested)
         {
-            decision = _deterministicPlanner.PlanSuggestion(suggestion, currentTurnResource);
+            decision = AiSuggestionCatalog.IsTyped(suggestion)
+                ? AiTypedSuggestionPlanner.Plan(suggestion!)
+                : _deterministicPlanner.PlanSuggestion(suggestion, currentTurnResource);
         }
         else
         {
@@ -337,7 +339,8 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         return new AiCopilotSuggestionsResponseDto
         {
             Role = role.ToString(),
-            Suggestions = AiSuggestionCatalog.ForRole(role, hasCaseResource, hasPrescriptionResource: hasPrescriptionResource)
+            Suggestions = AiSuggestionCatalog.ForRole(role, hasCaseResource, hasPrescriptionResource: hasPrescriptionResource),
+            TypedSuggestions = AiSuggestionCatalog.TypedForRole(role)
         };
     }
 

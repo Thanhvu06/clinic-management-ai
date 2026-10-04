@@ -28,6 +28,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
     {
         ["admin.get_revenue_summary"] = ["period"],
         ["reception.get_pending_payments"] = [],
+        ["reception.get_upcoming_appointments"] = [],
         ["doctor.get_my_appointments_today"] = [],
         ["technician.get_completed_today"] = [],
         ["pharmacist.get_low_stock"] = []
@@ -168,6 +169,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
             "pharmacist.get_low_stock" => GetLowStockAsync(context, cancellationToken),
             "clinic.search_knowledge" => SearchKnowledgeAsync(invocation.ArgumentsJson, cancellationToken),
             "reception.get_today_appointments" => GetReceptionAppointmentsAsync(context, cancellationToken),
+            "reception.get_upcoming_appointments" => GetReceptionUpcomingAppointmentsAsync(context, cancellationToken),
             "reception.get_queue" => GetReceptionQueueAsync(context, cancellationToken),
             "reception.lookup_appointment" => LookupAppointmentAsync(context, invocation.ArgumentsJson, cancellationToken),
             "doctor.get_my_queue" => GetDoctorQueueAsync(context, cancellationToken),
@@ -748,6 +750,24 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
             .Select(a => new { a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName, doctorName = _db.Users.Where(u => u.Id == a.Doctor.UserId).Select(u => u.FullName).FirstOrDefault() ?? "Bác sĩ", specialtyId = a.SpecialtyId })
             .ToListAsync(cancellationToken);
         return Completed(appointments, "reception_appointments", $"Có {appointments.Count} lịch hẹn trong ngày hôm nay.");
+    }
+
+    // Same card shape as today's appointments; the window and status filter
+    // run in SQL before Take so SQL Server never pages unfiltered rows.
+    private async Task<AiToolExecutionResult> GetReceptionUpcomingAppointmentsAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
+    {
+        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Receptionist), cancellationToken);
+        if (facilities.Count == 0) return ScopeDenied();
+        var from = _clock.VietnamToday.AddDays(1);
+        var until = _clock.VietnamToday.AddDays(7);
+        var statuses = AppointmentStatusExtensions.HoldingSlotStatuses;
+        var appointments = await _db.Appointments.AsNoTracking()
+            .Where(a => a.AppointmentDate >= from && a.AppointmentDate <= until && statuses.Contains(a.Status) &&
+                        a.FacilityId.HasValue && facilities.Contains(a.FacilityId.Value))
+            .OrderBy(a => a.AppointmentDate).ThenBy(a => a.StartTime).ThenBy(a => a.Id).Take(100)
+            .Select(a => new { a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName, doctorName = _db.Users.Where(u => u.Id == a.Doctor.UserId).Select(u => u.FullName).FirstOrDefault() ?? "Bác sĩ", specialtyId = a.SpecialtyId })
+            .ToListAsync(cancellationToken);
+        return Completed(appointments, "reception_appointments", $"Có {appointments.Count} lịch hẹn từ ngày mai đến hết 7 ngày tới.");
     }
 
     private async Task<AiToolExecutionResult> GetReceptionQueueAsync(AiToolExecutionContext context, CancellationToken cancellationToken)

@@ -508,7 +508,7 @@ public sealed class AiSuggestionButtonTests : IntegrationTestBase
         Assert.Equal(AiSuggestionCatalog.Definitions.Where(x => x.Role == AiActorRole.Doctor).Select(x => x.Code).ToArray(), Codes(caseMenu).ToArray());
 
         var raw = caseMenu.GetRawText();
-        Assert.Equal(new[] { "role", "suggestions" }, caseMenu.EnumerateObject().Select(x => x.Name).ToArray());
+        Assert.Equal(new[] { "role", "suggestions", "typedSuggestions" }, caseMenu.EnumerateObject().Select(x => x.Name).ToArray());
         Assert.All(caseMenu.GetProperty("suggestions").EnumerateArray(), item =>
             Assert.Equal(new[] { "code", "label", "group" }, item.EnumerateObject().Select(x => x.Name).ToArray()));
         Assert.DoesNotContain(own.ToString(System.Globalization.CultureInfo.InvariantCulture), raw, StringComparison.Ordinal);

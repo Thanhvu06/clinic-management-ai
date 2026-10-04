@@ -63,7 +63,8 @@ export const DoctorQueue: React.FC = () => {
         try {
             const res = await doctorApi.checkInAppointment(appointmentId);
             if (res.success) {
-                showToast('Đã tiếp nhận bệnh nhân vào phòng khám!', 'success');
+                const queueDisplay = typeof res.data?.queueDisplay === 'string' ? res.data.queueDisplay : null;
+                showToast(queueDisplay ? `Đã tiếp nhận bệnh nhân vào phòng khám! Số thứ tự: ${queueDisplay}.` : 'Đã tiếp nhận bệnh nhân vào phòng khám!', 'success');
                 await loadQueue();
             }
         } catch (err: any) {

@@ -36,6 +36,31 @@ const formatMoney = (value: unknown, currency = 'VND'): string | null => {
     return `${amount.toLocaleString('vi-VN')} ${currency === 'VND' ? '₫' : currency}`;
 };
 
+const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+
+// Server UTC timestamps may arrive without an offset; read them as UTC.
+const parseUtc = (value: unknown): Date | null => {
+    const raw = text(value);
+    if (!raw) return null;
+    const date = new Date(/(?:z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`);
+    return Number.isNaN(date.valueOf()) ? null : date;
+};
+
+const formatVietnamDateTime = (value: unknown): string | null =>
+    parseUtc(value)?.toLocaleString('vi-VN', { timeZone: VIETNAM_TIME_ZONE, hour: '2-digit', minute: '2-digit', hour12: false, day: '2-digit', month: '2-digit', year: 'numeric' }) ?? null;
+
+const formatVietnamTime = (value: unknown): string | null =>
+    parseUtc(value)?.toLocaleTimeString('vi-VN', { timeZone: VIETNAM_TIME_ZONE, hour: '2-digit', minute: '2-digit', hour12: false }) ?? null;
+
+// "08:30:00" -> "08:30"
+const formatClock = (value: unknown): string | null => {
+    const raw = text(value);
+    const match = raw ? /^(\d{1,2}):(\d{2})/.exec(raw) : null;
+    return match ? `${match[1].padStart(2, '0')}:${match[2]}` : null;
+};
+
+const revenuePeriodLabels: Record<string, string> = { today: 'Hôm nay', this_month: 'Tháng này' };
+
 const valueLabel = (value: unknown): string | null => {
     if (typeof value === 'number' && Number.isFinite(value)) return String(value);
     return text(value);
@@ -95,6 +120,11 @@ export const copilotCardEmptyMessage = (card: AiCopilotCard): string | null => {
         case 'pharmacy_inventory': return noRows ? 'Kho thuốc hiện không có dữ liệu phù hợp.' : null;
         case 'admin_dashboard_metrics': return !record ? 'Chưa có chỉ số vận hành được hỗ trợ.' : null;
         case 'admin_ai_health': return !record ? 'Chưa có chỉ số sức khỏe AI được hỗ trợ.' : null;
+        case 'reception_pending_payments': return noRows ? 'Không có hóa đơn chờ thanh toán.' : null;
+        case 'doctor_appointments_today': return noRows ? 'Hôm nay bạn không có lịch hẹn phù hợp.' : null;
+        case 'technician_completed_today': return noRows ? 'Hôm nay chưa có chỉ định hoàn tất.' : null;
+        case 'pharmacy_low_stock': return noRows ? 'Không có thuốc dưới mức đặt lại.' : null;
+        case 'admin_revenue_summary': return !record || numberValue(record.invoiceCount) === 0 ? 'Chưa có doanh thu trong kỳ này.' : null;
         case 'booking_preview':
         case 'pending_action':
         case 'change_request':
@@ -375,6 +405,88 @@ const AdminHealthCard: React.FC<{ data: unknown }> = ({ data }) => {
     return <List><article className={styles.typedItem}><strong>Sức khỏe AI</strong><StatusLine label="Thao tác chờ xác nhận" value={item.pendingActions} /><StatusLine label="Sự kiện audit" value={item.auditEvents} /></article></List>;
 };
 
+const PendingPaymentsCard: React.FC<{ data: unknown }> = ({ data }) => {
+    const items = asRecords(data);
+    if (!items.length) return <EmptyData message="Không có hóa đơn chờ thanh toán." />;
+    return <List>{items.slice(0, 50).map((invoice, index) => {
+        const amount = formatMoney(invoice.totalAmount);
+        return <article className={styles.typedItem} key={index}>
+            <strong>{text(invoice.invoiceCode) ?? 'Hóa đơn'}</strong>
+            <StatusLine label="Người bệnh" value={invoice.patientName} />
+            {amount && <div className={styles.typedLine}><strong>Số tiền:</strong> {amount}</div>}
+            <StatusLine label="Trạng thái" value={invoice.status} />
+            <StatusLine label="Tạo lúc" value={formatVietnamDateTime(invoice.createdAtUtc)} />
+        </article>;
+    })}</List>;
+};
+
+const DoctorAppointmentsTodayCard: React.FC<{ data: unknown }> = ({ data }) => {
+    const items = asRecords(data);
+    if (!items.length) return <EmptyData message="Hôm nay bạn không có lịch hẹn phù hợp." />;
+    return <List>{items.slice(0, 100).map((item, index) => {
+        const start = formatClock(item.startTime);
+        const end = formatClock(item.endTime);
+        return <article className={styles.typedItem} key={index}>
+            <strong>{text(item.appointmentCode) ?? 'Lịch hẹn'}</strong>
+            <StatusLine label="Giờ khám" value={start && end ? `${start} – ${end}` : start} />
+            <StatusLine label="Người bệnh" value={item.patientName} />
+            <StatusLine label="Trạng thái" value={item.status} />
+            <StatusLine label="Lý do khám" value={item.reason} />
+        </article>;
+    })}</List>;
+};
+
+const TechnicianCompletedTodayCard: React.FC<{ data: unknown }> = ({ data }) => {
+    const items = asRecords(data);
+    if (!items.length) return <EmptyData message="Hôm nay chưa có chỉ định hoàn tất." />;
+    return <List>{items.slice(0, 100).map((item, index) => {
+        const services = Array.isArray(item.services) ? item.services.map(text).filter((name): name is string => Boolean(name)) : [];
+        return <article className={styles.typedItem} key={index}>
+            <strong>{text(item.orderCode) ?? 'Phiếu chỉ định'}</strong>
+            <StatusLine label="Hoàn tất lúc" value={formatVietnamTime(item.completedAtUtc)} />
+            <StatusLine label="Dịch vụ" value={services.join(', ')} />
+        </article>;
+    })}</List>;
+};
+
+const PharmacyLowStockCard: React.FC<{ data: unknown }> = ({ data }) => {
+    const items = asRecords(data);
+    if (!items.length) return <EmptyData message="Không có thuốc dưới mức đặt lại." />;
+    return <List>{items.slice(0, 100).map((item, index) => {
+        const name = text(item.name) ?? 'Thuốc';
+        const code = text(item.code);
+        const stock = numberValue(item.stockQuantity);
+        const reorder = numberValue(item.reorderLevel);
+        const unit = text(item.unit);
+        return <article className={styles.typedItem} key={index}>
+            <strong>{code ? `${name} (${code})` : name}</strong>
+            <StatusLine label="Tồn / mức đặt lại" value={stock !== null && reorder !== null ? `${stock} / ${reorder}${unit ? ` ${unit}` : ''}` : null} />
+        </article>;
+    })}</List>;
+};
+
+const AdminRevenueCard: React.FC<{ data: unknown }> = ({ data }) => {
+    const item = asRecord(data);
+    if (!item || numberValue(item.invoiceCount) === 0) return <EmptyData message="Chưa có doanh thu trong kỳ này." />;
+    const period = text(item.period);
+    const total = formatMoney(item.totalRevenue);
+    const facilities = asRecords(item.byFacility);
+    return <List><article className={styles.typedItem}>
+        <strong>Doanh thu</strong>
+        <StatusLine label="Kỳ" value={period ? revenuePeriodLabels[period] ?? period : null} />
+        {total && <div className={styles.typedLine}><strong>Tổng doanh thu:</strong> {total}</div>}
+        <StatusLine label="Số hóa đơn" value={item.invoiceCount} />
+        {facilities.length >= 2 && facilities.map((facility, index) => {
+            const id = numberValue(facility.facilityId);
+            const amount = formatMoney(facility.totalRevenue);
+            const count = numberValue(facility.invoiceCount);
+            return id !== null && amount && count !== null
+                ? <div className={styles.typedLine} key={index}>Cơ sở #{id}: {amount} · {count} hóa đơn</div>
+                : null;
+        })}
+    </article></List>;
+};
+
 const ActionResultCard: React.FC<{ type: string; data: unknown }> = ({ type, data }) => {
     const item = asRecord(data);
     if (type === 'booking_preview') {
@@ -413,6 +525,11 @@ export const renderCopilotCardData = (card: AiCopilotCard): React.ReactNode => {
         case 'pharmacy_inventory': return <PharmacyInventoryCard data={card.data} />;
         case 'admin_dashboard_metrics': return <AdminMetricsCard data={card.data} />;
         case 'admin_ai_health': return <AdminHealthCard data={card.data} />;
+        case 'reception_pending_payments': return <PendingPaymentsCard data={card.data} />;
+        case 'doctor_appointments_today': return <DoctorAppointmentsTodayCard data={card.data} />;
+        case 'technician_completed_today': return <TechnicianCompletedTodayCard data={card.data} />;
+        case 'pharmacy_low_stock': return <PharmacyLowStockCard data={card.data} />;
+        case 'admin_revenue_summary': return <AdminRevenueCard data={card.data} />;
         case 'booking_preview':
         case 'pending_action':
         case 'change_request':

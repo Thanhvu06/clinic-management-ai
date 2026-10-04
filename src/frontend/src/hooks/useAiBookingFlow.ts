@@ -11,7 +11,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import axiosClient from "../api/axiosClient";
 import { isLocalHelpPhrase, isPatientReadAlias } from "../components/copilot/patientPresentation";
-import { classifyPatientTypedIntent } from "../components/copilot/patientTypedIntent";
+import { classifyPatientTypedIntent, extractBookingHint } from "../components/copilot/patientTypedIntent";
 import { aiChatFailureMessage } from "../api/aiErrorMessages";
 import { sendRoleCopilotMessage } from "../api/aiCopilotApi";
 import type { ApiResponse } from "../types";
@@ -344,7 +344,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 setInput('');
                 if (intent === 'booking') {
                     setMessages(previous => [...previous, { role: 'user', content: trimmed }]);
-                    await handleWizardStep('start');
+                    // Only this typed start carries a hint; chips and retries start without one.
+                    await handleWizardStep('start', undefined, undefined, false, extractBookingHint(trimmed) ?? undefined);
                 } else {
                     const codes = {
                         appointments: 'patient.my_appointments', visits: 'patient.my_visits',
@@ -673,7 +674,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     };
 
     // Suggestion buttons run a server-owned read through the role Copilot.
-    const handleWizardStep = async (step: AiBookingWizardRequest['step'], optionToken?: string, reason?: string, retrying = false): Promise<void> => {
+    const handleWizardStep = async (step: AiBookingWizardRequest['step'], optionToken?: string, reason?: string, retrying = false, hint?: string): Promise<void> => {
         if (loading || submittingBooking || wizardBusyRef.current) return;
         wizardBusyRef.current = true;
         if (step === 'start' && !retrying) {
@@ -691,7 +692,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         try {
             const response = await axiosClient.post<AiBookingWizardRequest, ApiResponse<AiBookingWizardResponse>>('/ai/booking-wizard', {
                 sessionId: wizardSessionRef.current, step, optionToken, reason,
-                currentRoute: location.pathname, locale: 'vi-VN'
+                currentRoute: location.pathname, locale: 'vi-VN',
+                ...(step === 'start' && hint ? { hint } : {})
             }, { signal: controller.signal, suppressForbiddenRedirect: true });
             if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
             const data = response.data;

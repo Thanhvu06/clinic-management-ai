@@ -13,6 +13,9 @@ public sealed class AiBookingWizardRequestDto
     [MaxLength(2000)] public string? Reason { get; set; }
     [MaxLength(256)] public string? CurrentRoute { get; set; }
     [MaxLength(16)] public string? Locale { get; set; }
+    // Optional typed doctor/specialty name, read only on "start" and matched
+    // server-side against the same lists the wizard shows. Never an ID.
+    [MaxLength(120)] public string? Hint { get; set; }
 }
 
 public sealed record AiBookingWizardOptionDto(string Token, string Label, string? Hint = null);

@@ -28,6 +28,7 @@ public static class AiPlannerPolicy
         "patient.get_my_prescriptions",
         "patient.get_my_bills",
         "reception.get_today_appointments",
+        "reception.get_upcoming_appointments",
         "reception.get_queue",
         "reception.lookup_appointment",
         "doctor.get_my_queue",
