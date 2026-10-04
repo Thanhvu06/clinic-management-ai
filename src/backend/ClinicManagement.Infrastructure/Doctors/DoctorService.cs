@@ -26,11 +26,13 @@ public class DoctorService : IDoctorService
         _availabilityPolicy = availabilityPolicy;
     }
 
-    public async Task<List<DoctorBasicDto>> GetAllActiveDoctorsAsync()
+    public async Task<List<DoctorBasicDto>> GetAllActiveDoctorsAsync(long? facilityId = null)
     {
         return await (from d in _dbContext.Doctors
                       join u in _dbContext.Users on d.UserId equals u.Id
-                      where d.IsActive && u.IsActive
+                      where d.IsActive && u.IsActive &&
+                          (!facilityId.HasValue || _dbContext.StaffFacilityAssignments.Any(assignment =>
+                              assignment.UserId == d.UserId && assignment.IsActive && assignment.Role == "Doctor" && assignment.FacilityId == facilityId.Value))
                       let primarySpec = (from ds in _dbContext.DoctorSpecialties
                                          join s in _dbContext.Specialties on ds.SpecialtyId equals s.Id
                                          where ds.DoctorId == d.Id && s.IsActive

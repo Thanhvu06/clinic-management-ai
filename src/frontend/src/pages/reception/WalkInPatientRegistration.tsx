@@ -78,7 +78,7 @@ export const WalkInPatientRegistration: React.FC = () => {
     const [currentTicket, setCurrentTicket] = useState<CheckInTicketDto | null>(null);
     const [ticketModalOpen, setTicketModalOpen] = useState(false);
 
-    // 1. Initial Load: Facilities and Doctors
+    // 1. Initial Load: Facilities
     useEffect(() => {
         organizationApi.getFacilities(false)
             .then(res => {
@@ -88,15 +88,26 @@ export const WalkInPatientRegistration: React.FC = () => {
                 }
             })
             .catch(err => console.error('Lỗi tải cơ sở:', err));
-
-        axiosClient.get<any, ApiResponse<Doctor[]>>('/doctors')
-            .then(res => {
-                if (res.success && res.data) {
-                    setDoctors(res.data);
-                }
-            })
-            .catch(err => console.error('Lỗi tải bác sĩ:', err));
     }, []);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        let active = true;
+        axiosClient.get<any, ApiResponse<Doctor[]>>('/doctors', { params: { facilityId }, signal: controller.signal })
+            .then(res => {
+                if (!active) return;
+                const available = res.success && res.data ? res.data : [];
+                setDoctors(available);
+                setDoctorId(current => available.some(doctor => doctor.id === current) ? current : undefined);
+            })
+            .catch(err => {
+                if (!active) return;
+                setDoctors([]);
+                setDoctorId(undefined);
+                console.error('Lỗi tải bác sĩ:', err);
+            });
+        return () => { active = false; controller.abort(); };
+    }, [facilityId]);
 
     // 2. Check query params for pre-selected patient id
     useEffect(() => {
