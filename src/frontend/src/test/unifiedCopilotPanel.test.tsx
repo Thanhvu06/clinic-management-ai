@@ -240,7 +240,8 @@ describe('UnifiedCopilotPanel', () => {
         fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'Tìm cơ sở TEST-NOT-FOUND' } });
         fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
 
-        await waitFor(() => expect(screen.getByText('Không có bản ghi công khai phù hợp.')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Không có cơ sở phù hợp với mã TEST-NOT-FOUND.')).toBeInTheDocument());
+        expect(screen.queryByText('Không có bản ghi công khai phù hợp.')).not.toBeInTheDocument();
         expect(screen.queryByText('Cơ sở không xác định')).not.toBeInTheDocument();
     });
 

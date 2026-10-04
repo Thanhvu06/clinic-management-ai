@@ -29,10 +29,15 @@ const MessageBubble: React.FC<{
                 {response?.safetyNotice && normalizeText(response.safetyNotice) !== normalizeText(item.content) && normalizeText(response.safetyNotice) !== normalizeText(response.clarification) && <div className={styles.clarification}>{response.safetyNotice}</div>}
                 {cards.map((card, index) => {
                     // An empty card shows no frame, title or sources: only one
-                    // secondary line, and only when it adds to the reply.
+                    // secondary line that adds to the reply. A public catalog
+                    // description names what was searched, so it wins over the
+                    // generic empty message; staff cards keep the empty message.
                     const emptyMessage = copilotCardEmptyMessage(card);
-                    if (emptyMessage !== null) return normalizeText(emptyMessage) !== normalizeText(item.content)
-                        ? <p className={styles.cardDescription} key={`${card.type}-${index}`}>{emptyMessage}</p> : null;
+                    if (emptyMessage !== null) {
+                        const lines = card.type === 'clinic_knowledge' ? [card.description?.trim(), emptyMessage] : [emptyMessage];
+                        const secondary = lines.find(line => line && normalizeText(line) !== normalizeText(item.content));
+                        return secondary ? <p className={styles.cardDescription} key={`${card.type}-${index}`}>{secondary}</p> : null;
+                    }
                     const sources = Array.from(new Map(
                         [...(card.sources ?? []), ...(index === 0 ? (response?.sources ?? []) : [])]
                             .map(source => [`${source.name}:${source.kind}`, source] as const)
