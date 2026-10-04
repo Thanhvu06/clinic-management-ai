@@ -9,6 +9,5 @@ export const ProviderStatus = ({ state = 'NotCalled', error, detail }: { state?:
         : state;
     return <div className={styles.status} data-provider-status data-state={currentState} data-tone={providerStateTone(currentState)} title={detail}>
         <span className={styles.dot} aria-hidden="true" /><span>{providerStateLabel(currentState)}</span>
-        {import.meta.env.DEV && detail && <small>{detail}</small>}
     </div>;
 };

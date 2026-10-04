@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { AiBookingWizardRequest, AiBookingWizardResponse } from "../types/ai";
 import styles from "./MedicalChatWidget.module.css";
+import { Check } from 'lucide-react';
 
 const allSteps = ['specialty', 'doctor', 'day', 'slot', 'facility', 'reason', 'review'] as const;
 const allLabels = ['Chuyên khoa', 'Bác sĩ', 'Ngày', 'Giờ', 'Cơ sở', 'Lý do', 'Xem lại'];
@@ -33,14 +34,14 @@ export const BookingWizard = ({ state, busy, onStep, reviewContent }: Props) => 
         ...(hasFacilityStep ? [state.summary?.facilityName ?? selected('facility')] : []),
         reason ? 'Đã nhập lý do' : selected('reason')];
     return <section ref={card} className={styles.wizard} data-wizard-step={state.step} aria-label="Đặt lịch khám từng bước" aria-busy={busy}>
+        {state.canGoBack && state.backToken && <button type="button" className={styles.textLink} aria-label="Quay lại bước trước" disabled={busy}
+            onClick={() => { setReason(""); void onStep("back", state.backToken); }}>← Quay lại</button>}
         {index >= 0 && <div className={styles.wizardProgress} aria-label={`Bước ${index + 1}/${steps.length}: ${labels.join(' → ')}`}>
             <strong>Bước {index + 1}/{steps.length}:</strong><span className={styles.progressLabels}>{labels.join(' → ')}</span>
             <div className={styles.progressDots} aria-hidden="true">{steps.map((step, position) => <i key={step} data-completed={position <= index} />)}</div>
         </div>}
-        {completed.slice(0, Math.max(0, index)).map((value, position) => value && <p className={styles.completedStep} data-completed-step key={labels[position]}>{labels[position]}: {value} ✓</p>)}
-        {!hasFacilityStep && state.summary?.facilityName && <p className={styles.completedStep}>Cơ sở: {state.summary.facilityName} ✓</p>}
-        {state.canGoBack && state.backToken && <button type="button" className={styles.textLink} aria-label="Quay lại bước trước" disabled={busy}
-            onClick={() => { setReason(""); void onStep("back", state.backToken); }}>← Quay lại</button>}
+        {completed.slice(0, Math.max(0, index)).map((value, position) => value && <p className={styles.completedStep} data-completed-step key={labels[position]}><Check size={14} aria-hidden="true" />{labels[position]}: {value}</p>)}
+        {!hasFacilityStep && state.summary?.facilityName && <p className={styles.completedStep}><Check size={14} aria-hidden="true" />Cơ sở: {state.summary.facilityName}</p>}
         <h4 ref={heading} tabIndex={-1}>{state.title}</h4>
         <p role={state.errorCode ? "alert" : "status"}>{state.message}</p>
         {state.step === 'review' && reviewContent}

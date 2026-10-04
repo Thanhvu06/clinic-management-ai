@@ -1,4 +1,5 @@
 import { BookingSummaryCard } from "../../components/BookingSummaryCard";
+import { BookingSuccessCard } from "../../components/BookingSuccessCard";
 import { BookingWizard } from "../../components/BookingWizard";
 import { BookingActionChoices } from "../../components/BookingActionChoices";
 import { ProviderStatus } from "../../components/copilot/ProviderStatus";
@@ -74,7 +75,8 @@ export const PatientAiConsultation: React.FC = () => {
     const renderMessage = (msg: typeof messages[number], idx: number) => (
                         <div key={idx} data-review={wizard?.step === "review" && idx === latestAssistantIndex && msg.bookingDraft?.isComplete || undefined} className={`${styles.messageRow} ${msg.role === "user" ? styles.rowUser : styles.rowModel}`}>
                             <div data-chat-bubble className={`${styles.bubble} ${msg.role === "user" ? styles.bubbleUser : styles.bubbleModel}`}>
-                                {idx !== reviewIndex && <div>{msg.content}</div>}
+                                {idx !== reviewIndex && !msg.bookingResult && <div>{msg.content}</div>}
+                                {msg.bookingResult && <BookingSuccessCard result={msg.bookingResult} onAction={action => void handleActionClick(action)} busy={submittingBooking} />}
 
                                 {msg.copilotCards?.map((card, cardIndex) => <article className={styles.bookingSummaryCard} key={`${card.type}-${cardIndex}`}><h4>{card.title}</h4>{isAdditionalCopy(card.description, msg.content) && <p>{card.description}</p>}{renderCopilotCardData(card)}</article>)}
 

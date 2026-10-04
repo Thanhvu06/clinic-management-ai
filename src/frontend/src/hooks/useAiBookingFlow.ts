@@ -198,6 +198,27 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     const [loading, setLoading] = useState(false);
     const [submittingBooking, setSubmittingBooking] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
+    const failedRequestRef = useRef<(() => Promise<void>) | null>(null);
+    const [canRetry, setCanRetry] = useState(false);
+    const [retryAfterSeconds, setRetryAfterSeconds] = useState(0);
+    const retryUntilRef = useRef(0);
+    const clearFailure = () => {
+        failedRequestRef.current = null;
+        setCanRetry(false); setRetryAfterSeconds(0); setErrorMsg('');
+    };
+    const rememberFailure = (error: unknown, retry: () => Promise<void>) => {
+        const value = error as { retryAfterSeconds?: number; response?: { data?: { retryAfterSeconds?: number } }; data?: { retryAfterSeconds?: number } };
+        const seconds = Number(value?.retryAfterSeconds ?? value?.response?.data?.retryAfterSeconds ?? value?.data?.retryAfterSeconds ?? 0);
+        const delay = Number.isFinite(seconds) ? Math.max(0, Math.ceil(seconds)) : 0;
+        failedRequestRef.current = retry;
+        retryUntilRef.current = Date.now() + delay * 1000;
+        setCanRetry(true); setRetryAfterSeconds(delay);
+    };
+    useEffect(() => {
+        if (!canRetry || retryAfterSeconds <= 0) return;
+        const timer = window.setInterval(() => setRetryAfterSeconds(Math.max(0, Math.ceil((retryUntilRef.current - Date.now()) / 1000))), 1000);
+        return () => window.clearInterval(timer);
+    }, [canRetry, retryAfterSeconds]);
     const navigate = useNavigate();
     const location = useLocation();
     const activeRequestIdRef = useRef(0);
@@ -272,6 +293,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         accountKeyRef.current = accountKey;
 
         if (prevAccountKey !== accountKey) {
+            clearFailure();
             setWizard(null);
             wizardSessionRef.current = generateSessionIdentity();
             wizardBusyRef.current = false;
@@ -300,7 +322,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         prefixMessage?: ChatMessage
     ) => {
         const trimmed = textToSend.trim();
-        if (!trimmed || loading) return;
+        if (!trimmed || loading || submittingBooking) return;
         if (trimmed.length > 500) {
             setErrorMsg("Tin nhắn quá dài (tối đa 500 ký tự).");
             return;
@@ -325,7 +347,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 
         setMessages(newMessages);
         setInput("");
-        setErrorMsg("");
+        clearFailure();
         setLoading(true);
         const requestSentAt = Date.now();
         const requestId = ++activeRequestIdRef.current;
@@ -381,6 +403,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             if (!isCurrentRequest()) return;
 
             if (res.success && res.data) {
+                clearFailure();
                 const data = res.data;
                 if (data.sessionId) {
                     sessionIdRef.current = data.sessionId;
@@ -543,6 +566,10 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 }
 
 
+                if (data.retryable === true) {
+                    rememberFailure(data, () => handleSendMessage(textToSend, pendingPayload, prefixMessage));
+                    aiMsg.isError = true;
+                }
                 setMessages(prev => [...prev, aiMsg]);
             } else {
                 throw new Error("Invalid response");
@@ -592,10 +619,12 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 return;
             }
 
+            rememberFailure(err, () => handleSendMessage(textToSend, pendingPayload, prefixMessage));
             const isRateLimited = errorCode === "TOO_MANY_REQUESTS" || message.includes("quá nhiều");
             setMessages(prev => [...prev, {
                 role: "model",
                 content: aiChatFailureMessage(err),
+                isError: true,
                 urgency: "ROUTINE",
                 assistantStatus: providerFailure ? "Degraded" : "Offline",
                 providerState: providerFailure ? "Degraded" : undefined,
@@ -621,10 +650,10 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     };
 
     // Suggestion buttons run a server-owned read through the role Copilot.
-    const handleWizardStep = async (step: AiBookingWizardRequest['step'], optionToken?: string, reason?: string): Promise<void> => {
+    const handleWizardStep = async (step: AiBookingWizardRequest['step'], optionToken?: string, reason?: string, retrying = false): Promise<void> => {
         if (loading || submittingBooking || wizardBusyRef.current) return;
         wizardBusyRef.current = true;
-        if (step === 'start') {
+        if (step === 'start' && !retrying) {
             wizardSessionRef.current = generateSessionIdentity();
             setActiveDraft(null);
             setWizard(null);
@@ -635,7 +664,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         activeRequestControllerRef.current?.abort();
         activeRequestControllerRef.current = controller;
         setLoading(true);
-        setErrorMsg('');
+        clearFailure();
         try {
             const response = await axiosClient.post<AiBookingWizardRequest, ApiResponse<AiBookingWizardResponse>>('/ai/booking-wizard', {
                 sessionId: wizardSessionRef.current, step, optionToken, reason,
@@ -644,6 +673,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
             const data = response.data;
             if (!data) throw new Error('Không nhận được dữ liệu đặt lịch. Vui lòng thử lại.');
+            clearFailure();
             setWizard(data);
             if (data.reviewAction) {
                 const payload = data.reviewAction.payload;
@@ -663,6 +693,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }
         } catch (error: unknown) {
             if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
+            rememberFailure(error, () => handleWizardStep(step, optionToken, reason, true));
             setErrorMsg(aiChatFailureMessage(error));
         } finally {
             if (requestId === activeRequestIdRef.current) {
@@ -683,7 +714,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         if (!label || (!freeText && !suggestion.code) || loading) return;
 
         setMessages(previous => [...previous, { role: "user", content: label }]);
-        setErrorMsg("");
+        clearFailure();
         setLoading(true);
         const requestId = ++activeRequestIdRef.current;
         const requesterAccountKey = accountKeyRef.current;
@@ -707,6 +738,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
             }, requestController.signal);
             if (requestController.signal.aborted || !isCurrentRequest()) return;
+            clearFailure();
             setMessages(previous => [...previous, {
                 role: "model",
                 content: response.message,
@@ -724,10 +756,12 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             if (requestController.signal.aborted || !isCurrentRequest()) return;
             const status = (err as { status?: number; response?: { status?: number } })?.status ??
                 (err as { response?: { status?: number } })?.response?.status;
+            rememberFailure(err, () => handleSuggestion(suggestion, freeText));
             setAiAssistantStatus(status === 429 ? "Degraded" : "Offline");
             setMessages(previous => [...previous, {
                 role: "model",
                 content: aiChatFailureMessage(err),
+                isError: true,
                 urgency: "ROUTINE",
                 assistantStatus: status === 429 ? "Degraded" : "Offline"
             }]);
@@ -1269,26 +1303,21 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                             return;
                         }
                         const apt = bookRes.data;
-                        const formattedDate = formatVietnameseDate(action.payload.slotDate);
                         const finalReason = apt.reason || actionReason;
                         const finalDocName = apt.doctorName || action.payload.doctorName || "Bác sĩ phụ trách";
                         const finalTime = apt.startTime || action.payload.startTime;
                         const successMsg: ChatMessage = {
                             role: "model",
-                            content: `🎉 **Đặt lịch khám thành công!**\n- **Mã cuộc hẹn:** ${apt.appointmentCode || apt.id}\n- **Bác sĩ:** ${finalDocName}\n- **Thời gian:** ${finalTime} ngày ${formattedDate}\n- **Lý do khám:** ${finalReason}\n\nCuộc hẹn của bạn đã được lưu vào hệ thống phòng khám.`,
-                            actions: [
-                                {
-                                    id: "act-view-created-apt",
-                                    type: "ViewMyAppointments",
-                                    label: "Xem danh sách lịch hẹn của tôi",
-                                    style: "primary",
-                                    requiresAuthentication: true,
-                                    requiresConfirmation: false,
-                                    payload: { targetUrl: "/patient/appointments" }
-                                }
-                            ]
+                            content: 'Đặt lịch khám thành công.',
+                            bookingResult: {
+                                appointmentId: apt.id, appointmentCode: apt.appointmentCode || String(apt.id),
+                                doctorName: finalDocName, specialtyName: apt.specialtyName || action.payload.specialtyName,
+                                facilityName: action.payload.facilityName, slotDate: apt.appointmentDate || action.payload.slotDate,
+                                startTime: finalTime, endTime: apt.endTime || action.payload.endTime, reason: finalReason
+                            }
                         };
                         setMessages(prev => [...prev, successMsg]);
+                        setWizard(null);
                         draftCancelledAtRef.current = Date.now();
                         setActiveDraft(null);
                     }
@@ -1579,7 +1608,15 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         setErrorMsg,
         messages,
         activeDraft,
-        clearChat: () => { setWizard(null); clearChat(); },
+        clearChat: () => { clearFailure(); setWizard(null); clearChat(); },
+        canRetry,
+        retryAfterSeconds,
+        retryLastRequest: async () => {
+            if (loading || submittingBooking || retryAfterSeconds > 0 || !failedRequestRef.current) return;
+            const retry = failedRequestRef.current;
+            clearFailure();
+            await retry();
+        },
         handleSendMessage,
         handleSuggestion,
         wizard,

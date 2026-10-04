@@ -1,3 +1,6 @@
+import { BookingSuccessCard } from "./BookingSuccessCard";
+import { providerStateTone } from "./copilot/copilotConfig";
+import { DEFAULT_AI_MESSAGE } from "../contexts/ChatContext";
 import { BookingSummaryCard } from "./BookingSummaryCard";
 import { BookingWizard } from "./BookingWizard";
 import { BookingActionChoices } from "./BookingActionChoices";
@@ -6,7 +9,6 @@ import { patientSuggestions, isAdditionalCopy } from "./copilot/patientPresentat
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useChatContext } from "../contexts/ChatContext";
 import { useAiBookingFlow } from "../hooks/useAiBookingFlow";
 import { getRoleDashboardPath } from "../utils/roleRoutes";
 import styles from "./MedicalChatWidget.module.css";
@@ -18,7 +20,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import type { AiAction, AiChatIntent, AiToolExecutionResult } from "../types/ai";
 import SafeMarkdown from "./SafeMarkdown";
-import { aiToolErrorMessage, isAiToolArgumentError } from '../api/aiErrorMessages';
+import { aiToolErrorMessage } from '../api/aiErrorMessages';
 import { SuggestionChips } from "./copilot/SuggestionChips";
 import { useSuggestionMenu } from "./copilot/useSuggestionMenu";
 import { renderCopilotCardData } from "./copilot/copilotDataRenderers";
@@ -90,18 +92,22 @@ const PatientMedicalChatWidget: React.FC = () => {
     const launcherRef = useRef<HTMLButtonElement>(null);
     const chatWindowRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const [historyExpanded, setHistoryExpanded] = useState(false);
+    const [hasNewMessages, setHasNewMessages] = useState(false);
+    const messageAreaRef = useRef<HTMLDivElement>(null);
+    const nearBottomRef = useRef(true);
+    const wizardHistoryLimitRef = useRef<number | null>(null);
+    const previousMessagesRef = useRef<typeof messages>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const navigate = useNavigate();
     const location = useLocation();
     const { user } = useAuth();
-    const { setPendingSpecialtyId } = useChatContext();
 
     const {
         input,
         setInput,
         loading,
         submittingBooking,
-        errorMsg,
+        errorMsg, retryLastRequest, canRetry, retryAfterSeconds,
         messages,
         activeDraft,
         clearChat,
@@ -121,6 +127,7 @@ const PatientMedicalChatWidget: React.FC = () => {
         currentRoute: location.pathname
     });
     const latestAssistantIndex = messages.map(message => message.role).lastIndexOf("model");
+    const conversationEmpty = messages.length === 0 || messages.length === 1 && messages[0].content === DEFAULT_AI_MESSAGE.content;
     const emptySuggestions = messages.length <= 1;
     const activeSuggestions = patientSuggestions(messages[latestAssistantIndex], suggestionMenu, emptySuggestions);
     const suggestionsBusy = loading || submittingBooking || executingActionId !== null;
@@ -129,14 +136,28 @@ const PatientMedicalChatWidget: React.FC = () => {
         void handleSuggestion(suggestion);
     };
 
+    const scrollToLatest = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'instant', block: 'end' });
+        nearBottomRef.current = true;
+        setHasNewMessages(false);
+    };
     useEffect(() => {
-        if (isOpen && !wizard) {
-            messagesEndRef.current?.scrollIntoView({ behavior: "instant", block: 'end' });
-            requestAnimationFrame(() => {
-                inputRef.current?.focus();
-            });
-        }
+        if (isOpen) { scrollToLatest(); inputRef.current?.focus(); }
+    }, [isOpen]);
+    useEffect(() => {
+        const previous = previousMessagesRef.current;
+        previousMessagesRef.current = messages;
+        if (!isOpen || messages === previous || wizard) return;
+        const ownMessage = messages.slice(previous.length).some(message => message.role === 'user');
+        if (nearBottomRef.current || ownMessage) scrollToLatest();
+        else if (messages.length > previous.length) setHasNewMessages(true);
+        if (ownMessage) inputRef.current?.focus();
     }, [messages, isOpen, wizard]);
+
+    useEffect(() => {
+        if (!wizard) wizardHistoryLimitRef.current = null;
+        else if (wizardHistoryLimitRef.current === null) wizardHistoryLimitRef.current = messages.length;
+    }, [wizard, messages.length]);
 
     // Accessible keyboard handling: Escape and Tab Focus Trap
     useEffect(() => {
@@ -186,7 +207,7 @@ const PatientMedicalChatWidget: React.FC = () => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             e.stopPropagation();
-            handleSendMessage(input);
+            if (!loading && !submittingBooking) void handleSendMessage(input);
         }
     };
 
@@ -201,6 +222,23 @@ const PatientMedicalChatWidget: React.FC = () => {
     };
 
     const reviewIndex = wizard?.step === 'review' ? messages.findLastIndex(message => message.bookingDraft?.isComplete) : -1;
+    const retryButton = () => canRetry && <button type="button" className={styles.textLink} disabled={loading || submittingBooking || retryAfterSeconds > 0} onClick={() => void retryLastRequest()}>{retryAfterSeconds > 0 ? `Thử lại sau ${retryAfterSeconds} giây` : 'Thử lại'}</button>;
+    const isStaleAction = (act: AiAction) => {
+        if (!['SelectDoctor', 'SelectSlot', 'ConfirmBooking', 'ReviewBooking', 'ChangePreferredDate'].includes(act.type)) return false;
+        const payload = act.payload as Record<string, unknown>;
+        const version = act.draftVersion ?? payload.draftVersion;
+        return (['ConfirmBooking', 'ReviewBooking'].includes(act.type) && !activeDraft) ||
+            (act.type === 'ConfirmBooking' && Boolean(payload.confirmationId) && Boolean(activeDraft?.confirmationId) && payload.confirmationId !== activeDraft?.confirmationId) ||
+            (typeof version === 'number' && typeof activeDraft?.version === 'number' && version < activeDraft.version) ||
+            (version === undefined && (activeDraft?.version ?? 1) > 1);
+    };
+    const history = messages.map((msg, idx) => ({ msg, idx })).filter(({ msg, idx }) => idx !== reviewIndex && !(idx === 0 && msg.content === DEFAULT_AI_MESSAGE.content));
+    const wizardHistoryLimit = wizardHistoryLimitRef.current ?? messages.length;
+    const priorHistory = wizard ? history.filter(({ idx }) => idx < (reviewIndex >= 0 ? reviewIndex : wizardHistoryLimit)) : history;
+    const hiddenCount = wizard ? priorHistory.length : history.length > 6 ? Math.max(0, history.length - 4) : 0;
+    const visibleHistory = historyExpanded ? priorHistory : wizard ? [] : history.slice(hiddenCount);
+    const latestMessage = messages[latestAssistantIndex];
+    const announcement = (errorMsg || latestMessage?.content || '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[*_#`>]/g, '').slice(0, 200);
     const renderMessage = (msg: typeof messages[number], idx: number) => (
                             <div
                                 key={idx}
@@ -208,7 +246,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                                 className={`${styles.messageRow} ${msg.role === "user" ? styles.rowUser : styles.rowModel}`}
                             >
                                 <div data-chat-bubble className={`${styles.bubble} ${msg.role === "user" ? styles.bubbleUser : styles.bubbleModel}`}>
-                                    <SafeMarkdown content={idx === reviewIndex ? "" : msg.content} />
+                                    {!msg.bookingResult && <SafeMarkdown content={idx === reviewIndex ? "" : msg.content} />}
 
                                     {/* Emergency Card */}
                                     {msg.urgency === "EMERGENCY" && (
@@ -217,7 +255,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                 <AlertTriangle size={20} />
                                                 <span>CẢNH BÁO NGUY HIỂM</span>
                                             </div>
-                                            <div>{msg.safetyNotice || "Dấu hiệu bạn mô tả có thể là tình huống khẩn cấp. Hãy gọi 115 hoặc đến cơ sở y tế gần nhất ngay lập tức."}</div>
+                                            {isAdditionalCopy(msg.safetyNotice || "Dấu hiệu bạn mô tả có thể là tình huống khẩn cấp. Hãy gọi 115 hoặc đến cơ sở y tế gần nhất ngay lập tức.", msg.content) && <div>{msg.safetyNotice || "Dấu hiệu bạn mô tả có thể là tình huống khẩn cấp. Hãy gọi 115 hoặc đến cơ sở y tế gần nhất ngay lập tức."}</div>}
                                             <a href="tel:115" className={styles.call115Btn}>
                                                 <Phone size={18} />
                                                 Gọi Cấp cứu 115 ngay
@@ -225,19 +263,41 @@ const PatientMedicalChatWidget: React.FC = () => {
                                         </div>
                                     )}
 
-                                    {msg.toolResults?.map((toolResult, toolIndex) => (
-                                        <div key={`${toolResult.actionId ?? "tool"}-${toolIndex}`} className={styles.cardContainer}>
-                                            <div className={styles.bookingSummaryCard} role="status" aria-label="Trạng thái thao tác AI">
+                                    {msg.toolResults?.map((toolResult, toolIndex) => toolResult.status === 'completed'
+                                        ? <GroundedToolData key={toolIndex} result={toolResult} />
+                                        : toolResult.status === 'failed' ? <p key={toolIndex} className={styles.toolError}>{aiToolErrorMessage(toolResult.error?.code, toolResult.error?.message)}</p> : toolResult.displayText && isAdditionalCopy(toolResult.displayText, msg.content) ? <p key={toolIndex}>{toolResult.displayText}</p> : null)}
+
+                                    {msg.copilotCards?.map((card, cardIndex) => (
+                                        <div key={`${card.type}-${cardIndex}`} className={styles.cardContainer}>
+                                            <div className={styles.cardData} aria-label="Dữ liệu từ hệ thống ClinicCare">
                                                 <h4 className={styles.bookingSummaryTitle}>
-                                                    <CheckCircle2 size={18} color={toolResult.status === "failed" ? "#b91c1c" : "var(--chat-accent)"} />
-                                                    {toolResult.status === "pending_confirmation" ? "Đang chờ xác nhận" : toolResult.status === "completed" ? "Dữ liệu từ hệ thống ClinicCare" : isAiToolArgumentError(toolResult.error?.code) ? 'Yêu cầu chưa được xử lý' : "Không thể thực hiện thao tác"}
+                                                    <CheckCircle2 size={18} color={card.data === null || card.data === undefined ? "#b91c1c" : "var(--chat-accent)"} />
+                                                    {card.title}
                                                 </h4>
-                                                <p className={styles.specialtyReason}>
-                                                    {toolResult.status === "pending_confirmation"
-                                                        ? "Thao tác ghi chưa được thực hiện. Hãy kiểm tra thông tin và xác nhận trong luồng lịch hẹn."
-                                                        : aiToolErrorMessage(toolResult.error?.code, toolResult.error?.message) || toolResult.displayText || "Kết quả được trả về từ dịch vụ ClinicCare đã kiểm chứng."}
-                                                </p>
-                                                <GroundedToolData result={toolResult} />
+                                                {isAdditionalCopy(card.description, msg.content) && <p className={styles.specialtyReason}>{card.description}</p>}
+                                                {renderCopilotCardData(card)}
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    {msg.suggestions && msg.suggestions.length > 0 && msg.urgency !== 'EMERGENCY' && <div className={styles.cardContainer}>
+                                        {msg.suggestions.map(s => <button type="button" key={s.specialtyId} className={styles.specialtyChoice}
+                                            aria-label={`Xem lịch khám khoa ${s.specialtyName}`} disabled={loading || submittingBooking}
+                                            onClick={() => void handleSendMessage(`Tìm lịch khám khoa ${s.specialtyName}`, { specialtyId: s.specialtyId })}>
+                                            <span><strong>{s.specialtyName}</strong><small>{s.reason}</small></span><ArrowRight size={18} aria-hidden="true" />
+                                        </button>)}
+                                        <p className={styles.specialtyReason}>Chạm vào một khoa để xem lịch khám.</p>
+                                    </div>}
+                                    {msg.bookingResult && <BookingSuccessCard result={msg.bookingResult} onAction={act => void onActionClick(act)} busy={submittingBooking} />}
+
+                                    {!msg.toolResults?.some(result => result.status === "pending_confirmation") && msg.bookingDraft && msg.bookingDraft.isComplete && msg.urgency !== "EMERGENCY" && (
+    <BookingSummaryCard draft={msg.bookingDraft} formatVietnameseDate={formatVietnameseDate} />
+)}
+
+{msg.toolResults?.map((toolResult, toolIndex) => toolResult.status === 'pending_confirmation' && msg.toolResults?.findIndex(result => result.status === 'pending_confirmation') === toolIndex
+                                                ? <div key={toolIndex} className={msg.urgency === 'EMERGENCY' ? styles.cardData : styles.bookingSummaryCard} role="status" aria-label="Trạng thái thao tác AI">
+                                                    <h4 className={styles.bookingSummaryTitle}>Đang chờ xác nhận</h4>
+                                                    <p className={styles.specialtyReason}>Thao tác ghi chưa được thực hiện. Hãy kiểm tra thông tin và xác nhận trong luồng lịch hẹn.</p>
                                                 {toolResult.status === "pending_confirmation" && toolResult.actionId && (<>
                                                     <button
                                                         type="button"
@@ -274,83 +334,15 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                         {executingActionId === toolResult.actionId ? "Đang hủy..." : "Hủy thao tác"}
                                                     </button>
                                                 </>)}
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    {msg.copilotCards?.map((card, cardIndex) => (
-                                        <div key={`${card.type}-${cardIndex}`} className={styles.cardContainer}>
-                                            <div className={styles.bookingSummaryCard} role="status" aria-label="Dữ liệu từ hệ thống ClinicCare">
-                                                <h4 className={styles.bookingSummaryTitle}>
-                                                    <CheckCircle2 size={18} color={card.data === null || card.data === undefined ? "#b91c1c" : "var(--chat-accent)"} />
-                                                    {card.title}
-                                                </h4>
-                                                {isAdditionalCopy(card.description, msg.content) && <p className={styles.specialtyReason}>{card.description}</p>}
-                                                {renderCopilotCardData(card)}
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    {/* Specialty Suggestions */}
-                                    {msg.suggestions && msg.suggestions.length > 0 && msg.urgency !== "EMERGENCY" && (
-                                        <div className={styles.cardContainer}>
-                                            {msg.suggestions.map(s => (
-                                                <div key={s.specialtyId} className={styles.specialtyCard}>
-                                                    <div className={styles.specialtyHeader}>
-                                                        <h4 className={styles.specialtyTitle}>{s.specialtyName}</h4>
-                                                        <span className={styles.fitBadge}>Phù hợp tham khảo</span>
-                                                    </div>
-                                                    <p className={styles.specialtyReason}>{s.reason}</p>
-                                                    <div style={{ display: "flex", gap: "6px" }}>
-                                                        <button
-                                                            type="button"
-                                                            className={`${styles.actionBtn} ${styles.btnPrimary}`}
-                                                            style={{ flex: 1 }}
-                                                            onClick={() => handleSendMessage(`Tìm lịch khám khoa ${s.specialtyName}`, { specialtyId: s.specialtyId })}
-                                                        >
-                                                            Xem lịch khám <ArrowRight size={14} />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className={`${styles.actionBtn} ${styles.btnSecondary}`}
-                                                            onClick={() => {
-                                                                setPendingSpecialtyId(s.specialtyId);
-                                                                navigate(`/patient/book?specialtyId=${s.specialtyId}`);
-                                                                setIsOpen(false);
-                                                            }}
-                                                        >
-                                                            Chi tiết khoa
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {msg.bookingDraft && msg.bookingDraft.isComplete && msg.urgency !== "EMERGENCY" && (
-    <BookingSummaryCard draft={msg.bookingDraft} formatVietnameseDate={formatVietnameseDate} />
-)}
+                                                </div> : null)}
 
 {/* Action Buttons */}
-                                    {msg.actions && msg.actions.length > 0 && msg.urgency !== "EMERGENCY" && (
-                                        <BookingActionChoices actions={msg.actions} latest={idx === latestAssistantIndex} renderAction={act => {
+                                    {!msg.bookingResult && !msg.toolResults?.some(result => result.status === "pending_confirmation") && msg.actions && msg.actions.length > 0 && msg.urgency !== "EMERGENCY" && (
+                                        <BookingActionChoices actions={msg.actions} latest={idx === latestAssistantIndex} isStale={isStaleAction} renderAction={act => {
                                                 const isPrimary = act.style === "primary";
                                                 const isDanger = act.style === "danger";
 
-                                                const isBooking = ["SelectDoctor", "SelectSlot", "ConfirmBooking", "ReviewBooking", "ChangePreferredDate"].includes(act.type);
-                                                const rawActVersion = act.draftVersion ?? (act.payload as Record<string, unknown>)?.draftVersion;
-                                                const hasValidActVer = typeof rawActVersion === "number" && Number.isInteger(rawActVersion) && rawActVersion >= 1;
-                                                const activeVer = (typeof activeDraft?.version === "number" && Number.isInteger(activeDraft.version) && activeDraft.version >= 1)
-                                                    ? activeDraft.version
-                                                    : null;
-
-                                                const actConfirmationId = (act.payload as Record<string, unknown>)?.confirmationId;
-                                                const isStale = isBooking && (
-                                                    (["ConfirmBooking", "ReviewBooking"].includes(act.type) && !activeDraft) ||
-                                                    (act.type === "ConfirmBooking" && Boolean(actConfirmationId) && Boolean(activeDraft?.confirmationId) && actConfirmationId !== activeDraft?.confirmationId) ||
-                                                    (hasValidActVer && activeVer !== null && (rawActVersion as number) < activeVer) ||
-                                                    (!hasValidActVer && activeVer !== null && activeVer > 1)
-                                                );
+                                                const isStale = isStaleAction(act);
 
                                                 const btnClass = `${
                                                     isDanger
@@ -358,7 +350,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                         : isPrimary
                                                             ? `${styles.actionBtn} ${styles.btnPrimary}`
                                                             : `${styles.actionBtn} ${styles.btnSecondary}`
-                                                } ${isStale ? styles.btnStale : ""}`;
+                                                }`;
 
                                                 return (
                                                     <button
@@ -379,11 +371,12 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                         {act.type === "ViewPrescriptions" && <FileText size={16} />}
                                                         {act.type === "ViewBills" && <CreditCard size={16} />}
                                                         {executingActionId === act.id ? "Đang xử lý..." : (submittingBooking && act.type === "ConfirmBooking" ? "Đang xử lý..." : act.label)}
-                                                        {isStale && <span className={styles.staleTag}> (Lựa chọn đã cũ)</span>}
+
                                                     </button>
                                                 );
                                             }} />
                                     )}
+                                    {msg.isError && idx === latestAssistantIndex && retryButton()}
                                 </div>
                             </div>
 
@@ -456,41 +449,25 @@ const PatientMedicalChatWidget: React.FC = () => {
 
                     <ProviderStatus state={wizard ? 'NotCalled' : messages[latestAssistantIndex]?.providerState} error={errorMsg || (messages[latestAssistantIndex]?.assistantStatus === 'Offline' ? messages[latestAssistantIndex]?.content : undefined)} detail={messages[latestAssistantIndex]?.executionMode} />
 
-                    <div className={styles.messageArea} aria-live="polite" data-chat-messages>
-                        {/* Welcome Disclaimer on top */}
-                        <div className={styles.welcomeContainer}>
-                            <div className={styles.disclaimerBadge}>
-                                <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
-                                <span>Trợ lý hỗ trợ định hướng chuyên khoa và đặt lịch khám. Thông tin chỉ mang tính tham khảo, không thay thế chẩn đoán y khoa.</span>
-                            </div>
-
-                            {emptySuggestions && (
-                                <>
-                                    {!activeSuggestions?.length && <p className={styles.quickPromptsTitle}>Gợi ý câu hỏi nhanh:</p>}
-                                    {!activeSuggestions?.length && <div className={styles.quickPrompts}>
-                                        {QUICK_PROMPTS.map((qp) => (
-                                            <button
-                                                key={qp.label}
-                                                type="button"
-                                                className={styles.quickPromptChip}
-                                                onClick={() => handleSendMessage(qp.label, { intent: qp.intent })}
-                                            >
-                                                {qp.label}
-                                            </button>
-                                        ))}
-                                    </div>}
-
-                                </>
-                            )}
-                        </div>
-
-                        {messages.map((msg, idx) => idx === reviewIndex ? null : renderMessage(msg, idx))}
-
-                    <BookingWizard state={wizard} busy={loading || submittingBooking} onStep={handleWizardStep} reviewContent={reviewIndex >= 0 ? renderMessage(messages[reviewIndex], reviewIndex) : undefined} />
+                    {(latestMessage?.fallbackActive || providerStateTone(latestMessage?.providerState) === 'amber' || /quá nhiều|giới hạn|429|phản hồi quá lâu|chờ.*giây/i.test(errorMsg)) && <p className={styles.localHint}>Trợ lý đang ở chế độ nội bộ nên chỉ hiểu một số câu. Bạn dùng các gợi ý bên dưới để chắc chắn nhất.</p>}
+                    <div className={styles.visuallyHidden} aria-live="polite" aria-atomic="true" data-chat-announcement>{announcement && <span key={announcement} role="note" aria-label={announcement} />}</div>
+                    <div ref={messageAreaRef} className={styles.messageArea} data-chat-messages onScroll={() => {
+                        const area = messageAreaRef.current;
+                        if (area) { nearBottomRef.current = area.scrollHeight - area.scrollTop - area.clientHeight <= 80; if (nearBottomRef.current) setHasNewMessages(false); }
+                    }}>
+                        {!wizard && <div className={conversationEmpty ? styles.welcomeContainer : styles.welcomeLine}>
+                            {conversationEmpty ? <><p>Xin chào{user?.fullName ? `, ${user.fullName}` : ''}! Mình có thể giúp bạn đặt lịch khám và tra cứu lịch hẹn, đơn thuốc, kết quả xét nghiệm, hóa đơn.</p>
+                            <span>Thông tin chỉ mang tính tham khảo, không thay thế chẩn đoán y khoa.</span></> : <p>Xin chào{user?.fullName ? `, ${user.fullName}` : ''}! Thông tin chỉ mang tính tham khảo, không thay thế chẩn đoán y khoa.</p>}
+                            {emptySuggestions && !activeSuggestions?.length && <div className={styles.quickPrompts}>{QUICK_PROMPTS.map(qp => <button key={qp.label} type="button" className={styles.quickPromptChip} disabled={suggestionsBusy} onClick={() => void handleSendMessage(qp.label, { intent: qp.intent })}>{qp.label}</button>)}</div>}
+                        </div>}
+                        {hiddenCount > 0 && <button type="button" className={styles.textLink} onClick={() => setHistoryExpanded(value => !value)}>{historyExpanded ? 'Thu gọn' : `Xem ${hiddenCount} tin nhắn trước`}</button>}
+                        {visibleHistory.map(({ msg, idx }) => renderMessage(msg, idx))}
+                    <BookingWizard state={wizard} busy={loading || submittingBooking} onStep={handleWizardStep} reviewContent={reviewIndex >= 0 ? <>{renderMessage(messages[reviewIndex], reviewIndex)}{history.filter(({ idx }) => idx > reviewIndex).map(({ msg, idx }) => renderMessage(msg, idx))}</> : undefined} />
                         {loading && (
                             <div className={`${styles.messageRow} ${styles.rowModel}`}>
                                 <div className={`${styles.bubble} ${styles.bubbleModel}`}>
-                                    <div style={{ display: "flex", gap: "5px", padding: "6px" }}>
+                                    <div role="status" aria-label="Trợ lý đang trả lời" style={{ display: "flex", gap: "5px", padding: "6px", alignItems: "center" }}>
+                                        <span>Trợ lý đang trả lời…</span>
                                         <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "var(--chat-accent)", animation: "pulse 1.4s infinite" }} />
                                         <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "var(--chat-accent)", animation: "pulse 1.4s infinite 0.2s" }} />
                                         <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "var(--chat-accent)", animation: "pulse 1.4s infinite 0.4s" }} />
@@ -498,9 +475,11 @@ const PatientMedicalChatWidget: React.FC = () => {
                                 </div>
                             </div>
                         )}
+                        {wizard && reviewIndex < 0 && history.filter(({ idx }) => idx >= wizardHistoryLimit).map(({ msg, idx }) => renderMessage(msg, idx))}
                         <div ref={messagesEndRef} />
                     </div>
 
+                    {hasNewMessages && <button type="button" className={styles.newMessages} onClick={scrollToLatest}>Có tin nhắn mới</button>}
                     <div className={styles.composer} data-chat-composer>
                         <SuggestionChips variant={emptySuggestions && !wizard ? "grid" : "compact"} suggestions={activeSuggestions} disabled={suggestionsBusy} onSelect={onSuggestion} ariaLabel={emptySuggestions ? "Tra cứu nhanh dữ liệu của bạn" : "Gợi ý tiếp theo"} />
                     <div className={styles.inputArea}>
@@ -519,13 +498,13 @@ const PatientMedicalChatWidget: React.FC = () => {
                             type="button"
                             className={styles.sendBtn}
                             onClick={() => handleSendMessage(input)}
-                            disabled={!input.trim() || loading}
+                            disabled={!input.trim() || loading || submittingBooking}
                             aria-label="Gửi tin nhắn"
                         >
                             <Send size={18} />
                         </button>
                     </div>
-                    {errorMsg && <div className={styles.errorText}>{errorMsg}</div>}
+                    {errorMsg && <div className={styles.errorText}>{errorMsg}{retryButton()}</div>}
                     </div>
                 </div>
             )}
