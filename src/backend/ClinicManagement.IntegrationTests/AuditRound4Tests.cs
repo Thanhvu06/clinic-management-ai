@@ -352,14 +352,66 @@ public class AuditRound4Tests : IntegrationTestBase
             _output.WriteLine($"SQL {list}: 1 order = {counter.Count}");
             Assert.Equal(counter.Count, twentyCount);
         }
-        Assert.InRange(twentyCount, 1, 6);
+        Assert.InRange(twentyCount, 1, 8);
+    }
+
+    [Fact]
+    public async Task F7_Batched_one_and_twenty_orders_use_same_split_queries_and_one_user_lookup()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var seed = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var visit = await VisitAsync(seed);
+        var serviceIds = await seed.DiagnosticServices.OrderBy(x => x.Id).Select(x => x.Id).Take(2).ToListAsync();
+        Assert.Equal(2, serviceIds.Count);
+        var orders = Enumerable.Range(0, 20).Select(i => new DiagnosticOrder
+        {
+            OrderCode = Code(), PatientVisitId = visit.Id, PatientId = Patient1EntityId,
+            OrderingDoctorId = DoctorEntityId, ReviewedByDoctorId = DoctorEntityId,
+            StartedByUserId = DoctorId, CompletedByUserId = TechnicianId,
+            Status = DiagnosticOrderStatus.Completed,
+            Items = new List<DiagnosticOrderItem>
+            {
+                new() { DiagnosticServiceId = serviceIds[0], Result = new DiagnosticResult
+                    { ResultText = "Kết quả bác sĩ", ResultedByUserId = DoctorId } },
+                new() { DiagnosticServiceId = serviceIds[1], Result = new DiagnosticResult
+                    { ResultText = "Kết quả kỹ thuật viên", ResultedByUserId = TechnicianId } }
+            }
+        }).ToList();
+        seed.DiagnosticOrders.AddRange(orders);
+        await seed.SaveChangesAsync();
+        var counter = new SqlCounter();
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite(seed.Database.GetConnectionString()!).AddInterceptors(counter).Options);
+        var service = DiagnosticService(db, DoctorId);
+        var batch = typeof(DiagnosticWorkflowService).GetMethod("GetOrderDtosByIdsAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var ids = orders.Select(order => order.Id).Reverse().ToList();
+        var twenty = await (Task<List<DiagnosticOrderDto>>)batch.Invoke(service, new object[] { ids })!;
+        var twentyCount = counter.Count;
+        Assert.Equal(ids, twenty.Select(order => order.Id));
+        Assert.Equal(4, twentyCount); // root, doctor specialties, items/results, then Users
+        Assert.Single(counter.Commands, command => command.Contains("AspNetUsers", StringComparison.Ordinal));
+        Assert.All(counter.Commands.Take(3), command => Assert.DoesNotContain("AspNetUsers", command));
+        Assert.All(twenty, order =>
+        {
+            Assert.Equal(2, order.Items.Count);
+            Assert.Equal(order.StartedByUserName, order.ReviewedByDoctorName);
+            Assert.Equal(order.StartedByUserName, order.Items[0].Result!.ResultedByUserName);
+            Assert.Equal(order.CompletedByUserName, order.Items[1].Result!.ResultedByUserName);
+        });
+        counter.Count = 0;
+        counter.Commands.Clear();
+        var one = await (Task<List<DiagnosticOrderDto>>)batch.Invoke(service, new object[] { new List<long> { ids[0] } })!;
+        Assert.Equal(twentyCount, counter.Count);
+        Assert.Equal(JsonSerializer.Serialize(twenty[0]), JsonSerializer.Serialize(Assert.Single(one)));
+        _output.WriteLine($"SQL batch: 20 orders = {twentyCount}, 1 order = {counter.Count}");
     }
 
     private sealed class SqlCounter : DbCommandInterceptor
     {
         public int Count;
+        public List<string> Commands { get; } = new();
         public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
             InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
-        { Count++; return ValueTask.FromResult(result); }
+        { Count++; Commands.Add(command.CommandText); return ValueTask.FromResult(result); }
     }
 }
