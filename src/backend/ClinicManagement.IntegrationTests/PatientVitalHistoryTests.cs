@@ -32,6 +32,7 @@ public class PatientVitalHistoryTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.Created, createRes1.StatusCode);
         var doc1 = JsonDocument.Parse(await createRes1.Content.ReadAsStringAsync());
         var aptId1 = doc1.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        await MoveAppointmentToVietnamTodayAsync(aptId1);
 
         // Reception confirms
         await AuthenticateAsync("rec@test.com");
@@ -81,6 +82,7 @@ public class PatientVitalHistoryTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.Created, createRes2.StatusCode);
         var doc2 = JsonDocument.Parse(await createRes2.Content.ReadAsStringAsync());
         var aptId2 = doc2.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        await MoveAppointmentToVietnamTodayAsync(aptId2);
 
         // Reception confirms
         await AuthenticateAsync("rec@test.com");

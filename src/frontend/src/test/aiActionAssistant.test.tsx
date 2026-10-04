@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { MedicalChatWidget } from '../components/MedicalChatWidget';
 import { ChatProvider, useChatContext } from '../contexts/ChatContext';
@@ -1553,6 +1553,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(confirmBtn);
 
         // While Request A is in-flight, user modifies draft into Draft B via chat
+        await waitFor(() => expect(vi.mocked(axiosClient.post).mock.calls.some(([url]) => url === '/appointments')).toBe(true));
         fireEvent.change(chatInput, { target: { value: 'Đổi sang giờ 10:00 và lý do mới' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
         await waitFor(() => {
@@ -1560,21 +1561,28 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         });
 
         // Now resolve stale Request A
-        resolveRequestA({
-            success: true,
-            message: '',
-            data: {
-                id: 901,
-                appointmentCode: 'APT-901',
-                doctorName: 'BS Nguyễn Văn An',
-                specialtyName: 'Tim mạch',
-                startTime: '09:00:00',
-                endTime: '09:30:00',
-                reason: 'Đau tức ngực trái kéo dài 3 ngày'
-            }
+        await waitFor(() => {
+            const persisted = sessionStorage.getItem('cliniccare_booking_draft_pat-1');
+            expect(persisted).not.toBeNull();
+            expect(JSON.parse(persisted!)).toMatchObject({ slotId: 1002, version: 2,
+                reason: 'Đau tức ngực trái kèm khó thở về đêm (Draft B)' });
         });
-
-        await new Promise(r => setTimeout(r, 30));
+        await act(async () => {
+            resolveRequestA({
+                success: true,
+                message: '',
+                data: {
+                    id: 901,
+                    appointmentCode: 'APT-901',
+                    doctorName: 'BS Nguyễn Văn An',
+                    specialtyName: 'Tim mạch',
+                    startTime: '09:00:00',
+                    endTime: '09:30:00',
+                    reason: 'Đau tức ngực trái kéo dài 3 ngày'
+                }
+            });
+            await deferredA;
+        });
 
         // Draft B must remain intact in sessionStorage and UI, NOT wiped or replaced by Request A's success screen
         expect(screen.queryByText('APT-901')).not.toBeInTheDocument();

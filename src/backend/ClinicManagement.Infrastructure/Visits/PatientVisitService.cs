@@ -546,6 +546,9 @@ public class PatientVisitService : IPatientVisitService
         var facilityId = appointmentFacilityId.Value;
         await _facilityAuthService.ValidateUserFacilityAccessAsync(currentUserId, facilityId, cancellationToken);
 
+        if (appointment.AppointmentDate != _dateTimeProvider.VietnamToday)
+            throw new BusinessException("CHECKIN_NOT_TODAY", $"Lịch hẹn ngày {appointment.AppointmentDate:dd/MM/yyyy}; chỉ tiếp nhận được vào đúng ngày khám.");
+
         // Verify room if specified
         Room? room = null;
         if (request.RoomId.HasValue)

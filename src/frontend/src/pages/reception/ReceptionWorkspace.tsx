@@ -14,6 +14,7 @@ import { MpiPatientSearchModal } from './MpiPatientSearchModal';
 import { CheckInTicketModal } from '../../components/CheckInTicketModal';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 import styles from './ReceptionWorkspace.module.css';
+import { toLocalDateString } from '../../utils/formatters';
 
 interface AppointmentItem {
     id: number;
@@ -598,10 +599,10 @@ export const ReceptionWorkspace: React.FC = () => {
                                                         <button
                                                             type="button"
                                                             className="btn-primary"
-                                                            style={{ padding: '5px 12px', fontSize: '0.82rem' }}
+                                                            style={{ padding: '5px 12px', minHeight: '40px', fontSize: '0.82rem' }}
                                                             onClick={() => handleFastCheckIn(item)}
-                                                            disabled={actionLoadingId === item.id}
-                                                            title="Tiếp nhận ngay và cấp số thứ tự vào hàng đợi bác sĩ"
+                                                            disabled={actionLoadingId === item.id || item.appointmentDate !== toLocalDateString()}
+                                                            title={item.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${item.appointmentDate.split('-').reverse().join('/')}` : 'Tiếp nhận ngay và cấp số thứ tự vào hàng đợi bác sĩ'}
                                                         >
                                                             {actionLoadingId === item.id ? (
                                                                 <RefreshCw className="spin" size={13} />

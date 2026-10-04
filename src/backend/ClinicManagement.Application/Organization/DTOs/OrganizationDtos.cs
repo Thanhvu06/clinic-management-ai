@@ -102,6 +102,7 @@ public class CreateBuildingRequest
 public class DepartmentDto
 {
     public long Id { get; set; }
+    public long? SpecialtyId { get; set; }
     public long FacilityId { get; set; }
     public string FacilityName { get; set; } = string.Empty;
     public long? BuildingId { get; set; }

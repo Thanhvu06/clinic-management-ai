@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Identity;
@@ -371,6 +372,17 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         }
 
         return date;
+    }
+
+    protected async Task<DateOnly> MoveAppointmentToVietnamTodayAsync(long appointmentId, IServiceProvider? services = null)
+    {
+        using var scope = (services ?? Factory.Services).CreateScope();
+        var today = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>().VietnamToday;
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var appointment = await db.Appointments.SingleAsync(a => a.Id == appointmentId);
+        appointment.AppointmentDate = today;
+        await db.SaveChangesAsync();
+        return today;
     }
 
     protected async Task AuthenticateAsync(string email)

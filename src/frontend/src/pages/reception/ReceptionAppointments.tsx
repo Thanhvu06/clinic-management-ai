@@ -7,6 +7,7 @@ import { Search, CalendarDays, Eye, X, Clock, RefreshCw, UserCheck } from 'lucid
 import { useDialog } from '../../contexts/DialogContext';
 import { CheckInTicketModal } from '../../components/CheckInTicketModal';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
+import { toLocalDateString } from '../../utils/formatters';
 
 interface ReceptionAppointment {
     id: number;
@@ -147,7 +148,10 @@ export const ReceptionAppointments: React.FC = () => {
                 .then(result => {
                     if (controller.signal.aborted || departmentRequestRef.current.generation !== generation) return;
                     if (result.success && result.data) {
-                        setDepartments(result.data.filter(department => department.isActive && department.facilityId === facilityId));
+                        const available = result.data.filter(department => department.isActive && department.facilityId === facilityId);
+                        const matching = available.filter(department => department.specialtyId === apt.specialtyId);
+                        setDepartments(available);
+                        setSelectedDepartmentId(matching.length === 1 ? matching[0].id : null);
                         setDepartmentsError('');
                     } else {
                         setDepartments([]);
@@ -403,9 +407,10 @@ export const ReceptionAppointments: React.FC = () => {
                                         {apt.status === 'Confirmed' && (
                                             <button 
                                                 className="btn-primary" 
-                                                style={{ padding: '6px 12px', fontSize: '0.85rem', marginRight: '8px', backgroundColor: '#059669', borderColor: '#059669' }} 
+                                                style={{ padding: '6px 12px', minHeight: '40px', fontSize: '0.85rem', marginRight: '8px', backgroundColor: '#059669', borderColor: '#059669' }}
                                                 onClick={() => handleCheckIn(apt)}
-                                                disabled={checkingInId === apt.id}
+                                                disabled={checkingInId === apt.id || apt.appointmentDate !== toLocalDateString()}
+                                                title={apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${apt.appointmentDate.split('-').reverse().join('/')}` : undefined}
                                             >
                                                 <UserCheck size={14} style={{ marginRight: '4px' }} />
                                                 {checkingInId === apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận'}
@@ -481,7 +486,7 @@ export const ReceptionAppointments: React.FC = () => {
                             </select>
                             {departmentsError && <div role="alert" style={{ color: 'var(--c-danger, #b91c1c)', marginTop: '8px' }}>{departmentsError}</div>}
                             <small style={{ display: 'block', color: 'var(--c-muted)', marginTop: '8px' }}>
-                                Danh sách lấy từ API khoa của cơ sở {modal.apt.facilityName ? `“${modal.apt.facilityName}”` : 'đang gắn với lịch hẹn'}. Không tự chọn khoa; backend sẽ kiểm tra lại cơ sở, quyền và lịch hẹn khi chuẩn bị/xác nhận.
+                                Đã chọn sẵn khoa theo chuyên khoa của lịch hẹn; bạn có thể đổi. Backend vẫn kiểm tra lại cơ sở, quyền và lịch hẹn.
                             </small>
                         </div>
 
@@ -528,9 +533,10 @@ export const ReceptionAppointments: React.FC = () => {
                                 <button className="btn-secondary" onClick={closeDetail}>Đóng</button>
                                 <button 
                                     className="btn-primary" 
-                                    style={{ backgroundColor: '#059669', borderColor: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                    style={{ minHeight: '40px', backgroundColor: '#059669', borderColor: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}
                                     onClick={() => handleCheckIn(modal.apt!)}
-                                    disabled={checkingInId === modal.apt.id}
+                                    disabled={checkingInId === modal.apt.id || modal.apt.appointmentDate !== toLocalDateString()}
+                                    title={modal.apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${modal.apt.appointmentDate.split('-').reverse().join('/')}` : undefined}
                                 >
                                     <UserCheck size={16} />
                                     {checkingInId === modal.apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận & Cấp phiếu STT'}

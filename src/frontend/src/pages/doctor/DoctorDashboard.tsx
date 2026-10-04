@@ -9,6 +9,7 @@ import { doctorApi } from '../../api/doctorApi';
 import type { DoctorDashboardDto, DoctorQueueItemDto } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { PageHeader, StatCard, StatusBadge, InlineError, EmptyState } from '../../components/common';
+import { toLocalDateString } from '../../utils/formatters';
 
 export const DoctorDashboard: React.FC = () => {
     const navigate = useNavigate();
@@ -431,9 +432,9 @@ export const DoctorDashboard: React.FC = () => {
                                                         <button 
                                                             className="btn-secondary"
                                                             onClick={() => handleCheckIn(item.appointmentId)}
-                                                            disabled={actionLoadingId === item.appointmentId}
-                                                            style={{ padding: '5px 10px', fontSize: '0.78rem' }}
-                                                            title="Xác nhận bệnh nhân đã đến phòng khám"
+                                                            disabled={actionLoadingId === item.appointmentId || item.appointmentDate !== toLocalDateString()}
+                                                            style={{ padding: '5px 10px', minHeight: '40px', fontSize: '0.78rem' }}
+                                                            title={item.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${item.appointmentDate.split('-').reverse().join('/')}` : 'Xác nhận bệnh nhân đã đến phòng khám'}
                                                         >
                                                             Tiếp nhận
                                                         </button>

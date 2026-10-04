@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ReceptionWorkspace } from '../pages/reception/ReceptionWorkspace';
 import { WalkInPatientRegistration } from '../pages/reception/WalkInPatientRegistration';
@@ -193,6 +193,13 @@ describe('Reception Workspace Rebuild', () => {
     });
 
     it('selects the appointment from the rendered worklist row for Copilot', async () => {
+        const originalGet = vi.mocked(axiosClient.get).getMockImplementation()!;
+        let releaseFacilityRows!: () => void;
+        const facilityRows = new Promise<void>(resolve => { releaseFacilityRows = resolve; });
+        vi.mocked(axiosClient.get).mockImplementation(async (url: string) => {
+            if (url.includes('/reception/appointments') && url.includes('facilityId=1')) await facilityRows;
+            return originalGet(url);
+        });
         render(
             <MemoryRouter>
                 <DialogProvider>
@@ -204,9 +211,13 @@ describe('Reception Workspace Rebuild', () => {
             </MemoryRouter>
         );
 
+        // Initial unscoped rows can render before facility selection clears Copilot.
+        await waitFor(() => expect(vi.mocked(axiosClient.get).mock.calls.some(([url]) =>
+            url.includes('/reception/appointments') && url.includes('facilityId=1'))).toBe(true));
+        await act(async () => { releaseFacilityRows(); });
         await waitFor(() => expect(screen.getAllByRole('button', { name: 'Chọn Copilot' }).length).toBe(2));
         fireEvent.click(screen.getAllByRole('button', { name: 'Chọn Copilot' })[0]);
-        expect(screen.getByTestId('copilot-selection')).toHaveTextContent('101');
+        await waitFor(() => expect(screen.getByTestId('copilot-selection')).toHaveTextContent('101'));
     });
 
     it('filters worklist by appointment tabs', async () => {
