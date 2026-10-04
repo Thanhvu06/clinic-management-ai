@@ -1,6 +1,7 @@
 using ClinicManagement.Application.Appointments.DTOs.Doctor;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Patients.DTOs;
 using ClinicManagement.Application.Patients.Interfaces;
 using ClinicManagement.Domain.Enums;
@@ -13,11 +14,13 @@ public class PatientService : IPatientService
 {
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public PatientService(AppDbContext dbContext, ICurrentUserService currentUserService)
+    public PatientService(AppDbContext dbContext, ICurrentUserService currentUserService, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<PatientProfileDto> GetMyProfileAsync()
@@ -57,7 +60,7 @@ public class PatientService : IPatientService
         if (user == null)
             throw new NotFoundException("Không tìm thấy tài khoản.");
 
-        if (request.DateOfBirth.HasValue && request.DateOfBirth.Value > DateOnly.FromDateTime(DateTime.UtcNow))
+        if (request.DateOfBirth.HasValue && request.DateOfBirth.Value > _dateTimeProvider.VietnamToday)
             throw new ValidationException("DateOfBirth", "Ngày sinh không được lớn hơn ngày hiện tại.");
 
         user.FullName = request.FullName;

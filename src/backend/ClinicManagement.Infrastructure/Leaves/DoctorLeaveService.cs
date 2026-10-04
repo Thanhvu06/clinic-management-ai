@@ -114,11 +114,12 @@ public class DoctorLeaveService : IDoctorLeaveService
 
         var query = from a in _dbContext.Appointments
                     join p in _dbContext.Patients on a.PatientId equals p.Id
-                    join u in _dbContext.Users on p.UserId equals u.Id
+                    join u in _dbContext.Users on p.UserId equals u.Id into patientUsers
+                    from u in patientUsers.DefaultIfEmpty()
                     where a.DoctorId == doctor.Id
                        && a.AppointmentDate >= startDateOnly
                        && a.AppointmentDate <= endDateOnly
-                       && (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed)
+                       && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status)
                     select new
                     {
                         a.Id,
@@ -126,7 +127,7 @@ public class DoctorLeaveService : IDoctorLeaveService
                         a.AppointmentDate,
                         a.StartTime,
                         a.EndTime,
-                        PatientName = u.FullName,
+                        PatientName = u != null ? u.FullName : p.FullName!,
                         Status = a.Status.ToString()
                     };
 

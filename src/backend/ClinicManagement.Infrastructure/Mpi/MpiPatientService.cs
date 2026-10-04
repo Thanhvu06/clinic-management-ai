@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.Mpi.DTOs;
 using ClinicManagement.Application.Mpi.Interfaces;
@@ -12,6 +13,7 @@ using ClinicManagement.Application.Common.Constants;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
+using ClinicManagement.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClinicManagement.Infrastructure.Mpi;
@@ -22,12 +24,14 @@ public class MpiPatientService : IMpiPatientService
     private readonly AppDbContext _dbContext;
     private readonly IMrnGenerator _mrnGenerator;
     private readonly ICurrentUserService? _currentUser;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public MpiPatientService(AppDbContext dbContext, IMrnGenerator mrnGenerator, ICurrentUserService? currentUser = null)
+    public MpiPatientService(AppDbContext dbContext, IMrnGenerator mrnGenerator, ICurrentUserService? currentUser = null, IDateTimeProvider? dateTimeProvider = null)
     {
         _dbContext = dbContext;
         _mrnGenerator = mrnGenerator;
         _currentUser = currentUser;
+        _dateTimeProvider = dateTimeProvider ?? new DateTimeProvider();
     }
 
     public async Task<PagedResult<MpiPatientDto>> SearchPatientsAsync(PatientSearchQuery query, CancellationToken cancellationToken = default)
@@ -87,7 +91,7 @@ public class MpiPatientService : IMpiPatientService
             .OrderByDescending(p => p.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(p => MapToMpiDto(p))
+            .Select(p => MapToMpiDto(p, _dateTimeProvider.VietnamToday))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<MpiPatientDto>(items, totalItems, page, pageSize);
@@ -105,7 +109,7 @@ public class MpiPatientService : IMpiPatientService
         if (patient == null)
             throw new NotFoundException($"Không tìm thấy hồ sơ bệnh nhân với ID: {id}");
 
-        return MapToMpiDto(patient);
+        return MapToMpiDto(patient, _dateTimeProvider.VietnamToday);
     }
 
     public async Task<MpiPatientDto> GetPatientByMrnAsync(string mrn, CancellationToken cancellationToken = default)
@@ -121,7 +125,7 @@ public class MpiPatientService : IMpiPatientService
         if (patient == null)
             throw new NotFoundException($"Không tìm thấy hồ sơ bệnh nhân với mã MRN: {cleanMrn}");
 
-        return MapToMpiDto(patient);
+        return MapToMpiDto(patient, _dateTimeProvider.VietnamToday);
     }
 
     public async Task<MpiPatientDto> RegisterWalkInPatientAsync(RegisterWalkInPatientRequest request, CancellationToken cancellationToken = default)
@@ -276,7 +280,7 @@ public class MpiPatientService : IMpiPatientService
             throw new ConflictException($"Số CCCD/Định danh '{cleanNid}' đã được sử dụng bởi một hồ sơ bệnh nhân khác.");
         }
 
-        return MapToMpiDto(patient);
+        return MapToMpiDto(patient, _dateTimeProvider.VietnamToday);
     }
 
     public async Task<PatientAllergyDto> AddAllergyAsync(long patientId, CreatePatientAllergyRequest request, CancellationToken cancellationToken = default)
@@ -342,12 +346,11 @@ public class MpiPatientService : IMpiPatientService
             _dbContext.PatientVisits.Any(visit => visit.PatientId == patient.Id && visit.AssignedDoctorId.HasValue && doctorIds.Contains(visit.AssignedDoctorId.Value)));
     }
 
-    private static MpiPatientDto MapToMpiDto(Patient p)
+    private static MpiPatientDto MapToMpiDto(Patient p, DateOnly today)
     {
         int? age = null;
         if (p.DateOfBirth.HasValue)
         {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
             age = today.Year - p.DateOfBirth.Value.Year;
             if (p.DateOfBirth.Value > today.AddYears(-age.Value)) age--;
         }

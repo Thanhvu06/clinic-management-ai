@@ -4,8 +4,10 @@ using System.Threading.Tasks;
 using ClinicManagement.Application.Admin.DTOs;
 using ClinicManagement.Application.Admin.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Domain.Entities;
+using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,14 +16,18 @@ namespace ClinicManagement.Infrastructure.Admin;
 public class AdminSpecialtyService : IAdminSpecialtyService
 {
     private readonly AppDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public AdminSpecialtyService(AppDbContext dbContext)
+    public AdminSpecialtyService(AppDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<PagedResult<AdminSpecialtyDto>> GetSpecialtiesAsync(bool? isActive, string? search, int page, int pageSize)
     {
+        page = Math.Max(1, page);
+        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
         var query = _dbContext.Specialties.AsNoTracking();
 
         if (isActive.HasValue)
@@ -75,6 +81,15 @@ public class AdminSpecialtyService : IAdminSpecialtyService
     {
         var specialty = await _dbContext.Specialties.FirstOrDefaultAsync(s => s.Id == id);
         if (specialty == null) throw new NotFoundException("Chuyên khoa không tồn tại.");
+
+        if (specialty.IsActive && !request.IsActive)
+        {
+            var today = _dateTimeProvider.VietnamToday;
+            var count = await _dbContext.Appointments.CountAsync(a => a.SpecialtyId == id && a.AppointmentDate >= today &&
+                AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status));
+            if (count > 0)
+                throw new BusinessException("SPECIALTY_HAS_ACTIVE_APPOINTMENTS", $"Chuyên khoa còn {count} lịch hẹn cần xử lý trước khi ngừng hoạt động.");
+        }
 
         specialty.Name = request.Name;
         specialty.Description = request.Description;

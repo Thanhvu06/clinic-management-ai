@@ -7,8 +7,11 @@ using ClinicManagement.Application.Admin.Interfaces;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Constants;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Infrastructure.Identity;
+using ClinicManagement.Domain.Enums;
+using ClinicManagement.Infrastructure.Services;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -21,13 +24,15 @@ public class AdminUserService : IAdminUserService
     private readonly RoleManager<IdentityRole<Guid>> _roleManager;
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public AdminUserService(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole<Guid>> roleManager, AppDbContext dbContext, ICurrentUserService currentUserService)
+    public AdminUserService(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole<Guid>> roleManager, AppDbContext dbContext, ICurrentUserService currentUserService, IDateTimeProvider? dateTimeProvider = null)
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _dateTimeProvider = dateTimeProvider ?? new DateTimeProvider();
     }
 
     public async Task<PagedResult<UserDto>> GetUsersAsync(string? role, bool? isActive, string? search, int page, int pageSize)
@@ -137,7 +142,7 @@ public class AdminUserService : IAdminUserService
 
         var result = await _userManager.CreateAsync(user, request.Password);
         if (!result.Succeeded)
-            throw new BusinessException("CREATE_FAILED", string.Join("; ", result.Errors.Select(e => e.Description)));
+            throw new BusinessException("CREATE_FAILED", string.Join("; ", result.Errors.Select(IdentityErrorMessages.ToVietnamese)));
 
         var roleResult = await _userManager.AddToRoleAsync(user, request.Role);
         if (!roleResult.Succeeded)
@@ -168,6 +173,16 @@ public class AdminUserService : IAdminUserService
 
         var user = await _userManager.FindByIdAsync(id.ToString());
         if (user == null) throw new NotFoundException("Tài khoản không tồn tại.");
+
+        if (user.IsActive && !request.IsActive)
+        {
+            var doctorIds = _dbContext.Doctors.Where(d => d.UserId == id).Select(d => d.Id);
+            var today = _dateTimeProvider.VietnamToday;
+            var count = await _dbContext.Appointments.CountAsync(a => doctorIds.Contains(a.DoctorId) && a.AppointmentDate >= today &&
+                AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status));
+            if (count > 0)
+                throw new BusinessException("DOCTOR_HAS_ACTIVE_APPOINTMENTS", $"Bác sĩ còn {count} lịch hẹn cần xử lý trước khi khóa tài khoản.");
+        }
 
         var roles = await _userManager.GetRolesAsync(user);
         if (roles.Contains(RoleNames.Admin) && !request.IsActive)
