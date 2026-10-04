@@ -96,6 +96,7 @@ public class DoctorWorkflowTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         var createDoc = JsonDocument.Parse(await createResponse.Content.ReadAsStringAsync());
         var appointmentId = createDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        await MoveAppointmentToVietnamTodayAsync(appointmentId);
 
         // 2. Reception confirms appointment
         await AuthenticateAsync("rec@test.com");
@@ -166,6 +167,7 @@ public class DoctorWorkflowTests : IntegrationTestBase
         });
         var createDoc = JsonDocument.Parse(await createResponse.Content.ReadAsStringAsync());
         var appointmentId = createDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        await MoveAppointmentToVietnamTodayAsync(appointmentId);
 
         await AuthenticateAsync("rec@test.com");
         await Client.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);
@@ -247,6 +249,7 @@ public class DoctorWorkflowTests : IntegrationTestBase
         });
         var createDoc = JsonDocument.Parse(await createResponse.Content.ReadAsStringAsync());
         var appointmentId = createDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        await MoveAppointmentToVietnamTodayAsync(appointmentId);
 
         await AuthenticateAsync("rec@test.com");
         await Client.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);

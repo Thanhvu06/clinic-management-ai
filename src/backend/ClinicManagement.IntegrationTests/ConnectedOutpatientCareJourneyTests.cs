@@ -379,6 +379,7 @@ public class ConnectedOutpatientCareJourneyTests : IntegrationTestBase
         });
         Assert.Equal(HttpStatusCode.Created, bookRes.StatusCode);
         var apptId = JsonDocument.Parse(await bookRes.Content.ReadAsStringAsync()).RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        date = await MoveAppointmentToVietnamTodayAsync(apptId);
 
         // 2. Reception confirms appointment
         await AuthenticateAsync("rec@test.com");

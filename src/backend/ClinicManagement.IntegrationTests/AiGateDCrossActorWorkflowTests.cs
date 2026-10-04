@@ -49,6 +49,7 @@ public sealed class AiGateDCrossActorWorkflowTests : IntegrationTestBase
             $"Appointment create failed ({(int)appointmentResponse.StatusCode}): {await appointmentResponse.Content.ReadAsStringAsync()}");
         var appointmentData = await ReadDataAsync(appointmentResponse);
         var appointmentId = appointmentData.GetProperty("id").GetInt64();
+        slotDate = await MoveAppointmentToVietnamTodayAsync(appointmentId);
         var appointmentCode = appointmentData.GetProperty("appointmentCode").GetString()!;
         Assert.Equal(seed.AlphaFacilityId, appointmentData.GetProperty("facilityId").GetInt64());
         Assert.Equal("Pending", appointmentData.GetProperty("status").GetString());

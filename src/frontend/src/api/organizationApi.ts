@@ -30,6 +30,7 @@ export interface BuildingDto {
 
 export interface DepartmentDto {
     id: number;
+    specialtyId?: number | null;
     facilityId: number;
     facilityName: string;
     buildingId?: number;

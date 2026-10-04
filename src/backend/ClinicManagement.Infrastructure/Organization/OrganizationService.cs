@@ -273,6 +273,7 @@ public class OrganizationService : IOrganizationService
         return departments.Select(d => new DepartmentDto
         {
             Id = d.Id,
+            SpecialtyId = d.SpecialtyId,
             FacilityId = d.FacilityId,
             FacilityName = d.Facility.Name,
             BuildingId = d.BuildingId,
@@ -312,6 +313,7 @@ public class OrganizationService : IOrganizationService
         return new DepartmentDto
         {
             Id = d.Id,
+            SpecialtyId = d.SpecialtyId,
             FacilityId = d.FacilityId,
             FacilityName = d.Facility.Name,
             BuildingId = d.BuildingId,

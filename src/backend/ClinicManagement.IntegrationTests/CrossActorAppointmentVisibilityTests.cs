@@ -137,6 +137,7 @@ public class CrossActorAppointmentVisibilityTests : IntegrationTestBase
         });
         Assert.Equal(HttpStatusCode.Created, bookRes.StatusCode);
         var aptId = JsonDocument.Parse(await bookRes.Content.ReadAsStringAsync()).RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        await MoveAppointmentToVietnamTodayAsync(aptId);
 
         // Verify doctor received notification for booking
         await AuthenticateAsync("doc@test.com");

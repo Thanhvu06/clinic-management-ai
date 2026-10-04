@@ -795,6 +795,9 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         if (appointment.Status != AppointmentStatus.Confirmed)
             throw new BusinessException("INVALID_STATE_TRANSITION", "Chỉ có thể check-in lịch hẹn ở trạng thái Confirmed.");
 
+        if (appointment.AppointmentDate != _dateTimeProvider.VietnamToday)
+            throw new BusinessException("CHECKIN_NOT_TODAY", $"Lịch hẹn ngày {appointment.AppointmentDate:dd/MM/yyyy}; chỉ tiếp nhận được vào đúng ngày khám.");
+
         var oldStatus = appointment.Status;
         appointment.Status = AppointmentStatus.CheckedIn;
 
@@ -1090,6 +1093,9 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
             if (appointment.Status != AppointmentStatus.Confirmed && appointment.Status != AppointmentStatus.CheckedIn && appointment.Status != AppointmentStatus.Pending)
                 throw new BusinessException("INVALID_STATE", "Chỉ có thể đánh dấu NoShow cho lịch hẹn chưa hoàn thành.");
+
+            if (await _dbContext.PatientVisits.AnyAsync(v => v.AppointmentId == appointment.Id && v.Status != VisitStatus.Cancelled))
+                throw new BusinessException("APPOINTMENT_ALREADY_CHECKED_IN", "Bệnh nhân đã được tiếp nhận vào hàng đợi, không thể đánh dấu vắng mặt.");
 
             if (appointment.AppointmentDate > _dateTimeProvider.VietnamToday ||
                (appointment.AppointmentDate == _dateTimeProvider.VietnamToday && appointment.StartTime > _dateTimeProvider.VietnamTime))

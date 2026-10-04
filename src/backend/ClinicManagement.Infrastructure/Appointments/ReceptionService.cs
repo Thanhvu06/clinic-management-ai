@@ -241,6 +241,9 @@ public class ReceptionService : IReceptionService
         if (appointment.Status != AppointmentStatus.Pending)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể xác nhận lịch hẹn ở trạng thái Pending.");
 
+        if (appointment.AppointmentDate < _dateTimeProvider.VietnamToday)
+            throw new BusinessException("APPOINTMENT_DATE_PASSED", $"Lịch hẹn ngày {appointment.AppointmentDate:dd/MM/yyyy} đã qua, không thể xác nhận.");
+
         var oldStatus = appointment.Status;
         appointment.Status = AppointmentStatus.Confirmed;
 
@@ -318,6 +321,9 @@ public class ReceptionService : IReceptionService
 
         if (appointment.Status != AppointmentStatus.Confirmed)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể check-in lịch hẹn ở trạng thái Confirmed.");
+
+        if (appointment.AppointmentDate != _dateTimeProvider.VietnamToday)
+            throw new BusinessException("CHECKIN_NOT_TODAY", $"Lịch hẹn ngày {appointment.AppointmentDate:dd/MM/yyyy}; chỉ tiếp nhận được vào đúng ngày khám.");
 
         var oldStatus = appointment.Status;
         appointment.Status = AppointmentStatus.CheckedIn;

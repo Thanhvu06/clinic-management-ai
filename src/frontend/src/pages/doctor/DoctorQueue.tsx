@@ -378,8 +378,9 @@ export const DoctorQueue: React.FC = () => {
                                                                 type="button"
                                                                 className="btn-secondary"
                                                                 onClick={() => item.appointmentId && handleCheckIn(item.appointmentId)}
-                                                                disabled={actionLoadingId === item.appointmentId}
-                                                                style={{ padding: '6px 12px', fontSize: '0.8rem', height: '32px' }}
+                                                                disabled={actionLoadingId === item.appointmentId || item.appointmentDate !== toLocalDateString()}
+                                                                title={item.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${item.appointmentDate.split('-').reverse().join('/')}` : undefined}
+                                                                style={{ padding: '6px 12px', fontSize: '0.8rem', height: '40px' }}
                                                             >
                                                                 Tiếp nhận
                                                             </button>

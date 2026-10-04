@@ -36,6 +36,7 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.Created, createAptRes.StatusCode);
         var aptDoc = JsonDocument.Parse(await createAptRes.Content.ReadAsStringAsync());
         var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        await MoveAppointmentToVietnamTodayAsync(appointmentId);
 
         // Reception confirms appointment
         await AuthenticateAsync("rec@test.com");
@@ -192,6 +193,7 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
         });
         var aptDoc = JsonDocument.Parse(await createAptRes.Content.ReadAsStringAsync());
         var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        await MoveAppointmentToVietnamTodayAsync(appointmentId);
 
         // Reception confirms appointment
         await AuthenticateAsync("rec@test.com");
@@ -252,6 +254,7 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.Created, createAptRes.StatusCode);
         var aptDoc = JsonDocument.Parse(await createAptRes.Content.ReadAsStringAsync());
         var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        await MoveAppointmentToVietnamTodayAsync(appointmentId);
 
         await AuthenticateAsync("rec@test.com");
         await Client.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);
@@ -312,6 +315,7 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
         });
         var aptDoc = JsonDocument.Parse(await createAptRes.Content.ReadAsStringAsync());
         var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        await MoveAppointmentToVietnamTodayAsync(appointmentId);
 
         await AuthenticateAsync("rec@test.com");
         await Client.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);
@@ -414,6 +418,7 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
         });
         var aptDoc = System.Text.Json.JsonDocument.Parse(await createAptRes.Content.ReadAsStringAsync());
         var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        await MoveAppointmentToVietnamTodayAsync(appointmentId);
 
         await AuthenticateAsync("rec@test.com");
         await Client.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);
@@ -519,6 +524,7 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.Created, aptRes.StatusCode);
         var aptDoc = System.Text.Json.JsonDocument.Parse(await aptRes.Content.ReadAsStringAsync());
         var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        await MoveAppointmentToVietnamTodayAsync(appointmentId, atomicFactory.Services);
 
         await AuthAtomic("rec@test.com");
         var confRes = await atomicClient.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);
@@ -653,6 +659,7 @@ public class DiagnosticOrderWorkflowTests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.Created, aptRes.StatusCode);
         var aptDoc = System.Text.Json.JsonDocument.Parse(await aptRes.Content.ReadAsStringAsync());
         var appointmentId = aptDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+        await MoveAppointmentToVietnamTodayAsync(appointmentId, atomicFactory.Services);
 
         await AuthAtomic("rec@test.com");
         var confRes = await atomicClient.PostAsync($"/api/v1/reception/appointments/{appointmentId}/confirm", null);
