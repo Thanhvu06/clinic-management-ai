@@ -56,7 +56,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
             fireEvent.click(screen.getByRole('button', { name: 'Mở Trợ lý ClinicCare AI' }));
             fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Tìm lịch khám khoa Tai mũi họng' } });
             fireEvent.click(screen.getByRole('button', { name: 'Gửi tin nhắn' }));
-            expect(await screen.findByText('ClinicCare chưa xử lý được yêu cầu này. Bạn thử diễn đạt lại hoặc chọn một gợi ý bên dưới.')).toBeInTheDocument();
+            expect(await screen.findByText('ClinicCare chưa hiểu câu này. Bạn thử diễn đạt lại hoặc chọn một gợi ý bên dưới.', { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
             expect(screen.queryByText(/keyword/)).not.toBeInTheDocument();
             expect(screen.queryByText('Không thể thực hiện thao tác')).not.toBeInTheDocument();
         },
@@ -345,7 +345,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(screen.getByText('Tôi nên khám chuyên khoa nào?'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Dựa trên mô tả của bạn, tôi gợi ý chuyên khoa Tim Mạch/i)).toBeInTheDocument();
+            expect(screen.getByText(/Dựa trên mô tả của bạn, tôi gợi ý chuyên khoa Tim Mạch/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
             expect(screen.getByRole('button', { name: 'Xem lịch khám khoa Tim Mạch' })).toBeInTheDocument();
             expect(screen.getByText('Xem chi tiết khoa Tim Mạch')).toBeInTheDocument();
         });
@@ -488,7 +488,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
                     })
                 })
             );
-            expect(screen.getByText(/Đặt lịch khám thành công/i)).toBeInTheDocument();
+            expect(screen.getByText(/Đặt lịch khám thành công/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
             expect(screen.getByText(/APPT-20260915-001/i)).toBeInTheDocument();
         });
     });
@@ -678,8 +678,8 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(screen.getByText('Liên hệ lễ tân'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Thông tin Quầy Tiếp Đón & Lễ Tân/i)).toBeInTheDocument();
-            expect(screen.getByText(/Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống/i)).toBeInTheDocument();
+            expect(screen.getByText(/Thông tin Quầy Tiếp Đón & Lễ Tân/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
+            expect(screen.getByText(/Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
             // Did not navigate to /contact
             expect(screen.getByTestId('location-display').textContent).toBe('/patient');
         });
@@ -736,7 +736,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(screen.getByText('Kiểm tra lại thông tin'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Chưa có mã xác nhận đặt lịch hợp lệ từ hệ thống/i)).toBeInTheDocument();
+            expect(screen.getByText(/Chưa có mã xác nhận đặt lịch hợp lệ từ hệ thống/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
             expect(screen.queryByText('Xác nhận đặt lịch')).not.toBeInTheDocument();
         });
     });
@@ -797,7 +797,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(screen.getByText('Liên hệ lễ tân'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống/i)).toBeInTheDocument();
+            expect(screen.getByText(/Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
     });
 
@@ -846,7 +846,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(screen.getByText('Xem lại thông tin'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Thông tin đặt lịch chưa đầy đủ/i)).toBeInTheDocument();
+            expect(screen.getByText(/Thông tin đặt lịch chưa đầy đủ/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
             expect(screen.queryByText('Xác nhận đặt lịch')).not.toBeInTheDocument();
         });
     });
@@ -920,7 +920,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(screen.getByText('Xác nhận đặt lịch'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Lý do khám phải từ 10 đến 500 ký tự/i)).toBeInTheDocument();
+            expect(screen.getByText(/Lý do khám phải từ 10 đến 500 ký tự/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
 
         // Must NOT have called /appointments
@@ -1092,7 +1092,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(screen.getByText('Chọn BS Nguyễn Văn A'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Thao tác này thuộc phiên bản thảo lịch cũ \(v1\)/i)).toBeInTheDocument();
+            expect(screen.getByText(/Thao tác này thuộc phiên bản thảo lịch cũ \(v1\)/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
     });
 
@@ -1295,7 +1295,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(screen.getByText('Xác nhận đặt lịch v1'));
 
         await waitFor(() => {
-            expect(screen.getByText(/thuộc phiên bản cũ \(v1\)/i)).toBeInTheDocument();
+            expect(screen.getByText(/thuộc phiên bản cũ \(v1\)/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
         expect(axiosClient.post).toHaveBeenCalledTimes(1); // Only the initial /ai/chat call
     });
@@ -1361,7 +1361,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Đã hủy bản nháp đặt lịch hiện tại/i)).toBeInTheDocument();
+            expect(screen.getByText(/Đã hủy bản nháp đặt lịch hiện tại/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
 
         // Completed choice lists are collapsed: cancelled history cannot be selected.
@@ -1431,7 +1431,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.change(chatInput, { target: { value: 'Giá khám bao nhiêu' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
         await waitFor(() => {
-            expect(screen.getByText(/150\.000đ/i)).toBeInTheDocument();
+            expect(screen.getByText(/150\.000đ/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
         expect(screen.getByText('Chế độ nội bộ')).toBeInTheDocument();
 
@@ -1556,7 +1556,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.change(chatInput, { target: { value: 'Đổi sang giờ 10:00 và lý do mới' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
         await waitFor(() => {
-            expect(screen.getByText('Đã cập nhật sang bản nháp B')).toBeInTheDocument();
+            expect(screen.getByText('Đã cập nhật sang bản nháp B', { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
 
         // Now resolve stale Request A
@@ -1709,13 +1709,13 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.change(chatInput, { target: { value: 'Hủy đặt lịch' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
         await waitFor(() => {
-            expect(screen.getByText('Đã hủy bản nháp A')).toBeInTheDocument();
+            expect(screen.getByText('Đã hủy bản nháp A', { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
 
         fireEvent.change(chatInput, { target: { value: 'Tạo lịch B' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
         await waitFor(() => {
-            expect(screen.getByText('Bản nháp B mới')).toBeInTheDocument();
+            expect(screen.getByText('Bản nháp B mới', { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
 
         // 3. Reject stale Request A with SLOT_ALREADY_BOOKED
@@ -1933,7 +1933,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         // (2d) Response in valid context updates success state normally
         await waitFor(() => {
-            expect(screen.getByText(/Đặt lịch khám thành công/i)).toBeInTheDocument();
+            expect(screen.getByText(/Đặt lịch khám thành công/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
             expect(screen.getAllByText(/APT-999/i).length).toBeGreaterThan(0);
         });
     });
@@ -2240,7 +2240,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         // Wait for timeout error notice to render so attempt status is updated to "uncertain"
         await waitFor(() => {
-            expect(screen.getByText(/timeout of 15000ms exceeded/i)).toBeInTheDocument();
+            expect(screen.getByText(/timeout of 15000ms exceeded/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
 
         // Unmount BOTH Widget and ChatProvider
@@ -2422,12 +2422,12 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         const k1 = capturedKeys[0];
 
         // Turn 2: cancel draft via chat UI/API
-        await waitFor(() => expect(screen.getByText(/Network timeout/i)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText(/Network timeout/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument());
         fireEvent.change(input, { target: { value: 'Hủy đặt lịch' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Đã hủy bản nháp đặt lịch hiện tại/i)).toBeInTheDocument();
+            expect(screen.getByText(/Đã hủy bản nháp đặt lịch hiện tại/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
         expect(sessionStorage.getItem('cliniccare_pending_booking_attempt_pat-1')).toBeNull();
 
@@ -2688,7 +2688,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         await waitFor(() => expect(capturedKeys).toHaveLength(1));
         const k1FromWidget = capturedKeys[0];
-        await waitFor(() => expect(screen.getByText(/Network timeout in widget/i)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText(/Network timeout in widget/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument());
 
         unmount();
 
@@ -2845,7 +2845,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         const k1 = capturedKeys[0];
 
         // 2. User changes slot/reason -> receives v2 draft
-        await waitFor(() => expect(screen.getByText(/Temporary network timeout/i)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText(/Temporary network timeout/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument());
         fireEvent.change(input, { target: { value: 'Đổi sang 10h và cập nhật triệu chứng' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 

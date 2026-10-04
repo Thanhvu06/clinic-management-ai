@@ -188,7 +188,7 @@ describe('P0-1 earliest-slot booking context', () => {
                 expect.objectContaining({ signal: expect.any(Object) })
             );
         });
-        expect(await screen.findByText(/chưa chọn chuyên khoa/i)).toBeInTheDocument();
+        expect(await screen.findByText(/chưa chọn chuyên khoa/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         expect(screen.queryByText(/Xác nhận đặt lịch khám/i)).not.toBeInTheDocument();
     });
 
@@ -200,7 +200,7 @@ describe('P0-1 earliest-slot booking context', () => {
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
         fireEvent.click(screen.getByText('Tìm lịch khám sớm nhất.'));
 
-        expect(await screen.findByText(/Máy chủ ClinicCare đang gặp sự cố tạm thời/i)).toBeInTheDocument();
+        expect(await screen.findByText(/Máy chủ ClinicCare đang gặp sự cố tạm thời/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         expect(screen.getByTestId('draft-json')).toHaveTextContent('"specialtyId":1');
         expect(screen.getByText('Mở trang Đặt lịch khám')).toBeInTheDocument();
     });
@@ -227,7 +227,7 @@ describe('P0-1 earliest-slot booking context', () => {
             );
         });
 
-        expect(await screen.findByText(/đang dùng chuyên khoa Tim mạch/i)).toBeInTheDocument();
+        expect(await screen.findByText(/đang dùng chuyên khoa Tim mạch/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         expect(screen.getByText('08:00 - 15/09 · BS Nguyễn An')).toBeInTheDocument();
         expect(screen.queryByText('Mở trang Đặt lịch khám')).not.toBeInTheDocument();
     });
