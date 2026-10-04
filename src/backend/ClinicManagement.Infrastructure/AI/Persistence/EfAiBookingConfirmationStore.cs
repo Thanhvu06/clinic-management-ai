@@ -62,10 +62,11 @@ public sealed class EfAiBookingConfirmationStore : IAiBookingConfirmationStore
                     SpecialtyId = request.SpecialtyId,
                     DoctorId = request.DoctorId,
                     SlotId = request.SlotId,
+                    FacilityId = request.FacilityId,
                     SlotDate = request.SlotDate,
                     StartTime = request.StartTime,
                     EndTime = request.EndTime,
-                    ReasonHash = AiBookingConfirmationHasher.Compute(request.Reason),
+                    ReasonHash = AiBookingConfirmationHasher.Compute(request.Reason, request.FacilityId),
                     CreatedAtUtc = now,
                     ExpiresAtUtc = now.Add(ttl)
                 };
@@ -121,10 +122,11 @@ public sealed class EfAiBookingConfirmationStore : IAiBookingConfirmationStore
             confirmation.SpecialtyId != request.SpecialtyId ||
             confirmation.DoctorId != request.DoctorId ||
             confirmation.SlotId != request.SlotId ||
+            (confirmation.FacilityId.HasValue && confirmation.FacilityId != request.FacilityId) ||
             confirmation.SlotDate != request.SlotDate ||
             confirmation.StartTime != request.StartTime ||
             confirmation.EndTime != request.EndTime ||
-            !string.Equals(confirmation.ReasonHash, AiBookingConfirmationHasher.Compute(request.Reason), StringComparison.Ordinal))
+            !string.Equals(confirmation.ReasonHash, AiBookingConfirmationHasher.Compute(request.Reason, confirmation.FacilityId), StringComparison.Ordinal))
         {
             return AiBookingConfirmationValidationResult.Fail("CONFIRMATION_PAYLOAD_MISMATCH", "Mã xác nhận AI không khớp với thông tin đặt lịch hiện tại.");
         }
@@ -245,9 +247,10 @@ public sealed class EfAiBookingConfirmationStore : IAiBookingConfirmationStore
 
 public static class AiBookingConfirmationHasher
 {
-    public static string Compute(string reason)
+    public static string Compute(string reason, long? facilityId = null)
     {
         var normalized = (reason ?? string.Empty).Trim();
+        if (facilityId.HasValue) normalized = facilityId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + normalized;
         using var sha = SHA256.Create();
         return Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(normalized)));
     }

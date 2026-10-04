@@ -109,7 +109,7 @@ public class AppointmentService : IAppointmentService
         // A doctor can have active assignments at several facilities. Bind the
         // appointment to a real facility now; do not infer it later from an
         // assignment that might be unrelated or changed after booking.
-        var appointmentFacilityId = await ResolveAppointmentFacilityAsync(request, bookingDoctorUserId.Value);
+        var appointmentFacilityId = await ResolveAppointmentFacilityAsync(request);
 
         // Idempotency check: If same patient already holds this slot with an active appointment, verify payload matches
         var initialExisting = await _dbContext.Appointments
@@ -225,6 +225,7 @@ public class AppointmentService : IAppointmentService
                     SpecialtyId = request.SpecialtyId,
                     DoctorId = request.DoctorId,
                     SlotId = request.AppointmentSlotId,
+                    FacilityId = request.FacilityId,
                     SlotDate = confirmationSlot.SlotDate,
                     StartTime = confirmationSlot.StartTime,
                     EndTime = confirmationSlot.EndTime,
@@ -745,9 +746,10 @@ public class AppointmentService : IAppointmentService
             .ToListAsync();
     }
 
-    public async Task<List<AppointmentLookupDto>> LookupAppointmentsAsync(string query)
+    public async Task<List<AppointmentLookupDto>> LookupAppointmentsAsync(string query, string? phone = null)
     {
-        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 4)
+        var cleanPhone = NormalizeLookupPhone(phone);
+        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 4 || string.IsNullOrEmpty(cleanPhone))
             return new List<AppointmentLookupDto>();
 
         var cleanQuery = query.Trim();
@@ -758,7 +760,7 @@ public class AppointmentService : IAppointmentService
                         join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
                         join d in _dbContext.Doctors on a.DoctorId equals d.Id
                         join du in _dbContext.Users on d.UserId equals du.Id
-                        where a.AppointmentCode == cleanQuery.ToUpper() || pu.PhoneNumber == cleanQuery
+                        where a.AppointmentCode == cleanQuery.ToUpper()
                         orderby a.AppointmentDate descending, a.StartTime descending
                         select new
                         {
@@ -775,7 +777,7 @@ public class AppointmentService : IAppointmentService
 
         var items = await queryable.Take(10).ToListAsync();
 
-        return items.Select(x => new AppointmentLookupDto
+        return items.Where(x => NormalizeLookupPhone(x.PhoneNumber) == cleanPhone).Select(x => new AppointmentLookupDto
         {
             AppointmentCode = x.AppointmentCode,
             AppointmentDate = x.AppointmentDate,
@@ -787,6 +789,14 @@ public class AppointmentService : IAppointmentService
             MaskedPatientName = MaskName(x.FullName),
             MaskedPhoneNumber = MaskPhone(x.PhoneNumber)
         }).ToList();
+    }
+
+    private static string NormalizeLookupPhone(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return string.Empty;
+        if (phone.Any(character => !char.IsAsciiDigit(character) && !char.IsWhiteSpace(character) && character is not ('+' or '-' or '(' or ')'))) return string.Empty;
+        var digits = new string(phone.Where(char.IsAsciiDigit).ToArray());
+        return digits.StartsWith("84", StringComparison.Ordinal) && digits.Length == 11 ? "0" + digits[2..] : digits;
     }
 
     private static string MaskName(string? name)
@@ -803,42 +813,26 @@ public class AppointmentService : IAppointmentService
         return phone.Substring(0, 3) + "****" + phone.Substring(phone.Length - 3);
     }
 
-    private async Task<long> ResolveAppointmentFacilityAsync(CreateAppointmentRequest request, Guid doctorUserId)
+    private async Task<long> ResolveAppointmentFacilityAsync(CreateAppointmentRequest request)
     {
         // A facility is eligible only when the doctor has a live Doctor
         // assignment there which can serve the requested specialty. This keeps
         // the booking binding independent of a later check-in department.
-        var candidates = await (from assignment in _dbContext.StaffFacilityAssignments.AsNoTracking()
-                                join facility in _dbContext.Facilities.AsNoTracking() on assignment.FacilityId equals facility.Id
-                                join department in _dbContext.Departments.AsNoTracking() on assignment.FacilityId equals department.FacilityId
-                                where assignment.UserId == doctorUserId &&
-                                      assignment.IsActive &&
-                                      assignment.Role == "Doctor" &&
-                                      facility.IsActive &&
-                                      department.IsActive &&
-                                      department.SpecialtyId == request.SpecialtyId &&
-                                      (!assignment.DepartmentId.HasValue || assignment.DepartmentId == department.Id)
-                                select new { assignment.FacilityId, assignment.IsPrimary })
-            .ToListAsync();
-
-        var facilities = candidates
-            .GroupBy(x => x.FacilityId)
-            .Select(group => new { FacilityId = group.Key, IsPrimary = group.Any(x => x.IsPrimary) })
-            .ToList();
+        var facilities = await AppointmentFacilityResolver.GetEligibleAsync(_dbContext, request.DoctorId, request.SpecialtyId);
 
         if (request.FacilityId.HasValue)
         {
-            if (request.FacilityId.Value <= 0 || !facilities.Any(x => x.FacilityId == request.FacilityId.Value))
+            if (request.FacilityId.Value <= 0 || !facilities.Any(x => x.Id == request.FacilityId.Value))
                 throw new BusinessException("FACILITY_SCOPE_DENIED", "Cơ sở được chọn không có bác sĩ/chuyên khoa khả dụng cho lịch hẹn này.");
             return request.FacilityId.Value;
         }
 
         if (facilities.Count == 1)
-            return facilities[0].FacilityId;
+            return facilities[0].Id;
 
         var primaryFacilities = facilities.Where(x => x.IsPrimary).ToList();
         if (primaryFacilities.Count == 1)
-            return primaryFacilities[0].FacilityId;
+            return primaryFacilities[0].Id;
 
         throw new BusinessException(
             "FACILITY_SELECTION_REQUIRED",

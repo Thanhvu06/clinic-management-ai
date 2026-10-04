@@ -14,6 +14,7 @@ public class AiBookingConfirmation
     public long SpecialtyId { get; set; }
     public long DoctorId { get; set; }
     public long SlotId { get; set; }
+    public long? FacilityId { get; set; }
     public DateOnly SlotDate { get; set; }
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }

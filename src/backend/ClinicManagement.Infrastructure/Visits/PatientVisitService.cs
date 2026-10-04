@@ -1085,23 +1085,6 @@ public class PatientVisitService : IPatientVisitService
 
         if (patient != null)
         {
-            // Backfill CCCD/Address if missing
-            if (string.IsNullOrEmpty(patient.NationalId) && !string.IsNullOrEmpty(cleanCccd))
-            {
-                patient.NationalId = cleanCccd;
-            }
-            if (string.IsNullOrEmpty(patient.Address) && !string.IsNullOrEmpty(request.Address))
-            {
-                patient.Address = request.Address.Trim();
-            }
-            if (!patient.DateOfBirth.HasValue && request.DateOfBirth.HasValue)
-            {
-                patient.DateOfBirth = request.DateOfBirth;
-            }
-            if (!patient.Gender.HasValue && request.Gender.HasValue)
-            {
-                patient.Gender = request.Gender;
-            }
             return patient;
         }
 
@@ -1120,6 +1103,24 @@ public class PatientVisitService : IPatientVisitService
             MedicalRecordNumber = mrn,
             PrimaryFacilityId = facilityId
         };
+
+        foreach (var allergy in request.Allergies)
+        {
+            var severity = Enum.TryParse<AllergySeverity>(allergy.Severity, true, out var parsed) ? parsed : AllergySeverity.Moderate;
+            patient.Allergies.Add(new PatientAllergy
+            {
+                AllergenName = allergy.Allergen.Trim(), Severity = severity,
+                ReactionDescription = allergy.Reaction?.Trim(), AllergenType = AllergenType.Drug
+            });
+        }
+        if (request.EmergencyContact is { } contact)
+        {
+            patient.EmergencyContacts.Add(new EmergencyContact
+            {
+                FullName = contact.ContactName.Trim(), Relationship = contact.Relationship.Trim(),
+                PhoneNumber = contact.PhoneNumber.Trim(), IsGuardian = contact.IsGuardian, IsPrimary = true
+            });
+        }
 
         _dbContext.Patients.Add(patient);
         await _dbContext.SaveChangesAsync(cancellationToken);

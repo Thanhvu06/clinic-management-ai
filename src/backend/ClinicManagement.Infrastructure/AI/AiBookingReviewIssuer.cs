@@ -90,7 +90,7 @@ public sealed class AiBookingReviewIssuer
             currentUserId,
             cleanDraftId,
             draftVersion,
-            facilityId: null,
+            facilityId: draft.FacilityId,
             cancellationToken: cancellationToken);
         if (!touch.IsAccepted)
         {
@@ -153,6 +153,7 @@ public sealed class AiBookingReviewIssuer
                 SpecialtyId = draft.SpecialtyId!.Value,
                 DoctorId = draft.DoctorId!.Value,
                 SlotId = draft.SlotId!.Value,
+                FacilityId = draft.FacilityId,
                 SlotDate = slot.SlotDate.Value,
                 StartTime = slot.StartTime.Value,
                 EndTime = slot.EndTime.Value,
@@ -189,6 +190,8 @@ public sealed class AiBookingReviewIssuer
             SessionId = cleanSessionId,
             DraftId = cleanDraftId,
             SpecialtyId = draft.SpecialtyId,
+            FacilityId = draft.FacilityId,
+            FacilityName = draft.FacilityName,
             SpecialtyName = draft.SpecialtyName,
             DoctorId = draft.DoctorId,
             DoctorName = draft.DoctorName,

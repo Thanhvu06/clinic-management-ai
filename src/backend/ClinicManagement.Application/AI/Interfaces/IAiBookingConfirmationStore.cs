@@ -14,6 +14,7 @@ public class CreateAiBookingConfirmationRequest
     public long SpecialtyId { get; init; }
     public long DoctorId { get; init; }
     public long SlotId { get; init; }
+    public long? FacilityId { get; init; }
     public DateOnly SlotDate { get; init; }
     public TimeOnly StartTime { get; init; }
     public TimeOnly EndTime { get; init; }
@@ -32,6 +33,7 @@ public class ValidateAiBookingConfirmationRequest
     public long SpecialtyId { get; init; }
     public long DoctorId { get; init; }
     public long SlotId { get; init; }
+    public long? FacilityId { get; init; }
     public DateOnly SlotDate { get; init; }
     public TimeOnly StartTime { get; init; }
     public TimeOnly EndTime { get; init; }

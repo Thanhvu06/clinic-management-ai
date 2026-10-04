@@ -7,6 +7,8 @@ using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.Mpi.DTOs;
 using ClinicManagement.Application.Mpi.Interfaces;
+using ClinicManagement.Application.Authentication.Interfaces;
+using ClinicManagement.Application.Common.Constants;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
@@ -19,16 +21,18 @@ public class MpiPatientService : IMpiPatientService
     private static readonly SemaphoreSlim WalkInMrnAllocationSemaphore = new(1, 1);
     private readonly AppDbContext _dbContext;
     private readonly IMrnGenerator _mrnGenerator;
+    private readonly ICurrentUserService? _currentUser;
 
-    public MpiPatientService(AppDbContext dbContext, IMrnGenerator mrnGenerator)
+    public MpiPatientService(AppDbContext dbContext, IMrnGenerator mrnGenerator, ICurrentUserService? currentUser = null)
     {
         _dbContext = dbContext;
         _mrnGenerator = mrnGenerator;
+        _currentUser = currentUser;
     }
 
     public async Task<PagedResult<MpiPatientDto>> SearchPatientsAsync(PatientSearchQuery query, CancellationToken cancellationToken = default)
     {
-        var dbQuery = _dbContext.Patients
+        var dbQuery = (await VisiblePatientsAsync(cancellationToken))
             .AsNoTracking()
             .Include(p => p.PrimaryFacility)
             .Include(p => p.Allergies)
@@ -91,7 +95,7 @@ public class MpiPatientService : IMpiPatientService
 
     public async Task<MpiPatientDto> GetPatientByIdAsync(long id, CancellationToken cancellationToken = default)
     {
-        var patient = await _dbContext.Patients
+        var patient = await (await VisiblePatientsAsync(cancellationToken))
             .AsNoTracking()
             .Include(p => p.PrimaryFacility)
             .Include(p => p.Allergies)
@@ -107,7 +111,7 @@ public class MpiPatientService : IMpiPatientService
     public async Task<MpiPatientDto> GetPatientByMrnAsync(string mrn, CancellationToken cancellationToken = default)
     {
         var cleanMrn = mrn.Trim();
-        var patient = await _dbContext.Patients
+        var patient = await (await VisiblePatientsAsync(cancellationToken))
             .AsNoTracking()
             .Include(p => p.PrimaryFacility)
             .Include(p => p.Allergies)
@@ -269,7 +273,7 @@ public class MpiPatientService : IMpiPatientService
 
     public async Task<PatientAllergyDto> AddAllergyAsync(long patientId, CreatePatientAllergyRequest request, CancellationToken cancellationToken = default)
     {
-        var patientExists = await _dbContext.Patients.AnyAsync(p => p.Id == patientId, cancellationToken);
+        var patientExists = await (await VisiblePatientsAsync(cancellationToken)).AnyAsync(p => p.Id == patientId, cancellationToken);
         if (!patientExists)
             throw new NotFoundException($"Không tìm thấy bệnh nhân với ID: {patientId}");
 
@@ -310,6 +314,21 @@ public class MpiPatientService : IMpiPatientService
 
         _dbContext.PatientAllergies.Remove(allergy);
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<IQueryable<Patient>> VisiblePatientsAsync(CancellationToken cancellationToken)
+    {
+        var query = _dbContext.Patients.AsQueryable();
+        var userId = _currentUser?.UserId;
+        if (!userId.HasValue) return query;
+        var roles = await (from membership in _dbContext.UserRoles
+                           join role in _dbContext.Roles on membership.RoleId equals role.Id
+                           where membership.UserId == userId.Value
+                           select role.Name).ToListAsync(cancellationToken);
+        if (!roles.Contains(RoleNames.Doctor) || roles.Contains(RoleNames.Admin) || roles.Contains(RoleNames.Receptionist)) return query;
+        var doctorIds = _dbContext.Doctors.Where(doctor => doctor.UserId == userId.Value).Select(doctor => doctor.Id);
+        return query.Where(patient => _dbContext.Appointments.Any(appointment => appointment.PatientId == patient.Id && doctorIds.Contains(appointment.DoctorId)) ||
+            _dbContext.PatientVisits.Any(visit => visit.PatientId == patient.Id && visit.AssignedDoctorId.HasValue && doctorIds.Contains(visit.AssignedDoctorId.Value)));
     }
 
     private static MpiPatientDto MapToMpiDto(Patient p)

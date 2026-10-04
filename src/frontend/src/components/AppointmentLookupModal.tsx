@@ -22,6 +22,7 @@ interface AppointmentLookupModalProps {
 
 export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ isOpen, onClose }) => {
     const [query, setQuery] = useState('');
+    const [phone, setPhone] = useState('');
     const [results, setResults] = useState<AppointmentLookupDto[]>([]);
     const [loading, setLoading] = useState(false);
     const [searched, setSearched] = useState(false);
@@ -32,8 +33,8 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
         const trimmed = query.trim();
-        if (!trimmed) {
-            setErrorMsg('Vui lòng nhập mã lịch hẹn (ví dụ: APT-...) hoặc số điện thoại.');
+        if (!trimmed || !phone.trim()) {
+            setErrorMsg('Vui lòng nhập mã lịch hẹn và số điện thoại chủ lịch hẹn.');
             return;
         }
 
@@ -47,7 +48,7 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
         setSearched(true);
 
         try {
-            const res = await axiosClient.get<any, ApiResponse<AppointmentLookupDto[]>>(`/appointments/lookup?query=${encodeURIComponent(trimmed)}`);
+            const res = await axiosClient.get<any, ApiResponse<AppointmentLookupDto[]>>(`/appointments/lookup?query=${encodeURIComponent(trimmed)}&phone=${encodeURIComponent(phone.trim())}`);
             if (res.success && res.data) {
                 setResults(res.data);
             } else {
@@ -135,7 +136,7 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
                             Tra cứu lịch hẹn khám bệnh
                         </h3>
                         <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.875rem' }}>
-                            Nhập mã lịch hẹn (APT-...) hoặc số điện thoại đã đăng ký
+                            Nhập mã lịch hẹn (APT-...) và số điện thoại đã đăng ký
                         </p>
                     </div>
                     <button
@@ -159,13 +160,14 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
 
                 {/* Body */}
                 <div style={{ padding: '24px' }}>
-                    <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                    <form onSubmit={handleSearch} style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '20px' }}>
                         <div style={{ position: 'relative', flex: 1 }}>
                             <Search size={18} style={{ position: 'absolute', left: '14px', top: '13px', color: '#94a3b8' }} />
                             <input
                                 type="text"
-                                aria-label="Mã lịch hẹn hoặc số điện thoại"
-                                placeholder="Ví dụ: APT-260829-0001 hoặc 0900000004"
+                                required
+                                aria-label="Mã lịch hẹn"
+                                placeholder="Ví dụ: APT-260829-0001"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 style={{
@@ -179,6 +181,9 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
                                 }}
                             />
                         </div>
+                        <input type="tel" aria-label="Số điện thoại chủ lịch hẹn" placeholder="Số điện thoại đã đăng ký" required
+                            value={phone} onChange={event => setPhone(event.target.value)}
+                            style={{ minWidth: 0, flex: 1, padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #cbd5e1', fontSize: '0.95rem' }} />
                         <button
                             type="submit"
                             disabled={loading}

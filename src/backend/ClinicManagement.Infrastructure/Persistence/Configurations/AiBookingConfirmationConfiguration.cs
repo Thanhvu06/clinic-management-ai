@@ -10,6 +10,7 @@ public class AiBookingConfirmationConfiguration : IEntityTypeConfiguration<AiBoo
     {
         builder.ToTable("AiBookingConfirmations");
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.FacilityId).IsRequired(false);
 
         builder.Property(x => x.ConfirmationId).IsRequired().HasMaxLength(64);
         builder.Property(x => x.SessionId).IsRequired().HasMaxLength(128);

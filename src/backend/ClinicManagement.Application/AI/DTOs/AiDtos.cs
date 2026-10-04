@@ -489,6 +489,7 @@ public static class AiActionValidator
 
 public class AiActionPayloadDto
 {
+    public long? FacilityId { get; set; }
     public long? SpecialtyId { get; set; }
     public string? SpecialtyCode { get; set; }
     public string? SpecialtyName { get; set; }
@@ -528,6 +529,8 @@ public class AiActionDto
 
 public class AiBookingDraftDto
 {
+    public long? FacilityId { get; set; }
+    public string? FacilityName { get; set; }
     public string? DraftId { get; set; }
     public string? SessionId { get; set; }
     public string? ContextSnapshotId { get; set; }

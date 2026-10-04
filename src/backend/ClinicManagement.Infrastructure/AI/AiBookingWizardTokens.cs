@@ -6,11 +6,11 @@ using Microsoft.AspNetCore.WebUtilities;
 
 namespace ClinicManagement.Infrastructure.AI;
 
-public enum BookingWizardStage : byte { Specialty, Doctor, Day, Slot, Reason, Review }
+public enum BookingWizardStage : byte { Specialty, Doctor, Day, Slot, Facility, Reason, Review }
 public enum BookingWizardOperation : byte { Pick, Back, Reason, Preset }
 public sealed record BookingWizardSelection(
     Guid DraftId, BookingWizardStage Stage = BookingWizardStage.Specialty,
-    long SpecialtyId = 0, long DoctorId = 0, int Day = 0, long SlotId = 0, byte Preset = 0, bool AnyDoctor = false);
+    long SpecialtyId = 0, long DoctorId = 0, int Day = 0, long SlotId = 0, byte Preset = 0, bool AnyDoctor = false, long? FacilityId = null);
 
 /// <summary>Compact encrypted, authenticated capabilities; no server-side wizard state.</summary>
 public sealed class AiBookingWizardTokens
@@ -28,7 +28,7 @@ public sealed class AiBookingWizardTokens
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
-            writer.Write((byte)1);
+            writer.Write((byte)2);
             writer.Write(Binding(user, session));
             writer.Write(_clock.UtcNow.AddMinutes(15).Ticks);
             writer.Write(selection.DraftId.ToByteArray());
@@ -40,6 +40,7 @@ public sealed class AiBookingWizardTokens
             writer.Write(selection.SlotId);
             writer.Write(selection.Preset);
             writer.Write(selection.AnyDoctor);
+            writer.Write(selection.FacilityId ?? 0);
         }
         return WebEncoders.Base64UrlEncode(_protector.Protect(stream.ToArray(), TimeSpan.FromMinutes(15)));
     }
@@ -52,12 +53,15 @@ public sealed class AiBookingWizardTokens
             var bytes = _protector.Unprotect(WebEncoders.Base64UrlDecode(token), out _);
             using var stream = new MemoryStream(bytes);
             using var reader = new BinaryReader(stream);
-            if (reader.ReadByte() != 1 || !CryptographicOperations.FixedTimeEquals(reader.ReadBytes(32), Binding(user, session)) ||
+            if (reader.ReadByte() != 2 || !CryptographicOperations.FixedTimeEquals(reader.ReadBytes(32), Binding(user, session)) ||
                 reader.ReadInt64() <= _clock.UtcNow.Ticks) return null;
             var draft = new Guid(reader.ReadBytes(16));
             var operation = (BookingWizardOperation)reader.ReadByte();
             var stage = (BookingWizardStage)reader.ReadByte();
             var selection = new BookingWizardSelection(draft, stage, reader.ReadInt64(), reader.ReadInt64(), reader.ReadInt32(), reader.ReadInt64(), reader.ReadByte(), reader.ReadBoolean());
+            var facilityId = reader.ReadInt64();
+            if (facilityId < 0) return null;
+            selection = selection with { FacilityId = facilityId == 0 ? null : facilityId };
             if (stream.Position != stream.Length || !Enum.IsDefined(stage)) return null;
             return (requestStep, operation) switch
             {
