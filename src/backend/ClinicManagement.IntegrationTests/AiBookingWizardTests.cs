@@ -37,6 +37,47 @@ public sealed class AiBookingWizardTests(CustomWebApplicationFactory factory) : 
     private static int _sequence;
 
     [Fact]
+    public async Task Multi_facility_wizard_exposes_missing_facility_binding_in_review_contract()
+    {
+        Factory.MockAiProvider.Invocations.Clear();
+        var client = await CreateAuthenticatedClientAsync("pat1@test.com");
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var assignments = await db.StaffFacilityAssignments.Where(x => x.UserId == DoctorId && x.IsActive && x.Role == "Doctor").ToListAsync();
+        var originalPrimary = assignments.ToDictionary(x => x.Id, x => x.IsPrimary);
+        foreach (var assignment in assignments) assignment.IsPrimary = false;
+        var facility = new Facility { Code = "batch-" + Guid.NewGuid().ToString("N")[..8], Name = "Cơ sở thử nghiệm thứ hai", Address = "Synthetic", IsActive = true };
+        db.Facilities.Add(facility);
+        await db.SaveChangesAsync();
+        var department = new Department { FacilityId = facility.Id, Code = "batch-" + Guid.NewGuid().ToString("N")[..8], Name = "Chuyên khoa thử nghiệm", SpecialtyId = SpecialtyEntityId, IsActive = true };
+        db.Departments.Add(department);
+        var additional = new StaffFacilityAssignment { UserId = DoctorId, FacilityId = facility.Id, Role = "Doctor", IsActive = true, IsPrimary = false };
+        db.StaffFacilityAssignments.Add(additional);
+        await db.SaveChangesAsync();
+        try
+        {
+            var slot = await FixtureAsync();
+            var session = Session();
+            var reason = await ToReasonAsync(client, session, slot);
+            var review = await StepAsync(client, session, "reason", reason.ReasonToken, Reason);
+            Assert.Equal("review", review.Step);
+            Assert.DoesNotContain("facilityId", JsonSerializer.Serialize(review.ReviewAction!.Payload, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            var result = await ConfirmAsync(client, review.ReviewAction.Payload, Guid.NewGuid().ToString("N"));
+            Assert.False(result.IsSuccessStatusCode);
+            Assert.Contains("FACILITY_SELECTION_REQUIRED", await result.Content.ReadAsStringAsync());
+            Assert.False(await db.Appointments.AnyAsync(x => x.AppointmentSlotId == slot.Id));
+        }
+        finally
+        {
+            db.StaffFacilityAssignments.Remove(additional);
+            db.Departments.Remove(department);
+            db.Facilities.Remove(facility);
+            foreach (var assignment in assignments) assignment.IsPrimary = originalPrimary[assignment.Id];
+            await db.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
     public async Task Complete_token_flow_only_writes_review_tables_then_existing_endpoint_is_idempotent()
     {
         Factory.MockAiProvider.Invocations.Clear();

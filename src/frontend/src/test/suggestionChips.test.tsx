@@ -65,7 +65,10 @@ const deferred = <T,>() => {
 const menuGroup = (name: string) => screen.findByRole('group', { name });
 
 describe('Role suggestion buttons', () => {
-    it.each([[false, 'TÔI CÓ QUYỀN HẠN GÌ?', 'Help'], [true, 'TÔI CÓ QUYỀN HẠN GÌ?', 'Help'], [false, 'Lịch hẹn của mình', 'ViewAppointments'], [true, 'Lịch hẹn của mình', 'ViewAppointments']] as const)('routes patient help/read aliases through the existing read-only endpoint (widget=%s, text=%s)', async (widget, text, intent) => {
+    it.each([[false, 'TÔI CÓ QUYỀN HẠN GÌ?', 'Help'], [true, 'TÔI CÓ QUYỀN HẠN GÌ?', 'Help'], [false, 'Lịch hẹn của mình', 'ViewAppointments'], [true, 'Lịch hẹn của mình', 'ViewAppointments'],
+        [true, 'lịch hẹn của tôi', 'ViewAppointments'], [true, 'lượt khám của tôi', 'VisitLookup'],
+        [true, 'đơn thuốc của tôi', 'PrescriptionLookup'], [true, 'kết quả xét nghiệm của tôi', 'DiagnosticLookup'], [true, 'hóa đơn của tôi', 'BillingLookup']
+    ] as const)('routes patient help/read aliases through the existing read-only endpoint (widget=%s, text=%s)', async (widget, text, intent) => {
         mockUser = { userId: 'synthetic-patient', fullName: 'Synthetic', role: 'Patient' };
         menuMock.mockResolvedValue({ role: 'Patient', suggestions: PATIENT_MENU });
         sendMock.mockResolvedValueOnce(copilotResponse({ role: 'Patient', intent, message: 'Bạn chọn một gợi ý bên dưới nhé.', suggestions: PATIENT_MENU, cards: [] }));

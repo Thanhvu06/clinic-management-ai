@@ -18,6 +18,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import type { AiAction, AiChatIntent, AiToolExecutionResult } from "../types/ai";
 import SafeMarkdown from "./SafeMarkdown";
+import { aiToolErrorMessage, isAiToolArgumentError } from '../api/aiErrorMessages';
 import { SuggestionChips } from "./copilot/SuggestionChips";
 import { useSuggestionMenu } from "./copilot/useSuggestionMenu";
 import { renderCopilotCardData } from "./copilot/copilotDataRenderers";
@@ -229,12 +230,12 @@ const PatientMedicalChatWidget: React.FC = () => {
                                             <div className={styles.bookingSummaryCard} role="status" aria-label="Trạng thái thao tác AI">
                                                 <h4 className={styles.bookingSummaryTitle}>
                                                     <CheckCircle2 size={18} color={toolResult.status === "failed" ? "#b91c1c" : "var(--chat-accent)"} />
-                                                    {toolResult.status === "pending_confirmation" ? "Đang chờ xác nhận" : toolResult.status === "completed" ? "Dữ liệu từ hệ thống ClinicCare" : "Không thể thực hiện thao tác"}
+                                                    {toolResult.status === "pending_confirmation" ? "Đang chờ xác nhận" : toolResult.status === "completed" ? "Dữ liệu từ hệ thống ClinicCare" : isAiToolArgumentError(toolResult.error?.code) ? 'Yêu cầu chưa được xử lý' : "Không thể thực hiện thao tác"}
                                                 </h4>
                                                 <p className={styles.specialtyReason}>
                                                     {toolResult.status === "pending_confirmation"
                                                         ? "Thao tác ghi chưa được thực hiện. Hãy kiểm tra thông tin và xác nhận trong luồng lịch hẹn."
-                                                        : toolResult.error?.message || toolResult.displayText || "Kết quả được trả về từ dịch vụ ClinicCare đã kiểm chứng."}
+                                                        : aiToolErrorMessage(toolResult.error?.code, toolResult.error?.message) || toolResult.displayText || "Kết quả được trả về từ dịch vụ ClinicCare đã kiểm chứng."}
                                                 </p>
                                                 <GroundedToolData result={toolResult} />
                                                 {toolResult.status === "pending_confirmation" && toolResult.actionId && (<>

@@ -1,5 +1,13 @@
 type ErrorRecord = Record<string, unknown>;
 
+export const isAiToolArgumentError = (code?: string): boolean => Boolean(code && (
+    ['UNKNOWN_TOOL_ARGUMENT', 'FORBIDDEN_TOOL_ARGUMENT', 'MISSING_TOOL_ARGUMENT'].includes(code) || code.startsWith('INVALID_')
+));
+
+export const aiToolErrorMessage = (code?: string, message?: string): string | undefined => isAiToolArgumentError(code)
+    ? 'ClinicCare chưa xử lý được yêu cầu này. Bạn thử diễn đạt lại hoặc chọn một gợi ý bên dưới.'
+    : message;
+
 const asRecord = (value: unknown): ErrorRecord =>
     value && typeof value === 'object' ? value as ErrorRecord : {};
 

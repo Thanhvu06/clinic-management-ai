@@ -5,7 +5,7 @@ interface SafeMarkdownProps {
     className?: string;
 }
 
-const SAFE_URL_PATTERN = /^(https?:\/\/|\/|tel:|mailto:)/i;
+const SAFE_URL_PATTERN = /^(https?:\/\/|\/(?!\/)|tel:|mailto:)/i;
 
 /**
  * Parses inline markdown tokens: `code`, **bold**, *italic*, [link](url).

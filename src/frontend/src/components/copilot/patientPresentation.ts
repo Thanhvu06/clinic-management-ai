@@ -9,6 +9,7 @@ export const isLocalHelpPhrase = (value: string): boolean => /^(?:ban lam duoc g
 // Routing only: the server still resolves the phrase, actor and authorized read.
 // These exact patient phrases keep legacy booking/clinical turns on their path.
 export const isPatientReadAlias = (value: string): boolean => [
+    'lich hen cua toi', 'luot kham cua toi', 'don thuoc cua toi', 'ket qua xet nghiem cua toi', 'hoa don cua toi',
     'lich hen cua minh', 'lich cua toi', 'cac luot kham cua toi', 'lich su kham cua minh',
     'ket qua xet nghiem cua minh', 'xem ket qua cua toi', 'toa thuoc cua minh', 'xem don thuoc cua toi',
     'bien lai cua toi', 'hoa don cua minh'

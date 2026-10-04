@@ -374,7 +374,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             const res = await axiosClient.post<AiChatRequestPayload, ApiResponse<AiChatResponse>>(
                 "/ai/chat",
                 requestBody,
-                { signal: requestController.signal }
+                { signal: requestController.signal, suppressForbiddenRedirect: true }
             );
 
             if (!isCurrentRequest()) return;
@@ -639,7 +639,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             const response = await axiosClient.post<AiBookingWizardRequest, ApiResponse<AiBookingWizardResponse>>('/ai/booking-wizard', {
                 sessionId: wizardSessionRef.current, step, optionToken, reason,
                 currentRoute: location.pathname, locale: 'vi-VN'
-            }, { signal: controller.signal });
+            }, { signal: controller.signal, suppressForbiddenRedirect: true });
             if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
             const data = response.data;
             if (!data) throw new Error('Không nhận được dữ liệu đặt lịch. Vui lòng thử lại.');
@@ -1481,7 +1481,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }, AiToolExecutionResult>(`/ai/tool-actions/${actionId}/confirm`, {
                 sessionId: sessionIdRef.current,
                 concurrencyToken
-            });
+            }, { suppressForbiddenRedirect: true });
             setMessages(previous => [...previous, {
                 role: "model",
                 content: result.status === "completed"
@@ -1533,7 +1533,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         try {
             const result = await axiosClient.post<{ sessionId: string }, AiToolExecutionResult>(`/ai/tool-actions/${encodeURIComponent(actionId)}/cancel`, {
                 sessionId: sessionIdRef.current
-            });
+            }, { suppressForbiddenRedirect: true });
             if (result.status === "cancelled") retirePreview(result);
             setMessages(previous => [...previous, {
                 role: "model",

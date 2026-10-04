@@ -20,7 +20,7 @@ public sealed class AiGroundedResponseComposer : IAiGroundedResponseComposer
         {
             Type = result.ResultType ?? "workspace_result",
             Title = result.Status == "completed" ? "Dữ liệu đã kiểm chứng" : "Không thể truy cập dữ liệu",
-            Description = result.DisplayText ?? result.Error?.Message,
+            Description = ArgumentErrorMessage(result) ?? result.DisplayText ?? result.Error?.Message,
             Data = result.Status == "completed" ? result.Data : null,
             Sources = result.DataSources,
             RetrievedAtUtc = result.RetrievedAtUtc
@@ -28,10 +28,15 @@ public sealed class AiGroundedResponseComposer : IAiGroundedResponseComposer
         var failed = results.FirstOrDefault(x => x.Status != "completed");
         return new AiGroundedResponse
         {
-            Message = failed?.Error?.Message ?? string.Join(" ", results.Select(x => x.DisplayText).Where(x => !string.IsNullOrWhiteSpace(x))),
+            Message = (failed is null ? null : ArgumentErrorMessage(failed)) ?? failed?.Error?.Message ?? string.Join(" ", results.Select(x => x.DisplayText).Where(x => !string.IsNullOrWhiteSpace(x))),
             NavigationRoute = decision.NavigationRoute,
             Cards = cards,
             Sources = results.SelectMany(x => x.DataSources).Distinct().ToArray()
         };
     }
+
+    private static string? ArgumentErrorMessage(AiToolExecutionResult result) =>
+        result.Error?.Code is { } code && (code is "UNKNOWN_TOOL_ARGUMENT" or "FORBIDDEN_TOOL_ARGUMENT" or "MISSING_TOOL_ARGUMENT" || code.StartsWith("INVALID_", StringComparison.Ordinal))
+            ? "ClinicCare chưa xử lý được yêu cầu này. Bạn thử diễn đạt lại hoặc chọn một gợi ý bên dưới."
+            : null;
 }

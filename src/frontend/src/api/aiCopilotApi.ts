@@ -104,7 +104,7 @@ export interface AiCopilotRequest {
 
 export async function sendRoleCopilotMessage(request: AiCopilotRequest | string, signal?: AbortSignal): Promise<AiCopilotResponse> {
     const body: AiCopilotRequest = typeof request === 'string' ? { message: request } : request;
-    const response = await axiosClient.post<AiCopilotRequest, ApiResponse<AiCopilotResponse>>('/ai/copilot/chat', body, { signal });
+    const response = await axiosClient.post<AiCopilotRequest, ApiResponse<AiCopilotResponse>>('/ai/copilot/chat', body, { signal, suppressForbiddenRedirect: true });
     if (!response.success || !response.data) throw new Error(response.message || 'Không thể kết nối Copilot.');
     return response.data;
 }
@@ -168,19 +168,19 @@ export interface AiActionPreviewChange {
 }
 
 export async function getRoleCopilotCatalog(signal?: AbortSignal): Promise<AiCopilotCatalog> {
-    const response = await axiosClient.get<unknown, ApiResponse<AiCopilotCatalog>>('/ai/copilot/catalog', { signal });
+    const response = await axiosClient.get<unknown, ApiResponse<AiCopilotCatalog>>('/ai/copilot/catalog', { signal, suppressForbiddenRedirect: true });
     if (!response.success || !response.data) throw new Error(response.message || 'Không thể tải danh mục thao tác.');
     return response.data;
 }
 
 export async function prepareRoleAction(request: AiToolInvocationRequest, signal?: AbortSignal): Promise<AiRoleActionResult> {
-    return axiosClient.post<AiToolInvocationRequest, AiRoleActionResult>('/ai/copilot/actions/prepare', request, { signal });
+    return axiosClient.post<AiToolInvocationRequest, AiRoleActionResult>('/ai/copilot/actions/prepare', request, { signal, suppressForbiddenRedirect: true });
 }
 
 export async function confirmRoleAction(actionId: string, request: { sessionId: string; concurrencyToken: string }, signal?: AbortSignal): Promise<AiRoleActionResult> {
-    return axiosClient.post<typeof request, AiRoleActionResult>(`/ai/copilot/actions/${encodeURIComponent(actionId)}/confirm`, request, { signal });
+    return axiosClient.post<typeof request, AiRoleActionResult>(`/ai/copilot/actions/${encodeURIComponent(actionId)}/confirm`, request, { signal, suppressForbiddenRedirect: true });
 }
 
 export async function cancelRoleAction(actionId: string, request: { sessionId: string }, signal?: AbortSignal): Promise<AiRoleActionResult> {
-    return axiosClient.post<typeof request, AiRoleActionResult>(`/ai/copilot/actions/${encodeURIComponent(actionId)}/cancel`, request, { signal });
+    return axiosClient.post<typeof request, AiRoleActionResult>(`/ai/copilot/actions/${encodeURIComponent(actionId)}/cancel`, request, { signal, suppressForbiddenRedirect: true });
 }
