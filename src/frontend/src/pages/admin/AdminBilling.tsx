@@ -1,3 +1,4 @@
+import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect } from 'react';
 import {
     TrendingUp,
@@ -33,8 +34,8 @@ export const AdminBilling: React.FC = () => {
     const [revLoading, setRevLoading] = useState<boolean>(true);
 
     // Date range for report (default: past 30 days to today)
-    const todayStr = new Date().toISOString().split('T')[0];
-    const thirtyDaysAgoStr = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const todayStr = toLocalDateString();
+    const thirtyDaysAgoStr = toLocalDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
     const [fromDate, setFromDate] = useState<string>(thirtyDaysAgoStr);
     const [toDate, setToDate] = useState<string>(todayStr);
 

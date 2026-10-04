@@ -1,3 +1,4 @@
+import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
     ChevronLeft, ChevronRight, Clock, 
@@ -33,10 +34,10 @@ export const DoctorSchedule: React.FC = () => {
     const [previewLoading, setPreviewLoading] = useState(false);
     const [submittingLeave, setSubmittingLeave] = useState(false);
 
-    const startDateStr = currentMonday.toISOString().split('T')[0];
+    const startDateStr = toLocalDateString(currentMonday);
     const sunday = new Date(currentMonday);
     sunday.setDate(sunday.getDate() + 6);
-    const endDateStr = sunday.toISOString().split('T')[0];
+    const endDateStr = toLocalDateString(sunday);
 
     const loadSchedule = useCallback(async () => {
         setLoading(true);

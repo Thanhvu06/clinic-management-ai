@@ -1,3 +1,4 @@
+import { toLocalDateString, formatDisplayDate } from '../../utils/formatters';
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import axiosClient from "../../api/axiosClient";
@@ -329,7 +330,7 @@ export const PatientAppointments: React.FC = () => {
     const tomorrowStr = (() => {
         const d = new Date();
         d.setDate(d.getDate() + 1);
-        return d.toISOString().split("T")[0];
+        return toLocalDateString(d);
     })();
 
     return (
@@ -412,7 +413,7 @@ export const PatientAppointments: React.FC = () => {
                                         </div>
                                         <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--c-text)", fontSize: "0.95rem" }}>
                                             <CalendarDays size={16} color="var(--c-muted)" />
-                                            <span>Ngày: <strong>{app.slotDate ? app.slotDate.split("T")[0] : ""}</strong></span>
+                                            <span>Ngày: <strong>{formatDisplayDate(app.slotDate)}</strong></span>
                                             <span style={{ margin: "0 8px", color: "var(--c-border)" }}>|</span>
                                             <Clock size={16} color="var(--c-muted)" />
                                             <span>Giờ: <strong>{app.startTime && app.startTime.substring(0, 5)} - {app.endTime && app.endTime.substring(0, 5)}</strong></span>
@@ -558,7 +559,7 @@ export const PatientAppointments: React.FC = () => {
                 <div style={{ marginBottom: "16px", padding: "12px", backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", fontSize: "0.9rem" }}>
                     <div>Bác sĩ: <strong>{rescheduleModal.app?.doctorName}</strong></div>
                     <div>Chuyên khoa: <strong>{specialtiesMap[rescheduleModal.app?.specialtyId]}</strong></div>
-                    <div>Lịch hiện tại: <strong>{rescheduleModal.app?.slotDate?.split("T")[0]} ({rescheduleModal.app?.startTime?.substring(0, 5)} - {rescheduleModal.app?.endTime?.substring(0, 5)})</strong></div>
+                    <div>Lịch hiện tại: <strong>{formatDisplayDate(rescheduleModal.app?.slotDate)} ({rescheduleModal.app?.startTime?.substring(0, 5)} - {rescheduleModal.app?.endTime?.substring(0, 5)})</strong></div>
                 </div>
 
                 <div style={{ marginBottom: "16px" }}>

@@ -1,3 +1,4 @@
+import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
@@ -94,7 +95,7 @@ export const DoctorAppointments: React.FC = () => {
             if (search) params.append('search', search);
             if (statusFilter) params.append('status', statusFilter);
             if (dateFilter === 'today') {
-                const todayStr = new Date().toISOString().split('T')[0];
+                const todayStr = toLocalDateString();
                 params.append('date', todayStr);
             }
 
@@ -102,7 +103,7 @@ export const DoctorAppointments: React.FC = () => {
             if (res.success && res.data) {
                 let items = res.data.items as DoctorAppointment[];
                 if (dateFilter === 'today') {
-                    const todayStr = new Date().toISOString().split('T')[0];
+                    const todayStr = toLocalDateString();
                     items = items.filter(i => i.appointmentDate.startsWith(todayStr));
                 }
                 

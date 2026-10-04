@@ -1,3 +1,4 @@
+import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -16,7 +17,7 @@ export const DoctorQueue: React.FC = () => {
     const navigate = useNavigate();
     const { showConfirm, showToast } = useDialog();
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = toLocalDateString();
     const [selectedDate, setSelectedDate] = useState(todayStr);
     const [queue, setQueue] = useState<DoctorQueueItemDto[]>([]);
     const [loading, setLoading] = useState(true);
