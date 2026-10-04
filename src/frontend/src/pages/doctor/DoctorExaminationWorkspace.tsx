@@ -1,3 +1,4 @@
+import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
@@ -349,7 +350,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const minRevisitDate = useMemo(() => {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
-        return tomorrow.toISOString().split('T')[0];
+        return toLocalDateString(tomorrow);
     }, []);
 
     // Previous height for reuse

@@ -11,6 +11,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import axiosClient from "../api/axiosClient";
 import { isLocalHelpPhrase, isPatientReadAlias } from "../components/copilot/patientPresentation";
+import { classifyPatientTypedIntent } from "../components/copilot/patientTypedIntent";
 import { aiChatFailureMessage } from "../api/aiErrorMessages";
 import { sendRoleCopilotMessage } from "../api/aiCopilotApi";
 import type { ApiResponse } from "../types";
@@ -335,6 +336,25 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             setInput('');
             await handleSuggestion({ code: '', label: trimmed }, true, retryError);
             return;
+        }
+
+        if (!pendingPayload && !prefixMessage) {
+            const intent = classifyPatientTypedIntent(trimmed);
+            if (intent) {
+                setInput('');
+                if (intent === 'booking') {
+                    setMessages(previous => [...previous, { role: 'user', content: trimmed }]);
+                    await handleWizardStep('start');
+                } else {
+                    const codes = {
+                        appointments: 'patient.my_appointments', visits: 'patient.my_visits',
+                        prescriptions: 'patient.my_prescriptions', results: 'patient.my_diagnostic_results',
+                        bills: 'patient.my_bills'
+                    };
+                    await handleSuggestion({ code: codes[intent], label: trimmed }, false, retryError);
+                }
+                return;
+            }
         }
 
         const userMsg: ChatMessage = { role: "user", content: trimmed };

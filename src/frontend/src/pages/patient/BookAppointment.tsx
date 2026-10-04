@@ -1,3 +1,4 @@
+import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import axiosClient from "../../api/axiosClient";
@@ -1123,7 +1124,7 @@ export const BookAppointment: React.FC = () => {
                                     <TextInput
                                         id="slotDate"
                                         type="date"
-                                        min={new Date().toISOString().split("T")[0]}
+                                        min={toLocalDateString()}
                                         value={slotDate}
                                         onChange={(e) => handleSlotDateChange(e.target.value)}
                                     />

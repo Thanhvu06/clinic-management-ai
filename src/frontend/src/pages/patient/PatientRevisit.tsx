@@ -1,3 +1,4 @@
+import { formatDisplayDate } from '../../utils/formatters';
 import React, { useState, useEffect } from "react";
 import axiosClient from "../../api/axiosClient";
 import type { ApiResponse } from "../../types";
@@ -141,7 +142,7 @@ export const PatientRevisit: React.FC = () => {
                                         <p style={{ margin: "0 0 4px 0", color: "var(--c-muted)", fontSize: "0.9rem" }}>Ngày gợi ý</p>
                                         <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 500 }}>
                                             <CalendarDays size={18} color="var(--c-primary)" />
-                                            {r.suggestedDate ? r.suggestedDate.split("T")[0] : ""}
+                                            {formatDisplayDate(r.suggestedDate)}
                                         </div>
                                     </div>
                                     <div>
@@ -187,7 +188,7 @@ export const PatientRevisit: React.FC = () => {
                         {historyRequests.map(r => (
                             <div key={r.id} className="card-panel" style={{ padding: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                 <div>
-                                    <p style={{ margin: "0 0 8px 0", fontWeight: 500 }}>Ngày hẹn: {r.suggestedDate ? r.suggestedDate.split("T")[0] : ""}</p>
+                                    <p style={{ margin: "0 0 8px 0", fontWeight: 500 }}>Ngày hẹn: {formatDisplayDate(r.suggestedDate)}</p>
                                     <p style={{ margin: "0 0 4px 0", fontSize: "0.9rem", color: "var(--c-text)" }}>Bác sĩ: <strong>{r.doctorName}</strong></p>
                                     <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--c-muted)" }}>Lý do: {r.note}</p>
                                 </div>

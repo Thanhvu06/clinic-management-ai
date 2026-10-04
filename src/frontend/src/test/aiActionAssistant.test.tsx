@@ -622,7 +622,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
         const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
-        fireEvent.change(input, { target: { value: 'Tôi muốn xem hóa đơn' } });
+        fireEvent.change(input, { target: { value: 'Cho tôi xem thông tin thanh toán' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         await waitFor(() => {
@@ -1280,7 +1280,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
         const chatInput = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
-        fireEvent.change(chatInput, { target: { value: 'Đặt lịch tim mạch' } });
+        fireEvent.change(chatInput, { target: { value: 'Tôi đau đầu, Đặt lịch tim mạch' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         await waitFor(() => {
@@ -1349,7 +1349,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
         const chatInput = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
-        fireEvent.change(chatInput, { target: { value: 'Đặt lịch khám tim' } });
+        fireEvent.change(chatInput, { target: { value: 'Tôi đau đầu, Đặt lịch khám tim' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         await waitFor(() => {
@@ -1357,7 +1357,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         });
 
         // Cancel draft
-        fireEvent.change(chatInput, { target: { value: 'Hủy đặt lịch' } });
+        fireEvent.change(chatInput, { target: { value: 'Hủy bản nháp hiện tại' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         await waitFor(() => {
@@ -1539,7 +1539,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         // Seed Draft A via chat
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
         const chatInput = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
-        fireEvent.change(chatInput, { target: { value: 'Đặt lịch khám tim mạch' } });
+        fireEvent.change(chatInput, { target: { value: 'Tôi đau đầu, Đặt lịch khám tim mạch' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         const reasonTextarea = await screen.findByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
@@ -1697,7 +1697,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         // 1. Create Draft A
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
         const chatInput = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
-        fireEvent.change(chatInput, { target: { value: 'Đặt lịch A' } });
+        fireEvent.change(chatInput, { target: { value: 'Tôi đau đầu, Đặt lịch A' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         await screen.findByLabelText(/Triệu chứng hoặc lý do thăm khám/i);
@@ -1706,7 +1706,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(confirmBtn);
 
         // 2. Cancel Draft A via chat, then create Draft B with slot 1002
-        fireEvent.change(chatInput, { target: { value: 'Hủy đặt lịch' } });
+        fireEvent.change(chatInput, { target: { value: 'Hủy bản nháp hiện tại' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
         await waitFor(() => {
             expect(screen.getByText('Đã hủy bản nháp A', { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
@@ -2219,7 +2219,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
         const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
-        fireEvent.change(input, { target: { value: 'Tôi muốn đặt lịch khám tim mạch' } });
+        fireEvent.change(input, { target: { value: 'Tôi đau đầu, Tôi muốn đặt lịch khám tim mạch' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         const confirmBtn1 = await screen.findByRole('button', { name: 'Xác nhận đặt lịch' });
@@ -2413,7 +2413,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
 
         // Turn 1: create draft and confirm -> timeout records K1
-        fireEvent.change(input, { target: { value: 'Đặt lịch khám' } });
+        fireEvent.change(input, { target: { value: 'Tôi đau đầu, Đặt lịch khám' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         const btn1 = await screen.findByRole('button', { name: 'Xác nhận đặt lịch' });
@@ -2423,7 +2423,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         // Turn 2: cancel draft via chat UI/API
         await waitFor(() => expect(screen.getByText(/Network timeout/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument());
-        fireEvent.change(input, { target: { value: 'Hủy đặt lịch' } });
+        fireEvent.change(input, { target: { value: 'Hủy bản nháp hiện tại' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         await waitFor(() => {
@@ -2432,7 +2432,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         expect(sessionStorage.getItem('cliniccare_pending_booking_attempt_pat-1')).toBeNull();
 
         // Turn 3: create new draft with identical payload -> confirm must use K2 !== K1
-        fireEvent.change(input, { target: { value: 'Đặt lịch khám lại' } });
+        fireEvent.change(input, { target: { value: 'Tôi đau đầu, Đặt lịch khám lại' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         const btn2 = await screen.findByRole('button', { name: 'Xác nhận bản nháp mới' });
@@ -2514,7 +2514,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
         const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
-        fireEvent.change(input, { target: { value: 'Đặt lịch' } });
+        fireEvent.change(input, { target: { value: 'Tôi đau đầu, Đặt lịch' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         const confirmBtn = await screen.findByRole('button', { name: 'Xác nhận đặt lịch' });
@@ -2680,7 +2680,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         // Step 1: Confirm in Widget -> fails with timeout, records K1
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
         const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
-        fireEvent.change(input, { target: { value: 'Đặt lịch khám' } });
+        fireEvent.change(input, { target: { value: 'Tôi đau đầu, Đặt lịch khám' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         const widgetConfirmBtn = await screen.findByRole('button', { name: 'Xác nhận đặt lịch' });
@@ -2836,7 +2836,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         const input = screen.getByLabelText('Nội dung tin nhắn gửi tới ClinicCare AI');
 
         // 1. Create v1 draft & confirm -> records K1
-        fireEvent.change(input, { target: { value: 'Đặt lịch 9h' } });
+        fireEvent.change(input, { target: { value: 'Tôi đau đầu, Đặt lịch 9h' } });
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         const btnV1 = await screen.findByRole('button', { name: 'Xác nhận đặt lịch v1' });

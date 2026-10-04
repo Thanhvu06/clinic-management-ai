@@ -1,3 +1,4 @@
+import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
@@ -162,7 +163,7 @@ export const AdminWorkSchedules: React.FC = () => {
                     <CalendarDays size={24} /> Quản lý lịch làm việc
                 </h2>
                 {selectedDoctorId && (
-                    <button className="btn-primary" onClick={() => setModal({ isOpen: true, isEdit: false, data: { workDate: new Date().toISOString().split('T')[0] } })}>
+                    <button className="btn-primary" onClick={() => setModal({ isOpen: true, isEdit: false, data: { workDate: toLocalDateString() } })}>
                         <Plus size={18} /> Thêm lịch làm việc
                     </button>
                 )}

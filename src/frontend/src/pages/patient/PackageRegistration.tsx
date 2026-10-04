@@ -4,7 +4,7 @@ import {
     CheckCircle2, ArrowLeft, ArrowRight, AlertCircle 
 } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
-import { parseIncludedServices, formatVndCurrency } from '../../utils/formatters';
+import { parseIncludedServices, formatVndCurrency, toLocalDateString } from '../../utils/formatters';
 import { FormField, TextInput, Textarea, Button, FormError } from '../../components/forms';
 
 interface HealthPackage {
@@ -43,7 +43,7 @@ export const PackageRegistration: React.FC = () => {
     const [registrationResult, setRegistrationResult] = useState<any | null>(null);
 
     // Tomorrow's date string YYYY-MM-DD for min date picker
-    const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    const tomorrowStr = toLocalDateString(new Date(Date.now() + 86400000));
 
     useEffect(() => {
         const fetchPackage = async () => {
