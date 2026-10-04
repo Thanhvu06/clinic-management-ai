@@ -60,6 +60,49 @@ const StatusLine: React.FC<{ label: string; value: unknown; date?: boolean }> = 
 
 const EmptyData: React.FC<{ message: string }> = ({ message }) => <p className={styles.typedNotice} role="status">{message}</p>;
 
+// Match the typed renderers' empty states, including unsupported envelopes.
+export const copilotCardEmptyMessage = (card: AiCopilotCard): string | null => {
+    const record = asRecord(card.data);
+    const noRows = asRecords(card.data).length === 0;
+    switch (card.type) {
+        case 'clinic_knowledge':
+            if (!record) return 'Cấu trúc danh mục công khai chưa được hỗ trợ.';
+            return text(record.status)?.toLowerCase() === 'not_found' || !asRecords(record.items).length ? 'Không có bản ghi công khai phù hợp.' : null;
+        case 'specialties': return noRows ? 'Không có chuyên khoa phù hợp.' : null;
+        case 'doctors': return noRows ? 'Không có bác sĩ phù hợp.' : null;
+        case 'available_slots': return noRows ? 'Không có khung giờ trống phù hợp.' : null;
+        case 'facilities': return noRows ? 'Không có cơ sở đang hoạt động phù hợp.' : null;
+        case 'pricing_catalog':
+            if (!record) return 'Bảng giá chưa có cấu trúc được hỗ trợ.';
+            return !asRecords(record.consultation).length && !asRecords(record.diagnostics).length ? 'Chưa có giá công bố phù hợp.' : null;
+        case 'appointments': return !rowsFrom(card.data).length ? 'Bạn chưa có lịch hẹn phù hợp.' : null;
+        case 'appointment_detail': return !record ? 'Bạn chưa có lịch hẹn phù hợp.' : null;
+        case 'patient_visits': return noRows ? 'Bạn chưa có lượt khám nào.' : null;
+        case 'patient_diagnostic_results': return noRows ? 'Bạn chưa có kết quả cận lâm sàng được công bố.' : null;
+        case 'patient_prescriptions': return noRows ? 'Bạn chưa có đơn thuốc đã phát hành.' : null;
+        case 'patient_bills': return noRows ? 'Bạn chưa có hóa đơn nào.' : null;
+        case 'reception_appointments': return noRows ? 'Không có lịch hẹn phù hợp.' : null;
+        case 'reception_queue': return noRows ? 'Hàng đợi hiện không có lượt phù hợp.' : null;
+        case 'appointment_lookup': return !record || text(record.status)?.toLowerCase() === 'not_found' || !text(record.appointmentCode) ? 'Không tìm thấy lịch hẹn phù hợp.' : null;
+        case 'doctor_patient_summary': return !record ? 'Cấu trúc tóm tắt bệnh nhân chưa được hỗ trợ.' : null;
+        case 'doctor_summary':
+        case 'doctor_queue': return noRows ? 'Hàng đợi bác sĩ hiện không có dữ liệu phù hợp.' : null;
+        case 'doctor_diagnostic_orders': return noRows ? 'Chưa có chỉ định cận lâm sàng trong ca này.' : null;
+        case 'doctor_prescription_status': return noRows ? 'Ca khám chưa có đơn thuốc được công bố trong dữ liệu này.' : null;
+        case 'technician_worklist': return noRows ? 'Worklist cận lâm sàng hiện không có phiếu phù hợp.' : null;
+        case 'pharmacist_prescription_queue': return noRows ? 'Hàng đợi đơn thuốc hiện không có dữ liệu phù hợp.' : null;
+        case 'pharmacist_prescription_payment': return !record ? 'Chưa thể hiển thị trạng thái thanh toán của đơn thuốc.' : null;
+        case 'pharmacy_inventory': return noRows ? 'Kho thuốc hiện không có dữ liệu phù hợp.' : null;
+        case 'admin_dashboard_metrics': return !record ? 'Chưa có chỉ số vận hành được hỗ trợ.' : null;
+        case 'admin_ai_health': return !record ? 'Chưa có chỉ số sức khỏe AI được hỗ trợ.' : null;
+        case 'booking_preview':
+        case 'pending_action':
+        case 'change_request':
+        case 'idempotent_replay': return null;
+        default: return 'Copilot chưa hỗ trợ trình bày đầy đủ cấu trúc dữ liệu này; không hiển thị dữ liệu thô.';
+    }
+};
+
 const List: React.FC<{ children: React.ReactNode }> = ({ children }) => <div className={styles.typedList}>{children}</div>;
 
 const PublicCatalogCard: React.FC<{ data: unknown }> = ({ data }) => {

@@ -319,7 +319,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     const handleSendMessage = async (
         textToSend: string,
         pendingPayload?: SendMessageOptions,
-        prefixMessage?: ChatMessage
+        prefixMessage?: ChatMessage,
+        retryError?: ChatMessage
     ) => {
         const trimmed = textToSend.trim();
         if (!trimmed || loading || submittingBooking) return;
@@ -332,7 +333,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         // endpoint; legacy booking requests and payloads keep their own path.
         if (!pendingPayload && !prefixMessage && (isLocalHelpPhrase(trimmed) || isPatientReadAlias(trimmed))) {
             setInput('');
-            await handleSuggestion({ code: '', label: trimmed }, true);
+            await handleSuggestion({ code: '', label: trimmed }, true, retryError);
             return;
         }
 
@@ -345,7 +346,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             .slice(-9, -1)
             .map(m => ({ role: m.role, content: m.content }));
 
-        setMessages(newMessages);
+        if (retryError) setMessages(previous => previous.filter(message => message !== retryError || !message.isError));
+        else setMessages(newMessages);
         setInput("");
         clearFailure();
         setLoading(true);
@@ -567,8 +569,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 
 
                 if (data.retryable === true) {
-                    rememberFailure(data, () => handleSendMessage(textToSend, pendingPayload, prefixMessage));
                     aiMsg.isError = true;
+                    rememberFailure(data, () => handleSendMessage(textToSend, pendingPayload, prefixMessage, aiMsg));
                 }
                 setMessages(prev => [...prev, aiMsg]);
             } else {
@@ -619,9 +621,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 return;
             }
 
-            rememberFailure(err, () => handleSendMessage(textToSend, pendingPayload, prefixMessage));
             const isRateLimited = errorCode === "TOO_MANY_REQUESTS" || message.includes("quá nhiều");
-            setMessages(prev => [...prev, {
+            const failedMessage: ChatMessage = {
                 role: "model",
                 content: aiChatFailureMessage(err),
                 isError: true,
@@ -640,7 +641,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                         payload: { targetUrl: "/patient/book" }
                     }
                 ] } : {})
-            }]);
+            };
+            rememberFailure(err, () => handleSendMessage(textToSend, pendingPayload, prefixMessage, failedMessage));
+            setMessages(prev => [...prev, failedMessage]);
         } finally {
             if (requestId === activeRequestIdRef.current) {
                 setLoading(false);
@@ -705,7 +708,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     };
 
     // Only the code is authoritative; the label is shown as the user's turn.
-    const handleSuggestion = async (suggestion: AiSuggestionItem, freeText = false): Promise<void> => {
+    const handleSuggestion = async (suggestion: AiSuggestionItem, freeText = false, retryError?: ChatMessage): Promise<void> => {
         if (suggestion.code === 'patient.start_booking') {
             await handleWizardStep('start');
             return;
@@ -713,7 +716,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         const label = suggestion.label.trim();
         if (!label || (!freeText && !suggestion.code) || loading) return;
 
-        setMessages(previous => [...previous, { role: "user", content: label }]);
+        setMessages(previous => retryError
+            ? previous.filter(message => message !== retryError || !message.isError)
+            : [...previous, { role: "user", content: label }]);
         clearFailure();
         setLoading(true);
         const requestId = ++activeRequestIdRef.current;
@@ -756,15 +761,16 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             if (requestController.signal.aborted || !isCurrentRequest()) return;
             const status = (err as { status?: number; response?: { status?: number } })?.status ??
                 (err as { response?: { status?: number } })?.response?.status;
-            rememberFailure(err, () => handleSuggestion(suggestion, freeText));
             setAiAssistantStatus(status === 429 ? "Degraded" : "Offline");
-            setMessages(previous => [...previous, {
+            const failedMessage: ChatMessage = {
                 role: "model",
                 content: aiChatFailureMessage(err),
                 isError: true,
                 urgency: "ROUTINE",
                 assistantStatus: status === 429 ? "Degraded" : "Offline"
-            }]);
+            };
+            rememberFailure(err, () => handleSuggestion(suggestion, freeText, failedMessage));
+            setMessages(previous => [...previous, failedMessage]);
         } finally {
             if (requestId === activeRequestIdRef.current) {
                 setLoading(false);

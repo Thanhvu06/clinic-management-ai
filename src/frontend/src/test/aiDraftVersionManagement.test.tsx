@@ -107,7 +107,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
             // Must NOT contain "vnull" anywhere
             expect(screen.queryByText(/vnull/i)).not.toBeInTheDocument();
             // Must show friendly notice and offer reload
-            expect(screen.getByText(/Lựa chọn này được tạo từ phiên trò chuyện cũ hoặc chưa được đồng bộ phiên bản/i)).toBeInTheDocument();
+            expect(screen.getByText(/Lựa chọn này được tạo từ phiên trò chuyện cũ hoặc chưa được đồng bộ phiên bản/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
             expect(screen.getByText('Tải lại lựa chọn hiện tại')).toBeInTheDocument();
         });
     });
@@ -156,7 +156,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
 
         await waitFor(() => {
             expect(screen.queryByText(/vundefined/i)).not.toBeInTheDocument();
-            expect(screen.getByText(/Lựa chọn này được tạo từ phiên trò chuyện cũ hoặc chưa được đồng bộ phiên bản/i)).toBeInTheDocument();
+            expect(screen.getByText(/Lựa chọn này được tạo từ phiên trò chuyện cũ hoặc chưa được đồng bộ phiên bản/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
     });
 
@@ -205,7 +205,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
         await waitFor(() => {
             expect(screen.queryByText(/vNaN/i)).not.toBeInTheDocument();
             expect(screen.queryByText(/vnull/i)).not.toBeInTheDocument();
-            expect(screen.getByText(/Lựa chọn này được tạo từ phiên trò chuyện cũ hoặc chưa được đồng bộ phiên bản/i)).toBeInTheDocument();
+            expect(screen.getByText(/Lựa chọn này được tạo từ phiên trò chuyện cũ hoặc chưa được đồng bộ phiên bản/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
     });
 
@@ -257,7 +257,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
         fireEvent.click(screen.getByText(/Chọn BS Nguyễn Minh Khải \(v1\)/i));
 
         await waitFor(() => {
-            expect(screen.getByText(/Thao tác này thuộc phiên bản thảo lịch cũ \(v1\)\. Thông tin lịch khám hiện tại đã được cập nhật sang phiên bản mới hơn \(v2\)\./i)).toBeInTheDocument();
+            expect(screen.getByText(/Thao tác này thuộc phiên bản thảo lịch cũ \(v1\)\. Thông tin lịch khám hiện tại đã được cập nhật sang phiên bản mới hơn \(v2\)\./i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
             // Did NOT call /appointments or send new /ai/chat for booking
             expect(axiosClient.post).toHaveBeenCalledTimes(1); // Only initial chat message
         });
@@ -349,7 +349,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
                 }),
                 expect.any(Object)
             );
-            expect(screen.getByText(/Đặt lịch khám thành công/i)).toBeInTheDocument();
+            expect(screen.getByText(/Đặt lịch khám thành công/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
             expect(screen.getByText(/APPT-20260925-888/i)).toBeInTheDocument();
         });
     });
@@ -456,7 +456,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
         fireEvent.click(staleBtn);
 
         await waitFor(() => {
-            const warnings = screen.getAllByText(/Thao tác này thuộc phiên bản thảo lịch cũ \(v1\)/i);
+            const warnings = screen.getAllByText(/Thao tác này thuộc phiên bản thảo lịch cũ \(v1\)/i, { selector: ':not([data-chat-announcement])' });
             // Should avoid duplicate spam
             expect(warnings.length).toBe(1);
             expect(screen.getByText('Tải lại lựa chọn hiện tại')).toBeInTheDocument();
@@ -500,7 +500,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         await waitFor(() => {
-            expect(screen.getByText('Chào bạn, bạn đã có bản nháp v2.')).toBeInTheDocument();
+            expect(screen.getByText('Chào bạn, bạn đã có bản nháp v2.', { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
 
         // Send 2nd message, it should include draftVersion: 2
@@ -551,7 +551,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         await waitFor(() => {
-            expect(screen.getByText('Bản nháp v2 đã sẵn sàng.')).toBeInTheDocument();
+            expect(screen.getByText('Bản nháp v2 đã sẵn sàng.', { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
 
         // Active draft version must NOT be downgraded to 2, it should remain 3
@@ -684,7 +684,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
         });
 
         await waitFor(() => {
-            expect(screen.getByText(/Đặt lịch khám thành công/i)).toBeInTheDocument();
+            expect(screen.getByText(/Đặt lịch khám thành công/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
     });
 
@@ -752,7 +752,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
         fireEvent.click(screen.getByText('Liên hệ lễ tân'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Thông tin Quầy Tiếp Đón & Lễ Tân/i)).toBeInTheDocument();
+            expect(screen.getByText(/Thông tin Quầy Tiếp Đón & Lễ Tân/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
             expect(screen.queryByText(/Thao tác này thuộc phiên bản thảo lịch cũ/i)).not.toBeInTheDocument();
         });
     });
@@ -794,7 +794,7 @@ describe('AI Draft Version Management Contract & Flow', () => {
         fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
         await waitFor(() => {
-            expect(screen.getByText('Đã hủy thông tin đặt lịch hẹn hiện tại. Bạn muốn hỗ trợ gì khác không?')).toBeInTheDocument();
+            expect(screen.getByText('Đã hủy thông tin đặt lịch hẹn hiện tại. Bạn muốn hỗ trợ gì khác không?', { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
 
         // Active draft must now be cleared ('none')

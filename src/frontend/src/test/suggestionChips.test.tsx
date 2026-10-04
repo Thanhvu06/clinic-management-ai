@@ -77,7 +77,7 @@ describe('Role suggestion buttons', () => {
         await menuGroup('Tra cứu nhanh dữ liệu của bạn');
         fireEvent.change(screen.getByRole('textbox'), { target: { value: text } });
         fireEvent.click(screen.getByRole('button', { name: 'Gửi tin nhắn' }));
-        await screen.findByText('Bạn chọn một gợi ý bên dưới nhé.');
+        await screen.findByText('Bạn chọn một gợi ý bên dưới nhé.', { selector: ':not([data-chat-announcement])' });
         expect(sendMock).toHaveBeenCalledTimes(1);
         expect(sendMock.mock.calls[0][0]).toMatchObject({ message: text });
         expect(sendMock.mock.calls[0][0]).toHaveProperty('suggestionCode', undefined);
@@ -319,8 +319,8 @@ describe('Role suggestion buttons', () => {
             }));
             await pending.promise;
         });
-        expect(await screen.findByText('Đây là lịch hẹn của bạn.')).toBeInTheDocument();
-        expect(screen.getByText('Lịch hẹn của chính bạn')).toBeInTheDocument();
+        expect(await screen.findByText('Đây là lịch hẹn của bạn.', { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
+        expect(screen.getByText('Bạn chưa có lịch hẹn phù hợp.')).toBeInTheDocument();
         const next = await menuGroup('Gợi ý tiếp theo');
         expect(within(next).getByRole('button', { name: 'Gợi ý: Hóa đơn của tôi' })).toBeEnabled();
         expect(within(next).queryByRole('button', { name: /Lịch hẹn của tôi/ })).not.toBeInTheDocument();
@@ -335,7 +335,7 @@ describe('Role suggestion buttons', () => {
         expect(sendMock).toHaveBeenCalledTimes(2);
         expect(sendMock.mock.calls[1][0]).toMatchObject({ message: 'Hóa đơn của tôi', suggestionCode: 'patient.my_bills' });
         await act(async () => { second.resolve(copilotResponse({ role: 'Patient', message: 'Hóa đơn của bạn.', cards: [], suggestions: [] })); await second.promise; });
-        expect(await screen.findByText('Hóa đơn của bạn.')).toBeInTheDocument();
+        expect(await screen.findByText('Hóa đơn của bạn.', { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Gợi ý: Lượt khám của tôi' })).not.toBeInTheDocument();
     });
 
@@ -347,7 +347,7 @@ describe('Role suggestion buttons', () => {
 
         fireEvent.click(screen.getByLabelText('Mở Trợ lý ClinicCare AI'));
         fireEvent.click(within(await menuGroup('Tra cứu nhanh dữ liệu của bạn')).getByRole('button', { name: 'Gợi ý: Lượt khám của tôi' }));
-        expect(await screen.findByText(/quá nhiều|giới hạn/i)).toBeInTheDocument();
+        expect(await screen.findByText(/quá nhiều|giới hạn/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         expect(screen.getAllByText('Lượt khám của tôi').length).toBeGreaterThanOrEqual(1);
     });
 });

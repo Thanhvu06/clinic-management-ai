@@ -1,10 +1,11 @@
 @import './chatTokens.css';
 .chips { gap: var(--chat-space-2); max-width: 100%; min-width: 0; }
 .compact { display: flex; flex-wrap: wrap; max-height: 96px; }
-.compact[data-horizontal='true'] { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--chat-accent) var(--chat-border); mask-image: linear-gradient(to right, transparent, #000 8px, #000 calc(100% - 8px), transparent); padding: 4px 8px; }
+.compact[data-horizontal='true'] { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; mask-image: linear-gradient(to right, transparent, #000 8px, #000 calc(100% - 8px), transparent); padding: 4px 8px; }
 .compact[data-horizontal='true']::-webkit-scrollbar { height: 6px; }
-.compact[data-horizontal='true']::-webkit-scrollbar-track { background: var(--chat-border); }
-.compact[data-horizontal='true']::-webkit-scrollbar-thumb { background: var(--chat-accent); border-radius: 3px; }
+.compact[data-horizontal='true']::-webkit-scrollbar-track { background: transparent; }
+.compact[data-horizontal='true']::-webkit-scrollbar-thumb { background: var(--chat-border); border-radius: 3px; }
+.compact[data-horizontal='true']::-webkit-scrollbar-button { display: none; }
 .compact[data-horizontal='true'] .chip { flex: 0 0 auto; max-width: 260px; white-space: nowrap; }
 .grid, .gridButtons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--chat-space-2); }
 .section { grid-column: 1 / -1; min-width: 0; }

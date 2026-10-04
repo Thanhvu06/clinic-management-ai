@@ -18,12 +18,16 @@ import {
     FileText, Activity, CreditCard
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
-import type { AiAction, AiChatIntent, AiToolExecutionResult } from "../types/ai";
+import type { AiAction, AiChatIntent, AiToolExecutionResult, ChatMessage } from "../types/ai";
 import SafeMarkdown from "./SafeMarkdown";
-import { aiToolErrorMessage } from '../api/aiErrorMessages';
+import { aiToolErrorMessage, isAiToolArgumentError } from '../api/aiErrorMessages';
 import { SuggestionChips } from "./copilot/SuggestionChips";
 import { useSuggestionMenu } from "./copilot/useSuggestionMenu";
-import { renderCopilotCardData } from "./copilot/copilotDataRenderers";
+import { copilotCardEmptyMessage, renderCopilotCardData } from "./copilot/copilotDataRenderers";
+
+const isNotUnderstood = (message?: ChatMessage): boolean => Boolean(message?.toolResults?.length &&
+    message.toolResults.every(result => result.status === 'failed' && isAiToolArgumentError(result.error?.code)));
+const NOT_UNDERSTOOD_MESSAGE = 'ClinicCare chưa hiểu câu này. Bạn thử diễn đạt lại hoặc chọn một gợi ý bên dưới.';
 
 const QUICK_PROMPTS: Array<{ label: string; intent?: AiChatIntent }> = [
     { label: "Tôi nên khám chuyên khoa nào?" },
@@ -222,7 +226,7 @@ const PatientMedicalChatWidget: React.FC = () => {
     };
 
     const reviewIndex = wizard?.step === 'review' ? messages.findLastIndex(message => message.bookingDraft?.isComplete) : -1;
-    const retryButton = () => canRetry && <button type="button" className={styles.textLink} disabled={loading || submittingBooking || retryAfterSeconds > 0} onClick={() => void retryLastRequest()}>{retryAfterSeconds > 0 ? `Thử lại sau ${retryAfterSeconds} giây` : 'Thử lại'}</button>;
+    const retryButton = () => canRetry && !isNotUnderstood(messages[latestAssistantIndex]) && <button type="button" className={styles.textLink} disabled={loading || submittingBooking || retryAfterSeconds > 0} onClick={() => void retryLastRequest()}>{retryAfterSeconds > 0 ? `Thử lại sau ${retryAfterSeconds} giây` : 'Thử lại'}</button>;
     const isStaleAction = (act: AiAction) => {
         if (!['SelectDoctor', 'SelectSlot', 'ConfirmBooking', 'ReviewBooking', 'ChangePreferredDate'].includes(act.type)) return false;
         const payload = act.payload as Record<string, unknown>;
@@ -238,7 +242,7 @@ const PatientMedicalChatWidget: React.FC = () => {
     const hiddenCount = wizard ? priorHistory.length : history.length > 6 ? Math.max(0, history.length - 4) : 0;
     const visibleHistory = historyExpanded ? priorHistory : wizard ? [] : history.slice(hiddenCount);
     const latestMessage = messages[latestAssistantIndex];
-    const announcement = (errorMsg || latestMessage?.content || '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[*_#`>]/g, '').slice(0, 200);
+    const announcement = (isNotUnderstood(latestMessage) ? NOT_UNDERSTOOD_MESSAGE : errorMsg || latestMessage?.content || '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[*_#`>]/g, '').slice(0, 200);
     const renderMessage = (msg: typeof messages[number], idx: number) => (
                             <div
                                 key={idx}
@@ -246,7 +250,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                                 className={`${styles.messageRow} ${msg.role === "user" ? styles.rowUser : styles.rowModel}`}
                             >
                                 <div data-chat-bubble className={`${styles.bubble} ${msg.role === "user" ? styles.bubbleUser : styles.bubbleModel}`}>
-                                    {!msg.bookingResult && <SafeMarkdown content={idx === reviewIndex ? "" : msg.content} />}
+                                    {isNotUnderstood(msg) ? <p>{NOT_UNDERSTOOD_MESSAGE}</p> : !msg.bookingResult && <SafeMarkdown content={idx === reviewIndex ? "" : msg.content} />}
 
                                     {/* Emergency Card */}
                                     {msg.urgency === "EMERGENCY" && (
@@ -263,11 +267,15 @@ const PatientMedicalChatWidget: React.FC = () => {
                                         </div>
                                     )}
 
-                                    {msg.toolResults?.map((toolResult, toolIndex) => toolResult.status === 'completed'
+                                    {!isNotUnderstood(msg) && msg.toolResults?.map((toolResult, toolIndex) => toolResult.status === 'completed'
                                         ? <GroundedToolData key={toolIndex} result={toolResult} />
                                         : toolResult.status === 'failed' ? <p key={toolIndex} className={styles.toolError}>{aiToolErrorMessage(toolResult.error?.code, toolResult.error?.message)}</p> : toolResult.displayText && isAdditionalCopy(toolResult.displayText, msg.content) ? <p key={toolIndex}>{toolResult.displayText}</p> : null)}
 
-                                    {msg.copilotCards?.map((card, cardIndex) => (
+                                    {msg.copilotCards?.map((card, cardIndex) => {
+                                        const emptyMessage = copilotCardEmptyMessage(card);
+                                        if (emptyMessage !== null) return isAdditionalCopy(emptyMessage, msg.content)
+                                            ? <p key={`${card.type}-${cardIndex}`} className={styles.specialtyReason}>{emptyMessage}</p> : null;
+                                        return (
                                         <div key={`${card.type}-${cardIndex}`} className={styles.cardContainer}>
                                             <div className={styles.cardData} aria-label="Dữ liệu từ hệ thống ClinicCare">
                                                 <h4 className={styles.bookingSummaryTitle}>
@@ -278,7 +286,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                 {renderCopilotCardData(card)}
                                             </div>
                                         </div>
-                                    ))}
+                                    ); })}
 
                                     {msg.suggestions && msg.suggestions.length > 0 && msg.urgency !== 'EMERGENCY' && <div className={styles.cardContainer}>
                                         {msg.suggestions.map(s => <button type="button" key={s.specialtyId} className={styles.specialtyChoice}
@@ -449,8 +457,7 @@ const PatientMedicalChatWidget: React.FC = () => {
 
                     <ProviderStatus state={wizard ? 'NotCalled' : messages[latestAssistantIndex]?.providerState} error={errorMsg || (messages[latestAssistantIndex]?.assistantStatus === 'Offline' ? messages[latestAssistantIndex]?.content : undefined)} detail={messages[latestAssistantIndex]?.executionMode} />
 
-                    {(latestMessage?.fallbackActive || providerStateTone(latestMessage?.providerState) === 'amber' || /quá nhiều|giới hạn|429|phản hồi quá lâu|chờ.*giây/i.test(errorMsg)) && <p className={styles.localHint}>Trợ lý đang ở chế độ nội bộ nên chỉ hiểu một số câu. Bạn dùng các gợi ý bên dưới để chắc chắn nhất.</p>}
-                    <div className={styles.visuallyHidden} aria-live="polite" aria-atomic="true" data-chat-announcement>{announcement && <span key={announcement} role="note" aria-label={announcement} />}</div>
+                    {(latestMessage?.isError || latestMessage?.toolResults?.some(result => result.status === 'failed') || isNotUnderstood(latestMessage) || providerStateTone(latestMessage?.providerState) === 'amber' || /quá nhiều|giới hạn lưu lượng|429/i.test(errorMsg)) && <p className={styles.localHint}>Trợ lý đang ở chế độ nội bộ nên chỉ hiểu một số câu. Bạn dùng các gợi ý bên dưới để chắc chắn nhất.</p>}
                     <div ref={messageAreaRef} className={styles.messageArea} data-chat-messages onScroll={() => {
                         const area = messageAreaRef.current;
                         if (area) { nearBottomRef.current = area.scrollHeight - area.scrollTop - area.clientHeight <= 80; if (nearBottomRef.current) setHasNewMessages(false); }
@@ -509,6 +516,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                 </div>
             )}
 
+            {isOpen && <div className={styles.visuallyHidden} aria-live="polite" aria-atomic="true" data-chat-announcement>{announcement}</div>}
             <style>{`
                 @keyframes pulse {
                     0%, 100% { opacity: 0.3; transform: scale(0.8); }

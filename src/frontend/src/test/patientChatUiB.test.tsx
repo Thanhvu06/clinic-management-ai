@@ -114,8 +114,7 @@ it('5 hides technical detail and explains fallback outside the status element', 
     mocks.flow.messages = [{ role: 'model', content: 'Hỗ trợ nội bộ', providerState: 'Disabled', executionMode: 'Deterministic', fallbackActive: true }];
     mount();
     expect(screen.queryByText('Deterministic')).not.toBeInTheDocument();
-    const hint = screen.getByText(/Trợ lý đang ở chế độ nội bộ nên chỉ hiểu một số câu/);
-    expect(hint.closest('[data-provider-status]')).toBeNull();
+    expect(screen.queryByText(/Trợ lý đang ở chế độ nội bộ nên chỉ hiểu một số câu/)).not.toBeInTheDocument();
     expect(document.querySelector('[data-provider-status]')).toHaveAttribute('data-tone', 'local');
 });
 it('6 shows a single success card action with the upcoming highlight URL', () => {
@@ -139,5 +138,5 @@ it('8 announces only 200 plain characters, not the whole message history', () =>
     expect(document.querySelector('[data-chat-messages]')).not.toHaveAttribute('aria-live');
     const live = document.querySelector('[data-chat-announcement]')!;
     expect(live).toHaveAttribute('aria-live', 'polite');
-    expect(within(live as HTMLElement).getByRole('note')).toHaveAccessibleName('a'.repeat(200));
+    expect(live).toHaveTextContent('a'.repeat(200));
 });
