@@ -22,6 +22,8 @@ export interface ActiveMedicine {
     name: string;
     unit: string;
     stockQuantity: number;
+    isPrescriptionRequired?: boolean;
+    strength?: string | null;
 }
 
 export const doctorApi = {

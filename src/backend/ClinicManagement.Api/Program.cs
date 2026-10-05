@@ -279,6 +279,8 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
+builder.Services.AddScoped<ClinicManagement.Infrastructure.Medicines.MedicineCatalogService>();
+builder.Services.AddSingleton<MedicineImageStorage>();
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddCors();
@@ -313,6 +315,16 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+var medicineImages = app.Services.GetRequiredService<MedicineImageStorage>();
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(medicineImages.DirectoryPath),
+    RequestPath = "/media/medicines",
+    ContentTypeProvider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider(
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        { [".jpg"] = "image/jpeg", [".png"] = "image/png", [".webp"] = "image/webp" }),
+    OnPrepareResponse = context => context.Context.Response.Headers["X-Content-Type-Options"] = "nosniff"
+});
 app.UseRouting();
 app.UseCors(corsBuilder => 
 {
