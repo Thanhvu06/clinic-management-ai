@@ -67,6 +67,32 @@ public sealed class CancelledVisitAndCopilotCheckInTests : IntegrationTestBase
         public RoleConfirmedActionToolHandler Handler() => new(Db, Actor(ReceptionistId), Clock, Visits,
             Mock.Of<IDiagnosticWorkflowService>(), Doctor, Mock.Of<IPharmacyService>());
 
+        public async Task<(AiToolInvocation Invocation, AiToolExecutionContext Context)> PrepareCheckInAsync(Appointment appointment)
+        {
+            var department = await Db.Departments.FirstAsync(x => x.FacilityId == appointment.FacilityId && x.IsActive);
+            var sessionId = "sess_r3_" + Guid.NewGuid().ToString("N");
+            AiToolExecutionContext Context(AiToolInvocationChannel channel) => new()
+            {
+                ActorId = ReceptionistId, IsAuthenticated = true,
+                Roles = new HashSet<AiActorRole> { AiActorRole.Receptionist },
+                SessionId = sessionId, InvocationChannel = channel
+            };
+            var prepared = await Handler().ExecuteAsync(new AiToolInvocation
+            {
+                ToolName = "reception.prepare_check_in_appointment", ToolVersion = "1.0",
+                ArgumentsJson = JsonSerializer.Serialize(new { appointmentId = appointment.Id, departmentId = department.Id })
+            }, Context(AiToolInvocationChannel.DirectHumanPreparation));
+            Assert.Null(prepared.Error);
+            Assert.True(prepared.RequiresConfirmation);
+            Assert.NotNull(prepared.ActionId);
+            var token = JsonSerializer.SerializeToElement(prepared.Data).GetProperty("confirmationToken").GetString();
+            return (new AiToolInvocation
+            {
+                ToolName = "role.execute_confirmed_action", ToolVersion = "1.0",
+                ArgumentsJson = JsonSerializer.Serialize(new { actionId = prepared.ActionId, confirm = true, concurrencyToken = token })
+            }, Context(AiToolInvocationChannel.DirectHumanConfirmation));
+        }
+
         public void AdvanceOneMinute()
         {
             var utc = Clock.UtcNow.AddMinutes(1);
@@ -281,6 +307,87 @@ public sealed class CancelledVisitAndCopilotCheckInTests : IntegrationTestBase
         await f.Doctor.MarkNoShowAsync(appointment.Id, new NoShowAppointmentDto());
         Assert.Equal(AppointmentStatus.NoShow, (await f.Db.Appointments.SingleAsync(x => x.Id == appointment.Id)).Status);
         Assert.Equal(VisitStatus.Cancelled, (await f.Db.PatientVisits.SingleAsync(x => x.Id == ticket.VisitId)).Status);
+    }
+
+    [Fact]
+    public async Task R3_Copilot_rechecks_cancelled_visit_and_confirmation_replay_has_no_domain_writes()
+    {
+        using var f = new Fixture(Factory);
+        var appointment = await f.AppointmentAsync();
+        var firstAction = await f.PrepareCheckInAsync(appointment);
+        var firstConfirmation = await f.Handler().ExecuteAsync(firstAction.Invocation, firstAction.Context);
+        Assert.Null(firstConfirmation.Error);
+        Assert.Equal("completed", firstConfirmation.Status);
+        f.Db.ChangeTracker.Clear();
+        var first = await f.Db.PatientVisits.AsNoTracking().SingleAsync(x => x.AppointmentId == appointment.Id);
+        await f.Visits.UpdateVisitStatusAsync(first.Id, VisitStatus.Cancelled, "Bệnh nhân yêu cầu hủy");
+        f.AdvanceOneMinute();
+        f.Db.ChangeTracker.Clear();
+        Assert.Equal(VisitStatus.Cancelled, (await f.Db.PatientVisits.AsNoTracking().SingleAsync(x => x.Id == first.Id)).Status);
+        Assert.Equal(AppointmentStatus.Confirmed, (await f.Db.Appointments.AsNoTracking().SingleAsync(x => x.Id == appointment.Id)).Status);
+
+        var action = await f.PrepareCheckInAsync(appointment);
+        var confirmed = await f.Handler().ExecuteAsync(action.Invocation, action.Context);
+        Assert.Null(confirmed.Error);
+        Assert.Equal("completed", confirmed.Status);
+        Assert.False(confirmed.IsIdempotentReplay);
+        Assert.Equal("Đã check-in lịch hẹn và tạo lượt khám.", confirmed.DisplayText);
+        Assert.Equal(first.Id.ToString(), JsonSerializer.SerializeToElement(confirmed.Data).GetProperty("reference").GetString());
+        f.Db.ChangeTracker.Clear();
+        var reopened = await f.Db.PatientVisits.AsNoTracking().SingleAsync(x => x.AppointmentId == appointment.Id);
+        Assert.Equal(first.Id, reopened.Id);
+        Assert.Equal(first.VisitCode, reopened.VisitCode);
+        Assert.Equal(VisitStatus.WaitingForDoctor, reopened.Status);
+        Assert.True(reopened.QueueNumber > first.QueueNumber);
+        Assert.Null(reopened.CancelledAtUtc);
+        Assert.Null(reopened.CancellationReason);
+        Assert.Equal(f.Clock.UtcNow, reopened.CheckedInAtUtc);
+        Assert.Equal(AppointmentStatus.CheckedIn, (await f.Db.Appointments.AsNoTracking().SingleAsync(x => x.Id == appointment.Id)).Status);
+        Assert.Equal(1, await f.Db.PatientVisits.CountAsync(x => x.AppointmentId == appointment.Id));
+        var histories = await f.Db.AppointmentHistories.CountAsync(x => x.AppointmentId == appointment.Id);
+        Assert.Equal(3, histories);
+        var queue = await f.Db.DailyQueueSequences.AsNoTracking().SingleAsync(x => x.DepartmentId == reopened.DepartmentId && x.Date == Today);
+        var notifications = await f.Db.Notifications.CountAsync(x => x.RelatedEntityId == appointment.Id.ToString());
+
+        var replay = await f.Handler().ExecuteAsync(action.Invocation, action.Context);
+        Assert.Null(replay.Error);
+        Assert.Equal("completed", replay.Status);
+        Assert.True(replay.IsIdempotentReplay);
+        Assert.Equal("idempotent_replay", replay.ResultType);
+        Assert.Equal(first.Id.ToString(), JsonSerializer.SerializeToElement(replay.Data).GetProperty("reference").GetString());
+        f.Db.ChangeTracker.Clear();
+        var afterReplay = await f.Db.PatientVisits.AsNoTracking().SingleAsync(x => x.AppointmentId == appointment.Id);
+        Assert.Equal(reopened.QueueNumber, afterReplay.QueueNumber);
+        Assert.Equal(reopened.CheckedInAtUtc, afterReplay.CheckedInAtUtc);
+        Assert.Equal(queue.LastNumber, (await f.Db.DailyQueueSequences.AsNoTracking().SingleAsync(x => x.DepartmentId == reopened.DepartmentId && x.Date == Today)).LastNumber);
+        Assert.Equal(histories, await f.Db.AppointmentHistories.CountAsync(x => x.AppointmentId == appointment.Id));
+        Assert.Equal(notifications, await f.Db.Notifications.CountAsync(x => x.RelatedEntityId == appointment.Id.ToString()));
+        Assert.Equal(1, await f.Db.PatientVisits.CountAsync(x => x.AppointmentId == appointment.Id));
+    }
+
+    [Fact]
+    public async Task R3_Copilot_keeps_already_checked_in_response_for_active_visit_without_domain_writes()
+    {
+        using var f = new Fixture(Factory);
+        var appointment = await f.AppointmentAsync();
+        var ticket = await f.Visits.CheckInAppointmentAsync(new AppointmentCheckInRequest { AppointmentId = appointment.Id });
+        f.Db.ChangeTracker.Clear();
+        var historyCount = await f.Db.AppointmentHistories.CountAsync(x => x.AppointmentId == appointment.Id);
+        var queue = await f.Db.DailyQueueSequences.AsNoTracking().SingleAsync(x => x.DepartmentId == ticket.DepartmentId && x.Date == Today);
+        var action = await f.PrepareCheckInAsync(appointment);
+        var confirmed = await f.Handler().ExecuteAsync(action.Invocation, action.Context);
+        Assert.Null(confirmed.Error);
+        Assert.Equal("completed", confirmed.Status);
+        Assert.True(confirmed.IsIdempotentReplay);
+        Assert.Equal("Lịch hẹn đã được check-in trước đó.", confirmed.DisplayText);
+        Assert.Equal(ticket.VisitId.ToString(), JsonSerializer.SerializeToElement(confirmed.Data).GetProperty("reference").GetString());
+        f.Db.ChangeTracker.Clear();
+        var visit = await f.Db.PatientVisits.AsNoTracking().SingleAsync(x => x.AppointmentId == appointment.Id);
+        Assert.Equal(VisitStatus.WaitingForDoctor, visit.Status);
+        Assert.Equal(ticket.QueueNumber, visit.QueueNumber);
+        Assert.Equal(queue.LastNumber, (await f.Db.DailyQueueSequences.AsNoTracking().SingleAsync(x => x.DepartmentId == ticket.DepartmentId && x.Date == Today)).LastNumber);
+        Assert.Equal(historyCount, await f.Db.AppointmentHistories.CountAsync(x => x.AppointmentId == appointment.Id));
+        Assert.Equal(1, await f.Db.PatientVisits.CountAsync(x => x.AppointmentId == appointment.Id));
     }
 
     [Fact]

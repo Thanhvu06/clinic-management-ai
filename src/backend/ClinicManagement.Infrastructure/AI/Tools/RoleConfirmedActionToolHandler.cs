@@ -348,7 +348,7 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
         var resolved = await ResolveReceptionAppointmentAsync(context.ActorId!.Value, appointmentId, departmentId, GetLong(args, "roomId"), GetLong(args, "assignedDoctorId"), ct, enforcePreparationDate: false);
         EnsureFacility(action, resolved.FacilityId);
         var existing = await _db.PatientVisits.AsNoTracking().FirstOrDefaultAsync(x => x.AppointmentId == appointmentId, ct);
-        if (existing != null) return new ExecutionResult(existing.Id.ToString(), "check_in_ticket", "Lịch hẹn đã được check-in trước đó.", true);
+        if (existing != null && existing.Status != VisitStatus.Cancelled) return new ExecutionResult(existing.Id.ToString(), "check_in_ticket", "Lịch hẹn đã được check-in trước đó.", true);
         EnsureVersion(action, resolved.Version);
         var ticket = await _visits.CheckInAppointmentAsync(new AppointmentCheckInRequest
         {
