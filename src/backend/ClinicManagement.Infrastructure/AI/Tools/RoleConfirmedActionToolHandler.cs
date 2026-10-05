@@ -345,7 +345,7 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
     {
         var appointmentId = GetLong(args, "appointmentId")!.Value;
         var departmentId = GetLong(args, "departmentId")!.Value;
-        var resolved = await ResolveReceptionAppointmentAsync(context.ActorId!.Value, appointmentId, departmentId, GetLong(args, "roomId"), GetLong(args, "assignedDoctorId"), ct);
+        var resolved = await ResolveReceptionAppointmentAsync(context.ActorId!.Value, appointmentId, departmentId, GetLong(args, "roomId"), GetLong(args, "assignedDoctorId"), ct, enforcePreparationDate: false);
         EnsureFacility(action, resolved.FacilityId);
         var existing = await _db.PatientVisits.AsNoTracking().FirstOrDefaultAsync(x => x.AppointmentId == appointmentId, ct);
         if (existing != null) return new ExecutionResult(existing.Id.ToString(), "check_in_ticket", "Lịch hẹn đã được check-in trước đó.", true);
@@ -500,7 +500,8 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
         long departmentId,
         long? roomId,
         long? assignedDoctorId,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool enforcePreparationDate = true)
     {
         var appointment = await _db.Appointments.AsNoTracking().Where(x => x.Id == appointmentId)
             .Select(x => new
@@ -524,6 +525,9 @@ public sealed class RoleConfirmedActionToolHandler : IAiToolHandler
             !await HasFacilityRoleAsync(actorId, AiActorRole.Receptionist, appointment.FacilityId.Value, null, ct) ||
             !await HasDoctorAtFacilityAsync(appointment.DoctorUserId, department.FacilityId, ct))
             return Preparation.Invalid("FACILITY_SCOPE_DENIED", "Lịch hẹn không thuộc cơ sở tiếp nhận được phân quyền.");
+
+        if (enforcePreparationDate && appointment.AppointmentDate != _clock.VietnamToday)
+            return Preparation.Invalid("CHECKIN_NOT_TODAY", $"Lịch hẹn ngày {appointment.AppointmentDate:dd/MM/yyyy}; chỉ tiếp nhận được vào đúng ngày khám.");
 
         if (roomId.HasValue && !await _db.Rooms.AsNoTracking().AnyAsync(x => x.Id == roomId.Value && x.DepartmentId == department.Id && x.IsActive, ct))
             return Preparation.Invalid("RESOURCE_SCOPE_DENIED", "Phòng tiếp nhận không thuộc khoa đang được phân quyền.");
