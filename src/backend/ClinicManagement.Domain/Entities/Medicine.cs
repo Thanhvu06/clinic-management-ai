@@ -22,6 +22,16 @@ public class Medicine
     public int ReorderLevel { get; set; }
     public decimal? UnitPrice { get; set; }
     public bool IsActive { get; set; } = true;
+    public string? ActiveIngredient { get; set; }
+    public string? Strength { get; set; }
+    public string? DosageForm { get; set; }
+    public string? Manufacturer { get; set; }
+    public long? CategoryId { get; set; }
+    public MedicineCategory? Category { get; set; }
+    public bool IsPrescriptionRequired { get; set; } = true;
+    public string? Description { get; set; }
+    public string? StorageInstructions { get; set; }
+    public string? ImagePath { get; set; }
     
     [Timestamp]
     public byte[]? RowVersion { get; set; }

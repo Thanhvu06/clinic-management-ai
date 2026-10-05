@@ -37,6 +37,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     
     // Pharmacy
     public DbSet<Medicine> Medicines { get; set; } = null!;
+    public DbSet<MedicineCategory> MedicineCategories { get; set; } = null!;
     public DbSet<Prescription> Prescriptions { get; set; } = null!;
     public DbSet<PrescriptionItem> PrescriptionItems { get; set; } = null!;
     public DbSet<MedicineStockTransaction> MedicineStockTransactions { get; set; } = null!;

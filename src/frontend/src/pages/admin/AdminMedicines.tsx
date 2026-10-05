@@ -1,21 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
-import type { ApiResponse } from '../../types';
+import type { ApiResponse, MedicineDto, MedicineCategoryDto } from '../../types';
+import { medicineApi, medicineImageUrl } from '../../api/medicineApi';
+import { MedicineCategoryManager } from './MedicineCategoryManager';
 import { Search, Plus, Edit, Pill, X, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
 
-interface Medicine {
-    id: number;
-    code: string;
-    name: string;
-    unit: string;
-    stockQuantity: number;
-    reorderLevel: number;
-    unitPrice?: number | null;
-    isActive: boolean;
-    createdAt: string;
-    updatedAt?: string;
-}
+type Medicine = MedicineDto;
 
 export const AdminMedicines: React.FC = () => {
     const { showAlert } = useDialog();
@@ -36,6 +27,45 @@ export const AdminMedicines: React.FC = () => {
     });
     const [formLoading, setFormLoading] = useState(false);
     const [formError, setFormError] = useState('');
+    const [categories, setCategories] = useState<MedicineCategoryDto[]>([]);
+    const [selectedImage, setSelectedImage] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [savedMedicineId, setSavedMedicineId] = useState<number | null>(null);
+    const fetchCategories = async () => {
+        try { const res = await medicineApi.getCategories(); if (res.success) setCategories(res.data ?? []); }
+        catch (error) { showAlert((error as { message?: string }).message || 'Không thể tải nhóm thuốc.', 'Lỗi', 'error'); }
+    };
+    useEffect(() => { fetchCategories(); }, []);
+    useEffect(() => { setSelectedImage(null); setSavedMedicineId(null); }, [modal.isOpen, modal.data.id]);
+    useEffect(() => {
+        if (!selectedImage) { setImagePreview(null); return; }
+        const preview = URL.createObjectURL(selectedImage); setImagePreview(preview);
+        return () => URL.revokeObjectURL(preview);
+    }, [selectedImage]);
+    const catalogPayload = () => ({
+        activeIngredient: modal.data.activeIngredient || null, strength: modal.data.strength || null,
+        dosageForm: modal.data.dosageForm || null, manufacturer: modal.data.manufacturer || null,
+        categoryId: modal.data.categoryId ?? null, isPrescriptionRequired: modal.data.isPrescriptionRequired ?? true,
+        description: modal.data.description || null, storageInstructions: modal.data.storageInstructions || null
+    });
+    const finishSave = async (id: number, message: string) => {
+        // Retain the saved id when image upload fails so retry cannot create a duplicate.
+        setSavedMedicineId(id);
+        if (selectedImage) await medicineApi.uploadImage(id, selectedImage);
+        showAlert(message, 'Thành công', 'success');
+        setModal({ isOpen: false, isEdit: false, data: {} }); fetchMedicines();
+    };
+    const deleteImage = async () => {
+        if (!modal.data.id) return;
+        setFormLoading(true); setFormError('');
+        try {
+            await medicineApi.deleteImage(modal.data.id);
+            setSelectedImage(null);
+            setModal(current => ({ ...current, data: { ...current.data, imagePath: null, imageUrl: null } }));
+            fetchMedicines();
+        } catch (error) { setFormError((error as { message?: string }).message || 'Không thể xóa ảnh.'); }
+        finally { setFormLoading(false); }
+    };
 
     const fetchMedicines = async () => {
         setLoading(true);
@@ -75,8 +105,13 @@ export const AdminMedicines: React.FC = () => {
         setFormLoading(true);
 
         try {
+            if (!modal.isEdit && savedMedicineId !== null) {
+                await finishSave(savedMedicineId, 'Thêm thuốc mới vào danh mục thành công.');
+                return;
+            }
             if (modal.isEdit) {
                 const res = await axiosClient.put<any, ApiResponse<any>>(`/admin/medicines/${modal.data.id}`, {
+                    ...catalogPayload(),
                     name: modal.data.name,
                     unit: modal.data.unit,
                     reorderLevel: Number(modal.data.reorderLevel) || 10,
@@ -84,12 +119,11 @@ export const AdminMedicines: React.FC = () => {
                     isActive: modal.data.isActive ?? true
                 });
                 if (res.success) {
-                    showAlert('Cập nhật thông tin thuốc thành công.', 'Thành công', 'success');
-                    setModal({ isOpen: false, isEdit: false, data: {} });
-                    fetchMedicines();
+                    await finishSave(modal.data.id!, 'Cập nhật thông tin thuốc thành công.');
                 }
             } else {
                 const res = await axiosClient.post<any, ApiResponse<any>>('/admin/medicines', {
+                    ...catalogPayload(),
                     code: modal.data.code,
                     name: modal.data.name,
                     unit: modal.data.unit,
@@ -99,9 +133,7 @@ export const AdminMedicines: React.FC = () => {
                     isActive: modal.data.isActive ?? true
                 });
                 if (res.success) {
-                    showAlert('Thêm thuốc mới vào danh mục thành công.', 'Thành công', 'success');
-                    setModal({ isOpen: false, isEdit: false, data: {} });
-                    fetchMedicines();
+                    await finishSave(res.data.id, 'Thêm thuốc mới vào danh mục thành công.');
                 }
             }
         } catch (error: any) {
@@ -171,11 +203,13 @@ export const AdminMedicines: React.FC = () => {
             {/* Table */}
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
-                    <table className="table">
+                    <table className="table" aria-label="Danh mục thuốc">
                         <thead>
                             <tr>
                                 <th>Mã thuốc</th>
                                 <th>Tên thuốc</th>
+                                <th>Nhóm</th>
+                                <th>Kê đơn</th>
                                 <th>Đơn vị tính</th>
                                 <th>Đơn giá (VNĐ)</th>
                                 <th>Tồn kho hiện tại</th>
@@ -187,11 +221,11 @@ export const AdminMedicines: React.FC = () => {
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={8} style={{ textAlign: 'center', padding: '32px' }}>Đang tải danh mục thuốc...</td>
+                                    <td colSpan={10} style={{ textAlign: 'center', padding: '32px' }}>Đang tải danh mục thuốc...</td>
                                 </tr>
                             ) : medicines.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} style={{ textAlign: 'center', padding: '32px', color: 'var(--c-muted)' }}>
+                                    <td colSpan={10} style={{ textAlign: 'center', padding: '32px', color: 'var(--c-muted)' }}>
                                         Không tìm thấy thuốc nào trong danh mục.
                                     </td>
                                 </tr>
@@ -202,6 +236,8 @@ export const AdminMedicines: React.FC = () => {
                                         <tr key={med.id}>
                                             <td style={{ fontWeight: 600, color: 'var(--c-navy-dark)' }}>{med.code}</td>
                                             <td style={{ fontWeight: 600 }}>{med.name}</td>
+                                            <td>{med.categoryName || '—'}</td>
+                                            <td><span className="badge">{(med.isPrescriptionRequired ?? true) ? 'Kê đơn' : 'Không kê đơn'}</span></td>
                                             <td>
                                                 <span style={{ backgroundColor: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', fontSize: '0.825rem', color: '#475569' }}>
                                                     {med.unit}
@@ -288,6 +324,7 @@ export const AdminMedicines: React.FC = () => {
             </div>
 
             {/* Modal */}
+            <MedicineCategoryManager categories={categories} onChanged={() => { fetchCategories(); fetchMedicines(); }} />
             {modal.isOpen && (
                 <div style={{
                     position: 'fixed',
@@ -404,6 +441,25 @@ export const AdminMedicines: React.FC = () => {
                                 </div>
                             )}
 
+                            {([
+                                ['activeIngredient', 'Hoạt chất', 200], ['strength', 'Hàm lượng', 100],
+                                ['dosageForm', 'Dạng bào chế', 100], ['manufacturer', 'Nhà sản xuất', 200],
+                                ['description', 'Mô tả', 1000], ['storageInstructions', 'Hướng dẫn bảo quản', 500]
+                            ] as const).map(([field, label, maxLength]) => <label key={field} style={{ fontWeight: 600, fontSize: '0.875rem' }}>{label}
+                                <input className="form-input" maxLength={maxLength} value={modal.data[field] ?? ''}
+                                    onChange={e => setModal({ ...modal, data: { ...modal.data, [field]: e.target.value } })} />
+                            </label>)}
+                            <label>Nhóm thuốc<select className="form-select" value={modal.data.categoryId ?? ''}
+                                onChange={e => setModal({ ...modal, data: { ...modal.data, categoryId: e.target.value ? Number(e.target.value) : null } })}>
+                                <option value="">Không có nhóm</option>
+                                {categories.filter(c => c.isActive).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select></label>
+                            <label><input type="checkbox" checked={modal.data.isPrescriptionRequired ?? true}
+                                onChange={e => setModal({ ...modal, data: { ...modal.data, isPrescriptionRequired: e.target.checked } })} /> Thuốc kê đơn</label>
+                            <label>Ảnh thuốc<input type="file" accept="image/jpeg,image/png,image/webp" disabled={formLoading}
+                                onChange={e => setSelectedImage(e.target.files?.[0] ?? null)} /></label>
+                            {(imagePreview || modal.data.imageUrl) && <img src={imagePreview ?? medicineImageUrl(modal.data.imageUrl!)} alt="Xem trước ảnh thuốc" style={{ maxWidth: 180, maxHeight: 160, objectFit: 'contain' }} />}
+                            {modal.data.imageUrl && <button type="button" className="btn-secondary" disabled={formLoading} onClick={deleteImage}>Xóa ảnh</button>}
                             <div>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
                                     <input

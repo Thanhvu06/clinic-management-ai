@@ -29,9 +29,9 @@ public class MedicineController : ControllerBase
 
     [HttpGet("api/v1/admin/medicines")]
     [Authorize(Roles = RoleNames.Admin + "," + RoleNames.Pharmacist)]
-    public async Task<IActionResult> GetMedicines([FromQuery] string? search, [FromQuery] bool? isActive, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    public async Task<IActionResult> GetMedicines([FromQuery] string? search, [FromQuery] bool? isActive, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] long? categoryId = null, [FromQuery] bool? isPrescriptionRequired = null)
     {
-        var result = await _medicineService.GetMedicinesAsync(search, isActive, page, pageSize);
+        var result = await _medicineService.GetMedicinesAsync(search, isActive, page, pageSize, categoryId, isPrescriptionRequired);
         return Ok(ApiResponse<PagedResult<MedicineDto>>.Ok(result));
     }
 

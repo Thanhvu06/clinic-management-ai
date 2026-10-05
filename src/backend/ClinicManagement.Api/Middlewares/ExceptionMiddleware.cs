@@ -65,7 +65,10 @@ public class ExceptionMiddleware
                 response.Message = e.Message;
                 break;
             case BusinessException e:
-                context.Response.StatusCode = (int)HttpStatusCode.UnprocessableEntity;
+                context.Response.StatusCode = e.ErrorCode is "INVALID_MEDICINE_CATEGORY" or "INVALID_IMAGE_TYPE"
+                    or "IMAGE_TOO_LARGE" or "CATEGORY_HAS_ACTIVE_MEDICINES" or "DUPLICATE_CATEGORY_NAME"
+                    or "INVALID_CATEGORY_NAME" or "INVALID_MEDICINE_TYPE" or "IMAGE_UPLOAD_REQUIRED"
+                    ? (int)HttpStatusCode.BadRequest : (int)HttpStatusCode.UnprocessableEntity;
                 response.ErrorCode = e.ErrorCode;
                 response.Message = e.Message;
                 break;

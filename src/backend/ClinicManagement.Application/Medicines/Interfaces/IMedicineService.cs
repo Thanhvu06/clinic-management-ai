@@ -8,7 +8,7 @@ namespace ClinicManagement.Application.Medicines.Interfaces;
 public interface IMedicineService
 {
     Task<List<ActiveMedicineDto>> GetActiveMedicinesAsync();
-    Task<PagedResult<MedicineDto>> GetMedicinesAsync(string? search, bool? isActive, int page, int pageSize);
+    Task<PagedResult<MedicineDto>> GetMedicinesAsync(string? search, bool? isActive, int page, int pageSize, long? categoryId = null, bool? isPrescriptionRequired = null);
     Task<MedicineDto> GetMedicineByIdAsync(long id);
     Task<MedicineDto> CreateMedicineAsync(CreateMedicineDto dto);
     Task<MedicineDto> UpdateMedicineAsync(long id, UpdateMedicineDto dto);

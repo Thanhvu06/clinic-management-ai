@@ -22,6 +22,7 @@ public class DevelopmentDataSeederOptions
 
 public static class DevelopmentDataSeeder
 {
+    public static Task SeedMedicineCatalogAsync(AppDbContext db) => MedicineCatalogDevelopmentSeed.SeedAsync(db);
     public static async Task SeedAsync(IServiceProvider serviceProvider, DevelopmentDataSeederOptions? options = null)
     {
         var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DevelopmentDataSeeder");
@@ -475,23 +476,15 @@ public static class DevelopmentDataSeeder
         }
 
         // 10. Medicines & Pharmacy Seed
-        if (!await db.Medicines.AnyAsync())
+        var seedPharmacyPrescriptions = !await db.Medicines.AnyAsync();
+        await SeedMedicineCatalogAsync(db);
+        if (seedPharmacyPrescriptions)
         {
-            var med1 = new Medicine { Code = "MED01", Name = "Paracetamol 500mg", Unit = "Viên", StockQuantity = 500, ReorderLevel = 100, UnitPrice = 2000m, IsActive = true };
-            var med2 = new Medicine { Code = "MED02", Name = "Amoxicillin 500mg", Unit = "Viên", StockQuantity = 300, ReorderLevel = 50, UnitPrice = 5000m, IsActive = true };
-            var med3 = new Medicine { Code = "MED03", Name = "Ibuprofen 400mg", Unit = "Viên", StockQuantity = 250, ReorderLevel = 50, UnitPrice = 3500m, IsActive = true };
-            var med4 = new Medicine { Code = "MED04", Name = "Omeprazole 20mg", Unit = "Viên", StockQuantity = 400, ReorderLevel = 80, UnitPrice = 4500m, IsActive = true };
-            var med5 = new Medicine { Code = "MED05", Name = "Cefixime 200mg", Unit = "Viên", StockQuantity = 150, ReorderLevel = 40, UnitPrice = 12000m, IsActive = true };
-            var med6 = new Medicine { Code = "MED06", Name = "Loratadine 10mg", Unit = "Viên", StockQuantity = 200, ReorderLevel = 50, UnitPrice = 3000m, IsActive = true };
-            var med7 = new Medicine { Code = "MED07", Name = "Metformin 500mg", Unit = "Viên", StockQuantity = 350, ReorderLevel = 60, UnitPrice = 2500m, IsActive = true };
-            var med8 = new Medicine { Code = "MED08", Name = "Amlodipine 5mg", Unit = "Viên", StockQuantity = 300, ReorderLevel = 50, UnitPrice = 4000m, IsActive = true };
-            var med9 = new Medicine { Code = "MED09", Name = "Vitamin C 500mg", Unit = "Viên", StockQuantity = 600, ReorderLevel = 100, UnitPrice = 1500m, IsActive = true };
-            var med10 = new Medicine { Code = "MED10", Name = "Salbutamol 2mg", Unit = "Viên", StockQuantity = 25, ReorderLevel = 50, UnitPrice = 2000m, IsActive = true }; // Low stock alert!
-            var med11 = new Medicine { Code = "MED11", Name = "Berberin 100mg", Unit = "Viên", StockQuantity = 400, ReorderLevel = 80, UnitPrice = 1000m, IsActive = true };
-            var med12 = new Medicine { Code = "MED12", Name = "Phosphalugel 20g", Unit = "Gói", StockQuantity = 180, ReorderLevel = 40, UnitPrice = 8000m, IsActive = true };
-
-            db.Medicines.AddRange(med1, med2, med3, med4, med5, med6, med7, med8, med9, med10, med11, med12);
-            await db.SaveChangesAsync();
+            var med1 = await db.Medicines.SingleAsync(m => m.Code == "MED01");
+            var med2 = await db.Medicines.SingleAsync(m => m.Code == "MED02");
+            var med4 = await db.Medicines.SingleAsync(m => m.Code == "MED04");
+            var med9 = await db.Medicines.SingleAsync(m => m.Code == "MED09");
+            var med12 = await db.Medicines.SingleAsync(m => m.Code == "MED12");
 
             var pharmacistUser = await userManager.FindByEmailAsync("pharmacist@cliniccare.local");
             var pharmacistId = pharmacistUser?.Id ?? Guid.NewGuid();
@@ -562,34 +555,7 @@ public static class DevelopmentDataSeeder
                 logger.LogInformation("Sample Prescriptions seeded.");
             }
         }
-        else
-        {
-            var existingMedsWithoutPrice = await db.Medicines.Where(m => m.UnitPrice == null || m.UnitPrice <= 0).ToListAsync();
-            foreach (var m in existingMedsWithoutPrice)
-            {
-                m.UnitPrice = m.Code switch
-                {
-                    "MED01" => 2000m,
-                    "MED02" => 5000m,
-                    "MED03" => 3500m,
-                    "MED04" => 4500m,
-                    "MED05" => 12000m,
-                    "MED06" => 3000m,
-                    "MED07" => 2500m,
-                    "MED08" => 4000m,
-                    "MED09" => 1500m,
-                    "MED10" => 2000m,
-                    "MED11" => 1000m,
-                    "MED12" => 8000m,
-                    _ => 10000m
-                };
-            }
-            if (existingMedsWithoutPrice.Count > 0)
-            {
-                await db.SaveChangesAsync();
-            }
-        }
-        
+
         // Diagnostic Services Catalog (Idempotent)
         var diagnosticServiceDefs = new[]
         {

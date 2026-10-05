@@ -3,6 +3,7 @@ export interface ApiResponse<T = any> {
     message: string;
     data?: T;
 }
+export type { MedicineDto, ActiveMedicineDto, MedicineCategoryDto, SaveMedicineCategoryDto, PublicMedicineDto, PublicMedicineCategoryDto, MedicineCatalogFields, MedicinePage } from './medicine';
 
 export interface ApiErrorResponse {
     success: boolean;
