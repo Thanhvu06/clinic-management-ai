@@ -115,7 +115,7 @@ public class MedicineCatalogPersistenceTests
         Assert.Null(old.UnitPrice);
         Assert.False(old.IsActive);
         Assert.Equal("custom strength", typeof(Medicine).GetProperty("Strength")!.GetValue(old));
-        Assert.True((bool)typeof(Medicine).GetProperty("IsPrescriptionRequired")!.GetValue(old)!);
+        Assert.False((bool)typeof(Medicine).GetProperty("IsPrescriptionRequired")!.GetValue(old)!);
         var low = await db.Medicines.SingleAsync(m => m.Code == "MED10");
         Assert.Equal(25, low.StockQuantity);
         Assert.Equal(50, low.ReorderLevel);

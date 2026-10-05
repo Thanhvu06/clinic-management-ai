@@ -64,7 +64,9 @@ internal static class MedicineCatalogDevelopmentSeed
                 };
                 db.Medicines.Add(medicine);
             }
-            // Preserve all existing values, including the non-null prescription flag.
+            // Apply prescription classification on first categorization; preserve later pharmacist edits.
+            if (medicine.CategoryId == null)
+                medicine.IsPrescriptionRequired = def.Rx;
             medicine.ActiveIngredient ??= def.ActiveIngredient;
             medicine.Strength ??= def.Strength;
             medicine.DosageForm ??= def.DosageForm;
