@@ -469,7 +469,7 @@ public class PatientVisitService : IPatientVisitService
     {
         var currentUserId = GetUserId();
 
-        // 1. Check idempotency: If visit already created for this appointment, return existing ticket
+        // Active visits keep their ticket; cancelled visits must pass fresh check-in validation.
         var existingVisit = await _dbContext.PatientVisits
             .Include(v => v.Patient)
             .Include(v => v.Department)
@@ -479,7 +479,7 @@ public class PatientVisitService : IPatientVisitService
             .Include(v => v.Appointment)
             .FirstOrDefaultAsync(v => v.AppointmentId == request.AppointmentId, cancellationToken);
 
-        if (existingVisit != null)
+        if (existingVisit != null && existingVisit.Status != VisitStatus.Cancelled)
         {
             await _facilityAuthService.ValidateUserFacilityAccessAsync(currentUserId, existingVisit.FacilityId, cancellationToken);
             var rName = await GetUserNameAsync(existingVisit.CreatedByUserId, cancellationToken);
@@ -568,29 +568,36 @@ public class PatientVisitService : IPatientVisitService
         }
 
         var queueNumber = await GetNextQueueNumberAsync(facilityId, department.Id, appointment.AppointmentDate, cancellationToken);
-        var visitCode = await GenerateVisitCodeAsync(appointment.AppointmentDate, queueNumber, cancellationToken);
-
-        var visit = new PatientVisit
+        var now = _dateTimeProvider.UtcNow;
+        var visit = existingVisit ?? new PatientVisit
         {
-            VisitCode = visitCode,
+            VisitCode = await GenerateVisitCodeAsync(appointment.AppointmentDate, queueNumber, cancellationToken),
             PatientId = appointment.PatientId,
             AppointmentId = appointment.Id,
-            FacilityId = facilityId,
-            DepartmentId = department.Id,
-            RoomId = room?.Id,
-            AssignedDoctorId = assignedDoctorId,
-            VisitDate = appointment.AppointmentDate,
             ArrivalType = VisitArrivalType.Scheduled,
             Priority = VisitPriority.Normal,
             ChiefComplaint = appointment.Reason,
-            QueueNumber = queueNumber,
-            Status = VisitStatus.WaitingForDoctor,
-            CheckedInAtUtc = _dateTimeProvider.UtcNow,
             CreatedByUserId = currentUserId,
-            CreatedAtUtc = _dateTimeProvider.UtcNow
+            CreatedAtUtc = now
         };
-
-        _dbContext.PatientVisits.Add(visit);
+        visit.FacilityId = facilityId;
+        visit.DepartmentId = department.Id;
+        visit.RoomId = room?.Id;
+        visit.AssignedDoctorId = assignedDoctorId;
+        visit.VisitDate = appointment.AppointmentDate;
+        visit.QueueNumber = queueNumber;
+        visit.Status = VisitStatus.WaitingForDoctor;
+        visit.CheckedInAtUtc = now;
+        visit.CancelledAtUtc = null;
+        visit.CancellationReason = null;
+        if (existingVisit == null)
+            _dbContext.PatientVisits.Add(visit);
+        else
+            visit.UpdatedAtUtc = now;
+        var visitCode = visit.VisitCode;
+        // Each re-check-in issues a new queue ticket; first-check-in keys stay unchanged.
+        var notificationSuffix = existingVisit == null ? string.Empty
+            : $":recheck:{department.Id}:{appointment.AppointmentDate:yyyyMMdd}:{queueNumber}";
 
         // Update appointment status to CheckedIn
         var oldStatus = appointment.Status;
@@ -624,7 +631,7 @@ public class PatientVisitService : IPatientVisitService
                 // stable appointment instead of the temporary visit key.
                 RelatedEntityType = "Appointment",
                 RelatedEntityId = appointment.Id.ToString(),
-                DedupeKey = $"checkin_appointment_{appointment.Id}",
+                DedupeKey = $"checkin_appointment_{appointment.Id}{notificationSuffix}",
                 IsRead = false,
                 CreatedAtUtc = _dateTimeProvider.UtcNow
             });
@@ -642,7 +649,7 @@ public class PatientVisitService : IPatientVisitService
                 Route = $"/doctor/appointments/{appointment.Id}",
                 RelatedEntityType = "Appointment",
                 RelatedEntityId = appointment.Id.ToString(),
-                DedupeKey = $"appt_checkin_doc_{appointment.Id}_{doctor.UserId}",
+                DedupeKey = $"appt_checkin_doc_{appointment.Id}_{doctor.UserId}{notificationSuffix}",
                 IsRead = false,
                 CreatedAtUtc = _dateTimeProvider.UtcNow
             });
@@ -650,7 +657,7 @@ public class PatientVisitService : IPatientVisitService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        var receptionistName = await GetUserNameAsync(currentUserId, cancellationToken);
+        var receptionistName = await GetUserNameAsync(visit.CreatedByUserId, cancellationToken);
         var doctorName = doctor != null ? await GetDoctorNameAsync(doctor.Id, cancellationToken) : null;
 
         return new CheckInTicketDto
@@ -944,6 +951,24 @@ public class PatientVisitService : IPatientVisitService
         {
             visit.CancelledAtUtc = _dateTimeProvider.UtcNow;
             visit.CancellationReason = reason;
+            if (visit.AppointmentId.HasValue)
+            {
+                var appointment = await _dbContext.Appointments.FirstOrDefaultAsync(a => a.Id == visit.AppointmentId.Value, cancellationToken);
+                if (appointment?.Status == AppointmentStatus.CheckedIn)
+                {
+                    appointment.Status = AppointmentStatus.Confirmed;
+                    _dbContext.AppointmentHistories.Add(new AppointmentHistory
+                    {
+                        AppointmentId = appointment.Id,
+                        Action = AppointmentHistoryAction.Confirmed,
+                        OldStatus = AppointmentStatus.CheckedIn,
+                        NewStatus = AppointmentStatus.Confirmed,
+                        Note = $"Trả lịch hẹn về trạng thái đã xác nhận sau khi hủy lượt khám {visit.VisitCode}.",
+                        PerformedByUserId = currentUserId,
+                        CreatedAt = _dateTimeProvider.UtcNow
+                    });
+                }
+            }
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);

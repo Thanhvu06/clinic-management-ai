@@ -796,7 +796,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         // doctor's appointment stays NotFound and never creates a visit.
         var appointment = await _dbContext.Appointments.AsNoTracking()
             .Where(a => a.Id == appointmentId && a.DoctorId == doctor.Id)
-            .Select(a => new { a.Status, a.AppointmentDate, HasVisit = _dbContext.PatientVisits.Any(v => v.AppointmentId == a.Id) })
+            .Select(a => new { a.Status, a.AppointmentDate, HasVisit = _dbContext.PatientVisits.Any(v => v.AppointmentId == a.Id && v.Status != VisitStatus.Cancelled) })
             .FirstOrDefaultAsync();
 
         if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
