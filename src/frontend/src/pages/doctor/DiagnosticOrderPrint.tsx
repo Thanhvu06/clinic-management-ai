@@ -129,7 +129,7 @@ export const DiagnosticOrderPrint: React.FC = () => {
                             <ShieldPlus size={32} />
                         </div>
                         <div>
-                            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#0369a1', textTransform: 'uppercase' }}>ClinicCare AI – Hệ thống demo quản lý phòng khám</div>
+                            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#0369a1', textTransform: 'uppercase' }}>ClinicCare AI – Hệ thống phòng khám đa khoa</div>
                             <div style={{ fontSize: '12px', color: '#64748b' }}>Dữ liệu phục vụ trình diễn học tập, không phải chứng từ y tế chính thức.</div>
                         </div>
                     </div>

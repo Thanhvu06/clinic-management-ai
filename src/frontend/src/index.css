@@ -1,71 +1,75 @@
 :root {
-  /* Medical Design System Colors */
-  --c-primary: #0F4C81;          /* Deep Medical Blue */
-  --c-primary-light: #EBF3FA;
-  --c-primary-hover: #0A355C;
-  --c-teal: #0891B2;             /* Medical Cyan / Teal */
-  --c-teal-light: #E0F2FE;
-  --c-teal-dark: #0E7490;
-  
-  --c-secondary: #0D9488;
-  --c-secondary-hover: #0F766E;
+  /*
+   * Alias tương thích ngược. Giá trị thật nằm ở src/theme/tokens.ts
+   * (ghi lên :root thành biến --cc-* bởi applyTokenCssVariables trong main.tsx).
+   * Không thêm giá trị màu/khoảng cách mới tại đây - thêm vào tokens.ts.
+   */
+  --c-primary: var(--cc-color-primary);
+  --c-primary-light: var(--cc-color-primary-light);
+  --c-primary-hover: var(--cc-color-primary-hover);
+  --c-teal: var(--cc-color-teal);
+  --c-teal-light: var(--cc-color-teal-light);
+  --c-teal-dark: var(--cc-color-teal-dark);
 
-  --c-navy: #0F4C81;
-  --c-navy-dark: #0C2340;        /* Sidebar deep slate */
-  
-  --c-bg: #F4F7FA;               /* Modern soft clinic background */
-  --c-card: #FFFFFF;
-  
-  --c-text: #172033;             /* Primary text */
-  --c-text-dark: #0F172A;
-  --c-text-light: #667085;        /* Secondary / muted text */
-  --c-muted: #94A3B8;
-  
-  --c-border: #E2E8F0;
-  --c-border-light: #F1F5F9;
-  
-  --c-success: #059669;
-  --c-success-bg: #ECFDF5;
-  --c-warning: #D97706;
-  --c-warning-bg: #FFFBEB;
-  --c-danger: #DC2626;
-  --c-danger-bg: #FEF2F2;
-  --c-info: #0284C7;
-  --c-info-bg: #F0F9FF;
+  --c-secondary: var(--cc-color-secondary);
+  --c-secondary-hover: var(--cc-color-secondary-hover);
+
+  --c-navy: var(--cc-color-navy);
+  --c-navy-dark: var(--cc-color-navy-dark);
+
+  --c-bg: var(--cc-color-bg-layout);
+  --c-card: var(--cc-color-bg-container);
+
+  --c-text: var(--cc-color-text);
+  --c-text-dark: var(--cc-color-text-dark);
+  --c-text-light: var(--cc-color-text-secondary);
+  --c-muted: var(--cc-color-text-muted);
+
+  --c-border: var(--cc-color-border);
+  --c-border-light: var(--cc-color-border-light);
+
+  --c-success: var(--cc-color-success);
+  --c-success-bg: var(--cc-color-success-bg);
+  --c-warning: var(--cc-color-warning);
+  --c-warning-bg: var(--cc-color-warning-bg);
+  --c-danger: var(--cc-color-danger);
+  --c-danger-bg: var(--cc-color-danger-bg);
+  --c-info: var(--cc-color-info);
+  --c-info-bg: var(--cc-color-info-bg);
 
   /* Typography */
-  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  
-  /* Metrics & 4/8px Spacing Grid */
-  --spacing-1: 4px;
-  --spacing-2: 8px;
-  --spacing-3: 12px;
-  --spacing-4: 16px;
-  --spacing-5: 20px;
-  --spacing-6: 24px;
-  --spacing-7: 28px;
-  --spacing-8: 32px;
+  --font-family: var(--cc-font-family);
 
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
+  /* Spacing (thang token 4/8/12/16/24/32; 20px và 28px ngoài thang, giữ cho CSS cũ) */
+  --spacing-1: var(--cc-space-xxs);
+  --spacing-2: var(--cc-space-xs);
+  --spacing-3: var(--cc-space-sm);
+  --spacing-4: var(--cc-space-md);
+  --spacing-5: 20px;
+  --spacing-6: var(--cc-space-lg);
+  --spacing-7: 28px;
+  --spacing-8: var(--cc-space-xl);
+
+  --space-1: var(--cc-space-xxs);
+  --space-2: var(--cc-space-xs);
+  --space-3: var(--cc-space-sm);
+  --space-4: var(--cc-space-md);
   --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
+  --space-6: var(--cc-space-lg);
+  --space-8: var(--cc-space-xl);
 
   /* Radii */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 14px;
-  --radius-full: 9999px;
+  --radius-sm: var(--cc-radius-sm);
+  --radius-md: var(--cc-radius-md);
+  --radius-lg: var(--cc-radius-lg);
+  --radius-xl: var(--cc-radius-xl);
+  --radius-full: var(--cc-radius-full);
 
-  /* Shadows - subtle & clean */
-  --shadow-sm: 0 1px 2px 0 rgba(16, 24, 40, 0.05);
-  --shadow-md: 0 4px 8px -2px rgba(16, 24, 40, 0.06), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
-  --shadow-lg: 0 12px 16px -4px rgba(16, 24, 40, 0.08), 0 4px 6px -2px rgba(16, 24, 40, 0.03);
-  
+  /* Shadows */
+  --shadow-sm: var(--cc-shadow-sm);
+  --shadow-md: var(--cc-shadow-md);
+  --shadow-lg: var(--cc-shadow-lg);
+
   --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 

@@ -28,6 +28,8 @@ import {
 } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { InvoiceReceiptModal } from '../../components/billing/InvoiceReceiptModal';
+import { DataTable, LoadingState } from '../../components/common';
+import type { DataTableColumn } from '../../components/common';
 import styles from './ReceptionBilling.module.css';
 
 export const ReceptionBilling: React.FC = () => {
@@ -372,6 +374,130 @@ export const ReceptionBilling: React.FC = () => {
 
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
 
+    const invoiceColumns: DataTableColumn<InvoiceDto>[] = [
+        {
+            header: 'Mã HĐ',
+            accessor: (inv) => <span className={styles.codeBadge}>{inv.invoiceCode}</span>,
+        },
+        {
+            header: 'Bệnh nhân',
+            accessor: (inv) => (
+                <>
+                    <div className={styles.primaryText}>{inv.patientName}</div>
+                    <div className={styles.secondaryText}>{inv.patientPhone || 'Không có SĐT'}</div>
+                </>
+            ),
+        },
+        { header: 'Nguồn thu', accessor: 'sourceTypeName' },
+        {
+            header: 'Mã liên kết',
+            accessor: (inv) => (
+                <span className={styles.mutedText}>
+                    {inv.visitCode || inv.appointmentCode || inv.registrationCode || '---'}
+                </span>
+            ),
+        },
+        {
+            header: 'Tổng tiền',
+            align: 'right',
+            accessor: (inv) => <span className={styles.amount}>{formatCurrency(inv.totalAmount)}</span>,
+        },
+        { header: 'Trạng thái', accessor: (inv) => renderStatusBadge(inv.status) },
+        { header: 'Ngày lập', accessor: (inv) => formatDateTime(inv.createdAtUtc) },
+        {
+            header: 'Thao tác',
+            align: 'right',
+            accessor: (inv) => (
+                <div className={styles.actionBtnGroup}>
+                    <button
+                        type="button"
+                        className={`btn-secondary ${styles.rowActionBtn}`}
+                        onClick={() => handleViewDetail(inv.id)}
+                        title="Xem chi tiết & In phiếu thu"
+                    >
+                        <Eye size={13} /> Xem
+                    </button>
+
+                    {inv.status === InvoiceStatus.Unpaid && (
+                        <>
+                            <button
+                                type="button"
+                                className={`btn-primary ${styles.rowActionBtn}`}
+                                onClick={() => handleOpenPaymentModal(inv)}
+                                title="Thu tiền hóa đơn"
+                            >
+                                <CreditCard size={13} /> Thu tiền
+                            </button>
+
+                            <button
+                                type="button"
+                                className={`btn-danger ${styles.rowActionBtn}`}
+                                onClick={() => handleOpenCancelModal(inv)}
+                                title="Hủy hóa đơn"
+                            >
+                                <Ban size={13} /> Hủy
+                            </button>
+                        </>
+                    )}
+                </div>
+            ),
+        },
+    ];
+
+    const unbilledColumns: DataTableColumn<UnbilledVisitDto>[] = [
+        {
+            header: 'Mã lượt khám',
+            accessor: (v) => <span className={styles.codeBadge}>{v.visitCode}</span>,
+        },
+        {
+            header: 'Bệnh nhân',
+            accessor: (v) => (
+                <>
+                    <div className={styles.primaryText}>{v.patientName}</div>
+                    <div className={styles.secondaryText}>
+                        {v.medicalRecordNumber ? `MRN: ${v.medicalRecordNumber}` : ''}
+                        {v.phoneNumber ? ` • ${v.phoneNumber}` : ''}
+                    </div>
+                </>
+            ),
+        },
+        {
+            header: 'Khoa / Bác sĩ',
+            accessor: (v) => (
+                <>
+                    <div>{v.departmentName}</div>
+                    <div className={styles.secondaryText}>BS: {v.doctorName || 'Chưa gán'}</div>
+                </>
+            ),
+        },
+        { header: 'Ngày khám', accessor: 'visitDate' },
+        { header: 'Trạng thái', accessor: (v) => <span className="badge badge-info">{v.status}</span> },
+        {
+            header: 'Mục chờ thu',
+            align: 'center',
+            accessor: (v) => <span className={styles.countPill}>{v.unbilledItemCount} mục</span>,
+        },
+        {
+            header: 'Tạm tính',
+            align: 'right',
+            accessor: (v) => <span className={styles.amount}>{formatCurrency(v.estimatedTotal)}</span>,
+        },
+        {
+            header: 'Thao tác',
+            align: 'right',
+            accessor: (v) => (
+                <button
+                    type="button"
+                    className={`btn-primary ${styles.rowActionBtn}`}
+                    onClick={() => handleCreateInvoiceFromUnbilled(v.visitId)}
+                    disabled={creatingInvoice}
+                >
+                    <Plus size={14} /> Lập hóa đơn
+                </button>
+            ),
+        },
+    ];
+
     return (
         <div className={styles.container}>
             {/* Header */}
@@ -380,8 +506,8 @@ export const ReceptionBilling: React.FC = () => {
                     <Receipt size={28} color="var(--c-primary)" />
                     <div>
                         <h2>Quản lý Hóa đơn & Thu ngân</h2>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', marginTop: '2px' }}>
-                            Tiếp nhận thanh toán tại quầy và theo dõi dòng tiền phòng khám (Dữ liệu demo)
+                        <div className={styles.subtitle}>
+                            Thu tiền tại quầy và theo dõi hóa đơn của phòng khám
                         </div>
                     </div>
                 </div>
@@ -541,108 +667,14 @@ export const ReceptionBilling: React.FC = () => {
                     {/* Table Card */}
                     <div className={styles.tableCard}>
                         {loading ? (
-                            <div className={styles.loadingWrapper}>
-                                <RefreshCw className={styles.spin} size={28} />
-                                <span style={{ marginTop: '10px', color: 'var(--c-muted)' }}>Đang tải danh sách hóa đơn...</span>
-                            </div>
+                            <LoadingState message="Đang tải danh sách hóa đơn..." />
                         ) : (
-                            <div className={styles.tableResponsive}>
-                                <table className={styles.table}>
-                                    <thead>
-                                        <tr>
-                                            <th>Mã HĐ</th>
-                                            <th>Bệnh nhân</th>
-                                            <th>Nguồn thu</th>
-                                            <th>Mã liên kết</th>
-                                            <th style={{ textAlign: 'right' }}>Tổng tiền</th>
-                                            <th>Trạng thái</th>
-                                            <th>Ngày lập</th>
-                                            <th style={{ textAlign: 'right' }}>Thao tác</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {invoices.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={8} className={styles.emptyState}>
-                                                    Không tìm thấy hóa đơn nào phù hợp với bộ lọc.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            invoices.map((inv) => (
-                                                <tr key={inv.id}>
-                                                    <td>
-                                                        <span className={styles.codeBadge}>{inv.invoiceCode}</span>
-                                                    </td>
-                                                    <td>
-                                                        <div style={{ fontWeight: 600, color: 'var(--c-text)' }}>
-                                                            {inv.patientName}
-                                                        </div>
-                                                        <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)' }}>
-                                                            {inv.patientPhone || 'Không có SĐT'}
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <span style={{ fontSize: '0.85rem' }}>{inv.sourceTypeName}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>
-                                                            {inv.visitCode || inv.appointmentCode || inv.registrationCode || '---'}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--c-primary)' }}>
-                                                        {formatCurrency(inv.totalAmount)}
-                                                    </td>
-                                                    <td>
-                                                        {renderStatusBadge(inv.status)}
-                                                    </td>
-                                                    <td>
-                                                        <div style={{ fontSize: '0.85rem', color: 'var(--c-text)' }}>
-                                                            {formatDateTime(inv.createdAtUtc)}
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ textAlign: 'right' }}>
-                                                        <div className={styles.actionBtnGroup}>
-                                                            <button
-                                                                type="button"
-                                                                className="btn-secondary"
-                                                                style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                                                                onClick={() => handleViewDetail(inv.id)}
-                                                                title="Xem chi tiết & In phiếu thu"
-                                                            >
-                                                                <Eye size={13} /> Xem
-                                                            </button>
-
-                                                            {inv.status === InvoiceStatus.Unpaid && (
-                                                                <>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="btn-primary"
-                                                                        style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                                                                        onClick={() => handleOpenPaymentModal(inv)}
-                                                                        title="Thu tiền hóa đơn"
-                                                                    >
-                                                                        <CreditCard size={13} /> Thu tiền
-                                                                    </button>
-
-                                                                    <button
-                                                                        type="button"
-                                                                        className="btn-danger"
-                                                                        style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                                                                        onClick={() => handleOpenCancelModal(inv)}
-                                                                        title="Hủy hóa đơn"
-                                                                    >
-                                                                        <Ban size={13} /> Hủy
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                            <DataTable
+                                columns={invoiceColumns}
+                                data={invoices}
+                                keyExtractor={(inv) => inv.id}
+                                emptyText="Không tìm thấy hóa đơn nào phù hợp với bộ lọc."
+                            />
                         )}
 
                         {/* Pagination */}
@@ -691,81 +723,15 @@ export const ReceptionBilling: React.FC = () => {
                         </button>
                     </div>
                     {unbilledLoading ? (
-                        <div className={styles.loadingWrapper}>
-                            <RefreshCw className={styles.spin} size={28} />
-                            <span style={{ marginTop: '10px', color: 'var(--c-muted)' }}>Đang tải hàng đợi ca khám...</span>
-                        </div>
+                        <LoadingState message="Đang tải hàng đợi ca khám..." />
                     ) : (
                         <>
-                            <div className={styles.tableResponsive}>
-                            <table className={styles.table}>
-                                <thead>
-                                    <tr>
-                                        <th>Mã lượt khám</th>
-                                        <th>Bệnh nhân</th>
-                                        <th>Khoa / Bác sĩ</th>
-                                        <th>Ngày khám</th>
-                                        <th>Trạng thái</th>
-                                        <th style={{ textAlign: 'center' }}>Mục chờ thu</th>
-                                        <th style={{ textAlign: 'right' }}>Tạm tính</th>
-                                        <th style={{ textAlign: 'right' }}>Thao tác</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {unbilledVisits.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={8} className={styles.emptyState}>
-                                                Hiện không có lượt khám nào chờ lập hóa đơn.
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        unbilledVisits.map((v) => (
-                                            <tr key={v.visitId}>
-                                                <td>
-                                                    <span className={styles.codeBadge}>{v.visitCode}</span>
-                                                </td>
-                                                <td>
-                                                    <div style={{ fontWeight: 600, color: 'var(--c-text)' }}>{v.patientName}</div>
-                                                    <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)' }}>
-                                                        {v.medicalRecordNumber ? `MRN: ${v.medicalRecordNumber}` : ''}
-                                                        {v.phoneNumber ? ` • ${v.phoneNumber}` : ''}
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div style={{ fontSize: '0.85rem', color: 'var(--c-text)' }}>{v.departmentName}</div>
-                                                    <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)' }}>BS: {v.doctorName || 'Chưa gán'}</div>
-                                                </td>
-                                                <td>
-                                                    <div style={{ fontSize: '0.85rem', color: 'var(--c-text)' }}>{v.visitDate}</div>
-                                                </td>
-                                                <td>
-                                                    <span className="badge badge-info">{v.status}</span>
-                                                </td>
-                                                <td style={{ textAlign: 'center' }}>
-                                                    <span style={{ background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 600 }}>
-                                                        {v.unbilledItemCount} mục
-                                                    </span>
-                                                </td>
-                                                <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--c-primary)' }}>
-                                                    {formatCurrency(v.estimatedTotal)}
-                                                </td>
-                                                <td style={{ textAlign: 'right' }}>
-                                                    <button
-                                                        type="button"
-                                                        className="btn-primary"
-                                                        style={{ padding: '6px 14px', fontSize: '0.85rem' }}
-                                                        onClick={() => handleCreateInvoiceFromUnbilled(v.visitId)}
-                                                        disabled={creatingInvoice}
-                                                    >
-                                                        <Plus size={14} /> Lập hóa đơn
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
+                            <DataTable
+                                columns={unbilledColumns}
+                                data={unbilledVisits}
+                                keyExtractor={(v) => v.visitId}
+                                emptyText="Hiện không có lượt khám nào chờ lập hóa đơn."
+                            />
                         {unbilledTotalPages > 1 && (
                             <div className={styles.pagination}>
                                 <button

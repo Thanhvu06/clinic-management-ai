@@ -1,5 +1,7 @@
 import React from 'react';
+import { Button, Card, Flex, Input } from 'antd';
 import { Search, RotateCcw } from 'lucide-react';
+import styles from './common.module.css';
 
 interface FilterBarProps {
     searchTerm?: string;
@@ -17,65 +19,31 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     onReset
 }) => {
     return (
-        <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '12px',
-            backgroundColor: 'white',
-            padding: '16px',
-            borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--c-border)',
-            marginBottom: '20px',
-            boxShadow: 'var(--shadow-sm)'
-        }}>
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '12px',
-                flex: 1,
-                minWidth: '280px'
-            }}>
-                {onSearchChange !== undefined && (
-                    <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: '360px' }}>
-                        <Search 
-                            size={16} 
-                            style={{
-                                position: 'absolute',
-                                left: '12px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                color: 'var(--c-muted)',
-                                pointerEvents: 'none'
-                            }} 
-                        />
-                        <input
-                            type="text"
-                            className="form-input"
-                            style={{ paddingLeft: '36px' }}
+        <Card size="small" className={styles.filterBar}>
+            <Flex align="center" justify="space-between" wrap gap="small">
+                <Flex align="center" wrap gap="small" className={styles.filterControls}>
+                    {onSearchChange !== undefined && (
+                        <Input
+                            className={styles.filterSearch}
+                            prefix={<Search size={16} className={styles.filterSearchIcon} />}
                             placeholder={searchPlaceholder}
                             value={searchTerm || ''}
                             onChange={(e) => onSearchChange(e.target.value)}
                         />
-                    </div>
-                )}
-                {children}
-            </div>
+                    )}
+                    {children}
+                </Flex>
 
-            {onReset && (
-                <button 
-                    type="button" 
-                    className="btn-secondary"
-                    onClick={onReset}
-                    style={{ fontSize: '0.85rem', padding: '8px 14px' }}
-                    title="Đặt lại bộ lọc"
-                >
-                    <RotateCcw size={14} />
-                    <span>Làm mới</span>
-                </button>
-            )}
-        </div>
+                {onReset && (
+                    <Button
+                        onClick={onReset}
+                        title="Đặt lại bộ lọc"
+                        icon={<RotateCcw size={14} />}
+                    >
+                        Làm mới
+                    </Button>
+                )}
+            </Flex>
+        </Card>
     );
 };

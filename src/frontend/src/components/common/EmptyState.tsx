@@ -1,5 +1,7 @@
 import React from 'react';
+import { Empty, Typography } from 'antd';
 import { Inbox } from 'lucide-react';
+import styles from './common.module.css';
 
 interface EmptyStateProps {
     icon?: React.ReactNode;
@@ -15,26 +17,25 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
     action
 }) => {
     return (
-        <div className="empty-state">
-            <div className="empty-state-icon">
-                {icon || <Inbox size={48} />}
-            </div>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>{title}</h3>
-            {description && (
-                <p style={{
-                    fontSize: '0.88rem',
-                    color: 'var(--c-text-light)',
-                    maxWidth: '400px',
-                    margin: '0 auto 16px auto'
-                }}>
-                    {description}
-                </p>
-            )}
+        <Empty
+            className={styles.emptyState}
+            image={icon || <Inbox size={48} />}
+            description={
+                <>
+                    <Typography.Title level={3} className={styles.emptyTitle}>{title}</Typography.Title>
+                    {description && (
+                        <Typography.Text type="secondary" className={styles.emptyDescription}>
+                            {description}
+                        </Typography.Text>
+                    )}
+                </>
+            }
+        >
             {action && (
-                <div style={{ marginTop: '12px' }}>
+                <div className={styles.emptyAction}>
                     {action}
                 </div>
             )}
-        </div>
+        </Empty>
     );
 };

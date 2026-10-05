@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Package, CheckCircle2, CalendarCheck, Phone, Users, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Package, CheckCircle2, CalendarCheck, Users, ShieldCheck, AlertCircle } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import type { HealthPackageDto } from '../../types';
 import { parseIncludedServices, formatVndCurrency } from '../../utils/formatters';
@@ -162,15 +162,6 @@ export const HealthPackageDetail: React.FC = () => {
                     >
                         Xem các gói khám khác
                     </Link>
-
-                    <div style={{ borderTop: '1px solid var(--c-border-light)', paddingTop: '20px', marginTop: '16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--c-navy)', fontWeight: 600, fontSize: '0.95rem', marginBottom: '6px' }}>
-                            <Phone size={18} color="var(--c-primary)" /> Hotline tư vấn gói khám
-                        </div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--c-text-muted)', lineHeight: 1.5 }}>
-                            Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.
-                        </div>
-                    </div>
                 </aside>
             </div>
         </div>

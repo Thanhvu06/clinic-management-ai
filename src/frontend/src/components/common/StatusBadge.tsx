@@ -1,10 +1,14 @@
 import React from 'react';
+import { Tag } from 'antd';
+import styles from './common.module.css';
 
 interface StatusBadgeProps {
     status: string;
     label?: string;
     size?: 'sm' | 'md';
 }
+
+type TagColor = 'processing' | 'warning' | 'success' | 'error' | 'default';
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({
     status,
@@ -13,26 +17,26 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
 }) => {
     const normalize = (status || '').toLowerCase().trim();
 
-    let badgeClass = 'badge-default';
+    let color: TagColor = 'default';
     let text = label || status;
 
     switch (normalize) {
         case 'confirmed':
         case 'daxacnhan':
         case 'đã xác nhận':
-            badgeClass = 'badge-info';
+            color = 'processing';
             text = label || 'Đã xác nhận';
             break;
         case 'checkedin':
         case 'datiépnhan':
         case 'đã tiếp nhận':
-            badgeClass = 'badge-warning';
+            color = 'warning';
             text = label || 'Đã tiếp nhận';
             break;
         case 'inconsultation':
         case 'dangkham':
         case 'đang khám':
-            badgeClass = 'badge-info';
+            color = 'processing';
             text = label || 'Đang khám';
             break;
         case 'completed':
@@ -41,7 +45,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
         case 'hoàn thành':
         case 'approved':
         case 'đã duyệt':
-            badgeClass = 'badge-success';
+            color = 'success';
             text = label || (normalize.includes('approved') ? 'Đã duyệt' : 'Hoàn thành');
             break;
         case 'cancelled':
@@ -49,13 +53,13 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
         case 'đã hủy':
         case 'rejected':
         case 'từ chối':
-            badgeClass = 'badge-danger';
+            color = 'error';
             text = label || (normalize.includes('rejected') ? 'Từ chối' : 'Đã hủy');
             break;
         case 'noshow':
         case 'vangmat':
         case 'vắng mặt':
-            badgeClass = 'badge-danger';
+            color = 'error';
             text = label || 'Vắng mặt';
             break;
         case 'pending':
@@ -63,27 +67,18 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
         case 'chờ xử lý':
         case 'chờ duyệt':
         case 'chờ tiếp nhận':
-            badgeClass = 'badge-warning';
+            color = 'warning';
             text = label || 'Chờ xử lý';
             break;
         default:
-            badgeClass = 'badge-default';
+            color = 'default';
             break;
     }
 
-    const padding = size === 'sm' ? '2px 8px' : '4px 10px';
-    const fontSize = size === 'sm' ? '0.74rem' : '0.8rem';
-
     return (
-        <span className={`badge ${badgeClass}`} style={{ padding, fontSize }}>
-            <span style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: 'currentColor',
-                display: 'inline-block'
-            }} />
+        <Tag color={color} className={`${styles.statusBadge} ${size === 'sm' ? styles.statusBadgeSm : ''}`}>
+            <span className={styles.statusDot} />
             {text}
-        </span>
+        </Tag>
     );
 };

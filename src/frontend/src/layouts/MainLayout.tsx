@@ -1,16 +1,73 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
+import { Layout, Menu } from 'antd';
+import type { MenuProps } from 'antd';
 import { useAuth } from '../auth/AuthContext';
 import styles from './MainLayout.module.css';
-import { 
-    LayoutDashboard, CalendarDays, CalendarCheck, 
-    History, Users, Stethoscope, 
-    ShieldPlus, LogOut, Menu, X, ShieldAlert, Pill, Package, Calendar,
+import {
+    LayoutDashboard, CalendarDays, CalendarCheck,
+    History, Users, Stethoscope,
+    ShieldPlus, LogOut, Menu as MenuIcon, X, ShieldAlert, Pill, Package, Calendar,
     Receipt, TrendingUp, FlaskConical, Building2, UserPlus
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { NotificationBell } from '../components/common/NotificationBell';
 import { RoleCopilotPanel } from '../components/RoleCopilotPanel';
 import { CopilotResourceProvider } from '../components/copilot/copilotResourceContext';
+import { layout } from '../theme/tokens';
+
+interface NavEntry {
+    to: string;
+    icon: LucideIcon;
+    label: string;
+}
+
+// Thứ tự, nhãn và route theo vai trò giữ nguyên như sidebar cũ.
+const NAV_BY_ROLE: Record<string, NavEntry[]> = {
+    Doctor: [
+        { to: '/doctor', icon: LayoutDashboard, label: 'Bàn làm việc' },
+        { to: '/doctor/queue', icon: Users, label: 'Hàng đợi khám' },
+        { to: '/doctor/schedule', icon: CalendarCheck, label: 'Lịch trực & ca khám' },
+        { to: '/doctor/appointments', icon: CalendarDays, label: 'Danh sách lịch khám' },
+        { to: '/doctor/leave-requests', icon: History, label: 'Yêu cầu nghỉ phép' },
+    ],
+    Receptionist: [
+        { to: '/reception', icon: LayoutDashboard, label: 'Bàn làm việc' },
+        { to: '/reception/walk-in', icon: UserPlus, label: 'Tiếp nhận bệnh nhân' },
+        { to: '/reception/appointments', icon: CalendarCheck, label: 'Quản lý lịch hẹn' },
+        { to: '/reception/package-registrations', icon: Package, label: 'Đăng ký gói khám' },
+        { to: '/reception/billing', icon: Receipt, label: 'Thu ngân & Hóa đơn' },
+        { to: '/reception/change-requests', icon: History, label: 'Yêu cầu đổi/hủy' },
+    ],
+    Admin: [
+        { to: '/admin', icon: LayoutDashboard, label: 'Tổng quan' },
+        { to: '/admin/facilities', icon: Building2, label: 'Mạng lưới cơ sở' },
+        { to: '/admin/billing', icon: TrendingUp, label: 'Doanh thu & Biểu phí' },
+        { to: '/admin/accounts', icon: ShieldAlert, label: 'Quản lý tài khoản' },
+        { to: '/admin/specialties', icon: Stethoscope, label: 'Quản lý chuyên khoa' },
+        { to: '/admin/doctors', icon: Users, label: 'Quản lý bác sĩ' },
+        { to: '/admin/packages', icon: Package, label: 'Gói khám sức khỏe' },
+        { to: '/admin/medicines', icon: Pill, label: 'Danh mục thuốc' },
+        { to: '/admin/work-schedules', icon: CalendarCheck, label: 'Lịch trực & Slots' },
+        { to: '/admin/leaves', icon: CalendarDays, label: 'Duyệt nghỉ phép' },
+        { to: '/admin/audit-logs', icon: History, label: 'Nhật ký hệ thống' },
+    ],
+    Pharmacist: [
+        { to: '/pharmacy', icon: LayoutDashboard, label: 'Bàn làm việc' },
+        { to: '/pharmacy/prescriptions', icon: CalendarCheck, label: 'Đơn thuốc chờ cấp' },
+        { to: '/pharmacy/medicines', icon: Pill, label: 'Danh mục thuốc' },
+        { to: '/pharmacy/inventory', icon: History, label: 'Lịch sử kho' },
+    ],
+    DiagnosticTechnician: [
+        { to: '/diagnostics', icon: FlaskConical, label: 'Hàng đợi chỉ định' },
+    ],
+};
+
+// Trang gốc theo vai trò chỉ sáng khi khớp chính xác, không khớp theo tiền tố.
+const ROLE_HOME_ROUTES = new Set(['/doctor', '/admin', '/reception', '/pharmacy', '/diagnostics']);
+
+const isNavActive = (to: string, pathname: string) =>
+    pathname === to || (!ROLE_HOME_ROUTES.has(to) && pathname.startsWith(to));
 
 export const MainLayout: React.FC = () => {
     const { user, logout } = useAuth();
@@ -88,123 +145,50 @@ export const MainLayout: React.FC = () => {
         year: 'numeric'
     }).format(new Date());
 
-    const NavItem = ({ to, icon: Icon, label }: { to: string; icon: any; label: string }) => {
-        const isActive = location.pathname === to || (to !== '/doctor' && to !== '/admin' && to !== '/reception' && to !== '/pharmacy' && to !== '/diagnostics' && location.pathname.startsWith(to));
-        return (
-            <li>
-                <Link 
-                    to={to} 
-                    className={`${styles.navLink} ${isActive ? styles.navLinkActive : ''}`}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                >
-                    <Icon size={18} className={styles.navIcon} />
-                    <span>{label}</span>
-                </Link>
-            </li>
-        );
-    };
-
-    const renderMenu = () => {
-        switch (user?.role) {
-            case 'Doctor':
-                return (
-                    <>
-                        <NavItem to="/doctor" icon={LayoutDashboard} label="Bàn làm việc" />
-                        <NavItem to="/doctor/queue" icon={Users} label="Hàng đợi khám" />
-                        <NavItem to="/doctor/schedule" icon={CalendarCheck} label="Lịch trực & ca khám" />
-                        <NavItem to="/doctor/appointments" icon={CalendarDays} label="Danh sách lịch khám" />
-                        <NavItem to="/doctor/leave-requests" icon={History} label="Yêu cầu nghỉ phép" />
-                    </>
-                );
-            case 'Receptionist':
-                return (
-                    <>
-                        <NavItem to="/reception" icon={LayoutDashboard} label="Bàn làm việc" />
-                        <NavItem to="/reception/walk-in" icon={UserPlus} label="Tiếp nhận bệnh nhân" />
-                        <NavItem to="/reception/appointments" icon={CalendarCheck} label="Quản lý lịch hẹn" />
-                        <NavItem to="/reception/package-registrations" icon={Package} label="Đăng ký gói khám" />
-                        <NavItem to="/reception/billing" icon={Receipt} label="Thu ngân & Hóa đơn" />
-                        <NavItem to="/reception/change-requests" icon={History} label="Yêu cầu đổi/hủy" />
-                    </>
-                );
-            case 'Admin':
-                return (
-                    <>
-                        <NavItem to="/admin" icon={LayoutDashboard} label="Tổng quan" />
-                        <NavItem to="/admin/facilities" icon={Building2} label="Mạng lưới cơ sở" />
-                        <NavItem to="/admin/billing" icon={TrendingUp} label="Doanh thu & Biểu phí" />
-                        <NavItem to="/admin/accounts" icon={ShieldAlert} label="Quản lý tài khoản" />
-                        <NavItem to="/admin/specialties" icon={Stethoscope} label="Quản lý chuyên khoa" />
-                        <NavItem to="/admin/doctors" icon={Users} label="Quản lý bác sĩ" />
-                        <NavItem to="/admin/packages" icon={Package} label="Gói khám sức khỏe" />
-                        <NavItem to="/admin/medicines" icon={Pill} label="Danh mục thuốc" />
-                        <NavItem to="/admin/work-schedules" icon={CalendarCheck} label="Lịch trực & Slots" />
-                        <NavItem to="/admin/leaves" icon={CalendarDays} label="Duyệt nghỉ phép" />
-                        <NavItem to="/admin/audit-logs" icon={History} label="Nhật ký hệ thống" />
-                    </>
-                );
-            case 'Pharmacist':
-                return (
-                    <>
-                        <NavItem to="/pharmacy" icon={LayoutDashboard} label="Bàn làm việc" />
-                        <NavItem to="/pharmacy/prescriptions" icon={CalendarCheck} label="Đơn thuốc chờ cấp" />
-                        <NavItem to="/pharmacy/medicines" icon={Pill} label="Danh mục thuốc" />
-                        <NavItem to="/pharmacy/inventory" icon={History} label="Lịch sử kho" />
-                    </>
-                );
-            case 'DiagnosticTechnician':
-                return (
-                    <>
-                        <NavItem to="/diagnostics" icon={FlaskConical} label="Hàng đợi chỉ định" />
-                    </>
-                );
-            default:
-                return null;
-        }
-    };
+    const navEntries = (user?.role && NAV_BY_ROLE[user.role]) || [];
+    const menuItems: MenuProps['items'] = navEntries.map(({ to, icon: Icon, label }) => ({
+        key: to,
+        icon: <Icon size={18} />,
+        label: (
+            <Link to={to} onClick={() => setIsMobileMenuOpen(false)}>
+                {label}
+            </Link>
+        ),
+    }));
+    const selectedKeys = navEntries.filter(entry => isNavActive(entry.to, location.pathname)).map(entry => entry.to);
 
     return (
-        <div className={styles.layout}>
-            {/* Mobile Top Bar */}
-            <div className={styles.mobileHeader}>
-                <div className={styles.mobileLogo}>
-                    <div className={styles.logoBadge} style={{ width: 32, height: 32 }}>
-                        <ShieldPlus size={20} />
-                    </div>
-                    <span>ClinicCare AI</span>
-                </div>
-                <button 
-                    type="button"
-                    className={styles.hamburgerBtn}
-                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                    aria-label="Toggle Navigation"
-                >
-                    {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-                </button>
-            </div>
-
+        <Layout className={styles.layout}>
             {/* Mobile Backdrop Overlay */}
             {isMobileMenuOpen && (
                 <div className={styles.mobileOverlay} onClick={() => setIsMobileMenuOpen(false)} />
             )}
 
             {/* Sidebar Navigation */}
-            <aside className={`${styles.sidebar} ${isMobileMenuOpen ? styles.sidebarOpen : ''}`}>
+            <Layout.Sider
+                width={layout.sidebarWidth}
+                trigger={null}
+                className={`${styles.sidebar} ${isMobileMenuOpen ? styles.sidebarOpen : ''}`}
+            >
                 <div className={styles.sidebarHeader}>
                     <div className={styles.logoBadge}>
                         <ShieldPlus size={22} />
                     </div>
                     <div>
                         <div className={styles.logoText}>ClinicCare AI</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--c-teal)', fontWeight: 500 }}>
-                            Hệ Thống Y Tế Thông Minh
-                        </div>
+                        <div className={styles.logoTagline}>Hệ Thống Y Tế Thông Minh</div>
                     </div>
                 </div>
-                
+
                 <nav className={styles.nav}>
                     <div className={styles.navSectionTitle}>CHỨC NĂNG CHÍNH</div>
-                    <ul className={styles.navList}>{renderMenu()}</ul>
+                    <Menu
+                        mode="inline"
+                        theme="dark"
+                        selectedKeys={selectedKeys}
+                        items={menuItems}
+                        className={styles.menu}
+                    />
                 </nav>
 
                 {/* User Profile Footer Card */}
@@ -220,21 +204,39 @@ export const MainLayout: React.FC = () => {
                             {getRoleName(user?.role)}
                         </div>
                     </div>
-                    <button 
+                    <button
                         type="button"
-                        className={styles.logoutBtn} 
-                        onClick={handleLogout} 
+                        className={styles.logoutBtn}
+                        onClick={handleLogout}
                         title="Đăng xuất khỏi hệ thống"
                     >
                         <LogOut size={16} />
                     </button>
                 </div>
-            </aside>
+            </Layout.Sider>
 
             {/* Main Content Area */}
-            <main className={styles.main}>
+            <Layout className={styles.main}>
+                {/* Mobile Top Bar */}
+                <div className={styles.mobileHeader}>
+                    <div className={styles.mobileLogo}>
+                        <div className={`${styles.logoBadge} ${styles.logoBadgeSmall}`}>
+                            <ShieldPlus size={20} />
+                        </div>
+                        <span>ClinicCare AI</span>
+                    </div>
+                    <button
+                        type="button"
+                        className={styles.hamburgerBtn}
+                        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                        aria-label="Toggle Navigation"
+                    >
+                        {isMobileMenuOpen ? <X size={24} /> : <MenuIcon size={24} />}
+                    </button>
+                </div>
+
                 {/* Desktop Topbar Header */}
-                <header className={styles.header}>
+                <Layout.Header className={styles.header}>
                     <div className={styles.pageHeaderTitle}>
                         <span>{getPageTitle(location.pathname)}</span>
                     </div>
@@ -242,26 +244,26 @@ export const MainLayout: React.FC = () => {
                     <div className={styles.headerRight}>
                         <NotificationBell />
                         <div className={styles.currentDateBadge}>
-                            <Calendar size={14} style={{ color: 'var(--c-primary)' }} />
+                            <Calendar size={14} className={styles.currentDateIcon} />
                             <span>{todayFormatted}</span>
                         </div>
                         <div className={styles.headerRoleBadge}>
                             {getRoleName(user?.role)}
                         </div>
-                        <div className={styles.userAvatar} style={{ width: 34, height: 34, fontSize: '0.8rem' }}>
+                        <div className={`${styles.userAvatar} ${styles.userAvatarSmall}`}>
                             {getInitials(user?.fullName)}
                         </div>
                     </div>
-                </header>
+                </Layout.Header>
 
                 {/* Page Outlet */}
                 <CopilotResourceProvider key={`${location.pathname}${location.search}`}>
-                    <div className={styles.content}>
+                    <Layout.Content className={styles.content}>
                         <Outlet />
-                    </div>
+                    </Layout.Content>
                     <RoleCopilotPanel />
                 </CopilotResourceProvider>
-            </main>
-        </div>
+            </Layout>
+        </Layout>
     );
 };

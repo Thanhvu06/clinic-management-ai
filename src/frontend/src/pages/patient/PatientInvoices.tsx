@@ -121,7 +121,7 @@ export const PatientInvoices: React.FC = () => {
                     <div>
                         <h2>Hóa đơn dịch vụ của tôi</h2>
                         <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', marginTop: '2px' }}>
-                            Theo dõi chi phí khám chữa bệnh và lịch sử thanh toán tại ClinicCare AI (Dữ liệu demo)
+                            Theo dõi chi phí khám chữa bệnh và lịch sử thanh toán tại ClinicCare AI
                         </div>
                     </div>
                 </div>

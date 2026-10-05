@@ -1356,11 +1356,6 @@ export const BookAppointment: React.FC = () => {
                             </div>
                         </div>
                     </div>
-
-                    <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '14px', border: '1px solid var(--c-border-light)', fontSize: '0.85rem', color: 'var(--c-text-muted)', lineHeight: 1.5 }}>
-                        <div style={{ fontWeight: 600, color: 'var(--c-navy)', marginBottom: '4px' }}>Hỗ trợ đặt hẹn</div>
-                        Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.
-                    </div>
                 </aside>
             </div>
         </div>

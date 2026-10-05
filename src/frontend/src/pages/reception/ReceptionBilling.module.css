@@ -190,3 +190,89 @@
     gap: 6px;
     justify-content: flex-end;
 }
+
+.subtitle {
+    font-size: 0.85rem;
+    color: var(--c-muted);
+    margin-top: 2px;
+}
+
+/* Khung chứa bảng (bảng là DataTable/antd Table có viền riêng) */
+.tableCard {
+    background: var(--cc-color-bg-container);
+    border-radius: var(--cc-radius-lg);
+    box-shadow: var(--cc-shadow-sm);
+    overflow: hidden;
+}
+
+.codeBadge {
+    display: inline-block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--cc-color-primary);
+    background: var(--cc-color-primary-light);
+    padding: 2px var(--cc-space-xs);
+    border-radius: var(--cc-radius-sm);
+    white-space: nowrap;
+}
+
+.primaryText {
+    font-weight: 600;
+    color: var(--cc-color-text);
+}
+
+.secondaryText {
+    font-size: 0.8rem;
+    color: var(--cc-color-text-muted);
+}
+
+.mutedText {
+    color: var(--cc-color-text-muted);
+}
+
+.amount {
+    font-weight: 700;
+    color: var(--cc-color-primary);
+    white-space: nowrap;
+}
+
+.countPill {
+    background: var(--cc-color-border-light);
+    color: #475569;
+    padding: 2px var(--cc-space-xs);
+    border-radius: var(--cc-radius-lg);
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.rowActionBtn {
+    min-height: 28px;
+    padding: var(--cc-space-xxs) 10px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--cc-space-sm);
+    padding: var(--cc-space-md) 20px;
+    border-top: 1px solid var(--cc-color-border);
+}
+
+.pageInfo {
+    font-size: 0.85rem;
+    color: var(--cc-color-text-muted);
+}
+
+.spin {
+    animation: billingSpin 1s linear infinite;
+}
+
+@keyframes billingSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
