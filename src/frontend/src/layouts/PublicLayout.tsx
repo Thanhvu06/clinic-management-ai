@@ -107,6 +107,7 @@ export const PublicLayout: React.FC = () => {
                         <NavLink to="/doctors" className={navLinkClass}>Bác sĩ</NavLink>
                         <NavLink to="/locations" className={navLinkClass}>Điểm khám</NavLink>
                         <NavLink to="/patient/ai-consultation" className={navLinkClass} onClick={handleAiConsultationClick}>Tư vấn AI</NavLink>
+                        <NavLink to="/medicines" className={navLinkClass}>Tra giá thuốc</NavLink>
                     </nav>
 
                     <div className={styles.authArea}>
@@ -227,6 +228,7 @@ export const PublicLayout: React.FC = () => {
                         setIsMobileMenuOpen(false);
                         handleAiConsultationClick(e);
                     }}>Tư vấn AI</NavLink>
+                    <NavLink to="/medicines" className={navLinkClass} onClick={() => setIsMobileMenuOpen(false)}>Tra giá thuốc</NavLink>
                     
                     <button 
                         type="button" 

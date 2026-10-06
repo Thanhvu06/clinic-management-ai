@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
-import type { ApiResponse } from '../../types';
+import type { ActiveMedicineDto, ApiResponse } from '../../types';
+import { Col, Input, Row, Segmented } from 'antd';
+import { MedicineCard } from '../../components/medicines/MedicineCard';
+import { EmptyState, InlineError, LoadingState } from '../../components/common';
+import { spacing } from '../../theme/tokens';
+import styles from './PharmacyInventory.module.css';
 import { History, Plus, Clock, User, ArrowDownRight, ArrowUpRight, RefreshCw, X, Pill } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
 
@@ -19,12 +24,9 @@ interface StockTransaction {
     createdAt: string;
 }
 
-interface ActiveMedicine {
-    id: number;
-    code: string;
-    name: string;
-    unit: string;
-    stockQuantity: number;
+interface ActiveMedicine extends ActiveMedicineDto {
+    imageUrl?: string | null;
+    reorderLevel?: number;
 }
 
 export const PharmacyInventory: React.FC = () => {
@@ -33,6 +35,10 @@ export const PharmacyInventory: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [totalItems, setTotalItems] = useState(0);
     const [page, setPage] = useState(1);
+    const [view, setView] = useState<'Lưới' | 'Bảng'>('Lưới');
+    const [search, setSearch] = useState('');
+    const [medicinesLoading, setMedicinesLoading] = useState(true);
+    const [medicinesError, setMedicinesError] = useState('');
 
     // Modal
     const [activeMedicines, setActiveMedicines] = useState<ActiveMedicine[]>([]);
@@ -64,6 +70,8 @@ export const PharmacyInventory: React.FC = () => {
     };
 
     const fetchMedicines = async () => {
+        setMedicinesLoading(true);
+        setMedicinesError('');
         try {
             const res = await axiosClient.get<any, ApiResponse<ActiveMedicine[]>>('/medicines/active');
             if (res.success && res.data) {
@@ -71,9 +79,13 @@ export const PharmacyInventory: React.FC = () => {
                 if (res.data.length > 0 && selectedMedId === 0) {
                     setSelectedMedId(res.data[0].id);
                 }
+            } else {
+                setMedicinesError('Chưa thể tải danh sách thuốc. Bạn vui lòng thử lại.');
             }
         } catch {
-            // Handled
+            setMedicinesError('Chưa thể tải danh sách thuốc. Bạn vui lòng thử lại.');
+        } finally {
+            setMedicinesLoading(false);
         }
     };
 
@@ -149,6 +161,11 @@ export const PharmacyInventory: React.FC = () => {
         }
     };
 
+    const query = search.trim().toLocaleLowerCase('vi-VN');
+    const matchesMedicine = (name: string, code: string) => `${name} ${code}`.toLocaleLowerCase('vi-VN').includes(query);
+    const filteredMedicines = activeMedicines.filter(m => matchesMedicine(m.name, m.code));
+    const filteredTransactions = transactions.filter(t => matchesMedicine(t.medicineName, t.medicineCode));
+
     return (
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
@@ -173,6 +190,35 @@ export const PharmacyInventory: React.FC = () => {
                 </div>
             </div>
 
+            <div className={styles.toolbar}>
+                <Input
+                    className={styles.search}
+                    aria-label="Tìm thuốc trong kho"
+                    placeholder="Tìm theo tên hoặc mã thuốc"
+                    value={search}
+                    onChange={event => setSearch(event.target.value)}
+                    allowClear
+                />
+                <Segmented options={['Lưới', 'Bảng']} value={view} onChange={setView} aria-label="Chế độ xem kho thuốc" />
+            </div>
+
+            <section hidden={view !== 'Lưới'} aria-label="Lưới thuốc trong kho">
+                {medicinesLoading ? <LoadingState message="Đang tải danh sách thuốc..." /> : medicinesError ? (
+                    <InlineError message={medicinesError} onRetry={fetchMedicines} />
+                ) : filteredMedicines.length === 0 ? (
+                    <EmptyState title="Chưa có thuốc phù hợp" description="Bạn thử tìm với tên hoặc mã thuốc khác nhé." />
+                ) : (
+                    <Row gutter={[spacing.md, spacing.md]}>
+                        {filteredMedicines.map(medicine => (
+                            <Col key={medicine.id} xs={24} sm={12} lg={6}>
+                                <MedicineCard medicine={medicine} />
+                            </Col>
+                        ))}
+                    </Row>
+                )}
+            </section>
+
+            <div hidden={view !== 'Bảng'}>
             {/* Table */}
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
@@ -193,14 +239,14 @@ export const PharmacyInventory: React.FC = () => {
                                 <tr>
                                     <td colSpan={7} style={{ textAlign: 'center', padding: '32px' }}>Đang tải lịch sử giao dịch kho...</td>
                                 </tr>
-                            ) : transactions.length === 0 ? (
+                            ) : filteredTransactions.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} style={{ textAlign: 'center', padding: '32px', color: 'var(--c-muted)' }}>
                                         Chưa có giao dịch biến động tồn kho nào.
                                     </td>
                                 </tr>
                             ) : (
-                                transactions.map(t => (
+                                filteredTransactions.map(t => (
                                     <tr key={t.id}>
                                         <td style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--c-muted)' }}>
@@ -258,6 +304,8 @@ export const PharmacyInventory: React.FC = () => {
                         </div>
                     </div>
                 )}
+            </div>
+
             </div>
 
             {/* Modal */}

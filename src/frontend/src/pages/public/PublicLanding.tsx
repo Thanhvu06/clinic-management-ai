@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
     Search, Calendar, Bot, Stethoscope, ChevronRight, CheckCircle2, 
     ShieldCheck, Clock, FileText, User, ChevronDown, ChevronUp, MapPin, 
-    Phone, Award, Sparkles, Check, CalendarCheck, Package 
+    Phone, Award, Sparkles, Check, CalendarCheck, Package, Pill
 } from 'lucide-react';
 import styles from './PublicLanding.module.css';
 import axiosClient from '../../api/axiosClient';
@@ -120,6 +120,7 @@ export const PublicLanding: React.FC = () => {
                             </div>
 
                             <div className={styles.trustPoints}>
+                                <Link to="/medicines" className={styles.trustPoint}><Pill size={16} /> Tra giá thuốc</Link>
                                 <span className={styles.trustPoint}><CheckCircle2 size={16} /> Đặt lịch không chờ đợi</span>
                                 <span className={styles.trustPoint}><CheckCircle2 size={16} /> Bác sĩ chuyên khoa đầu ngành</span>
                                 <span className={styles.trustPoint}><CheckCircle2 size={16} /> AI phân luồng bảo mật</span>

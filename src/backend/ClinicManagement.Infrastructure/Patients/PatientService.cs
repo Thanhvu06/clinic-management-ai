@@ -6,6 +6,7 @@ using ClinicManagement.Application.Patients.DTOs;
 using ClinicManagement.Application.Patients.Interfaces;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
+using ClinicManagement.Infrastructure.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClinicManagement.Infrastructure.Patients;
@@ -110,10 +111,48 @@ public class PatientService : IPatientService
             .Where(u => doctorUserIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.FullName);
 
+        var visitIds = prescriptions.Where(p => p.PatientVisitId.HasValue).Select(p => p.PatientVisitId!.Value).Distinct().ToList();
+        var appointmentIds = prescriptions.Where(p => p.AppointmentId.HasValue).Select(p => p.AppointmentId!.Value).Distinct().ToList();
+        var invoicePrices = await _dbContext.InvoiceItems.AsNoTracking()
+            .Where(i => !i.IsCancelled && i.Invoice.Status != InvoiceStatus.Cancelled && i.Invoice.PatientId == patient.Id)
+            .Where(i => i.Invoice.PatientVisitId.HasValue && visitIds.Contains(i.Invoice.PatientVisitId.Value)
+                || i.Invoice.AppointmentId.HasValue && appointmentIds.Contains(i.Invoice.AppointmentId.Value))
+            .Where(i => i.ReferenceType == PrescriptionItemBillingReference.ModernReferenceType
+                || i.ReferenceType == PrescriptionItemBillingReference.LegacyReferenceType)
+            .OrderByDescending(i => i.Invoice.CreatedAtUtc).ThenByDescending(i => i.Id)
+            .Select(i => new { i.ReferenceType, i.ReferenceId, i.ItemCode, i.UnitPrice, i.LineTotal })
+            .ToListAsync();
+
         return prescriptions.Select(p =>
         {
             var doctorFullName = (p.Doctor != null && doctorUsers.TryGetValue(p.Doctor.UserId, out var name)) ? name : "Bác sĩ";
             var doctorTitle = string.IsNullOrWhiteSpace(p.Doctor?.AcademicTitle) ? "" : p.Doctor.AcademicTitle + ". ";
+
+            var priceIsReference = false;
+            var items = p.Items.Select(i =>
+            {
+                var savedPrice = invoicePrices.FirstOrDefault(price =>
+                    PrescriptionItemBillingReference.TryDecodeMedicineId(price.ReferenceType, price.ReferenceId, p.Id, out var medicineId)
+                        && medicineId == i.MedicineId
+                    || price.ReferenceType == PrescriptionItemBillingReference.LegacyReferenceType &&
+                        price.ReferenceId == p.Id && price.ItemCode == i.Medicine?.Code);
+                if (savedPrice == null) priceIsReference = true;
+                var unitPrice = savedPrice?.UnitPrice ?? i.Medicine?.UnitPrice;
+
+                return new PatientPrescriptionItemDto
+                {
+                    MedicineId = i.MedicineId,
+                    Name = i.Medicine?.Name ?? "Thuốc",
+                    Unit = i.Medicine?.Unit ?? "Đơn vị",
+                    Quantity = i.Quantity,
+                    UnitPrice = unitPrice,
+                    LineTotal = savedPrice?.LineTotal ?? unitPrice * i.Quantity,
+                    Dosage = i.Dosage,
+                    Frequency = i.Frequency,
+                    DurationDays = i.DurationDays,
+                    Instructions = i.Instructions
+                };
+            }).ToList();
 
             return new PatientPrescriptionDto
             {
@@ -131,17 +170,9 @@ public class PatientService : IPatientService
                 Notes = p.Notes,
                 CreatedAt = p.CreatedAt,
                 DispensedAt = p.DispensedAt,
-                Items = p.Items.Select(i => new PatientPrescriptionItemDto
-                {
-                    MedicineId = i.MedicineId,
-                    Name = i.Medicine?.Name ?? "Thuốc",
-                    Unit = i.Medicine?.Unit ?? "Đơn vị",
-                    Quantity = i.Quantity,
-                    Dosage = i.Dosage,
-                    Frequency = i.Frequency,
-                    DurationDays = i.DurationDays,
-                    Instructions = i.Instructions
-                }).ToList()
+                Items = items,
+                TotalAmount = items.Count > 0 && items.All(i => i.LineTotal.HasValue) ? items.Sum(i => i.LineTotal!.Value) : null,
+                PriceIsReference = priceIsReference
             };
         }).ToList();
     }

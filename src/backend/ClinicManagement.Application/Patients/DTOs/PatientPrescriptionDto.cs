@@ -19,6 +19,8 @@ public class PatientPrescriptionDto
     public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? DispensedAt { get; set; }
+    public decimal? TotalAmount { get; set; }
+    public bool PriceIsReference { get; set; }
     public List<PatientPrescriptionItemDto> Items { get; set; } = new();
 }
 
@@ -28,6 +30,8 @@ public class PatientPrescriptionItemDto
     public string Name { get; set; } = string.Empty;
     public string Unit { get; set; } = string.Empty;
     public int Quantity { get; set; }
+    public decimal? UnitPrice { get; set; }
+    public decimal? LineTotal { get; set; }
     public string Dosage { get; set; } = string.Empty;
     public string Frequency { get; set; } = string.Empty;
     public int? DurationDays { get; set; }

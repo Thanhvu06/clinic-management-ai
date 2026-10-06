@@ -1,0 +1,6 @@
+.table { overflow-x: auto; }
+.medicineName { font-weight: 600; color: var(--cc-color-text-dark); }
+.instructions { font-weight: 400; font-size: 0.8rem; color: var(--cc-color-text-secondary); margin-top: var(--cc-space-xxs); }
+.quantity { font-weight: 700; color: var(--cc-color-primary); }
+.total { text-align: right; margin: var(--cc-space-md) 0 var(--cc-space-xs); color: var(--cc-color-text-dark); }
+.priceNote { text-align: right; margin: 0; color: var(--cc-color-text-secondary); font-size: 0.85rem; }
