@@ -30,6 +30,8 @@ public class MedicineDto
 
 public class ActiveMedicineDto
 {
+    public string? ImageUrl { get; set; }
+    public int ReorderLevel { get; set; }
     public bool IsPrescriptionRequired { get; set; }
     public string? Strength { get; set; }
     public long Id { get; set; }

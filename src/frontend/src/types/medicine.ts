@@ -29,6 +29,8 @@ export interface ActiveMedicineDto {
     name: string;
     unit: string;
     stockQuantity: number;
+    imageUrl?: string | null;
+    reorderLevel: number;
     unitPrice?: number | null;
     isPrescriptionRequired: boolean;
     strength?: string | null;

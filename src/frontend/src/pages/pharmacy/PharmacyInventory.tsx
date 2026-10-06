@@ -24,11 +24,6 @@ interface StockTransaction {
     createdAt: string;
 }
 
-interface ActiveMedicine extends ActiveMedicineDto {
-    imageUrl?: string | null;
-    reorderLevel?: number;
-}
-
 export const PharmacyInventory: React.FC = () => {
     const { showAlert } = useDialog();
     const [transactions, setTransactions] = useState<StockTransaction[]>([]);
@@ -41,7 +36,7 @@ export const PharmacyInventory: React.FC = () => {
     const [medicinesError, setMedicinesError] = useState('');
 
     // Modal
-    const [activeMedicines, setActiveMedicines] = useState<ActiveMedicine[]>([]);
+    const [activeMedicines, setActiveMedicines] = useState<ActiveMedicineDto[]>([]);
     const [modalOpen, setModalOpen] = useState(false);
     const [formLoading, setFormLoading] = useState(false);
     const [formError, setFormError] = useState('');
@@ -73,7 +68,7 @@ export const PharmacyInventory: React.FC = () => {
         setMedicinesLoading(true);
         setMedicinesError('');
         try {
-            const res = await axiosClient.get<any, ApiResponse<ActiveMedicine[]>>('/medicines/active');
+            const res = await axiosClient.get<any, ApiResponse<ActiveMedicineDto[]>>('/medicines/active');
             if (res.success && res.data) {
                 setActiveMedicines(res.data);
                 if (res.data.length > 0 && selectedMedId === 0) {
