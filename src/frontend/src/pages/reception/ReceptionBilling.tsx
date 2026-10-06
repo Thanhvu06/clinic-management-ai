@@ -28,8 +28,9 @@ import {
 } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { InvoiceReceiptModal } from '../../components/billing/InvoiceReceiptModal';
-import { DataTable, LoadingState } from '../../components/common';
+import { DataTable, LoadingState, StatusBadge } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
+import { statusLabels } from '../../components/copilot/copilotDataRenderers';
 import styles from './ReceptionBilling.module.css';
 
 export const ReceptionBilling: React.FC = () => {
@@ -471,7 +472,15 @@ export const ReceptionBilling: React.FC = () => {
             ),
         },
         { header: 'Ngày khám', accessor: 'visitDate' },
-        { header: 'Trạng thái', accessor: (v) => <span className="badge badge-info">{v.status}</span> },
+        {
+            header: 'Trạng thái',
+            accessor: (v) => (
+                <StatusBadge
+                    status={v.status}
+                    label={Object.hasOwn(statusLabels, v.status) ? statusLabels[v.status] : 'Không xác định'}
+                />
+            ),
+        },
         {
             header: 'Mục chờ thu',
             align: 'center',
