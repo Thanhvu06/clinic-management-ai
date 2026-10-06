@@ -95,10 +95,6 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
                                 <div className={styles.clinicName}>
                                     HỆ THỐNG PHÒNG KHÁM ĐA KHOA CLINICCARE AI
                                 </div>
-                                <div className={styles.clinicSub}>
-                                    Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.<br />
-                                    <em>(Dữ liệu minh họa)</em>
-                                </div>
                             </div>
 
                             {/* Receipt Title */}

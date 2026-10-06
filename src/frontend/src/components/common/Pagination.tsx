@@ -1,5 +1,7 @@
 import React from 'react';
+import { Button, Flex, Typography } from 'antd';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import styles from './common.module.css';
 
 interface PaginationProps {
     page: number;
@@ -17,48 +19,32 @@ export const Pagination: React.FC<PaginationProps> = ({
     if (totalPages <= 1) return null;
 
     return (
-        <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '12px',
-            marginTop: '20px',
-            padding: '12px 16px',
-            backgroundColor: 'white',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--c-border)'
-        }}>
-            <div style={{ fontSize: '0.85rem', color: 'var(--c-text-light)' }}>
-                Trang <strong style={{ color: 'var(--c-text-dark)' }}>{page}</strong> / {totalPages}
+        <Flex align="center" justify="space-between" wrap gap="small" className={styles.pagination}>
+            <Typography.Text type="secondary" className={styles.paginationInfo}>
+                Trang <Typography.Text strong>{page}</Typography.Text> / {totalPages}
                 {totalRecords !== undefined && (
-                    <span> (Tổng số: <strong style={{ color: 'var(--c-text-dark)' }}>{totalRecords}</strong> bản ghi)</span>
+                    <span> (Tổng số: <Typography.Text strong>{totalRecords}</Typography.Text> bản ghi)</span>
                 )}
-            </div>
+            </Typography.Text>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                    type="button"
-                    className="btn-secondary"
+            <Flex align="center" gap="small">
+                <Button
                     disabled={page <= 1}
                     onClick={() => onPageChange(page - 1)}
-                    style={{ padding: '6px 12px', height: '32px', fontSize: '0.82rem' }}
+                    icon={<ChevronLeft size={16} />}
                 >
-                    <ChevronLeft size={16} />
-                    <span>Trước</span>
-                </button>
+                    Trước
+                </Button>
 
-                <button
-                    type="button"
-                    className="btn-secondary"
+                <Button
                     disabled={page >= totalPages}
                     onClick={() => onPageChange(page + 1)}
-                    style={{ padding: '6px 12px', height: '32px', fontSize: '0.82rem' }}
+                    icon={<ChevronRight size={16} />}
+                    iconPlacement="end"
                 >
-                    <span>Sau</span>
-                    <ChevronRight size={16} />
-                </button>
-            </div>
-        </div>
+                    Sau
+                </Button>
+            </Flex>
+        </Flex>
     );
 };

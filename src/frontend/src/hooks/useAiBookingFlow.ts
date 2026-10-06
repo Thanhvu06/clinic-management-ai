@@ -1499,7 +1499,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 if (phone && phone !== "Chưa cấu hình") {
                     content = `📞 **Thông tin Quầy Tiếp Đón & Lễ Tân${facilityName ? ` - ${facilityName}` : ""}:**\n- **Hotline hỗ trợ:** [${phone}](tel:${phone.replace(/\s+/g, "")})${address ? `\n- **Địa chỉ:** ${address}` : ""}${reason ? `\n- **Ghi chú:** ${reason}` : ""}\n\nNếu cần hỗ trợ thêm, bạn có thể liên hệ số điện thoại trên.`;
                 } else {
-                    content = `📞 **Thông tin Quầy Tiếp Đón & Lễ Tân${facilityName ? ` - ${facilityName}` : ""}:**\nThông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.${address ? `\n- **Địa chỉ cơ sở:** ${address}` : ""}`;
+                    content = `📞 **Thông tin Quầy Tiếp Đón & Lễ Tân${facilityName ? ` - ${facilityName}` : ""}:**\nBạn vui lòng liên hệ trực tiếp quầy lễ tân tại phòng khám để được hỗ trợ nhé.${address ? `\n- **Địa chỉ cơ sở:** ${address}` : ""}`;
                 }
 
                 const receptionMsg: ChatMessage = {

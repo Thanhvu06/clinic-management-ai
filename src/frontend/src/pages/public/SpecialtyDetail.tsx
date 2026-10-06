@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Stethoscope, User, Calendar, Bot, Phone, ChevronRight, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Stethoscope, User, Calendar, Bot, ChevronRight, Sparkles, CheckCircle2 } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import styles from './PublicPages.module.css';
 import { formatDoctorName } from '../../utils/doctorNameHelper';
@@ -208,15 +208,6 @@ export const SpecialtyDetail: React.FC = () => {
                             <Bot size={18} /> Định tuyến triệu chứng AI
                         </Link>
                     )}
-
-                    <div style={{ borderTop: '1px solid var(--c-border-light)', paddingTop: '20px', marginTop: '16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--c-navy)', fontWeight: 600, fontSize: '0.95rem', marginBottom: '6px' }}>
-                            <Phone size={18} color="var(--c-primary)" /> Hỗ trợ khách hàng
-                        </div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--c-text-muted)', lineHeight: 1.5 }}>
-                            Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.
-                        </div>
-                    </div>
                 </aside>
             </div>
         </div>

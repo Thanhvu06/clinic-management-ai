@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { User, Calendar, Stethoscope, Award, Phone, CheckCircle2, Clock, CalendarDays } from 'lucide-react';
+import { User, Calendar, Stethoscope, Award, CheckCircle2, Clock, CalendarDays } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import type { DoctorAvailabilityDto, DoctorDayAvailabilityDto } from '../../types';
 import styles from './PublicPages.module.css';
@@ -340,15 +340,6 @@ export const DoctorDetail: React.FC = () => {
                             <Stethoscope size={16} /> Xem khoa {primarySpecialty.specialtyName}
                         </Link>
                     )}
-
-                    <div style={{ borderTop: '1px solid var(--c-border-light)', paddingTop: '20px', marginTop: '16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--c-navy)', fontWeight: 600, fontSize: '0.95rem', marginBottom: '6px' }}>
-                            <Phone size={18} color="var(--c-primary)" /> Tổng đài phòng khám
-                        </div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--c-text-muted)', lineHeight: 1.5 }}>
-                            Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.
-                        </div>
-                    </div>
                 </aside>
             </div>
         </div>

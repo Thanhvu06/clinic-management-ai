@@ -1,4 +1,6 @@
 import React from 'react';
+import { Flex, Typography } from 'antd';
+import styles from './common.module.css';
 
 interface PageHeaderProps {
     title: string;
@@ -14,47 +16,25 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
     actions
 }) => {
     return (
-        <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            flexWrap: 'wrap',
-            gap: '16px',
-            marginBottom: '24px'
-        }}>
+        <Flex justify="space-between" align="flex-start" wrap gap="middle" className={styles.pageHeader}>
             <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                    <h1 style={{
-                        fontSize: '1.5rem',
-                        fontWeight: 700,
-                        color: 'var(--c-text-dark)',
-                        margin: 0,
-                        letterSpacing: '-0.02em'
-                    }}>
+                <Flex align="center" gap="small" wrap>
+                    <Typography.Title level={1} className={styles.pageTitle}>
                         {title}
-                    </h1>
+                    </Typography.Title>
                     {badge}
-                </div>
+                </Flex>
                 {subtitle && (
-                    <p style={{
-                        margin: '6px 0 0 0',
-                        color: 'var(--c-text-light)',
-                        fontSize: '0.9rem'
-                    }}>
+                    <Typography.Text type="secondary" className={styles.pageSubtitle}>
                         {subtitle}
-                    </p>
+                    </Typography.Text>
                 )}
             </div>
             {actions && (
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    flexWrap: 'wrap'
-                }}>
+                <Flex align="center" gap="small" wrap>
                     {actions}
-                </div>
+                </Flex>
             )}
-        </div>
+        </Flex>
     );
 };

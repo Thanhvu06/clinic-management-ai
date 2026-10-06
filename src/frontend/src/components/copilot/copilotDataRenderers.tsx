@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AiCopilotCard } from '../../api/aiCopilotApi';
+import type { VisitStatus } from '../../types/visit';
 import styles from './UnifiedCopilotPanel.module.css';
 
 type DataRecord = Record<string, unknown>;
@@ -66,7 +67,7 @@ const valueLabel = (value: unknown): string | null => {
     return text(value);
 };
 
-const statusLabels: Record<string, string> = {
+export const statusLabels: Record<string, string> & Record<VisitStatus, string> = {
     Pending: 'Chờ xử lý', Confirmed: 'Đã xác nhận', PendingReschedule: 'Chờ đổi lịch', PendingCancellation: 'Chờ hủy',
     Cancelled: 'Đã hủy', Completed: 'Đã hoàn tất', NoShow: 'Không đến', CheckedIn: 'Đã tiếp nhận', Registered: 'Đã đăng ký',
     WaitingForDoctor: 'Chờ bác sĩ', WaitingDoctor: 'Chờ bác sĩ', InConsultation: 'Đang khám',

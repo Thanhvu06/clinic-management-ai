@@ -679,7 +679,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
 
         await waitFor(() => {
             expect(screen.getByText(/Thông tin Quầy Tiếp Đón & Lễ Tân/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
-            expect(screen.getByText(/Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
+            expect(screen.getByText(/Bạn vui lòng liên hệ trực tiếp quầy lễ tân tại phòng khám để được hỗ trợ nhé\./i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
             // Did not navigate to /contact
             expect(screen.getByTestId('location-display').textContent).toBe('/patient');
         });
@@ -797,7 +797,7 @@ describe('AI Action Assistant - Frontend Widget & Flow', () => {
         fireEvent.click(screen.getByText('Liên hệ lễ tân'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống/i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
+            expect(screen.getByText(/Bạn vui lòng liên hệ trực tiếp quầy lễ tân tại phòng khám để được hỗ trợ nhé\./i, { selector: ':not([data-chat-announcement])' })).toBeInTheDocument();
         });
     });
 

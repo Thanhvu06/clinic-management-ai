@@ -1,55 +1,76 @@
+/*
+ * Khung giao diện nhân viên dựng trên antd Layout.
+ * Kích thước (sidebar 240, header 56, content padding 24) lấy từ src/theme/tokens.ts qua biến --cc-*.
+ */
 .layout {
-    display: flex;
     min-height: 100vh;
-    background-color: var(--c-bg);
-    overflow-x: hidden;
+    background-color: var(--cc-color-bg-layout);
+    /* clip (không phải hidden) để sticky của header/sidebar vẫn hoạt động */
+    overflow-x: clip;
 }
 
-/* Sidebar styling */
+/* Sidebar */
 .sidebar {
-    width: 256px;
-    background-color: var(--c-navy-dark);
-    color: #F8FAFC;
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: sticky;
+    top: 0;
+    height: 100vh;
     z-index: 50;
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar :global(.ant-layout-sider-children) {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
 .sidebarHeader {
-    height: 64px;
+    height: var(--cc-header-height);
     display: flex;
     align-items: center;
-    padding: 0 20px;
+    padding: 0 var(--cc-space-md);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    gap: 12px;
+    gap: var(--cc-space-sm);
+    flex-shrink: 0;
 }
 
 .logoBadge {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
     border-radius: 10px;
-    background: linear-gradient(135deg, var(--c-primary) 0%, var(--c-teal) 100%);
+    background: linear-gradient(135deg, var(--cc-color-primary) 0%, var(--cc-color-teal) 100%);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: #FFFFFF;
     box-shadow: 0 2px 6px rgba(8, 145, 178, 0.35);
     flex-shrink: 0;
 }
 
+.logoBadgeSmall {
+    width: 32px;
+    height: 32px;
+}
+
 .logoText {
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     font-weight: 700;
     letter-spacing: -0.02em;
     color: #FFFFFF;
+    line-height: 1.3;
+}
+
+.logoTagline {
+    font-size: 0.7rem;
+    color: var(--cc-color-teal);
+    font-weight: 500;
+    line-height: 1.3;
 }
 
 .nav {
     flex: 1;
-    padding: 20px 12px;
+    padding: var(--cc-space-md) 0;
     overflow-y: auto;
 }
 
@@ -57,85 +78,63 @@
     font-size: 0.72rem;
     font-weight: 700;
     color: #64748B;
-    margin-bottom: 8px;
-    padding: 0 12px;
+    margin-bottom: var(--cc-space-xs);
+    padding: 0 var(--cc-space-lg);
     letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 
-.navList {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.navLink {
-    display: flex;
-    align-items: center;
-    padding: 10px 14px;
-    color: #94A3B8;
-    border-radius: var(--radius-md);
+.menu {
+    border-inline-end: none !important;
     font-weight: 500;
-    font-size: 0.9rem;
-    transition: all 0.15s ease;
-    gap: 12px;
 }
 
-.navLink:hover {
-    background-color: rgba(255, 255, 255, 0.06);
-    color: #FFFFFF;
-}
-
-.navLinkActive {
-    background-color: var(--c-teal);
-    color: #FFFFFF !important;
+.menu :global(.ant-menu-item-selected) {
     font-weight: 600;
-    box-shadow: 0 2px 6px rgba(8, 145, 178, 0.3);
-}
-
-.navIcon {
-    flex-shrink: 0;
-    opacity: 0.85;
-}
-
-.navLinkActive .navIcon {
-    opacity: 1;
 }
 
 /* User Card at bottom of Sidebar */
 .userCard {
-    padding: 16px;
+    padding: var(--cc-space-md);
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
     align-items: center;
     background-color: rgba(0, 0, 0, 0.2);
-    gap: 12px;
+    gap: var(--cc-space-sm);
+    flex-shrink: 0;
 }
 
 .userAvatar {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
     border-radius: 10px;
-    background: linear-gradient(135deg, var(--c-primary) 0%, var(--c-teal) 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--cc-color-primary) 0%, var(--cc-color-teal) 100%);
+    color: #FFFFFF;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 600;
     font-size: 0.85rem;
+    line-height: 1;
     flex-shrink: 0;
+}
+
+.userAvatarSmall {
+    width: 34px;
+    height: 34px;
+    font-size: 0.8rem;
 }
 
 .userInfo {
     flex: 1;
     overflow: hidden;
+    line-height: 1.4;
 }
 
 .userName {
     font-weight: 600;
     font-size: 0.88rem;
-    color: #F8FAFC;
+    color: var(--cc-color-text-on-dark);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -143,17 +142,17 @@
 
 .userRole {
     font-size: 0.75rem;
-    color: #94A3B8;
-    margin-top: 1px;
+    color: var(--cc-color-text-on-dark-muted);
 }
 
 .logoutBtn {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #94A3B8;
+    color: var(--cc-color-text-on-dark-muted);
     cursor: pointer;
-    padding: 8px;
-    border-radius: var(--radius-md);
+    padding: var(--cc-space-xs);
+    min-height: 0;
+    border-radius: var(--cc-radius-md);
     transition: all 0.15s ease;
     display: flex;
     align-items: center;
@@ -169,23 +168,17 @@
 
 /* Main Body Area */
 .main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
     min-width: 0; /* fixes flex child overflow */
-    background-color: var(--c-bg);
+    background-color: var(--cc-color-bg-layout);
 }
 
 /* Topbar Header */
 .header {
-    height: 64px;
-    background-color: #FFFFFF;
-    border-bottom: 1px solid var(--c-border);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 28px;
-    flex-shrink: 0;
+    gap: var(--cc-space-md);
+    border-bottom: 1px solid var(--cc-color-border);
     position: sticky;
     top: 0;
     z-index: 30;
@@ -193,18 +186,23 @@
 }
 
 .pageHeaderTitle {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     font-weight: 600;
-    color: var(--c-text-dark);
+    color: var(--cc-color-text-dark);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--cc-gap);
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .headerRight {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: var(--cc-space-md);
+    line-height: normal;
 }
 
 .currentDateBadge {
@@ -212,30 +210,34 @@
     align-items: center;
     gap: 6px;
     font-size: 0.82rem;
-    color: var(--c-text-light);
-    background-color: #F8FAFC;
-    padding: 6px 12px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--c-border);
+    color: var(--cc-color-text-secondary);
+    background-color: var(--cc-color-bg-subtle);
+    padding: 6px var(--cc-space-sm);
+    border-radius: var(--cc-radius-md);
+    border: 1px solid var(--cc-color-border);
+    white-space: nowrap;
+}
+
+.currentDateIcon {
+    color: var(--cc-color-primary);
 }
 
 .headerRoleBadge {
     font-size: 0.76rem;
     font-weight: 600;
-    padding: 4px 10px;
-    border-radius: var(--radius-full);
-    background-color: var(--c-primary-light);
-    color: var(--c-primary);
+    padding: var(--cc-space-xxs) 10px;
+    border-radius: var(--cc-radius-full);
+    background-color: var(--cc-color-primary-light);
+    color: var(--cc-color-primary);
+    white-space: nowrap;
 }
 
 /* Content Area */
 .content {
-    flex: 1;
-    padding: 28px;
+    padding: var(--cc-content-padding);
     width: 100%;
     max-width: 1560px;
     margin: 0 auto;
-    overflow-y: auto;
 }
 
 /* Mobile Header & Overlay */
@@ -248,28 +250,15 @@
 }
 
 /* Responsive Breakpoints */
-@media (max-width: 1024px) {
-    .content {
-        padding: 20px;
-    }
-    .header {
-        padding: 0 20px;
-    }
-}
-
 @media (max-width: 768px) {
-    .layout {
-        flex-direction: column;
-    }
-
     .mobileHeader {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        height: 60px;
-        background-color: var(--c-navy-dark);
-        color: white;
-        padding: 0 16px;
+        height: var(--cc-header-height);
+        background-color: var(--cc-color-navy-dark);
+        color: #FFFFFF;
+        padding: 0 var(--cc-space-md);
         flex-shrink: 0;
         position: sticky;
         top: 0;
@@ -287,7 +276,7 @@
     .hamburgerBtn {
         background: none;
         border: none;
-        color: white;
+        color: #FFFFFF;
         cursor: pointer;
         padding: 6px;
         display: flex;
@@ -301,7 +290,6 @@
         left: 0;
         bottom: 0;
         transform: translateX(-100%);
-        width: 264px;
         z-index: 100;
     }
 
@@ -323,7 +311,7 @@
     }
 
     .content {
-        padding: 16px;
+        padding: var(--cc-space-md);
     }
 }
 

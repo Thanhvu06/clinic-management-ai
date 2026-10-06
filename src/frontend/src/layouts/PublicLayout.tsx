@@ -75,11 +75,7 @@ export const PublicLayout: React.FC = () => {
             {/* Utility Top Bar (Tier 1) */}
             <div className={styles.topBar}>
                 <div className={styles.topBarContainer}>
-                    <div className={styles.topBarInfo}>
-                        <div className={styles.topBarInfoItem}>
-                            Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.
-                        </div>
-                    </div>
+                    <div className={styles.topBarInfo} />
                     <div className={styles.topBarInfo}>
                         <button 
                             type="button"
@@ -293,7 +289,6 @@ export const PublicLayout: React.FC = () => {
                             ClinicCare AI
                         </div>
                         <p>Hệ thống phòng khám đa khoa thông minh tích hợp trí tuệ nhân tạo, mang lại trải nghiệm khám chữa bệnh nhanh chóng, chính xác và tiện lợi.</p>
-                        <p style={{ marginTop: '20px' }}>Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống.</p>
                     </div>
                     <div className={styles.footerCol}>
                         <h3>Dịch vụ & Đặt hẹn</h3>
