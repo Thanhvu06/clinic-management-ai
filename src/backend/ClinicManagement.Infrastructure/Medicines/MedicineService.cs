@@ -38,6 +38,8 @@ public class MedicineService : IMedicineService
                 Name = m.Name,
                 Unit = m.Unit,
                 StockQuantity = m.StockQuantity,
+                ImageUrl = m.ImagePath == null ? null : "/media/medicines/" + m.ImagePath,
+                ReorderLevel = m.ReorderLevel,
                 UnitPrice = m.UnitPrice,
                 IsPrescriptionRequired = m.IsPrescriptionRequired,
                 Strength = m.Strength

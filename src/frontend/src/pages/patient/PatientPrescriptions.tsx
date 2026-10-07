@@ -3,12 +3,17 @@ import { Breadcrumb } from '../../components/Breadcrumb';
 import { FileText, CalendarDays, Pill, Printer, Search, CheckCircle, Clock4, AlertCircle } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
+import { DataTable } from '../../components/common';
+import { formatVndCurrency } from '../../utils/formatters';
+import styles from './PatientPrescriptions.module.css';
 
 interface PrescriptionItem {
     medicineId: number;
     name: string;
     unit: string;
     quantity: number;
+    unitPrice?: number | null;
+    lineTotal?: number | null;
     dosage: string;
     frequency: string;
     durationDays?: number;
@@ -28,6 +33,8 @@ interface PatientPrescription {
     notes?: string;
     createdAt: string;
     dispensedAt?: string;
+    totalAmount?: number | null;
+    priceIsReference?: boolean;
     items: PrescriptionItem[];
 }
 
@@ -74,6 +81,8 @@ export const PatientPrescriptions: React.FC = () => {
         // Trigger browser print
         window.print();
     };
+
+    const formatPrice = (amount?: number | null) => amount == null ? '—' : formatVndCurrency(amount);
 
     const getStatusBadge = (status: string) => {
         if (status === 'Dispensed') {
@@ -187,41 +196,29 @@ export const PatientPrescriptions: React.FC = () => {
                                     <h4 style={{ margin: '0 0 12px 0', color: 'var(--c-navy)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem' }}>
                                         <Pill size={18} color="#0284c7" /> Danh sách thuốc chỉ định ({p.items.length})
                                     </h4>
-                                    <div className="table-responsive">
-                                        <table className="table" style={{ margin: 0, fontSize: '0.9rem' }}>
-                                            <thead>
-                                                <tr style={{ backgroundColor: '#f1f5f9' }}>
-                                                    <th style={{ width: '40px' }}>STT</th>
-                                                    <th>Tên thuốc</th>
-                                                    <th>Liều dùng</th>
-                                                    <th>Tần suất</th>
-                                                    <th>Số ngày</th>
-                                                    <th style={{ textAlign: 'right' }}>Số lượng</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {p.items.map((m, i) => (
-                                                    <tr key={i}>
-                                                        <td style={{ color: '#64748b' }}>{i + 1}</td>
-                                                        <td style={{ fontWeight: 600, color: '#0f172a' }}>
-                                                            {m.name}
-                                                            {m.instructions && (
-                                                                <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 400, marginTop: '2px' }}>
-                                                                    💡 {m.instructions}
-                                                                </div>
-                                                            )}
-                                                        </td>
-                                                        <td>{m.dosage}</td>
-                                                        <td>{m.frequency}</td>
-                                                        <td>{m.durationDays ? `${m.durationDays} ngày` : '-'}</td>
-                                                        <td style={{ textAlign: 'right', fontWeight: 700, color: '#0284c7' }}>
-                                                            {m.quantity} {m.unit}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                    <div className={styles.table}>
+                                        <DataTable<PrescriptionItem>
+                                            data={p.items}
+                                            keyExtractor={item => item.medicineId}
+                                            columns={[
+                                                { header: 'STT', width: 40, accessor: item => p.items.indexOf(item) + 1 },
+                                                { header: 'Tên thuốc', accessor: item => (
+                                                    <div className={styles.medicineName}>
+                                                        {item.name}
+                                                        {item.instructions && <div className={styles.instructions}>💡 {item.instructions}</div>}
+                                                    </div>
+                                                ) },
+                                                { header: 'Liều dùng', accessor: 'dosage' },
+                                                { header: 'Tần suất', accessor: 'frequency' },
+                                                { header: 'Số ngày', accessor: item => item.durationDays ? `${item.durationDays} ngày` : '-' },
+                                                { header: 'Số lượng', align: 'right', accessor: item => <span className={styles.quantity}>{item.quantity} {item.unit}</span> },
+                                                { header: 'Đơn giá', align: 'right', accessor: item => formatPrice(item.unitPrice) },
+                                                { header: 'Thành tiền', align: 'right', accessor: item => formatPrice(item.lineTotal) },
+                                            ]}
+                                        />
                                     </div>
+                                    <p className={styles.total}><strong>Tổng tiền thuốc: {formatPrice(p.totalAmount)}</strong></p>
+                                    {p.priceIsReference && <p className={styles.priceNote}>Giá tham khảo theo bảng giá hiện tại, có thể khác khi thanh toán.</p>}
                                 </div>
 
                                 {p.notes && (

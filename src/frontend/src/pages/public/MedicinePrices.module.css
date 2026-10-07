@@ -1,0 +1,11 @@
+.page { max-width: 1240px; width: 100%; margin: 0 auto; padding: var(--cc-space-xl) var(--cc-space-lg); }
+.page h1 { color: var(--cc-color-text-dark); margin: 0 0 var(--cc-space-xs); }
+.intro { color: var(--cc-color-text-secondary); margin-bottom: var(--cc-space-lg); }
+.filters { display: flex; flex-wrap: wrap; gap: var(--cc-space-md); margin-bottom: var(--cc-space-lg); }
+.search { flex: 1; min-width: 200px; }
+.select { min-width: 180px; }
+.pagination { display: flex; justify-content: center; margin-top: var(--cc-space-lg); }
+@media (max-width: 575px) {
+    .page { padding: var(--cc-space-lg) var(--cc-space-md); }
+    .search, .select { width: 100%; }
+}
