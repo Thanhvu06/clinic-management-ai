@@ -33,3 +33,30 @@ it('shows prescription unit prices, line totals and total amount, with dashes fo
     expect(screen.getByText('Giá tham khảo theo bảng giá hiện tại, có thể khác khi thanh toán.')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'In đơn thuốc' })).toHaveLength(2);
 });
+
+it('renders both lines with the same medicineId and distinct dosages without duplicate key warnings', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+        vi.mocked(axiosClient.get).mockResolvedValue({ success: true, data: [{
+            id: 3, code: 'RX-DUPLICATE-1', appointmentId: 1, appointmentCode: 'APT-1', appointmentDate: '2026-10-06',
+            doctorName: 'Nguyễn Văn An', specialtyName: 'Nội khoa', diagnosis: 'Khám định kỳ', status: 'Dispensed',
+            createdAt: '2026-10-06T08:00:00Z', priceIsReference: false, totalAmount: 5000,
+            items: [
+                { medicineId: 1, name: 'Thuốc cùng mã', unit: 'Viên', quantity: 3, dosage: '1 viên buổi sáng', frequency: '1 lần/ngày', unitPrice: 1000, lineTotal: 3000 },
+                { medicineId: 1, name: 'Thuốc cùng mã', unit: 'Viên', quantity: 2, dosage: '2 viên buổi tối', frequency: '1 lần/ngày', unitPrice: 1000, lineTotal: 2000 },
+            ],
+        }] });
+
+        render(<MemoryRouter><PatientPrescriptions /></MemoryRouter>);
+
+        const rows = await screen.findAllByRole('row', { name: /Thuốc cùng mã/ });
+        expect(rows).toHaveLength(2);
+        expect(within(rows[0]).getByText('1 viên buổi sáng')).toBeInTheDocument();
+        expect(within(rows[0]).queryByText('2 viên buổi tối')).not.toBeInTheDocument();
+        expect(within(rows[1]).getByText('2 viên buổi tối')).toBeInTheDocument();
+        expect(within(rows[1]).queryByText('1 viên buổi sáng')).not.toBeInTheDocument();
+        expect(consoleError.mock.calls.filter(args => /same key|unique.*key/i.test(args.map(String).join(' ')))).toHaveLength(0);
+    } finally {
+        consoleError.mockRestore();
+    }
+});

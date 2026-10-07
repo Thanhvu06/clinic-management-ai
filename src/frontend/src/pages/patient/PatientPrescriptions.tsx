@@ -199,7 +199,7 @@ export const PatientPrescriptions: React.FC = () => {
                                     <div className={styles.table}>
                                         <DataTable<PrescriptionItem>
                                             data={p.items}
-                                            keyExtractor={item => item.medicineId}
+                                            keyExtractor={item => `${item.medicineId}-${p.items.indexOf(item)}`}
                                             columns={[
                                                 { header: 'STT', width: 40, accessor: item => p.items.indexOf(item) + 1 },
                                                 { header: 'Tên thuốc', accessor: item => (
