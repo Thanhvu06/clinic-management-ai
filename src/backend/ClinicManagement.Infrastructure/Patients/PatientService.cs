@@ -146,7 +146,7 @@ public class PatientService : IPatientService
                     Unit = i.Medicine?.Unit ?? "Đơn vị",
                     Quantity = i.Quantity,
                     UnitPrice = unitPrice,
-                    LineTotal = savedPrice?.LineTotal ?? unitPrice * i.Quantity,
+                    LineTotal = unitPrice * i.Quantity,
                     Dosage = i.Dosage,
                     Frequency = i.Frequency,
                     DurationDays = i.DurationDays,

@@ -65,6 +65,32 @@ public class PatientPrescriptionPriceTests(CustomWebApplicationFactory factory) 
         Assert.True(result.PriceIsReference);
     }
 
+    [Fact]
+    public async Task SavedInvoiceUnitPriceUsesPrescribedQuantityWhenInvoiceQuantityDiffers()
+    {
+        var prescription = await CreatePrescriptionAsync(5000m);
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var invoice = CreateInvoice(prescription, 1200m, InvoiceStatus.Paid, Patient1EntityId);
+            var invoiceItem = invoice.Items.Single();
+            invoiceItem.Quantity = 2;
+            invoiceItem.LineTotal = 2400m;
+            invoice.Subtotal = 2400m;
+            invoice.TotalAmount = 2400m;
+            db.Invoices.Add(invoice);
+            await db.SaveChangesAsync();
+        }
+
+        var result = await ReadPrescriptionAsync(prescription.Id);
+        var item = Assert.Single(result.Items);
+        Assert.Equal(3, item.Quantity);
+        Assert.Equal(1200m, item.UnitPrice);
+        Assert.Equal(3600m, item.LineTotal);
+        Assert.Equal(3600m, result.TotalAmount);
+        Assert.False(result.PriceIsReference);
+    }
+
     private async Task<Prescription> CreatePrescriptionAsync(decimal? unitPrice)
     {
         using var scope = Factory.Services.CreateScope();
