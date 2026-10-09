@@ -30,7 +30,7 @@ import { useDialog } from '../../contexts/DialogContext';
 import { InvoiceReceiptModal } from '../../components/billing/InvoiceReceiptModal';
 import { DataTable, LoadingState, StatusBadge } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
-import { statusLabels } from '../../components/copilot/copilotDataRenderers';
+import { getVisitStatusLabel } from '../../utils/visitStatusLabels';
 import styles from './ReceptionBilling.module.css';
 
 export const ReceptionBilling: React.FC = () => {
@@ -477,7 +477,7 @@ export const ReceptionBilling: React.FC = () => {
             accessor: (v) => (
                 <StatusBadge
                     status={v.status}
-                    label={Object.hasOwn(statusLabels, v.status) ? statusLabels[v.status] : 'Không xác định'}
+                    label={getVisitStatusLabel(v.status)}
                 />
             ),
         },
