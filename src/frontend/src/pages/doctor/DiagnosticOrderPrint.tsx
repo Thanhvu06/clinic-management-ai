@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Button, Flex } from 'antd';
 import { Printer, ArrowLeft, ShieldPlus } from 'lucide-react';
 import { diagnosticApi } from '../../api/diagnosticApi';
 import type { DiagnosticOrderDto } from '../../types';
+import { LoadingState, InlineError } from '../../components/common';
 
 export const DiagnosticOrderPrint: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -40,23 +42,16 @@ export const DiagnosticOrderPrint: React.FC = () => {
     };
 
     if (loading) {
-        return (
-            <div style={{ padding: '60px', textAlign: 'center', fontFamily: 'sans-serif' }}>
-                <p>Đang tải thông tin phiếu chỉ định...</p>
-            </div>
-        );
+        return <LoadingState message="Đang tải thông tin phiếu chỉ định..." height="300px" />;
     }
 
     if (error || !order) {
         return (
-            <div style={{ padding: '60px', textAlign: 'center', fontFamily: 'sans-serif' }}>
-                <p style={{ color: '#dc2626' }}>{error || 'Không tìm thấy phiếu chỉ định.'}</p>
-                <button 
-                    onClick={() => navigate(-1)} 
-                    style={{ padding: '8px 16px', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                >
-                    Quay lại
-                </button>
+            <div style={{ padding: '60px 24px', maxWidth: '520px', margin: '0 auto' }}>
+                <InlineError message={error || 'Không tìm thấy phiếu chỉ định.'} />
+                <Flex justify="center" style={{ marginTop: 16 }}>
+                    <Button type="primary" onClick={() => navigate(-1)}>Quay lại</Button>
+                </Flex>
             </div>
         );
     }
@@ -105,20 +100,14 @@ export const DiagnosticOrderPrint: React.FC = () => {
             `}</style>
 
             {/* Action Bar (Screen Only) */}
-            <div className="no-print" style={{ maxWidth: '800px', margin: '0 auto 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button
-                    onClick={() => navigate(-1)}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}
-                >
-                    <ArrowLeft size={16} /> Quay lại
-                </button>
-                <button
-                    onClick={handlePrint}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', background: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, boxShadow: '0 2px 4px rgba(2,132,199,0.2)' }}
-                >
-                    <Printer size={16} /> In phiếu chỉ định
-                </button>
-            </div>
+            <Flex justify="space-between" align="center" className="no-print" style={{ maxWidth: '800px', margin: '0 auto 16px' }}>
+                <Button icon={<ArrowLeft size={16} />} onClick={() => navigate(-1)}>
+                    Quay lại
+                </Button>
+                <Button type="primary" icon={<Printer size={16} />} onClick={handlePrint}>
+                    In phiếu chỉ định
+                </Button>
+            </Flex>
 
             {/* Print Slip Document */}
             <div className="print-container" style={{ maxWidth: '800px', margin: '0 auto', background: '#ffffff', padding: '40px', borderRadius: '8px', border: '1px solid #cbd5e1', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', color: '#0f172a', fontFamily: 'Arial, sans-serif' }}>

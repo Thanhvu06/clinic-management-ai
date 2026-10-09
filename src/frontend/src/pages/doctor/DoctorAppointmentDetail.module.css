@@ -1,0 +1,184 @@
+/* DoctorAppointmentDetail: style riêng không đáp ứng được bằng props antd thuần. Biến lấy từ --cc-*. */
+
+.page {
+    padding: 8px 0;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.topBar {
+    margin-bottom: 20px;
+}
+
+.backLink {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--cc-color-primary);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.notFoundCard {
+    padding: 36px;
+    text-align: center;
+    margin: 30px auto;
+    max-width: 480px;
+}
+
+.spotlightCard {
+    margin-bottom: 20px;
+    border-inline-start: 5px solid var(--cc-color-success);
+}
+
+.patientName {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--cc-color-text-dark);
+}
+
+.codeTag {
+    background-color: var(--cc-color-bg-subtle);
+    color: var(--cc-color-text-muted);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-family: monospace;
+}
+
+.metaRow {
+    display: flex;
+    gap: 20px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+    color: var(--cc-color-text-muted);
+}
+
+.sectionCard {
+    margin-bottom: 20px;
+}
+
+.sectionTitleRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--cc-color-border);
+    padding-bottom: 10px;
+}
+
+.sectionTitle {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--cc-color-text-dark);
+}
+
+.fieldLabel {
+    font-weight: 700;
+    color: var(--cc-color-text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+
+.fieldValue {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--cc-color-text-dark);
+    margin-top: 2px;
+}
+
+.icdTag {
+    margin-left: 8px;
+    background-color: var(--cc-color-info-bg);
+    color: var(--cc-color-info);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.plainValue {
+    color: var(--cc-color-text);
+    margin-top: 2px;
+}
+
+.summaryBox {
+    color: var(--cc-color-text);
+    margin-top: 2px;
+    background-color: var(--cc-color-bg-subtle);
+    padding: 10px;
+    border-radius: 6px;
+    border-inline-start: 3px solid var(--cc-color-primary);
+}
+
+.emptyNote {
+    color: var(--cc-color-text-muted);
+    font-style: italic;
+    padding: 12px 0;
+}
+
+.vitalsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+}
+
+.vitalBox {
+    background-color: var(--cc-color-bg-subtle);
+    padding: 12px;
+    border-radius: 6px;
+}
+
+.vitalLabel {
+    font-size: 0.75rem;
+    color: var(--cc-color-text-muted);
+    font-weight: 600;
+}
+
+.vitalValue {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--cc-color-text-dark);
+    margin-top: 2px;
+}
+
+.notesText {
+    margin-top: 14px;
+    font-size: 0.85rem;
+    color: var(--cc-color-text-muted);
+}
+
+.historyList {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 0.85rem;
+}
+
+.historyRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: var(--cc-color-bg-subtle);
+    border-radius: 6px;
+}
+
+.historyAction {
+    font-weight: 600;
+    color: var(--cc-color-text-dark);
+}
+
+.historyNote {
+    color: var(--cc-color-text);
+    margin-left: 8px;
+}
+
+.historyDate {
+    color: var(--cc-color-text-muted);
+    font-size: 0.8rem;
+}

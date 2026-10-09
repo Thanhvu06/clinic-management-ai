@@ -1,0 +1,133 @@
+/* DoctorDashboard: style riêng không đáp ứng được bằng props antd thuần. Biến lấy từ --cc-*. */
+
+.shiftBanner {
+    margin-bottom: var(--cc-space-lg);
+    border-radius: var(--cc-radius-lg);
+}
+
+.shiftBanner :global(.ant-card-body) {
+    padding: var(--cc-space-sm) var(--cc-space-md);
+}
+
+.shiftBannerActive {
+    background-color: var(--cc-color-bg-subtle);
+    border-left: 4px solid var(--cc-color-teal);
+}
+
+.shiftBannerIdle {
+    background-color: var(--cc-color-warning-bg);
+    border-left: 4px solid var(--cc-color-warning);
+}
+
+.shiftIcon {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--cc-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.shiftIconActive {
+    background-color: var(--cc-color-teal-light);
+    color: var(--cc-color-teal);
+}
+
+.shiftIconIdle {
+    background-color: var(--cc-color-warning-bg);
+    color: var(--cc-color-warning);
+}
+
+.shiftLabel {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.shiftValue {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--cc-color-text-dark);
+    margin-top: 2px;
+}
+
+.kpiGrid {
+    margin-bottom: var(--cc-space-xl);
+}
+
+.nextPatientBanner {
+    margin-bottom: var(--cc-space-xl);
+    background-color: var(--cc-color-info-bg);
+    border: 1px solid var(--cc-color-border);
+    border-radius: var(--cc-radius-lg);
+}
+
+.nextPatientTag {
+    background-color: var(--cc-color-primary);
+    color: var(--cc-color-text-on-dark);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: var(--cc-radius-sm);
+    letter-spacing: 0.04em;
+}
+
+.nextPatientName {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--cc-color-text-dark);
+}
+
+.nextPatientMeta {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--cc-color-text-muted);
+    margin-left: 10px;
+}
+
+.vitalsOk {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--cc-color-success);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.vitalsPending {
+    color: var(--cc-color-text-muted);
+    font-size: 0.78rem;
+}
+
+.sectionCard {
+    border-radius: var(--cc-radius-lg);
+}
+
+.sectionCard + .sectionCard {
+    margin-top: var(--cc-space-lg);
+}
+
+.sectionIcon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--cc-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--cc-color-primary-light);
+    color: var(--cc-color-primary);
+}
+
+.sectionIconInfo {
+    background-color: var(--cc-color-info-bg);
+    color: var(--cc-color-info);
+}
+
+.sectionTitle {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--cc-color-text-dark);
+    margin: 0;
+}

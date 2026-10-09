@@ -1,0 +1,35 @@
+/* DoctorLeaveRequests: style riêng không đáp ứng được bằng props antd thuần. Biến lấy từ --cc-*. */
+
+.filterCard {
+    margin-bottom: var(--cc-space-lg);
+}
+
+.totalLine {
+    margin-top: var(--cc-space-md);
+    color: var(--cc-color-text-muted);
+    font-size: 0.9rem;
+}
+
+.leaveTime {
+    font-weight: 500;
+}
+
+.leaveTimeMuted {
+    font-size: 0.9rem;
+    color: var(--cc-color-text-muted);
+    margin-top: 4px;
+    margin-left: 20px;
+}
+
+.reasonCell {
+    font-size: 0.9rem;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.adminNoteCell {
+    font-size: 0.9rem;
+    color: var(--cc-color-danger);
+}

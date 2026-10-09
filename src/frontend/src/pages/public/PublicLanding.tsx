@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-    Search, Calendar, Bot, Stethoscope, ChevronRight, CheckCircle2, 
-    ShieldCheck, Clock, FileText, User, ChevronDown, ChevronUp, MapPin, 
+import { Button } from 'antd';
+import {
+    Search, Calendar, Bot, Stethoscope, ChevronRight, CheckCircle2,
+    ShieldCheck, Clock, FileText, User, ChevronDown, ChevronUp, MapPin,
     Phone, Award, Sparkles, Check, CalendarCheck, Package, Pill
 } from 'lucide-react';
 import styles from './PublicLanding.module.css';
@@ -108,19 +109,27 @@ export const PublicLanding: React.FC = () => {
                                 <Link to="/specialties" className={styles.btnSecondary} title="Xem danh mục chuyên khoa">
                                     <Stethoscope size={18} /> Tìm chuyên khoa
                                 </Link>
-                                <button 
-                                    type="button" 
-                                    onClick={() => setIsLookupModalOpen(true)} 
+                                <button
+                                    type="button"
+                                    onClick={() => setIsLookupModalOpen(true)}
                                     className={styles.btnSecondary}
                                     style={{ background: '#f0f9ff', borderColor: '#0284c7', color: '#0284c7' }}
                                     title="Tra cứu lịch hẹn"
                                 >
                                     <Search size={18} /> Tra cứu lịch hẹn
                                 </button>
+                                <Button
+                                    type="default"
+                                    size="large"
+                                    icon={<Pill size={18} />}
+                                    onClick={() => navigate('/medicines')}
+                                    title="Tra giá thuốc"
+                                >
+                                    Tra giá thuốc
+                                </Button>
                             </div>
 
                             <div className={styles.trustPoints}>
-                                <Link to="/medicines" className={styles.trustPoint}><Pill size={16} /> Tra giá thuốc</Link>
                                 <span className={styles.trustPoint}><CheckCircle2 size={16} /> Đặt lịch không chờ đợi</span>
                                 <span className={styles.trustPoint}><CheckCircle2 size={16} /> Bác sĩ chuyên khoa đầu ngành</span>
                                 <span className={styles.trustPoint}><CheckCircle2 size={16} /> AI phân luồng bảo mật</span>

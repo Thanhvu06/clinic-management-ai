@@ -1,0 +1,126 @@
+/* DoctorAppointments: style riêng không đáp ứng được bằng props antd thuần. Biến lấy từ --cc-*. */
+
+.filterCard {
+    margin-bottom: var(--cc-space-lg);
+}
+
+.totalLine {
+    margin-top: var(--cc-space-md);
+    color: var(--cc-color-text-muted);
+    font-size: 0.9rem;
+}
+
+.timeCell {
+    font-weight: 600;
+    color: var(--cc-color-text-dark);
+}
+
+.dateCell {
+    font-size: 0.85rem;
+    color: var(--cc-color-text-muted);
+    margin-top: 4px;
+}
+
+.codeCell {
+    font-size: 0.75rem;
+    color: var(--cc-color-text-muted);
+    margin-top: 2px;
+}
+
+.patientMeta {
+    font-size: 0.85rem;
+    color: var(--cc-color-text-muted);
+}
+
+.reasonCell {
+    font-size: 0.9rem;
+    color: var(--cc-color-text);
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.patientInfoBar {
+    background-color: var(--cc-color-bg-subtle);
+    padding: 16px;
+    border-radius: var(--cc-radius-md);
+    margin-bottom: 20px;
+}
+
+.patientAvatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-color: var(--cc-color-navy);
+    color: var(--cc-color-text-on-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.infoBlockLabel {
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.infoBlockValue {
+    background-color: var(--cc-color-bg-subtle);
+    padding: 12px;
+    border-radius: var(--cc-radius-sm);
+    font-size: 0.95rem;
+}
+
+.historyTimeline {
+    border-inline-start: 2px solid var(--cc-color-border);
+    margin-left: 8px;
+    padding-left: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.historyDot {
+    position: absolute;
+    left: -21px;
+    top: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--cc-color-teal);
+}
+
+.historyItem {
+    position: relative;
+}
+
+.medicineRow {
+    background-color: var(--cc-color-bg-subtle);
+    padding: 12px;
+    border-radius: var(--cc-radius-md);
+    border: 1px solid var(--cc-color-border);
+}
+
+.medicineRow + .medicineRow {
+    margin-top: 10px;
+}
+
+.infoBanner {
+    padding: 12px;
+    border-radius: var(--cc-radius-sm);
+    font-size: 0.9rem;
+}
+
+.infoBannerInfo {
+    background-color: var(--cc-color-info-bg);
+    color: var(--cc-color-info);
+}
+
+.infoBannerWarning {
+    background-color: var(--cc-color-warning-bg);
+    color: var(--cc-color-warning);
+}

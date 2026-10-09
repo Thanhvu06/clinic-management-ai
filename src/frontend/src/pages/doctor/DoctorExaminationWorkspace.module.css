@@ -1,0 +1,30 @@
+/* DoctorExaminationWorkspace: style riêng không đáp ứng được bằng props antd thuần. Biến lấy từ --cc-*. */
+
+.tabBar {
+    display: flex;
+    border-bottom: 2px solid var(--cc-color-border);
+    margin-bottom: 20px;
+    gap: 8px;
+    overflow-x: auto;
+}
+
+.tabButton {
+    padding: 12px 18px;
+    border: none;
+    background: none;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--cc-color-text-muted);
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
+}
+
+.tabButtonActive {
+    color: var(--cc-color-primary);
+    border-bottom: 3px solid var(--cc-color-primary);
+}

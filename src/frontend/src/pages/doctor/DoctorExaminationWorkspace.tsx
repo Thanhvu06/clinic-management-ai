@@ -1,15 +1,16 @@
 import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { 
-    Stethoscope, HeartPulse, Pill, History, Save, CheckCircle, 
-    AlertCircle, ArrowLeft, Trash2, Search, Clock, Calendar, 
+import { Button, Card } from 'antd';
+import {
+    Stethoscope, HeartPulse, Pill, History, Save, CheckCircle,
+    AlertCircle, ArrowLeft, Trash2, Search, Clock, Calendar,
     User, Phone, MapPin, RefreshCw, FlaskConical, Printer,
     Check, AlertTriangle
 } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
 import { diagnosticApi } from '../../api/diagnosticApi';
-import type { 
+import type {
     PatientClinicalContextDto,
     SaveEncounterRequest,
     SaveVitalSignsRequest,
@@ -20,6 +21,8 @@ import type {
 } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
+import { LoadingState, InlineError } from '../../components/common';
+import tabStyles from './DoctorExaminationWorkspace.module.css';
 
 interface ActiveMedicine {
     id: number;
@@ -772,23 +775,19 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     };
 
     if (loading) {
-        return (
-            <div style={{ textAlign: 'center', padding: '80px 0', color: '#64748b' }}>
-                <RefreshCw size={36} className="animate-spin" style={{ margin: '0 auto 16px auto', color: '#0284c7' }} />
-                <h3 style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>Đang nạp hồ sơ khám bệnh...</h3>
-                <p style={{ fontSize: '0.9rem', marginTop: '6px' }}>Vui lòng đợi giây lát trong khi hệ thống xác thực và tải dữ liệu bệnh nhân.</p>
-            </div>
-        );
+        return <LoadingState message="Đang nạp hồ sơ khám bệnh..." height="300px" />;
     }
 
     if (!context) {
         return (
-            <div className="card" style={{ padding: '40px', textAlign: 'center', margin: '40px auto', maxWidth: '500px' }}>
-                <AlertCircle size={48} style={{ color: '#ef4444', margin: '0 auto 16px auto' }} />
+            <Card style={{ padding: '40px', textAlign: 'center', margin: '40px auto', maxWidth: '500px' }}>
+                <AlertCircle size={48} style={{ color: 'var(--cc-color-danger)', margin: '0 auto 16px auto' }} />
                 <h3>Không tìm thấy lịch hẹn</h3>
-                <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý của bạn.</p>
-                <Link to="/doctor" className="btn-primary" style={{ display: 'inline-block', marginTop: '16px' }}>Quay lại bàn làm việc</Link>
-            </div>
+                <p style={{ color: 'var(--cc-color-text-muted)', fontSize: '0.9rem' }}>Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý của bạn.</p>
+                <Link to="/doctor">
+                    <Button type="primary" style={{ marginTop: 16 }}>Quay lại bàn làm việc</Button>
+                </Link>
+            </Card>
         );
     }
 
@@ -807,17 +806,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     <ArrowLeft size={16} />
                     <span>Quay lại Bàn làm việc Bác sĩ</span>
                 </Link>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <button 
-                        type="button"
-                        onClick={loadContext} 
-                        className="btn-secondary" 
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '0.85rem' }}
-                    >
-                        <RefreshCw size={14} />
-                        <span>Đồng bộ dữ liệu</span>
-                    </button>
-                </div>
+                <Button size="small" icon={<RefreshCw size={14} />} onClick={loadContext}>
+                    Đồng bộ dữ liệu
+                </Button>
             </div>
 
             {/* Read-only Banner if Completed */}
@@ -879,14 +870,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             <strong>Đã có kết quả CLS:</strong> Phiếu <code>{unreviewedDiagnosticOrder.orderCode}</code> đã có kết quả. Vui lòng chuyển sang tab Cận lâm sàng và bấm "Xác nhận đã xem kết quả" để hoàn tất ca khám.
                         </div>
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => setActiveTab('diagnostics')}
-                        className="btn-primary"
-                        style={{ padding: '6px 12px', fontSize: '0.82rem', whiteSpace: 'nowrap' }}
-                    >
+                    <Button type="primary" size="small" onClick={() => setActiveTab('diagnostics')}>
                         Xem kết quả ngay
-                    </button>
+                    </Button>
                 </div>
             )}
 
@@ -944,112 +930,47 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             </div>
 
             {/* Workspace Tab Navigation */}
-            <div style={{ display: 'flex', borderBottom: '2px solid #e2e8f0', marginBottom: '20px', gap: '8px', overflowX: 'auto' }}>
+            <div className={tabStyles.tabBar}>
                 <button
+                    type="button"
                     onClick={() => setActiveTab('encounter')}
-                    style={{
-                        padding: '12px 18px',
-                        border: 'none',
-                        background: 'none',
-                        fontWeight: 700,
-                        fontSize: '0.95rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        color: activeTab === 'encounter' ? '#0284c7' : '#64748b',
-                        borderBottom: activeTab === 'encounter' ? '3px solid #0284c7' : '3px solid transparent',
-                        marginBottom: '-2px',
-                        whiteSpace: 'nowrap'
-                    }}
+                    className={`${tabStyles.tabButton} ${activeTab === 'encounter' ? tabStyles.tabButtonActive : ''}`}
                 >
                     <Stethoscope size={18} />
                     <span>Diễn tiến lâm sàng</span>
                 </button>
 
                 <button
+                    type="button"
                     onClick={() => setActiveTab('vitals')}
-                    style={{
-                        padding: '12px 18px',
-                        border: 'none',
-                        background: 'none',
-                        fontWeight: 700,
-                        fontSize: '0.95rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        color: activeTab === 'vitals' ? '#0284c7' : '#64748b',
-                        borderBottom: activeTab === 'vitals' ? '3px solid #0284c7' : '3px solid transparent',
-                        marginBottom: '-2px',
-                        whiteSpace: 'nowrap'
-                    }}
+                    className={`${tabStyles.tabButton} ${activeTab === 'vitals' ? tabStyles.tabButtonActive : ''}`}
                 >
                     <HeartPulse size={18} />
                     <span>Dấu hiệu sinh tồn {computedBmi ? `(BMI ${computedBmi})` : ''}</span>
                 </button>
 
                 <button
+                    type="button"
                     onClick={() => setActiveTab('diagnostics')}
-                    style={{
-                        padding: '12px 18px',
-                        border: 'none',
-                        background: 'none',
-                        fontWeight: 700,
-                        fontSize: '0.95rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        color: activeTab === 'diagnostics' ? '#0284c7' : '#64748b',
-                        borderBottom: activeTab === 'diagnostics' ? '3px solid #0284c7' : '3px solid transparent',
-                        marginBottom: '-2px',
-                        whiteSpace: 'nowrap'
-                    }}
+                    className={`${tabStyles.tabButton} ${activeTab === 'diagnostics' ? tabStyles.tabButtonActive : ''}`}
                 >
                     <FlaskConical size={18} />
                     <span>Chỉ định Cận lâm sàng ({diagnosticOrders.length})</span>
                 </button>
 
                 <button
+                    type="button"
                     onClick={() => setActiveTab('prescription')}
-                    style={{
-                        padding: '12px 18px',
-                        border: 'none',
-                        background: 'none',
-                        fontWeight: 700,
-                        fontSize: '0.95rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        color: activeTab === 'prescription' ? '#0284c7' : '#64748b',
-                        borderBottom: activeTab === 'prescription' ? '3px solid #0284c7' : '3px solid transparent',
-                        marginBottom: '-2px',
-                        whiteSpace: 'nowrap'
-                    }}
+                    className={`${tabStyles.tabButton} ${activeTab === 'prescription' ? tabStyles.tabButtonActive : ''}`}
                 >
                     <Pill size={18} />
                     <span>Kê đơn thuốc ({prescriptionItems.length})</span>
                 </button>
 
                 <button
+                    type="button"
                     onClick={() => setActiveTab('history')}
-                    style={{
-                        padding: '12px 18px',
-                        border: 'none',
-                        background: 'none',
-                        fontWeight: 700,
-                        fontSize: '0.95rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        color: activeTab === 'history' ? '#0284c7' : '#64748b',
-                        borderBottom: activeTab === 'history' ? '3px solid #0284c7' : '3px solid transparent',
-                        marginBottom: '-2px',
-                        whiteSpace: 'nowrap'
-                    }}
+                    className={`${tabStyles.tabButton} ${activeTab === 'history' ? tabStyles.tabButtonActive : ''}`}
                 >
                     <History size={18} />
                     <span>Lịch sử khám ({patient.totalPastVisits})</span>
@@ -1505,31 +1426,11 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             {activeTab === 'diagnostics' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                     {pollError && (
-                        <div style={{
-                            background: '#fffbeb',
-                            border: '1px solid #fde68a',
-                            color: '#92400e',
-                            padding: '10px 16px',
-                            borderRadius: '8px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            fontSize: '0.875rem'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <AlertTriangle size={16} color="#d97706" />
-                                <span>Tự động cập nhật kết quả cận lâm sàng bị gián đoạn. Kết quả hiển thị có thể chưa mới nhất.</span>
-                            </div>
-                            <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{ padding: '4px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                onClick={() => loadDiagnosticOrders()}
-                                disabled={loadingOrders}
-                            >
-                                <RefreshCw size={12} className={loadingOrders ? 'spin' : ''} /> Thử lại
-                            </button>
-                        </div>
+                        <InlineError
+                            title="Tự động cập nhật bị gián đoạn"
+                            message="Tự động cập nhật kết quả cận lâm sàng bị gián đoạn. Kết quả hiển thị có thể chưa mới nhất."
+                            onRetry={() => loadDiagnosticOrders()}
+                        />
                     )}
                     {/* Diagnostic Create Form */}
                     {!isCompleted && (
