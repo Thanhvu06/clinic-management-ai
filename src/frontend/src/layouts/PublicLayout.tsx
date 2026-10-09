@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Flex } from 'antd';
 import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { getRoleDashboardPath } from '../utils/roleRoutes';
@@ -85,7 +86,7 @@ export const PublicLayout: React.FC = () => {
                         >
                             <Search size={13} /> Tra cứu lịch hẹn
                         </button>
-                        <Link to="/locations" className={styles.topBarInfoItem} style={{ textDecoration: 'none' }}>
+                        <Link to="/locations" className={`${styles.topBarInfoItem} ${styles.topBarLocation}`}>
                             <MapPin size={14} /> Hệ thống cơ sở phòng khám
                         </Link>
                     </div>
@@ -110,7 +111,7 @@ export const PublicLayout: React.FC = () => {
                         <NavLink to="/medicines" className={navLinkClass}>Tra giá thuốc</NavLink>
                     </nav>
 
-                    <div className={styles.authArea}>
+                    <Flex wrap className={styles.authArea}>
                         {!isAuthenticated ? (
                             <>
                                 <Link to="/login" className={styles.btnLogin}>Đăng nhập</Link>
@@ -129,7 +130,7 @@ export const PublicLayout: React.FC = () => {
                                         <div className={styles.avatar}>
                                             {user?.fullName?.charAt(0).toUpperCase() || 'U'}
                                         </div>
-                                        <span style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>
+                                        <span className={styles.userName}>
                                             {user?.fullName}
                                         </span>
                                         <ChevronDown size={16} color="var(--c-text-light)" />
@@ -186,7 +187,7 @@ export const PublicLayout: React.FC = () => {
                                 <Calendar size={16} /> Đặt lịch khám
                             </Link>
                         )}
-                    </div>
+                    </Flex>
 
                     <button 
                         className={styles.hamburger}
@@ -206,7 +207,7 @@ export const PublicLayout: React.FC = () => {
                 {/* Mobile Drawer */}
                 <div className={`${styles.mobileMenu} ${isMobileMenuOpen ? styles.open : ''}`}>
                     <div className={styles.mobileMenuHeader}>
-                        <div className={styles.logoArea} style={{ fontSize: '1.2rem' }}>
+                        <div className={`${styles.logoArea} ${styles.mobileLogo}`}>
                             <ShieldPlus size={24} />
                             ClinicCare AI
                         </div>
@@ -233,19 +234,18 @@ export const PublicLayout: React.FC = () => {
                     <button 
                         type="button" 
                         onClick={() => { setIsMobileMenuOpen(false); setIsLookupModalOpen(true); }}
-                        className={styles.navLink}
-                        style={{ textAlign: 'left', background: 'transparent', border: 'none', padding: '8px 0', cursor: 'pointer', color: 'var(--c-primary)' }}
+                        className={`${styles.navLink} ${styles.mobileLookup}`}
                     >
                         🔍 Tra cứu lịch hẹn
                     </button>
 
-                    <div style={{ borderTop: '1px solid var(--c-border)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div className={styles.mobileAuth}>
                         {!isAuthenticated ? (
                             <>
-                                <Link to="/login" className={styles.btnLogin} style={{ textAlign: 'center' }} onClick={() => setIsMobileMenuOpen(false)}>
+                                <Link to="/login" className={`${styles.btnLogin} ${styles.centeredLogin}`} onClick={() => setIsMobileMenuOpen(false)}>
                                     Đăng nhập
                                 </Link>
-                                <Link to="/register" className={styles.btnRegister} style={{ textAlign: 'center', justifyContent: 'center' }} onClick={() => setIsMobileMenuOpen(false)}>
+                                <Link to="/register" className={`${styles.btnRegister} ${styles.centeredRegister}`} onClick={() => setIsMobileMenuOpen(false)}>
                                     Đăng ký tài khoản
                                 </Link>
                             </>
@@ -259,17 +259,17 @@ export const PublicLayout: React.FC = () => {
                                     <Link to="/patient/prescriptions" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Đơn thuốc của tôi</Link>
                                     <Link to="/patient/diagnostic-results" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Kết quả cận lâm sàng</Link>
                                     <Link to="/patient/invoices" className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Hóa đơn của tôi</Link>
-                                    <button onClick={handleLogout} className={styles.navLink} style={{ textAlign: 'left', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--c-danger)' }}>Đăng xuất</button>
+                                    <button onClick={handleLogout} className={`${styles.navLink} ${styles.mobileLogout}`}>Đăng xuất</button>
                                 </>
                             ) : (
                                 <>
                                     <Link to={getRoleDashboardPath(user?.role)} className={styles.navLink} onClick={() => setIsMobileMenuOpen(false)}>Bảng điều khiển quản trị</Link>
-                                    <button onClick={handleLogout} className={styles.navLink} style={{ textAlign: 'left', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--c-danger)' }}>Đăng xuất</button>
+                                    <button onClick={handleLogout} className={`${styles.navLink} ${styles.mobileLogout}`}>Đăng xuất</button>
                                 </>
                             )
                         )}
                         {!isStaff && (
-                            <Link to="/patient/book" className={styles.btnBookHeader} style={{ justifyContent: 'center', marginTop: '10px' }} onClick={() => setIsMobileMenuOpen(false)}>
+                            <Link to="/patient/book" className={`${styles.btnBookHeader} ${styles.mobileBooking}`} onClick={() => setIsMobileMenuOpen(false)}>
                                 <Calendar size={16} /> Đặt lịch khám
                             </Link>
                         )}
@@ -286,7 +286,7 @@ export const PublicLayout: React.FC = () => {
             <footer className={styles.footer}>
                 <div className={styles.footerContainer}>
                     <div className={styles.footerCol}>
-                        <div className={styles.logoArea} style={{ color: 'white', marginBottom: '20px' }}>
+                        <div className={`${styles.logoArea} ${styles.footerLogo}`}>
                             <ShieldPlus size={28} />
                             ClinicCare AI
                         </div>
@@ -312,7 +312,7 @@ export const PublicLayout: React.FC = () => {
                         <span className={styles.footerText}>Chính sách bảo mật dữ liệu y tế</span>
                         <span className={styles.footerText}>Điều khoản sử dụng dịch vụ</span>
                         <span className={styles.footerText}>Quy định định tuyến AI</span>
-                        <p style={{ fontSize: '0.8rem', marginTop: '10px', color: '#94a3b8', lineHeight: 1.5 }}>
+                        <p className={styles.footerDisclaimer}>
                             * Lưu ý: Trợ lý AI chỉ đưa ra định hướng tham khảo dựa trên mô tả triệu chứng, không thay thế chẩn đoán y khoa chuyên sâu của bác sĩ.
                         </p>
                     </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Button } from 'antd';
+import { Button, Flex } from 'antd';
 import {
     Search, Calendar, Bot, Stethoscope, ChevronRight, CheckCircle2,
     ShieldCheck, Clock, FileText, User, ChevronDown, ChevronUp, MapPin,
@@ -102,7 +102,7 @@ export const PublicLanding: React.FC = () => {
                                 Đặt khám chuyên khoa dễ dàng, định tuyến triệu chứng chuẩn xác bằng Trí tuệ Nhân tạo và quản lý hồ sơ bệnh án trực tuyến 24/7.
                             </p>
                             
-                            <div className={styles.heroActions}>
+                            <Flex wrap className={styles.heroActions}>
                                 <Link to="/patient/book" className={styles.btnPrimary} title="Đặt lịch khám">
                                     <Calendar size={18} /> Đặt lịch khám
                                 </Link>
@@ -112,8 +112,7 @@ export const PublicLanding: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={() => setIsLookupModalOpen(true)}
-                                    className={styles.btnSecondary}
-                                    style={{ background: '#f0f9ff', borderColor: '#0284c7', color: '#0284c7' }}
+                                    className={`${styles.btnSecondary} ${styles.btnLookup}`}
                                     title="Tra cứu lịch hẹn"
                                 >
                                     <Search size={18} /> Tra cứu lịch hẹn
@@ -121,13 +120,14 @@ export const PublicLanding: React.FC = () => {
                                 <Button
                                     type="default"
                                     size="large"
+                                    className={styles.btnMedicine}
                                     icon={<Pill size={18} />}
                                     onClick={() => navigate('/medicines')}
                                     title="Tra giá thuốc"
                                 >
                                     Tra giá thuốc
                                 </Button>
-                            </div>
+                            </Flex>
 
                             <div className={styles.trustPoints}>
                                 <span className={styles.trustPoint}><CheckCircle2 size={16} /> Đặt lịch không chờ đợi</span>
@@ -159,32 +159,32 @@ export const PublicLanding: React.FC = () => {
             <section className={styles.statsSection}>
                 <div className={styles.container}>
                     <div className={styles.statsGrid}>
-                        <div className={styles.statItem} style={{ padding: '0 16px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
-                                <CalendarCheck size={28} color="var(--c-primary)" />
+                        <div className={`${styles.statItem} ${styles.statPadding}`}>
+                            <div className={styles.statIcon}>
+                                <CalendarCheck size={28} color="var(--cc-color-primary)" />
                             </div>
-                            <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--c-navy)' }}>Đặt lịch trực tuyến 24/7</div>
+                            <div className={styles.statTitle}>Đặt lịch trực tuyến 24/7</div>
                             <div className={styles.statLabel}>Chủ động chọn giờ khám, tiếp đón ưu tiên không chờ đợi</div>
                         </div>
-                        <div className={styles.statItem} style={{ padding: '0 16px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
-                                <Sparkles size={28} color="var(--c-primary)" />
+                        <div className={`${styles.statItem} ${styles.statPadding}`}>
+                            <div className={styles.statIcon}>
+                                <Sparkles size={28} color="var(--cc-color-primary)" />
                             </div>
-                            <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--c-navy)' }}>Định tuyến AI an toàn</div>
+                            <div className={styles.statTitle}>Định tuyến AI an toàn</div>
                             <div className={styles.statLabel}>Gợi ý chuyên khoa phù hợp theo triệu chứng bất thường</div>
                         </div>
-                        <div className={styles.statItem} style={{ padding: '0 16px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
-                                <Stethoscope size={28} color="var(--c-primary)" />
+                        <div className={`${styles.statItem} ${styles.statPadding}`}>
+                            <div className={styles.statIcon}>
+                                <Stethoscope size={28} color="var(--cc-color-primary)" />
                             </div>
-                            <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--c-navy)' }}>Bác sĩ giàu kinh nghiệm</div>
+                            <div className={styles.statTitle}>Bác sĩ giàu kinh nghiệm</div>
                             <div className={styles.statLabel}>Chuyên gia y tế tận tâm, đào tạo chính quy trong & ngoài nước</div>
                         </div>
-                        <div className={styles.statItem} style={{ padding: '0 16px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
-                                <ShieldCheck size={28} color="var(--c-primary)" />
+                        <div className={`${styles.statItem} ${styles.statPadding}`}>
+                            <div className={styles.statIcon}>
+                                <ShieldCheck size={28} color="var(--cc-color-primary)" />
                             </div>
-                            <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--c-navy)' }}>Minh bạch chi phí & hồ sơ</div>
+                            <div className={styles.statTitle}>Minh bạch chi phí & hồ sơ</div>
                             <div className={styles.statLabel}>Quản lý lịch hẹn, đơn thuốc và hồ sơ bệnh án trực tuyến</div>
                         </div>
                     </div>
@@ -258,10 +258,10 @@ export const PublicLanding: React.FC = () => {
                                                     </div>
                                                 )}
 
-                                                <div style={{ padding: '10px 16px', borderTop: '1px solid #f1f5f9', textAlign: 'center' }}>
+                                                <div className={styles.dropdownFooter}>
                                                     <Link 
                                                         to={`/search?q=${encodeURIComponent(searchQuery)}`}
-                                                        style={{ fontSize: '0.875rem', color: 'var(--c-primary)', fontWeight: 600, textDecoration: 'none' }}
+                                                        className={styles.dropdownViewAll}
                                                         onClick={() => setShowDropdown(false)}
                                                     >
                                                         Xem toàn bộ kết quả tìm kiếm &rarr;
@@ -283,7 +283,7 @@ export const PublicLanding: React.FC = () => {
                     <div className={styles.sectionHeader}>
                         <div>
                             <h2>Danh mục Chuyên khoa</h2>
-                            <p style={{ margin: '4px 0 0', color: '#64748b' }}>Đa dạng chuyên khoa y tế phục vụ khám chữa bệnh toàn diện</p>
+                            <p className={styles.sectionDescription}>Đa dạng chuyên khoa y tế phục vụ khám chữa bệnh toàn diện</p>
                         </div>
                         <Link to="/specialties" className={styles.viewAll}>
                             Xem tất cả <ChevronRight size={20} />
@@ -305,11 +305,11 @@ export const PublicLanding: React.FC = () => {
                                     </div>
                                     <h3>{spec.specialtyName || spec.name}</h3>
                                     <p>{spec.description || 'Chăm sóc sức khỏe chuyên sâu với đội ngũ chuyên gia tận tâm.'}</p>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '12px', borderTop: '1px solid #f1f5f9' }}>
-                                        <Link to={`/specialties/${spec.id}`} style={{ fontSize: '0.875rem', color: 'var(--c-primary)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <div className={styles.specialtyActions}>
+                                        <Link to={`/specialties/${spec.id}`} className={styles.specialtyDetail}>
                                             Xem chi tiết <ChevronRight size={14} />
                                         </Link>
-                                        <Link to={`/patient/book?specialtyId=${spec.id}`} style={{ fontSize: '0.875rem', color: 'var(--c-secondary)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <Link to={`/patient/book?specialtyId=${spec.id}`} className={styles.specialtyBooking}>
                                             <Calendar size={14} /> Đặt lịch
                                         </Link>
                                     </div>
@@ -323,12 +323,12 @@ export const PublicLanding: React.FC = () => {
             </section>
 
             {/* 5. Health Care Packages (ClinicCare Branded) */}
-            <section id="packages" style={{ padding: '70px 0', backgroundColor: '#ffffff' }}>
+            <section id="packages" className={styles.catalogSection}>
                 <div className={styles.container}>
                     <div className={styles.sectionHeader}>
                         <div>
                             <h2>Gói Chăm Sóc Sức Khỏe ClinicCare</h2>
-                            <p style={{ margin: '4px 0 0', color: '#64748b' }}>Thiết kế khoa học, tiết kiệm chi phí và tầm soát toàn diện từng đối tượng</p>
+                            <p className={styles.sectionDescription}>Thiết kế khoa học, tiết kiệm chi phí và tầm soát toàn diện từng đối tượng</p>
                         </div>
                         <Link to="/health-packages" className={styles.viewAll}>
                             Xem tất cả gói khám <ChevronRight size={20} />
@@ -338,7 +338,7 @@ export const PublicLanding: React.FC = () => {
                     {loading ? (
                         <div className={styles.packageGrid}>
                             {[1, 2, 3].map(i => (
-                                <div key={i} className={styles.skeletonCard} style={{ minHeight: '260px' }}></div>
+                                <div key={i} className={`${styles.skeletonCard} ${styles.packageSkeleton}`}></div>
                             ))}
                         </div>
                     ) : healthPackages.length > 0 ? (
@@ -357,12 +357,12 @@ export const PublicLanding: React.FC = () => {
                                                 <ul className={styles.packageIncluded}>
                                                     {services.slice(0, 4).map((srv: string, i: number) => (
                                                         <li key={i}>
-                                                            <Check size={16} color="#0284c7" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                                            <Check size={16} color="var(--cc-color-info)" className={styles.detailIcon} />
                                                             <span>{srv}</span>
                                                         </li>
                                                     ))}
                                                     {services.length > 4 && (
-                                                        <li style={{ color: '#0284c7', fontWeight: 600, fontSize: '0.8rem' }}>
+                                                        <li className={styles.moreServices}>
                                                             + {services.length - 4} xét nghiệm và dịch vụ khác
                                                         </li>
                                                     )}
@@ -372,14 +372,14 @@ export const PublicLanding: React.FC = () => {
 
                                         <div className={styles.packageFooter}>
                                             <div>
-                                                <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>Chi phí trọn gói</span>
+                                                <span className={styles.priceLabel}>Chi phí trọn gói</span>
                                                 <div className={styles.packagePrice}>{formatVndCurrency(pkg.price)}</div>
                                             </div>
-                                            <div style={{ display: 'flex', gap: '8px' }}>
-                                                <Link to={`/health-packages/${pkg.id}`} className={styles.btnSecondary} style={{ padding: '8px 14px', fontSize: '0.85rem' }}>
+                                            <div className={styles.packageActions}>
+                                                <Link to={`/health-packages/${pkg.id}`} className={`${styles.btnSecondary} ${styles.packageAction}`}>
                                                     Chi tiết
                                                 </Link>
-                                                <Link to={`/patient/health-packages/${pkg.id}/register`} className={styles.btnPrimary} style={{ padding: '8px 14px', fontSize: '0.85rem' }}>
+                                                <Link to={`/patient/health-packages/${pkg.id}/register`} className={`${styles.btnPrimary} ${styles.packageAction}`}>
                                                     Đăng ký
                                                 </Link>
                                             </div>
@@ -390,7 +390,7 @@ export const PublicLanding: React.FC = () => {
                         </div>
                     ) : (
                         <div className={styles.emptyState}>
-                            <Package size={40} style={{ opacity: 0.3, marginBottom: '8px' }} />
+                            <Package size={40} className={styles.emptyIcon} />
                             <div>{packagesError ? 'Hiện chưa tải được danh sách gói khám. Bạn vui lòng thử lại sau ít phút.' : 'Các gói khám đang được cập nhật, bạn vui lòng quay lại sau nhé.'}</div>
                         </div>
                     )}
@@ -433,7 +433,7 @@ export const PublicLanding: React.FC = () => {
                     <div className={styles.sectionHeader}>
                         <div>
                             <h2>Đội ngũ Bác sĩ Chuyên khoa</h2>
-                            <p style={{ margin: '4px 0 0', color: '#64748b' }}>Bác sĩ giỏi chuyên môn, giàu y đức và giàu kinh nghiệm điều trị</p>
+                            <p className={styles.sectionDescription}>Bác sĩ giỏi chuyên môn, giàu y đức và giàu kinh nghiệm điều trị</p>
                         </div>
                         <Link to="/doctors" className={styles.viewAll}>
                             Xem danh sách <ChevronRight size={20} />
@@ -457,11 +457,11 @@ export const PublicLanding: React.FC = () => {
                                         <h3>{formatDoctorName(doc.academicTitle, doc.fullName)}</h3>
                                         <p className={styles.doctorSpec}>{doc.specialtyName || 'Bác sĩ Đa khoa'}</p>
                                         <p className={styles.doctorExp}>{doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật kinh nghiệm'}</p>
-                                        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                                            <Link to={`/doctors/${doc.id}`} className={styles.btnOutline} style={{ flex: 1, padding: '8px 10px', fontSize: '0.85rem' }}>
+                                        <div className={styles.doctorActions}>
+                                            <Link to={`/doctors/${doc.id}`} className={`${styles.btnOutline} ${styles.doctorAction}`}>
                                                 Hồ sơ
                                             </Link>
-                                            <Link to={`/patient/book?doctorId=${doc.id}`} className={styles.btnPrimary} style={{ flex: 1, padding: '8px 10px', fontSize: '0.85rem' }}>
+                                            <Link to={`/patient/book?doctorId=${doc.id}`} className={`${styles.btnPrimary} ${styles.doctorAction}`}>
                                                 Đặt khám
                                             </Link>
                                         </div>
@@ -476,12 +476,12 @@ export const PublicLanding: React.FC = () => {
             </section>
 
             {/* 8. Clinic Locations (Điểm khám) */}
-            <section id="locations" style={{ padding: '70px 0', backgroundColor: '#ffffff' }}>
+            <section id="locations" className={styles.catalogSection}>
                 <div className={styles.container}>
                     <div className={styles.sectionHeader}>
                         <div>
                             <h2>Hệ thống Điểm khám ClinicCare</h2>
-                            <p style={{ margin: '4px 0 0', color: '#64748b' }}>Mạng lưới phòng khám rộng khắp, cơ sở vật chất khang trang, hiện đại</p>
+                            <p className={styles.sectionDescription}>Mạng lưới phòng khám rộng khắp, cơ sở vật chất khang trang, hiện đại</p>
                         </div>
                         <Link to="/locations" className={styles.viewAll}>
                             Xem tất cả cơ sở <ChevronRight size={20} />
@@ -491,20 +491,20 @@ export const PublicLanding: React.FC = () => {
                     <div className={styles.locationsGrid}>
                         {locations.slice(0, 3).map((loc) => (
                             <div key={loc.id} className={styles.locationCard}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                                    <Award size={18} color="#0284c7" />
+                                <div className={styles.locationHeading}>
+                                    <Award size={18} color="var(--cc-color-info)" />
                                     <h4 className={styles.locationName}>{loc.name}</h4>
                                 </div>
                                 <div className={styles.locationDetail}>
-                                    <MapPin size={16} color="#64748b" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                    <MapPin size={16} color="var(--cc-color-text-secondary)" className={styles.detailIcon} />
                                     <span>{loc.address}</span>
                                 </div>
                                 <div className={styles.locationDetail}>
-                                    <Clock size={16} color="#64748b" style={{ flexShrink: 0 }} />
+                                    <Clock size={16} color="var(--cc-color-text-secondary)" className={styles.fixedIcon} />
                                     <span>{loc.openingHours}</span>
                                 </div>
                                 <div className={styles.locationDetail}>
-                                    <Phone size={16} color="#64748b" style={{ flexShrink: 0 }} />
+                                    <Phone size={16} color="var(--cc-color-text-secondary)" className={styles.fixedIcon} />
                                     <span>{loc.phone}</span>
                                 </div>
                             </div>
@@ -550,7 +550,7 @@ export const PublicLanding: React.FC = () => {
             </section>
 
             {/* 10. FAQ Section */}
-            <section style={{ padding: '70px 0', backgroundColor: '#f8fafc' }}>
+            <section className={styles.faqSection}>
                 <div className={styles.container}>
                     <div className={styles.sectionHeaderCenter}>
                         <h2>Câu hỏi thường gặp</h2>
@@ -566,7 +566,7 @@ export const PublicLanding: React.FC = () => {
                                     className={styles.faqQuestion}
                                 >
                                     <span>{item.question}</span>
-                                    {openFaq === idx ? <ChevronUp size={20} color="#0284c7" /> : <ChevronDown size={20} color="#64748b" />}
+                                    {openFaq === idx ? <ChevronUp size={20} color="var(--cc-color-info)" /> : <ChevronDown size={20} color="var(--cc-color-text-secondary)" />}
                                 </button>
                                 {openFaq === idx && (
                                     <div className={styles.faqAnswer}>
