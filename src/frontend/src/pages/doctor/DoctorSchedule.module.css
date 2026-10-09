@@ -1,0 +1,189 @@
+/* DoctorSchedule: style riêng không đáp ứng được bằng props antd thuần. Biến lấy từ --cc-*. */
+
+.weekBar {
+    padding: 12px 18px;
+    margin-bottom: 20px;
+    background-color: var(--cc-color-bg-subtle);
+    border-radius: var(--cc-radius-lg);
+}
+
+.weekLabel {
+    font-weight: 600;
+    color: var(--cc-color-text-dark);
+    font-size: 0.92rem;
+}
+
+.dayCard {
+    border-radius: var(--cc-radius-md);
+}
+
+.dayCard + .dayCard {
+    margin-top: 16px;
+}
+
+.dayHeader {
+    border-bottom: 1px solid var(--cc-color-border);
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+}
+
+.dayName {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--cc-color-text-dark);
+}
+
+.dayDate {
+    margin-left: 8px;
+    color: var(--cc-color-text-muted);
+    font-size: 0.9rem;
+}
+
+.shiftCountActive {
+    font-size: 0.85rem;
+    color: var(--cc-color-primary);
+    font-weight: 600;
+}
+
+.shiftCountIdle {
+    font-size: 0.85rem;
+    color: var(--cc-color-text-muted);
+    font-weight: 600;
+}
+
+.noShift {
+    color: var(--cc-color-text-muted);
+    font-style: italic;
+    font-size: 0.85rem;
+    padding: 6px 0;
+}
+
+.shiftBox {
+    background-color: var(--cc-color-bg-subtle);
+    padding: 14px;
+    border-radius: var(--cc-radius-sm);
+    border: 1px solid var(--cc-color-border);
+}
+
+.shiftBox + .shiftBox {
+    margin-top: 14px;
+}
+
+.shiftTitleRow {
+    margin-bottom: 10px;
+}
+
+.shiftName {
+    font-weight: 700;
+    color: var(--cc-color-text-dark);
+    font-size: 0.95rem;
+}
+
+.roomTag {
+    background-color: var(--cc-color-info-bg);
+    color: var(--cc-color-info);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.slotCount {
+    font-size: 0.8rem;
+    color: var(--cc-color-text-muted);
+}
+
+.slotsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+}
+
+.slotBox {
+    padding: 8px 10px;
+    border-radius: var(--cc-radius-sm);
+    border: 1px dashed var(--cc-color-border);
+}
+
+.slotBoxBooked {
+    border: 1px solid var(--cc-color-primary-light);
+    background-color: var(--cc-color-primary-light);
+}
+
+.slotTimeRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--cc-color-text-muted);
+}
+
+.slotTimeRowBooked {
+    color: var(--cc-color-primary);
+}
+
+.slotStatusFree {
+    font-size: 0.7rem;
+    color: var(--cc-color-text-muted);
+}
+
+.slotStatusBooked {
+    font-size: 0.7rem;
+    color: var(--cc-color-success);
+}
+
+.slotPatient {
+    margin-top: 4px;
+    font-size: 0.8rem;
+}
+
+.slotPatientName {
+    font-weight: 600;
+    color: var(--cc-color-text-dark);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.slotPatientPhone {
+    color: var(--cc-color-text-muted);
+    font-size: 0.75rem;
+}
+
+.previewBanner {
+    padding: 12px;
+    border-radius: var(--cc-radius-sm);
+    margin-bottom: 16px;
+}
+
+.previewBannerWarn {
+    background-color: var(--cc-color-danger-bg);
+    border: 1px solid var(--cc-color-danger);
+}
+
+.previewBannerOk {
+    background-color: var(--cc-color-success-bg);
+    border: 1px solid var(--cc-color-success);
+}
+
+.previewHeadWarn {
+    color: var(--cc-color-danger);
+}
+
+.previewHeadOk {
+    color: var(--cc-color-success);
+}
+
+.previewList {
+    margin-top: 8px;
+    max-height: 120px;
+    overflow-y: auto;
+    font-size: 0.8rem;
+    color: var(--cc-color-danger);
+}
+
+.previewFootnote {
+    margin-top: 6px;
+    font-style: italic;
+}

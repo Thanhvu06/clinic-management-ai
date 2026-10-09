@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { Button, Card, DatePicker, Form, Input, Modal, Select } from 'antd';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { CalendarCheck, Plus, XCircle, Clock, RefreshCw, X } from 'lucide-react';
+import { CalendarCheck, Plus, XCircle, Clock, RefreshCw } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
+import {
+    PageHeader, DataTable, StatusBadge, LoadingState, EmptyState, Pagination
+} from '../../components/common';
+import type { DataTableColumn } from '../../components/common';
+import styles from './DoctorLeaveRequests.module.css';
 
 interface LeaveRequest {
     id: number;
@@ -13,6 +19,13 @@ interface LeaveRequest {
     adminNote: string | null;
 }
 
+const statusLabels: Record<string, string> = {
+    Pending: 'Chờ duyệt',
+    Approved: 'Đã duyệt',
+    Rejected: 'Đã từ chối',
+    Cancelled: 'Đã rút'
+};
+
 export const DoctorLeaveRequests: React.FC = () => {
     const { showAlert, showConfirm } = useDialog();
     const [requests, setRequests] = useState<LeaveRequest[]>([]);
@@ -21,15 +34,9 @@ export const DoctorLeaveRequests: React.FC = () => {
     const [page, setPage] = useState(1);
     const [statusFilter, setStatusFilter] = useState('');
 
-    // Modal
     const [modalOpen, setModalOpen] = useState(false);
     const [formLoading, setFormLoading] = useState(false);
-    
-    // Create Form
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
-    const [reason, setReason] = useState('');
-    const [formError, setFormError] = useState('');
+    const [form] = Form.useForm();
 
     const fetchRequests = async () => {
         setLoading(true);
@@ -56,16 +63,16 @@ export const DoctorLeaveRequests: React.FC = () => {
         fetchRequests();
     }, [page, statusFilter]);
 
-    const handleCreate = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setFormError('');
+    const handleCreate = async (values: { startDate: any; endDate: any; reason: string }) => {
+        const startDate = values.startDate.toISOString();
+        const endDate = values.endDate.toISOString();
 
         if (new Date(startDate) >= new Date(endDate)) {
-            setFormError('Thời gian bắt đầu phải trước thời gian kết thúc.');
+            showAlert('Thời gian bắt đầu phải trước thời gian kết thúc.', 'Lỗi', 'error');
             return;
         }
         if (new Date(startDate) < new Date()) {
-            setFormError('Không thể xin nghỉ trong quá khứ.');
+            showAlert('Không thể xin nghỉ trong quá khứ.', 'Lỗi', 'error');
             return;
         }
 
@@ -74,18 +81,16 @@ export const DoctorLeaveRequests: React.FC = () => {
             const res = await axiosClient.post<any, ApiResponse<any>>('/doctor/leave-requests', {
                 startDateTime: startDate,
                 endDateTime: endDate,
-                reason
+                reason: values.reason
             });
             if (res.success) {
                 showAlert('Tạo yêu cầu nghỉ thành công.', 'Thành công', 'success');
                 setModalOpen(false);
-                setStartDate('');
-                setEndDate('');
-                setReason('');
+                form.resetFields();
                 fetchRequests();
             }
         } catch (error: any) {
-            setFormError(error?.message || 'Có lỗi xảy ra.');
+            showAlert(error?.message || 'Có lỗi xảy ra.', 'Lỗi', 'error');
         } finally {
             setFormLoading(false);
         }
@@ -116,166 +121,105 @@ export const DoctorLeaveRequests: React.FC = () => {
         }
     };
 
-    const getStatusBadge = (status: string) => {
-        switch(status) {
-            case 'Pending': return <span className="badge badge-warning">Chờ duyệt</span>;
-            case 'Approved': return <span className="badge badge-success">Đã duyệt</span>;
-            case 'Rejected': return <span className="badge badge-danger">Đã từ chối</span>;
-            case 'Cancelled': return <span className="badge badge-default">Đã rút</span>;
-            default: return <span className="badge badge-default">{status}</span>;
+    const columns: DataTableColumn<LeaveRequest>[] = [
+        {
+            header: 'Thời gian nghỉ',
+            accessor: (req) => (
+                <div>
+                    <div className={styles.leaveTime}>
+                        <Clock size={14} style={{ marginRight: 6, color: 'var(--cc-color-teal)', verticalAlign: -2 }} />
+                        Từ: {formatDateTime(req.startDateTime)}
+                    </div>
+                    <div className={styles.leaveTimeMuted}>Đến: {formatDateTime(req.endDateTime)}</div>
+                </div>
+            )
+        },
+        { header: 'Lý do', accessor: (req) => <div className={styles.reasonCell}>{req.reason}</div> },
+        { header: 'Ghi chú quản trị', accessor: (req) => <div className={styles.adminNoteCell}>{req.adminNote || '-'}</div> },
+        { header: 'Trạng thái', accessor: (req) => <StatusBadge status={req.status} label={statusLabels[req.status] || req.status} /> },
+        {
+            header: 'Thao tác',
+            align: 'right',
+            accessor: (req) => req.status === 'Pending' ? (
+                <Button size="small" danger icon={<XCircle size={14} />} onClick={() => handleWithdraw(req.id)}>
+                    Rút Y/C
+                </Button>
+            ) : null
         }
-    };
+    ];
 
     return (
         <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h2 style={{ color: 'var(--c-navy-dark)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <CalendarCheck size={24} /> Yêu cầu nghỉ
-                </h2>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                    <button className="btn-secondary" onClick={() => fetchRequests()} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <RefreshCw size={14} /> Làm mới
-                    </button>
-                    <button className="btn-primary" onClick={() => setModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Plus size={16} /> Tạo yêu cầu mới
-                    </button>
-                </div>
-            </div>
+            <PageHeader
+                title="Yêu cầu nghỉ"
+                actions={
+                    <>
+                        <Button icon={<RefreshCw size={14} />} onClick={() => fetchRequests()}>
+                            Làm mới
+                        </Button>
+                        <Button type="primary" icon={<Plus size={16} />} onClick={() => setModalOpen(true)}>
+                            Tạo yêu cầu mới
+                        </Button>
+                    </>
+                }
+            />
 
-            <div className="card" style={{ marginBottom: '24px' }}>
-                <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                    <div style={{ width: '250px' }}>
-                        <select className="form-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
-                            <option value="">Tất cả trạng thái</option>
-                            <option value="Pending">Chờ duyệt</option>
-                            <option value="Approved">Đã duyệt</option>
-                            <option value="Rejected">Đã từ chối</option>
-                            <option value="Cancelled">Đã rút</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
+            <Card size="small" className={styles.filterCard}>
+                <Select
+                    style={{ width: 250 }}
+                    value={statusFilter || undefined}
+                    placeholder="Tất cả trạng thái"
+                    allowClear
+                    onChange={(val) => { setStatusFilter(val || ''); setPage(1); }}
+                    options={[
+                        { value: 'Pending', label: 'Chờ duyệt' },
+                        { value: 'Approved', label: 'Đã duyệt' },
+                        { value: 'Rejected', label: 'Đã từ chối' },
+                        { value: 'Cancelled', label: 'Đã rút' }
+                    ]}
+                />
+            </Card>
 
-            <div className="card table-responsive" style={{ padding: 0 }}>
-                {loading ? (
-                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
-                ) : (
-                    <table className="table">
-                        <thead>
-                            <tr>
-                                <th>Thời gian nghỉ</th>
-                                <th>Lý do</th>
-                                <th>Ghi chú quản trị</th>
-                                <th>Trạng thái</th>
-                                <th style={{ textAlign: 'right' }}>Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {requests.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>
-                                        Chưa có yêu cầu nghỉ nào.
-                                    </td>
-                                </tr>
-                            ) : requests.map(req => (
-                                <tr key={req.id} style={{ borderBottom: '1px solid var(--c-border)' }}>
-                                    <td style={{ padding: '16px' }}>
-                                        <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <Clock size={14} color="var(--c-teal)"/> Từ: {formatDateTime(req.startDateTime)}
-                                        </div>
-                                        <div style={{ fontSize: '0.9rem', color: 'var(--c-muted)', marginTop: '4px', marginLeft: '20px' }}>
-                                            Đến: {formatDateTime(req.endDateTime)}
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '16px' }}>
-                                        <div style={{ fontSize: '0.9rem', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {req.reason}
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '16px' }}>
-                                        <div style={{ fontSize: '0.9rem', color: 'var(--c-danger)' }}>
-                                            {req.adminNote || '-'}
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '16px' }}>
-                                        {getStatusBadge(req.status)}
-                                    </td>
-                                    <td style={{ padding: '16px', textAlign: 'right' }}>
-                                        {req.status === 'Pending' && (
-                                            <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => handleWithdraw(req.id)}>
-                                                <XCircle size={14} style={{ marginRight: '4px' }}/> Rút Y/C
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-            
-            <div style={{ marginTop: '16px', color: 'var(--c-muted)', fontSize: '0.9rem' }}>
-                Tổng cộng: {totalItems} yêu cầu
-            </div>
-
-            {/* Create Modal */}
-            {modalOpen && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-                    <div style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '500px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h3 style={{ margin: 0 }}>Tạo yêu cầu nghỉ phép</h3>
-                            <button onClick={() => setModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
-                        </div>
-                        
-                        {formError && <div style={{ color: 'var(--c-danger)', background: 'var(--c-danger-bg)', padding: '10px', borderRadius: '6px', marginBottom: '16px', fontSize: '0.9rem' }}>{formError}</div>}
-
-                        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div style={{ padding: '12px', background: 'var(--c-info-bg)', color: 'var(--c-info)', borderRadius: '6px', fontSize: '0.9rem' }}>
-                                Lưu ý: Yêu cầu nghỉ sẽ cần được Quản trị viên duyệt. Vui lòng nộp yêu cầu trước ít nhất 1-2 ngày để tránh ảnh hưởng lịch bệnh nhân.
-                            </div>
-                            <div style={{ display: 'flex', gap: '16px' }}>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Từ thời gian (*)</label>
-                                    <input 
-                                        type="datetime-local" 
-                                        className="form-input" 
-                                        required 
-                                        value={startDate} 
-                                        onChange={e => setStartDate(e.target.value)} 
-                                    />
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Đến thời gian (*)</label>
-                                    <input 
-                                        type="datetime-local" 
-                                        className="form-input" 
-                                        required 
-                                        value={endDate} 
-                                        onChange={e => setEndDate(e.target.value)} 
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Lý do nghỉ (*)</label>
-                                <textarea 
-                                    className="form-textarea" 
-                                    rows={3}
-                                    required
-                                    value={reason} 
-                                    onChange={e => setReason(e.target.value)}
-                                    placeholder="Nêu rõ lý do..."
-                                />
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                                <button type="button" className="btn-secondary" onClick={() => setModalOpen(false)}>Hủy</button>
-                                <button type="submit" className="btn-primary" disabled={formLoading}>
-                                    {formLoading ? 'Đang gửi...' : 'Gửi yêu cầu'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+            {loading ? (
+                <LoadingState message="Đang tải dữ liệu..." />
+            ) : requests.length === 0 ? (
+                <EmptyState icon={<CalendarCheck size={44} />} title="Chưa có yêu cầu nghỉ nào." />
+            ) : (
+                <DataTable columns={columns} data={requests} keyExtractor={(req) => req.id} />
             )}
+
+            <Pagination page={page} totalPages={Math.max(1, Math.ceil(totalItems / 10))} totalRecords={totalItems} onPageChange={setPage} />
+
+            <Modal
+                title="Tạo yêu cầu nghỉ phép"
+                open={modalOpen}
+                onCancel={() => setModalOpen(false)}
+                footer={null}
+                destroyOnHidden
+            >
+                <Form form={form} layout="vertical" onFinish={handleCreate}>
+                    <Form.Item
+                        label="Lưu ý"
+                    >
+                        <div style={{ padding: 12, background: 'var(--cc-color-info-bg)', color: 'var(--cc-color-info)', borderRadius: 6, fontSize: '0.9rem' }}>
+                            Yêu cầu nghỉ sẽ cần được Quản trị viên duyệt. Vui lòng nộp yêu cầu trước ít nhất 1-2 ngày để tránh ảnh hưởng lịch bệnh nhân.
+                        </div>
+                    </Form.Item>
+                    <Form.Item name="startDate" label="Từ thời gian" rules={[{ required: true, message: 'Vui lòng chọn thời gian bắt đầu' }]}>
+                        <DatePicker showTime style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" />
+                    </Form.Item>
+                    <Form.Item name="endDate" label="Đến thời gian" rules={[{ required: true, message: 'Vui lòng chọn thời gian kết thúc' }]}>
+                        <DatePicker showTime style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" />
+                    </Form.Item>
+                    <Form.Item name="reason" label="Lý do nghỉ" rules={[{ required: true, message: 'Vui lòng nêu rõ lý do' }]}>
+                        <Input.TextArea rows={3} placeholder="Nêu rõ lý do..." />
+                    </Form.Item>
+                    <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
+                        <Button onClick={() => setModalOpen(false)} style={{ marginRight: 8 }}>Hủy</Button>
+                        <Button type="primary" htmlType="submit" loading={formLoading}>Gửi yêu cầu</Button>
+                    </Form.Item>
+                </Form>
+            </Modal>
         </div>
     );
 };

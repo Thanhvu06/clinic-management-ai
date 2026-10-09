@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { 
-    Clock, Users, Stethoscope, CheckCircle, 
-    Calendar, ArrowRight, RefreshCw, HeartPulse, UserCheck, 
+import { Button, Card, Col, Row, Flex, Typography } from 'antd';
+import {
+    Clock, Users, Stethoscope, CheckCircle,
+    Calendar, ArrowRight, RefreshCw, HeartPulse, UserCheck,
     CalendarDays, AlertOctagon
 } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
 import type { DoctorDashboardDto, DoctorQueueItemDto } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
-import { PageHeader, StatCard, StatusBadge, InlineError, EmptyState } from '../../components/common';
+import { PageHeader, StatCard, StatusBadge, InlineError, EmptyState, DataTable, LoadingState } from '../../components/common';
+import type { DataTableColumn } from '../../components/common';
 import { toLocalDateString } from '../../utils/formatters';
+import styles from './DoctorDashboard.module.css';
 
 export const DoctorDashboard: React.FC = () => {
     const navigate = useNavigate();
@@ -130,67 +133,155 @@ export const DoctorDashboard: React.FC = () => {
     const currentShift = dashboardData?.currentShift;
     const nextPatient = dashboardData?.nextPatient;
     const queue: DoctorQueueItemDto[] = dashboardData?.todayQueue || (dashboardData as any)?.queue || [];
+    const upcoming = dashboardData?.upcomingAppointments || [];
+
+    const queueColumns: DataTableColumn<DoctorQueueItemDto>[] = [
+        { header: '#', accessor: (item) => queue.indexOf(item) + 1, width: 50 },
+        {
+            header: 'Giờ hẹn',
+            accessor: (item) => `${item.startTime?.substring(0, 5) || '--:--'} - ${item.endTime?.substring(0, 5) || '--:--'}`,
+            width: 130
+        },
+        { header: 'Mã lịch', accessor: 'appointmentCode', width: 120 },
+        {
+            header: 'Bệnh nhân',
+            accessor: (item) => (
+                <div>
+                    <div style={{ fontWeight: 600, color: 'var(--cc-color-text-dark)' }}>{item.patientName}</div>
+                    <Typography.Text type="secondary" style={{ fontSize: '0.78rem' }}>
+                        {item.patientPhone} {item.patientGender === 'Male' ? '• Nam' : item.patientGender === 'Female' ? '• Nữ' : ''} {item.patientAge ? `• ${item.patientAge}t` : ''}
+                    </Typography.Text>
+                </div>
+            )
+        },
+        { header: 'Lý do khám', accessor: (item) => item.reason || 'Khám tổng quát' },
+        {
+            header: 'Sinh hiệu',
+            accessor: (item) => item.isVitalsRecorded
+                ? <span className={styles.vitalsOk}><CheckCircle size={14} /><span>Đã đo</span></span>
+                : <span className={styles.vitalsPending}>Chưa đo</span>
+        },
+        { header: 'Trạng thái', accessor: (item) => <StatusBadge status={item.status} size="sm" /> },
+        {
+            header: 'Thao tác',
+            align: 'right',
+            accessor: (item) => (
+                <Flex gap="small" justify="flex-end">
+                    {item.status === 'Confirmed' && item.appointmentId && (
+                        <>
+                            <Button
+                                size="small"
+                                style={{ minHeight: 40 }}
+                                onClick={() => handleCheckIn(item.appointmentId)}
+                                loading={actionLoadingId === item.appointmentId}
+                                disabled={item.appointmentDate !== toLocalDateString()}
+                                title={item.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${item.appointmentDate.split('-').reverse().join('/')}` : 'Xác nhận bệnh nhân đã đến phòng khám'}
+                            >
+                                Tiếp nhận
+                            </Button>
+                            <Button size="small" danger onClick={() => handleMarkNoShow(item)} title="Đánh dấu vắng mặt">
+                                Vắng
+                            </Button>
+                        </>
+                    )}
+                    {item.status === 'CheckedIn' && (
+                        <Button
+                            type="primary"
+                            size="small"
+                            onClick={() => handleStartConsultation(item)}
+                            loading={actionLoadingId === (item.patientVisitId || item.appointmentId)}
+                        >
+                            Vào khám
+                        </Button>
+                    )}
+                    {item.status === 'InConsultation' && (
+                        <Button
+                            type="primary"
+                            size="small"
+                            onClick={() => navigate(item.patientVisitId ? `/doctor/visits/${item.patientVisitId}/examination` : `/doctor/appointments/${item.appointmentId}/examination`)}
+                        >
+                            Tiếp tục khám →
+                        </Button>
+                    )}
+                    {item.status === 'Completed' && (
+                        <Button
+                            size="small"
+                            onClick={() => item.appointmentId ? navigate(`/doctor/appointments/${item.appointmentId}`) : navigate('/doctor/queue')}
+                        >
+                            Xem hồ sơ
+                        </Button>
+                    )}
+                </Flex>
+            )
+        }
+    ];
+
+    const upcomingColumns: DataTableColumn<DoctorQueueItemDto>[] = [
+        { header: 'Ngày khám', accessor: (item) => item.appointmentDate ? new Date(item.appointmentDate).toLocaleDateString('vi-VN') : '--', width: 120 },
+        { header: 'Khung giờ', accessor: (item) => `${item.startTime?.substring(0, 5) || '--:--'} - ${item.endTime?.substring(0, 5) || '--:--'}`, width: 130 },
+        { header: 'Mã lịch', accessor: 'appointmentCode', width: 120 },
+        {
+            header: 'Bệnh nhân',
+            accessor: (item) => (
+                <div>
+                    <div style={{ fontWeight: 600, color: 'var(--cc-color-text-dark)' }}>{item.patientName}</div>
+                    <Typography.Text type="secondary" style={{ fontSize: '0.78rem' }}>
+                        {item.patientPhone} {item.patientGender === 'Male' ? '• Nam' : item.patientGender === 'Female' ? '• Nữ' : ''} {item.patientAge ? `• ${item.patientAge}t` : ''}
+                    </Typography.Text>
+                </div>
+            )
+        },
+        { header: 'Lý do khám', accessor: (item) => item.reason || 'Khám theo lịch hẹn' },
+        { header: 'Trạng thái', accessor: (item) => <StatusBadge status={item.status} size="sm" /> },
+        {
+            header: 'Thao tác',
+            align: 'right',
+            accessor: (item) => (
+                <Button size="small" onClick={() => navigate(`/doctor/appointments/${item.appointmentId}`)}>
+                    Chi tiết
+                </Button>
+            )
+        }
+    ];
 
     return (
         <div>
-            {/* Page Header */}
             <PageHeader
                 title="Bàn làm việc Bác sĩ"
                 subtitle="Hệ thống điều phối khám lâm sàng và quản lý hồ sơ y tế bệnh nhân hôm nay"
                 actions={
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button 
-                            className="btn-secondary" 
-                            onClick={loadDashboard} 
+                    <Flex gap="small">
+                        <Button
+                            icon={<RefreshCw size={15} className={loading ? 'animate-spin' : ''} />}
+                            onClick={loadDashboard}
                             disabled={loading}
                         >
-                            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-                            <span>Làm mới</span>
-                        </button>
-                        <Link to="/doctor/schedule" className="btn-primary" style={{ textDecoration: 'none' }}>
-                            <Calendar size={15} />
-                            <span>Lịch trực tuần</span>
+                            Làm mới
+                        </Button>
+                        <Link to="/doctor/schedule">
+                            <Button type="primary" icon={<Calendar size={15} />}>
+                                Lịch trực tuần
+                            </Button>
                         </Link>
-                    </div>
+                    </Flex>
                 }
             />
 
-            {/* Load error inline banner */}
             {loadError && (
-                <div style={{ marginBottom: '20px' }}>
-                    <InlineError 
-                        message={loadError} 
-                        onRetry={loadDashboard} 
-                    />
-                </div>
+                <InlineError message={loadError} onRetry={loadDashboard} />
             )}
 
-            {/* Current Shift Info Banner */}
-            <div className="card" style={{ 
-                padding: '16px 20px', 
-                marginBottom: '24px', 
-                backgroundColor: currentShift ? '#f8fafc' : '#fffbeb', 
-                borderLeft: currentShift ? '4px solid var(--c-teal)' : '4px solid #f59e0b'
-            }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <div style={{ 
-                            width: '42px', 
-                            height: '42px', 
-                            borderRadius: '10px', 
-                            backgroundColor: currentShift ? 'var(--c-teal-light)' : '#fef3c7', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center', 
-                            color: currentShift ? 'var(--c-teal)' : '#d97706' 
-                        }}>
+            <Card className={`${styles.shiftBanner} ${currentShift ? styles.shiftBannerActive : styles.shiftBannerIdle}`}>
+                <Flex justify="space-between" align="center" wrap gap="middle">
+                    <Flex align="center" gap="middle">
+                        <div className={`${styles.shiftIcon} ${currentShift ? styles.shiftIconActive : styles.shiftIconIdle}`}>
                             <Clock size={22} />
                         </div>
                         <div>
-                            <div style={{ fontSize: '0.78rem', color: 'var(--c-text-light)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            <div className={styles.shiftLabel}>
                                 Ca trực hôm nay ({new Date().toLocaleDateString('vi-VN')})
                             </div>
-                            <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--c-text-dark)', marginTop: '2px' }}>
+                            <div className={styles.shiftValue}>
                                 {typeof currentShift === 'string' ? (
                                     currentShift || 'Hôm nay bạn không có ca trực phòng khám được phân bổ'
                                 ) : currentShift ? (
@@ -202,382 +293,201 @@ export const DoctorDashboard: React.FC = () => {
                                 )}
                             </div>
                         </div>
-                    </div>
+                    </Flex>
                     {currentShift && typeof currentShift === 'object' && (
-                        <StatusBadge 
-                            status={currentShift.status === 'InProgress' ? 'Đang trong ca trực' : 'Ca trực hôm nay'} 
+                        <StatusBadge
+                            status={currentShift.status === 'InProgress' ? 'Đang trong ca trực' : 'Ca trực hôm nay'}
                             label={currentShift.status === 'InProgress' ? 'Đang trong ca trực' : 'Ca trực hôm nay'}
                         />
                     )}
-                </div>
-            </div>
+                </Flex>
+            </Card>
 
-            {/* KPIs Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '28px' }}>
-                <StatCard
-                    title="Tổng số ca hôm nay"
-                    value={loading ? '...' : (kpis?.totalAppointmentsToday ?? 0)}
-                    subtitle="Tất cả lịch khám"
-                    icon={<CalendarDays size={22} />}
-                    color="primary"
-                    onClick={() => navigate('/doctor/appointments')}
-                />
-                <StatCard
-                    title="Đang chờ khám"
-                    value={loading ? '...' : (kpis?.waitingCount ?? 0)}
-                    subtitle="Đã xác nhận & tiếp nhận"
-                    icon={<Users size={22} />}
-                    color="warning"
-                    onClick={() => navigate('/doctor/queue')}
-                />
-                <StatCard
-                    title="Đang thăm khám"
-                    value={loading ? '...' : (kpis?.inConsultationCount ?? 0)}
-                    subtitle="Phiên khám đang mở"
-                    icon={<Stethoscope size={22} />}
-                    color="teal"
-                />
-                <StatCard
-                    title="Đã hoàn tất"
-                    value={loading ? '...' : (kpis?.completedCount ?? 0)}
-                    subtitle="Đã chốt kết quả & đơn"
-                    icon={<CheckCircle size={22} />}
-                    color="success"
-                />
-                <StatCard
-                    title="Vắng mặt (No-Show)"
-                    value={loading ? '...' : (kpis?.noShowCount ?? 0)}
-                    subtitle="Không đến khám"
-                    icon={<AlertOctagon size={22} />}
-                    color="danger"
-                />
-            </div>
+            <Row gutter={[16, 16]} className={styles.kpiGrid}>
+                <Col xs={12} sm={12} md={8} lg={4}>
+                    <StatCard
+                        title="Tổng số ca hôm nay"
+                        value={loading ? '...' : (kpis?.totalAppointmentsToday ?? 0)}
+                        subtitle="Tất cả lịch khám"
+                        icon={<CalendarDays size={22} />}
+                        color="primary"
+                        onClick={() => navigate('/doctor/appointments')}
+                    />
+                </Col>
+                <Col xs={12} sm={12} md={8} lg={4}>
+                    <StatCard
+                        title="Đang chờ khám"
+                        value={loading ? '...' : (kpis?.waitingCount ?? 0)}
+                        subtitle="Đã xác nhận & tiếp nhận"
+                        icon={<Users size={22} />}
+                        color="warning"
+                        onClick={() => navigate('/doctor/queue')}
+                    />
+                </Col>
+                <Col xs={12} sm={12} md={8} lg={4}>
+                    <StatCard
+                        title="Đang thăm khám"
+                        value={loading ? '...' : (kpis?.inConsultationCount ?? 0)}
+                        subtitle="Phiên khám đang mở"
+                        icon={<Stethoscope size={22} />}
+                        color="teal"
+                    />
+                </Col>
+                <Col xs={12} sm={12} md={8} lg={4}>
+                    <StatCard
+                        title="Đã hoàn tất"
+                        value={loading ? '...' : (kpis?.completedCount ?? 0)}
+                        subtitle="Đã chốt kết quả & đơn"
+                        icon={<CheckCircle size={22} />}
+                        color="success"
+                    />
+                </Col>
+                <Col xs={12} sm={12} md={8} lg={4}>
+                    <StatCard
+                        title="Vắng mặt (No-Show)"
+                        value={loading ? '...' : (kpis?.noShowCount ?? 0)}
+                        subtitle="Không đến khám"
+                        icon={<AlertOctagon size={22} />}
+                        color="danger"
+                    />
+                </Col>
+            </Row>
 
-            {/* Next Patient Spotlight Banner */}
-            <div className="card" style={{ 
-                padding: '20px 24px', 
-                marginBottom: '28px', 
-                backgroundColor: '#f0f9ff', 
-                border: '1px solid #bae6fd', 
-                borderRadius: '12px' 
-            }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-                    <div style={{ flex: 1, minWidth: '280px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                            <span style={{ 
-                                backgroundColor: 'var(--c-primary)', 
-                                color: 'white', 
-                                fontSize: '0.72rem', 
-                                fontWeight: 700, 
-                                padding: '3px 8px', 
-                                borderRadius: '4px',
-                                letterSpacing: '0.04em'
-                            }}>
-                                BỆNH NHÂN TIẾP THEO
-                            </span>
+            <Card className={styles.nextPatientBanner}>
+                <Flex justify="space-between" align="center" wrap gap="middle">
+                    <div style={{ flex: 1, minWidth: 280 }}>
+                        <Flex align="center" gap="small" style={{ marginBottom: 8 }}>
+                            <span className={styles.nextPatientTag}>BỆNH NHÂN TIẾP THEO</span>
                             {nextPatient && <StatusBadge status={nextPatient.status} />}
-                        </div>
+                        </Flex>
 
                         {nextPatient ? (
                             <div>
-                                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--c-text-dark)' }}>
+                                <span className={styles.nextPatientName}>
                                     {nextPatient.patientName}
-                                    <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--c-text-light)', marginLeft: '10px' }}>
+                                    <span className={styles.nextPatientMeta}>
                                         (#{nextPatient.appointmentCode}) • {nextPatient.patientGender === 'Male' ? 'Nam' : nextPatient.patientGender === 'Female' ? 'Nữ' : 'Khác'} {nextPatient.patientAge ? `• ${nextPatient.patientAge} tuổi` : ''}
                                     </span>
-                                </div>
-                                <div style={{ fontSize: '0.88rem', color: 'var(--c-text)', marginTop: '4px' }}>
+                                </span>
+                                <div style={{ fontSize: '0.88rem', color: 'var(--cc-color-text)', marginTop: 4 }}>
                                     <strong>Khung giờ:</strong> {nextPatient.startTime?.substring(0, 5) || '--:--'} - {nextPatient.endTime?.substring(0, 5) || '--:--'} | <strong>SĐT:</strong> {nextPatient.patientPhone}
                                 </div>
-                                <div style={{ fontSize: '0.88rem', color: 'var(--c-text-light)', marginTop: '2px' }}>
+                                <div style={{ fontSize: '0.88rem', color: 'var(--cc-color-text-muted)', marginTop: 2 }}>
                                     <strong>Lý do khám:</strong> {nextPatient.reason || 'Khám tổng quát theo lịch hẹn'}
                                 </div>
                                 {nextPatient.vitalSummaryText && (
-                                    <div style={{ fontSize: '0.82rem', color: 'var(--c-teal)', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 500 }}>
+                                    <Flex align="center" gap={5} style={{ fontSize: '0.82rem', color: 'var(--cc-color-teal)', marginTop: 6, fontWeight: 500 }}>
                                         <HeartPulse size={14} />
                                         <span>Dấu hiệu sinh tồn: {nextPatient.vitalSummaryText}</span>
-                                    </div>
+                                    </Flex>
                                 )}
                             </div>
                         ) : (
-                            <div style={{ color: 'var(--c-text-light)', fontStyle: 'italic', padding: '6px 0', fontSize: '0.9rem' }}>
+                            <Typography.Text type="secondary" italic>
                                 Hiện không có bệnh nhân nào đang chờ hoặc tiếp nhận trong hàng đợi hôm nay.
-                            </div>
+                            </Typography.Text>
                         )}
                     </div>
 
                     {nextPatient && (
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <Flex gap="small" align="center">
                             {nextPatient.status === 'Confirmed' && nextPatient.appointmentId && (
-                                <button
-                                    className="btn-secondary"
+                                <Button
+                                    icon={<UserCheck size={16} />}
                                     onClick={() => handleCheckIn(nextPatient.appointmentId)}
-                                    disabled={actionLoadingId === nextPatient.appointmentId}
-                                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 16px', borderRadius: '6px', cursor: 'pointer' }}
+                                    loading={actionLoadingId === nextPatient.appointmentId}
                                 >
-                                    <UserCheck size={16} />
-                                    <span>Tiếp nhận</span>
-                                </button>
+                                    Tiếp nhận
+                                </Button>
                             )}
 
                             {nextPatient.status === 'CheckedIn' && (
-                                <button
-                                    className="btn-primary"
+                                <Button
+                                    type="primary"
+                                    icon={<Stethoscope size={16} />}
                                     onClick={() => handleStartConsultation(nextPatient)}
-                                    disabled={actionLoadingId === (nextPatient.patientVisitId || nextPatient.appointmentId)}
-                                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 20px', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+                                    loading={actionLoadingId === (nextPatient.patientVisitId || nextPatient.appointmentId)}
                                 >
-                                    <Stethoscope size={16} />
-                                    <span>Bắt đầu khám</span>
-                                </button>
+                                    Bắt đầu khám
+                                </Button>
                             )}
 
                             {nextPatient.status === 'InConsultation' && (
-                                <button
-                                    className="btn-primary"
+                                <Button
+                                    type="primary"
+                                    icon={<ArrowRight size={16} />}
                                     onClick={() => navigate(nextPatient.patientVisitId ? `/doctor/visits/${nextPatient.patientVisitId}/examination` : `/doctor/appointments/${nextPatient.appointmentId}/examination`)}
-                                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 20px', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
                                 >
-                                    <ArrowRight size={16} />
-                                    <span>Tiếp tục khám</span>
-                                </button>
+                                    Tiếp tục khám
+                                </Button>
                             )}
-                        </div>
+                        </Flex>
                     )}
-                </div>
-            </div>
+                </Flex>
+            </Card>
 
-            {/* Today's Queue Section */}
-            <div className="card" style={{ padding: '24px', borderRadius: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: 'var(--c-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-primary)' }}>
-                            <Users size={18} />
-                        </div>
-                        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--c-text-dark)', margin: 0 }}>
+            <Card className={styles.sectionCard}>
+                <Flex justify="space-between" align="center" wrap gap="small" style={{ marginBottom: 18 }}>
+                    <Flex align="center" gap="small">
+                        <div className={styles.sectionIcon}><Users size={18} /></div>
+                        <h2 className={styles.sectionTitle}>
                             Hàng đợi khám hôm nay ({queue.length} bệnh nhân)
                         </h2>
-                    </div>
-                    <Link to="/doctor/queue" style={{ fontSize: '0.88rem', color: 'var(--c-primary)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span>Xem chế độ hàng đợi đầy đủ</span>
-                        <ArrowRight size={14} />
+                    </Flex>
+                    <Link to="/doctor/queue">
+                        <Flex align="center" gap={4} style={{ fontSize: '0.88rem', color: 'var(--cc-color-primary)', fontWeight: 600 }}>
+                            <span>Xem chế độ hàng đợi đầy đủ</span>
+                            <ArrowRight size={14} />
+                        </Flex>
                     </Link>
-                </div>
+                </Flex>
 
                 {loading ? (
-                    <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--c-text-light)' }}>
-                        <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px auto' }} />
-                        <p style={{ fontSize: '0.9rem' }}>Đang tải danh sách hàng đợi...</p>
-                    </div>
+                    <LoadingState message="Đang tải danh sách hàng đợi..." height="200px" />
                 ) : queue.length === 0 ? (
                     <EmptyState
                         title="Không có lịch khám nào được ghi nhận hôm nay."
                         description="Các lịch hẹn mới của bệnh nhân sẽ tự động xuất hiện tại đây khi được đặt."
                     />
                 ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
-                            <thead>
-                                <tr style={{ borderBottom: '2px solid var(--c-border)', textAlign: 'left', color: 'var(--c-text-light)', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                    <th style={{ padding: '12px 10px' }}>#</th>
-                                    <th style={{ padding: '12px 10px' }}>Giờ hẹn</th>
-                                    <th style={{ padding: '12px 10px' }}>Mã lịch</th>
-                                    <th style={{ padding: '12px 10px' }}>Bệnh nhân</th>
-                                    <th style={{ padding: '12px 10px' }}>Lý do khám</th>
-                                    <th style={{ padding: '12px 10px' }}>Sinh hiệu</th>
-                                    <th style={{ padding: '12px 10px' }}>Trạng thái</th>
-                                    <th style={{ padding: '12px 10px', textAlign: 'right' }}>Thao tác</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {queue.map((item, idx) => (
-                                    <tr key={item.appointmentId} style={{ 
-                                        borderBottom: '1px solid var(--c-border-light)', 
-                                        backgroundColor: item.status === 'InConsultation' ? 'rgba(8, 145, 178, 0.04)' : 'transparent' 
-                                    }}>
-                                        <td style={{ padding: '14px 10px', fontWeight: 600, color: 'var(--c-text-light)' }}>
-                                            {item.queueOrder || idx + 1}
-                                        </td>
-                                        <td style={{ padding: '14px 10px', fontWeight: 700, color: 'var(--c-text-dark)', whiteSpace: 'nowrap' }}>
-                                            {item.startTime?.substring(0, 5) || '--:--'} - {item.endTime?.substring(0, 5) || '--:--'}
-                                        </td>
-                                        <td style={{ padding: '14px 10px', fontFamily: 'var(--font-mono, monospace)', fontSize: '0.82rem', color: 'var(--c-text-light)' }}>
-                                            {item.appointmentCode}
-                                        </td>
-                                        <td style={{ padding: '14px 10px' }}>
-                                            <div style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>{item.patientName}</div>
-                                            <div style={{ fontSize: '0.78rem', color: 'var(--c-text-light)', marginTop: '2px' }}>
-                                                {item.patientPhone} {item.patientGender === 'Male' ? '• Nam' : item.patientGender === 'Female' ? '• Nữ' : ''} {item.patientAge ? `• ${item.patientAge}t` : ''}
-                                            </div>
-                                        </td>
-                                        <td style={{ padding: '14px 10px', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-text)' }}>
-                                            {item.reason || 'Khám tổng quát'}
-                                        </td>
-                                        <td style={{ padding: '14px 10px' }}>
-                                            {item.isVitalsRecorded ? (
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--c-success)', fontSize: '0.78rem', fontWeight: 600 }}>
-                                                    <CheckCircle size={14} />
-                                                    <span>Đã đo</span>
-                                                </span>
-                                            ) : (
-                                                <span style={{ color: 'var(--c-text-light)', fontSize: '0.78rem' }}>Chưa đo</span>
-                                            )}
-                                        </td>
-                                        <td style={{ padding: '14px 10px' }}>
-                                            <StatusBadge status={item.status} size="sm" />
-                                        </td>
-                                        <td style={{ padding: '14px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                            <div style={{ display: 'inline-flex', gap: '6px' }}>
-                                                {item.status === 'Confirmed' && item.appointmentId && (
-                                                    <>
-                                                        <button 
-                                                            className="btn-secondary"
-                                                            onClick={() => handleCheckIn(item.appointmentId)}
-                                                            disabled={actionLoadingId === item.appointmentId || item.appointmentDate !== toLocalDateString()}
-                                                            style={{ padding: '5px 10px', minHeight: '40px', fontSize: '0.78rem' }}
-                                                            title={item.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${item.appointmentDate.split('-').reverse().join('/')}` : 'Xác nhận bệnh nhân đã đến phòng khám'}
-                                                        >
-                                                            Tiếp nhận
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleMarkNoShow(item)}
-                                                            style={{ 
-                                                                padding: '5px 8px', 
-                                                                fontSize: '0.78rem', 
-                                                                borderRadius: '6px', 
-                                                                border: '1px solid rgba(220, 38, 38, 0.2)', 
-                                                                backgroundColor: 'var(--c-danger-bg)', 
-                                                                color: 'var(--c-danger)', 
-                                                                cursor: 'pointer',
-                                                                fontWeight: 500
-                                                            }}
-                                                            title="Đánh dấu vắng mặt"
-                                                        >
-                                                            Vắng
-                                                        </button>
-                                                    </>
-                                                )}
-
-                                                {item.status === 'CheckedIn' && (
-                                                    <button 
-                                                        className="btn-primary"
-                                                        onClick={() => handleStartConsultation(item)}
-                                                        disabled={actionLoadingId === (item.patientVisitId || item.appointmentId)}
-                                                        style={{ padding: '5px 12px', fontSize: '0.78rem', fontWeight: 600 }}
-                                                    >
-                                                        Vào khám
-                                                    </button>
-                                                )}
-
-                                                {item.status === 'InConsultation' && (
-                                                    <button 
-                                                        className="btn-primary"
-                                                        onClick={() => navigate(item.patientVisitId ? `/doctor/visits/${item.patientVisitId}/examination` : `/doctor/appointments/${item.appointmentId}/examination`)}
-                                                        style={{ padding: '5px 12px', fontSize: '0.78rem', fontWeight: 600 }}
-                                                    >
-                                                        Tiếp tục khám →
-                                                    </button>
-                                                )}
-
-                                                {item.status === 'Completed' && (
-                                                    <button 
-                                                        className="btn-secondary"
-                                                        onClick={() => item.appointmentId ? navigate(`/doctor/appointments/${item.appointmentId}`) : navigate('/doctor/queue')}
-                                                        style={{ padding: '5px 10px', fontSize: '0.78rem' }}
-                                                    >
-                                                        Xem hồ sơ
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                    <DataTable
+                        columns={queueColumns}
+                        data={queue}
+                        keyExtractor={(item) => item.appointmentId ?? `visit-${item.patientVisitId}`}
+                    />
                 )}
-            </div>
+            </Card>
 
-            {/* Upcoming 7 Days Appointments Section */}
-            <div className="card" style={{ padding: '24px', borderRadius: '12px', marginTop: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7' }}>
-                            <CalendarDays size={18} />
-                        </div>
-                        <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--c-text-dark)', margin: 0 }}>
-                            Lịch khám 7 ngày tới ({dashboardData?.upcomingAppointments?.length || 0} bệnh nhân)
+            <Card className={styles.sectionCard}>
+                <Flex justify="space-between" align="center" wrap gap="small" style={{ marginBottom: 18 }}>
+                    <Flex align="center" gap="small">
+                        <div className={`${styles.sectionIcon} ${styles.sectionIconInfo}`}><CalendarDays size={18} /></div>
+                        <h2 className={styles.sectionTitle}>
+                            Lịch khám 7 ngày tới ({upcoming.length} bệnh nhân)
                         </h2>
-                    </div>
-                    <Link to="/doctor/appointments" style={{ fontSize: '0.88rem', color: 'var(--c-primary)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span>Xem tất cả lịch hẹn</span>
-                        <ArrowRight size={14} />
+                    </Flex>
+                    <Link to="/doctor/appointments">
+                        <Flex align="center" gap={4} style={{ fontSize: '0.88rem', color: 'var(--cc-color-primary)', fontWeight: 600 }}>
+                            <span>Xem tất cả lịch hẹn</span>
+                            <ArrowRight size={14} />
+                        </Flex>
                     </Link>
-                </div>
+                </Flex>
 
                 {loading ? (
-                    <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--c-text-light)' }}>
-                        <RefreshCw size={20} className="animate-spin" style={{ margin: '0 auto 8px auto' }} />
-                        <p style={{ fontSize: '0.85rem' }}>Đang nạp lịch sắp tới...</p>
-                    </div>
-                ) : (!dashboardData?.upcomingAppointments || dashboardData.upcomingAppointments.length === 0) ? (
-                    <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--c-text-light)', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                        Không có lịch hẹn nào được ghi nhận trong 7 ngày tới.
-                    </div>
+                    <LoadingState message="Đang nạp lịch sắp tới..." height="160px" />
+                ) : upcoming.length === 0 ? (
+                    <EmptyState
+                        title="Không có lịch hẹn nào được ghi nhận trong 7 ngày tới."
+                    />
                 ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
-                            <thead>
-                                <tr style={{ borderBottom: '2px solid var(--c-border)', textAlign: 'left', color: 'var(--c-text-light)', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                    <th style={{ padding: '12px 10px' }}>Ngày khám</th>
-                                    <th style={{ padding: '12px 10px' }}>Khung giờ</th>
-                                    <th style={{ padding: '12px 10px' }}>Mã lịch</th>
-                                    <th style={{ padding: '12px 10px' }}>Bệnh nhân</th>
-                                    <th style={{ padding: '12px 10px' }}>Lý do khám</th>
-                                    <th style={{ padding: '12px 10px' }}>Trạng thái</th>
-                                    <th style={{ padding: '12px 10px', textAlign: 'right' }}>Thao tác</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {dashboardData.upcomingAppointments.map((item) => (
-                                    <tr key={item.appointmentId} style={{ borderBottom: '1px solid var(--c-border-light)' }}>
-                                        <td style={{ padding: '14px 10px', fontWeight: 600, color: 'var(--c-text-dark)' }}>
-                                            {item.appointmentDate ? new Date(item.appointmentDate).toLocaleDateString('vi-VN') : '--'}
-                                        </td>
-                                        <td style={{ padding: '14px 10px', fontWeight: 600, color: 'var(--c-text-dark)', whiteSpace: 'nowrap' }}>
-                                            {item.startTime?.substring(0, 5) || '--:--'} - {item.endTime?.substring(0, 5) || '--:--'}
-                                        </td>
-                                        <td style={{ padding: '14px 10px', fontFamily: 'monospace', fontSize: '0.82rem', color: 'var(--c-text-light)' }}>
-                                            {item.appointmentCode}
-                                        </td>
-                                        <td style={{ padding: '14px 10px' }}>
-                                            <div style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>{item.patientName}</div>
-                                            <div style={{ fontSize: '0.78rem', color: 'var(--c-text-light)', marginTop: '2px' }}>
-                                                {item.patientPhone} {item.patientGender === 'Male' ? '• Nam' : item.patientGender === 'Female' ? '• Nữ' : ''} {item.patientAge ? `• ${item.patientAge}t` : ''}
-                                            </div>
-                                        </td>
-                                        <td style={{ padding: '14px 10px', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-text)' }}>
-                                            {item.reason || 'Khám theo lịch hẹn'}
-                                        </td>
-                                        <td style={{ padding: '14px 10px' }}>
-                                            <StatusBadge status={item.status} size="sm" />
-                                        </td>
-                                        <td style={{ padding: '14px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                            <button 
-                                                className="btn-secondary"
-                                                onClick={() => navigate(`/doctor/appointments/${item.appointmentId}`)}
-                                                style={{ padding: '5px 10px', fontSize: '0.78rem' }}
-                                            >
-                                                Chi tiết
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                    <DataTable
+                        columns={upcomingColumns}
+                        data={upcoming}
+                        keyExtractor={(item) => item.appointmentId ?? `visit-${item.patientVisitId}`}
+                    />
                 )}
-            </div>
+            </Card>
         </div>
     );
 };

@@ -1,0 +1,41 @@
+/* DoctorQueue: style riêng không đáp ứng được bằng props antd thuần. Biến lấy từ --cc-*. */
+
+.dateInput {
+    width: 170px;
+}
+
+.patientMeta {
+    font-size: 0.78rem;
+    color: var(--cc-color-text-muted);
+    margin-top: 2px;
+}
+
+.reasonCell {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--cc-color-text);
+    font-size: 0.88rem;
+}
+
+.vitalsOk {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--cc-color-success);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.vitalsSummary {
+    font-size: 0.74rem;
+    color: var(--cc-color-text-muted);
+    margin-top: 2px;
+}
+
+.vitalsPending {
+    color: var(--cc-color-text-muted);
+    font-size: 0.8rem;
+    font-style: italic;
+}

@@ -1,17 +1,20 @@
 import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-    Users, RefreshCw, Calendar, Clock, 
+import { Button, Flex, Input, Segmented } from 'antd';
+import {
+    Users, RefreshCw, Calendar, Clock,
     CheckCircle2, PlayCircle, Eye, UserX, Stethoscope
 } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
 import type { DoctorQueueItemDto } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
-import { 
-    PageHeader, FilterBar, StatusBadge, 
-    InlineError, LoadingState, EmptyState 
+import {
+    PageHeader, FilterBar, StatusBadge, DataTable,
+    InlineError, LoadingState, EmptyState
 } from '../../components/common';
+import type { DataTableColumn } from '../../components/common';
+import styles from './DoctorQueue.module.css';
 
 export const DoctorQueue: React.FC = () => {
     const navigate = useNavigate();
@@ -136,7 +139,7 @@ export const DoctorQueue: React.FC = () => {
 
     const filteredQueue = queue.filter(item => {
         const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
-        const matchesSearch = !searchTerm || 
+        const matchesSearch = !searchTerm ||
             item.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             item.appointmentCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
             item.patientPhone.includes(searchTerm);
@@ -154,62 +157,164 @@ export const DoctorQueue: React.FC = () => {
         NoShow: queue.filter(i => i.status === 'NoShow').length,
     };
 
+    const statusTabOptions = [
+        { value: 'ALL', label: `Tất cả (${statusCounts.ALL})` },
+        { value: 'Confirmed', label: `Chờ tiếp nhận (${statusCounts.Confirmed})` },
+        { value: 'CheckedIn', label: `Đã tiếp nhận (${statusCounts.CheckedIn})` },
+        { value: 'InConsultation', label: `Đang khám (${statusCounts.InConsultation})` },
+        { value: 'InDiagnostics', label: `Chờ CLS (${statusCounts.InDiagnostics})` },
+        { value: 'ResultsReady', label: `Có kết quả CLS (${statusCounts.ResultsReady})` },
+        { value: 'Completed', label: `Đã xong (${statusCounts.Completed})` },
+        { value: 'NoShow', label: `Vắng mặt (${statusCounts.NoShow})` },
+    ];
+
+    const columns: DataTableColumn<DoctorQueueItemDto>[] = [
+        { header: 'STT', align: 'center', width: 60, accessor: (item) => item.queueOrder || filteredQueue.indexOf(item) + 1 },
+        {
+            header: 'Khung giờ',
+            width: 130,
+            accessor: (item) => (
+                <Flex align="center" gap={6} style={{ fontWeight: 600, color: 'var(--cc-color-text-dark)' }}>
+                    <Clock size={14} style={{ color: 'var(--cc-color-teal)' }} />
+                    <span>{item.startTime.substring(0, 5)} - {item.endTime.substring(0, 5)}</span>
+                </Flex>
+            )
+        },
+        { header: 'Mã lịch', width: 130, accessor: (item) => <span style={{ fontFamily: 'monospace', fontSize: '0.84rem', color: 'var(--cc-color-text-muted)' }}>{item.appointmentCode}</span> },
+        {
+            header: 'Bệnh nhân',
+            accessor: (item) => (
+                <div>
+                    <div style={{ fontWeight: 600, color: 'var(--cc-color-text-dark)' }}>{item.patientName}</div>
+                    <div className={styles.patientMeta}>
+                        {item.patientPhone}
+                        {item.patientGender === 'Male' ? ' • Nam' : item.patientGender === 'Female' ? ' • Nữ' : ''}
+                        {item.patientAge ? ` • ${item.patientAge} tuổi` : ''}
+                    </div>
+                </div>
+            )
+        },
+        {
+            header: 'Lý do khám / Chẩn đoán sơ bộ',
+            accessor: (item) => <div className={styles.reasonCell}>{item.chiefComplaint || item.reason || 'Khám tổng quát theo lịch hẹn'}</div>
+        },
+        {
+            header: 'Dấu hiệu sinh tồn',
+            width: 180,
+            accessor: (item) => item.isVitalsRecorded ? (
+                <div>
+                    <span className={styles.vitalsOk}><CheckCircle2 size={13} /><span>Đã ghi nhận</span></span>
+                    {item.vitalSummaryText && <div className={styles.vitalsSummary}>{item.vitalSummaryText}</div>}
+                </div>
+            ) : (
+                <span className={styles.vitalsPending}>Chưa ghi nhận</span>
+            )
+        },
+        { header: 'Trạng thái', width: 130, accessor: (item) => <StatusBadge status={item.status} /> },
+        {
+            header: 'Thao tác',
+            align: 'right',
+            width: 220,
+            accessor: (item) => (
+                <Flex gap={6} justify="flex-end" wrap>
+                    {item.status === 'Confirmed' && (
+                        <>
+                            <Button
+                                size="small"
+                                style={{ minHeight: 40 }}
+                                onClick={() => item.appointmentId && handleCheckIn(item.appointmentId)}
+                                loading={actionLoadingId === item.appointmentId}
+                                disabled={item.appointmentDate !== toLocalDateString()}
+                                title={item.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${item.appointmentDate.split('-').reverse().join('/')}` : undefined}
+                            >
+                                Tiếp nhận
+                            </Button>
+                            <Button
+                                size="small"
+                                danger
+                                icon={<UserX size={14} />}
+                                onClick={() => handleMarkNoShow(item)}
+                                disabled={actionLoadingId === item.appointmentId}
+                                title="Đánh dấu vắng mặt"
+                            />
+                        </>
+                    )}
+
+                    {(item.status === 'CheckedIn' || item.status === 'WaitingDoctor') && (
+                        <Button
+                            type="primary"
+                            size="small"
+                            icon={<PlayCircle size={14} />}
+                            onClick={() => handleStartConsultation(item)}
+                            loading={actionLoadingId === (item.appointmentId || item.patientVisitId)}
+                        >
+                            Vào khám
+                        </Button>
+                    )}
+
+                    {item.status === 'InConsultation' && (
+                        <Button type="primary" size="small" icon={<Stethoscope size={14} />} onClick={() => navigate(getExaminationUrl(item))}>
+                            Tiếp tục khám
+                        </Button>
+                    )}
+
+                    {item.status === 'InDiagnostics' && (
+                        <Button size="small" icon={<Eye size={14} />} onClick={() => navigate(getExaminationUrl(item))}>
+                            Chờ CLS
+                        </Button>
+                    )}
+
+                    {item.status === 'ResultsReady' && (
+                        <Button type="primary" size="small" icon={<CheckCircle2 size={14} />} onClick={() => navigate(getExaminationUrl(item))}>
+                            Có kết quả CLS
+                        </Button>
+                    )}
+
+                    {item.status === 'Completed' && (
+                        <Button
+                            size="small"
+                            icon={<Eye size={14} />}
+                            onClick={() => {
+                                if (item.appointmentId) {
+                                    navigate(`/doctor/appointments/${item.appointmentId}`);
+                                } else {
+                                    navigate(getExaminationUrl(item));
+                                }
+                            }}
+                        >
+                            Hồ sơ
+                        </Button>
+                    )}
+                </Flex>
+            )
+        }
+    ];
+
     return (
         <div>
             <PageHeader
                 title="Hàng đợi khám lâm sàng"
                 subtitle="Theo dõi thứ tự tiếp nhận, đo sinh hiệu và điều phối bệnh nhân vào phòng khám."
                 actions={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            backgroundColor: 'white',
-                            padding: '6px 12px',
-                            border: '1px solid var(--c-border)',
-                            borderRadius: 'var(--radius-md)',
-                            boxShadow: 'var(--shadow-sm)'
-                        }}>
-                            <Calendar size={16} style={{ color: 'var(--c-primary)' }} />
-                            <input
-                                type="date"
-                                value={selectedDate}
-                                onChange={(e) => setSelectedDate(e.target.value)}
-                                style={{
-                                    border: 'none',
-                                    outline: 'none',
-                                    fontSize: '0.88rem',
-                                    color: 'var(--c-text)',
-                                    cursor: 'pointer',
-                                    fontWeight: 500
-                                }}
-                            />
-                        </div>
-
-                        <button 
-                            type="button"
-                            className="btn-secondary" 
-                            onClick={() => loadQueue(false)}
-                            disabled={loading}
-                            title="Tải lại danh sách"
-                        >
-                            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-                            <span>Làm mới</span>
-                        </button>
-                    </div>
+                    <Flex align="center" gap="small">
+                        <Input
+                            type="date"
+                            className={styles.dateInput}
+                            prefix={<Calendar size={16} style={{ color: 'var(--cc-color-primary)' }} />}
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                        />
+                        <Button icon={<RefreshCw size={15} className={loading ? 'animate-spin' : ''} />} onClick={() => loadQueue(false)} disabled={loading} title="Tải lại danh sách">
+                            Làm mới
+                        </Button>
+                    </Flex>
                 }
             />
 
             {error && (
-                <InlineError
-                    title="Không thể tải danh sách hàng đợi"
-                    message={error}
-                    onRetry={loadQueue}
-                />
+                <InlineError title="Không thể tải danh sách hàng đợi" message={error} onRetry={loadQueue} />
             )}
 
-            {/* Filter and Tab Navigation Bar */}
             <FilterBar
                 searchTerm={searchTerm}
                 onSearchChange={setSearchTerm}
@@ -220,286 +325,26 @@ export const DoctorQueue: React.FC = () => {
                     setSelectedDate(todayStr);
                 }}
             >
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    {[
-                        { key: 'ALL', label: `Tất cả (${statusCounts.ALL})` },
-                        { key: 'Confirmed', label: `Chờ tiếp nhận (${statusCounts.Confirmed})` },
-                        { key: 'CheckedIn', label: `Đã tiếp nhận (${statusCounts.CheckedIn})` },
-                        { key: 'InConsultation', label: `Đang khám (${statusCounts.InConsultation})` },
-                        { key: 'InDiagnostics', label: `Chờ CLS (${statusCounts.InDiagnostics})` },
-                        { key: 'ResultsReady', label: `Có kết quả CLS (${statusCounts.ResultsReady})` },
-                        { key: 'Completed', label: `Đã xong (${statusCounts.Completed})` },
-                        { key: 'NoShow', label: `Vắng mặt (${statusCounts.NoShow})` },
-                    ].map(tab => (
-                        <button
-                            key={tab.key}
-                            type="button"
-                            onClick={() => setStatusFilter(tab.key)}
-                            style={{
-                                padding: '6px 12px',
-                                borderRadius: 'var(--radius-md)',
-                                fontSize: '0.82rem',
-                                fontWeight: 600,
-                                border: '1px solid',
-                                borderColor: statusFilter === tab.key ? 'var(--c-primary)' : 'var(--c-border)',
-                                backgroundColor: statusFilter === tab.key ? 'var(--c-primary)' : 'white',
-                                color: statusFilter === tab.key ? 'white' : 'var(--c-text)',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease'
-                            }}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
+                <Segmented options={statusTabOptions} value={statusFilter} onChange={(val) => setStatusFilter(String(val))} />
             </FilterBar>
 
-            {/* Queue Table */}
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                {loading ? (
-                    <LoadingState message="Đang tải danh sách hàng đợi khám..." height="280px" />
-                ) : filteredQueue.length === 0 ? (
-                    <EmptyState
-                        icon={<Users size={44} style={{ color: 'var(--c-muted)' }} />}
-                        title="Không tìm thấy bệnh nhân nào trong hàng đợi"
-                        description={searchTerm || statusFilter !== 'ALL' 
-                            ? "Thử thay đổi bộ lọc trạng thái hoặc từ khóa tìm kiếm."
-                            : "Chưa có lịch khám cho ngày đã chọn."}
-                    />
-                ) : (
-                    <div className="table-responsive" style={{ border: 'none', borderRadius: 0 }}>
-                        <table className="table">
-                            <thead>
-                                <tr>
-                                    <th style={{ width: '60px', textAlign: 'center' }}>STT</th>
-                                    <th style={{ width: '130px' }}>Khung giờ</th>
-                                    <th style={{ width: '130px' }}>Mã lịch</th>
-                                    <th>Bệnh nhân</th>
-                                    <th>Lý do khám / Chẩn đoán sơ bộ</th>
-                                    <th style={{ width: '180px' }}>Dấu hiệu sinh tồn</th>
-                                    <th style={{ width: '130px' }}>Trạng thái</th>
-                                    <th style={{ textAlign: 'right', width: '180px' }}>Thao tác</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredQueue.map((item, idx) => {
-                                    const isCurrent = item.status === 'InConsultation';
-                                    const isWaiting = item.status === 'CheckedIn' || item.status === 'WaitingDoctor';
-                                    const rowKey = item.appointmentId ? `apt-${item.appointmentId}` : `visit-${item.patientVisitId || idx}`;
-                                    return (
-                                        <tr 
-                                            key={rowKey}
-                                            style={{
-                                                backgroundColor: isCurrent 
-                                                    ? 'rgba(15, 76, 129, 0.05)' 
-                                                    : isWaiting 
-                                                    ? 'rgba(5, 150, 105, 0.04)' 
-                                                    : undefined,
-                                                borderLeft: isCurrent 
-                                                    ? '3px solid var(--c-primary)' 
-                                                    : isWaiting 
-                                                    ? '3px solid var(--c-success)' 
-                                                    : undefined
-                                            }}
-                                        >
-                                            <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--c-text-light)' }}>
-                                                {item.queueOrder || idx + 1}
-                                            </td>
-
-                                            <td style={{ whiteSpace: 'nowrap' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--c-text-dark)' }}>
-                                                    <Clock size={14} style={{ color: 'var(--c-teal)' }} />
-                                                    <span>{item.startTime.substring(0, 5)} - {item.endTime.substring(0, 5)}</span>
-                                                </div>
-                                            </td>
-
-                                            <td style={{ fontFamily: 'monospace', fontSize: '0.84rem', color: 'var(--c-text-light)' }}>
-                                                {item.appointmentCode}
-                                            </td>
-
-                                            <td>
-                                                <div style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>
-                                                    {item.patientName}
-                                                </div>
-                                                <div style={{ fontSize: '0.78rem', color: 'var(--c-text-light)', marginTop: '2px' }}>
-                                                    {item.patientPhone}
-                                                    {item.patientGender === 'Male' ? ' • Nam' : item.patientGender === 'Female' ? ' • Nữ' : ''}
-                                                    {item.patientAge ? ` • ${item.patientAge} tuổi` : ''}
-                                                </div>
-                                            </td>
-
-                                            <td style={{ maxWidth: '240px' }}>
-                                                <div style={{
-                                                    whiteSpace: 'nowrap',
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    color: 'var(--c-text)',
-                                                    fontSize: '0.88rem'
-                                                }}>
-                                                    {item.chiefComplaint || item.reason || 'Khám tổng quát theo lịch hẹn'}
-                                                </div>
-                                            </td>
-
-                                            <td>
-                                                {item.isVitalsRecorded ? (
-                                                    <div>
-                                                        <span style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: '4px',
-                                                            color: 'var(--c-success)',
-                                                            fontSize: '0.8rem',
-                                                            fontWeight: 600
-                                                        }}>
-                                                            <CheckCircle2 size={13} />
-                                                            <span>Đã ghi nhận</span>
-                                                        </span>
-                                                        {item.vitalSummaryText && (
-                                                            <div style={{ fontSize: '0.74rem', color: 'var(--c-text-light)', marginTop: '2px' }}>
-                                                                {item.vitalSummaryText}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <span style={{ color: 'var(--c-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
-                                                        Chưa ghi nhận
-                                                    </span>
-                                                )}
-                                            </td>
-
-                                            <td>
-                                                <StatusBadge status={item.status} />
-                                            </td>
-
-                                            <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                                <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
-                                                    {item.status === 'Confirmed' && (
-                                                        <>
-                                                            <button 
-                                                                type="button"
-                                                                className="btn-secondary"
-                                                                onClick={() => item.appointmentId && handleCheckIn(item.appointmentId)}
-                                                                disabled={actionLoadingId === item.appointmentId || item.appointmentDate !== toLocalDateString()}
-                                                                title={item.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${item.appointmentDate.split('-').reverse().join('/')}` : undefined}
-                                                                style={{ padding: '6px 12px', fontSize: '0.8rem', height: '40px' }}
-                                                            >
-                                                                Tiếp nhận
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleMarkNoShow(item)}
-                                                                disabled={actionLoadingId === item.appointmentId}
-                                                                style={{
-                                                                    padding: '6px 10px',
-                                                                    fontSize: '0.8rem',
-                                                                    height: '32px',
-                                                                    borderRadius: 'var(--radius-md)',
-                                                                    border: '1px solid rgba(220, 38, 38, 0.25)',
-                                                                    backgroundColor: 'var(--c-danger-bg)',
-                                                                    color: 'var(--c-danger)'
-                                                                }}
-                                                                title="Đánh dấu vắng mặt"
-                                                            >
-                                                                <UserX size={14} />
-                                                            </button>
-                                                        </>
-                                                    )}
-
-                                                    {(item.status === 'CheckedIn' || item.status === 'WaitingDoctor') && (
-                                                        <button 
-                                                            type="button"
-                                                            className="btn-primary"
-                                                            onClick={() => handleStartConsultation(item)}
-                                                            disabled={actionLoadingId === (item.appointmentId || item.patientVisitId)}
-                                                            style={{
-                                                                padding: '6px 14px',
-                                                                fontSize: '0.82rem',
-                                                                height: '32px',
-                                                                backgroundColor: 'var(--c-teal)'
-                                                            }}
-                                                        >
-                                                            <PlayCircle size={14} />
-                                                            <span>Vào khám</span>
-                                                        </button>
-                                                    )}
-
-                                                    {item.status === 'InConsultation' && (
-                                                        <button 
-                                                            type="button"
-                                                            className="btn-primary"
-                                                            onClick={() => navigate(getExaminationUrl(item))}
-                                                            style={{
-                                                                padding: '6px 14px',
-                                                                fontSize: '0.82rem',
-                                                                height: '32px'
-                                                            }}
-                                                        >
-                                                            <Stethoscope size={14} />
-                                                            <span>Tiếp tục khám</span>
-                                                        </button>
-                                                    )}
-
-                                                    {item.status === 'InDiagnostics' && (
-                                                        <button 
-                                                            type="button"
-                                                            className="btn-secondary"
-                                                            onClick={() => navigate(getExaminationUrl(item))}
-                                                            style={{
-                                                                padding: '6px 12px',
-                                                                fontSize: '0.8rem',
-                                                                height: '32px'
-                                                            }}
-                                                        >
-                                                            <Eye size={14} />
-                                                            <span>Chờ CLS</span>
-                                                        </button>
-                                                    )}
-
-                                                    {item.status === 'ResultsReady' && (
-                                                        <button 
-                                                            type="button"
-                                                            className="btn-primary"
-                                                            onClick={() => navigate(getExaminationUrl(item))}
-                                                            style={{
-                                                                padding: '6px 14px',
-                                                                fontSize: '0.82rem',
-                                                                height: '32px',
-                                                                backgroundColor: '#059669',
-                                                                borderColor: '#059669'
-                                                            }}
-                                                        >
-                                                            <CheckCircle2 size={14} />
-                                                            <span>Có kết quả CLS</span>
-                                                        </button>
-                                                    )}
-
-                                                    {item.status === 'Completed' && (
-                                                        <button 
-                                                            type="button"
-                                                            className="btn-secondary"
-                                                            onClick={() => {
-                                                                if (item.appointmentId) {
-                                                                    navigate(`/doctor/appointments/${item.appointmentId}`);
-                                                                } else {
-                                                                    navigate(getExaminationUrl(item));
-                                                                }
-                                                            }}
-                                                            style={{ padding: '6px 12px', fontSize: '0.8rem', height: '32px' }}
-                                                        >
-                                                            <Eye size={14} />
-                                                            <span>Hồ sơ</span>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
+            {loading ? (
+                <LoadingState message="Đang tải danh sách hàng đợi khám..." height="280px" />
+            ) : filteredQueue.length === 0 ? (
+                <EmptyState
+                    icon={<Users size={44} />}
+                    title="Không tìm thấy bệnh nhân nào trong hàng đợi"
+                    description={searchTerm || statusFilter !== 'ALL'
+                        ? "Thử thay đổi bộ lọc trạng thái hoặc từ khóa tìm kiếm."
+                        : "Chưa có lịch khám cho ngày đã chọn."}
+                />
+            ) : (
+                <DataTable
+                    columns={columns}
+                    data={filteredQueue}
+                    keyExtractor={(item) => item.appointmentId ? `apt-${item.appointmentId}` : `visit-${item.patientVisitId}`}
+                />
+            )}
         </div>
     );
 };
