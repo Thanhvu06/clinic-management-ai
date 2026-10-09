@@ -1,8 +1,8 @@
 /* DoctorSchedule: style riêng không đáp ứng được bằng props antd thuần. Biến lấy từ --cc-*. */
 
 .weekBar {
-    padding: 12px 18px;
-    margin-bottom: 20px;
+    padding: var(--cc-space-sm) var(--cc-space-md);
+    margin-bottom: var(--cc-space-md);
     background-color: var(--cc-color-bg-subtle);
     border-radius: var(--cc-radius-lg);
 }
@@ -18,13 +18,13 @@
 }
 
 .dayCard + .dayCard {
-    margin-top: 16px;
+    margin-top: var(--cc-space-md);
 }
 
 .dayHeader {
     border-bottom: 1px solid var(--cc-color-border);
-    padding-bottom: 10px;
-    margin-bottom: 12px;
+    padding-bottom: var(--cc-space-xs);
+    margin-bottom: var(--cc-space-sm);
 }
 
 .dayName {
@@ -34,7 +34,7 @@
 }
 
 .dayDate {
-    margin-left: 8px;
+    margin-left: var(--cc-space-xs);
     color: var(--cc-color-text-muted);
     font-size: 0.9rem;
 }
@@ -55,22 +55,22 @@
     color: var(--cc-color-text-muted);
     font-style: italic;
     font-size: 0.85rem;
-    padding: 6px 0;
+    padding: var(--cc-space-xs) 0;
 }
 
 .shiftBox {
     background-color: var(--cc-color-bg-subtle);
-    padding: 14px;
+    padding: var(--cc-space-sm);
     border-radius: var(--cc-radius-sm);
     border: 1px solid var(--cc-color-border);
 }
 
 .shiftBox + .shiftBox {
-    margin-top: 14px;
+    margin-top: var(--cc-space-sm);
 }
 
 .shiftTitleRow {
-    margin-bottom: 10px;
+    margin-bottom: var(--cc-space-xs);
 }
 
 .shiftName {
@@ -84,8 +84,8 @@
     color: var(--cc-color-info);
     font-size: 0.75rem;
     font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 4px;
+    padding: 2px var(--cc-space-xs);
+    border-radius: var(--cc-radius-sm);
 }
 
 .slotCount {
@@ -96,17 +96,17 @@
 .slotsGrid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 8px;
+    gap: var(--cc-space-xs);
 }
 
 .slotBox {
-    padding: 8px 10px;
+    padding: var(--cc-space-xs) var(--cc-space-xs);
     border-radius: var(--cc-radius-sm);
     border: 1px dashed var(--cc-color-border);
 }
 
 .slotBoxBooked {
-    border: 1px solid var(--cc-color-primary-light);
+    border: 1px solid var(--cc-color-primary);
     background-color: var(--cc-color-primary-light);
 }
 
@@ -134,7 +134,7 @@
 }
 
 .slotPatient {
-    margin-top: 4px;
+    margin-top: var(--cc-space-xxs);
     font-size: 0.8rem;
 }
 
@@ -152,9 +152,9 @@
 }
 
 .previewBanner {
-    padding: 12px;
+    padding: var(--cc-space-sm);
     border-radius: var(--cc-radius-sm);
-    margin-bottom: 16px;
+    margin-bottom: var(--cc-space-md);
 }
 
 .previewBannerWarn {
@@ -176,7 +176,7 @@
 }
 
 .previewList {
-    margin-top: 8px;
+    margin-top: var(--cc-space-xs);
     max-height: 120px;
     overflow-y: auto;
     font-size: 0.8rem;
@@ -184,6 +184,6 @@
 }
 
 .previewFootnote {
-    margin-top: 6px;
+    margin-top: var(--cc-space-xs);
     font-style: italic;
 }

@@ -1,7 +1,7 @@
 import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Button, Card } from 'antd';
+import { Button, Card, Col, Form, Input, Row } from 'antd';
 import {
     Stethoscope, HeartPulse, Pill, History, Save, CheckCircle,
     AlertCircle, ArrowLeft, Trash2, Search, Clock, Calendar,
@@ -21,7 +21,7 @@ import type {
 } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
-import { LoadingState, InlineError } from '../../components/common';
+import { LoadingState, InlineError, DataTable, EmptyState, StatusBadge } from '../../components/common';
 import tabStyles from './DoctorExaminationWorkspace.module.css';
 
 interface ActiveMedicine {
@@ -762,15 +762,15 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const statusBadge = (status: string) => {
         switch (status) {
             case 'Ordered':
-                return <span style={{ backgroundColor: '#fef3c7', color: '#b45309', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>Chờ thực hiện</span>;
+                return <StatusBadge status="Pending" label="Chờ thực hiện" />;
             case 'InProgress':
-                return <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>Đang thực hiện</span>;
+                return <StatusBadge status="InConsultation" label="Đang thực hiện" />;
             case 'Completed':
-                return <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>Đã hoàn tất</span>;
+                return <StatusBadge status={status} label="Đã hoàn tất" />;
             case 'Cancelled':
-                return <span style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>Đã hủy</span>;
+                return <StatusBadge status={status} label="Đã hủy" />;
             default:
-                return <span style={{ backgroundColor: '#f1f5f9', color: '#475569', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>{status}</span>;
+                return <StatusBadge status={status} label={status} />;
         }
     };
 
@@ -780,12 +780,12 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
     if (!context) {
         return (
-            <Card style={{ padding: '40px', textAlign: 'center', margin: '40px auto', maxWidth: '500px' }}>
-                <AlertCircle size={48} style={{ color: 'var(--cc-color-danger)', margin: '0 auto 16px auto' }} />
+            <Card className={tabStyles.missingAppointment}>
+                <AlertCircle size={48} className={tabStyles.detail23} />
                 <h3>Không tìm thấy lịch hẹn</h3>
-                <p style={{ color: 'var(--cc-color-text-muted)', fontSize: '0.9rem' }}>Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý của bạn.</p>
+                <p className={tabStyles.description2}>Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý của bạn.</p>
                 <Link to="/doctor">
-                    <Button type="primary" style={{ marginTop: 16 }}>Quay lại bàn làm việc</Button>
+                    <Button type="primary" className={tabStyles.sectionSpacing6}>Quay lại bàn làm việc</Button>
                 </Link>
             </Card>
         );
@@ -799,10 +799,10 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const historyList = context.vitalHistory || [];
 
     return (
-        <div style={{ paddingBottom: '90px' }}>
+        <div className={tabStyles.workspace}>
             {/* Top Navigation Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <Link to="/doctor" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--c-primary)', textDecoration: 'none', fontWeight: 600, fontSize: '0.9rem' }}>
+            <div className={tabStyles.sectionHeader}>
+                <Link to="/doctor" className={tabStyles.backLink}>
                     <ArrowLeft size={16} />
                     <span>Quay lại Bàn làm việc Bác sĩ</span>
                 </Link>
@@ -813,19 +813,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Read-only Banner if Completed */}
             {isCompleted && (
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '14px 18px',
-                    backgroundColor: 'var(--c-warning-bg)',
-                    border: '1px solid rgba(217, 119, 6, 0.3)',
-                    borderRadius: 'var(--radius-lg)',
-                    color: 'var(--c-warning)',
-                    marginBottom: '20px'
-                }}>
-                    <AlertCircle size={20} style={{ flexShrink: 0 }} />
-                    <div style={{ fontSize: '0.9rem', color: '#92400e' }}>
+                <div className={tabStyles.inlineGroup12}>
+                    <AlertCircle size={20} className={tabStyles.detail25} />
+                    <div className={tabStyles.detailText35}>
                         <strong>Ca khám này đã hoàn tất:</strong> Hồ sơ bệnh án và đơn thuốc đang ở trạng thái lưu trữ chính thức (chỉ đọc) để bảo toàn tính xác thực y khoa.
                     </div>
                 </div>
@@ -833,40 +823,19 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Pending or Unreviewed Diagnostic Warning Banner */}
             {!isCompleted && pendingDiagnosticOrder && (
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '12px 18px',
-                    backgroundColor: '#fffbeb',
-                    border: '1px solid #fde68a',
-                    borderRadius: '8px',
-                    color: '#92400e',
-                    marginBottom: '16px'
-                }}>
-                    <AlertTriangle size={20} style={{ flexShrink: 0, color: '#d97706' }} />
-                    <div style={{ fontSize: '0.88rem' }}>
+                <div className={tabStyles.inlineGroup13}>
+                    <AlertTriangle size={20} className={tabStyles.detail26} />
+                    <div className={tabStyles.detail27}>
                         <strong>Chỉ định CLS đang chờ:</strong> Phiếu <code>{pendingDiagnosticOrder.orderCode}</code> đang được kỹ thuật viên tiếp nhận/thực hiện. Ca khám chưa thể kết thúc cho đến khi có kết quả đầy đủ.
                     </div>
                 </div>
             )}
 
             {!isCompleted && !pendingDiagnosticOrder && unreviewedDiagnosticOrder && (
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '12px',
-                    padding: '12px 18px',
-                    backgroundColor: '#f0fdf4',
-                    border: '1px solid #bbf7d0',
-                    borderRadius: '8px',
-                    color: '#166534',
-                    marginBottom: '16px'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <CheckCircle size={20} style={{ flexShrink: 0, color: '#15803d' }} />
-                        <div style={{ fontSize: '0.88rem' }}>
+                <div className={tabStyles.navigation}>
+                    <div className={tabStyles.inlineGroup2}>
+                        <CheckCircle size={20} className={tabStyles.detail28} />
+                        <div className={tabStyles.detail27}>
                             <strong>Đã có kết quả CLS:</strong> Phiếu <code>{unreviewedDiagnosticOrder.orderCode}</code> đã có kết quả. Vui lòng chuyển sang tab Cận lâm sàng và bấm "Xác nhận đã xem kết quả" để hoàn tất ca khám.
                         </div>
                     </div>
@@ -877,57 +846,57 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             )}
 
             {/* Patient Header Spotlight Banner */}
-            <div className="card" style={{ padding: '20px 24px', marginBottom: '20px', borderRadius: '10px', backgroundColor: '#f8fafc', borderLeft: '5px solid var(--c-primary)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+            <Card className={[tabStyles.tabPanel, tabStyles.sectionSpacing7].join(' ')} >
+                <div className={tabStyles.sectionHeader10}>
                     <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                            <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>
+                        <div className={tabStyles.inlineGroup14}>
+                            <h2 className={tabStyles.detailText36}>
                                 {patient.patientName}
                             </h2>
-                            <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 700, fontFamily: 'monospace' }}>
+                            <span className={tabStyles.detailText37}>
                                 #{apt.appointmentCode}
                             </span>
-                            <span style={{ backgroundColor: isCompleted ? '#dcfce7' : '#e0e7ff', color: isCompleted ? '#15803d' : '#4338ca', padding: '2px 10px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700 }}>
+                            <span className={[tabStyles.detail29, (isCompleted ? tabStyles.statusBackground : tabStyles.statusBackground8), (isCompleted ? tabStyles.statusText3 : tabStyles.statusText6)].join(' ')}>
                                 {isCompleted ? 'Hồ sơ đã hoàn tất' : 'Phiên khám lâm sàng'}
                             </span>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '20px', marginTop: '10px', flexWrap: 'wrap', fontSize: '0.9rem', color: '#475569' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <User size={16} style={{ color: '#64748b' }} />
+                        <div className={tabStyles.patientMetadata}>
+                            <div className={tabStyles.inlineGroup2}>
+                                <User size={16} className={tabStyles.statusText5} />
                                 <span>{patient.patientGender === 'Male' ? 'Nam' : patient.patientGender === 'Female' ? 'Nữ' : 'Khác'} {patient.patientDob ? `• NS: ${patient.patientDob}` : ''}</span>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Phone size={16} style={{ color: '#64748b' }} />
+                            <div className={tabStyles.inlineGroup2}>
+                                <Phone size={16} className={tabStyles.statusText5} />
                                 <span>{patient.patientPhone}</span>
                             </div>
                             {patient.address && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <MapPin size={16} style={{ color: '#64748b' }} />
+                                <div className={tabStyles.inlineGroup2}>
+                                    <MapPin size={16} className={tabStyles.statusText5} />
                                     <span>{patient.address}</span>
                                 </div>
                             )}
                             {apt.startTime && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <Clock size={16} style={{ color: '#64748b' }} />
+                                <div className={tabStyles.inlineGroup2}>
+                                    <Clock size={16} className={tabStyles.statusText5} />
                                     <span>Giờ hẹn: {apt.startTime.substring(0, 5)} - {apt.endTime ? apt.endTime.substring(0, 5) : ''}</span>
                                 </div>
                             )}
                         </div>
 
-                        <div style={{ marginTop: '10px', fontSize: '0.9rem', color: '#334155' }}>
+                        <div className={tabStyles.detailText38}>
                             <strong>Lý do đến khám:</strong> {apt.reason || 'Khám theo lịch'}
                         </div>
                     </div>
 
-                    <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Lịch sử tại phòng khám</div>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
+                    <div className={tabStyles.detail30}>
+                        <div className={tabStyles.detailText9}>Lịch sử tại phòng khám</div>
+                        <div className={tabStyles.detailText39}>
                             {patient.totalPastVisits} lượt khám trước
                         </div>
                     </div>
                 </div>
-            </div>
+            </Card>
 
             {/* Workspace Tab Navigation */}
             <div className={tabStyles.tabBar}>
@@ -979,323 +948,327 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Tab 1: Clinical Encounter */}
             {activeTab === 'encounter' && (
-                <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-                        <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                <Card className={[tabStyles.tabPanel].join(' ')} >
+                    <div className={tabStyles.sectionHeader}>
+                        <h3 className={tabStyles.sectionTitle}>
                             Ghi nhận diễn tiến lâm sàng
                         </h3>
-                        <button
-                            type="button"
-                            className="btn-secondary"
+                        <Button
+                            htmlType="button"
+                            className={[tabStyles.actionButton].join(' ')}
                             onClick={handleSaveEncounter}
                             disabled={savingEncounter}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}
                         >
                             <Save size={16} />
                             <span>{savingEncounter ? 'Đang lưu...' : 'Lưu nháp diễn tiến'}</span>
-                        </button>
+                        </Button>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                Triệu chứng chính / Lý do khám
-                            </label>
-                            <input
-                                type="text"
-                                value={chiefComplaint}
-                                onChange={(e) => setChiefComplaint(e.target.value)}
-                                placeholder="Ví dụ: Đau đầu, sốt nhẹ 2 ngày nay..."
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                            />
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '10px' }}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                    Chẩn đoán bệnh *
+                    <Row className={[tabStyles.responsiveRow, tabStyles.sectionSpacing].join(' ')}>
+                        <Col xs={24} md={12} className={tabStyles.column}>
+                            <Form.Item className={tabStyles.formItem}>
+                                <label className={tabStyles.fieldLabel}>
+                                    Triệu chứng chính / Lý do khám
                                 </label>
-                                <input
+                                <Input
                                     type="text"
-                                    value={diagnosis}
-                                    onChange={(e) => setDiagnosis(e.target.value)}
-                                    placeholder="Ví dụ: Viêm họng cấp / Tăng huyết áp độ 1..."
-                                    required
-                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                    value={chiefComplaint}
+                                    onChange={(e) => setChiefComplaint(e.target.value)}
+                                    placeholder="Ví dụ: Đau đầu, sốt nhẹ 2 ngày nay..."
+                                    className={[tabStyles.fieldControl].join(' ')}
                                 />
-                            </div>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                    Mã ICD-10
-                                </label>
-                                <input
-                                    type="text"
-                                    value={diagnosisCode}
-                                    onChange={(e) => setDiagnosisCode(e.target.value)}
-                                    placeholder="J02.9"
-                                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem', textTransform: 'uppercase' }}
-                                />
-                            </div>
-                        </div>
-                    </div>
+                            </Form.Item>
+                        </Col>
 
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                        <Col xs={24} md={12} className={tabStyles.column}>
+                            <Row className={tabStyles.responsiveRow}>
+                                <Col xs={24} md={18} className={tabStyles.column}>
+                                    <Form.Item className={tabStyles.formItem}>
+                                        <label className={tabStyles.fieldLabel}>
+                                            Chẩn đoán bệnh *
+                                        </label>
+                                        <Input
+                                            type="text"
+                                            value={diagnosis}
+                                            onChange={(e) => setDiagnosis(e.target.value)}
+                                            placeholder="Ví dụ: Viêm họng cấp / Tăng huyết áp độ 1..."
+                                            required
+                                            className={[tabStyles.fieldControl].join(' ')}
+                                        />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} md={6} className={tabStyles.column}>
+                                    <Form.Item className={tabStyles.formItem}>
+                                        <label className={tabStyles.fieldLabel}>
+                                            Mã ICD-10
+                                        </label>
+                                        <Input
+                                            type="text"
+                                            value={diagnosisCode}
+                                            onChange={(e) => setDiagnosisCode(e.target.value)}
+                                            placeholder="J02.9"
+                                            className={[tabStyles.fieldControl, tabStyles.icdCode].join(' ')}
+                                        />
+                                    </Form.Item>
+                                </Col>
+                            </Row></Col>
+                    </Row>
+
+                    <Form.Item className={tabStyles.formItem}>
+                        <label className={tabStyles.fieldLabel}>
                             Khám thực thể & Bệnh sử lâm sàng
                         </label>
-                        <textarea
+                        <Input.TextArea
                             value={clinicalFindings}
                             onChange={(e) => setClinicalFindings(e.target.value)}
                             rows={4}
                             placeholder="Ghi nhận các triệu chứng cơ năng, thực thể: họng đỏ, không có giả mạc, tim phổi bình thường..."
-                            style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                            className={[tabStyles.fieldControl].join(' ')}
                         />
-                    </div>
+                    </Form.Item>
 
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                    <Form.Item className={tabStyles.formItem}>
+                        <label className={tabStyles.fieldLabel}>
                             Hướng điều trị / Chỉ định
                         </label>
-                        <textarea
+                        <Input.TextArea
                             value={treatmentPlan}
                             onChange={(e) => setTreatmentPlan(e.target.value)}
                             rows={3}
                             placeholder="Kế hoạch điều trị: Sử dụng kháng sinh, hạ sốt, uống nhiều nước ấm, nghỉ ngơi..."
-                            style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                            className={[tabStyles.fieldControl].join(' ')}
                         />
-                    </div>
+                    </Form.Item>
 
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                    <Form.Item className={tabStyles.formItem}>
+                        <label className={tabStyles.fieldLabel}>
                             Tóm tắt kết luận buổi khám *
                         </label>
-                        <textarea
+                        <Input.TextArea
                             value={summary}
                             onChange={(e) => setSummary(e.target.value)}
                             rows={3}
                             placeholder="Tóm tắt chẩn đoán và tình trạng chung của bệnh nhân..."
                             required
-                            style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                            className={[tabStyles.fieldControl].join(' ')}
                         />
-                    </div>
+                    </Form.Item>
 
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                    <Form.Item className={tabStyles.formItem}>
+                        <label className={tabStyles.fieldLabel}>
                             Lời dặn dò & Lưu ý tái khám
                         </label>
-                        <textarea
+                        <Input.TextArea
                             value={followUpInstruction}
                             onChange={(e) => setFollowUpInstruction(e.target.value)}
                             rows={2}
                             placeholder="Tái khám sau 5 ngày nếu không thuyên giảm hoặc có biểu hiện sốt cao liên tục..."
-                            style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                            className={[tabStyles.fieldControl].join(' ')}
                         />
-                    </div>
-                </div>
+                    </Form.Item>
+                </Card>
             )}
 
             {/* Tab 2: Longitudinal Vital Signs with 3 Distinct Regions */}
             {activeTab === 'vitals' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <Card className={[tabStyles.tabPanel, tabStyles.stackedTab].join(' ')}>
                     {/* Region 2 & Region 3: Historical Comparison & Anthropometric Deltas */}
                     {prevMeasurement ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                        <Row className={tabStyles.responsiveRow}>
                             {/* Region 2: Previous Measurement */}
-                            <div className="card" style={{ padding: '20px', borderRadius: '8px', borderLeft: '4px solid #0284c7', backgroundColor: '#f8fafc' }}>
-                                <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            <Col xs={24} md={12} className={tabStyles.column}><Card className={[tabStyles.tabPanel, tabStyles.previousMeasurement].join(' ')} >
+                                <div className={tabStyles.detailText}>
                                     VÙNG 2: SỐ LIỆU ĐO LẦN TRƯỚC
                                 </div>
-                                <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: 600, marginTop: '4px' }}>
+                                <div className={tabStyles.detailText2}>
                                     Ngày đo: {new Date(prevMeasurement.recordedAtUtc).toLocaleDateString('vi-VN')} ({new Date(prevMeasurement.recordedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })})
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '14px' }}>
-                                    <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
-                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Cân nặng</div>
-                                        <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                                <Row className={[tabStyles.responsiveRow, tabStyles.sectionSpacing2].join(' ')}>
+                                    <Col xs={24} md={8} className={tabStyles.column}><div className={tabStyles.measurementTile}>
+                                        <div className={tabStyles.detailText3}>Cân nặng</div>
+                                        <div className={tabStyles.detailText4}>
                                             {prevMeasurement.weight ? `${prevMeasurement.weight} kg` : '--'}
                                         </div>
-                                    </div>
-                                    <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
-                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Chiều cao</div>
-                                        <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                                    </div></Col>
+                                    <Col xs={24} md={8} className={tabStyles.column}><div className={tabStyles.measurementTile}>
+                                        <div className={tabStyles.detailText3}>Chiều cao</div>
+                                        <div className={tabStyles.detailText4}>
                                             {prevMeasurement.height ? `${prevMeasurement.height} cm` : '--'}
                                         </div>
-                                    </div>
-                                    <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
-                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>BMI cũ</div>
-                                        <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                                    </div></Col>
+                                    <Col xs={24} md={8} className={tabStyles.column}><div className={tabStyles.measurementTile}>
+                                        <div className={tabStyles.detailText3}>BMI cũ</div>
+                                        <div className={tabStyles.detailText4}>
                                             {prevMeasurement.bmi ? prevMeasurement.bmi : '--'}
                                         </div>
-                                    </div>
-                                </div>
-                            </div>
+                                    </div></Col>
+                                </Row>
+                            </Card></Col>
 
                             {/* Region 3: Anthropometric Deltas (Color & Badge) */}
-                            <div className="card" style={{ padding: '20px', borderRadius: '8px', borderLeft: '4px solid #10b981', backgroundColor: '#f0fdf4' }}>
-                                <div style={{ fontSize: '0.78rem', color: '#166534', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            <Col xs={24} md={12} className={tabStyles.column}><Card className={[tabStyles.tabPanel, tabStyles.detail6].join(' ')} >
+                                <div className={tabStyles.detailText5}>
                                     VÙNG 3: BIẾN ĐỘNG THỂ TRẠNG (DELTAS)
                                 </div>
-                                <div style={{ fontSize: '0.9rem', color: '#166534', fontWeight: 600, marginTop: '4px' }}>
+                                <div className={tabStyles.detailText6}>
                                     Chênh lệch so với lần khám trước
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '14px' }}>
-                                    <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #bbf7d0', textAlign: 'center' }}>
-                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Δ Cân nặng</div>
-                                        <div style={{ fontSize: '1.15rem', fontWeight: 800, color: (comparison?.weightDeltaKg || 0) > 0 ? '#ea580c' : (comparison?.weightDeltaKg || 0) < 0 ? '#0284c7' : '#15803d' }}>
-                                            {comparison?.weightDeltaKg !== undefined && comparison?.weightDeltaKg !== null 
-                                                ? (comparison.weightDeltaKg > 0 ? `+${comparison.weightDeltaKg} kg` : `${comparison.weightDeltaKg} kg`) 
+                                <Row className={[tabStyles.responsiveRow, tabStyles.sectionSpacing2].join(' ')}>
+                                    <Col xs={24} md={8} className={tabStyles.column}><div className={tabStyles.outlinedPanel2}>
+                                        <div className={tabStyles.detailText3}>Δ Cân nặng</div>
+                                        <div className={[tabStyles.measurementValue, ((comparison?.weightDeltaKg || 0) > 0 ? tabStyles.statusText : ((comparison?.weightDeltaKg || 0) < 0 ? tabStyles.statusText2 : tabStyles.statusText3))].join(' ')}>
+                                            {comparison?.weightDeltaKg !== undefined && comparison?.weightDeltaKg !== null
+                                                ? (comparison.weightDeltaKg > 0 ? `+${comparison.weightDeltaKg} kg` : `${comparison.weightDeltaKg} kg`)
                                                 : '--'}
                                         </div>
-                                    </div>
-                                    <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #bbf7d0', textAlign: 'center' }}>
-                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Δ Chiều cao</div>
-                                        <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#15803d' }}>
-                                            {comparison?.heightDeltaCm !== undefined && comparison?.heightDeltaCm !== null 
-                                                ? (comparison.heightDeltaCm > 0 ? `+${comparison.heightDeltaCm} cm` : `${comparison.heightDeltaCm} cm`) 
+                                    </div></Col>
+                                    <Col xs={24} md={8} className={tabStyles.column}><div className={tabStyles.outlinedPanel2}>
+                                        <div className={tabStyles.detailText3}>Δ Chiều cao</div>
+                                        <div className={tabStyles.detailText7}>
+                                            {comparison?.heightDeltaCm !== undefined && comparison?.heightDeltaCm !== null
+                                                ? (comparison.heightDeltaCm > 0 ? `+${comparison.heightDeltaCm} cm` : `${comparison.heightDeltaCm} cm`)
                                                 : '--'}
                                         </div>
-                                    </div>
-                                    <div style={{ backgroundColor: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #bbf7d0', textAlign: 'center' }}>
-                                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Δ BMI</div>
-                                        <div style={{ fontSize: '1.15rem', fontWeight: 800, color: (comparison?.bmiDelta || 0) > 0 ? '#ea580c' : (comparison?.bmiDelta || 0) < 0 ? '#0284c7' : '#15803d' }}>
-                                            {comparison?.bmiDelta !== undefined && comparison?.bmiDelta !== null 
-                                                ? (comparison.bmiDelta > 0 ? `+${comparison.bmiDelta}` : `${comparison.bmiDelta}`) 
+                                    </div></Col>
+                                    <Col xs={24} md={8} className={tabStyles.column}><div className={tabStyles.outlinedPanel2}>
+                                        <div className={tabStyles.detailText3}>Δ BMI</div>
+                                        <div className={[tabStyles.measurementValue, ((comparison?.bmiDelta || 0) > 0 ? tabStyles.statusText : ((comparison?.bmiDelta || 0) < 0 ? tabStyles.statusText2 : tabStyles.statusText3))].join(' ')}>
+                                            {comparison?.bmiDelta !== undefined && comparison?.bmiDelta !== null
+                                                ? (comparison.bmiDelta > 0 ? `+${comparison.bmiDelta}` : `${comparison.bmiDelta}`)
                                                 : '--'}
                                         </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                                    </div></Col>
+                                </Row>
+                            </Card></Col>
+                        </Row>
                     ) : (
-                        <div className="card" style={{ padding: '14px 20px', borderRadius: '8px', backgroundColor: '#f8fafc', color: '#64748b', fontSize: '0.88rem' }}>
+                        <Card className={[tabStyles.tabPanel, tabStyles.detailText8].join(' ')} >
                             ℹ️ Đây là lần đầu bệnh nhân ghi nhận dấu hiệu sinh tồn tại phòng khám. Dữ liệu so sánh thể trạng (deltas) sẽ xuất hiện từ lần khám kế tiếp.
-                        </div>
+                        </Card>
                     )}
 
                     {/* Region 1: Current Measurement Form */}
-                    <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <Card className={[tabStyles.tabPanel].join(' ')} >
+                        <div className={tabStyles.sectionHeader}>
                             <div>
-                                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                                <h3 className={tabStyles.sectionTitle}>
                                     VÙNG 1: ĐO LƯỜNG SINH HIỆU HIỆN TẠI
                                 </h3>
-                                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                                <p className={tabStyles.description}>
                                     Nhập kết quả đo tại phòng khám hôm nay. BMI được tự động tính và phân loại.
                                 </p>
                             </div>
-                            <button
-                                type="button"
-                                className="btn-secondary"
+                            <Button
+                                htmlType="button"
+                                className={[tabStyles.actionButton].join(' ')}
                                 onClick={handleSaveVitals}
                                 disabled={savingVitals}
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}
                             >
                                 <Save size={16} />
                                 <span>{savingVitals ? 'Đang lưu...' : 'Lưu dấu hiệu sinh tồn'}</span>
-                            </button>
+                            </Button>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                    Nhiệt độ (°C)
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    min="30"
-                                    max="45"
-                                    value={temperature}
-                                    onChange={(e) => setTemperature(e.target.value)}
-                                    placeholder="37.0"
-                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                    Huyết áp (Tâm thu / Tâm trương)
-                                </label>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <input
+                        <Row className={[tabStyles.responsiveRow, tabStyles.sectionSpacing3].join(' ')}>
+                            <Col xs={24} md={12} xl={8} className={tabStyles.column}>
+                                <Form.Item className={tabStyles.formItem}>
+                                    <label className={tabStyles.fieldLabel}>
+                                        Nhiệt độ (°C)
+                                    </label>
+                                    <Input
                                         type="number"
-                                        min="40"
-                                        max="260"
-                                        value={bpSystolic}
-                                        onChange={(e) => setBpSystolic(e.target.value)}
-                                        placeholder="120"
-                                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                        step="0.1"
+                                        min="30"
+                                        max="45"
+                                        value={temperature}
+                                        onChange={(e) => setTemperature(e.target.value)}
+                                        placeholder="37.0"
+                                        className={[tabStyles.fieldControl].join(' ')}
                                     />
-                                    <span style={{ color: '#64748b', fontWeight: 700 }}>/</span>
-                                    <input
+                                </Form.Item>
+                            </Col>
+
+                            <Col xs={24} md={12} xl={8} className={tabStyles.column}>
+                                <Form.Item className={tabStyles.formItem}>
+                                    <label className={tabStyles.fieldLabel}>
+                                        Huyết áp (Tâm thu / Tâm trương)
+                                    </label>
+                                    <div className={tabStyles.inlineGroup2}>
+                                        <Input
+                                            type="number"
+                                            min="40"
+                                            max="260"
+                                            value={bpSystolic}
+                                            onChange={(e) => setBpSystolic(e.target.value)}
+                                            placeholder="120"
+                                            className={[tabStyles.fieldControl].join(' ')}
+                                        />
+                                        <span className={tabStyles.detail8}>/</span>
+                                        <Input
+                                            type="number"
+                                            min="30"
+                                            max="180"
+                                            value={bpDiastolic}
+                                            onChange={(e) => setBpDiastolic(e.target.value)}
+                                            placeholder="80"
+                                            className={[tabStyles.fieldControl].join(' ')}
+                                        />
+                                        <span className={tabStyles.detailText9}>mmHg</span>
+                                    </div>
+                                </Form.Item>
+                            </Col>
+
+                            <Col xs={24} md={12} xl={8} className={tabStyles.column}>
+                                <Form.Item className={tabStyles.formItem}>
+                                    <label className={tabStyles.fieldLabel}>
+                                        Nhịp tim / Mạch (nhịp/phút)
+                                    </label>
+                                    <Input
                                         type="number"
                                         min="30"
-                                        max="180"
-                                        value={bpDiastolic}
-                                        onChange={(e) => setBpDiastolic(e.target.value)}
-                                        placeholder="80"
-                                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                        max="220"
+                                        value={heartRate}
+                                        onChange={(e) => setHeartRate(e.target.value)}
+                                        placeholder="75"
+                                        className={[tabStyles.fieldControl].join(' ')}
                                     />
-                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>mmHg</span>
-                                </div>
-                            </div>
+                                </Form.Item>
+                            </Col>
 
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                    Nhịp tim / Mạch (nhịp/phút)
-                                </label>
-                                <input
-                                    type="number"
-                                    min="30"
-                                    max="220"
-                                    value={heartRate}
-                                    onChange={(e) => setHeartRate(e.target.value)}
-                                    placeholder="75"
-                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                                />
-                            </div>
+                            <Col xs={24} md={12} xl={8} className={tabStyles.column}>
+                                <Form.Item className={tabStyles.formItem}>
+                                    <label className={tabStyles.fieldLabel}>
+                                        Nhịp thở (lần/phút)
+                                    </label>
+                                    <Input
+                                        type="number"
+                                        min="8"
+                                        max="60"
+                                        value={respiratoryRate}
+                                        onChange={(e) => setRespiratoryRate(e.target.value)}
+                                        placeholder="18"
+                                        className={[tabStyles.fieldControl].join(' ')}
+                                    />
+                                </Form.Item>
+                            </Col>
 
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                    Nhịp thở (lần/phút)
-                                </label>
-                                <input
-                                    type="number"
-                                    min="8"
-                                    max="60"
-                                    value={respiratoryRate}
-                                    onChange={(e) => setRespiratoryRate(e.target.value)}
-                                    placeholder="18"
-                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                                />
-                            </div>
-
-                            <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}>
+                            <Col xs={24} md={12} xl={8} className={tabStyles.column}><div>
+                                <div className={tabStyles.fieldLabelRow}>
+                                    <label className={tabStyles.fieldLabel2}>
                                         Chiều cao (cm)
                                     </label>
                                     {previousHeight && !height && (
-                                        <button
-                                            type="button"
+                                        <Button
+                                            htmlType="button"
                                             onClick={() => setHeight(previousHeight.toString())}
-                                            style={{
-                                                padding: '2px 8px',
-                                                fontSize: '0.75rem',
-                                                backgroundColor: '#e0f2fe',
-                                                color: '#0284c7',
-                                                border: '1px solid #bae6fd',
-                                                borderRadius: '4px',
-                                                cursor: 'pointer',
-                                                fontWeight: 600
-                                            }}
-                                            title="Tái sử dụng chiều cao từ lần đo trước"
+
+                                            title="Tái sử dụng chiều cao từ lần đo trước" className={[tabStyles.actionButton, tabStyles.detailText10].join(' ')}
                                         >
                                             Dùng chiều cao lần trước ({previousHeight} cm)
-                                        </button>
+                                        </Button>
                                     )}
                                 </div>
-                                <input
+                                <Input
                                     type="number"
                                     step="0.5"
                                     min="30"
@@ -1303,128 +1276,112 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                     value={height}
                                     onChange={(e) => setHeight(e.target.value)}
                                     placeholder="170"
-                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                    className={[tabStyles.fieldControl].join(' ')}
                                 />
-                            </div>
+                            </div></Col>
 
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                    Cân nặng (kg)
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    min="2"
-                                    max="300"
-                                    value={weight}
-                                    onChange={(e) => setWeight(e.target.value)}
-                                    placeholder="65.0"
-                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                                />
-                            </div>
+                            <Col xs={24} md={12} xl={8} className={tabStyles.column}>
+                                <Form.Item className={tabStyles.formItem}>
+                                    <label className={tabStyles.fieldLabel}>
+                                        Cân nặng (kg)
+                                    </label>
+                                    <Input
+                                        type="number"
+                                        step="0.1"
+                                        min="2"
+                                        max="300"
+                                        value={weight}
+                                        onChange={(e) => setWeight(e.target.value)}
+                                        placeholder="65.0"
+                                        className={[tabStyles.fieldControl].join(' ')}
+                                    />
+                                </Form.Item>
+                            </Col>
 
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                    Nồng độ oxy SpO2 (%)
-                                </label>
-                                <input
-                                    type="number"
-                                    min="50"
-                                    max="100"
-                                    value={spO2}
-                                    onChange={(e) => setSpO2(e.target.value)}
-                                    placeholder="98"
-                                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                                />
-                            </div>
-                        </div>
+                            <Col xs={24} md={12} xl={8} className={tabStyles.column}>
+                                <Form.Item className={tabStyles.formItem}>
+                                    <label className={tabStyles.fieldLabel}>
+                                        Nồng độ oxy SpO2 (%)
+                                    </label>
+                                    <Input
+                                        type="number"
+                                        min="50"
+                                        max="100"
+                                        value={spO2}
+                                        onChange={(e) => setSpO2(e.target.value)}
+                                        placeholder="98"
+                                        className={[tabStyles.fieldControl].join(' ')}
+                                    />
+                                </Form.Item>
+                            </Col>
+                        </Row>
 
                         {/* Calculated BMI Badge Card */}
-                        <div style={{ backgroundColor: '#f8fafc', padding: '18px 24px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                        <div className={tabStyles.sectionHeader3}>
                             <div>
-                                <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>CHỈ SỐ KHỐI CƠ THỂ (BMI) TỰ ĐỘNG</div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px' }}>
-                                    <span style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0f172a' }}>
+                                <div className={tabStyles.detailText11}>CHỈ SỐ KHỐI CƠ THỂ (BMI) TỰ ĐỘNG</div>
+                                <div className={tabStyles.inlineGroup3}>
+                                    <span className={tabStyles.detailText12}>
                                         {computedBmi !== null ? computedBmi : '--'}
                                     </span>
                                     {bmiClassification && (
-                                        <span style={{ 
-                                            backgroundColor: bmiClassification.color === '#15803d' ? '#dcfce7' : bmiClassification.color === '#d97706' ? '#fef3c7' : '#fee2e2',
-                                            color: bmiClassification.color,
-                                            fontWeight: 700,
-                                            padding: '4px 12px',
-                                            borderRadius: '20px',
-                                            fontSize: '0.85rem'
-                                        }}>
+                                        <span className={[tabStyles.bmiBadge, (bmiClassification.color === '#15803d' ? tabStyles.statusBackground : (bmiClassification.color === '#d97706' ? tabStyles.statusBackground2 : tabStyles.statusBackground3)), (bmiClassification.color === '#15803d' ? tabStyles.statusText3 : bmiClassification.color === '#d97706' ? tabStyles.statusText : tabStyles.statusText4)].join(' ')}>
                                             {bmiClassification.label}
                                         </span>
                                     )}
                                 </div>
                             </div>
 
-                            <div style={{ fontSize: '0.8rem', color: '#64748b', maxWidth: '360px' }}>
+                            <div className={tabStyles.bmiExplanation}>
                                 * BMI được tính theo công thức kg/m² và phân nhóm theo ngưỡng đang cấu hình trong hệ thống: Thiếu cân (&lt;18.5), Bình thường (18.5 - 24.9), Tiền béo phì (25 - 29.9), Béo phì (≥30).
                             </div>
                         </div>
-                    </div>
+                    </Card>
 
                     {/* Region 4: Vital Signs Longitudinal History Table */}
-                    <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>
+                    <Card className={[tabStyles.tabPanel].join(' ')} >
+                        <div className={tabStyles.sectionHeader}>
+                            <h3 className={tabStyles.regionTitle}>
                                 Bảng theo dõi lịch sử sinh hiệu qua các lần khám ({historyList.length} lần đo)
                             </h3>
                         </div>
 
                         {historyList.length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '30px 0', color: '#64748b', fontStyle: 'italic', fontSize: '0.9rem' }}>
-                                Chưa có dữ liệu lịch sử sinh hiệu từ các lần khám trước.
-                            </div>
+                            <EmptyState title="Chưa có dữ liệu lịch sử sinh hiệu từ các lần khám trước." />
                         ) : (
-                            <div style={{ overflowX: 'auto' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
-                                    <thead>
-                                        <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase' }}>
-                                            <th style={{ padding: '10px' }}>Thời điểm đo</th>
-                                            <th style={{ padding: '10px' }}>Huyết áp (mmHg)</th>
-                                            <th style={{ padding: '10px' }}>Mạch (nhịp/phút)</th>
-                                            <th style={{ padding: '10px' }}>Nhiệt độ (°C)</th>
-                                            <th style={{ padding: '10px' }}>SpO2 (%)</th>
-                                            <th style={{ padding: '10px' }}>Cân nặng (kg)</th>
-                                            <th style={{ padding: '10px' }}>Chiều cao (cm)</th>
-                                            <th style={{ padding: '10px' }}>BMI</th>
-                                            <th style={{ padding: '10px' }}>Người đo</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {historyList.map((item, idx) => (
-                                            <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '10px', fontWeight: 600, color: '#0f172a' }}>
-                                                    {new Date(item.recordedAtUtc).toLocaleDateString('vi-VN')} {new Date(item.recordedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                                                </td>
-                                                <td style={{ padding: '10px' }}>
-                                                    {item.bloodPressureSystolic && item.bloodPressureDiastolic ? `${item.bloodPressureSystolic}/${item.bloodPressureDiastolic}` : '--'}
-                                                </td>
-                                                <td style={{ padding: '10px' }}>{item.heartRate || '--'}</td>
-                                                <td style={{ padding: '10px' }}>{item.temperature ? `${item.temperature}°C` : '--'}</td>
-                                                <td style={{ padding: '10px' }}>{item.spO2 ? `${item.spO2}%` : '--'}</td>
-                                                <td style={{ padding: '10px' }}>{item.weight || '--'}</td>
-                                                <td style={{ padding: '10px' }}>{item.height || '--'}</td>
-                                                <td style={{ padding: '10px', fontWeight: 700, color: '#0284c7' }}>{item.bmi || '--'}</td>
-                                                <td style={{ padding: '10px', color: '#64748b' }}>{item.recordedByUserName || '--'}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                            <div className={tabStyles.detail10}>
+                                <div className={tabStyles.tableScroll}><DataTable data={historyList} keyExtractor={(item) => historyList.indexOf(item)} columns={[
+                                    {
+                                        header: "Thời điểm đo", accessor: (item) => {
+                                            return <>
+                                                {new Date(item.recordedAtUtc).toLocaleDateString('vi-VN')} {new Date(item.recordedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                            </>;
+                                        }
+                                    },
+                                    {
+                                        header: "Huyết áp (mmHg)", accessor: (item) => {
+                                            return <>
+                                                {item.bloodPressureSystolic && item.bloodPressureDiastolic ? `${item.bloodPressureSystolic}/${item.bloodPressureDiastolic}` : '--'}
+                                            </>;
+                                        }
+                                    },
+                                    { header: "Mạch (nhịp/phút)", accessor: (item) => { return <>{item.heartRate || '--'}</>; } },
+                                    { header: "Nhiệt độ (°C)", accessor: (item) => { return <>{item.temperature ? `${item.temperature}°C` : '--'}</>; } },
+                                    { header: "SpO2 (%)", accessor: (item) => { return <>{item.spO2 ? `${item.spO2}%` : '--'}</>; } },
+                                    { header: "Cân nặng (kg)", accessor: (item) => { return <>{item.weight || '--'}</>; } },
+                                    { header: "Chiều cao (cm)", accessor: (item) => { return <>{item.height || '--'}</>; } },
+                                    { header: "BMI", accessor: (item) => { return <>{item.bmi || '--'}</>; } },
+                                    { header: "Người đo", accessor: (item) => { return <>{item.recordedByUserName || '--'}</>; } }
+                                ]} /></div>
                             </div>
                         )}
-                    </div>
-                </div>
+                    </Card>
+                </Card>
             )}
 
             {/* Tab 3: Diagnostic Orders (Chỉ định Cận lâm sàng) */}
             {activeTab === 'diagnostics' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <Card className={[tabStyles.tabPanel, tabStyles.stackedTab].join(' ')}>
                     {pollError && (
                         <InlineError
                             title="Tự động cập nhật bị gián đoạn"
@@ -1434,702 +1391,628 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     )}
                     {/* Diagnostic Create Form */}
                     {!isCompleted && (
-                        <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <Card className={[tabStyles.tabPanel].join(' ')} >
+                            <div className={tabStyles.sectionHeader}>
                                 <div>
-                                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                                    <h3 className={tabStyles.sectionTitle}>
                                         Tạo phiếu chỉ định Cận lâm sàng mới
                                     </h3>
-                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                                    <p className={tabStyles.description}>
                                         Chọn các xét nghiệm hoặc chẩn đoán hình ảnh từ danh mục để chuyển đến Kỹ thuật viên.
                                     </p>
                                 </div>
                             </div>
 
                             {/* Category filter tabs */}
-                            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                            <div className={tabStyles.inlineGroup5}>
                                 {['All', 'Laboratory', 'Ultrasound', 'Imaging', 'Other'].map(cat => (
-                                    <button
+                                    <Button
                                         key={cat}
-                                        type="button"
+                                        htmlType="button"
                                         onClick={() => setCatalogCategory(cat)}
-                                        style={{
-                                            padding: '6px 14px',
-                                            borderRadius: '6px',
-                                            border: '1px solid',
-                                            borderColor: catalogCategory === cat ? '#0284c7' : '#cbd5e1',
-                                            backgroundColor: catalogCategory === cat ? '#e0f2fe' : '#ffffff',
-                                            color: catalogCategory === cat ? '#0284c7' : '#475569',
-                                            fontSize: '0.85rem',
-                                            fontWeight: 600,
-                                            cursor: 'pointer'
-                                        }}
+                                        className={[tabStyles.actionButton, tabStyles.detail11, (catalogCategory === cat ? tabStyles.statusBackground4 : tabStyles.statusBackground5), (catalogCategory === cat ? tabStyles.statusBackground6 : tabStyles.statusBackground7), (catalogCategory === cat ? tabStyles.statusText2 : tabStyles.statusText5)].join(' ')}
                                     >
                                         {cat === 'All' ? 'Tất cả danh mục' : categoryMap[cat] || cat}
-                                    </button>
+                                    </Button>
                                 ))}
                             </div>
 
                             {/* Services Catalog Selection Grid */}
-                            <div style={{ 
-                                display: 'grid', 
-                                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
-                                gap: '10px', 
-                                maxHeight: '280px', 
-                                overflowY: 'auto', 
-                                padding: '10px',
-                                backgroundColor: '#f8fafc',
-                                borderRadius: '8px',
-                                border: '1px solid #e2e8f0',
-                                marginBottom: '16px'
-                            }}>
+                            <Row className={[tabStyles.responsiveRow, tabStyles.outlinedPanel3].join(' ')}>
                                 {filteredCatalog.map(srv => {
                                     const isSelected = selectedServiceIds.includes(srv.id);
                                     return (
-                                        <div
+                                        <Col key={srv.id} xs={24} md={12} xl={8} className={tabStyles.column}><div
                                             key={srv.id}
                                             onClick={() => handleToggleSelectService(srv.id)}
-                                            style={{
-                                                padding: '10px 12px',
-                                                borderRadius: '6px',
-                                                border: '1px solid',
-                                                borderColor: isSelected ? '#0284c7' : '#e2e8f0',
-                                                backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                gap: '8px',
-                                                transition: 'all 0.15s ease'
-                                            }}
+                                            className={[tabStyles.serviceOption, (isSelected ? tabStyles.statusBackground4 : tabStyles.statusBackground5), (isSelected ? tabStyles.statusBackground8 : tabStyles.statusBackground7)].join(' ')}
                                         >
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div className={tabStyles.inlineGroup2}>
                                                 <input
                                                     type="checkbox"
                                                     checked={isSelected}
-                                                    onChange={() => {}}
-                                                    style={{ cursor: 'pointer' }}
+                                                    onChange={() => { }}
+                                                    className={tabStyles.serviceCheckbox}
                                                 />
                                                 <div>
-                                                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#0f172a' }}>
+                                                    <div className={tabStyles.serviceName}>
                                                         {srv.name}
                                                     </div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                                    <div className={tabStyles.detailText3}>
                                                         <code>{srv.code}</code> • {categoryMap[srv.category] || srv.category}
                                                     </div>
                                                 </div>
                                             </div>
                                             {srv.preparationInstructions && (
-                                                <div style={{ fontSize: '0.75rem', color: '#0369a1', fontStyle: 'italic', maxWidth: '240px', textAlign: 'right' }}>
+                                                <div className={tabStyles.preparationInstructions}>
                                                     {srv.preparationInstructions}
                                                 </div>
                                             )}
-                                        </div>
+                                        </div></Col>
                                     );
                                 })}
-                            </div>
+                            </Row>
 
                             {/* Indication and Notes */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                        Chỉ định lâm sàng / Mục đích cận lâm sàng
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={clinicalIndication}
-                                        onChange={(e) => setClinicalIndication(e.target.value)}
-                                        placeholder="Ví dụ: Kiểm tra men gan / Nghi ngờ sỏi thận..."
-                                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                        Ghi chú / Lưu ý cho Kỹ thuật viên
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={orderNotes}
-                                        onChange={(e) => setOrderNotes(e.target.value)}
-                                        placeholder="Ví dụ: Bệnh nhân nhịn ăn sáng / Lấy máu cẩn thận..."
-                                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                                    />
-                                </div>
-                            </div>
+                            <Row className={[tabStyles.responsiveRow, tabStyles.sectionSpacing].join(' ')}>
+                                <Col xs={24} md={12} className={tabStyles.column}>
+                                    <Form.Item className={tabStyles.formItem}>
+                                        <label className={tabStyles.fieldLabel}>
+                                            Chỉ định lâm sàng / Mục đích cận lâm sàng
+                                        </label>
+                                        <Input
+                                            type="text"
+                                            value={clinicalIndication}
+                                            onChange={(e) => setClinicalIndication(e.target.value)}
+                                            placeholder="Ví dụ: Kiểm tra men gan / Nghi ngờ sỏi thận..."
+                                            className={[tabStyles.fieldControl].join(' ')}
+                                        />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} md={12} className={tabStyles.column}>
+                                    <Form.Item className={tabStyles.formItem}>
+                                        <label className={tabStyles.fieldLabel}>
+                                            Ghi chú / Lưu ý cho Kỹ thuật viên
+                                        </label>
+                                        <Input
+                                            type="text"
+                                            value={orderNotes}
+                                            onChange={(e) => setOrderNotes(e.target.value)}
+                                            placeholder="Ví dụ: Bệnh nhân nhịn ăn sáng / Lấy máu cẩn thận..."
+                                            className={[tabStyles.fieldControl].join(' ')}
+                                        />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ fontSize: '0.88rem', color: '#475569' }}>
+                            <div className={tabStyles.fieldLabelRow}>
+                                <div className={tabStyles.detailText17}>
                                     Đã chọn: <strong>{selectedServiceIds.length}</strong> dịch vụ
                                 </div>
-                                <button
-                                    type="button"
+                                <Button type="primary"
+                                    htmlType="button"
                                     onClick={handleCreateDiagnosticOrder}
                                     disabled={creatingOrder || selectedServiceIds.length === 0}
-                                    className="btn-primary"
-                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 18px', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+                                    className={[tabStyles.actionButton, tabStyles.refreshAction].join(' ')}
                                 >
                                     <FlaskConical size={16} />
                                     <span>{creatingOrder ? 'Đang tạo...' : 'Tạo phiếu chỉ định'}</span>
-                                </button>
+                                </Button>
                             </div>
-                        </div>
+                        </Card>
                     )}
 
                     {/* Diagnostic Orders List */}
-                    <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                    <Card className={[tabStyles.tabPanel].join(' ')} >
+                        <div className={tabStyles.sectionHeader}>
+                            <h3 className={tabStyles.sectionTitle}>
                                 Danh sách phiếu chỉ định cận lâm sàng ({diagnosticOrders.length})
                             </h3>
-                            <button
-                                type="button"
+                            <Button
+                                htmlType="button"
                                 onClick={() => void loadDiagnosticOrders()}
-                                className="btn-secondary"
-                                style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                className={[tabStyles.actionButton, tabStyles.inlineGroup6].join(' ')}
                             >
                                 <RefreshCw size={14} className={loadingOrders ? 'animate-spin' : ''} />
                                 <span>Cập nhật kết quả</span>
-                            </button>
+                            </Button>
                         </div>
 
                         {diagnosticOrders.length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
-                                <FlaskConical size={36} style={{ margin: '0 auto 10px auto', color: '#cbd5e1' }} />
-                                <p style={{ fontWeight: 600, margin: 0 }}>Chưa có phiếu chỉ định cận lâm sàng nào trong ca khám này.</p>
-                                <p style={{ fontSize: '0.85rem', margin: '4px 0 0 0' }}>Sử dụng danh mục phía trên để lập phiếu chỉ định gửi sang Kỹ thuật viên.</p>
-                            </div>
+                            <EmptyState icon={<FlaskConical size={36} className={tabStyles.detail14} />} title="Chưa có phiếu chỉ định cận lâm sàng nào trong ca khám này." description="Sử dụng danh mục phía trên để lập phiếu chỉ định gửi sang Kỹ thuật viên." />
                         ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                            <div className={tabStyles.inlineGroup}>
                                 {diagnosticOrders.map(order => (
-                                    <div 
-                                        key={order.id} 
-                                        style={{ 
-                                            borderRadius: '8px', 
-                                            border: '1px solid #e2e8f0', 
-                                            backgroundColor: '#ffffff',
-                                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                                            overflow: 'hidden'
-                                        }}
+                                    <div
+                                        key={order.id}
+                                        className={tabStyles.orderCard}
                                     >
                                         {/* Order Header */}
-                                        <div style={{ 
-                                            padding: '14px 20px', 
-                                            backgroundColor: '#f8fafc', 
-                                            borderBottom: '1px solid #e2e8f0', 
-                                            display: 'flex', 
-                                            justifyContent: 'space-between', 
-                                            alignItems: 'center', 
-                                            flexWrap: 'wrap', 
-                                            gap: '10px' 
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                                                <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>
+                                        <div className={tabStyles.orderHeader}>
+                                            <div className={tabStyles.inlineGroup7}>
+                                                <span className={tabStyles.orderCode}>
                                                     {order.orderCode}
                                                 </span>
                                                 {statusBadge(order.status)}
                                                 {order.reviewedAtUtc ? (
-                                                    <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span className={tabStyles.reviewedBadge}>
                                                         <Check size={12} />
                                                         <span>Bác sĩ đã xem: {new Date(order.reviewedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
                                                     </span>
                                                 ) : (
                                                     order.status === 'Completed' && (
-                                                        <span style={{ backgroundColor: '#fee2e2', color: '#dc2626', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
+                                                        <span className={tabStyles.unreviewedBadge}>
                                                             Chưa duyệt kết quả
                                                         </span>
                                                     )
                                                 )}
-                                                <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                                                <span className={tabStyles.detailText21}>
                                                     Thời gian lập: {new Date(order.orderedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                                                 </span>
                                             </div>
 
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div className={tabStyles.inlineGroup2}>
                                                 {/* Print Slip Button */}
-                                                <a
+                                                <Button
                                                     href={`/doctor/diagnostic-orders/${order.id}/print`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="btn-secondary"
-                                                    style={{ padding: '6px 12px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                                                    className={[tabStyles.actionButton, tabStyles.inlineGroup8].join(' ')}
                                                 >
                                                     <Printer size={14} />
                                                     <span>In phiếu chỉ định</span>
-                                                </a>
+                                                </Button>
 
                                                 {/* Doctor Review Confirmation Button */}
                                                 {order.status === 'Completed' && !order.reviewedAtUtc && (
-                                                    <button
-                                                        type="button"
+                                                    <Button type="primary"
+                                                        htmlType="button"
                                                         onClick={() => handleReviewOrder(order.id)}
                                                         disabled={actionOrderId === order.id}
-                                                        className="btn-primary"
-                                                        style={{ padding: '6px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#059669' }}
+                                                        className={[tabStyles.actionButton, tabStyles.inlineGroup9].join(' ')}
                                                     >
                                                         <Check size={14} />
                                                         <span>{actionOrderId === order.id ? 'Đang xử lý...' : 'Xác nhận đã xem kết quả'}</span>
-                                                    </button>
+                                                    </Button>
                                                 )}
 
                                                 {/* Cancel Button */}
                                                 {order.status === 'Ordered' && !isCompleted && (
-                                                    <button
-                                                        type="button"
+                                                    <Button
+                                                        htmlType="button"
                                                         onClick={() => handleCancelOrder(order.id)}
                                                         disabled={actionOrderId === order.id}
-                                                        style={{ padding: '6px 10px', fontSize: '0.82rem', borderRadius: '6px', border: '1px solid #fecaca', backgroundColor: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}
+                                                        className={[tabStyles.actionButton, tabStyles.detailText22].join(' ')}
                                                     >
                                                         Hủy
-                                                    </button>
+                                                    </Button>
                                                 )}
                                             </div>
                                         </div>
 
                                         {/* Order Items & Results Table */}
-                                        <div style={{ padding: '16px 20px' }}>
+                                        <div className={tabStyles.detail15}>
                                             {order.clinicalIndication && (
-                                                <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '12px' }}>
+                                                <div className={tabStyles.detailText23}>
                                                     <strong>Chỉ định lâm sàng:</strong> {order.clinicalIndication}
                                                 </div>
                                             )}
 
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
-                                                <thead>
-                                                    <tr style={{ borderBottom: '2px solid #e2e8f0', textAlign: 'left', color: '#64748b', fontSize: '0.78rem', textTransform: 'uppercase' }}>
-                                                        <th style={{ padding: '8px 10px' }}>Dịch vụ chỉ định</th>
-                                                        <th style={{ padding: '8px 10px' }}>Phân loại</th>
-                                                        <th style={{ padding: '8px 10px' }}>Trạng thái</th>
-                                                        <th style={{ padding: '8px 10px' }}>Kết quả đo / Trị số</th>
-                                                        <th style={{ padding: '8px 10px' }}>Chỉ số tham chiếu</th>
-                                                        <th style={{ padding: '8px 10px' }}>Kết luận / Nhận xét</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {order.items.map(item => (
-                                                        <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                            <td style={{ padding: '12px 10px' }}>
-                                                                <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.serviceName}</div>
-                                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{item.serviceCode}</div>
-                                                            </td>
-                                                            <td style={{ padding: '12px 10px', color: '#475569' }}>
-                                                                {categoryMap[item.category] || item.category}
-                                                            </td>
-                                                            <td style={{ padding: '12px 10px' }}>
-                                                                {statusBadge(item.status)}
-                                                            </td>
-                                                            <td style={{ padding: '12px 10px' }}>
-                                                                {item.result ? (
-                                                                    <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                                                                        {item.result.resultText || '--'} {item.result.unit}
+                                            <div className={tabStyles.tableScroll}><DataTable data={order.items} keyExtractor={(item) => item.id} columns={[
+                                                {
+                                                    header: "Dịch vụ chỉ định", accessor: (item) => {
+                                                        return <>
+                                                            <div className={tabStyles.medicineName}>{item.serviceName}</div>
+                                                            <div className={tabStyles.detailText3}>{item.serviceCode}</div>
+                                                        </>;
+                                                    }
+                                                },
+                                                {
+                                                    header: "Phân loại", accessor: (item) => {
+                                                        return <>
+                                                            {categoryMap[item.category] || item.category}
+                                                        </>;
+                                                    }
+                                                },
+                                                {
+                                                    header: "Trạng thái", accessor: (item) => {
+                                                        return <>
+                                                            {statusBadge(item.status)}
+                                                        </>;
+                                                    }
+                                                },
+                                                {
+                                                    header: "Kết quả đo / Trị số", accessor: (item) => {
+                                                        return <>
+                                                            {item.result ? (
+                                                                <div className={tabStyles.detail17}>
+                                                                    {item.result.resultText || '--'} {item.result.unit}
+                                                                </div>
+                                                            ) : (
+                                                                <span className={tabStyles.detail18}>Chưa có</span>
+                                                            )}
+                                                        </>;
+                                                    }
+                                                },
+                                                {
+                                                    header: "Chỉ số tham chiếu", accessor: (item) => {
+                                                        return <>
+                                                            {item.result?.referenceRange || '--'}
+                                                        </>;
+                                                    }
+                                                },
+                                                {
+                                                    header: "Kết luận / Nhận xét", accessor: (item) => {
+                                                        return <>
+                                                            {item.result ? (
+                                                                <div>
+                                                                    {item.result.conclusion && (
+                                                                        <div className={tabStyles.medicineName}>{item.result.conclusion}</div>
+                                                                    )}
+                                                                    <div className={tabStyles.detailText24}>
+                                                                        KTV: {item.result.resultedByUserName} • {new Date(item.result.resultedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                                                                     </div>
-                                                                ) : (
-                                                                    <span style={{ color: '#94a3b8' }}>Chưa có</span>
-                                                                )}
-                                                            </td>
-                                                            <td style={{ padding: '12px 10px', color: '#64748b' }}>
-                                                                {item.result?.referenceRange || '--'}
-                                                            </td>
-                                                            <td style={{ padding: '12px 10px' }}>
-                                                                {item.result ? (
-                                                                    <div>
-                                                                        {item.result.conclusion && (
-                                                                            <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.result.conclusion}</div>
-                                                                        )}
-                                                                        <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>
-                                                                            KTV: {item.result.resultedByUserName} • {new Date(item.result.resultedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                                                                        </div>
-                                                                    </div>
-                                                                ) : (
-                                                                    <span style={{ color: '#94a3b8' }}>--</span>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                                                </div>
+                                                            ) : (
+                                                                <span className={tabStyles.detail18}>--</span>
+                                                            )}
+                                                        </>;
+                                                    }
+                                                }
+                                            ]} /></div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         )}
-                    </div>
-                </div>
+                    </Card>
+                </Card>
             )}
 
             {/* Tab 4: Prescription */}
             {activeTab === 'prescription' && (
-                <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
-                        <div>
-                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
-                                Kê đơn thuốc cho bệnh nhân
-                            </h3>
-                            <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
-                                Tìm kiếm thuốc từ danh mục hoạt động của phòng khám và điều chỉnh liều dùng.
-                            </p>
-                        </div>
-                        <button
-                            type="button"
-                            className="btn-secondary"
-                            onClick={handleSavePrescriptionDraft}
-                            disabled={savingPrescription}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}
-                        >
-                            <Save size={16} />
-                            <span>{savingPrescription ? 'Đang lưu...' : 'Lưu nháp đơn thuốc'}</span>
-                        </button>
-                    </div>
+                <Card className={[tabStyles.tabPanel].join(' ')} >
+                    <Row className={tabStyles.responsiveRow}>
+                        <Col span={24} className={tabStyles.column}>
+                            <div className={tabStyles.prescriptionHeader}>
+                                <div>
+                                    <h3 className={tabStyles.sectionTitle}>
+                                        Kê đơn thuốc cho bệnh nhân
+                                    </h3>
+                                    <p className={tabStyles.description}>
+                                        Tìm kiếm thuốc từ danh mục hoạt động của phòng khám và điều chỉnh liều dùng.
+                                    </p>
+                                </div>
+                                <Button
+                                    htmlType="button"
+                                    className={[tabStyles.actionButton].join(' ')}
+                                    onClick={handleSavePrescriptionDraft}
+                                    disabled={savingPrescription}
+                                >
+                                    <Save size={16} />
+                                    <span>{savingPrescription ? 'Đang lưu...' : 'Lưu nháp đơn thuốc'}</span>
+                                </Button>
+                            </div>
 
-                    {/* Medicine Search Box */}
-                    <div style={{ position: 'relative', marginBottom: '20px' }}>
-                        <div style={{ position: 'relative' }}>
-                            <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                            <input
-                                type="text"
-                                placeholder="Gõ tên thuốc hoặc mã thuốc để tìm kiếm và thêm vào đơn..."
-                                value={medicineSearch}
-                                onChange={(e) => setMedicineSearch(e.target.value)}
-                                style={{ width: '100%', padding: '10px 12px 10px 40px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                            />
-                        </div>
+                            {/* Medicine Search Box */}
+                            <div className={tabStyles.medicineSearchSection}>
+                                <div className={tabStyles.medicineSearch}>
+                                    <Input
+                                        prefix={<Search size={18} />}
+                                        type="text"
+                                        placeholder="Gõ tên thuốc hoặc mã thuốc để tìm kiếm và thêm vào đơn..."
+                                        value={medicineSearch}
+                                        onChange={(e) => setMedicineSearch(e.target.value)}
+                                        className={[tabStyles.fieldControl].join(' ')}
+                                    />
+                                </div>
 
-                        {/* Search Dropdown Results */}
-                        {medicineSearch.trim() && (
-                            <div style={{ 
-                                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                                backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '6px',
-                                boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', maxHeight: '240px', overflowY: 'auto'
-                            }}>
-                                {filteredMedicines.length === 0 ? (
-                                    <div style={{ padding: '12px', color: '#64748b', fontSize: '0.85rem', textAlign: 'center' }}>
-                                        Không tìm thấy thuốc khớp với "{medicineSearch}" trong kho.
+                                {/* Search Dropdown Results */}
+                                {medicineSearch.trim() && (
+                                    <div className={tabStyles.medicineResults}>
+                                        {filteredMedicines.length === 0 ? (
+                                            <EmptyState title={`Không tìm thấy thuốc khớp với "${medicineSearch}" trong kho.`} />
+                                        ) : (
+                                            filteredMedicines.map(med => (
+                                                <div
+                                                    key={med.id}
+                                                    onClick={() => handleAddMedicine(med)} className={tabStyles.medicineOption}
+                                                >
+                                                    <div>
+                                                        <span className={tabStyles.medicineName}>{med.name}</span>
+                                                        <span className={tabStyles.medicineCode}>
+                                                            ({med.code}) • ĐVT: {med.unit}
+                                                        </span>
+                                                    </div>
+                                                    <div className={tabStyles.inlineGroup2}>
+                                                        <span className={[tabStyles.detail21, (med.stockQuantity > 0 ? tabStyles.statusText3 : tabStyles.statusText4)].join(' ')}>
+                                                            Tồn: {med.stockQuantity} {med.unit}
+                                                        </span>
+                                                        <span className={tabStyles.detailText26}>
+                                                            + Thêm
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
                                     </div>
-                                ) : (
-                                    filteredMedicines.map(med => (
-                                        <div
-                                            key={med.id}
-                                            onClick={() => handleAddMedicine(med)}
-                                            style={{
-                                                padding: '10px 14px',
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'center',
-                                                cursor: 'pointer',
-                                                borderBottom: '1px solid #f1f5f9',
-                                                backgroundColor: 'white'
-                                            }}
-                                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
-                                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                                        >
-                                            <div>
-                                                <span style={{ fontWeight: 600, color: '#0f172a' }}>{med.name}</span>
-                                                <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#64748b' }}>
-                                                    ({med.code}) • ĐVT: {med.unit}
-                                                </span>
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span style={{ fontSize: '0.8rem', color: med.stockQuantity > 0 ? '#15803d' : '#dc2626', fontWeight: 600 }}>
-                                                    Tồn: {med.stockQuantity} {med.unit}
-                                                </span>
-                                                <span style={{ backgroundColor: '#0284c7', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem' }}>
-                                                    + Thêm
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))
                                 )}
                             </div>
-                        )}
-                    </div>
 
-                    {/* Prescription Items Table */}
-                    {prescriptionItems.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '36px 0', border: '1px dashed #cbd5e1', borderRadius: '6px', color: '#64748b' }}>
-                            <Pill size={36} style={{ margin: '0 auto 10px auto', color: '#cbd5e1' }} />
-                            <p style={{ margin: 0, fontWeight: 600 }}>Chưa có thuốc nào trong đơn.</p>
-                            <p style={{ fontSize: '0.85rem', margin: '4px 0 0 0' }}>Sử dụng ô tìm kiếm phía trên để thêm thuốc vào đơn.</p>
-                        </div>
-                    ) : (
-                        <div style={{ overflowX: 'auto', marginBottom: '20px' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                                <thead style={{ backgroundColor: '#f8fafc' }}>
-                                    <tr style={{ borderBottom: '2px solid #e2e8f0', textAlign: 'left', color: '#475569', fontSize: '0.8rem', textTransform: 'uppercase' }}>
-                                        <th style={{ padding: '10px' }}>#</th>
-                                        <th style={{ padding: '10px' }}>Tên thuốc</th>
-                                        <th style={{ padding: '10px', width: '90px' }}>Số lượng</th>
-                                        <th style={{ padding: '10px', width: '110px' }}>Liều dùng</th>
-                                        <th style={{ padding: '10px', width: '140px' }}>Tần suất</th>
-                                        <th style={{ padding: '10px', width: '90px' }}>Số ngày</th>
-                                        <th style={{ padding: '10px' }}>Hướng dẫn uống</th>
-                                        <th style={{ padding: '10px', width: '50px' }}></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {prescriptionItems.map((item, idx) => (
-                                        <tr key={item.medicineId} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                            <td style={{ padding: '10px', fontWeight: 600, color: '#64748b' }}>{idx + 1}</td>
-                                            <td style={{ padding: '10px' }}>
-                                                <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.medicineName}</div>
-                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                                    {item.medicineCode} • {item.unit}
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: '10px' }}>
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    value={item.quantity}
-                                                    onChange={(e) => handleItemChange(idx, 'quantity', parseInt(e.target.value, 10) || 1)}
-                                                    style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-                                                />
-                                            </td>
-                                            <td style={{ padding: '10px' }}>
-                                                <input
-                                                    type="text"
-                                                    value={item.dosage}
-                                                    onChange={(e) => handleItemChange(idx, 'dosage', e.target.value)}
-                                                    placeholder="1 viên"
-                                                    style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-                                                />
-                                            </td>
-                                            <td style={{ padding: '10px' }}>
-                                                <input
-                                                    type="text"
-                                                    value={item.frequency}
-                                                    onChange={(e) => handleItemChange(idx, 'frequency', e.target.value)}
-                                                    placeholder="Ngày 2 lần"
-                                                    style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-                                                />
-                                            </td>
-                                            <td style={{ padding: '10px' }}>
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    max="90"
-                                                    value={item.durationDays}
-                                                    onChange={(e) => handleItemChange(idx, 'durationDays', parseInt(e.target.value, 10) || 1)}
-                                                    style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-                                                />
-                                            </td>
-                                            <td style={{ padding: '10px' }}>
-                                                <input
-                                                    type="text"
-                                                    value={item.instructions}
-                                                    onChange={(e) => handleItemChange(idx, 'instructions', e.target.value)}
-                                                    placeholder="Uống sau khi ăn 30 phút..."
-                                                    style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-                                                />
-                                            </td>
-                                            <td style={{ padding: '10px', textAlign: 'center' }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRemoveMedicine(idx)}
-                                                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
-                                                    title="Xóa thuốc khỏi đơn"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                            {/* Prescription Items Table */}
+                            {prescriptionItems.length === 0 ? (
+                                <EmptyState icon={<Pill size={36} className={tabStyles.detail14} />} title="Chưa có thuốc nào trong đơn." description="Sử dụng ô tìm kiếm phía trên để thêm thuốc vào đơn." />
+                            ) : (
+                                <div className={tabStyles.sectionSpacing5}>
+                                    <div className={tabStyles.tableScroll}><DataTable data={prescriptionItems} keyExtractor={(item) => item.medicineId} columns={[
+                                        { header: "#", accessor: (item) => { const idx = prescriptionItems.indexOf(item); return <>{idx + 1}</>; } },
+                                        {
+                                            header: "Tên thuốc", accessor: (item) => {
+                                                return <>
+                                                    <div className={tabStyles.medicineName}>{item.medicineName}</div>
+                                                    <div className={tabStyles.detailText3}>
+                                                        {item.medicineCode} • {item.unit}
+                                                    </div>
+                                                </>;
+                                            }
+                                        },
+                                        {
+                                            header: "Số lượng", width: '90px', accessor: (item) => {
+                                                const idx = prescriptionItems.indexOf(item); return <>
+                                                    <Input
+                                                        type="number"
+                                                        min="1"
+                                                        value={item.quantity}
+                                                        onChange={(e) => handleItemChange(idx, 'quantity', parseInt(e.target.value, 10) || 1)}
+                                                        className={[tabStyles.fieldControl].join(' ')}
+                                                    />
+                                                </>;
+                                            }
+                                        },
+                                        {
+                                            header: "Liều dùng", width: '110px', accessor: (item) => {
+                                                const idx = prescriptionItems.indexOf(item); return <>
+                                                    <Input
+                                                        type="text"
+                                                        value={item.dosage}
+                                                        onChange={(e) => handleItemChange(idx, 'dosage', e.target.value)}
+                                                        placeholder="1 viên"
+                                                        className={[tabStyles.fieldControl].join(' ')}
+                                                    />
+                                                </>;
+                                            }
+                                        },
+                                        {
+                                            header: "Tần suất", width: '140px', accessor: (item) => {
+                                                const idx = prescriptionItems.indexOf(item); return <>
+                                                    <Input
+                                                        type="text"
+                                                        value={item.frequency}
+                                                        onChange={(e) => handleItemChange(idx, 'frequency', e.target.value)}
+                                                        placeholder="Ngày 2 lần"
+                                                        className={[tabStyles.fieldControl].join(' ')}
+                                                    />
+                                                </>;
+                                            }
+                                        },
+                                        {
+                                            header: "Số ngày", width: '90px', accessor: (item) => {
+                                                const idx = prescriptionItems.indexOf(item); return <>
+                                                    <Input
+                                                        type="number"
+                                                        min="1"
+                                                        max="90"
+                                                        value={item.durationDays}
+                                                        onChange={(e) => handleItemChange(idx, 'durationDays', parseInt(e.target.value, 10) || 1)}
+                                                        className={[tabStyles.fieldControl].join(' ')}
+                                                    />
+                                                </>;
+                                            }
+                                        },
+                                        {
+                                            header: "Hướng dẫn uống", accessor: (item) => {
+                                                const idx = prescriptionItems.indexOf(item); return <>
+                                                    <Input
+                                                        type="text"
+                                                        value={item.instructions}
+                                                        onChange={(e) => handleItemChange(idx, 'instructions', e.target.value)}
+                                                        placeholder="Uống sau khi ăn 30 phút..."
+                                                        className={[tabStyles.fieldControl].join(' ')}
+                                                    />
+                                                </>;
+                                            }
+                                        },
+                                        {
+                                            header: "", width: '50px', accessor: (item) => {
+                                                const idx = prescriptionItems.indexOf(item); return <>
+                                                    <Button
+                                                        htmlType="button"
+                                                        onClick={() => handleRemoveMedicine(idx)}
 
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                            Ghi chú đơn thuốc cho dược sĩ / bệnh nhân
-                        </label>
-                        <textarea
-                            value={prescriptionNotes}
-                            onChange={(e) => setPrescriptionNotes(e.target.value)}
-                            rows={2}
-                            placeholder="Lưu ý dị ứng hoặc hướng dẫn bảo quản thuốc..."
-                            style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-                        />
-                    </div>
-                </div>
+                                                        title="Xóa thuốc khỏi đơn" className={[tabStyles.actionButton, tabStyles.statusText4].join(' ')}
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </Button>
+                                                </>;
+                                            }
+                                        }
+                                    ]} /></div>
+                                </div>
+                            )}
+
+                            <Form.Item className={tabStyles.formItem}>
+                                <label className={tabStyles.fieldLabel}>
+                                    Ghi chú đơn thuốc cho dược sĩ / bệnh nhân
+                                </label>
+                                <Input.TextArea
+                                    value={prescriptionNotes}
+                                    onChange={(e) => setPrescriptionNotes(e.target.value)}
+                                    rows={2}
+                                    placeholder="Lưu ý dị ứng hoặc hướng dẫn bảo quản thuốc..."
+                                    className={[tabStyles.fieldControl].join(' ')}
+                                />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                </Card>
             )}
 
             {/* Tab 5: Past Visits History */}
             {activeTab === 'history' && (
-                <div className="card" style={{ padding: '24px', borderRadius: '8px' }}>
-                    <h3 style={{ margin: '0 0 16px 0', fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
-                        Lịch sử các lần khám trước của bệnh nhân ({patient.pastVisits.length} lượt)
-                    </h3>
+                <Card className={[tabStyles.tabPanel].join(' ')} >
+                    <Row className={tabStyles.responsiveRow}>
+                        <Col span={24} className={tabStyles.column}>
+                            <h3 className={tabStyles.historyTitle}>
+                                Lịch sử các lần khám trước của bệnh nhân ({patient.pastVisits.length} lượt)
+                            </h3>
 
-                    {patient.pastVisits.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '36px 0', color: '#64748b' }}>
-                            <History size={36} style={{ margin: '0 auto 10px auto', color: '#cbd5e1' }} />
-                            <p style={{ fontWeight: 600, margin: 0 }}>Đây là lần đầu bệnh nhân đến khám tại hệ thống phòng khám.</p>
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                            {patient.pastVisits.map(visit => (
-                                <div key={visit.appointmentId} style={{ padding: '16px', borderRadius: '6px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
-                                        <div>
-                                            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '1rem' }}>
-                                                Ngày: {visit.date}
-                                            </span>
-                                            <span style={{ marginLeft: '10px', fontSize: '0.85rem', color: '#64748b' }}>
-                                                Mã: #{visit.appointmentCode}
-                                            </span>
-                                        </div>
-                                        <div style={{ fontSize: '0.85rem', color: '#0369a1', fontWeight: 600 }}>
-                                            BS: {visit.doctorName} • Khoa: {visit.specialtyName}
-                                        </div>
-                                    </div>
+                            {patient.pastVisits.length === 0 ? (
+                                <EmptyState icon={<History size={36} className={tabStyles.detail14} />} title="Đây là lần đầu bệnh nhân đến khám tại hệ thống phòng khám." />
+                            ) : (
+                                <div className={tabStyles.historyList}>
+                                    {patient.pastVisits.map(visit => (
+                                        <div key={visit.appointmentId} className={tabStyles.historyVisit}>
+                                            <div className={tabStyles.historyHeader}>
+                                                <div>
+                                                    <span className={tabStyles.detailText27}>
+                                                        Ngày: {visit.date}
+                                                    </span>
+                                                    <span className={tabStyles.detailText28}>
+                                                        Mã: #{visit.appointmentCode}
+                                                    </span>
+                                                </div>
+                                                <div className={tabStyles.detailText29}>
+                                                    BS: {visit.doctorName} • Khoa: {visit.specialtyName}
+                                                </div>
+                                            </div>
 
-                                    {visit.diagnosis && (
-                                        <div style={{ fontSize: '0.9rem', color: '#1e293b', marginBottom: '4px' }}>
-                                            <strong>Chẩn đoán:</strong> {visit.diagnosis}
-                                        </div>
-                                    )}
+                                            {visit.diagnosis && (
+                                                <div className={tabStyles.detailText30}>
+                                                    <strong>Chẩn đoán:</strong> {visit.diagnosis}
+                                                </div>
+                                            )}
 
-                                    {visit.summary && (
-                                        <div style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '6px' }}>
-                                            <strong>Kết luận:</strong> {visit.summary}
-                                        </div>
-                                    )}
+                                            {visit.summary && (
+                                                <div className={tabStyles.detailText31}>
+                                                    <strong>Kết luận:</strong> {visit.summary}
+                                                </div>
+                                            )}
 
-                                    {visit.prescriptionItemNames && visit.prescriptionItemNames.length > 0 && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
-                                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>Thuốc đã kê:</span>
-                                            {visit.prescriptionItemNames.map((medName, mIdx) => (
-                                                <span key={mIdx} style={{ backgroundColor: '#e0f2fe', color: '#0369a1', fontSize: '0.75rem', padding: '2px 8px', borderRadius: '4px' }}>
-                                                    {medName}
-                                                </span>
-                                            ))}
+                                            {visit.prescriptionItemNames && visit.prescriptionItemNames.length > 0 && (
+                                                <div className={tabStyles.inlineGroup11}>
+                                                    <span className={tabStyles.detailText32}>Thuốc đã kê:</span>
+                                                    {visit.prescriptionItemNames.map((medName, mIdx) => (
+                                                        <span key={mIdx} className={tabStyles.detailText33}>
+                                                            {medName}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                            )}
+                        </Col>
+                    </Row>
+                </Card>
             )}
 
             {/* Bottom Sticky Action Bar */}
-            <div style={{ 
-                position: 'fixed', bottom: 0, left: 0, right: 0, 
-                backgroundColor: 'white', borderTop: '1px solid #e2e8f0', 
-                padding: '14px 24px', zIndex: 100, 
-                boxShadow: '0 -4px 6px -1px rgba(0,0,0,0.05)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Trạng thái hồ sơ:</span>
-                    <span style={{ 
-                        backgroundColor: isCompleted ? '#dcfce7' : '#e0e7ff', 
-                        color: isCompleted ? '#15803d' : '#4338ca', 
-                        padding: '3px 8px', 
-                        borderRadius: '4px', 
-                        fontSize: '0.8rem', 
-                        fontWeight: 700 
-                    }}>
-                        {isCompleted ? 'Đã hoàn tất' : 'Đang khám'}
-                    </span>
+            <div className={tabStyles.actionBar}>
+                <div className={[tabStyles.inlineGroup2, tabStyles.statusSummary].join(' ')}>
+                    <span className={tabStyles.recordStatusLabel}>Trạng thái hồ sơ:</span>
+                    <StatusBadge status={isCompleted ? 'Completed' : 'InConsultation'} label={isCompleted ? 'Đã hoàn tất' : 'Đang khám'} />
                     {diagnosticOrders.length > 0 && (
-                        <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '3px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>
+                        <span className={tabStyles.diagnosticsSummary}>
                             CLS ({diagnosticOrders.length} phiếu)
                         </span>
                     )}
                     {prescriptionItems.length > 0 && (
-                        <span style={{ backgroundColor: '#f0fdf4', color: '#15803d', padding: '3px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>
+                        <span className={tabStyles.prescriptionSummary}>
                             Đơn thuốc ({prescriptionItems.length} loại)
                         </span>
                     )}
                 </div>
 
                 {isCompleted ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#15803d', fontWeight: 600, fontSize: '0.9rem' }}>
+                    <div className={tabStyles.inlineGroup16}>
                         <CheckCircle size={18} />
                         <span>Hồ sơ ca khám đã chốt và lưu trữ chính thức</span>
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <div className={tabStyles.actionBarButtons}>
                         {pendingDiagnosticOrder && (
-                            <span style={{ fontSize: '0.82rem', color: '#b45309', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span className={tabStyles.inlineGroup18}>
                                 <AlertTriangle size={14} /> Có chỉ định CLS chờ xử lý
                             </span>
                         )}
                         {!pendingDiagnosticOrder && unreviewedDiagnosticOrder && (
-                            <span style={{ fontSize: '0.82rem', color: '#dc2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span className={tabStyles.inlineGroup19}>
                                 <AlertCircle size={14} /> Có kết quả CLS chưa duyệt
                             </span>
                         )}
 
-                        <button
-                            type="button"
+                        <Button
+                            htmlType="button"
                             onClick={() => setIsRevisitModalOpen(true)}
-                            className="btn-secondary"
-                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}
+                            className={[tabStyles.actionButton, tabStyles.inlineGroup2].join(' ')}
                         >
                             <Calendar size={16} />
                             <span>Hẹn tái khám</span>
-                        </button>
+                        </Button>
 
-                        <button
-                            type="button"
+                        <Button type="primary"
+                            htmlType="button"
                             onClick={handleOpenCompleteModal}
-                            className="btn-primary"
-                            style={{ 
-                                display: 'flex', alignItems: 'center', gap: '6px', 
-                                padding: '10px 20px', borderRadius: '6px', 
-                                fontWeight: 700, 
-                                backgroundColor: (pendingDiagnosticOrder || unreviewedDiagnosticOrder) ? '#94a3b8' : '#059669', 
-                                cursor: 'pointer', fontSize: '0.95rem' 
-                            }}
+                            className={[tabStyles.actionButton, tabStyles.completionButtonContent, ((pendingDiagnosticOrder || unreviewedDiagnosticOrder) ? tabStyles.statusBackground9 : tabStyles.statusBackground10)].join(' ')}
                         >
                             <CheckCircle size={18} />
                             <span>HOÀN TẤT KHÁM BỆNH</span>
-                        </button>
+                        </Button>
                     </div>
                 )}
             </div>
 
             {/* Revisit Modal */}
             {isRevisitModalOpen && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
-                    <div style={{ backgroundColor: 'white', borderRadius: '10px', width: '100%', maxWidth: '440px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-                        <h3 style={{ margin: '0 0 16px 0', fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>
+                <div className={tabStyles.modalOverlay}>
+                    <div className={tabStyles.revisitDialog}>
+                        <h3 className={tabStyles.sectionTitle4}>
                             Đề xuất tái khám cho bệnh nhân
                         </h3>
                         <form onSubmit={handleCreateRevisit}>
-                            <div style={{ marginBottom: '14px' }}>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                            <Form.Item className={tabStyles.formItem}>
+                                <label className={tabStyles.fieldLabel}>
                                     Ngày hẹn tái khám đề xuất *
                                 </label>
-                                <input
+                                <Input
                                     type="date"
                                     value={revisitDate}
                                     onChange={(e) => setRevisitDate(e.target.value)}
                                     min={minRevisitDate}
                                     required
-                                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                    className={[tabStyles.fieldControl].join(' ')}
                                 />
-                            </div>
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                            </Form.Item>
+                            <Form.Item className={tabStyles.formItem}>
+                                <label className={tabStyles.fieldLabel}>
                                     Ghi chú / Nhắc nhở tái khám
                                 </label>
-                                <textarea
+                                <Input.TextArea
                                     value={revisitNote}
                                     onChange={(e) => setRevisitNote(e.target.value)}
                                     placeholder="Tái khám đánh giá lại triệu chứng hoặc kết quả xét nghiệm..."
                                     rows={3}
-                                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                                    className={[tabStyles.fieldControl].join(' ')}
                                 />
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                                <button type="button" onClick={() => setIsRevisitModalOpen(false)} className="btn-secondary" style={{ padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}>
+                            </Form.Item>
+                            <div className={tabStyles.inlineGroup22}>
+                                <Button htmlType="button" onClick={() => setIsRevisitModalOpen(false)} className={tabStyles.actionButton} >
                                     Hủy
-                                </button>
-                                <button type="submit" disabled={savingRevisit} className="btn-primary" style={{ padding: '8px 16px', borderRadius: '6px', cursor: 'pointer' }}>
+                                </Button>
+                                <Button type="primary" htmlType="submit" disabled={savingRevisit} className={tabStyles.actionButton} >
                                     {savingRevisit ? 'Đang tạo...' : 'Xác nhận đề xuất'}
-                                </button>
+                                </Button>
                             </div>
                         </form>
                     </div>
@@ -2138,33 +2021,33 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Complete Consultation Confirmation Modal */}
             {isCompleteModalOpen && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
-                    <div style={{ backgroundColor: 'white', borderRadius: '10px', width: '100%', maxWidth: '520px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#15803d' }}>
+                <div className={tabStyles.modalOverlay}>
+                    <div className={tabStyles.completionDialog}>
+                        <div className={tabStyles.inlineGroup23}>
+                            <div className={tabStyles.inlineGroup24}>
                                 <CheckCircle size={24} />
                             </div>
                             <div>
-                                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>
+                                <h3 className={tabStyles.sectionTitle5}>
                                     Xác nhận hoàn tất ca khám
                                 </h3>
-                                <p style={{ margin: '2px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                                <p className={tabStyles.description}>
                                     Giao dịch nguyên tử: Chốt hồ sơ bệnh án và phát hành đơn thuốc.
                                 </p>
                             </div>
                         </div>
 
-                        <div style={{ backgroundColor: '#f8fafc', padding: '14px', borderRadius: '6px', marginBottom: '16px', fontSize: '0.9rem', border: '1px solid #e2e8f0' }}>
-                            <div style={{ marginBottom: '6px' }}>
+                        <div className={tabStyles.outlinedPanel7}>
+                            <div className={tabStyles.sectionSpacing8}>
                                 <strong>Bệnh nhân:</strong> {patient.patientName} ({patient.patientPhone})
                             </div>
-                            <div style={{ marginBottom: '6px' }}>
+                            <div className={tabStyles.sectionSpacing8}>
                                 <strong>Chẩn đoán:</strong> {diagnosis || '<Chưa nhập>'}
                             </div>
-                            <div style={{ marginBottom: '6px' }}>
+                            <div className={tabStyles.sectionSpacing8}>
                                 <strong>Tóm tắt:</strong> {summary || '<Chưa nhập>'}
                             </div>
-                            <div style={{ marginBottom: '6px' }}>
+                            <div className={tabStyles.sectionSpacing8}>
                                 <strong>Cận lâm sàng:</strong> {diagnosticOrders.length > 0 ? `${diagnosticOrders.length} phiếu chỉ định (Đã có kết quả & đã xem)` : 'Không có chỉ định CLS'}
                             </div>
                             <div>
@@ -2173,37 +2056,35 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         </div>
 
                         {prescriptionItems.length > 0 && (
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', color: '#1e293b' }}>
+                            <Form.Item className={tabStyles.formItem}>
+                                <label className={tabStyles.fieldLabel3}>
                                     <input
                                         type="checkbox"
                                         checked={issuePrescriptionCheck}
                                         onChange={(e) => setIssuePrescriptionCheck(e.target.checked)}
-                                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                        className={tabStyles.confirmationCheckbox}
                                     />
                                     <span>Chốt và phát hành đơn thuốc sang Dược sĩ (Trạng thái Issued)</span>
                                 </label>
-                            </div>
+                            </Form.Item>
                         )}
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                            <button 
-                                type="button" 
-                                onClick={() => setIsCompleteModalOpen(false)} 
-                                className="btn-secondary" 
-                                style={{ padding: '8px 16px', borderRadius: '6px', cursor: 'pointer' }}
+                        <div className={tabStyles.inlineGroup22}>
+                            <Button
+                                htmlType="button"
+                                onClick={() => setIsCompleteModalOpen(false)}
+                                className={tabStyles.actionButton}
                             >
                                 Quay lại chỉnh sửa
-                            </button>
-                            <button 
-                                type="button" 
-                                onClick={handleCompleteConsultation} 
-                                disabled={completing || !diagnosis.trim() || !summary.trim() || Boolean(pendingDiagnosticOrder) || Boolean(unreviewedDiagnosticOrder)} 
-                                className="btn-primary" 
-                                style={{ padding: '8px 20px', borderRadius: '6px', backgroundColor: '#059669', fontWeight: 700, cursor: 'pointer' }}
+                            </Button>
+                            <Button type="primary"
+                                htmlType="button"
+                                onClick={handleCompleteConsultation}
+                                disabled={completing || !diagnosis.trim() || !summary.trim() || Boolean(pendingDiagnosticOrder) || Boolean(unreviewedDiagnosticOrder)}
+                                className={tabStyles.actionButton}
                             >
                                 {completing ? 'Đang hoàn tất...' : 'Xác nhận hoàn tất'}
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>
