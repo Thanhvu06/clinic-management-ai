@@ -1,0 +1,21 @@
+.dashboard { min-width: 0; }
+.statGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--cc-space-md); margin-bottom: var(--cc-space-lg); }
+.filters { margin-bottom: var(--cc-space-lg); }
+.filterRow, .filterControls, .searchForm { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); min-width: 0; }
+.filterRow { gap: var(--cc-space-md); }
+.searchForm { flex: 1; }
+.searchForm > :first-child { flex: 1; min-width: 200px; }
+.statusFilter { width: 190px; }
+.dateFilter { width: 160px; }
+.tableScroll { min-width: 0; max-width: 100%; overflow-x: auto; }
+.tableScroll table { min-width: 1000px; }
+.orderCode { color: var(--cc-color-primary); }
+.secondary, .serviceNames { color: var(--cc-color-text-secondary); font-size: 12px; }
+.serviceNames { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard :global(.ant-btn) { white-space: nowrap; }
+@media (max-width: 767px) {
+    .statGrid { grid-template-columns: 1fr; }
+    .filterControls { width: 100%; }
+    .statusFilter, .dateFilter { flex: 1; min-width: 140px; }
+}
+@media (max-width: 480px) { .searchForm { width: 100%; flex: auto; } .searchForm > :first-child { min-width: 0; width: 100%; } }

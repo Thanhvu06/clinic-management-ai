@@ -3,6 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
     ArrowLeft, CheckCircle, PlayCircle, Save, Check 
 } from 'lucide-react';
+import { Button, Card, Col, Input, Row } from 'antd';
+import { EmptyState, LoadingState, StatusBadge } from '../../components/common';
+import { spacing } from '../../theme/tokens';
+import styles from './TechnicianOrderDetail.module.css';
 import { diagnosticApi } from '../../api/diagnosticApi';
 import type { DiagnosticOrderDto, RecordDiagnosticResultRequest } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
@@ -199,309 +203,64 @@ export const TechnicianOrderDetail: React.FC = () => {
         });
     };
 
-    if (loading) {
-        return <div style={{ padding: '60px 0', textAlign: 'center', color: '#64748b' }}>Đang tải thông tin phiếu chỉ định...</div>;
-    }
-
-    if (!order) {
-        return (
-            <div style={{ padding: '60px 0', textAlign: 'center' }}>
-                <p>Không tìm thấy phiếu chỉ định.</p>
-                <button onClick={() => navigate('/diagnostics')} style={{ padding: '8px 16px', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '6px' }}>
-                    Quay lại danh sách
-                </button>
-            </div>
-        );
-    }
+    if (loading) return <LoadingState message="Đang tải thông tin phiếu chỉ định..." />;
+    if (!order) return <EmptyState title="Không tìm thấy phiếu chỉ định." action={<Button type="primary" onClick={() => navigate('/diagnostics')}>Quay lại danh sách</Button>} />;
 
     const allItemsCompleted = order.items.every(i => i.status === 'Completed' || i.status === 'Cancelled');
 
     return (
-        <div style={{ padding: '24px', maxWidth: '1100px', margin: '0 auto' }}>
-            {/* Top Navigation */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <button
-                    onClick={() => navigate('/diagnostics')}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 500, color: '#334155' }}
-                >
-                    <ArrowLeft size={16} /> Quay lại danh sách
-                </button>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '14px', color: '#64748b' }}>Trạng thái phiếu:</span>
-                    <span style={{ 
-                        padding: '4px 12px', 
-                        borderRadius: '12px', 
-                        fontSize: '13px', 
-                        fontWeight: 600,
-                        background: order.status === 'Completed' ? '#dcfce7' : order.status === 'InProgress' ? '#e0e7ff' : '#fef3c7',
-                        color: order.status === 'Completed' ? '#15803d' : order.status === 'InProgress' ? '#4338ca' : '#b45309'
-                    }}>
-                        {order.status === 'Ordered' ? 'Chờ thực hiện' : order.status === 'InProgress' ? 'Đang thực hiện' : order.status === 'Completed' ? 'Đã hoàn tất' : 'Đã hủy'}
-                    </span>
-                </div>
+        <div className={styles.detail}>
+            <div className={styles.navigation}>
+                <Button onClick={() => navigate('/diagnostics')}><ArrowLeft size={16} aria-hidden="true" /> Quay lại danh sách</Button>
+                <div className={styles.orderStatus}><span>Trạng thái phiếu:</span><StatusBadge status={order.status === 'Ordered' ? 'pending' : order.status === 'InProgress' ? 'confirmed' : order.status} label={order.status === 'Ordered' ? 'Chờ thực hiện' : order.status === 'InProgress' ? 'Đang thực hiện' : order.status === 'Completed' ? 'Đã hoàn tất' : 'Đã hủy'} /></div>
             </div>
-
-            {/* Patient & Order Information Card */}
-            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '20px', marginBottom: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px', marginBottom: '16px' }}>
-                    <div>
-                        <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>PHIẾU CHỈ ĐỊNH CẬN LÂM SÀNG</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#0284c7', marginTop: '2px' }}>{order.orderCode}</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '13px', color: '#64748b' }}>Mã lịch hẹn: <strong>#{order.appointmentCode}</strong></div>
-                        <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
-                            Chỉ định lúc: {new Date(order.orderedAtUtc).toLocaleString('vi-VN')}
-                        </div>
-                    </div>
+            <Card className={styles.orderCard}>
+                <div className={styles.orderHeading}>
+                    <div><div className={styles.secondary}>PHIẾU CHỈ ĐỊNH CẬN LÂM SÀNG</div><div className={styles.orderCode}>{order.orderCode}</div></div>
+                    <div className={styles.appointmentInfo}><div>Mã lịch hẹn: <strong>#{order.appointmentCode}</strong></div><div className={styles.secondary}>Chỉ định lúc: {new Date(order.orderedAtUtc).toLocaleString('vi-VN')}</div></div>
                 </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', fontSize: '13px' }}>
-                    <div>
-                        <div style={{ color: '#64748b' }}>Bệnh nhân:</div>
-                        <div style={{ fontWeight: 600, fontSize: '15px', color: '#0f172a', marginTop: '2px' }}>{order.patientName}</div>
-                        <div style={{ color: '#64748b', marginTop: '2px' }}>
-                            {order.patientGender?.toLowerCase() === 'female' ? 'Nữ' : order.patientGender?.toLowerCase() === 'male' ? 'Nam' : 'Chưa cập nhật'} • {order.patientAge ? `${order.patientAge} tuổi` : '---'}
-                        </div>
-                    </div>
-
-                    <div>
-                        <div style={{ color: '#64748b' }}>Số điện thoại:</div>
-                        <div style={{ fontWeight: 600, color: '#0f172a', marginTop: '2px' }}>{order.patientPhone || '---'}</div>
-                    </div>
-
-                    <div>
-                        <div style={{ color: '#64748b' }}>Bác sĩ chỉ định:</div>
-                        <div style={{ fontWeight: 600, color: '#0f172a', marginTop: '2px' }}>{order.orderingDoctorName}</div>
-                        <div style={{ color: '#64748b', marginTop: '2px' }}>{order.specialtyName || '---'}</div>
-                    </div>
-                </div>
-
-                <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px dashed #e2e8f0', fontSize: '13px' }}>
-                    <div><strong>Chỉ định lâm sàng:</strong> <span style={{ color: '#0f172a' }}>{order.clinicalIndication}</span></div>
-                    {order.note && <div style={{ marginTop: '4px' }}><strong>Ghi chú từ bác sĩ:</strong> <span style={{ color: '#475569' }}>{order.note}</span></div>}
-                </div>
-
-                {order.status === 'Ordered' && (
-                    <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end' }}>
-                        <button
-                            onClick={handleStartOrder}
-                            disabled={actionLoading}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', background: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
-                        >
-                            <PlayCircle size={18} /> Bắt đầu thực hiện phiếu chỉ định
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            {/* Diagnostic Services List & Result Input */}
-            <div style={{ marginBottom: '24px' }}>
-                <h2 style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a', marginBottom: '14px' }}>
-                    Danh sách dịch vụ chỉ định ({order.items.length})
-                </h2>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <Row gutter={[spacing.md, spacing.md]}>
+                    <Col xs={24} sm={8}><div className={styles.secondary}>Bệnh nhân:</div><div className={styles.patientName}>{order.patientName}</div><div className={styles.secondary}>{order.patientGender?.toLowerCase() === 'female' ? 'Nữ' : order.patientGender?.toLowerCase() === 'male' ? 'Nam' : 'Chưa cập nhật'} • {order.patientAge ? `${order.patientAge} tuổi` : '---'}</div></Col>
+                    <Col xs={24} sm={8}><div className={styles.secondary}>Số điện thoại:</div><strong>{order.patientPhone || '---'}</strong></Col>
+                    <Col xs={24} sm={8}><div className={styles.secondary}>Bác sĩ chỉ định:</div><strong>{order.orderingDoctorName}</strong><div className={styles.secondary}>{order.specialtyName || '---'}</div></Col>
+                </Row>
+                <div className={styles.clinicalNotes}><div><strong>Chỉ định lâm sàng:</strong> <span>{order.clinicalIndication}</span></div>{order.note && <div className={styles.doctorNote}><strong>Ghi chú từ bác sĩ:</strong> <span>{order.note}</span></div>}</div>
+                {order.status === 'Ordered' && <div className={styles.startActions}><Button type="primary" onClick={handleStartOrder} disabled={actionLoading}><PlayCircle size={18} aria-hidden="true" /> Bắt đầu thực hiện phiếu chỉ định</Button></div>}
+            </Card>
+            <section className={styles.services}>
+                <h2 className={styles.sectionTitle}>Danh sách dịch vụ chỉ định ({order.items.length})</h2>
+                <div className={styles.serviceList}>
                     {order.items.map((item, idx) => {
                         const current = itemResults[item.id] || { resultText: '', conclusion: '', referenceRange: '', unit: '' };
                         const isCompleted = item.status === 'Completed';
-
                         return (
-                            <div key={item.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '20px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#e0f2fe', color: '#0369a1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '13px' }}>
-                                            {idx + 1}
-                                        </div>
-                                        <div>
-                                            <div style={{ fontWeight: 600, fontSize: '15px', color: '#0f172a' }}>{item.serviceName}</div>
-                                            <div style={{ fontSize: '12px', color: '#64748b' }}>Mã: {item.serviceCode} • Phân loại: {item.category}</div>
-                                        </div>
-                                    </div>
-                                    {!isCompleted && order.status !== 'Completed' && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setCopilotItemId(item.id)}
-                                            aria-label={`Chọn ${item.serviceName} cho Copilot`}
-                                            style={{
-                                                padding: '4px 8px',
-                                                borderRadius: '6px',
-                                                border: copilotItemId === item.id ? '1px solid #0284c7' : '1px solid #cbd5e1',
-                                                background: copilotItemId === item.id ? '#e0f2fe' : '#fff',
-                                                color: '#0369a1',
-                                                fontSize: '11px',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            {copilotItemId === item.id ? 'Đã chọn Copilot' : 'Chọn cho Copilot'}
-                                        </button>
-                                    )}
-                                    <span style={{ 
-                                        padding: '3px 10px', 
-                                        borderRadius: '12px', 
-                                        fontSize: '11px', 
-                                        fontWeight: 600,
-                                        background: isCompleted ? '#dcfce7' : item.status === 'InProgress' ? '#e0e7ff' : '#fef3c7',
-                                        color: isCompleted ? '#15803d' : item.status === 'InProgress' ? '#4338ca' : '#b45309'
-                                    }}>
-                                        {isCompleted ? 'Đã nhập kết quả' : item.status === 'InProgress' ? 'Đang thực hiện' : 'Chờ thực hiện'}
-                                    </span>
+                            <Card key={item.id}>
+                                <div className={styles.serviceHeader}>
+                                    <div className={styles.serviceIdentity}><div className={styles.serviceNumber}>{idx + 1}</div><div><div className={styles.serviceName}>{item.serviceName}</div><div className={styles.secondary}>Mã: {item.serviceCode} • Phân loại: {item.category}</div></div></div>
+                                    {!isCompleted && order.status !== 'Completed' && <Button htmlType="button" type={copilotItemId === item.id ? 'primary' : 'default'} onClick={() => setCopilotItemId(item.id)} aria-label={`Chọn ${item.serviceName} cho Copilot`}>{copilotItemId === item.id ? 'Đã chọn Copilot' : 'Chọn cho Copilot'}</Button>}
+                                    <StatusBadge status={isCompleted ? 'completed' : item.status === 'InProgress' ? 'confirmed' : 'pending'} label={isCompleted ? 'Đã nhập kết quả' : item.status === 'InProgress' ? 'Đang thực hiện' : 'Chờ thực hiện'} />
                                 </div>
-
-                                {order.status === 'Ordered' ? (
-                                    <div style={{ padding: '14px', background: '#f8fafc', borderRadius: '6px', fontSize: '13px', color: '#64748b', textAlign: 'center' }}>
-                                        Nhấn "Bắt đầu thực hiện" ở trên để tiếp nhận và nhập kết quả cho dịch vụ này.
-                                    </div>
-                                ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                                Kết quả chi tiết / Mô tả tổn thương <span style={{ color: '#dc2626' }}>*</span>
-                                            </label>
-                                            <textarea
-                                                rows={3}
-                                                disabled={order.status === 'Completed'}
-                                                value={current.resultText}
-                                                onChange={e => setItemResults(prev => ({
-                                                    ...prev,
-                                                    [item.id]: { ...prev[item.id], resultText: e.target.value }
-                                                }))}
-                                                placeholder="Nhập chi tiết thông số xét nghiệm, mô tả hình ảnh siêu âm..."
-                                                style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }}
-                                            />
+                                {order.status === 'Ordered' ? <div className={styles.startHint}>Nhấn "Bắt đầu thực hiện" ở trên để tiếp nhận và nhập kết quả cho dịch vụ này.</div> : (
+                                    <div className={styles.resultForm}>
+                                        <div><label className={styles.fieldLabel}>Kết quả chi tiết / Mô tả tổn thương <span className={styles.required}>*</span></label>
+                                            <Input.TextArea rows={3} disabled={order.status === 'Completed'} value={current.resultText} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], resultText: e.target.value }}))} placeholder="Nhập chi tiết thông số xét nghiệm, mô tả hình ảnh siêu âm..." />
                                         </div>
-
-                                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '12px' }}>
-                                            <div>
-                                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                                                    Kết luận / Đánh giá
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    disabled={order.status === 'Completed'}
-                                                    value={current.conclusion}
-                                                    onChange={e => setItemResults(prev => ({
-                                                        ...prev,
-                                                        [item.id]: { ...prev[item.id], conclusion: e.target.value }
-                                                    }))}
-                                                    placeholder="VD: Bình thường, Gan nhiễm mỡ độ 1..."
-                                                    style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', outline: 'none' }}
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                                                    Chỉ số bình thường
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    disabled={order.status === 'Completed'}
-                                                    value={current.referenceRange}
-                                                    onChange={e => setItemResults(prev => ({
-                                                        ...prev,
-                                                        [item.id]: { ...prev[item.id], referenceRange: e.target.value }
-                                                    }))}
-                                                    placeholder="VD: 70 - 100 mg/dL"
-                                                    style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', outline: 'none' }}
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                                                    Đơn vị tính
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    disabled={order.status === 'Completed'}
-                                                    value={current.unit}
-                                                    onChange={e => setItemResults(prev => ({
-                                                        ...prev,
-                                                        [item.id]: { ...prev[item.id], unit: e.target.value }
-                                                    }))}
-                                                    placeholder="VD: U/L, mg/dL"
-                                                    style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', outline: 'none' }}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {order.status !== 'Completed' && (
-                                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
-                                                <button
-                                                    onClick={() => handleSaveItemResult(item.id)}
-                                                    disabled={savingItemId === item.id}
-                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 16px', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
-                                                >
-                                                    <Save size={15} /> {savingItemId === item.id ? 'Đang lưu...' : 'Lưu kết quả dịch vụ'}
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {item.result && (
-                                            <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'right', marginTop: '4px' }}>
-                                                Nhập bởi: {item.result.resultedByUserName} • {new Date(item.result.resultedAtUtc).toLocaleString('vi-VN')}
-                                            </div>
-                                        )}
+                                        <Row gutter={[spacing.sm, spacing.sm]}>
+                                            <Col xs={24} sm={12}><label className={styles.fieldLabel}>Kết luận / Đánh giá</label><Input type="text" disabled={order.status === 'Completed'} value={current.conclusion} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], conclusion: e.target.value }}))} placeholder="VD: Bình thường, Gan nhiễm mỡ độ 1..." /></Col>
+                                            <Col xs={24} sm={6}><label className={styles.fieldLabel}>Chỉ số bình thường</label><Input type="text" disabled={order.status === 'Completed'} value={current.referenceRange} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], referenceRange: e.target.value }}))} placeholder="VD: 70 - 100 mg/dL" /></Col>
+                                            <Col xs={24} sm={6}><label className={styles.fieldLabel}>Đơn vị tính</label><Input type="text" disabled={order.status === 'Completed'} value={current.unit} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], unit: e.target.value }}))} placeholder="VD: U/L, mg/dL" /></Col>
+                                        </Row>
+                                        {order.status !== 'Completed' && <div className={styles.saveActions}><Button type="primary" onClick={() => handleSaveItemResult(item.id)} disabled={savingItemId === item.id}><Save size={15} aria-hidden="true" /> {savingItemId === item.id ? 'Đang lưu...' : 'Lưu kết quả dịch vụ'}</Button></div>}
+                                        {item.result && <div className={styles.resultAuthor}>Nhập bởi: {item.result.resultedByUserName} • {new Date(item.result.resultedAtUtc).toLocaleString('vi-VN')}</div>}
                                     </div>
                                 )}
-                            </div>
+                            </Card>
                         );
                     })}
                 </div>
-            </div>
-
-            {/* Bottom Actions for Order Completion */}
-            {order.status === 'InProgress' && (
-                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                    <div>
-                        <div style={{ fontWeight: 600, color: '#0f172a' }}>Hoàn tất phiếu chỉ định cận lâm sàng</div>
-                        <div style={{ fontSize: '13px', color: '#64748b' }}>
-                            {allItemsCompleted ? 'Tất cả các dịch vụ đã có kết quả. Bạn có thể chốt phiếu.' : 'Vui lòng lưu kết quả cho từng dịch vụ trước khi hoàn tất.'}
-                        </div>
-                    </div>
-                    <button
-                        onClick={handleCompleteOrder}
-                        disabled={!allItemsCompleted || actionLoading}
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '10px 24px',
-                            background: allItemsCompleted ? '#16a34a' : '#94a3b8',
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontWeight: 600,
-                            fontSize: '14px',
-                            cursor: allItemsCompleted ? 'pointer' : 'not-allowed'
-                        }}
-                    >
-                        <Check size={18} /> Hoàn tất và gửi kết quả
-                    </button>
-                </div>
-            )}
-
-            {order.status === 'Completed' && (
-                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                        <div style={{ fontWeight: 600, color: '#166534', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <CheckCircle size={18} /> Phiếu chỉ định đã được hoàn tất
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#15803d', marginTop: '2px' }}>
-                            Hoàn tất bởi: {order.completedByUserName} lúc {new Date(order.completedAtUtc!).toLocaleString('vi-VN')}
-                        </div>
-                    </div>
-                    {order.reviewedAtUtc ? (
-                        <div style={{ textAlign: 'right', fontSize: '12px', color: '#0369a1' }}>
-                            <strong>Bác sĩ đã xem:</strong> {order.reviewedByDoctorName} ({new Date(order.reviewedAtUtc).toLocaleString('vi-VN')})
-                        </div>
-                    ) : (
-                        <div style={{ fontSize: '12px', color: '#b45309', fontWeight: 500 }}>
-                            Chờ bác sĩ khám xác nhận đã xem
-                        </div>
-                    )}
-                </div>
-            )}
+            </section>
+            {order.status === 'InProgress' && <Card><div className={styles.completionActions}><div><strong>Hoàn tất phiếu chỉ định cận lâm sàng</strong><div className={styles.secondary}>{allItemsCompleted ? 'Tất cả các dịch vụ đã có kết quả. Bạn có thể chốt phiếu.' : 'Vui lòng lưu kết quả cho từng dịch vụ trước khi hoàn tất.'}</div></div><Button type="primary" className={styles.completeButton} onClick={handleCompleteOrder} disabled={!allItemsCompleted || actionLoading}><Check size={18} aria-hidden="true" /> Hoàn tất và gửi kết quả</Button></div></Card>}
+            {order.status === 'Completed' && <Card className={styles.completedCard}><div className={styles.completionActions}><div><div className={styles.completedTitle}><CheckCircle size={18} /> Phiếu chỉ định đã được hoàn tất</div><div className={styles.secondary}>Hoàn tất bởi: {order.completedByUserName} lúc {new Date(order.completedAtUtc!).toLocaleString('vi-VN')}</div></div>{order.reviewedAtUtc ? <div className={styles.reviewInfo}><strong>Bác sĩ đã xem:</strong> {order.reviewedByDoctorName} ({new Date(order.reviewedAtUtc).toLocaleString('vi-VN')})</div> : <div className={styles.reviewPending}>Chờ bác sĩ khám xác nhận đã xem</div>}</div></Card>}
         </div>
     );
 };
