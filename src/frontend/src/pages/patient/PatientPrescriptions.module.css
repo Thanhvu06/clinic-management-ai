@@ -1,6 +1,14 @@
-.table { overflow-x: auto; }
-.medicineName { font-weight: 600; color: var(--cc-color-text-dark); }
-.instructions { font-weight: 400; font-size: 0.8rem; color: var(--cc-color-text-secondary); margin-top: var(--cc-space-xxs); }
-.quantity { font-weight: 700; color: var(--cc-color-primary); }
-.total { text-align: right; margin: var(--cc-space-md) 0 var(--cc-space-xs); color: var(--cc-color-text-dark); }
-.priceNote { text-align: right; margin: 0; color: var(--cc-color-text-secondary); font-size: 0.85rem; }
+.page, .content { display: flex; flex-direction: column; gap: var(--cc-space-md); }
+.page { width: 100%; max-width: 1200px; margin: 0 auto; padding: var(--cc-space-lg) var(--cc-space-md); }
+.heading, .appointment { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-md); }
+.instructions { display: flex; align-items: center; gap: var(--cc-space-xxs); color: var(--cc-color-text-secondary); margin-top: var(--cc-space-xxs); }
+.total { text-align: right; margin: 0; color: var(--cc-color-primary); }
+.reference { text-align: right; margin: 0; color: var(--cc-color-text-secondary); }
+.content h4 { margin: 0; }
+@media print {
+    :global(body.cc-prescription-printing) * { visibility: hidden; }
+    :global(body.cc-prescription-printing) .printingPrescription,
+    :global(body.cc-prescription-printing) .printingPrescription * { visibility: visible; }
+    :global(body.cc-prescription-printing) .printingPrescription { position: absolute; top: 0; left: 0; width: 100%; }
+    :global(body.cc-prescription-printing) .printButton { display: none; }
+}

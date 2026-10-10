@@ -1,201 +1,80 @@
-import React, { useState, useEffect } from "react";
-import axiosClient from "../../api/axiosClient";
-import { User, Phone, MapPin, Calendar, Mail, Save } from "lucide-react";
-import type { ApiResponse } from "../../types";
-import { useDialog } from "../../contexts/DialogContext";
-import { Breadcrumb } from "../../components/Breadcrumb";
+import React, { useCallback, useEffect, useState } from 'react';
+import { Button, Card, Col, DatePicker, Form, Input, Row, Select } from 'antd';
+import dayjs from 'dayjs';
+import { Mail, MapPin, Phone, Save, User } from 'lucide-react';
+import axiosClient from '../../api/axiosClient';
+import type { ApiResponse } from '../../types';
+import { useDialog } from '../../contexts/DialogContext';
+import { Breadcrumb } from '../../components/Breadcrumb';
+import { PageHeader } from '../../components/common/PageHeader';
+import { EmptyState } from '../../components/common/EmptyState';
+import { InlineError } from '../../components/common/InlineError';
+import { LoadingState } from '../../components/common/LoadingState';
+import styles from './PatientProfile.module.css';
 
-interface PatientProfile {
+interface Profile {
     id: number;
     fullName: string;
     email: string;
     phoneNumber: string;
-    dateOfBirth?: string;
-    gender?: string;
+    dateOfBirth?: string | null;
+    gender?: string | number | null;
     address?: string;
 }
 
 export const PatientProfile: React.FC = () => {
-    const [profile, setProfile] = useState<PatientProfile | null>(null);
+    const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    
+    const [error, setError] = useState('');
     const { showAlert } = useDialog();
-
-    useEffect(() => {
-        fetchProfile();
-    }, []);
-
-    const fetchProfile = async () => {
+    const fetchProfile = useCallback(async () => {
+        setLoading(true);
+        setError('');
         try {
-            const res = await axiosClient.get<any, ApiResponse<PatientProfile>>("/patients/me");
-            if (res.success && res.data) {
-                // Ensure date string is formatted correctly for input type="date"
-                const data = res.data;
-                if (data.dateOfBirth && data.dateOfBirth.includes("T")) {
-                    data.dateOfBirth = data.dateOfBirth.split("T")[0];
-                }
-                setProfile(data);
-            }
-        } catch (error) {
-            console.error(error);
+            const res = await axiosClient.get<any, ApiResponse<Profile>>('/patients/me');
+            if (!res.success) throw new Error(res.message || 'Không thể tải thông tin hồ sơ.');
+            setProfile(res.data ? { ...res.data, dateOfBirth: res.data.dateOfBirth?.split('T')[0] || null } : null);
+        } catch (err: any) {
+            setError(err?.message || 'Không thể tải thông tin hồ sơ.');
         } finally {
             setLoading(false);
         }
-    };
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        if (!profile) return;
-        setProfile({ ...profile, [e.target.name]: e.target.value });
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!profile) return;
-        const genderVal = profile.gender === "" || profile.gender === null ? null : Number(profile.gender);
-
+    }, []);
+    useEffect(() => { void fetchProfile(); }, [fetchProfile]);
+    const update = (changes: Partial<Profile>) => setProfile(current => current ? { ...current, ...changes } : current);
+    const handleSubmit = async () => {
+        if (!profile || saving) return;
         setSaving(true);
         try {
-            const res = await axiosClient.put<any, ApiResponse<any>>("/patients/me", {
-                fullName: profile.fullName,
-                phoneNumber: profile.phoneNumber,
-                dateOfBirth: profile.dateOfBirth,
-                gender: genderVal,
-                address: profile.address
+            const res = await axiosClient.put<any, ApiResponse<Profile>>('/patients/me', {
+                fullName: profile.fullName, phoneNumber: profile.phoneNumber,
+                dateOfBirth: profile.dateOfBirth || null,
+                gender: profile.gender === '' || profile.gender == null ? null : Number(profile.gender), address: profile.address
             });
-            if (res.success) {
-                showAlert('Cập nhật hồ sơ thành công!', 'Thành công', 'success');
-                fetchProfile();
-            }
-        } catch (error: any) {
-            const msg = error?.response?.data?.message || error?.message || "Có lỗi xảy ra khi cập nhật.";
-            showAlert(msg, 'Lỗi', 'error');
+            if (!res.success) throw new Error(res.message || 'Có lỗi xảy ra khi cập nhật.');
+            showAlert('Cập nhật hồ sơ thành công!', 'Thành công', 'success');
+            await fetchProfile();
+        } catch (err: any) {
+            showAlert(err?.message || 'Có lỗi xảy ra khi cập nhật.', 'Lỗi', 'error');
         } finally {
             setSaving(false);
         }
     };
-
-    if (loading) {
-        return <div style={{ color: "var(--c-muted)", padding: "20px" }}>Đang tải thông tin...</div>;
-    }
-
-    if (!profile) {
-        return <div className="card">Không tìm thấy thông tin hồ sơ.</div>;
-    }
-
-    return (
-        <div>
-            <Breadcrumb items={[
-                { label: 'Trang chủ', path: '/patient' },
-                { label: 'Hồ sơ cá nhân' }
-            ]} />
-
-            <div className="card" style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px' }}>
-                <h2 style={{ marginBottom: "24px", color: "var(--c-navy)", borderBottom: '1px solid var(--c-border)', paddingBottom: '16px' }}>Hồ sơ cá nhân</h2>
-
-                <form onSubmit={handleSubmit} style={{ display: "grid", gap: "24px" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
-                        <div className="form-group">
-                            <label className="form-label">Họ và tên (*)</label>
-                            <div style={{ position: "relative" }}>
-                                <User size={18} style={{ position: "absolute", left: "12px", top: "10px", color: "var(--c-muted)" }} />
-                                <input
-                                    type="text"
-                                    name="fullName"
-                                    value={profile.fullName}
-                                    onChange={handleChange}
-                                    className="form-input"
-                                    style={{ paddingLeft: "40px" }}
-                                    required
-                                />
-                            </div>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Email</label>
-                            <div style={{ position: "relative" }}>
-                                <Mail size={18} style={{ position: "absolute", left: "12px", top: "10px", color: "var(--c-muted)" }} />
-                                <input
-                                    type="email"
-                                    value={profile.email}
-                                    className="form-input"
-                                    style={{ paddingLeft: "40px", backgroundColor: "var(--c-bg)" }}
-                                    disabled
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
-                        <div className="form-group">
-                            <label className="form-label">Số điện thoại (*)</label>
-                            <div style={{ position: "relative" }}>
-                                <Phone size={18} style={{ position: "absolute", left: "12px", top: "10px", color: "var(--c-muted)" }} />
-                                <input
-                                    type="text"
-                                    name="phoneNumber"
-                                    value={profile.phoneNumber}
-                                    onChange={handleChange}
-                                    className="form-input"
-                                    style={{ paddingLeft: "40px" }}
-                                    required
-                                />
-                            </div>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Ngày sinh</label>
-                            <div style={{ position: "relative" }}>
-                                <Calendar size={18} style={{ position: "absolute", left: "12px", top: "10px", color: "var(--c-muted)" }} />
-                                <input
-                                    type="date"
-                                    name="dateOfBirth"
-                                    value={profile.dateOfBirth || ""}
-                                    onChange={handleChange}
-                                    className="form-input"
-                                    style={{ paddingLeft: "40px" }}
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
-                        <div className="form-group">
-                            <label className="form-label">Giới tính</label>
-                            <select
-                                name="gender"
-                                value={profile.gender !== null && profile.gender !== undefined ? profile.gender.toString() : ""}
-                                onChange={handleChange}
-                                className="form-select"
-                            >
-                                <option value="">-- Chưa cập nhật --</option>
-                                <option value="0">Nam</option>
-                                <option value="1">Nữ</option>
-                                <option value="2">Khác</option>
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Địa chỉ</label>
-                            <div style={{ position: "relative" }}>
-                                <MapPin size={18} style={{ position: "absolute", left: "12px", top: "10px", color: "var(--c-muted)" }} />
-                                <input
-                                    type="text"
-                                    name="address"
-                                    value={profile.address || ""}
-                                    onChange={handleChange}
-                                    className="form-input"
-                                    style={{ paddingLeft: "40px" }}
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px", paddingTop: "24px", borderTop: "1px solid var(--c-border)" }}>
-                        <button type="submit" className="btn-primary" disabled={saving}>
-                            <Save size={18} style={{ marginRight: '8px' }} />
-                            {saving ? "Đang lưu..." : "Lưu thay đổi"}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
+    return <div className={styles.page}>
+        <Breadcrumb items={[{ label: 'Trang chủ', path: '/patient' }, { label: 'Hồ sơ cá nhân' }]} />
+        <PageHeader title="Hồ sơ cá nhân" />
+        {loading ? <LoadingState message="Đang tải thông tin..." /> : error ? <InlineError message={error} onRetry={fetchProfile} /> : !profile ? <EmptyState title="Không tìm thấy thông tin hồ sơ." /> :
+            <Card><Form layout="vertical" onFinish={handleSubmit}>
+                <Row gutter={[16, 0]}>
+                    <Col xs={24} md={12}><Form.Item label="Họ và tên (*)" htmlFor="profile-name"><Input id="profile-name" required prefix={<User size={18} />} value={profile.fullName} onChange={e => update({ fullName: e.target.value })} /></Form.Item></Col>
+                    <Col xs={24} md={12}><Form.Item label="Email" htmlFor="profile-email"><Input id="profile-email" disabled prefix={<Mail size={18} />} value={profile.email} /></Form.Item></Col>
+                    <Col xs={24} md={12}><Form.Item label="Số điện thoại (*)" htmlFor="profile-phone"><Input id="profile-phone" required prefix={<Phone size={18} />} value={profile.phoneNumber} onChange={e => update({ phoneNumber: e.target.value })} /></Form.Item></Col>
+                    <Col xs={24} md={12}><Form.Item label="Ngày sinh" htmlFor="profile-birth"><DatePicker id="profile-birth" className={styles.datePicker} format="DD/MM/YYYY" value={profile.dateOfBirth ? dayjs(profile.dateOfBirth) : null} onChange={date => update({ dateOfBirth: date?.format('YYYY-MM-DD') || null })} /></Form.Item></Col>
+                    <Col xs={24} md={12}><Form.Item label="Giới tính" htmlFor="profile-gender"><Select id="profile-gender" aria-label="Giới tính" value={profile.gender == null || profile.gender === '' ? '' : Number(profile.gender)} options={[{ value: '', label: '-- Chưa cập nhật --' }, { value: 0, label: 'Nam' }, { value: 1, label: 'Nữ' }, { value: 2, label: 'Khác' }]} onChange={gender => update({ gender })} /></Form.Item></Col>
+                    <Col xs={24} md={12}><Form.Item label="Địa chỉ" htmlFor="profile-address"><Input id="profile-address" prefix={<MapPin size={18} />} value={profile.address} onChange={e => update({ address: e.target.value })} /></Form.Item></Col>
+                </Row>
+                <div className={styles.actions}><Button type="primary" htmlType="submit" disabled={saving} icon={<Save size={18} />}>{saving ? 'Đang lưu...' : 'Lưu thay đổi'}</Button></div>
+            </Form></Card>}
+    </div>;
 };
