@@ -21,7 +21,6 @@
 .metricGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--cc-space-md); }
 .searchForm { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-sm); }
 .searchInput { flex: 1; min-width: 0; }
-.mainLayout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--cc-space-lg); }
 .worklistCard { background: var(--cc-color-bg-container); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-lg); overflow: hidden; }
 .worklistTabs { display: flex; gap: var(--cc-space-xxs); padding: var(--cc-space-sm); overflow-x: auto; border-bottom: 1px solid var(--cc-color-border); background: var(--cc-color-bg-subtle); }
 .worklistTab { flex-shrink: 0; font-weight: 600; }
@@ -35,14 +34,15 @@
 .patientIdentifiers, .doctorName { font-size: 0.8rem; color: var(--cc-color-text-secondary); overflow-wrap: anywhere; }
 .specialtyName { font-weight: 500; color: var(--cc-color-text); }
 .visitReason { max-width: 180px; overflow-wrap: anywhere; }
-.queueActions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--cc-space-xs); min-width: 180px; }
-.queueActions :global(.ant-btn) { white-space: nowrap; }
+.queueActionsCell { min-width: 180px; }
+.queueActionsCell :global(.ant-btn) { white-space: nowrap; }
+.queueActionsCell :global(.ant-btn), .queueActionsCell .detailLink { margin-inline-start: var(--cc-space-xs); margin-block: var(--cc-space-xxs); }
 .checkInButton { font-weight: 600; }
 .detailLink { display: inline-flex; align-items: center; justify-content: center; min-height: var(--cc-control-height); padding: var(--cc-space-xs) var(--cc-space-sm); color: var(--cc-color-text); background: var(--cc-color-bg-container); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-sm); }
 .detailLink:hover { color: var(--cc-color-primary); border-color: var(--cc-color-primary); }
 .queuePagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--cc-space-sm); padding: var(--cc-space-md); color: var(--cc-color-text-secondary); font-size: 0.85rem; border-top: 1px solid var(--cc-color-border); }
 .paginationButtons { display: flex; flex-wrap: wrap; gap: var(--cc-space-xs); }
-.actionPanel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cc-space-md); }
+.actionPanel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cc-space-md); margin-top: var(--cc-space-xs); }
 .intakeCard { border-top: 4px solid var(--cc-color-primary); }
 .actionCardHeader { display: flex; align-items: center; gap: var(--cc-space-xs); margin-bottom: var(--cc-space-sm); }
 .actionCardTitle { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--cc-color-text-dark); }

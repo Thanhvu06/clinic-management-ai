@@ -293,8 +293,8 @@ export const ReceptionWorkspace: React.FC = () => {
         { header: 'Chuyên khoa / Bác sĩ', accessor: item => <><div className={styles.specialtyName}>{item.specialtyName}</div><div className={styles.doctorName}>BS: {item.doctorName || 'Chưa phân công'}</div></> },
         { header: 'Lý do khám', accessor: item => item.reason || '-', className: styles.visitReason },
         { header: 'Trạng thái', accessor: item => renderStatusBadge(item.status) },
-        { header: 'Thao tác', align: 'right', accessor: item => (
-            <div className={styles.queueActions}>
+        { header: 'Thao tác', align: 'right', className: styles.queueActionsCell, accessor: item => (
+            <>
                 {item.status === 'Confirmed' && (
                     <Button type="primary" htmlType="button" className={styles.checkInButton} style={{ minHeight: '40px' }}
                         onClick={() => handleFastCheckIn(item)}
@@ -306,7 +306,7 @@ export const ReceptionWorkspace: React.FC = () => {
                 <Button htmlType="button" onClick={() => selectAppointmentForCopilot(item)} title="Chọn đúng lịch hẹn này cho Copilot">Chọn Copilot</Button>
                 {item.patientVisitId && <Button htmlType="button" onClick={() => handleViewTicket(item.patientVisitId!)} title="Xem lại phiếu khám và in vé số thứ tự"><Printer size={13} /> Vé khám</Button>}
                 <Link to={`/reception/appointments`} className={styles.detailLink} title="Xem chi tiết lịch hẹn"><Eye size={13} /></Link>
-            </div>
+            </>
         ) }
     ];
     return (
@@ -339,7 +339,7 @@ export const ReceptionWorkspace: React.FC = () => {
                     {searchTerm && <Button htmlType="button" onClick={() => { setSearchTerm(''); setPage(1); fetchWorklist(); }}>Xóa tìm kiếm</Button>}
                 </form>
             </Card>
-            <div className={styles.mainLayout}>
+            <>
                 <section className={styles.worklistCard}>
                     <div className={styles.worklistTabs}>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'today' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('today'); setPage(1); }}><span>Hôm nay (Ưu tiên tiếp nhận)</span><span className={styles.tabCount}>{activeTab === 'today' ? totalItems : (stats?.appointmentsToday ?? 0)}</span></Button>
@@ -358,7 +358,7 @@ export const ReceptionWorkspace: React.FC = () => {
                     <Card className={styles.actionCard}><div className={styles.actionCardHeader}><CreditCard size={20} className={styles.billingActionIcon} /><h3 className={styles.actionCardTitle}>Hàng đợi viện phí & Thu ngân</h3>{stats?.unbilledCount !== undefined && stats.unbilledCount > 0 && <span className={styles.unbilledCount}>{stats.unbilledCount} chờ thu</span>}</div><p className={styles.actionCardDescription}>Thu tiền công khám, dịch vụ cận lâm sàng và đơn thuốc đã xác nhận mua theo cơ chế khóa chống thu trùng.</p><Link to="/reception/billing" className={styles.actionLink}><CreditCard size={16} /> Mở thu ngân viện phí</Link></Card>
                     <Card className={styles.actionCard}><div className={styles.actionCardHeader}><Package size={20} className={styles.packageActionIcon} /><h3 className={styles.actionCardTitle}>Gói khám sức khỏe</h3></div><p className={styles.actionCardDescription}>Tiếp đón và kích hoạt lượt khám cho người bệnh đăng ký gói khám sức khỏe tổng quát.</p><Link to="/reception/package-registrations" className={styles.actionLink}><Package size={16} /> Quản lý đăng ký gói khám</Link></Card>
                 </div>
-            </div>
+            </>
             <MpiPatientSearchModal isOpen={mpiModalOpen} onClose={() => setMpiModalOpen(false)} onSelectPatient={(patient) => { setMpiModalOpen(false); navigate(`/reception/walk-in?existingPatientId=${patient.id}`); }} />
             <CheckInTicketModal isOpen={ticketModalOpen} ticket={currentTicket} onClose={() => setTicketModalOpen(false)} />
         </div>
