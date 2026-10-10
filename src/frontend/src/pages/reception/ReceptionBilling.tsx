@@ -1,3 +1,4 @@
+import { Button, Input, Select, Radio, Modal } from 'antd';
 import React, { useState, useEffect } from 'react';
 import {
     Receipt,
@@ -11,7 +12,6 @@ import {
     Eye,
     CreditCard,
     Ban,
-    X,
 } from 'lucide-react';
 import { billingApi } from '../../api/billingApi';
 import type {
@@ -28,7 +28,7 @@ import {
 } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { InvoiceReceiptModal } from '../../components/billing/InvoiceReceiptModal';
-import { DataTable, LoadingState, StatusBadge } from '../../components/common';
+import { DataTable, LoadingState, StatusBadge, PageHeader, StatCard } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import { getVisitStatusLabel } from '../../utils/visitStatusLabels';
 import styles from './ReceptionBilling.module.css';
@@ -350,26 +350,10 @@ export const ReceptionBilling: React.FC = () => {
 
     const renderStatusBadge = (status: InvoiceStatus) => {
         switch (status) {
-            case InvoiceStatus.Paid:
-                return (
-                    <span className="badge badge-success">
-                        <CheckCircle size={13} /> Đã thanh toán
-                    </span>
-                );
-            case InvoiceStatus.Unpaid:
-                return (
-                    <span className="badge badge-warning">
-                        <Clock size={13} /> Chờ thanh toán
-                    </span>
-                );
-            case InvoiceStatus.Cancelled:
-                return (
-                    <span className="badge badge-danger">
-                        <XCircle size={13} /> Đã hủy
-                    </span>
-                );
-            default:
-                return null;
+            case InvoiceStatus.Paid: return <StatusBadge status="Completed" label="Đã thanh toán" />;
+            case InvoiceStatus.Unpaid: return <StatusBadge status="Pending" label="Chờ thanh toán" />;
+            case InvoiceStatus.Cancelled: return <StatusBadge status="Cancelled" label="Đã hủy" />;
+            default: return null;
         }
     };
 
@@ -410,34 +394,34 @@ export const ReceptionBilling: React.FC = () => {
             align: 'right',
             accessor: (inv) => (
                 <div className={styles.actionBtnGroup}>
-                    <button
-                        type="button"
-                        className={`btn-secondary ${styles.rowActionBtn}`}
+                    <Button
+                        htmlType="button"
+                        className={styles.rowActionBtn}
                         onClick={() => handleViewDetail(inv.id)}
                         title="Xem chi tiết & In phiếu thu"
                     >
                         <Eye size={13} /> Xem
-                    </button>
+                    </Button>
 
                     {inv.status === InvoiceStatus.Unpaid && (
                         <>
-                            <button
-                                type="button"
-                                className={`btn-primary ${styles.rowActionBtn}`}
+                            <Button
+                                htmlType="button"
+                                type="primary" className={styles.rowActionBtn}
                                 onClick={() => handleOpenPaymentModal(inv)}
                                 title="Thu tiền hóa đơn"
                             >
                                 <CreditCard size={13} /> Thu tiền
-                            </button>
+                            </Button>
 
-                            <button
-                                type="button"
-                                className={`btn-danger ${styles.rowActionBtn}`}
+                            <Button
+                                htmlType="button"
+                                danger className={styles.rowActionBtn}
                                 onClick={() => handleOpenCancelModal(inv)}
                                 title="Hủy hóa đơn"
                             >
                                 <Ban size={13} /> Hủy
-                            </button>
+                            </Button>
                         </>
                     )}
                 </div>
@@ -495,544 +479,61 @@ export const ReceptionBilling: React.FC = () => {
             header: 'Thao tác',
             align: 'right',
             accessor: (v) => (
-                <button
-                    type="button"
-                    className={`btn-primary ${styles.rowActionBtn}`}
+                <Button
+                    htmlType="button"
+                    type="primary" className={styles.rowActionBtn}
                     onClick={() => handleCreateInvoiceFromUnbilled(v.visitId)}
                     disabled={creatingInvoice}
                 >
                     <Plus size={14} /> Lập hóa đơn
-                </button>
+                </Button>
             ),
         },
     ];
 
     return (
         <div className={styles.container}>
-            {/* Header */}
-            <div className={styles.headerRow}>
-                <div className={styles.titleArea}>
-                    <Receipt size={28} color="var(--c-primary)" />
-                    <div>
-                        <h2>Quản lý Hóa đơn & Thu ngân</h2>
-                        <div className={styles.subtitle}>
-                            Thu tiền tại quầy và theo dõi hóa đơn của phòng khám
-                        </div>
-                    </div>
-                </div>
-
-                <div className={styles.headerActions}>
-                    <button type="button" className="btn-secondary" onClick={handleRefresh} title="Làm mới dữ liệu">
-                        <RefreshCw size={15} /> Làm mới
-                    </button>
-                    <button type="button" className="btn-primary" onClick={handleOpenCreateModal}>
-                        <Plus size={16} /> Lập hóa đơn mới
-                    </button>
-                </div>
-            </div>
-
-            {/* KPI Cards */}
+            <PageHeader title="Quản lý Hóa đơn & Thu ngân" subtitle="Thu tiền tại quầy và theo dõi hóa đơn của phòng khám" badge={<Receipt size={28} className={styles.primaryIcon} />} actions={<><Button onClick={handleRefresh} title="Làm mới dữ liệu" icon={<RefreshCw size={15} />}>Làm mới</Button><Button type="primary" onClick={handleOpenCreateModal} icon={<Plus size={16} />}>Lập hóa đơn mới</Button></>} />
             <div className={styles.kpiGrid}>
-                <div className={styles.kpiCard}>
-                    <div className={styles.kpiIconWrapper} style={{ backgroundColor: 'var(--c-warning-bg)', color: 'var(--c-warning)' }}>
-                        <Clock size={24} />
-                    </div>
-                    <div className={styles.kpiContent}>
-                        <span className={styles.kpiLabel}>Chờ thanh toán</span>
-                        <span className={styles.kpiValue}>{kpi ? kpi.todayUnpaidInvoices : 0}</span>
-                    </div>
-                </div>
-
-                <div className={styles.kpiCard}>
-                    <div className={styles.kpiIconWrapper} style={{ backgroundColor: 'var(--c-success-bg)', color: 'var(--c-success)' }}>
-                        <CheckCircle size={24} />
-                    </div>
-                    <div className={styles.kpiContent}>
-                        <span className={styles.kpiLabel}>Đã thu hôm nay</span>
-                        <span className={styles.kpiValue}>{kpi ? kpi.todayPaidInvoices : 0}</span>
-                    </div>
-                </div>
-
-                <div className={styles.kpiCard}>
-                    <div className={styles.kpiIconWrapper} style={{ backgroundColor: 'var(--c-danger-bg)', color: 'var(--c-danger)' }}>
-                        <XCircle size={24} />
-                    </div>
-                    <div className={styles.kpiContent}>
-                        <span className={styles.kpiLabel}>Đã hủy hôm nay</span>
-                        <span className={styles.kpiValue}>{kpi ? kpi.todayCancelledInvoices : 0}</span>
-                    </div>
-                </div>
-
-                <div className={styles.kpiCard}>
-                    <div className={styles.kpiIconWrapper} style={{ backgroundColor: 'var(--c-info-bg)', color: 'var(--c-info)' }}>
-                        <DollarSign size={24} />
-                    </div>
-                    <div className={styles.kpiContent}>
-                        <span className={styles.kpiLabel}>Thực thu hôm nay</span>
-                        <span className={styles.kpiValue}>{kpi ? formatCurrency(kpi.todayRevenue) : '0 ₫'}</span>
-                    </div>
-                </div>
+                <StatCard title="Chờ thanh toán" value={kpi ? kpi.todayUnpaidInvoices : 0} icon={<Clock size={24} />} color="warning" />
+                <StatCard title="Đã thu hôm nay" value={kpi ? kpi.todayPaidInvoices : 0} icon={<CheckCircle size={24} />} color="success" />
+                <StatCard title="Đã hủy hôm nay" value={kpi ? kpi.todayCancelledInvoices : 0} icon={<XCircle size={24} />} color="danger" />
+                <StatCard title="Thực thu hôm nay" value={kpi ? formatCurrency(kpi.todayRevenue) : '0 ₫'} icon={<DollarSign size={24} />} color="info" />
             </div>
-
-            {/* Main Tabs */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                <button
-                    type="button"
-                    className={billingTab === 'invoices' ? 'btn-primary' : 'btn-secondary'}
-                    onClick={() => setBillingTab('invoices')}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                    <Receipt size={16} /> Danh sách Hóa đơn ({totalItems})
-                </button>
-                <button
-                    type="button"
-                    className={billingTab === 'unbilled' ? 'btn-primary' : 'btn-secondary'}
-                    onClick={() => setBillingTab('unbilled')}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                    <Clock size={16} /> Hàng đợi chờ lập hóa đơn ({unbilledTotalCount})
-                </button>
-            </div>
-
-            {billingTab === 'invoices' ? (
-                <>
-                    {/* Filter Bar */}
-                    <div className={styles.filterCard}>
-                        <form onSubmit={handleSearch} className={styles.filterForm}>
-                            <div className={styles.searchBox}>
-                                <Search size={18} className={styles.searchIcon} />
-                                <input
-                                    type="text"
-                                    className={`form-input ${styles.searchInput}`}
-                                    placeholder="Mã HĐ, mã khám, tên hoặc SĐT bệnh nhân..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                />
-                            </div>
-
-                            <div style={{ width: '160px' }}>
-                                <select
-                                    className="form-select"
-                                    value={statusFilter}
-                                    onChange={(e) => {
-                                        setStatusFilter(e.target.value);
-                                        setPage(1);
-                                    }}
-                                >
-                                    <option value="">Tất cả trạng thái</option>
-                                    <option value="1">Chờ thanh toán</option>
-                                    <option value="2">Đã thanh toán</option>
-                                    <option value="3">Đã hủy</option>
-                                </select>
-                            </div>
-
-                            <div style={{ width: '160px' }}>
-                                <select
-                                    className="form-select"
-                                    value={sourceFilter}
-                                    onChange={(e) => {
-                                        setSourceFilter(e.target.value);
-                                        setPage(1);
-                                    }}
-                                >
-                                    <option value="">Tất cả nguồn thu</option>
-                                    <option value="1">Lịch khám chuyên khoa</option>
-                                    <option value="2">Gói khám sức khỏe</option>
-                                </select>
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                <input
-                                    type="date"
-                                    className="form-input"
-                                    style={{ width: '135px' }}
-                                    value={fromDate}
-                                    onChange={(e) => {
-                                        setFromDate(e.target.value);
-                                        setPage(1);
-                                    }}
-                                    title="Từ ngày"
-                                />
-                                <span>-</span>
-                                <input
-                                    type="date"
-                                    className="form-input"
-                                    style={{ width: '135px' }}
-                                    value={toDate}
-                                    onChange={(e) => {
-                                        setToDate(e.target.value);
-                                        setPage(1);
-                                    }}
-                                    title="Đến ngày"
-                                />
-                            </div>
-
-                            <button type="submit" className="btn-secondary">
-                                <Search size={14} /> Tìm
-                            </button>
-                        </form>
-                    </div>
-
-                    {/* Table Card */}
-                    <div className={styles.tableCard}>
-                        {loading ? (
-                            <LoadingState message="Đang tải danh sách hóa đơn..." />
-                        ) : (
-                            <DataTable
-                                columns={invoiceColumns}
-                                data={invoices}
-                                keyExtractor={(inv) => inv.id}
-                                emptyText="Không tìm thấy hóa đơn nào phù hợp với bộ lọc."
-                            />
-                        )}
-
-                        {/* Pagination */}
-                        {totalItems > pageSize && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderTop: '1px solid var(--c-border)' }}>
-                                <span style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>
-                                    Hiển thị trang {page} / {totalPages} (Tổng {totalItems} hóa đơn)
-                                </span>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button
-                                        type="button"
-                                        className="btn-secondary"
-                                        style={{ padding: '4px 12px', fontSize: '0.85rem' }}
-                                        disabled={page <= 1}
-                                        onClick={() => setPage(p => p - 1)}
-                                    >
-                                        Trang trước
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="btn-secondary"
-                                        style={{ padding: '4px 12px', fontSize: '0.85rem' }}
-                                        disabled={page >= totalPages}
-                                        onClick={() => setPage(p => p + 1)}
-                                    >
-                                        Trang sau
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </>
-            ) : (
-                <div className={styles.tableCard}>
-                    <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--c-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--c-text)', margin: 0 }}>
-                                Hàng đợi ca khám có chi phí chờ lập hóa đơn ({unbilledTotalCount})
-                            </h3>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)', marginTop: '2px' }}>
-                                Bao gồm công khám, cận lâm sàng chỉ định và đơn thuốc đã xác nhận mua
-                            </div>
-                        </div>
-                        <button type="button" className="btn-secondary" onClick={() => fetchUnbilledVisits(unbilledPage)} disabled={unbilledLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <RefreshCw size={14} className={unbilledLoading ? styles.spin : ''} /> Làm mới hàng đợi
-                        </button>
-                    </div>
-                    {unbilledLoading ? (
-                        <LoadingState message="Đang tải hàng đợi ca khám..." />
-                    ) : (
-                        <>
-                            <DataTable
-                                columns={unbilledColumns}
-                                data={unbilledVisits}
-                                keyExtractor={(v) => v.visitId}
-                                emptyText="Hiện không có lượt khám nào chờ lập hóa đơn."
-                            />
-                        {unbilledTotalPages > 1 && (
-                            <div className={styles.pagination}>
-                                <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    disabled={unbilledPage <= 1 || unbilledLoading}
-                                    onClick={() => {
-                                        const prev = unbilledPage - 1;
-                                        setUnbilledPage(prev);
-                                        fetchUnbilledVisits(prev);
-                                    }}
-                                >
-                                    Trang trước
-                                </button>
-                                <span className={styles.pageInfo}>
-                                    Trang {unbilledPage} / {unbilledTotalPages} (Tổng {unbilledTotalCount} ca khám)
-                                </span>
-                                <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    disabled={unbilledPage >= unbilledTotalPages || unbilledLoading}
-                                    onClick={() => {
-                                        const next = unbilledPage + 1;
-                                        setUnbilledPage(next);
-                                        fetchUnbilledVisits(next);
-                                    }}
-                                >
-                                    Trang sau
-                                </button>
-                            </div>
-                        )}
-                        </>
-                    )}
+            <div className={styles.tabs}><Button type={billingTab === 'invoices' ? 'primary' : 'default'} onClick={() => setBillingTab('invoices')} icon={<Receipt size={16} />}>Danh sách Hóa đơn ({totalItems})</Button><Button type={billingTab === 'unbilled' ? 'primary' : 'default'} onClick={() => setBillingTab('unbilled')} icon={<Clock size={16} />}>Hàng đợi chờ lập hóa đơn ({unbilledTotalCount})</Button></div>
+            {billingTab === 'invoices' ? <>
+                <form onSubmit={handleSearch} className={styles.filterForm}>
+                    <Input className={styles.searchInput} prefix={<Search size={18} />} placeholder="Mã HĐ, mã khám, tên hoặc SĐT bệnh nhân..." value={search} onChange={e => setSearch(e.target.value)} />
+                    <Select className={styles.filterSelect} value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả trạng thái'},{value:'1',label:'Chờ thanh toán'},{value:'2',label:'Đã thanh toán'},{value:'3',label:'Đã hủy'}]} />
+                    <Select className={styles.filterSelect} value={sourceFilter} onChange={value => { setSourceFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả nguồn thu'},{value:'1',label:'Lịch khám chuyên khoa'},{value:'2',label:'Gói khám sức khỏe'}]} />
+                    <div className={styles.dateRange}><Input type="date" className={styles.dateInput} value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1); }} title="Từ ngày" /><span>-</span><Input type="date" className={styles.dateInput} value={toDate} onChange={e => { setToDate(e.target.value); setPage(1); }} title="Đến ngày" /></div>
+                    <Button htmlType="submit" icon={<Search size={14} />}>Tìm</Button>
+                </form>
+                <div className={styles.tableCard}>{loading ? <LoadingState message="Đang tải danh sách hóa đơn..." /> : <div className={styles.tableScroll}><DataTable columns={invoiceColumns} data={invoices} keyExtractor={inv => inv.id} emptyText="Không tìm thấy hóa đơn nào phù hợp với bộ lọc." /></div>}
+                    {totalItems > pageSize && <div className={styles.pagination}><span className={styles.pageInfo}>Hiển thị trang {page} / {totalPages} (Tổng {totalItems} hóa đơn)</span><div className={styles.paginationActions}><Button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Trang trước</Button><Button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
                 </div>
-            )}
-
-            {/* Create Invoice Modal */}
-            {createModalOpen && (
-                <div className={styles.modalOverlay} onClick={() => setCreateModalOpen(false)}>
-                    <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-                        <div className={styles.modalHeader}>
-                            <h3>Lập hóa đơn mới</h3>
-                            <button type="button" className="btn-secondary" style={{ padding: '4px 8px' }} onClick={() => setCreateModalOpen(false)}>
-                                <X size={16} />
-                            </button>
-                        </div>
-                        <form onSubmit={handleCreateInvoice}>
-                            <div className={styles.modalBody}>
-                                <div className="form-group">
-                                    <label className="form-label">Chọn nguồn tạo hóa đơn</label>
-                                    <div className={styles.radioGroup}>
-                                         <label className={styles.radioLabel}>
-                                             <input
-                                                 type="radio"
-                                                 name="sourceType"
-                                                 checked={createSourceType === 'visit'}
-                                                 onChange={() => setCreateSourceType('visit')}
-                                             />
-                                             Lượt khám ngoại trú (Visit)
-                                         </label>
-                                         <label className={styles.radioLabel}>
-                                             <input
-                                                 type="radio"
-                                                 name="sourceType"
-                                                 checked={createSourceType === 'appointment'}
-                                                 onChange={() => setCreateSourceType('appointment')}
-                                             />
-                                             Lịch khám bệnh (Appointment)
-                                         </label>
-                                         <label className={styles.radioLabel}>
-                                             <input
-                                                 type="radio"
-                                                 name="sourceType"
-                                                 checked={createSourceType === 'package'}
-                                                 onChange={() => setCreateSourceType('package')}
-                                             />
-                                             Gói khám sức khỏe (Đã xác nhận)
-                                         </label>
-                                     </div>
-                                </div>
-
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        {createSourceType === 'visit'
-                                            ? 'Patient Visit ID (Mã ID lượt khám) *'
-                                            : createSourceType === 'appointment'
-                                            ? 'Appointment ID (Mã lịch hẹn) *'
-                                            : 'Health Package Registration ID *'}
-                                    </label>
-                                    <input
-                                        type="number"
-                                        className="form-input"
-                                        placeholder={
-                                            createSourceType === 'visit'
-                                                ? 'Ví dụ: 1'
-                                                : createSourceType === 'appointment'
-                                                ? 'Ví dụ: 10'
-                                                : 'Ví dụ: 5'
-                                        }
-                                        value={referenceId}
-                                        onChange={(e) => setReferenceId(e.target.value)}
-                                        required
-                                        min="1"
-                                    />
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--c-muted)', display: 'block', marginTop: '4px' }}>
-                                        {createSourceType === 'visit'
-                                            ? 'Lượt khám ngoại trú đã hoàn tất khám, chỉ định cận lâm sàng và cấp thuốc (In-Billing hoặc sẵn sàng thanh toán).'
-                                            : createSourceType === 'appointment'
-                                            ? 'Lịch hẹn phải ở trạng thái "Completed" và chưa có hóa đơn còn hiệu lực.'
-                                            : 'Đăng ký gói khám phải ở trạng thái "Confirmed" và chưa có hóa đơn còn hiệu lực.'}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className={styles.modalFooter}>
-                                <button type="button" className="btn-secondary" onClick={() => setCreateModalOpen(false)}>
-                                    Hủy bỏ
-                                </button>
-                                <button type="submit" className="btn-primary" disabled={creatingInvoice}>
-                                    {creatingInvoice ? 'Đang lập hóa đơn...' : 'Tạo hóa đơn'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Process Payment Modal */}
-            {paymentModalOpen && paymentInvoice && (
-                <div className={styles.modalOverlay} onClick={() => !processingPayment && setPaymentModalOpen(false)}>
-                    <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-                        <div className={styles.modalHeader}>
-                            <h3>Thu tiền hóa đơn {paymentInvoice.invoiceCode}</h3>
-                            <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{ padding: '4px 8px' }}
-                                disabled={processingPayment}
-                                onClick={() => setPaymentModalOpen(false)}
-                            >
-                                <X size={16} />
-                            </button>
-                        </div>
-                        <form onSubmit={handleProcessPayment}>
-                            <div className={styles.modalBody}>
-                                <div style={{ background: 'var(--c-bg)', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.875rem' }}>
-                                    <div><strong>Bệnh nhân:</strong> {paymentInvoice.patientName} ({paymentInvoice.patientPhone})</div>
-                                    <div style={{ marginTop: '4px' }}>
-                                        <strong>Tổng số tiền cần thu:</strong>{' '}
-                                        <span style={{ color: 'var(--c-primary)', fontWeight: 800, fontSize: '1.05rem' }}>
-                                            {formatCurrency(paymentInvoice.totalAmount)}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="form-group">
-                                    <label className="form-label">Phương thức thanh toán *</label>
-                                    <select
-                                        className="form-select"
-                                        value={paymentMethod}
-                                        onChange={(e) => setPaymentMethod(parseInt(e.target.value, 10) as PaymentMethod)}
-                                    >
-                                        <option value={PaymentMethod.Cash}>Tiền mặt tại quầy (Cash)</option>
-                                        <option value={PaymentMethod.ManualBankTransfer}>Chuyển khoản trực tiếp (ManualBankTransfer)</option>
-                                    </select>
-                                </div>
-
-                                <div className="form-group">
-                                    <label className="form-label">Số tiền khách thanh toán (VNĐ) *</label>
-                                    <input
-                                        type="number"
-                                        className="form-input"
-                                        value={paymentAmount}
-                                        onChange={(e) => setPaymentAmount(e.target.value)}
-                                        required
-                                        min="0"
-                                    />
-                                    <span style={{ fontSize: '0.75rem', color: 'var(--c-muted)', display: 'block', marginTop: '2px' }}>
-                                        Hệ thống yêu cầu thu đúng toàn bộ giá trị hóa đơn ({formatCurrency(paymentInvoice.totalAmount)}).
-                                    </span>
-                                </div>
-
-                                <div className="form-group">
-                                    <label className="form-label">Mã giao dịch / Mã tham chiếu ngân hàng</label>
-                                    <input
-                                        type="text"
-                                        className="form-input"
-                                        placeholder={paymentMethod === PaymentMethod.ManualBankTransfer ? 'Ví dụ: FT26090612345' : 'Tùy chọn'}
-                                        value={paymentRefCode}
-                                        onChange={(e) => setPaymentRefCode(e.target.value)}
-                                        maxLength={100}
-                                    />
-                                </div>
-
-                                <div className="form-group">
-                                    <label className="form-label">Ghi chú thu tiền</label>
-                                    <textarea
-                                        className="form-input"
-                                        rows={2}
-                                        placeholder="Ghi chú thêm nếu có..."
-                                        value={paymentNote}
-                                        onChange={(e) => setPaymentNote(e.target.value)}
-                                        maxLength={500}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className={styles.modalFooter}>
-                                <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    disabled={processingPayment}
-                                    onClick={() => setPaymentModalOpen(false)}
-                                >
-                                    Đóng
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="btn-primary"
-                                    disabled={processingPayment}
-                                >
-                                    {processingPayment ? 'Đang xử lý...' : 'Xác nhận đã thu tiền'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Cancel Invoice Modal */}
-            {cancelModalOpen && cancelInvoiceTarget && (
-                <div className={styles.modalOverlay} onClick={() => !cancellingInvoice && setCancelModalOpen(false)}>
-                    <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-                        <div className={styles.modalHeader}>
-                            <h3 style={{ color: 'var(--c-danger)' }}>Hủy hóa đơn {cancelInvoiceTarget.invoiceCode}</h3>
-                            <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{ padding: '4px 8px' }}
-                                disabled={cancellingInvoice}
-                                onClick={() => setCancelModalOpen(false)}
-                            >
-                                <X size={16} />
-                            </button>
-                        </div>
-                        <form onSubmit={handleCancelInvoice}>
-                            <div className={styles.modalBody}>
-                                <div style={{ background: 'var(--c-danger-bg)', border: '1px solid #fecaca', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', color: 'var(--c-danger)', fontSize: '0.875rem' }}>
-                                    <strong>Cảnh báo:</strong> Việc hủy hóa đơn là vĩnh viễn và không thể hoàn tác. Hóa đơn đã hủy sẽ không thể thu tiền.
-                                </div>
-
-                                <div className="form-group">
-                                    <label className="form-label">Lý do hủy hóa đơn *</label>
-                                    <textarea
-                                        className="form-input"
-                                        rows={3}
-                                        placeholder="Nhập chi tiết lý do hủy (ví dụ: bệnh nhân đổi ý, sai thông tin...)"
-                                        value={cancelReason}
-                                        onChange={(e) => setCancelReason(e.target.value)}
-                                        required
-                                        maxLength={500}
-                                    />
-                                </div>
-                            </div>
-                            <div className={styles.modalFooter}>
-                                <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    disabled={cancellingInvoice}
-                                    onClick={() => setCancelModalOpen(false)}
-                                >
-                                    Quay lại
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="btn-danger"
-                                    disabled={cancellingInvoice || !cancelReason.trim()}
-                                >
-                                    {cancellingInvoice ? 'Đang hủy...' : 'Xác nhận hủy hóa đơn'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Invoice Receipt Modal */}
-            <InvoiceReceiptModal
-                isOpen={detailModalOpen}
-                onClose={() => setDetailModalOpen(false)}
-                invoice={selectedInvoice}
-                loading={detailLoading}
-            />
+            </> : <div className={styles.tableCard}><div className={styles.queueHeader}><div><h3 className={styles.queueTitle}>Hàng đợi ca khám có chi phí chờ lập hóa đơn ({unbilledTotalCount})</h3><div className={styles.secondaryText}>Bao gồm công khám, cận lâm sàng chỉ định và đơn thuốc đã xác nhận mua</div></div><Button onClick={() => fetchUnbilledVisits(unbilledPage)} disabled={unbilledLoading} icon={<RefreshCw size={14} className={unbilledLoading ? styles.spin : ''} />}>Làm mới hàng đợi</Button></div>
+                {unbilledLoading ? <LoadingState message="Đang tải hàng đợi ca khám..." /> : <><div className={styles.tableScroll}><DataTable columns={unbilledColumns} data={unbilledVisits} keyExtractor={v => v.visitId} emptyText="Hiện không có lượt khám nào chờ lập hóa đơn." /></div>{unbilledTotalPages > 1 && <div className={styles.pagination}><Button disabled={unbilledPage <= 1 || unbilledLoading} onClick={() => { const prev = unbilledPage - 1; setUnbilledPage(prev); fetchUnbilledVisits(prev); }}>Trang trước</Button><span className={styles.pageInfo}>Trang {unbilledPage} / {unbilledTotalPages} (Tổng {unbilledTotalCount} ca khám)</span><Button disabled={unbilledPage >= unbilledTotalPages || unbilledLoading} onClick={() => { const next = unbilledPage + 1; setUnbilledPage(next); fetchUnbilledVisits(next); }}>Trang sau</Button></div>}</>}
+            </div>}
+            {createModalOpen && <Modal open width={520} className={styles.formModal} onCancel={() => setCreateModalOpen(false)} title="Lập hóa đơn mới" footer={<><Button onClick={() => setCreateModalOpen(false)}>Hủy bỏ</Button><Button type="primary" htmlType="submit" form="reception-create-invoice" disabled={creatingInvoice}>{creatingInvoice ? 'Đang lập hóa đơn...' : 'Tạo hóa đơn'}</Button></>}>
+                <form id="reception-create-invoice" onSubmit={handleCreateInvoice} className={styles.modalForm}>
+                    <div className={styles.formField}><label className={styles.formLabel}>Chọn nguồn tạo hóa đơn</label><div className={styles.radioGroup}><Radio name="sourceType" checked={createSourceType === 'visit'} onChange={() => setCreateSourceType('visit')}>Lượt khám ngoại trú (Visit)</Radio><Radio name="sourceType" checked={createSourceType === 'appointment'} onChange={() => setCreateSourceType('appointment')}>Lịch khám bệnh (Appointment)</Radio><Radio name="sourceType" checked={createSourceType === 'package'} onChange={() => setCreateSourceType('package')}>Gói khám sức khỏe (Đã xác nhận)</Radio></div></div>
+                    <div className={styles.formField}><label className={styles.formLabel}>{createSourceType === 'visit' ? 'Patient Visit ID (Mã ID lượt khám) *' : createSourceType === 'appointment' ? 'Appointment ID (Mã lịch hẹn) *' : 'Health Package Registration ID *'}</label><Input type="number" placeholder={createSourceType === 'visit' ? 'Ví dụ: 1' : createSourceType === 'appointment' ? 'Ví dụ: 10' : 'Ví dụ: 5'} value={referenceId} onChange={e => setReferenceId(e.target.value)} required min="1" /><span className={styles.fieldHint}>{createSourceType === 'visit' ? 'Lượt khám ngoại trú đã hoàn tất khám, chỉ định cận lâm sàng và cấp thuốc (In-Billing hoặc sẵn sàng thanh toán).' : createSourceType === 'appointment' ? 'Lịch hẹn phải ở trạng thái "Completed" và chưa có hóa đơn còn hiệu lực.' : 'Đăng ký gói khám phải ở trạng thái "Confirmed" và chưa có hóa đơn còn hiệu lực.'}</span></div>
+                </form>
+            </Modal>}
+            {paymentModalOpen && paymentInvoice && <Modal open width={520} className={styles.formModal} onCancel={() => !processingPayment && setPaymentModalOpen(false)} closable={{disabled:processingPayment}} title={`Thu tiền hóa đơn ${paymentInvoice.invoiceCode}`} footer={<><Button disabled={processingPayment} onClick={() => setPaymentModalOpen(false)}>Đóng</Button><Button type="primary" htmlType="submit" form="reception-process-payment" disabled={processingPayment}>{processingPayment ? 'Đang xử lý...' : 'Xác nhận đã thu tiền'}</Button></>}>
+                <form id="reception-process-payment" onSubmit={handleProcessPayment} className={styles.modalForm}>
+                    <div className={styles.paymentSummary}><div><strong>Bệnh nhân:</strong> {paymentInvoice.patientName} ({paymentInvoice.patientPhone})</div><div className={styles.paymentTotal}><strong>Tổng số tiền cần thu:</strong>{' '}<span className={styles.amount}>{formatCurrency(paymentInvoice.totalAmount)}</span></div></div>
+                    <div className={styles.formField}><label className={styles.formLabel}>Phương thức thanh toán *</label><Select className={styles.paymentSelect} value={paymentMethod} onChange={value => setPaymentMethod(value)} options={[{value:PaymentMethod.Cash,label:'Tiền mặt tại quầy (Cash)'},{value:PaymentMethod.ManualBankTransfer,label:'Chuyển khoản trực tiếp (ManualBankTransfer)'}]} /></div>
+                    <div className={styles.formField}><label className={styles.formLabel}>Số tiền khách thanh toán (VNĐ) *</label><Input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} required min="0" /><span className={styles.fieldHint}>Hệ thống yêu cầu thu đúng toàn bộ giá trị hóa đơn ({formatCurrency(paymentInvoice.totalAmount)}).</span></div>
+                    <div className={styles.formField}><label className={styles.formLabel}>Mã giao dịch / Mã tham chiếu ngân hàng</label><Input type="text" placeholder={paymentMethod === PaymentMethod.ManualBankTransfer ? 'Ví dụ: FT26090612345' : 'Tùy chọn'} value={paymentRefCode} onChange={e => setPaymentRefCode(e.target.value)} maxLength={100} /></div>
+                    <div className={styles.formField}><label className={styles.formLabel}>Ghi chú thu tiền</label><Input.TextArea rows={2} placeholder="Ghi chú thêm nếu có..." value={paymentNote} onChange={e => setPaymentNote(e.target.value)} maxLength={500} /></div>
+                </form>
+            </Modal>}
+            {cancelModalOpen && cancelInvoiceTarget && <Modal open width={520} className={styles.formModal} onCancel={() => !cancellingInvoice && setCancelModalOpen(false)} closable={{disabled:cancellingInvoice}} title={<span className={styles.cancelTitle}>Hủy hóa đơn {cancelInvoiceTarget.invoiceCode}</span>} footer={<><Button disabled={cancellingInvoice} onClick={() => setCancelModalOpen(false)}>Quay lại</Button><Button type="primary" danger htmlType="submit" form="reception-cancel-invoice" disabled={cancellingInvoice || !cancelReason.trim()}>{cancellingInvoice ? 'Đang hủy...' : 'Xác nhận hủy hóa đơn'}</Button></>}>
+                <form id="reception-cancel-invoice" onSubmit={handleCancelInvoice} className={styles.modalForm}><div className={styles.cancelWarning}><strong>Cảnh báo:</strong> Việc hủy hóa đơn là vĩnh viễn và không thể hoàn tác. Hóa đơn đã hủy sẽ không thể thu tiền.</div><div className={styles.formField}><label className={styles.formLabel}>Lý do hủy hóa đơn *</label><Input.TextArea rows={3} placeholder="Nhập chi tiết lý do hủy (ví dụ: bệnh nhân đổi ý, sai thông tin...)" value={cancelReason} onChange={e => setCancelReason(e.target.value)} required maxLength={500} /></div></form>
+            </Modal>}
+            <InvoiceReceiptModal isOpen={detailModalOpen} onClose={() => setDetailModalOpen(false)} invoice={selectedInvoice} loading={detailLoading} />
         </div>
     );
 };

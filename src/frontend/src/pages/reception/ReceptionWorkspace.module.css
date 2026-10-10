@@ -1,4 +1,5 @@
-.workspace { display: flex; flex-direction: column; gap: var(--cc-space-md); padding-bottom: var(--cc-space-xl); min-width: 0; }
+.workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; gap: var(--cc-space-md); padding-bottom: var(--cc-space-xl); min-width: 0; }
+.workspaceHeader, .facilityNotice, .metricGrid, .searchCard { grid-column: 1 / -1; }
 .workspaceHeader, .searchCard, .worklistCard, .actionCard, .intakeCard { min-width: 0; }
 .workspaceHeader > :global(.ant-card-body), .searchCard > :global(.ant-card-body), .actionCard > :global(.ant-card-body), .intakeCard > :global(.ant-card-body) { padding: var(--cc-space-lg); }
 .primaryIcon { color: var(--cc-color-primary); flex-shrink: 0; }
@@ -42,7 +43,7 @@
 .detailLink:hover { color: var(--cc-color-primary); border-color: var(--cc-color-primary); }
 .queuePagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--cc-space-sm); padding: var(--cc-space-md); color: var(--cc-color-text-secondary); font-size: 0.85rem; border-top: 1px solid var(--cc-color-border); }
 .paginationButtons { display: flex; flex-wrap: wrap; gap: var(--cc-space-xs); }
-.actionPanel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cc-space-md); margin-top: var(--cc-space-xs); }
+.actionPanel { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--cc-space-md); min-width: 0; }
 .intakeCard { border-top: 4px solid var(--cc-color-primary); }
 .actionCardHeader { display: flex; align-items: center; gap: var(--cc-space-xs); margin-bottom: var(--cc-space-sm); }
 .actionCardTitle { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--cc-color-text-dark); }
@@ -55,7 +56,7 @@
 .actionLink:hover { color: var(--cc-color-primary); border-color: var(--cc-color-primary); }
 .intakeLink svg, .actionLink svg { flex-shrink: 0; }
 .unbilledCount { margin-left: auto; padding: var(--cc-space-xxs) var(--cc-space-xs); background: var(--cc-color-warning-bg); color: var(--cc-color-warning); border-radius: var(--cc-radius-full); font-size: 0.75rem; }
-@media (max-width: 1023px) { .metricGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1023px) { .workspace { grid-template-columns: minmax(0, 1fr); } .metricGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 767px) {
     .metricGrid, .actionPanel { grid-template-columns: minmax(0, 1fr); }
     .workspaceHeader > :global(.ant-card-body), .searchCard > :global(.ant-card-body), .actionCard > :global(.ant-card-body), .intakeCard > :global(.ant-card-body) { padding: var(--cc-space-md); }

@@ -1,0 +1,28 @@
+.page { display: flex; flex-direction: column; gap: var(--cc-space-lg); min-width: 0; }
+.primaryIcon, .appointmentCode { color: var(--cc-color-primary); }
+.appointmentCode { font-weight: 600; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cc-space-md); padding: var(--cc-space-md); background: var(--cc-color-bg-container); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-lg); }
+.filterLabel { display: flex; align-items: center; gap: var(--cc-space-xs); color: var(--cc-color-text-secondary); }
+.filterSelect { width: 200px; max-width: 100%; }
+.tableScroll { overflow-x: auto; min-width: 0; }
+.tableScroll :global(.ant-table) { min-width: 850px; }
+.secondaryText { color: var(--cc-color-text-secondary); font-size: 0.85rem; }
+.requestDetail { margin-top: var(--cc-space-xxs); }
+.requestReason { margin-top: var(--cc-space-xxs); max-width: 250px; overflow-wrap: anywhere; color: var(--cc-color-text-secondary); }
+.pagination, .resolvedFooter { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); }
+.paginationActions { display: flex; gap: var(--cc-space-xs); }
+.detailModal :global(.ant-modal-body) { max-height: 65vh; overflow-y: auto; }
+.detailModal :global(.ant-modal-footer) { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--cc-space-xs); }
+.detailModal :global(.ant-modal-footer > .ant-btn) { margin: 0; height: auto; min-height: var(--cc-control-height); white-space: normal; }
+.resolvedFooter { width: 100%; }
+.appointmentPanel { padding: var(--cc-space-md); margin-bottom: var(--cc-space-lg); display: flex; flex-direction: column; gap: var(--cc-space-xs); border-radius: var(--cc-radius-md); background: var(--cc-color-bg-subtle); overflow-wrap: anywhere; }
+.sectionTitle { display: block; font-weight: 600; color: var(--cc-color-text-dark); margin-bottom: var(--cc-space-xs); }
+.divider { border: 0; border-top: 1px dashed var(--cc-color-border); margin: var(--cc-space-xs) 0; }
+.detailSection { margin-bottom: var(--cc-space-md); }
+.reasonPanel { padding: var(--cc-space-sm); background: var(--cc-color-bg-subtle); border-radius: var(--cc-radius-md); border-inline-start: 3px solid var(--cc-color-primary); overflow-wrap: anywhere; }
+.slotComparison { display: flex; align-items: center; gap: var(--cc-space-md); padding: var(--cc-space-md); margin-bottom: var(--cc-space-lg); background: var(--cc-color-info-bg); border: 1px solid var(--cc-color-info); border-radius: var(--cc-radius-md); }
+.slotInfo { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.slotLabel { font-weight: 600; color: var(--cc-color-info); margin-bottom: var(--cc-space-xxs); }
+.requestedSlot { color: var(--cc-color-primary); font-weight: 600; }
+.actionNote { resize: none; }
+@media (max-width: 767px) { .filterSelect { width: 100%; } .slotComparison { flex-direction: column; align-items: stretch; } }
