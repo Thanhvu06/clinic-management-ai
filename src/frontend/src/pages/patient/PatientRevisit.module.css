@@ -1,0 +1,6 @@
+.page { width: 100%; max-width: 1000px; margin: 0 auto; }
+.content, .history { display: flex; flex-direction: column; gap: var(--cc-space-md); }
+.actions { display: flex; justify-content: flex-end; gap: var(--cc-space-sm); flex-wrap: wrap; }
+.history { margin-top: var(--cc-space-xl); }
+.history h3, .history p { margin: 0; }
+.history p + p { margin-top: var(--cc-space-xs); }

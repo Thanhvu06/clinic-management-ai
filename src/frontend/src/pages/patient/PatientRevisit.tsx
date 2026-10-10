@@ -1,249 +1,99 @@
-import { formatDisplayDate } from '../../utils/formatters';
-import React, { useState, useEffect } from "react";
-import axiosClient from "../../api/axiosClient";
-import type { ApiResponse } from "../../types";
-import { CalendarDays, Stethoscope, CheckCircle, XCircle, AlertCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { AppModal } from "../../components/AppModal";
-import { useDialog } from "../../contexts/DialogContext";
-import { Breadcrumb } from "../../components/Breadcrumb";
-import { buildRevisitBookingUrl } from "../../utils/revisitBookingHelper";
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, Button, Card, Col, Descriptions, Form, Input, Modal, Row } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import axiosClient from '../../api/axiosClient';
+import type { ApiResponse } from '../../types';
+import { useDialog } from '../../contexts/DialogContext';
+import { Breadcrumb } from '../../components/Breadcrumb';
+import { PageHeader } from '../../components/common/PageHeader';
+import { StatusBadge } from '../../components/common/StatusBadge';
+import { EmptyState } from '../../components/common/EmptyState';
+import { LoadingState } from '../../components/common/LoadingState';
+import { InlineError } from '../../components/common/InlineError';
+import { buildRevisitBookingUrl } from '../../utils/revisitBookingHelper';
+import { formatDateOnly } from '../../utils/formatters';
+import styles from './PatientRevisit.module.css';
 
 interface RevisitRequestView {
-    id: number;
-    appointmentId: number;
-    doctorId: number;
-    specialtyId: number;
-    suggestedDate: string;
-    note?: string;
-    status: string;
-    newAppointmentId?: number | null;
-    doctorName: string;
-    specialtyName: string;
+    id: number; appointmentId: number; doctorId: number; specialtyId: number; suggestedDate: string;
+    note?: string; status: string; newAppointmentId?: number | null; doctorName: string; specialtyName: string;
 }
-
+const statuses: Record<string, { status: string; label: string }> = {
+    PendingPatientResponse: { status: 'Pending', label: 'Chờ phản hồi' },
+    Accepted: { status: 'Approved', label: 'Đã chấp nhận' },
+    Rejected: { status: 'Rejected', label: 'Đã từ chối' },
+    ConvertedToAppointment: { status: 'Confirmed', label: 'Đã đặt lịch' }
+};
 export const PatientRevisit: React.FC = () => {
     const [requests, setRequests] = useState<RevisitRequestView[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [actionLoading, setActionLoading] = useState<number | null>(null);
+    const [rejectModal, setRejectModal] = useState({ isOpen: false, id: null as number | null, reason: '', error: '' });
     const { showAlert } = useDialog();
-    
-    // Reject Modal state
-    const [rejectModal, setRejectModal] = useState<{isOpen: boolean, id: number | null, reason: string, error: string}>({
-        isOpen: false, id: null, reason: "", error: ""
-    });
-
     const navigate = useNavigate();
-
-    const fetchRequests = async () => {
+    const fetchRequests = useCallback(async () => {
+        setLoading(true); setError('');
         try {
-            const res = await axiosClient.get<any, ApiResponse<{ items: RevisitRequestView[] } | RevisitRequestView[]>>("/revisit-requests");
-            if (res.success && res.data) {
-                setRequests(Array.isArray(res.data) ? res.data : (res.data.items || []));
-            }
-        } catch (error) {
-            // Ignore
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchRequests();
+            const res = await axiosClient.get<any, ApiResponse<{ items: RevisitRequestView[] } | RevisitRequestView[]>>('/revisit-requests');
+            if (!res.success) throw new Error(res.message || 'Không thể tải lời mời tái khám.');
+            setRequests(Array.isArray(res.data) ? res.data : res.data?.items || []);
+        } catch (err: any) { setError(err?.message || 'Không thể tải lời mời tái khám.'); }
+        finally { setLoading(false); }
     }, []);
-
+    useEffect(() => { void fetchRequests(); }, [fetchRequests]);
     const handleAccept = (request: RevisitRequestView) => {
         const bookingUrl = buildRevisitBookingUrl(request);
         if (!bookingUrl) {
             showAlert(
-                "Đề xuất tái khám thiếu thông tin bác sĩ hoặc chuyên khoa. Vui lòng tải lại trang.",
-                "Không thể đặt lịch",
-                "error"
+                'Đề xuất tái khám thiếu thông tin bác sĩ hoặc chuyên khoa. Vui lòng tải lại trang.',
+                'Không thể đặt lịch',
+                'error'
             );
             return;
         }
-
         navigate(bookingUrl);
     };
-
-    const openRejectModal = (id: number) => {
-        setRejectModal({ isOpen: true, id, reason: "", error: "" });
-    };
-
     const closeRejectModal = () => {
         if (actionLoading !== null) return;
-        setRejectModal({ isOpen: false, id: null, reason: "", error: "" });
+        setRejectModal({ isOpen: false, id: null, reason: '', error: '' });
     };
-
     const submitReject = async () => {
         const { id, reason } = rejectModal;
-        if (!id) return;
+        if (!id || actionLoading !== null) return;
         if (reason.trim().length < 5) {
-            setRejectModal(p => ({ ...p, error: "Vui lòng nhập lý do (ít nhất 5 ký tự)." }));
-            return;
+            setRejectModal(p => ({ ...p, error: 'Vui lòng nhập lý do (ít nhất 5 ký tự).' })); return;
         }
-
-        setActionLoading(id);
-        setRejectModal(p => ({ ...p, error: "" }));
-
+        setActionLoading(id); setRejectModal(p => ({ ...p, error: '' }));
         try {
             const res = await axiosClient.post<any, ApiResponse<any>>(`/revisit-requests/${id}/reject`, { reason });
-            if (res.success) {
-                closeRejectModal();
-                showAlert('Đã từ chối lời mời tái khám.', 'Thành công', 'success');
-                fetchRequests();
-            } else {
-                setRejectModal(p => ({ ...p, error: res.message || "Không thể từ chối" }));
-            }
-        } catch (err: any) {
-            const msg = err?.response?.data?.message || err?.message || "Có lỗi xảy ra";
-            setRejectModal(p => ({ ...p, error: msg }));
-        } finally {
-            setActionLoading(null);
-        }
+            if (!res.success) throw new Error(res.message || 'Không thể từ chối');
+            setRejectModal({ isOpen: false, id: null, reason: '', error: '' });
+            showAlert('Đã từ chối lời mời tái khám.', 'Thành công', 'success');
+            await fetchRequests();
+        } catch (err: any) { setRejectModal(p => ({ ...p, error: err?.message || 'Có lỗi xảy ra' })); }
+        finally { setActionLoading(null); }
     };
-
-    const pendingRequests = requests.filter(r => r.status === "PendingPatientResponse");
-    const historyRequests = requests.filter(r => r.status !== "PendingPatientResponse");
-
-    if (loading) {
-        return <div style={{ padding: "40px", textAlign: "center", color: "var(--c-muted)" }}>Đang tải lời mời tái khám...</div>;
-    }
-
-    return (
-        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
-            <Breadcrumb items={[
-                { label: 'Trang chủ', path: '/patient' },
-                { label: 'Tái khám' }
-            ]} />
-            <h2 style={{ marginBottom: "24px", color: "var(--c-navy-dark)" }}>Lời mời tái khám</h2>
-
-            {pendingRequests.length === 0 ? (
-                <div className="card-panel" style={{ textAlign: "center", padding: "60px 20px", marginBottom: "32px" }}>
-                    <CheckCircle size={48} color="var(--c-success)" style={{ marginBottom: "16px", opacity: 0.8 }} />
-                    <h3 style={{ margin: "0 0 8px 0", color: "var(--c-navy-dark)" }}>Không có lời mời mới</h3>
-                    <p style={{ margin: 0, color: "var(--c-text)" }}>Sức khỏe của bạn đang rất tốt, hãy duy trì nhé!</p>
+    const pending = requests.filter(r => r.status === 'PendingPatientResponse');
+    const history = requests.filter(r => r.status !== 'PendingPatientResponse');
+    const badge = (status: string) => <StatusBadge {...(statuses[status] || { status: 'Unknown', label: 'Chưa xác định' })} />;
+    const busy = actionLoading !== null;
+    return <div className={styles.page}>
+        <Breadcrumb items={[{ label: 'Trang chủ', path: '/patient' }, { label: 'Tái khám' }]} />
+        <PageHeader title="Lời mời tái khám" />
+        {loading ? <LoadingState message="Đang tải lời mời tái khám..." /> : error ? <InlineError message={error} onRetry={fetchRequests} /> : <>
+            {pending.length === 0 ? <EmptyState title="Không có lời mời mới" description="Sức khỏe của bạn đang rất tốt, hãy duy trì nhé!" /> : <Row gutter={[16, 16]}>{pending.map(r => <Col key={r.id} xs={24} md={12}><Card title="Bác sĩ yêu cầu tái khám" extra={badge(r.status)}>
+                <div className={styles.content}><Descriptions column={1} items={[{ key: 'date', label: 'Ngày gợi ý', children: formatDateOnly(r.suggestedDate) }, { key: 'doctor', label: 'Bác sĩ phụ trách', children: r.doctorName || '...' }]} />
+                    {r.note && <Alert type="info" title="Lời nhắn từ bác sĩ" description={`"${r.note}"`} />}
+                    <div className={styles.actions}><Button danger onClick={() => setRejectModal({ isOpen: true, id: r.id, reason: '', error: '' })} disabled={busy}>Từ chối</Button><Button type="primary" onClick={() => handleAccept(r)} disabled={busy}>Đặt lịch ngay</Button></div>
                 </div>
-            ) : (
-                <div style={{ display: "grid", gap: "20px", marginBottom: "40px" }}>
-                    {pendingRequests.map(r => (
-                        <div key={r.id} className="card-panel" style={{ padding: "0", border: "1px solid var(--c-primary)", overflow: "hidden" }}>
-                            <div style={{ backgroundColor: "#EFF6FF", padding: "16px 20px", borderBottom: "1px solid #BFDBFE", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--c-primary-dark)", fontWeight: 600 }}>
-                                    <AlertCircle size={20} />
-                                    Bác sĩ yêu cầu tái khám
-                                </div>
-                                <span className="badge badge-warning">Chờ phản hồi</span>
-                            </div>
-
-                            <div style={{ padding: "20px" }}>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
-                                    <div>
-                                        <p style={{ margin: "0 0 4px 0", color: "var(--c-muted)", fontSize: "0.9rem" }}>Ngày gợi ý</p>
-                                        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 500 }}>
-                                            <CalendarDays size={18} color="var(--c-primary)" />
-                                            {formatDisplayDate(r.suggestedDate)}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p style={{ margin: "0 0 4px 0", color: "var(--c-muted)", fontSize: "0.9rem" }}>Bác sĩ phụ trách</p>
-                                        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 500 }}>
-                                            <Stethoscope size={18} color="var(--c-primary)" />
-                                            {r.doctorName || "..."}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div style={{ backgroundColor: "var(--c-bg)", padding: "12px 16px", borderRadius: "8px", borderLeft: "4px solid var(--c-primary)", marginBottom: "24px" }}>
-                                    <p style={{ margin: "0 0 4px 0", fontSize: "0.85rem", color: "var(--c-muted)", fontWeight: 600, textTransform: "uppercase" }}>Lời nhắn từ bác sĩ</p>
-                                    <p style={{ margin: 0, fontStyle: "italic" }}>"{r.note}"</p>
-                                </div>
-
-                                <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-                                    <button
-                                        className="btn-danger"
-                                        onClick={() => openRejectModal(r.id)}
-                                        disabled={actionLoading === r.id}
-                                    >
-                                        <XCircle size={18} /> Từ chối
-                                    </button>
-                                    <button
-                                        className="btn-primary"
-                                        onClick={() => handleAccept(r)}
-                                        disabled={actionLoading === r.id}
-                                    >
-                                        <CheckCircle size={18} /> Đặt lịch ngay
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {historyRequests.length > 0 && (
-                <div>
-                    <h3 style={{ marginBottom: "16px", color: "var(--c-navy-dark)" }}>Lịch sử tái khám</h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                        {historyRequests.map(r => (
-                            <div key={r.id} className="card-panel" style={{ padding: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <div>
-                                    <p style={{ margin: "0 0 8px 0", fontWeight: 500 }}>Ngày hẹn: {formatDisplayDate(r.suggestedDate)}</p>
-                                    <p style={{ margin: "0 0 4px 0", fontSize: "0.9rem", color: "var(--c-text)" }}>Bác sĩ: <strong>{r.doctorName}</strong></p>
-                                    <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--c-muted)" }}>Lý do: {r.note}</p>
-                                </div>
-                                <div>
-                                    {r.status === "PatientRejected" ? (
-                                        <span className="badge badge-danger">Đã từ chối</span>
-                                    ) : r.status === "Accepted" ? (
-                                        <span className="badge badge-success">Đã chấp nhận</span>
-                                    ) : (
-                                        <span className="badge badge-muted">{r.status}</span>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            <AppModal
-                isOpen={rejectModal.isOpen}
-                onClose={closeRejectModal}
-                title="Từ chối tái khám"
-                actions={
-                    <>
-                        <button type="button" className="btn-secondary" onClick={closeRejectModal} disabled={actionLoading !== null}>
-                            Đóng
-                        </button>
-                        <button type="button" className="btn-danger" onClick={submitReject} disabled={actionLoading !== null}>
-                            {actionLoading !== null ? "Đang xử lý..." : "Xác nhận từ chối"}
-                        </button>
-                    </>
-                }
-            >
-                <div style={{ marginBottom: "16px", color: "var(--c-text-dark)" }}>
-                    Xin hãy cho chúng tôi biết lý do bạn không thể tham gia tái khám đợt này.
-                </div>
-                <label style={{ display: "block", marginBottom: "8px", fontWeight: 500, color: "var(--c-text-dark)" }}>
-                    Lý do từ chối (*)
-                </label>
-                <textarea
-                    className="form-input"
-                    rows={3}
-                    placeholder="Vui lòng nhập lý do (ví dụ: Đã khỏe lại, Bận công tác...)"
-                    value={rejectModal.reason}
-                    onChange={(e) => setRejectModal(p => ({ ...p, reason: e.target.value }))}
-                    disabled={actionLoading !== null}
-                    style={{ resize: "none" }}
-                />
-                {rejectModal.error && (
-                    <p style={{ color: "var(--c-danger)", fontSize: "0.85rem", marginTop: "8px", marginBottom: 0 }}>
-                        {rejectModal.error}
-                    </p>
-                )}
-            </AppModal>
-
-        </div>
-    );
+            </Card></Col>)}</Row>}
+            {history.length > 0 && <section className={styles.history}><h3>Lịch sử tái khám</h3>{history.map(r => <Card key={r.id} size="small" extra={badge(r.status)}><p>Ngày hẹn: {formatDateOnly(r.suggestedDate)}</p><p>Bác sĩ: <strong>{r.doctorName}</strong></p>{r.note && <p>Lý do: {r.note}</p>}</Card>)}</section>}
+        </>}
+        <Modal open={rejectModal.isOpen} title="Từ chối tái khám" onCancel={closeRejectModal} maskClosable={!busy} closable={!busy} keyboard={!busy} footer={<div className={styles.actions}><Button onClick={closeRejectModal} disabled={busy}>Đóng</Button><Button danger onClick={submitReject} disabled={busy}>{busy ? 'Đang xử lý...' : 'Xác nhận từ chối'}</Button></div>}>
+            <p>Xin hãy cho chúng tôi biết lý do bạn không thể tham gia tái khám đợt này.</p>
+            <Form layout="vertical"><Form.Item label="Lý do từ chối (*)" htmlFor="revisit-reason"><Input.TextArea id="revisit-reason" rows={3} placeholder="Vui lòng nhập lý do (ví dụ: Đã khỏe lại, Bận công tác...)" value={rejectModal.reason} onChange={e => setRejectModal(p => ({ ...p, reason: e.target.value }))} disabled={busy} /></Form.Item></Form>
+            {rejectModal.error && <Alert type="error" showIcon title={rejectModal.error} />}
+        </Modal>
+    </div>;
 };

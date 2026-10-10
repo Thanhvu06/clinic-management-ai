@@ -1,0 +1,9 @@
+.page { width: 100%; max-width: 1040px; margin: var(--cc-space-xl) auto; padding: 0 var(--cc-space-md); display: flex; flex-direction: column; gap: var(--cc-space-md); }
+.heading { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); }
+.price { display: flex; flex-direction: column; text-align: right; color: var(--cc-color-primary); }
+.price span { color: var(--cc-color-text-secondary); }
+.content { display: flex; flex-direction: column; gap: var(--cc-space-md); }
+.content p { margin: 0; }
+.actions, .modalActions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-sm); }
+.actions { justify-content: space-between; padding-top: var(--cc-space-sm); border-top: 1px solid var(--cc-color-border-light); }
+.modalActions { justify-content: flex-end; }
