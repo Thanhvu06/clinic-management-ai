@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Button, Card, Input, Select } from 'antd';
+import { PageHeader, StatCard, DataTable, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
+import type { DataTableColumn } from '../../components/common/DataTable';
 import {
     Users, UserPlus, Search, Clock, Calendar, CheckCircle2,
     Printer, RefreshCw, CreditCard, Package,
@@ -274,500 +277,90 @@ export const ReceptionWorkspace: React.FC = () => {
 
     const renderStatusBadge = (status: string) => {
         switch (status) {
-            case 'Pending':
-                return <span className="badge badge-warning">Chờ xác nhận</span>;
-            case 'Confirmed':
-                return <span className="badge badge-info">Đã xác nhận (Chờ tiếp nhận)</span>;
+            case 'Pending': return <StatusBadge status={status} label="Chờ xác nhận" />;
+            case 'Confirmed': return <StatusBadge status={status} label="Đã xác nhận (Chờ tiếp nhận)" />;
             case 'CheckedIn':
-            case 'InProgress':
-                return <span className="badge badge-primary">Đang khám</span>;
-            case 'Completed':
-                return <span className="badge badge-success">Đã hoàn thành</span>;
-            case 'Cancelled':
-                return <span className="badge badge-danger">Đã hủy</span>;
-            default:
-                return <span className="badge">{status}</span>;
+            case 'InProgress': return <StatusBadge status="inconsultation" label="Đang khám" />;
+            case 'Completed': return <StatusBadge status={status} label="Đã hoàn thành" />;
+            case 'Cancelled': return <StatusBadge status={status} label="Đã hủy" />;
+            default: return <StatusBadge status={status} label="Chưa rõ" />;
         }
     };
-
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
-
+    const queueColumns: DataTableColumn<AppointmentItem>[] = [
+        { header: 'Mã / Giờ hẹn', accessor: item => <><span className={styles.appointmentCode}>{item.appointmentCode}</span><div className={styles.appointmentTime}>{item.startTime} - {item.endTime}</div></> },
+        { header: 'Người bệnh', accessor: item => <><div className={styles.patientName}>{item.patientName}</div><div className={styles.patientIdentifiers}>{item.medicalRecordNumber ? `MRN: ${item.medicalRecordNumber}` : ''}{item.patientPhone ? ` • ${item.patientPhone}` : ''}</div></> },
+        { header: 'Chuyên khoa / Bác sĩ', accessor: item => <><div className={styles.specialtyName}>{item.specialtyName}</div><div className={styles.doctorName}>BS: {item.doctorName || 'Chưa phân công'}</div></> },
+        { header: 'Lý do khám', accessor: item => item.reason || '-', className: styles.visitReason },
+        { header: 'Trạng thái', accessor: item => renderStatusBadge(item.status) },
+        { header: 'Thao tác', align: 'right', className: styles.queueActionsCell, accessor: item => (
+            <>
+                {item.status === 'Confirmed' && (
+                    <Button type="primary" htmlType="button" className={styles.checkInButton} style={{ minHeight: '40px' }}
+                        onClick={() => handleFastCheckIn(item)}
+                        disabled={actionLoadingId === item.id || item.appointmentDate !== toLocalDateString()}
+                        title={item.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${item.appointmentDate.split('-').reverse().join('/')}` : 'Tiếp nhận ngay và cấp số thứ tự vào hàng đợi bác sĩ'}>
+                        {actionLoadingId === item.id ? <RefreshCw className="spin" size={13} /> : <CheckCircle2 size={13} />} Tiếp nhận
+                    </Button>
+                )}
+                <Button htmlType="button" onClick={() => selectAppointmentForCopilot(item)} title="Chọn đúng lịch hẹn này cho Copilot">Chọn Copilot</Button>
+                {item.patientVisitId && <Button htmlType="button" onClick={() => handleViewTicket(item.patientVisitId!)} title="Xem lại phiếu khám và in vé số thứ tự"><Printer size={13} /> Vé khám</Button>}
+                <Link to={`/reception/appointments`} className={styles.detailLink} title="Xem chi tiết lịch hẹn"><Eye size={13} /></Link>
+            </>
+        ) }
+    ];
     return (
-        <div className={styles.container}>
-            {/* 1. Top Bar */}
-            <div className={styles.topBar}>
-                <div className={styles.topBarLeft}>
-                    <div className={styles.workspaceTitle}>
-                        <Building2 size={24} color="var(--c-primary)" />
-                        <h1>Bàn Làm Việc Lễ Tân</h1>
-                    </div>
-
-                    <div className={styles.facilitySelectWrapper}>
-                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Cơ sở trực:</span>
-                        {facilityLoading ? (
-                            <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Đang tải cơ sở...</span>
-                        ) : facilityError ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontSize: '0.82rem', color: 'var(--c-danger, #ef4444)' }}>{facilityError}</span>
-                                <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    style={{ padding: '2px 8px', fontSize: '0.75rem' }}
-                                    onClick={loadFacilities}
-                                >
-                                    Thử lại
-                                </button>
-                            </div>
-                        ) : facilities.length === 0 ? (
-                            <span style={{ fontSize: '0.85rem', color: '#b45309', background: '#fef3c7', padding: '3px 10px', borderRadius: '6px', fontWeight: 500 }}>
-                                Chưa được phân công cơ sở trực
-                            </span>
-                        ) : facilities.length === 1 ? (
-                            <span style={{ fontWeight: 600, color: 'var(--c-primary, #0284c7)', padding: '3px 10px', background: '#e0f2fe', borderRadius: '6px', fontSize: '0.85rem' }}>
-                                {facilities[0].name} ({facilities[0].code})
-                            </span>
-                        ) : (
-                            <select
-                                className={styles.facilitySelect}
-                                value={selectedFacilityId || ''}
-                                onChange={(e) => {
-                                    setWorklistError(null);
-                                    setIsStale(false);
-                                    setWorklistItems([]);
-                                    setPage(1);
-                                    setSelectedFacilityId(Number(e.target.value));
-                                }}
-                            >
-                                {facilities.map((f) => (
-                                    <option key={f.id} value={f.id}>
-                                        {f.name} ({f.code})
-                                    </option>
-                                ))}
-                            </select>
-                        )}
-                    </div>
+        <div className={styles.workspace}>
+            <Card className={styles.workspaceHeader}>
+                <PageHeader title="Bàn Làm Việc Lễ Tân" badge={<Building2 size={24} className={styles.primaryIcon} />}
+                    actions={<><div className={styles.liveClock}><Clock size={16} /><span>{currentTime}</span></div><Button htmlType="button" onClick={handleRefreshAll}><RefreshCw size={14} className={loading ? 'spin' : ''} /> Làm mới</Button></>} />
+                <div className={styles.facilityPicker}>
+                    <span className={styles.facilityLabel}>Cơ sở trực:</span>
+                    {facilityLoading ? <LoadingState message="Đang tải cơ sở..." height="40px" /> : facilityError ? <InlineError title="" message={facilityError} onRetry={loadFacilities} /> : facilities.length === 0 ? (
+                        <span className={styles.unassignedFacility}>Chưa được phân công cơ sở trực</span>
+                    ) : facilities.length === 1 ? <span className={styles.assignedFacility}>{facilities[0].name} ({facilities[0].code})</span> : (
+                        <Select className={styles.facilitySelect} value={selectedFacilityId || undefined}
+                            onChange={(value) => { setWorklistError(null); setIsStale(false); setWorklistItems([]); setPage(1); setSelectedFacilityId(Number(value)); }}
+                            options={facilities.map(f => ({ value: f.id, label: `${f.name} (${f.code})` }))} />
+                    )}
                 </div>
-
-                <div className={styles.topBarRight}>
-                    <div className={styles.liveClock}>
-                        <Clock size={16} />
-                        <span>{currentTime}</span>
-                    </div>
-
-                    <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={handleRefreshAll}
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                    >
-                        <RefreshCw size={14} className={loading ? 'spin' : ''} /> Làm mới
-                    </button>
-                </div>
-            </div>
-
-            {/* Unassigned Facility Banner */}
-            {!facilityLoading && !facilityError && facilities.length === 0 && (
-                <div style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#92400e', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <AlertTriangle size={20} color="#d97706" style={{ flexShrink: 0 }} />
-                    <div style={{ fontSize: '0.9rem' }}>
-                        <strong>Tài khoản chưa được phân công cơ sở trực:</strong> Bạn chưa có phân công làm việc tại cơ sở y tế nào. Vui lòng liên hệ quản trị viên hệ thống để được gán cơ sở trước khi thực hiện tiếp nhận và quản lý hàng đợi.
-                    </div>
-                </div>
-            )}
-
-            {/* 2. Key Operational Metrics Cards */}
+            </Card>
+            {!facilityLoading && !facilityError && facilities.length === 0 && <div className={styles.facilityNotice}><AlertTriangle size={20} className={styles.noticeIcon} /><div><strong>Tài khoản chưa được phân công cơ sở trực:</strong> Bạn chưa có phân công làm việc tại cơ sở y tế nào. Vui lòng liên hệ quản trị viên hệ thống để được gán cơ sở trước khi thực hiện tiếp nhận và quản lý hàng đợi.</div></div>}
             <div className={styles.metricGrid}>
-                <div className={styles.metricCard}>
-                    <div className={styles.metricIcon} style={{ background: '#e0f2fe', color: '#0284c7' }}>
-                        <Calendar size={24} />
-                    </div>
-                    <div className={styles.metricInfo}>
-                        <span className={styles.metricLabel}>Lịch khám hôm nay</span>
-                        <span className={styles.metricValue}>{stats?.appointmentsToday ?? 0}</span>
-                        <span className={styles.metricSub}>Lịch hẹn đã đặt trong ngày</span>
-                    </div>
-                </div>
-
-                <div className={styles.metricCard}>
-                    <div className={styles.metricIcon} style={{ background: '#fef3c7', color: '#d97706' }}>
-                        <Clock size={24} />
-                    </div>
-                    <div className={styles.metricInfo}>
-                        <span className={styles.metricLabel}>Chờ xác nhận</span>
-                        <span className={styles.metricValue}>{stats?.pendingAppointmentsToday ?? 0}</span>
-                        <span className={styles.metricSub}>Cần lễ tân duyệt hoặc gọi xác nhận</span>
-                    </div>
-                </div>
-
-                <div className={styles.metricCard}>
-                    <div className={styles.metricIcon} style={{ background: '#e0e7ff', color: '#4338ca' }}>
-                        <Users size={24} />
-                    </div>
-                    <div className={styles.metricInfo}>
-                        <span className={styles.metricLabel}>Chờ tiếp đón / Đang khám</span>
-                        <span className={styles.metricValue}>{stats?.confirmedAppointmentsToday ?? 0}</span>
-                        <span className={styles.metricSub}>Sẵn sàng tiếp nhận vào hàng đợi</span>
-                    </div>
-                </div>
-
-                <div className={styles.metricCard}>
-                    <div className={styles.metricIcon} style={{ background: '#dcfce7', color: '#15803d' }}>
-                        <CheckCircle2 size={24} />
-                    </div>
-                    <div className={styles.metricInfo}>
-                        <span className={styles.metricLabel}>Đã khám xong hôm nay</span>
-                        <span className={styles.metricValue}>{stats?.completedAppointmentsToday ?? 0}</span>
-                        <span className={styles.metricSub}>Đã hoàn thành lượt khám</span>
-                    </div>
-                </div>
+                <StatCard title="Lịch khám hôm nay" value={stats?.appointmentsToday ?? 0} subtitle="Lịch hẹn đã đặt trong ngày" icon={<Calendar size={24} />} color="info" />
+                <StatCard title="Chờ xác nhận" value={stats?.pendingAppointmentsToday ?? 0} subtitle="Cần lễ tân duyệt hoặc gọi xác nhận" icon={<Clock size={24} />} color="warning" />
+                <StatCard title="Chờ tiếp đón / Đang khám" value={stats?.confirmedAppointmentsToday ?? 0} subtitle="Sẵn sàng tiếp nhận vào hàng đợi" icon={<Users size={24} />} color="primary" />
+                <StatCard title="Đã khám xong hôm nay" value={stats?.completedAppointmentsToday ?? 0} subtitle="Đã hoàn thành lượt khám" icon={<CheckCircle2 size={24} />} color="success" />
             </div>
-
-            {/* 3. Search Bar Across All Fields */}
-            <div className={styles.searchCard}>
+            <Card className={styles.searchCard}>
                 <form onSubmit={handleSearchSubmit} className={styles.searchForm}>
-                    <div className={styles.searchBox}>
-                        <Search size={18} className={styles.searchIcon} />
-                        <input
-                            type="text"
-                            className={`form-input ${styles.searchInput}`}
-                            placeholder="Tìm kiếm nhanh: Mã bệnh nhân (MRN), Số CCCD, Mã lịch hẹn, Tên người bệnh, Số điện thoại..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    <button type="submit" className="btn-primary" style={{ height: '44px', padding: '0 20px' }}>
-                        <Search size={16} /> Tra cứu
-                    </button>
-                    {searchTerm && (
-                        <button
-                            type="button"
-                            className="btn-secondary"
-                            style={{ height: '44px' }}
-                            onClick={() => {
-                                setSearchTerm('');
-                                setPage(1);
-                                fetchWorklist();
-                            }}
-                        >
-                            Xóa tìm kiếm
-                        </button>
-                    )}
+                    <Input className={styles.searchInput} prefix={<Search size={18} />} placeholder="Tìm kiếm nhanh: Mã bệnh nhân (MRN), Số CCCD, Mã lịch hẹn, Tên người bệnh, Số điện thoại..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <Button type="primary" htmlType="submit"><Search size={16} /> Tra cứu</Button>
+                    {searchTerm && <Button htmlType="button" onClick={() => { setSearchTerm(''); setPage(1); fetchWorklist(); }}>Xóa tìm kiếm</Button>}
                 </form>
-            </div>
-
-            {/* 4. Main 2/3 and 1/3 Work Area */}
-            <div className={styles.mainLayout}>
-                {/* 2/3 Worklist Table */}
-                <div className={styles.worklistCard}>
-                    <div className={styles.tabHeader}>
-                        <button
-                            type="button"
-                            className={`${styles.tabButton} ${activeTab === 'today' ? styles.tabButtonActive : ''}`}
-                            onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('today'); setPage(1); }}
-                        >
-                            <span>Hôm nay (Ưu tiên tiếp nhận)</span>
-                            <span className={`${styles.tabBadge} ${activeTab === 'today' ? styles.tabBadgeActive : ''}`}>
-                                {activeTab === 'today' ? totalItems : (stats?.appointmentsToday ?? 0)}
-                            </span>
-                        </button>
-                        <button
-                            type="button"
-                            className={`${styles.tabButton} ${activeTab === 'pending' ? styles.tabButtonActive : ''}`}
-                            onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('pending'); setPage(1); }}
-                        >
-                            <span>Chờ xác nhận</span>
-                            <span className={`${styles.tabBadge} ${activeTab === 'pending' ? styles.tabBadgeActive : ''}`}>
-                                {stats?.pendingAppointmentsToday ?? 0}
-                            </span>
-                        </button>
-                        <button
-                            type="button"
-                            className={`${styles.tabButton} ${activeTab === 'upcoming' ? styles.tabButtonActive : ''}`}
-                            onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('upcoming'); setPage(1); }}
-                        >
-                            <span>Sắp tới</span>
-                        </button>
-                        <button
-                            type="button"
-                            className={`${styles.tabButton} ${activeTab === 'recent' ? styles.tabButtonActive : ''}`}
-                            onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('recent'); setPage(1); }}
-                        >
-                            <span>Gần đây</span>
-                        </button>
-                        <button
-                            type="button"
-                            className={`${styles.tabButton} ${activeTab === 'history' ? styles.tabButtonActive : ''}`}
-                            onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('history'); setPage(1); }}
-                        >
-                            <span>Toàn bộ lịch sử</span>
-                        </button>
+            </Card>
+            <>
+                <section className={styles.worklistCard}>
+                    <div className={styles.worklistTabs}>
+                        <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'today' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('today'); setPage(1); }}><span>Hôm nay (Ưu tiên tiếp nhận)</span><span className={styles.tabCount}>{activeTab === 'today' ? totalItems : (stats?.appointmentsToday ?? 0)}</span></Button>
+                        <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'pending' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('pending'); setPage(1); }}><span>Chờ xác nhận</span><span className={styles.tabCount}>{stats?.pendingAppointmentsToday ?? 0}</span></Button>
+                        <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'upcoming' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('upcoming'); setPage(1); }}><span>Sắp tới</span></Button>
+                        <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'recent' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('recent'); setPage(1); }}><span>Gần đây</span></Button>
+                        <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'history' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('history'); setPage(1); }}><span>Toàn bộ lịch sử</span></Button>
                     </div>
-
-                    {/* Stale Warning Banner */}
-                    {isStale && (
-                        <div style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#92400e', padding: '8px 16px', borderRadius: '6px', margin: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <AlertTriangle size={16} color="#d97706" />
-                                <span>Dữ liệu có thể chưa mới nhất do kết nối mạng trong lần đồng bộ gần nhất. Đang tự động thử lại...</span>
-                            </div>
-                            <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{ padding: '2px 8px', fontSize: '0.75rem' }}
-                                onClick={() => fetchWorklist(false)}
-                            >
-                                Thử lại ngay
-                            </button>
-                        </div>
-                    )}
-
-                    <div className={styles.tableResponsive}>
-                        <table className={styles.table}>
-                            <thead>
-                                <tr>
-                                    <th>Mã / Giờ hẹn</th>
-                                    <th>Người bệnh</th>
-                                    <th>Chuyên khoa / Bác sĩ</th>
-                                    <th>Lý do khám</th>
-                                    <th>Trạng thái</th>
-                                    <th style={{ textAlign: 'right' }}>Thao tác</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loading ? (
-                                    <tr>
-                                        <td colSpan={6} className={styles.emptyState}>
-                                            <RefreshCw className="spin" size={24} style={{ margin: '0 auto 8px' }} />
-                                            <div>Đang tải danh sách hàng đợi tiếp nhận...</div>
-                                        </td>
-                                    </tr>
-                                ) : worklistError ? (
-                                    <tr>
-                                        <td colSpan={6} className={styles.emptyState}>
-                                            <div style={{ color: 'var(--c-danger, #ef4444)', marginBottom: '10px', fontSize: '0.9rem' }}>{worklistError}</div>
-                                            <button
-                                                type="button"
-                                                className="btn-primary"
-                                                style={{ padding: '6px 14px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                                                onClick={() => fetchWorklist(false)}
-                                            >
-                                                <RefreshCw size={14} /> Thử lại
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ) : worklistItems.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={6} className={styles.emptyState}>
-                                            Không có lịch hẹn nào trong mục này.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    worklistItems.map((item) => (
-                                        <tr key={item.id}>
-                                            <td>
-                                                <span className={styles.codeBadge}>{item.appointmentCode}</span>
-                                                <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)', marginTop: '4px' }}>
-                                                    {item.startTime} - {item.endTime}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div style={{ fontWeight: 600, color: 'var(--c-text)' }}>
-                                                    {item.patientName}
-                                                </div>
-                                                <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)' }}>
-                                                    {item.medicalRecordNumber ? `MRN: ${item.medicalRecordNumber}` : ''}
-                                                    {item.patientPhone ? ` • ${item.patientPhone}` : ''}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div style={{ fontWeight: 500, color: 'var(--c-text)' }}>
-                                                    {item.specialtyName}
-                                                </div>
-                                                <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)' }}>
-                                                    BS: {item.doctorName || 'Chưa phân công'}
-                                                </div>
-                                            </td>
-                                            <td style={{ maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {item.reason || '-'}
-                                            </td>
-                                            <td>
-                                                {renderStatusBadge(item.status)}
-                                            </td>
-                                            <td style={{ textAlign: 'right' }}>
-                                                <div className={styles.actionBtnGroup}>
-                                                    {item.status === 'Confirmed' && (
-                                                        <button
-                                                            type="button"
-                                                            className="btn-primary"
-                                                            style={{ padding: '5px 12px', minHeight: '40px', fontSize: '0.82rem' }}
-                                                            onClick={() => handleFastCheckIn(item)}
-                                                            disabled={actionLoadingId === item.id || item.appointmentDate !== toLocalDateString()}
-                                                            title={item.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${item.appointmentDate.split('-').reverse().join('/')}` : 'Tiếp nhận ngay và cấp số thứ tự vào hàng đợi bác sĩ'}
-                                                        >
-                                                            {actionLoadingId === item.id ? (
-                                                                <RefreshCw className="spin" size={13} />
-                                                            ) : (
-                                                                <CheckCircle2 size={13} />
-                                                            )}
-                                                            Tiếp nhận
-                                                        </button>
-                                                    )}
-
-                                                    <button
-                                                        type="button"
-                                                        className="btn-secondary"
-                                                        style={{ padding: '5px 10px', fontSize: '0.82rem' }}
-                                                        onClick={() => selectAppointmentForCopilot(item)}
-                                                        title="Chọn đúng lịch hẹn này cho Copilot"
-                                                    >
-                                                        Chọn Copilot
-                                                    </button>
-
-                                                    {item.patientVisitId && (
-                                                        <button
-                                                            type="button"
-                                                            className="btn-secondary"
-                                                            style={{ padding: '5px 10px', fontSize: '0.82rem' }}
-                                                            onClick={() => handleViewTicket(item.patientVisitId!)}
-                                                            title="Xem lại phiếu khám và in vé số thứ tự"
-                                                        >
-                                                            <Printer size={13} /> Vé khám
-                                                        </button>
-                                                    )}
-
-                                                    <Link
-                                                        to={`/reception/appointments`}
-                                                        className="btn-secondary"
-                                                        style={{ padding: '5px 10px', fontSize: '0.82rem' }}
-                                                        title="Xem chi tiết lịch hẹn"
-                                                    >
-                                                        <Eye size={13} />
-                                                    </Link>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* Pagination */}
-                    {totalItems > pageSize && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderTop: '1px solid var(--c-border)' }}>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>
-                                Hiển thị trang {page} / {totalPages} (Tổng {totalItems} lượt)
-                            </span>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    style={{ padding: '4px 12px', fontSize: '0.85rem' }}
-                                    disabled={page <= 1}
-                                    onClick={() => setPage(p => p - 1)}
-                                >
-                                    Trang trước
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    style={{ padding: '4px 12px', fontSize: '0.85rem' }}
-                                    disabled={page >= totalPages}
-                                    onClick={() => setPage(p => p + 1)}
-                                >
-                                    Trang sau
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* 1/3 Fast Action Panel */}
+                    {isStale && <div className={styles.staleNotice}><div className={styles.noticeMessage}><AlertTriangle size={16} /><span>Dữ liệu có thể chưa mới nhất do kết nối mạng trong lần đồng bộ gần nhất. Đang tự động thử lại...</span></div><Button htmlType="button" size="small" onClick={() => fetchWorklist(false)}>Thử lại ngay</Button></div>}
+                    {loading ? <LoadingState message="Đang tải danh sách hàng đợi tiếp nhận..." /> : worklistError ? <InlineError title="" message={worklistError} onRetry={() => fetchWorklist(false)} /> : worklistItems.length === 0 ? <EmptyState title="Không có lịch hẹn nào trong mục này." /> : <div className={styles.queueTable}><DataTable columns={queueColumns} data={worklistItems} keyExtractor={item => item.id} /></div>}
+                    {totalItems > pageSize && <div className={styles.queuePagination}><span>Hiển thị trang {page} / {totalPages} (Tổng {totalItems} lượt)</span><div className={styles.paginationButtons}><Button htmlType="button" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Trang trước</Button><Button htmlType="button" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
+                </section>
                 <div className={styles.actionPanel}>
-                    {/* Fast Action Card 1: Walk-In / Intake */}
-                    <div className={styles.actionCard} style={{ borderTop: '4px solid #0284c7' }}>
-                        <div className={styles.actionCardHeader}>
-                            <UserPlus size={20} color="#0284c7" />
-                            <h3 className={styles.actionCardTitle}>Tiếp nhận người bệnh</h3>
-                        </div>
-                        <p className={styles.actionCardDesc}>
-                            Quy trình 3 bước chuẩn bệnh viện: Tìm kiếm hồ sơ cũ qua MRN/CCCD/SĐT, chọn bác sĩ & phòng khám, xác nhận in phiếu khám A5/nhiệt.
-                        </p>
-                        <Link to="/reception/walk-in" className={styles.btnPrimaryLarge}>
-                            <UserPlus size={18} /> Tiếp nhận người bệnh mới
-                        </Link>
-                    </div>
-
-                    {/* Fast Action Card 2: MPI Search */}
-                    <div className={styles.actionCard}>
-                        <div className={styles.actionCardHeader}>
-                            <Search size={20} color="#0d9488" />
-                            <h3 className={styles.actionCardTitle}>Tra cứu hồ sơ y bạ (MPI)</h3>
-                        </div>
-                        <p className={styles.actionCardDesc}>
-                            Kiểm tra lịch sử khám, thẻ BHYT, CCCD, thông tin liên lạc và tiền sử dị ứng người bệnh trên toàn hệ thống.
-                        </p>
-                        <button
-                            type="button"
-                            className={styles.btnSecondaryAction}
-                            onClick={() => setMpiModalOpen(true)}
-                        >
-                            <Search size={16} /> Mở tra cứu hồ sơ bệnh nhân
-                        </button>
-                    </div>
-
-                    {/* Fast Action Card 3: Billing & Cashier */}
-                    <div className={styles.actionCard}>
-                        <div className={styles.actionCardHeader}>
-                            <CreditCard size={20} color="#16a34a" />
-                            <h3 className={styles.actionCardTitle}>Hàng đợi viện phí & Thu ngân</h3>
-                            {stats?.unbilledCount !== undefined && stats.unbilledCount > 0 && (
-                                <span className="badge badge-warning" style={{ marginLeft: 'auto', fontSize: '0.75rem' }}>
-                                    {stats.unbilledCount} chờ thu
-                                </span>
-                            )}
-                        </div>
-                        <p className={styles.actionCardDesc}>
-                            Thu tiền công khám, dịch vụ cận lâm sàng và đơn thuốc đã xác nhận mua theo cơ chế khóa chống thu trùng.
-                        </p>
-                        <Link to="/reception/billing" className={styles.btnSecondaryAction}>
-                            <CreditCard size={16} /> Mở thu ngân viện phí
-                        </Link>
-                    </div>
-
-                    {/* Fast Action Card 4: Health Packages */}
-                    <div className={styles.actionCard}>
-                        <div className={styles.actionCardHeader}>
-                            <Package size={20} color="#8b5cf6" />
-                            <h3 className={styles.actionCardTitle}>Gói khám sức khỏe</h3>
-                        </div>
-                        <p className={styles.actionCardDesc}>
-                            Tiếp đón và kích hoạt lượt khám cho người bệnh đăng ký gói khám sức khỏe tổng quát.
-                        </p>
-                        <Link to="/reception/package-registrations" className={styles.btnSecondaryAction}>
-                            <Package size={16} /> Quản lý đăng ký gói khám
-                        </Link>
-                    </div>
+                    <Card className={styles.intakeCard}><div className={styles.actionCardHeader}><UserPlus size={20} className={styles.primaryIcon} /><h3 className={styles.actionCardTitle}>Tiếp nhận người bệnh</h3></div><p className={styles.actionCardDescription}>Quy trình 3 bước chuẩn bệnh viện: Tìm kiếm hồ sơ cũ qua MRN/CCCD/SĐT, chọn bác sĩ & phòng khám, xác nhận in phiếu khám A5/nhiệt.</p><Link to="/reception/walk-in" className={styles.intakeLink}><UserPlus size={18} /> Tiếp nhận người bệnh mới</Link></Card>
+                    <Card className={styles.actionCard}><div className={styles.actionCardHeader}><Search size={20} className={styles.searchActionIcon} /><h3 className={styles.actionCardTitle}>Tra cứu hồ sơ y bạ (MPI)</h3></div><p className={styles.actionCardDescription}>Kiểm tra lịch sử khám, thẻ BHYT, CCCD, thông tin liên lạc và tiền sử dị ứng người bệnh trên toàn hệ thống.</p><Button htmlType="button" block onClick={() => setMpiModalOpen(true)}><Search size={16} /> Mở tra cứu hồ sơ bệnh nhân</Button></Card>
+                    <Card className={styles.actionCard}><div className={styles.actionCardHeader}><CreditCard size={20} className={styles.billingActionIcon} /><h3 className={styles.actionCardTitle}>Hàng đợi viện phí & Thu ngân</h3>{stats?.unbilledCount !== undefined && stats.unbilledCount > 0 && <span className={styles.unbilledCount}>{stats.unbilledCount} chờ thu</span>}</div><p className={styles.actionCardDescription}>Thu tiền công khám, dịch vụ cận lâm sàng và đơn thuốc đã xác nhận mua theo cơ chế khóa chống thu trùng.</p><Link to="/reception/billing" className={styles.actionLink}><CreditCard size={16} /> Mở thu ngân viện phí</Link></Card>
+                    <Card className={styles.actionCard}><div className={styles.actionCardHeader}><Package size={20} className={styles.packageActionIcon} /><h3 className={styles.actionCardTitle}>Gói khám sức khỏe</h3></div><p className={styles.actionCardDescription}>Tiếp đón và kích hoạt lượt khám cho người bệnh đăng ký gói khám sức khỏe tổng quát.</p><Link to="/reception/package-registrations" className={styles.actionLink}><Package size={16} /> Quản lý đăng ký gói khám</Link></Card>
                 </div>
-            </div>
-
-            {/* MPI Patient Search Modal */}
-            <MpiPatientSearchModal
-                isOpen={mpiModalOpen}
-                onClose={() => setMpiModalOpen(false)}
-                onSelectPatient={(patient) => {
-                    setMpiModalOpen(false);
-                    // Navigate to walk-in with pre-selected patient id
-                    navigate(`/reception/walk-in?existingPatientId=${patient.id}`);
-                }}
-            />
-
-            {/* Check-In Ticket Modal */}
-            <CheckInTicketModal
-                isOpen={ticketModalOpen}
-                ticket={currentTicket}
-                onClose={() => setTicketModalOpen(false)}
-            />
+            </>
+            <MpiPatientSearchModal isOpen={mpiModalOpen} onClose={() => setMpiModalOpen(false)} onSelectPatient={(patient) => { setMpiModalOpen(false); navigate(`/reception/walk-in?existingPatientId=${patient.id}`); }} />
+            <CheckInTicketModal isOpen={ticketModalOpen} ticket={currentTicket} onClose={() => setTicketModalOpen(false)} />
         </div>
     );
 };

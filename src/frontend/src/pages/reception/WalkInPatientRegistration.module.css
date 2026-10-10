@@ -1,0 +1,61 @@
+.registration { max-width: 1000px; margin: 0 auto; padding-bottom: var(--cc-space-xl); min-width: 0; }
+.intakeSteps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--cc-space-sm); margin-bottom: var(--cc-space-lg); padding: var(--cc-space-sm); background: var(--cc-color-bg-container); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-lg); box-shadow: var(--cc-shadow-sm); }
+.intakeStep { display: flex; align-items: center; gap: var(--cc-space-xs); padding: var(--cc-space-sm); border-radius: var(--cc-radius-md); background: var(--cc-color-bg-subtle); color: var(--cc-color-text-secondary); font-size: 0.9rem; font-weight: 600; border-left: 4px solid transparent; }
+.activeStep { background: var(--cc-color-primary-light); color: var(--cc-color-primary); border-left-color: var(--cc-color-primary); }
+.stepNumber { width: 26px; height: 26px; border-radius: var(--cc-radius-full); background: var(--cc-color-text-muted); color: var(--cc-color-text-on-dark); display: flex; flex-shrink: 0; align-items: center; justify-content: center; font-size: 0.85rem; }
+.reachedStepNumber { background: var(--cc-color-primary); }
+.stepCard { min-width: 0; }
+.stepCard > :global(.ant-card-body) { padding: var(--cc-space-lg); }
+.patientModeButtons { display: flex; flex-wrap: wrap; gap: var(--cc-space-xs); margin-bottom: var(--cc-space-lg); border-bottom: 1px solid var(--cc-color-border); padding-bottom: var(--cc-space-md); }
+.patientModeButtons :global(.ant-btn) { white-space: normal; height: auto; min-height: var(--cc-control-height); }
+.patientLookupForm { display: flex; flex-wrap: wrap; gap: var(--cc-space-xs); margin-bottom: var(--cc-space-lg); }
+.patientLookupInput { flex: 1; min-width: 0; }
+.selectedPatient { background: var(--cc-color-success-bg); border: 1px solid var(--cc-color-success); border-radius: var(--cc-radius-lg); padding: var(--cc-space-md); margin-bottom: var(--cc-space-lg); }
+.selectedPatientHeader { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: var(--cc-space-sm); }
+.selectedPatientIdentity { display: flex; align-items: center; gap: var(--cc-space-xs); min-width: 0; }
+.selectionIcon { color: var(--cc-color-success); flex-shrink: 0; }
+.selectedPatientName { margin: 0; font-size: 1.15rem; color: var(--cc-color-success); font-weight: 700; }
+.selectedPatientIdentifiers { color: var(--cc-color-success); font-size: 0.85rem; margin-top: var(--cc-space-xxs); overflow-wrap: anywhere; }
+.selectedPatientFacts { border-top: 1px solid var(--cc-color-border); margin-top: var(--cc-space-md); padding-top: var(--cc-space-sm); font-size: 0.85rem; color: var(--cc-color-text); }
+.patientLookupResults { display: flex; flex-direction: column; gap: var(--cc-space-xs); margin-bottom: var(--cc-space-lg); }
+.lookupResultCount { font-size: 0.85rem; color: var(--cc-color-text-secondary); font-weight: 600; }
+.patientLookupResult { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--cc-space-sm); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); padding: var(--cc-space-md); cursor: pointer; background: var(--cc-color-bg-container); transition: border-color 0.15s; }
+.patientLookupResult:hover { border-color: var(--cc-color-primary); }
+.lookupPatientDetails { flex: 1; min-width: 0; }
+.lookupPatientName { font-weight: 600; color: var(--cc-color-text-dark); font-size: 0.95rem; }
+.lookupMedicalRecord { color: var(--cc-color-primary); font-size: 0.85rem; font-weight: 500; }
+.lookupPatientIdentifiers { color: var(--cc-color-text-secondary); font-size: 0.82rem; margin-top: var(--cc-space-xxs); overflow-wrap: anywhere; }
+.patientFormRow, .visitFormRow { margin-bottom: var(--cc-space-md); }
+.formField { min-width: 0; }
+.fieldLabel { display: block; margin-bottom: var(--cc-space-xs); color: var(--cc-color-text); font-size: 0.9rem; font-weight: 500; }
+.fieldHint { display: block; font-size: 0.75rem; color: var(--cc-color-text-secondary); font-weight: 400; margin-top: var(--cc-space-xxs); }
+.nativeSelect { width: 100%; min-width: 0; height: var(--cc-control-height); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-sm); padding: 0 var(--cc-space-sm); background: var(--cc-color-bg-container); color: var(--cc-color-text); font: inherit; }
+.nativeSelect:focus { outline: 2px solid var(--cc-color-primary-light); border-color: var(--cc-color-primary); }
+.formSelect { width: 100%; min-width: 0; }
+.addressField { margin-bottom: var(--cc-space-lg); }
+.emergencyContactSection { border-top: 1px solid var(--cc-color-border); padding-top: var(--cc-space-md); margin-bottom: var(--cc-space-lg); }
+.sectionTitle { color: var(--cc-color-text-dark); font-size: 0.95rem; font-weight: 600; margin-bottom: var(--cc-space-sm); }
+.guardianLabel { display: flex; align-items: center; gap: var(--cc-space-xs); color: var(--cc-color-text); font-size: 0.9rem; }
+.guardianLabel input { flex-shrink: 0; }
+.allergySection { border-top: 1px solid var(--cc-color-border); padding-top: var(--cc-space-md); }
+.allergySectionHeader { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); margin-bottom: var(--cc-space-sm); }
+.allergyTitle { display: flex; align-items: center; gap: var(--cc-space-xs); margin: 0; color: var(--cc-color-danger); font-size: 0.95rem; font-weight: 600; }
+.allergyTitle svg { flex-shrink: 0; }
+.allergyRow { margin-bottom: var(--cc-space-xs); }
+.nextStepFooter, .stepFooter { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-sm); border-top: 1px solid var(--cc-color-border); padding-top: var(--cc-space-md); margin-top: var(--cc-space-lg); }
+.nextStepFooter { justify-content: flex-end; }
+.stepFooter { justify-content: space-between; }
+.stepTitle { color: var(--cc-color-text-dark); font-size: 1.15rem; font-weight: 600; margin-bottom: var(--cc-space-md); }
+.chiefComplaintField { margin-bottom: var(--cc-space-lg); }
+.patientSummary, .visitSummary { background: var(--cc-color-bg-subtle); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); padding: var(--cc-space-md); font-size: 0.88rem; overflow-wrap: anywhere; }
+.patientSummary { margin-bottom: var(--cc-space-md); }
+.visitSummary { margin-bottom: var(--cc-space-lg); }
+.summaryTitle { margin: 0 0 var(--cc-space-sm); font-size: 0.95rem; font-weight: 600; color: var(--cc-color-text-dark); }
+.confirmIntakeButton { font-weight: 700; }
+@media (max-width: 767px) {
+    .intakeSteps { grid-template-columns: minmax(0, 1fr); }
+    .stepCard > :global(.ant-card-body) { padding: var(--cc-space-md); }
+    .patientLookupInput { flex-basis: 100%; }
+    .patientModeButtons :global(.ant-btn), .nextStepFooter :global(.ant-btn), .stepFooter :global(.ant-btn), .patientLookupForm :global(.ant-btn) { width: 100%; white-space: normal; height: auto; min-height: var(--cc-control-height); padding-top: var(--cc-space-xs); padding-bottom: var(--cc-space-xs); }
+    .selectedPatientIdentity { align-items: flex-start; }
+}
