@@ -3560,7 +3560,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
         Assert.NotNull(cancelMissingSessionRes?.Data);
         Assert.Equal("ClarificationRequired", cancelMissingSessionRes.Data.DialogueOutcome);
-        Assert.Contains("SessionId", cancelMissingSessionRes.Data.Message);
+        Assert.DoesNotMatch(@"(?i)(sessionid|draftid|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f]))", cancelMissingSessionRes.Data.Message);
 
         // 3. Send CancelDraft WITH SessionId but WITHOUT DraftId -> Must fail closed and NOT revoke either tab!
         var cancelMissingDraftRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
@@ -3573,7 +3573,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         })).Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>();
         Assert.NotNull(cancelMissingDraftRes?.Data);
         Assert.Equal("ClarificationRequired", cancelMissingDraftRes.Data.DialogueOutcome);
-        Assert.Contains("DraftId", cancelMissingDraftRes.Data.Message);
+        Assert.DoesNotMatch(@"(?i)(sessionid|draftid|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f]))", cancelMissingDraftRes.Data.Message);
 
         // 4. Send CancelDraft missing BOTH SessionId and DraftId while active snapshots exist -> Must fail closed and NOT revoke either tab!
         var cancelMissingBothRes = await (await Client.PostAsJsonAsync("/api/v1/ai/chat", new AiChatRequestDto
