@@ -323,13 +323,13 @@ export const ReceptionAppointments: React.FC = () => {
         { header: 'Bác sĩ & Chuyên khoa', accessor: apt => <><div className={styles.primaryText}>{apt.doctorName}</div><div className={styles.secondaryText}>{apt.specialtyName}</div></> },
         { header: 'Trạng thái', accessor: apt => getStatusBadge(apt.status) },
         { header: 'Thao tác', align: 'right', className: styles.actionsCell, accessor: apt => <>
-            {apt.status === 'Confirmed' && <Button type="primary" className={styles.checkInButton} style={{ minHeight: '40px' }} onClick={() => handleCheckIn(apt)} disabled={checkingInId === apt.id || apt.appointmentDate !== toLocalDateString()} title={apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${apt.appointmentDate.split('-').reverse().join('/')}` : undefined} icon={<UserCheck size={14} />}>{checkingInId === apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận'}</Button>}
-            <Button onClick={() => openDetail(apt)} icon={<Eye size={14} />}>Chi tiết</Button>
+            {apt.status === 'Confirmed' && <Button type="primary" className={styles.checkInButton} style={{ minHeight: '40px' }} onClick={() => handleCheckIn(apt)} disabled={checkingInId === apt.id || apt.appointmentDate !== toLocalDateString()} title={apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${apt.appointmentDate.split('-').reverse().join('/')}` : undefined} ><UserCheck size={14} aria-hidden="true" />{checkingInId === apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận'}</Button>}
+            <Button onClick={() => openDetail(apt)} ><Eye size={14} aria-hidden="true" />Chi tiết</Button>
         </> },
     ];
 
     return (
-        <div className={styles.page}>
+        <>
             <PageHeader title="Quản lý lịch hẹn" badge={<CalendarDays size={24} className={styles.primaryIcon} />} actions={<Button onClick={() => fetchAppointments()} icon={<RefreshCw size={14} />}>Làm mới</Button>} />
             <form onSubmit={handleSearchSubmit} className={styles.filterForm}>
                 <Input className={styles.searchInput} prefix={<Search size={18} />} placeholder="Tìm theo mã lịch, tên, SĐT..." value={search} onChange={e => setSearch(e.target.value)} />
@@ -341,7 +341,7 @@ export const ReceptionAppointments: React.FC = () => {
             {modal.isOpen && modal.apt && <Modal open onCancel={closeDetail} width={600} className={styles.detailModal} mask={{closable:false}} keyboard={false} closable={{'aria-label':'Đóng chi tiết lịch hẹn'}} title={<>Chi tiết lịch hẹn <span className={styles.detailCode}>#{modal.apt.appointmentCode}</span></>} footer={<>
                 <Button onClick={closeDetail}>Đóng</Button>
                 {modal.apt.status === 'Pending' && <Button type="primary" onClick={handleConfirm} disabled={actionLoading}>{actionLoading ? 'Đang xử lý...' : 'Xác nhận lịch hẹn'}</Button>}
-                {modal.apt.status === 'Confirmed' && <Button type="primary" className={styles.checkInButton} style={{ minHeight: '40px' }} onClick={() => handleCheckIn(modal.apt!)} disabled={checkingInId === modal.apt.id || modal.apt.appointmentDate !== toLocalDateString()} title={modal.apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${modal.apt.appointmentDate.split('-').reverse().join('/')}` : undefined} icon={<UserCheck size={16} />}>{checkingInId === modal.apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận & Cấp phiếu STT'}</Button>}
+                {modal.apt.status === 'Confirmed' && <Button type="primary" className={styles.checkInButton} style={{ minHeight: '40px' }} onClick={() => handleCheckIn(modal.apt!)} disabled={checkingInId === modal.apt.id || modal.apt.appointmentDate !== toLocalDateString()} title={modal.apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${modal.apt.appointmentDate.split('-').reverse().join('/')}` : undefined} ><UserCheck size={16} aria-hidden="true" />{checkingInId === modal.apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận & Cấp phiếu STT'}</Button>}
             </>}>
                 <div className={styles.detailGrid}>
                     <div className={styles.factCard}><div className={styles.factLabel}>Bệnh nhân</div><div className={styles.primaryText}>{modal.apt.patientName}</div><div>{modal.apt.patientPhone}</div></div>
@@ -364,6 +364,6 @@ export const ReceptionAppointments: React.FC = () => {
                 </section>
             </Modal>}
             <CheckInTicketModal isOpen={ticketModalOpen} ticket={currentTicket} onClose={() => setTicketModalOpen(false)} />
-        </div>
+        </>
     );
 };

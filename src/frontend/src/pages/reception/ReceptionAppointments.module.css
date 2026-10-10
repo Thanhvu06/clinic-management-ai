@@ -1,9 +1,8 @@
-.page { display: flex; flex-direction: column; gap: var(--cc-space-lg); min-width: 0; }
 .primaryIcon { color: var(--cc-color-primary); flex-shrink: 0; }
-.filterForm { display: flex; flex-wrap: wrap; gap: var(--cc-space-md); padding: var(--cc-space-md); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-lg); background: var(--cc-color-bg-container); }
+.filterForm { display: flex; flex-wrap: wrap; gap: var(--cc-space-md); padding: var(--cc-space-md); margin-bottom: var(--cc-space-lg); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-lg); background: var(--cc-color-bg-container); }
 .searchInput { flex: 1 1 250px; min-width: 0; }
 .statusFilter { width: 200px; max-width: 100%; }
-.tableScroll { overflow-x: auto; min-width: 0; }
+.tableScroll { overflow-x: auto; min-width: 0; margin-bottom: var(--cc-space-lg); }
 .tableScroll :global(.ant-table) { min-width: 850px; }
 .primaryText { font-weight: 600; color: var(--cc-color-text); overflow-wrap: anywhere; }
 .secondaryText, .factLabel { color: var(--cc-color-text-secondary); font-size: 0.85rem; }
