@@ -1,0 +1,36 @@
+.patientSearchModal :global(.ant-modal-body) { min-width: 0; }
+.modalHeading { display: flex; align-items: flex-start; gap: var(--cc-space-sm); padding-right: var(--cc-space-md); }
+.searchIcon { display: flex; flex-shrink: 0; padding: var(--cc-space-xs); border-radius: var(--cc-radius-md); color: var(--cc-color-primary); background: var(--cc-color-primary-light); }
+.modalTitle { margin: 0; font-size: 1.2rem; font-weight: 600; color: var(--cc-color-text-dark); }
+.modalDescription { margin: var(--cc-space-xxs) 0 0; font-size: 0.85rem; color: var(--cc-color-text-secondary); font-weight: 400; }
+.patientSearchForm { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-sm); padding: var(--cc-space-md) 0; border-bottom: 1px solid var(--cc-color-border); }
+.searchType { width: 180px; }
+.searchInput { flex: 1; min-width: 0; }
+.patientSearchResults { min-height: 280px; max-height: 55vh; overflow-y: auto; padding-top: var(--cc-space-md); }
+.emptySearchIcon { color: var(--cc-color-text-muted); }
+.noResultsIcon { color: var(--cc-color-warning); }
+.resultCount { margin-bottom: var(--cc-space-sm); font-size: 0.875rem; color: var(--cc-color-text-secondary); }
+.patientSearchResult { display: flex; align-items: center; gap: var(--cc-space-md); padding: var(--cc-space-md) !important; margin-bottom: var(--cc-space-sm); border: 1px solid var(--cc-color-border) !important; border-radius: var(--cc-radius-md); background: var(--cc-color-bg-container); }
+.patientDetails { flex: 1; min-width: 0; }
+.patientIdentity, .patientContacts, .patientAllergies, .allergyList { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); }
+.medicalRecordNumber { background: var(--cc-color-primary); color: var(--cc-color-text-on-dark); font-size: 0.8rem; font-weight: 700; padding: var(--cc-space-xxs) var(--cc-space-xs); border-radius: var(--cc-radius-sm); overflow-wrap: anywhere; }
+.patientName { font-size: 1.05rem; font-weight: 600; color: var(--cc-color-text-dark); overflow-wrap: anywhere; }
+.patientDemographics { color: var(--cc-color-text-secondary); font-size: 0.85rem; }
+.bloodType { color: var(--cc-color-danger); background: var(--cc-color-danger-bg); font-size: 0.75rem; font-weight: 600; padding: var(--cc-space-xxs) var(--cc-space-xs); border-radius: var(--cc-radius-sm); }
+.patientContacts { margin-top: var(--cc-space-xs); color: var(--cc-color-text-secondary); font-size: 0.85rem; }
+.contactItem { display: flex; align-items: center; gap: var(--cc-space-xxs); overflow-wrap: anywhere; }
+.contactItem svg { flex-shrink: 0; }
+.patientFacility { color: var(--cc-color-primary); }
+.patientAllergies { margin-top: var(--cc-space-xs); }
+.allergyLabel { color: var(--cc-color-danger); font-weight: 600; font-size: 0.8rem; }
+.allergyIcon { color: var(--cc-color-danger); flex-shrink: 0; }
+.allergyTag { font-size: 0.75rem; padding: var(--cc-space-xxs) var(--cc-space-xs); border-radius: var(--cc-radius-sm); }
+.severeAllergy { color: var(--cc-color-danger); background: var(--cc-color-danger-bg); }
+.moderateAllergy { color: var(--cc-color-warning); background: var(--cc-color-warning-bg); }
+.selectPatientButton { white-space: nowrap; flex-shrink: 0; }
+@media (max-width: 767px) {
+    .searchType, .searchInput { width: 100%; flex-basis: 100%; }
+    .patientSearchResult { flex-direction: column; align-items: stretch; }
+    .selectPatientButton { width: 100%; }
+    .modalTitle { font-size: 1.05rem; }
+}
