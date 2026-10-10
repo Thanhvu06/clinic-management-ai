@@ -85,14 +85,17 @@ export interface StaffFacilityAssignmentDto {
     id: number;
     userId: string;
     userName: string;
-    userEmail: string;
-    roleName: string;
+    fullName: string;
+    email: string;
+    phoneNumber: string;
     facilityId: number;
     facilityName: string;
+    departmentId?: number | null;
+    departmentName?: string | null;
+    role: string;
     isPrimary: boolean;
     isActive: boolean;
     assignedAtUtc: string;
-    notes?: string;
 }
 
 export const organizationApi = {
