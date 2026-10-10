@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { Users, Search, Plus, CheckCircle, XCircle } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { Alert, Button, Form, Input, Modal, Select, Tag, Typography } from 'antd';
+import { PageHeader, FilterBar, DataTable, Pagination, EmptyState, LoadingState, InlineError } from '../../components/common';
+import styles from './AdminUsers.module.css';
 import { useDialog } from '../../contexts/DialogContext';
 
 interface UserDto {
@@ -20,7 +23,8 @@ export const AdminUsers: React.FC = () => {
     const [totalItems, setTotalItems] = useState(0);
     const [page, setPage] = useState(1);
     const pageSize = 10;
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
 
     // Filters
     const [search, setSearch] = useState('');
@@ -41,6 +45,7 @@ export const AdminUsers: React.FC = () => {
 
     const fetchUsers = async () => {
         setLoading(true);
+        setLoadError('');
         try {
             const params = new URLSearchParams({
                 page: page.toString(),
@@ -51,12 +56,13 @@ export const AdminUsers: React.FC = () => {
             if (statusFilter !== '') params.append('isActive', statusFilter);
 
             const res = await axiosClient.get<any, ApiResponse<any>>(`/admin/users?${params.toString()}`);
+            if (!res.success || !res.data) throw new Error(res.message || 'Không thể tải tài khoản.');
             if (res.success && res.data) {
                 setUsers(res.data.items);
                 setTotalItems(res.data.totalItems);
             }
         } catch (error) {
-            // Error
+            setLoadError((error as Error)?.message || 'Không thể tải tài khoản.');
         } finally {
             setLoading(false);
         }
@@ -66,10 +72,9 @@ export const AdminUsers: React.FC = () => {
         fetchUsers();
     }, [page, roleFilter, statusFilter]);
 
-    const handleSearchSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        setPage(1);
-        fetchUsers();
+    const handleSearchSubmit = () => {
+        if (page !== 1) setPage(1);
+        else fetchUsers();
     };
 
     const toggleStatus = async (userId: string, currentStatus: boolean) => {
@@ -89,8 +94,7 @@ export const AdminUsers: React.FC = () => {
         });
     };
 
-    const handleCreateSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleCreateSubmit = async () => {
         setFormError('');
         setFormLoading(true);
         try {
@@ -114,6 +118,8 @@ export const AdminUsers: React.FC = () => {
             case 'Doctor': return 'Bác sĩ';
             case 'Receptionist': return 'Lễ tân';
             case 'Patient': return 'Bệnh nhân';
+            case 'Pharmacist': return 'Dược sĩ';
+            case 'DiagnosticTechnician': return 'Kỹ thuật viên';
             default: return r;
         }
     };
@@ -126,172 +132,63 @@ export const AdminUsers: React.FC = () => {
         }
     };
 
+    const roleColors: Record<string, string> = {
+        Admin: 'error', Doctor: 'processing', Receptionist: 'default', Patient: 'default',
+        Pharmacist: 'green', DiagnosticTechnician: 'purple'
+    };
+    const roleOptions = ['Admin', 'Doctor', 'Receptionist', 'Patient', 'Pharmacist', 'DiagnosticTechnician']
+        .map(role => ({ value: role, label: translateRole(role) }));
+
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h2 style={{ color: 'var(--c-navy-dark)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Users size={24} /> Quản lý tài khoản
-                </h2>
-                <button className="btn-primary" onClick={() => setIsCreateModalOpen(true)}>
-                    <Plus size={18} /> Tạo tài khoản nhân sự
-                </button>
-            </div>
-
-            <div className="card" style={{ marginBottom: '24px' }}>
-                <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 250px' }}>
-                        <div style={{ position: 'relative' }}>
-                            <Search size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--c-muted)' }} />
-                            <input 
-                                type="text" 
-                                className="form-input" 
-                                placeholder="Tìm theo tên, email, sđt..." 
-                                style={{ paddingLeft: '40px' }}
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                            />
-                        </div>
+        <div className={styles.usersPage}>
+            <PageHeader title="Quản lý tài khoản" actions={
+                <Button type="primary" icon={<Plus size={18} />} onClick={() => { setFormError(''); setIsCreateModalOpen(true); }}>
+                    Tạo tài khoản nhân sự
+                </Button>
+            } />
+            <FilterBar>
+                <Input.Search className={styles.userSearch} placeholder="Tìm theo tên, email, sđt..."
+                    value={search} onChange={e => setSearch(e.target.value)} onSearch={handleSearchSubmit} enterButton="Lọc" />
+                <Select className={styles.userFilter} aria-label="Vai trò" value={roleFilter}
+                    onChange={value => { setRoleFilter(value); setPage(1); }}
+                    options={[{ value: '', label: 'Tất cả vai trò' }, ...roleOptions]} />
+                <Select className={styles.userFilter} aria-label="Trạng thái" value={statusFilter}
+                    onChange={value => { setStatusFilter(value); setPage(1); }} options={[
+                        { value: '', label: 'Tất cả trạng thái' }, { value: 'true', label: 'Đang hoạt động' }, { value: 'false', label: 'Đã khóa' }
+                    ]} />
+            </FilterBar>
+            {loading ? <LoadingState /> : loadError ? <InlineError message={loadError} onRetry={fetchUsers} />
+                : users.length === 0 ? <EmptyState title="Không tìm thấy tài khoản nào phù hợp." /> : <>
+                    <div className={styles.userTable}>
+                        <DataTable data={users} keyExtractor={user => user.id} columns={[
+                            { header: 'Họ và tên', accessor: user => <><Typography.Text strong>{user.fullName}</Typography.Text><div className={styles.userJoined}>Tham gia: {formatDate(user.createdAt)}</div></> },
+                            { header: 'Thông tin liên hệ', accessor: user => <div className={styles.userContact}><div>{user.email}</div><Typography.Text type="secondary">{user.phoneNumber}</Typography.Text></div> },
+                            { header: 'Vai trò', accessor: user => <div className={styles.userRoles}>{user.roles.map(role => <Tag key={role} color={roleColors[role] || 'default'}>{translateRole(role)}</Tag>)}</div> },
+                            { header: 'Trạng thái', accessor: user => <Tag color={user.isActive ? 'success' : 'error'}>{user.isActive ? 'Đang hoạt động' : 'Đã khóa'}</Tag> },
+                            { header: 'Thao tác', align: 'right', accessor: user => <Button size="small" danger={user.isActive} type={user.isActive ? 'default' : 'primary'}
+                                onClick={() => toggleStatus(user.id, user.isActive)} disabled={user.roles.includes('Admin')}
+                                title={user.roles.includes('Admin') ? 'Không thể đổi trạng thái Admin' : ''}>{user.isActive ? 'Khóa' : 'Mở khóa'}</Button> }
+                        ]} />
                     </div>
-                    <div style={{ width: '200px' }}>
-                        <select className="form-select" value={roleFilter} onChange={e => { setRoleFilter(e.target.value); setPage(1); }}>
-                            <option value="">Tất cả vai trò</option>
-                            <option value="Admin">Quản trị viên</option>
-                            <option value="Doctor">Bác sĩ</option>
-                            <option value="Receptionist">Lễ tân</option>
-                            <option value="Patient">Bệnh nhân</option>
-                        </select>
+                    <Pagination page={page} totalPages={Math.ceil(totalItems / pageSize)} totalRecords={totalItems} onPageChange={setPage} />
+                </>}
+            {!loading && !loadError && <div className={styles.userTotal}>Tổng cộng: {totalItems} tài khoản</div>}
+            <Modal title="Tạo tài khoản nhân sự" open={isCreateModalOpen} footer={null} destroyOnHidden
+                onCancel={() => { if (!formLoading) setIsCreateModalOpen(false); }} maskClosable={!formLoading} closable={!formLoading} keyboard={!formLoading}>
+                {formError && <Alert className={styles.userFormError} type="error" title={formError} showIcon />}
+                <Form layout="vertical" onFinish={handleCreateSubmit}>
+                    <Form.Item label="Họ và tên (*)" htmlFor="userFullName"><Input id="userFullName" required value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} placeholder="Nguyễn Văn A" /></Form.Item>
+                    <Form.Item label="Email (*)" htmlFor="userEmail"><Input id="userEmail" type="email" required value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="email@example.com" /></Form.Item>
+                    <Form.Item label="Số điện thoại (*)" htmlFor="userPhone"><Input id="userPhone" required value={formData.phoneNumber} onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder="09xxxxxxxxx" /></Form.Item>
+                    <Form.Item label="Mật khẩu (*)" htmlFor="userPassword"><Input.Password id="userPassword" required minLength={8} value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="Tối thiểu 8 ký tự" /></Form.Item>
+                    <Form.Item label="Vai trò (*)" htmlFor="userRole"><Select id="userRole" value={formData.role} onChange={role => setFormData({ ...formData, role })} options={roleOptions.filter(option => option.value !== 'Patient')} /></Form.Item>
+                    {formData.role === 'Doctor' && <Alert className={styles.userRoleNotice} type="warning" title={'Lưu ý: Sau khi tạo tài khoản, bạn cần vào menu "Bác sĩ" để tạo hồ sơ và phân công chuyên khoa.'} />}
+                    <div className={styles.userFormActions}>
+                        <Button disabled={formLoading} onClick={() => setIsCreateModalOpen(false)}>Hủy</Button>
+                        <Button type="primary" htmlType="submit" loading={formLoading}>{formLoading ? 'Đang tạo...' : 'Xác nhận tạo'}</Button>
                     </div>
-                    <div style={{ width: '200px' }}>
-                        <select className="form-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
-                            <option value="">Tất cả trạng thái</option>
-                            <option value="true">Đang hoạt động</option>
-                            <option value="false">Đã khóa</option>
-                        </select>
-                    </div>
-                    <button type="submit" className="btn-secondary">Lọc</button>
-                </form>
-            </div>
-
-            <div className="card table-responsive" style={{ padding: 0 }}>
-                {loading ? (
-                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
-                ) : (
-                    <table className="table" style={{ width: '100%' }}>
-                        <thead>
-                            <tr>
-                                <th>Họ và tên</th>
-                                <th>Thông tin liên hệ</th>
-                                <th>Vai trò</th>
-                                <th>Trạng thái</th>
-                                <th style={{ textAlign: 'right' }}>Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {users.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>
-                                        Không tìm thấy tài khoản nào phù hợp.
-                                    </td>
-                                </tr>
-                            ) : users.map(u => (
-                                <tr key={u.id}>
-                                    <td>
-                                        <div style={{ fontWeight: 500 }}>{u.fullName}</div>
-                                        <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>Tham gia: {formatDate(u.createdAt)}</div>
-                                    </td>
-                                    <td>
-                                        <div>{u.email}</div>
-                                        <div style={{ fontSize: '0.9rem', color: 'var(--c-muted)' }}>{u.phoneNumber}</div>
-                                    </td>
-                                    <td>
-                                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                            {u.roles.map(r => (
-                                                <span key={r} className={`badge ${r === 'Admin' ? 'badge-danger' : r === 'Doctor' ? 'badge-info' : 'badge-muted'}`}>
-                                                    {translateRole(r)}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        {u.isActive ? 
-                                            <span className="badge badge-success"><CheckCircle size={14} style={{ marginRight: '4px' }}/> Đang hoạt động</span> : 
-                                            <span className="badge badge-danger"><XCircle size={14} style={{ marginRight: '4px' }}/> Đã khóa</span>
-                                        }
-                                    </td>
-                                    <td style={{ textAlign: 'right' }}>
-                                        <button 
-                                            className={u.isActive ? "btn-danger" : "btn-primary"} 
-                                            style={{ padding: '6px 12px', fontSize: '0.85rem' }}
-                                            onClick={() => toggleStatus(u.id, u.isActive)}
-                                            disabled={u.roles.includes('Admin')}
-                                            title={u.roles.includes('Admin') ? 'Không thể đổi trạng thái Admin' : ''}
-                                        >
-                                            {u.isActive ? 'Khóa' : 'Mở khóa'}
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-            
-            <div style={{ marginTop: '16px', color: 'var(--c-muted)', fontSize: '0.9rem' }}>
-                Tổng cộng: {totalItems} tài khoản
-            </div>
-
-            {/* Create Modal */}
-            {isCreateModalOpen && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-                    <div style={{ background: 'white', padding: '24px', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: '500px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h3 style={{ margin: 0 }}>Tạo tài khoản nhân sự</h3>
-                            <button onClick={() => setIsCreateModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><XCircle size={24} color="var(--c-muted)"/></button>
-                        </div>
-                        
-                        {formError && <div style={{ color: 'var(--c-danger)', background: 'var(--c-danger-bg)', padding: '10px', borderRadius: '6px', marginBottom: '16px', fontSize: '0.9rem' }}>{formError}</div>}
-
-                        <form onSubmit={handleCreateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div className="form-group">
-                                <label className="form-label">Họ và tên (*)</label>
-                                <input type="text" className="form-input" required value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} placeholder="Nguyễn Văn A" />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Email (*)</label>
-                                <input type="email" className="form-input" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="email@example.com" />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Số điện thoại (*)</label>
-                                <input type="text" className="form-input" required value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} placeholder="09xxxxxxxxx" />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Mật khẩu (*)</label>
-                                <input type="password" className="form-input" required minLength={8} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="Tối thiểu 8 ký tự" />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Vai trò (*)</label>
-                                <select className="form-select" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
-                                    <option value="Receptionist">Lễ tân</option>
-                                    <option value="Doctor">Bác sĩ</option>
-                                    <option value="Admin">Quản trị viên</option>
-                                </select>
-                                {formData.role === 'Doctor' && (
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--c-warning)', marginTop: '4px' }}>
-                                        Lưu ý: Sau khi tạo tài khoản, bạn cần vào menu "Bác sĩ" để tạo hồ sơ và phân công chuyên khoa.
-                                    </div>
-                                )}
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                                <button type="button" className="btn-secondary" onClick={() => setIsCreateModalOpen(false)}>Hủy</button>
-                                <button type="submit" className="btn-primary" disabled={formLoading}>
-                                    {formLoading ? 'Đang tạo...' : 'Xác nhận tạo'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+                </Form>
+            </Modal>
         </div>
     );
 };
-

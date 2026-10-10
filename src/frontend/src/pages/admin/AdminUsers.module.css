@@ -1,0 +1,10 @@
+.usersPage { color: var(--cc-color-text); }
+.userSearch { width: 320px; max-width: 100%; }
+.userFilter { width: 200px; }
+.userTable { overflow-x: auto; }
+.userContact { overflow-wrap: anywhere; }
+.userJoined, .userTotal { color: var(--cc-color-text-secondary); }
+.userTotal { margin-top: var(--cc-space-md); }
+.userRoles { display: flex; flex-wrap: wrap; gap: var(--cc-space-xxs); }
+.userFormError, .userRoleNotice { margin-bottom: var(--cc-space-md); }
+.userFormActions { display: flex; justify-content: flex-end; gap: var(--cc-space-xs); }

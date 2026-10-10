@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { CalendarDays, User, CheckCircle, XCircle, Eye, X } from 'lucide-react';
+import { User, CheckCircle, XCircle, Eye } from 'lucide-react';
+import { Alert, Button, Descriptions, Form, Input, Modal, Select, Space } from 'antd';
+import { PageHeader, FilterBar, DataTable, Pagination, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
+import styles from './AdminLeaves.module.css';
 import { useDialog } from '../../contexts/DialogContext';
 
 interface LeaveRequest {
@@ -19,6 +22,10 @@ export const AdminLeaves: React.FC = () => {
     const { showAlert, showConfirm } = useDialog();
     const [requests, setRequests] = useState<LeaveRequest[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
+    const [doctorsError, setDoctorsError] = useState('');
+    const [doctorsLoading, setDoctorsLoading] = useState(true);
+    const [formError, setFormError] = useState('');
     const [totalItems, setTotalItems] = useState(0);
     const [page, setPage] = useState(1);
     
@@ -32,18 +39,26 @@ export const AdminLeaves: React.FC = () => {
     const [adminNote, setAdminNote] = useState('');
     const [actionLoading, setActionLoading] = useState(false);
 
+    const fetchDoctors = async () => {
+        setDoctorsLoading(true);
+        setDoctorsError('');
+        try {
+            const res = await axiosClient.get<any, ApiResponse<any>>('/admin/doctors?isActive=true&pageSize=100');
+            if (!res.success || !res.data) throw new Error(res.message || 'Không thể tải danh sách bác sĩ.');
+            if (res.success) setDoctors(res.data.items);
+        } catch (error) {
+            setDoctorsError((error as Error)?.message || 'Không thể tải danh sách bác sĩ.');
+        } finally {
+            setDoctorsLoading(false);
+        }
+    };
     useEffect(() => {
-        const fetchDoctors = async () => {
-            try {
-                const res = await axiosClient.get<any, ApiResponse<any>>('/admin/doctors?isActive=true&pageSize=100');
-                if (res.success) setDoctors(res.data.items);
-            } catch (e) {}
-        };
         fetchDoctors();
     }, []);
 
     const fetchRequests = async () => {
         setLoading(true);
+        setLoadError('');
         try {
             const params = new URLSearchParams({
                 page: page.toString(),
@@ -53,12 +68,13 @@ export const AdminLeaves: React.FC = () => {
             if (doctorIdFilter) params.append('doctorId', doctorIdFilter);
 
             const res = await axiosClient.get<any, ApiResponse<any>>(`/admin/leave-requests?${params.toString()}`);
+            if (!res.success || !res.data) throw new Error(res.message || 'Không thể tải yêu cầu nghỉ.');
             if (res.success && res.data) {
                 setRequests(res.data.items);
                 setTotalItems(res.data.totalItems);
             }
         } catch (error) {
-            // Error
+            setLoadError((error as Error)?.message || 'Không thể tải yêu cầu nghỉ.');
         } finally {
             setLoading(false);
         }
@@ -73,6 +89,7 @@ export const AdminLeaves: React.FC = () => {
         
         showConfirm(`Bạn có chắc chắn muốn ${action === 'approve' ? 'duyệt' : 'từ chối'} yêu cầu này?`, async () => {
             setActionLoading(true);
+            setFormError('');
             try {
                 const res = await axiosClient.post<any, ApiResponse<any>>(`/admin/leave-requests/${modal.req!.id}/${action}`, {
                     adminNote
@@ -83,6 +100,7 @@ export const AdminLeaves: React.FC = () => {
                     fetchRequests();
                 }
             } catch (error: any) {
+                setFormError(error?.message || 'Có lỗi xảy ra.');
                 if (error?.errorCode === 'LEAVE_HAS_AFFECTED_APPOINTMENTS') {
                     showAlert('Bác sĩ đang có lịch hẹn bị ảnh hưởng. Hãy để lễ tân xử lý các lịch này trước khi duyệt nghỉ.', 'Cảnh báo', 'warning');
                 } else {
@@ -108,166 +126,67 @@ export const AdminLeaves: React.FC = () => {
 
     const getStatusBadge = (status: string) => {
         switch(status) {
-            case 'Pending': return <span className="badge badge-warning">Chờ xử lý</span>;
-            case 'Approved': return <span className="badge badge-success">Đã duyệt</span>;
-            case 'Rejected': return <span className="badge badge-danger">Đã từ chối</span>;
-            case 'Cancelled': return <span className="badge badge-muted">Đã hủy</span>;
-            default: return <span className="badge badge-muted">{status}</span>;
+            case 'Pending': return <StatusBadge status={status} label="Chờ xử lý" />;
+            case 'Approved': return <StatusBadge status={status} label="Đã duyệt" />;
+            case 'Rejected': return <StatusBadge status={status} label="Đã từ chối" />;
+            case 'Cancelled': return <StatusBadge status={status} label="Đã hủy" />;
+            default: return <StatusBadge status={status} />;
         }
     };
 
+    const closeModal = () => { if (!actionLoading) setModal({ isOpen: false, req: null }); };
+
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h2 style={{ color: 'var(--c-navy-dark)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <CalendarDays size={24} /> Quản lý yêu cầu nghỉ
-                </h2>
-            </div>
-
-            <div className="card" style={{ marginBottom: '24px' }}>
-                <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                    <div style={{ width: '250px' }}>
-                        <select className="form-select" value={doctorIdFilter} onChange={e => { setDoctorIdFilter(e.target.value); setPage(1); }}>
-                            <option value="">Tất cả bác sĩ</option>
-                            {doctors.map(d => <option key={d.id} value={d.id}>{d.fullName}</option>)}
-                        </select>
+        <div className={styles.leavesPage}>
+            <PageHeader title="Quản lý yêu cầu nghỉ" />
+            <FilterBar>
+                <Select className={styles.leaveDoctorFilter} aria-label="Bác sĩ" value={doctorIdFilter} loading={doctorsLoading}
+                    onChange={value => { setDoctorIdFilter(value); setPage(1); }}
+                    options={[{ value: '', label: 'Tất cả bác sĩ' }, ...doctors.map(doctor => ({ value: String(doctor.id), label: doctor.fullName }))]} />
+                <Select className={styles.leaveStatusFilter} aria-label="Trạng thái" value={statusFilter}
+                    onChange={value => { setStatusFilter(value); setPage(1); }} options={[
+                        { value: '', label: 'Tất cả trạng thái' }, { value: 'Pending', label: 'Chờ xử lý' },
+                        { value: 'Approved', label: 'Đã duyệt' }, { value: 'Rejected', label: 'Đã từ chối' }, { value: 'Cancelled', label: 'Đã hủy' }
+                    ]} />
+            </FilterBar>
+            {loading || doctorsLoading ? <LoadingState /> : doctorsError ? <InlineError message={doctorsError} onRetry={fetchDoctors} />
+                : loadError ? <InlineError message={loadError} onRetry={fetchRequests} />
+                : requests.length === 0 ? <EmptyState title="Không tìm thấy yêu cầu nào." /> : <>
+                    <div className={styles.leaveTable}>
+                        <DataTable data={requests} keyExtractor={request => request.id} columns={[
+                            { header: 'Bác sĩ', accessor: request => <div className={styles.leaveDoctor}><User size={16} />{request.doctorName}</div> },
+                            { header: 'Thời gian nghỉ', accessor: request => <><div>Từ: {formatDate(request.startDateTime)}</div><div>Đến: {formatDate(request.endDateTime)}</div></> },
+                            { header: 'Trạng thái', accessor: request => getStatusBadge(request.status) },
+                            { header: 'Thao tác', align: 'right', accessor: request => <Button size="small" icon={<Eye size={14} />} onClick={() => { setModal({ isOpen: true, req: request }); setAdminNote(''); setFormError(''); }}>Chi tiết</Button> }
+                        ]} />
                     </div>
-                    <div style={{ width: '200px' }}>
-                        <select className="form-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
-                            <option value="">Tất cả trạng thái</option>
-                            <option value="Pending">Chờ xử lý</option>
-                            <option value="Approved">Đã duyệt</option>
-                            <option value="Rejected">Đã từ chối</option>
-                            <option value="Cancelled">Đã hủy</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div className="card table-responsive" style={{ padding: 0 }}>
-                {loading ? (
-                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
-                ) : (
-                    <table className="table" style={{ width: '100%' }}>
-                        <thead>
-                            <tr>
-                                <th>Bác sĩ</th>
-                                <th>Thời gian nghỉ</th>
-                                <th>Trạng thái</th>
-                                <th style={{ textAlign: 'right' }}>Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {requests.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4} style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>
-                                        Không tìm thấy yêu cầu nào.
-                                    </td>
-                                </tr>
-                            ) : requests.map(r => (
-                                <tr key={r.id}>
-                                    <td style={{ fontWeight: 500 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <User size={16} color="var(--c-teal)"/> {r.doctorName}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div style={{ fontSize: '0.9rem' }}>Từ: {formatDate(r.startDateTime)}</div>
-                                        <div style={{ fontSize: '0.9rem' }}>Đến: {formatDate(r.endDateTime)}</div>
-                                    </td>
-                                    <td>
-                                        {getStatusBadge(r.status)}
-                                    </td>
-                                    <td style={{ textAlign: 'right' }}>
-                                        <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => { setModal({ isOpen: true, req: r }); setAdminNote(''); }}>
-                                            <Eye size={14} style={{ marginRight: '4px' }}/> Chi tiết
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-            
-            <div style={{ marginTop: '16px', color: 'var(--c-muted)', fontSize: '0.9rem' }}>
-                Tổng cộng: {totalItems} yêu cầu
-            </div>
-
-            {/* Detail Modal */}
-            {modal.isOpen && modal.req && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-                    <div style={{ background: 'white', padding: '24px', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: '500px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h3 style={{ margin: 0 }}>Chi tiết yêu cầu nghỉ</h3>
-                            <button onClick={() => setModal({ isOpen: false, req: null })} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
-                        </div>
-                        
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
-                            <div>
-                                <span style={{ color: 'var(--c-muted)', fontSize: '0.9rem' }}>Bác sĩ: </span>
-                                <strong>{modal.req.doctorName}</strong>
-                            </div>
-                            <div>
-                                <span style={{ color: 'var(--c-muted)', fontSize: '0.9rem' }}>Thời gian: </span>
-                                <strong>{formatDate(modal.req.startDateTime)} - {formatDate(modal.req.endDateTime)}</strong>
-                            </div>
-                            <div>
-                                <span style={{ color: 'var(--c-muted)', fontSize: '0.9rem' }}>Trạng thái: </span>
-                                {getStatusBadge(modal.req.status)}
-                            </div>
-                            <div style={{ background: 'var(--c-bg)', padding: '12px', borderRadius: '6px', fontSize: '0.95rem' }}>
-                                <span style={{ color: 'var(--c-muted)', display: 'block', marginBottom: '4px' }}>Lý do xin nghỉ:</span>
-                                {modal.req.reason}
-                            </div>
-                            {modal.req.adminNote && (
-                                <div style={{ background: 'var(--c-info-bg)', padding: '12px', borderRadius: '6px', fontSize: '0.95rem', border: '1px solid #bfdbfe' }}>
-                                    <span style={{ color: 'var(--c-muted)', display: 'block', marginBottom: '4px' }}>Ghi chú quản trị:</span>
-                                    {modal.req.adminNote}
-                                </div>
-                            )}
-                        </div>
-
-                        {modal.req.status === 'Pending' && (
-                            <>
-                                <div className="form-group" style={{ marginBottom: '16px' }}>
-                                    <label className="form-label">Thêm ghi chú xử lý (Tùy chọn)</label>
-                                    <textarea 
-                                        className="form-textarea" 
-                                        rows={2}
-                                        value={adminNote} 
-                                        onChange={e => setAdminNote(e.target.value)} 
-                                        placeholder="Ghi chú thêm về quyết định duyệt/từ chối..."
-                                    />
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                                    <button 
-                                        className="btn-danger" 
-                                        style={{ background: 'white', color: 'var(--c-danger)', border: '1px solid var(--c-danger)' }} 
-                                        onClick={() => handleProcess('reject')}
-                                        disabled={actionLoading}
-                                    >
-                                        <XCircle size={18} style={{ marginRight: '4px' }}/> Từ chối
-                                    </button>
-                                    <button 
-                                        className="btn-primary" 
-                                        style={{ background: 'var(--c-success)', borderColor: 'var(--c-success)' }} 
-                                        onClick={() => handleProcess('approve')}
-                                        disabled={actionLoading}
-                                    >
-                                        <CheckCircle size={18} style={{ marginRight: '4px' }}/> Duyệt yêu cầu
-                                    </button>
-                                </div>
-                            </>
-                        )}
-                        {modal.req.status !== 'Pending' && (
-                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                <button className="btn-secondary" onClick={() => setModal({ isOpen: false, req: null })}>Đóng</button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
+                    <Pagination page={page} totalPages={Math.ceil(totalItems / 10)} totalRecords={totalItems} onPageChange={setPage} />
+                </>}
+            {!loading && !doctorsLoading && !doctorsError && !loadError && <div className={styles.leaveTotal}>Tổng cộng: {totalItems} yêu cầu</div>}
+            <Modal title="Chi tiết yêu cầu nghỉ" open={modal.isOpen} onCancel={closeModal} footer={null} destroyOnHidden
+                maskClosable={!actionLoading} closable={!actionLoading} keyboard={!actionLoading}>
+                {modal.req && <>
+                    {formError && <Alert className={styles.leaveFormError} type="error" title={formError} showIcon />}
+                    <Descriptions column={1} items={[
+                        { key: 'doctor', label: 'Bác sĩ', children: <strong>{modal.req.doctorName}</strong> },
+                        { key: 'time', label: 'Thời gian', children: <strong>{formatDate(modal.req.startDateTime)} - {formatDate(modal.req.endDateTime)}</strong> },
+                        { key: 'status', label: 'Trạng thái', children: getStatusBadge(modal.req.status) }
+                    ]} />
+                    <div className={styles.leaveReasonBox}><span className={styles.leaveNoteLabel}>Lý do xin nghỉ:</span>{modal.req.reason}</div>
+                    {modal.req.adminNote && <div className={styles.leaveAdminNoteBox}><span className={styles.leaveNoteLabel}>Ghi chú quản trị:</span>{modal.req.adminNote}</div>}
+                    {modal.req.status === 'Pending' ? <>
+                        <Form layout="vertical">
+                            <Form.Item label="Thêm ghi chú xử lý (Tùy chọn)" htmlFor="leaveAdminNote">
+                                <Input.TextArea id="leaveAdminNote" rows={2} value={adminNote} onChange={e => setAdminNote(e.target.value)} placeholder="Ghi chú thêm về quyết định duyệt/từ chối..." />
+                            </Form.Item>
+                        </Form>
+                        <Space className={styles.leaveActions}>
+                            <Button danger icon={<XCircle size={18} />} loading={actionLoading} disabled={actionLoading} onClick={() => handleProcess('reject')}>Từ chối</Button>
+                            <Button type="primary" icon={<CheckCircle size={18} />} loading={actionLoading} disabled={actionLoading} onClick={() => handleProcess('approve')}>Duyệt yêu cầu</Button>
+                        </Space>
+                    </> : <div className={styles.leaveActions}><Button disabled={actionLoading} onClick={closeModal}>Đóng</Button></div>}
+                </>}
+            </Modal>
         </div>
     );
 };

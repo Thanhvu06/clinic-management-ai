@@ -1,0 +1,13 @@
+.leavesPage { color: var(--cc-color-text); }
+.leaveDoctorFilter { width: 250px; }
+.leaveStatusFilter { width: 200px; }
+.leaveTable { overflow-x: auto; }
+.leaveDoctor { display: flex; align-items: center; gap: var(--cc-space-xs); font-weight: 500; }
+.leaveDoctor svg { color: var(--cc-color-teal); }
+.leaveTotal { margin-top: var(--cc-space-md); color: var(--cc-color-text-secondary); }
+.leaveReasonBox, .leaveAdminNoteBox { padding: var(--cc-space-sm); border-radius: var(--cc-radius-sm); margin-bottom: var(--cc-space-md); overflow-wrap: anywhere; white-space: pre-wrap; }
+.leaveReasonBox { background: var(--cc-color-bg-subtle); }
+.leaveAdminNoteBox { background: var(--cc-color-info-bg); border: 1px solid var(--cc-color-border); }
+.leaveNoteLabel { display: block; margin-bottom: var(--cc-space-xxs); color: var(--cc-color-text-secondary); }
+.leaveFormError { margin-bottom: var(--cc-space-md); }
+.leaveActions { display: flex; justify-content: flex-end; }

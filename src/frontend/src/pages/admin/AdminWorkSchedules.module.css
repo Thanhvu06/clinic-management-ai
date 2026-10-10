@@ -1,0 +1,13 @@
+.schedulesPage { color: var(--cc-color-text); }
+.scheduleDoctorLabel { font-weight: 500; }
+.scheduleDoctorFilter { width: 300px; max-width: 100%; }
+.scheduleTable { overflow-x: auto; }
+.scheduleSlotHint { margin-bottom: var(--cc-space-md); }
+.scheduleDay { color: var(--cc-color-text-secondary); }
+.scheduleTime { display: flex; align-items: center; gap: var(--cc-space-xs); }
+.scheduleTime svg { color: var(--cc-color-teal); }
+.scheduleFormError { margin-bottom: var(--cc-space-md); }
+.scheduleDatePicker { width: 100%; }
+.scheduleTimeFields { display: flex; gap: var(--cc-space-md); }
+.scheduleTimeFields > * { flex: 1; min-width: 0; }
+.scheduleFormActions { display: flex; justify-content: flex-end; gap: var(--cc-space-xs); }

@@ -1,0 +1,8 @@
+.auditPage { color: var(--cc-color-text); }
+.auditFilter { width: 260px; }
+.auditTable { overflow-x: auto; }
+.auditTime, .auditActor { display: flex; align-items: center; gap: var(--cc-space-xs); }
+.auditTime { color: var(--cc-color-text-secondary); }
+.auditActor { font-weight: 600; }
+.auditActor svg { color: var(--cc-color-primary); }
+.auditTotal { margin-top: var(--cc-space-md); color: var(--cc-color-text-secondary); }

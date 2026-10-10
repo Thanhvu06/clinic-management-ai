@@ -1,0 +1,8 @@
+.specialtiesPage { color: var(--cc-color-text); }
+.specialtySearch { width: 320px; max-width: 100%; }
+.specialtyFilter { width: 200px; }
+.specialtyTable { overflow-x: auto; }
+.specialtyDescription { max-width: 300px; margin-top: var(--cc-space-xxs); margin-bottom: 0; }
+.specialtyTotal { margin-top: var(--cc-space-md); color: var(--cc-color-text-secondary); }
+.specialtyFormError, .specialtyWarning { margin-bottom: var(--cc-space-md); }
+.specialtyFormActions { display: flex; justify-content: flex-end; gap: var(--cc-space-xs); }
