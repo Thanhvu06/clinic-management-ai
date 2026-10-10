@@ -1,0 +1,11 @@
+.packagesPage { color: var(--cc-color-text); }
+.packageSearch { flex: 1; min-width: 240px; }
+.packageStatusFilter { width: 200px; }
+.packageDescription { max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--cc-color-text-secondary); }
+.packagePrice { color: var(--cc-color-info); }
+.packageRowActions, .packageFormActions { display: flex; justify-content: flex-end; gap: var(--cc-space-sm); }
+.packageTotal { margin-top: var(--cc-space-md); color: var(--cc-color-text-secondary); }
+.packageFormAlert { margin-bottom: var(--cc-space-md); }
+.packageFormGrid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--cc-space-sm); }
+.packageNumber { width: 100%; }
+@media (max-width: 600px) { .packageFormGrid { grid-template-columns: 1fr; } .packageStatusFilter { width: 100%; } }

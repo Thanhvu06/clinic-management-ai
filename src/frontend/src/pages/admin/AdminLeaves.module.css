@@ -1,6 +1,7 @@
 .leavesPage { color: var(--cc-color-text); }
 .leaveDoctorFilter { width: 250px; }
 .leaveStatusFilter { width: 200px; }
+.leaveDoctorWarning { flex: 1; min-width: 240px; }
 .leaveTable { overflow-x: auto; }
 .leaveDoctor { display: flex; align-items: center; gap: var(--cc-space-xs); font-weight: 500; }
 .leaveDoctor svg { color: var(--cc-color-teal); }
