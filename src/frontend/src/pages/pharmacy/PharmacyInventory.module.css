@@ -1,2 +1,18 @@
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cc-space-md); margin-bottom: var(--cc-space-lg); }
 .search { flex: 1; min-width: 200px; max-width: 480px; }
+.tableScroll { max-width: 100%; min-width: 0; overflow-x: auto; }
+.tableScroll table { min-width: 1000px; }
+.transactionTime { white-space: nowrap; }
+.inlineContent { display: flex; align-items: center; gap: var(--cc-space-xs); }
+.secondary { color: var(--cc-color-text-secondary); font-size: 12px; }
+.actorIcon { color: var(--cc-color-primary); }
+.stockIncrease { color: var(--cc-color-success); }
+.stockDecrease { color: var(--cc-color-danger); }
+.pagination, .pageControls { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); }
+.pagination { justify-content: space-between; padding: var(--cc-space-md) 0; }
+.stockForm { display: flex; flex-direction: column; gap: var(--cc-space-md); }
+.fieldLabel { display: block; margin-bottom: var(--cc-space-xs); font-size: 13px; font-weight: 600; }
+.fullWidth { width: 100%; }
+.validationInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.stockModal :global(.ant-btn) { white-space: nowrap; }
+@media (max-width: 480px) { .search { min-width: 0; max-width: none; flex-basis: 100%; } }

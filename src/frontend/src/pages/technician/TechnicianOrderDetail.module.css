@@ -1,0 +1,36 @@
+.detail { min-width: 0; max-width: 1100px; margin: 0 auto; }
+.navigation, .orderStatus, .orderHeading, .serviceHeader, .serviceIdentity, .completionActions { display: flex; align-items: center; gap: var(--cc-space-sm); flex-wrap: wrap; }
+.navigation, .orderHeading, .serviceHeader, .completionActions { justify-content: space-between; }
+.navigation, .orderCard, .services { margin-bottom: var(--cc-space-lg); }
+.orderStatus { color: var(--cc-color-text-secondary); }
+.orderHeading { align-items: flex-start; border-bottom: 1px solid var(--cc-color-border-light); padding-bottom: var(--cc-space-md); margin-bottom: var(--cc-space-md); }
+.orderCode { font-size: 20px; font-weight: 700; color: var(--cc-color-primary); overflow-wrap: anywhere; }
+.appointmentInfo { text-align: right; color: var(--cc-color-text-secondary); }
+.secondary { color: var(--cc-color-text-secondary); font-size: 13px; }
+.patientName, .serviceName { font-size: 15px; font-weight: 600; color: var(--cc-color-text-dark); }
+.clinicalNotes { margin-top: var(--cc-space-md); padding-top: var(--cc-space-sm); border-top: 1px dashed var(--cc-color-border); }
+.doctorNote { margin-top: var(--cc-space-xxs); }
+.startActions { display: flex; justify-content: flex-end; margin-top: var(--cc-space-lg); padding-top: var(--cc-space-md); border-top: 1px solid var(--cc-color-border-light); }
+.sectionTitle { font-size: 16px; font-weight: 700; margin: 0 0 var(--cc-space-md); }
+.serviceList, .resultForm { display: flex; flex-direction: column; gap: var(--cc-space-md); }
+.resultForm { gap: var(--cc-space-sm); }
+.serviceHeader { margin-bottom: var(--cc-space-md); }
+.serviceIdentity { flex: 1; flex-wrap: nowrap; min-width: 200px; }
+.serviceNumber { flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--cc-radius-full); color: var(--cc-color-primary); background: var(--cc-color-primary-light); font-weight: 700; }
+.startHint { padding: var(--cc-space-md); background: var(--cc-color-bg-subtle); color: var(--cc-color-text-secondary); border-radius: var(--cc-radius-sm); text-align: center; }
+.fieldLabel { display: block; margin-bottom: var(--cc-space-xxs); font-weight: 600; font-size: 13px; }
+.required { color: var(--cc-color-danger); }
+.saveActions { display: flex; justify-content: flex-end; margin-top: var(--cc-space-xs); }
+.resultAuthor { text-align: right; font-size: 11px; color: var(--cc-color-text-muted); margin-top: var(--cc-space-xxs); }
+.completeButton:global(.ant-btn-primary:not(:disabled)) { background: var(--cc-color-success); border-color: var(--cc-color-success); }
+.completedCard { background: var(--cc-color-success-bg); border-color: var(--cc-color-success); }
+.completedTitle { display: flex; align-items: center; gap: var(--cc-space-xs); font-weight: 600; color: var(--cc-color-success); }
+.reviewInfo { text-align: right; font-size: 12px; color: var(--cc-color-info); }
+.reviewPending { font-size: 12px; color: var(--cc-color-warning); }
+.detail :global(.ant-btn) { white-space: nowrap; }
+@media (max-width: 767px) { .appointmentInfo, .reviewInfo { text-align: left; } }
+@media (max-width: 480px) {
+    .navigation, .completionActions { align-items: flex-start; }
+    .navigation > :first-child, .startActions > :first-child, .completionActions > :global(.ant-btn) { width: 100%; }
+    .startActions :global(.ant-btn) { height: auto; white-space: normal; }
+}

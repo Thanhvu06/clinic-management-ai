@@ -1,0 +1,33 @@
+.filters { margin-bottom: var(--cc-space-lg); }
+.filterForm, .pagination, .pageControls, .modalFooter, .footerActions, .medicineMeta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); min-width: 0; }
+.filterForm { gap: var(--cc-space-md); }
+.searchInput { flex: 1; min-width: 200px; }
+.statusFilter { width: 220px; }
+.tableScroll, .itemsScroll { max-width: 100%; min-width: 0; overflow-x: auto; }
+.tableScroll table { min-width: 950px; }
+.itemsScroll table { min-width: 650px; }
+.pagination { justify-content: space-between; padding: var(--cc-space-md) 0; }
+.secondary, .appointmentCode, .medicineMeta { color: var(--cc-color-text-secondary); font-size: 12px; }
+.itemCount { display: inline-block; background: var(--cc-color-bg-subtle); padding: var(--cc-space-xxs) var(--cc-space-xs); border-radius: var(--cc-radius-sm); font-weight: 600; white-space: nowrap; }
+.appointmentCode { margin-bottom: var(--cc-space-md); }
+.patientBanner { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--cc-space-sm); padding: var(--cc-space-md); margin-bottom: var(--cc-space-lg); border-radius: var(--cc-radius-md); background: var(--cc-color-bg-subtle); }
+.patientName { color: var(--cc-color-text-dark); font-weight: 700; }
+.doctorNotes { padding: var(--cc-space-sm) var(--cc-space-md); margin-bottom: var(--cc-space-md); background: var(--cc-color-info-bg); color: var(--cc-color-info); border-radius: var(--cc-radius-md); }
+.stockWarning, .inactiveWarning { display: flex; align-items: center; gap: var(--cc-space-sm); padding: var(--cc-space-sm) var(--cc-space-md); margin-bottom: var(--cc-space-md); border-radius: var(--cc-radius-md); }
+.stockWarning { color: var(--cc-color-danger); background: var(--cc-color-danger-bg); border: 1px solid var(--cc-color-danger); }
+.inactiveWarning { color: var(--cc-color-warning); background: var(--cc-color-warning-bg); border: 1px solid var(--cc-color-warning); }
+.stockWarning > svg, .inactiveWarning > svg { flex-shrink: 0; }
+.itemsHeading { margin: 0 0 var(--cc-space-sm); color: var(--cc-color-text-dark); }
+.insufficientStock, .availableStock { display: inline-block; border-radius: var(--cc-radius-sm); padding: var(--cc-space-xxs) var(--cc-space-xs); font-weight: 600; white-space: nowrap; }
+.insufficientStock { background: var(--cc-color-danger-bg); color: var(--cc-color-danger); }
+.availableStock { background: var(--cc-color-success-bg); color: var(--cc-color-success); }
+.instructions { color: var(--cc-color-text-secondary); font-size: 12px; font-style: italic; }
+.modalFooter { justify-content: space-between; }
+.dispenseButton { min-height: var(--cc-control-height); padding: var(--cc-space-xs) var(--cc-space-md); border: 1px solid var(--cc-color-success); border-radius: var(--cc-radius-md); background: var(--cc-color-success); color: var(--cc-color-bg-container); font: inherit; cursor: pointer; white-space: nowrap; }
+.dispenseButton:disabled { border-color: var(--cc-color-border); background: var(--cc-color-bg-subtle); color: var(--cc-color-text-muted); cursor: not-allowed; }
+.detailModal :global(.ant-btn) { white-space: nowrap; }
+@media (max-width: 767px) { .patientBanner { grid-template-columns: 1fr; } }
+@media (max-width: 480px) {
+    .filterForm > *, .searchInput, .statusFilter { width: 100%; min-width: 0; flex: auto; }
+    .modalFooter, .footerActions { flex-direction: column; align-items: stretch; width: 100%; }
+}
