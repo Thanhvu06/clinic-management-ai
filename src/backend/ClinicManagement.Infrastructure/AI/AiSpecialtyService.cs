@@ -228,9 +228,8 @@ public class AiSpecialtyService : IAiSpecialtyService
         // Stateless cancellation intentionally remains stateless until its scope is
         // proven, so an ambiguous cancel cannot create a new session as a side effect.
         var likelyCancel = string.Equals(request.Intent, AiChatIntentTypes.CancelDraft, StringComparison.OrdinalIgnoreCase) ||
-                           lowerMsg.Contains("hủy", StringComparison.OrdinalIgnoreCase) ||
-                           lowerMsg.Contains("huỷ", StringComparison.OrdinalIgnoreCase) ||
-                           lowerMsg.Contains("huy", StringComparison.OrdinalIgnoreCase);
+                           Regex.IsMatch(lowerMsg, @"(?<![\p{L}\p{M}\p{N}_])(?:hủy|huỷ|huy\s+(?:lich|hen|dat))(?![\p{L}\p{M}\p{N}_])",
+                               RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         // If a caller is continuing from a server-bound snapshot, leave the
         // session unset until snapshot validation. This preserves support for
         // legacy user-bound snapshots while still rejecting bound snapshots

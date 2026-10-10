@@ -968,6 +968,7 @@ public class ReceptionWorkspaceRebuildTests : IntegrationTestBase
         using (var scope = Factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var today = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>().VietnamToday;
 
             // Create patient & visit at fac2
             var patient = await db.Patients.FirstAsync();
@@ -979,7 +980,7 @@ public class ReceptionWorkspaceRebuildTests : IntegrationTestBase
                 SpecialtyId = SpecialtyEntityId,
                 AppointmentSlotId = SlotEntityId,
                 Status = AppointmentStatus.Pending,
-                AppointmentDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                AppointmentDate = today,
                 StartTime = new TimeOnly(15, 0),
                 EndTime = new TimeOnly(15, 30)
             };
@@ -996,7 +997,7 @@ public class ReceptionWorkspaceRebuildTests : IntegrationTestBase
                 DepartmentId = dept2.Id,
                 AssignedDoctorId = DoctorEntityId,
                 Status = VisitStatus.WaitingDoctor,
-                VisitDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                VisitDate = today,
                 Priority = VisitPriority.Normal,
                 QueueNumber = 777,
                 CheckedInAtUtc = DateTime.UtcNow
