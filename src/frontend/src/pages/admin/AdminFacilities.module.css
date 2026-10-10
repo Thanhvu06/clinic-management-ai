@@ -1,0 +1,27 @@
+.page { display: flex; flex-direction: column; gap: var(--cc-space-lg); }
+.facilityGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--cc-space-md); }
+.facilityCard { cursor: pointer; }
+.facilityCard h3 { margin: var(--cc-space-xs) 0; }
+.selectedCard { border-color: var(--cc-color-primary); background: var(--cc-color-primary-light); }
+.facilityCard:focus-visible, .roomButton:focus-visible { outline: 2px solid var(--cc-color-primary); outline-offset: var(--cc-space-xxs); }
+.facilityFacts { display: flex; flex-wrap: wrap; gap: var(--cc-space-md); margin-top: var(--cc-space-md); padding-top: var(--cc-space-sm); border-top: 1px solid var(--cc-color-border); color: var(--cc-color-text-secondary); }
+.facilityFacts span, .iconHeading { display: flex; align-items: center; gap: var(--cc-space-xxs); }
+.sectionHeading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--cc-space-sm); margin-bottom: var(--cc-space-sm); }
+.sectionHeading h2, .sectionHeading h3 { margin: 0; }
+.sectionHeading h2 { font-size: 18px; }
+.iconHeading { font-size: 16px; margin: 0 0 var(--cc-space-sm); }
+.actions, .formActions { display: flex; flex-wrap: wrap; gap: var(--cc-space-xs); }
+.formActions { justify-content: flex-end; }
+.structureRow { row-gap: var(--cc-space-lg); }
+.structureColumn:first-child { padding-right: var(--cc-space-sm); }
+.structureColumn:last-child { padding-left: var(--cc-space-sm); }
+.roomList { max-height: 480px; overflow-y: auto; border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); }
+.roomButton { display: flex; justify-content: space-between; align-items: center; gap: var(--cc-space-xs); width: 100%; padding: var(--cc-space-sm) var(--cc-space-md); border: 0; border-bottom: 1px solid var(--cc-color-border); background: var(--cc-color-bg-container); text-align: left; color: var(--cc-color-text); cursor: pointer; font: inherit; }
+.selectedRoom { background: var(--cc-color-primary-light); box-shadow: inset var(--cc-space-xxs) 0 var(--cc-color-primary); }
+.secondary { display: block; color: var(--cc-color-text-secondary); font-size: 13px; margin-top: var(--cc-space-xxs); }
+.bedGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: var(--cc-space-sm); }
+.bedPrice { display: block; color: var(--cc-color-primary); margin-top: var(--cc-space-xxs); }
+.formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cc-space-sm); }
+.numberInput { width: 100%; }
+@media (max-width: 991px) { .structureColumn:first-child, .structureColumn:last-child { padding: 0; } }
+@media (max-width: 575px) { .formGrid { grid-template-columns: 1fr; gap: 0; } }

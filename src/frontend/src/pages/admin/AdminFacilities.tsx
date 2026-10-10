@@ -1,789 +1,276 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, CheckCircle, XCircle, Layers, DoorOpen, BedDouble, Users, Trash2, UserPlus } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Alert, Button, Card, Checkbox, Col, Form, Input, InputNumber, Modal, Row, Select, Tabs, Tag, Typography } from 'antd';
+import { Plus, Building2, Stethoscope, Phone, Layers, DoorOpen, BedDouble, Trash2, UserPlus } from 'lucide-react';
 import { organizationApi, type FacilityDto, type DepartmentDto, type RoomDto, type BedDto, type StaffFacilityAssignmentDto } from '../../api/organizationApi';
+import axiosClient from '../../api/axiosClient';
+import type { ApiResponse } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
+import { PageHeader, DataTable, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
+import styles from './AdminFacilities.module.css';
+
+interface AssignableUser { id: string; fullName: string; email: string; roles: string[] }
+type CreateKind = 'facility' | 'department' | 'room' | 'bed' | 'staff';
+const initialFacility = { code: '', name: '', address: '', city: '', phone: '', hospitalLevel: 'Hạng 1', description: '' };
+const initialDepartment = { code: '', name: '', departmentType: 1, description: '' };
+const initialRoom = { departmentId: 0, roomNumber: '', name: '', roomType: 2, floorNumber: 1, maxCapacity: 4 };
+const initialBed = { roomId: 0, bedNumber: '', bedType: 1, dailyRate: 200000, notes: '' };
+const initialStaff = { userId: '', role: 'Receptionist', departmentId: 0, isPrimary: true };
+const departmentTypes = [
+    { value: 1, label: 'Lâm sàng (Clinical)' }, { value: 2, label: 'Cận lâm sàng (Paraclinical)' },
+    { value: 3, label: 'Hành chính (Administrative)' }, { value: 4, label: 'Dược (Pharmacy)' },
+    { value: 5, label: 'Cấp cứu (Emergency)' }, { value: 6, label: 'Ngoại khoa (Surgical)' },
+    { value: 7, label: 'Điều trị nội trú (Inpatient)' },
+];
+const bedTypes = ['Giường thường', 'Giường điện', 'Giường hồi sức (ICU)', 'Giường nhi', 'Giường cách ly', 'Cáng cấp cứu'].map((label, index) => ({ value: index + 1, label }));
+const bedStatuses = ['Trống', 'Đang sử dụng', 'Đang vệ sinh', 'Bảo trì', 'Đã đặt trước'];
+const staffRoles = [
+    ['Receptionist', 'Lễ tân tiếp đón (Receptionist)'], ['Doctor', 'Bác sĩ khám bệnh (Doctor)'],
+    ['Nurse', 'Điều dưỡng viên (Nurse)'], ['Cashier', 'Thu ngân (Cashier)'],
+    ['Pharmacist', 'Dược sĩ cấp phát (Pharmacist)'], ['Radiologist', 'Bác sĩ CĐHA (Radiologist)'],
+    ['LabTechnician', 'Kỹ thuật viên Xét nghiệm (LabTechnician)'], ['Admin', 'Quản trị viên (Admin)'],
+].map(([value, label]) => ({ value, label }));
+const errorMessage = (error: unknown, fallback: string) => (error as { message?: string })?.message || fallback;
 
 export const AdminFacilities: React.FC = () => {
-    const { showAlert } = useDialog();
+    const { showAlert, showConfirm } = useDialog();
     const [facilities, setFacilities] = useState<FacilityDto[]>([]);
     const [loading, setLoading] = useState(true);
+    const [facilityError, setFacilityError] = useState('');
     const [selectedFacility, setSelectedFacility] = useState<FacilityDto | null>(null);
     const [departments, setDepartments] = useState<DepartmentDto[]>([]);
     const [rooms, setRooms] = useState<RoomDto[]>([]);
+    const [structureLoading, setStructureLoading] = useState(false);
+    const [structureError, setStructureError] = useState('');
     const [beds, setBeds] = useState<BedDto[]>([]);
     const [selectedRoom, setSelectedRoom] = useState<RoomDto | null>(null);
-
-    // Modals
-    const [facilityModalOpen, setFacilityModalOpen] = useState(false);
-    const [facilityForm, setFacilityForm] = useState({
-        code: '',
-        name: '',
-        address: '',
-        city: '',
-        phone: '',
-        hospitalLevel: 'Hạng 1',
-        description: ''
-    });
-
-    const [deptModalOpen, setDeptModalOpen] = useState(false);
-    const [deptForm, setDeptForm] = useState({
-        code: '',
-        name: '',
-        departmentType: 1,
-        description: ''
-    });
-
-    const [roomModalOpen, setRoomModalOpen] = useState(false);
-    const [roomForm, setRoomForm] = useState({
-        departmentId: 0,
-        roomNumber: '',
-        name: '',
-        roomType: 2,
-        floorNumber: 1,
-        maxCapacity: 4
-    });
-
-    const [bedModalOpen, setBedModalOpen] = useState(false);
-    const [bedForm, setBedForm] = useState({
-        roomId: 0,
-        bedNumber: '',
-        bedType: 1,
-        dailyRate: 200000,
-        notes: ''
-    });
-
-    // Staff Assignments state
-    const [facilityTab, setFacilityTab] = useState<'structure' | 'staff'>('structure');
+    const [bedLoading, setBedLoading] = useState(false);
+    const [bedError, setBedError] = useState('');
+    const [facilityTab, setFacilityTab] = useState('structure');
     const [staffAssignments, setStaffAssignments] = useState<StaffFacilityAssignmentDto[]>([]);
     const [staffLoading, setStaffLoading] = useState(false);
+    const [staffError, setStaffError] = useState('');
+    const [users, setUsers] = useState<AssignableUser[]>([]);
+    const [usersLoading, setUsersLoading] = useState(false);
+    const [usersError, setUsersError] = useState('');
+    const [facilityModalOpen, setFacilityModalOpen] = useState(false);
+    const [deptModalOpen, setDeptModalOpen] = useState(false);
+    const [roomModalOpen, setRoomModalOpen] = useState(false);
+    const [bedModalOpen, setBedModalOpen] = useState(false);
     const [staffModalOpen, setStaffModalOpen] = useState(false);
-    const [staffForm, setStaffForm] = useState({
-        userId: '',
-        role: 'Receptionist',
-        departmentId: 0,
-        isPrimary: true,
-        notes: ''
-    });
+    const [facilityForm, setFacilityForm] = useState(initialFacility);
+    const [deptForm, setDeptForm] = useState(initialDepartment);
+    const [roomForm, setRoomForm] = useState(initialRoom);
+    const [bedForm, setBedForm] = useState(initialBed);
+    const [staffForm, setStaffForm] = useState(initialStaff);
+    const [facilitySubmitting, setFacilitySubmitting] = useState(false);
+    const [deptSubmitting, setDeptSubmitting] = useState(false);
+    const [roomSubmitting, setRoomSubmitting] = useState(false);
+    const [bedSubmitting, setBedSubmitting] = useState(false);
+    const [staffSubmitting, setStaffSubmitting] = useState(false);
+    // Guard consecutive submit events before React renders the disabled button.
+    const submitting = useRef<Record<CreateKind, boolean>>({ facility: false, department: false, room: false, bed: false, staff: false });
+    const structureRequest = useRef(0);
+    const staffRequest = useRef(0);
+    const bedRequest = useRef(0);
+    const usersRequest = useRef(0);
+    const facilityId = useRef<number | null>(null);
+    const selectedRoomId = useRef<number | null>(null);
 
-    const fetchStaffAssignments = async (facilityId: number) => {
-        setStaffLoading(true);
+    const fetchStaffAssignments = async (id: number) => {
+        const request = ++staffRequest.current;
+        setStaffLoading(true); setStaffError(''); setStaffAssignments([]);
         try {
-            const res = await organizationApi.getStaffAssignments(facilityId);
-            if (res.success && res.data) {
-                setStaffAssignments(res.data);
-            }
-        } catch {
-            showAlert('Lỗi', 'Không thể tải danh sách phân công nhân viên.', 'error');
+            const res = await organizationApi.getStaffAssignments(id);
+            if (!res.success || !res.data) throw new Error(res.message || 'Không thể tải danh sách phân công nhân viên.');
+            if (request === staffRequest.current && facilityId.current === id) setStaffAssignments(res.data);
+        } catch (error) {
+            if (request === staffRequest.current && facilityId.current === id) setStaffError(errorMessage(error, 'Không thể tải danh sách phân công nhân viên.'));
         } finally {
-            setStaffLoading(false);
+            if (request === staffRequest.current && facilityId.current === id) setStaffLoading(false);
         }
     };
-
+    const selectFacility = async (fac: FacilityDto) => {
+        const request = ++structureRequest.current;
+        facilityId.current = fac.id; selectedRoomId.current = null; ++bedRequest.current;
+        setSelectedFacility(fac); setSelectedRoom(null); setDepartments([]); setRooms([]); setBeds([]);
+        setBedLoading(false); setBedError(''); setStructureLoading(true); setStructureError('');
+        void fetchStaffAssignments(fac.id);
+        try {
+            const [deptRes, roomRes] = await Promise.all([organizationApi.getDepartments(fac.id), organizationApi.getRooms({ facilityId: fac.id })]);
+            if (!deptRes.success || !deptRes.data) throw new Error(deptRes.message || 'Không thể tải cấu trúc khoa phòng.');
+            if (!roomRes.success || !roomRes.data) throw new Error(roomRes.message || 'Không thể tải danh sách phòng bệnh.');
+            if (request === structureRequest.current) { setDepartments(deptRes.data); setRooms(roomRes.data); }
+        } catch (error) {
+            if (request === structureRequest.current) setStructureError(errorMessage(error, 'Không thể tải cấu trúc khoa phòng.'));
+        } finally { if (request === structureRequest.current) setStructureLoading(false); }
+    };
     const fetchFacilities = async () => {
-        setLoading(true);
+        setLoading(true); setFacilityError('');
         try {
             const res = await organizationApi.getFacilities(true);
-            if (res.success && res.data) {
-                setFacilities(res.data);
-                if (res.data.length > 0 && !selectedFacility) {
-                    selectFacility(res.data[0]);
-                }
-            }
-        } catch {
-            showAlert('Lỗi', 'Không thể tải danh sách cơ sở bệnh viện.', 'error');
-        } finally {
-            setLoading(false);
-        }
+            if (!res.success || !res.data) throw new Error(res.message || 'Không thể tải danh sách cơ sở bệnh viện.');
+            setFacilities(res.data);
+            if (res.data.length > 0 && facilityId.current === null) void selectFacility(res.data[0]);
+        } catch (error) { setFacilityError(errorMessage(error, 'Không thể tải danh sách cơ sở bệnh viện.')); }
+        finally { setLoading(false); }
     };
-
-    const selectFacility = async (fac: FacilityDto) => {
-        setSelectedFacility(fac);
-        setSelectedRoom(null);
-        setBeds([]);
-        try {
-            const deptRes = await organizationApi.getDepartments(fac.id);
-            if (deptRes.success && deptRes.data) {
-                setDepartments(deptRes.data);
-            }
-            const roomRes = await organizationApi.getRooms({ facilityId: fac.id });
-            if (roomRes.success && roomRes.data) {
-                setRooms(roomRes.data);
-            }
-            await fetchStaffAssignments(fac.id);
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
     const selectRoom = async (room: RoomDto) => {
-        setSelectedRoom(room);
+        const request = ++bedRequest.current;
+        selectedRoomId.current = room.id;
+        setSelectedRoom(room); setBeds([]); setBedLoading(true); setBedError('');
         try {
             const res = await organizationApi.getBedsByRoom(room.id);
-            if (res.success && res.data) {
-                setBeds(res.data);
-            }
-        } catch (err) {
-            console.error(err);
-        }
+            if (!res.success || !res.data) throw new Error(res.message || 'Không thể tải danh sách giường bệnh.');
+            if (request === bedRequest.current) setBeds(res.data);
+        } catch (error) { if (request === bedRequest.current) setBedError(errorMessage(error, 'Không thể tải danh sách giường bệnh.')); }
+        finally { if (request === bedRequest.current) setBedLoading(false); }
     };
-
     useEffect(() => {
-        fetchFacilities();
+        const requests = [structureRequest, staffRequest, bedRequest, usersRequest];
+        void fetchFacilities();
+        return () => { requests.forEach(request => { ++request.current; }); };
     }, []);
-
-    const handleCreateFacility = async (e: React.FormEvent) => {
+    const openStaffModal = async () => {
+        const request = ++usersRequest.current;
+        setStaffForm(initialStaff); setStaffModalOpen(true); setUsers([]); setUsersError(''); setUsersLoading(true);
+        try {
+            const res = await axiosClient.get<unknown, ApiResponse<{ items: AssignableUser[] }>>('/admin/users?isActive=true&pageSize=100');
+            if (!res.success || !res.data) throw new Error(res.message || 'Không thể tải danh sách nhân viên.');
+            if (request === usersRequest.current) setUsers(res.data.items.filter(user => !(user.roles?.length === 1 && user.roles[0] === 'Patient')));
+        } catch (error) { if (request === usersRequest.current) setUsersError(errorMessage(error, 'Không thể tải danh sách nhân viên.')); }
+        finally { if (request === usersRequest.current) setUsersLoading(false); }
+    };
+    const create = async (kind: CreateKind, setBusy: (busy: boolean) => void, operation: () => Promise<ApiResponse<unknown>>, close: () => void, success: string, fallback: string, refresh: () => void) => {
+        if (submitting.current[kind]) return;
+        submitting.current[kind] = true; setBusy(true);
+        try {
+            const res = await operation();
+            if (!res.success) throw new Error(res.message || fallback);
+            showAlert(success, 'Thành công', 'success'); close(); refresh();
+        } catch (error) { showAlert(errorMessage(error, fallback), 'Lỗi', 'error'); }
+        finally { submitting.current[kind] = false; setBusy(false); }
+    };
+    const handleCreateFacility = (e: React.FormEvent) => {
         e.preventDefault();
-        try {
-            const res = await organizationApi.createFacility(facilityForm);
-            if (res.success) {
-                showAlert('Thành công', 'Thêm cơ sở y tế thành công!', 'success');
-                setFacilityModalOpen(false);
-                setFacilityForm({ code: '', name: '', address: '', city: '', phone: '', hospitalLevel: 'Hạng 1', description: '' });
-                fetchFacilities();
-            }
-        } catch (err: any) {
-            showAlert('Lỗi', err.response?.data?.message || 'Không thể tạo cơ sở.', 'error');
-        }
+        void create('facility', setFacilitySubmitting, () => organizationApi.createFacility(facilityForm), () => { setFacilityModalOpen(false); setFacilityForm(initialFacility); }, 'Thêm cơ sở y tế thành công!', 'Không thể tạo cơ sở.', () => { void fetchFacilities(); });
     };
-
-    const handleCreateDepartment = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedFacility) return;
-        try {
-            const res = await organizationApi.createDepartment({
-                facilityId: selectedFacility.id,
-                ...deptForm
-            });
-            if (res.success) {
-                showAlert('Thành công', 'Thêm khoa phòng thành công!', 'success');
-                setDeptModalOpen(false);
-                setDeptForm({ code: '', name: '', departmentType: 1, description: '' });
-                selectFacility(selectedFacility);
-            }
-        } catch (err: any) {
-            showAlert('Lỗi', err.response?.data?.message || 'Không thể tạo khoa phòng.', 'error');
-        }
+    const handleCreateDepartment = (e: React.FormEvent) => {
+        e.preventDefault(); if (!selectedFacility) return;
+        const fac = selectedFacility;
+        void create('department', setDeptSubmitting, () => organizationApi.createDepartment({ facilityId: fac.id, ...deptForm }), () => { setDeptModalOpen(false); setDeptForm(initialDepartment); }, 'Thêm khoa phòng thành công!', 'Không thể tạo khoa phòng.', () => { if (facilityId.current === fac.id) void selectFacility(fac); });
     };
-
-    const handleCreateRoom = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try {
-            const res = await organizationApi.createRoom(roomForm);
-            if (res.success) {
-                showAlert('Thành công', 'Thêm phòng thành công!', 'success');
-                setRoomModalOpen(false);
-                if (selectedFacility) selectFacility(selectedFacility);
-            }
-        } catch (err: any) {
-            showAlert('Lỗi', err.response?.data?.message || 'Không thể tạo phòng.', 'error');
-        }
+    const handleCreateRoom = (e: React.FormEvent) => {
+        e.preventDefault(); if (!selectedFacility) return;
+        const fac = selectedFacility;
+        void create('room', setRoomSubmitting, () => organizationApi.createRoom(roomForm), () => setRoomModalOpen(false), 'Thêm phòng thành công!', 'Không thể tạo phòng.', () => { if (facilityId.current === fac.id) void selectFacility(fac); });
     };
-
-    const handleCreateBed = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedRoom) return;
-        try {
-            const res = await organizationApi.createBed({
-                ...bedForm,
-                roomId: selectedRoom.id
-            });
-            if (res.success) {
-                showAlert('Thành công', 'Thêm giường bệnh thành công!', 'success');
-                setBedModalOpen(false);
-                selectRoom(selectedRoom);
-            }
-        } catch (err: any) {
-            showAlert('Lỗi', err.response?.data?.message || 'Không thể tạo giường bệnh.', 'error');
-        }
+    const handleCreateBed = (e: React.FormEvent) => {
+        e.preventDefault(); if (!selectedRoom) return;
+        const room = selectedRoom;
+        void create('bed', setBedSubmitting, () => organizationApi.createBed({ ...bedForm, roomId: room.id }), () => setBedModalOpen(false), 'Thêm giường bệnh thành công!', 'Không thể tạo giường bệnh.', () => { if (selectedRoomId.current === room.id) void selectRoom(room); });
     };
-
-    const handleDeleteStaffAssignment = async (id: number) => {
-        if (!window.confirm('Bạn có chắc chắn muốn hủy phân công nhân sự này?')) return;
-        try {
-            const res = await organizationApi.deleteStaffAssignment(id);
-            if (res.success) {
-                showAlert('Thành công', 'Đã hủy phân công nhân sự.', 'success');
-                if (selectedFacility) fetchStaffAssignments(selectedFacility.id);
-            }
-        } catch (err: any) {
-            showAlert('Lỗi', err.response?.data?.message || 'Không thể hủy phân công.', 'error');
-        }
+    const handleCreateStaffAssignment = (e: React.FormEvent) => {
+        e.preventDefault(); if (!selectedFacility || usersLoading || usersError) return;
+        if (!staffForm.userId) { showAlert('Vui lòng chọn nhân viên.', 'Thông báo', 'warning'); return; }
+        const id = selectedFacility.id;
+        void create('staff', setStaffSubmitting, () => organizationApi.createStaffAssignment({ userId: staffForm.userId, facilityId: id, role: staffForm.role, departmentId: staffForm.departmentId > 0 ? staffForm.departmentId : undefined, isPrimary: staffForm.isPrimary }), () => { setStaffModalOpen(false); setStaffForm(initialStaff); }, 'Phân công nhân viên vào cơ sở thành công!', 'Không thể tạo phân công nhân viên.', () => { if (facilityId.current === id) void fetchStaffAssignments(id); });
     };
-
-    const handleCreateStaffAssignment = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedFacility) return;
-        if (!staffForm.userId.trim()) {
-            showAlert('Thông báo', 'Vui lòng nhập User ID của nhân viên.', 'warning');
-            return;
-        }
-        try {
-            const res = await organizationApi.createStaffAssignment({
-                userId: staffForm.userId.trim(),
-                facilityId: selectedFacility.id,
-                role: staffForm.role,
-                departmentId: staffForm.departmentId > 0 ? staffForm.departmentId : undefined,
-                isPrimary: staffForm.isPrimary,
-                notes: staffForm.notes.trim() || undefined
-            });
-            if (res.success) {
-                showAlert('Thành công', 'Phân công nhân viên vào cơ sở thành công!', 'success');
-                setStaffModalOpen(false);
-                setStaffForm({ userId: '', role: 'Receptionist', departmentId: 0, isPrimary: true, notes: '' });
-                fetchStaffAssignments(selectedFacility.id);
-            }
-        } catch (err: any) {
-            showAlert('Lỗi', err.response?.data?.message || 'Không thể tạo phân công nhân viên.', 'error');
-        }
+    const handleDeleteStaffAssignment = (id: number) => {
+        const assignedFacilityId = selectedFacility?.id;
+        showConfirm('Bạn có chắc chắn muốn hủy phân công nhân sự này?', async () => {
+            try {
+                const res = await organizationApi.deleteStaffAssignment(id);
+                if (!res.success) throw new Error(res.message || 'Không thể hủy phân công.');
+                showAlert('Đã hủy phân công nhân sự.', 'Thành công', 'success');
+                if (assignedFacilityId && facilityId.current === assignedFacilityId) void fetchStaffAssignments(assignedFacilityId);
+            } catch (error) { showAlert(errorMessage(error, 'Không thể hủy phân công.'), 'Lỗi', 'error'); }
+        });
     };
+    const modalProps = (busy: boolean) => ({ footer: null, maskClosable: !busy, closable: !busy, keyboard: !busy, destroyOnHidden: true });
+    const footer = (busy: boolean, close: () => void, label: string, disabled = false) => <div className={styles.formActions}><Button disabled={busy} onClick={close}>Hủy</Button><Button type="primary" htmlType="submit" disabled={busy || disabled}>{busy ? 'Đang lưu...' : label}</Button></div>;
+    const departmentOptions = departments.map(d => ({ value: d.id, label: d.name + ' (' + d.code + ')' }));
 
-    return (
-        <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <div>
-                    <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b' }}>Quản trị Mạng lưới Bệnh viện & Cơ sở</h1>
-                    <p style={{ color: '#64748b', marginTop: '4px' }}>Quản lý cây tổ chức: Cơ sở ➔ Tòa nhà ➔ Khoa phòng ➔ Phòng bệnh ➔ Giường bệnh</p>
-                </div>
-                <button
-                    onClick={() => setFacilityModalOpen(true)}
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        background: '#0284c7',
-                        color: '#fff',
-                        padding: '10px 18px',
-                        borderRadius: '8px',
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontWeight: 600
-                    }}
-                >
-                    <Plus size={18} /> Thêm Cơ sở Mới
-                </button>
-            </div>
-
-            {loading && facilities.length === 0 && (
-                <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Đang tải dữ liệu mạng lưới cơ sở...</div>
-            )}
-
-            {/* Facilities Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px', marginBottom: '28px' }}>
-                {facilities.map(fac => {
-                    const isSelected = selectedFacility?.id === fac.id;
-                    return (
-                        <div
-                            key={fac.id}
-                            onClick={() => selectFacility(fac)}
-                            style={{
-                                border: isSelected ? '2px solid #0284c7' : '1px solid #e2e8f0',
-                                borderRadius: '12px',
-                                padding: '20px',
-                                background: isSelected ? '#f0f9ff' : '#fff',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                            }}
-                        >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                <div>
-                                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#0284c7', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>{fac.code}</span>
-                                    <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b', marginTop: '6px' }}>{fac.name}</h3>
-                                </div>
-                                {fac.isActive ? (
-                                    <span style={{ color: '#16a34a', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={15} /> Hoạt động</span>
-                                ) : (
-                                    <span style={{ color: '#dc2626', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}><XCircle size={15} /> Tạm dừng</span>
-                                )}
-                            </div>
-                            <p style={{ fontSize: '14px', color: '#64748b', marginTop: '8px' }}>{fac.address}, {fac.city}</p>
-                            <div style={{ display: 'flex', gap: '16px', marginTop: '14px', borderTop: '1px solid #e2e8f0', paddingTop: '12px', fontSize: '13px', color: '#475569' }}>
-                                <span>🏢 {fac.buildingCount} Tòa nhà</span>
-                                <span>🩺 {fac.departmentCount} Khoa/Phòng</span>
-                                <span>📞 {fac.phone}</span>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Facility Details Breakdown */}
-            {selectedFacility && (
-                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                    {/* Facility Tabs */}
-                    <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '20px' }}>
-                        <button
-                            type="button"
-                            onClick={() => setFacilityTab('structure')}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '8px 16px',
-                                borderRadius: '6px',
-                                border: 'none',
-                                background: facilityTab === 'structure' ? '#0284c7' : '#f1f5f9',
-                                color: facilityTab === 'structure' ? '#fff' : '#475569',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                fontSize: '14px'
-                            }}
-                        >
-                            <Layers size={16} /> Cấu trúc Khoa & Phòng ({rooms.length} phòng)
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setFacilityTab('staff')}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '8px 16px',
-                                borderRadius: '6px',
-                                border: 'none',
-                                background: facilityTab === 'staff' ? '#0284c7' : '#f1f5f9',
-                                color: facilityTab === 'staff' ? '#fff' : '#475569',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                fontSize: '14px'
-                            }}
-                        >
-                            <Users size={16} /> Phân công nhân sự ({staffAssignments.length})
-                        </button>
-                    </div>
-
-                    {facilityTab === 'structure' ? (
-                        <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <div>
-                                    <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>Cấu trúc Khoa phòng & Buồng Giường: {selectedFacility.name}</h2>
-                                    <p style={{ fontSize: '13px', color: '#64748b' }}>Phân cấp chi tiết các đơn vị điều trị trực thuộc</p>
-                                </div>
-                                <div style={{ display: 'flex', gap: '12px' }}>
-                                    <button
-                                        onClick={() => {
-                                            setDeptForm({ code: '', name: '', departmentType: 1, description: '' });
-                                            setDeptModalOpen(true);
-                                        }}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#0284c7', color: '#fff', padding: '8px 14px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
-                                    >
-                                        <Plus size={16} /> Thêm Khoa Phòng
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            if (departments.length > 0) {
-                                                setRoomForm({ departmentId: departments[0].id, roomNumber: '', name: '', roomType: 2, floorNumber: 1, maxCapacity: 4 });
-                                                setRoomModalOpen(true);
-                                            } else {
-                                                showAlert('Thông báo', 'Cần tạo ít nhất 1 khoa phòng trước khi tạo phòng.', 'warning');
-                                            }
-                                        }}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#0d9488', color: '#fff', padding: '8px 14px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
-                                    >
-                                        <DoorOpen size={16} /> Thêm Phòng Bệnh
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                                {/* Departments & Rooms List */}
-                                <div>
-                                    <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#334155', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        <Layers size={18} color="#0284c7" /> Danh sách Khoa & Phòng ({rooms.length} phòng)
-                                    </h3>
-                                    <div style={{ maxHeight: '480px', overflowY: 'auto', border: '1px solid #f1f5f9', borderRadius: '8px' }}>
-                                        {rooms.map(room => {
-                                            const isRoomSelected = selectedRoom?.id === room.id;
-                                            return (
-                                                <div
-                                                    key={room.id}
-                                                    onClick={() => selectRoom(room)}
-                                                    style={{
-                                                        padding: '12px 16px',
-                                                        borderBottom: '1px solid #f1f5f9',
-                                                        cursor: 'pointer',
-                                                        background: isRoomSelected ? '#f8fafc' : '#fff',
-                                                        borderLeft: isRoomSelected ? '4px solid #0284c7' : '4px solid transparent',
-                                                        display: 'flex',
-                                                        justifyContent: 'space-between',
-                                                        alignItems: 'center'
-                                                    }}
-                                                >
-                                                    <div>
-                                                        <div style={{ fontWeight: 600, color: '#1e293b' }}>{room.roomNumber} - {room.name}</div>
-                                                        <div style={{ fontSize: '13px', color: '#64748b' }}>{room.departmentName} (Tầng {room.floorNumber})</div>
-                                                    </div>
-                                                    <div style={{ textAlign: 'right' }}>
-                                                        <span style={{ fontSize: '12px', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '12px' }}>
-                                                            {room.availableBedCount}/{room.bedCount} giường trống
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                        {rooms.length === 0 && (
-                                            <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8' }}>Chưa có phòng bệnh nào. Hãy thêm khoa và phòng mới.</div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Bed Management for Selected Room */}
-                                <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                        <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <BedDouble size={18} color="#0d9488" />
-                                            {selectedRoom ? `Giường bệnh phòng ${selectedRoom.roomNumber}` : 'Chọn phòng để quản lý giường'}
-                                        </h3>
-                                        {selectedRoom && (
-                                            <button
-                                                onClick={() => {
-                                                    setBedForm({ roomId: selectedRoom.id, bedNumber: '', bedType: 1, dailyRate: 200000, notes: '' });
-                                                    setBedModalOpen(true);
-                                                }}
-                                                style={{ background: '#0d9488', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 10px', fontSize: '13px', cursor: 'pointer', fontWeight: 500 }}
-                                            >
-                                                + Thêm Giường
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    <div style={{ minHeight: '300px', border: '1px solid #f1f5f9', borderRadius: '8px', padding: '16px', background: '#fafafa' }}>
-                                        {selectedRoom ? (
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-                                                {beds.map(bed => {
-                                                    const isAvailable = bed.status === 1;
-                                                    return (
-                                                        <div
-                                                            key={bed.id}
-                                                            style={{
-                                                                background: '#fff',
-                                                                border: isAvailable ? '1px solid #86efac' : '1px solid #fca5a5',
-                                                                borderRadius: '8px',
-                                                                padding: '12px',
-                                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                            }}
-                                                        >
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <span style={{ fontWeight: 'bold', color: '#1e293b' }}>{bed.bedNumber}</span>
-                                                                <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', background: isAvailable ? '#dcfce7' : '#fee2e2', color: isAvailable ? '#15803d' : '#b91c1c' }}>
-                                                                    {bed.statusName}
-                                                                </span>
-                                                            </div>
-                                                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>{bed.bedTypeName}</div>
-                                                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#0284c7', marginTop: '4px' }}>{bed.dailyRate.toLocaleString('vi-VN')} đ/ngày</div>
-                                                        </div>
-                                                    );
-                                                })}
-                                                {beds.length === 0 && (
-                                                    <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '32px', color: '#94a3b8' }}>Chưa có giường bệnh trong phòng này.</div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8' }}>Vui lòng nhấp chọn một phòng bệnh ở cột bên trái để theo dõi và quản lý giường.</div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <div>
-                                    <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>Danh sách Nhân viên tại cơ sở: {selectedFacility.name}</h2>
-                                    <p style={{ fontSize: '13px', color: '#64748b' }}>Phân công cán bộ y tế, bác sĩ, điều dưỡng, lễ tân và thu ngân làm việc tại cơ sở</p>
-                                </div>
-                                <button
-                                    onClick={() => setStaffModalOpen(true)}
-                                    style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#0284c7', color: '#fff', padding: '8px 14px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
-                                >
-                                    <UserPlus size={16} /> Phân công nhân viên mới
-                                </button>
-                            </div>
-
-                            {staffLoading ? (
-                                <div style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>Đang tải danh sách nhân viên...</div>
-                            ) : (
-                                <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', textAlign: 'left' }}>
-                                        <thead>
-                                            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
-                                                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Nhân viên</th>
-                                                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Email</th>
-                                                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Vai trò</th>
-                                                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Cơ sở</th>
-                                                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Trạng thái</th>
-                                                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Ngày phân công</th>
-                                                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Thao tác</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {staffAssignments.map(s => (
-                                                <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                    <td style={{ padding: '12px 16px', fontWeight: 500, color: '#1e293b' }}>
-                                                        {s.userName || 'Chưa cập nhật'}
-                                                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>ID: {s.userId}</div>
-                                                    </td>
-                                                    <td style={{ padding: '12px 16px', color: '#64748b' }}>{s.userEmail || '-'}</td>
-                                                    <td style={{ padding: '12px 16px' }}>
-                                                        <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 }}>
-                                                            {s.roleName || 'Staff'}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ padding: '12px 16px' }}>
-                                                        {s.isPrimary ? (
-                                                            <span style={{ background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 }}>Cơ sở chính</span>
-                                                        ) : (
-                                                            <span style={{ background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>Cơ sở phụ</span>
-                                                        )}
-                                                    </td>
-                                                    <td style={{ padding: '12px 16px' }}>
-                                                        {s.isActive ? (
-                                                            <span style={{ color: '#16a34a', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px' }}><CheckCircle size={14} /> Hoạt động</span>
-                                                        ) : (
-                                                            <span style={{ color: '#dc2626', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px' }}><XCircle size={14} /> Tạm dừng</span>
-                                                        )}
-                                                    </td>
-                                                    <td style={{ padding: '12px 16px', color: '#64748b', fontSize: '13px' }}>
-                                                        {new Date(s.assignedAtUtc).toLocaleDateString('vi-VN')}
-                                                    </td>
-                                                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                                                        <button
-                                                            onClick={() => handleDeleteStaffAssignment(s.id)}
-                                                            title="Hủy phân công"
-                                                            style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px 8px', borderRadius: '4px' }}
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                            {staffAssignments.length === 0 && (
-                                                <tr>
-                                                    <td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8' }}>
-                                                        Chưa có nhân viên nào được phân công tại cơ sở này.
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Modal Create Facility */}
-            {facilityModalOpen && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-                    <div style={{ background: '#fff', borderRadius: '12px', width: '520px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-                        <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px', color: '#1e293b' }}>Thêm Cơ sở Bệnh viện Mới</h2>
-                        <form onSubmit={handleCreateFacility}>
-                            <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Mã cơ sở *</label>
-                                <input required value={facilityForm.code} onChange={e => setFacilityForm({ ...facilityForm, code: e.target.value })} placeholder="VD: FAC-CS04" style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
-                            <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Tên bệnh viện / cơ sở *</label>
-                                <input required value={facilityForm.name} onChange={e => setFacilityForm({ ...facilityForm, name: e.target.value })} placeholder="VD: Bệnh viện Đa khoa ClinicCare CS4" style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Tỉnh/Thành phố *</label>
-                                    <input required value={facilityForm.city} onChange={e => setFacilityForm({ ...facilityForm, city: e.target.value })} placeholder="TP. Hồ Chí Minh" style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Số điện thoại *</label>
-                                    <input required value={facilityForm.phone} onChange={e => setFacilityForm({ ...facilityForm, phone: e.target.value })} placeholder="028 1234 5678" style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                                </div>
-                            </div>
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Địa chỉ chi tiết *</label>
-                                <input required value={facilityForm.address} onChange={e => setFacilityForm({ ...facilityForm, address: e.target.value })} placeholder="Số 100 Đường ABC, Phường X, Quận Y" style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                                <button type="button" onClick={() => setFacilityModalOpen(false)} style={{ padding: '8px 16px', background: '#f1f5f9', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Hủy</button>
-                                <button type="submit" style={{ padding: '8px 16px', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}>Lưu Cơ sở</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal Create Department */}
-            {deptModalOpen && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-                    <div style={{ background: '#fff', borderRadius: '12px', width: '480px', padding: '24px' }}>
-                        <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>Thêm Khoa Phòng Mới</h2>
-                        <form onSubmit={handleCreateDepartment}>
-                            <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Mã khoa *</label>
-                                <input required value={deptForm.code} onChange={e => setDeptForm({ ...deptForm, code: e.target.value })} placeholder="VD: K-NOI" style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
-                            <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Tên khoa *</label>
-                                <input required value={deptForm.name} onChange={e => setDeptForm({ ...deptForm, name: e.target.value })} placeholder="VD: Khoa Nội Tiết" style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Phân loại khoa</label>
-                                <select value={deptForm.departmentType} onChange={e => setDeptForm({ ...deptForm, departmentType: Number(e.target.value) })} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
-                                    <option value={1}>Lâm sàng (Clinical)</option>
-                                    <option value={2}>Cận lâm sàng (Paraclinical)</option>
-                                    <option value={4}>Dược (Pharmacy)</option>
-                                    <option value={5}>Cấp cứu (Emergency)</option>
-                                    <option value={7}>Điều trị nội trú (Inpatient)</option>
-                                </select>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                                <button type="button" onClick={() => setDeptModalOpen(false)} style={{ padding: '8px 16px', background: '#f1f5f9', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Hủy</button>
-                                <button type="submit" style={{ padding: '8px 16px', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Lưu Khoa</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal Create Room */}
-            {roomModalOpen && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-                    <div style={{ background: '#fff', borderRadius: '12px', width: '480px', padding: '24px' }}>
-                        <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>Thêm Phòng Mới</h2>
-                        <form onSubmit={handleCreateRoom}>
-                            <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Khoa trực thuộc</label>
-                                <select value={roomForm.departmentId} onChange={e => setRoomForm({ ...roomForm, departmentId: Number(e.target.value) })} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
-                                    {departments.map(d => (
-                                        <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Số phòng *</label>
-                                    <input required value={roomForm.roomNumber} onChange={e => setRoomForm({ ...roomForm, roomNumber: e.target.value })} placeholder="VD: P402" style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Tầng</label>
-                                    <input type="number" value={roomForm.floorNumber} onChange={e => setRoomForm({ ...roomForm, floorNumber: Number(e.target.value) })} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                                </div>
-                            </div>
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Tên phòng *</label>
-                                <input required value={roomForm.name} onChange={e => setRoomForm({ ...roomForm, name: e.target.value })} placeholder="VD: Phòng Điều Trị Bệnh Tim Mạch 1" style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                                <button type="button" onClick={() => setRoomModalOpen(false)} style={{ padding: '8px 16px', background: '#f1f5f9', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Hủy</button>
-                                <button type="submit" style={{ padding: '8px 16px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Lưu Phòng</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal Create Bed */}
-            {bedModalOpen && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-                    <div style={{ background: '#fff', borderRadius: '12px', width: '420px', padding: '24px' }}>
-                        <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>Thêm Giường Bệnh</h2>
-                        <form onSubmit={handleCreateBed}>
-                            <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Số/Mã giường *</label>
-                                <input required value={bedForm.bedNumber} onChange={e => setBedForm({ ...bedForm, bedNumber: e.target.value })} placeholder="VD: G01" style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
-                            <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Giá viện phí / ngày (VNĐ)</label>
-                                <input type="number" value={bedForm.dailyRate} onChange={e => setBedForm({ ...bedForm, dailyRate: Number(e.target.value) })} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Ghi chú</label>
-                                <input value={bedForm.notes} onChange={e => setBedForm({ ...bedForm, notes: e.target.value })} placeholder="VD: Giường gần cửa sổ" style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                                <button type="button" onClick={() => setBedModalOpen(false)} style={{ padding: '8px 16px', background: '#f1f5f9', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Hủy</button>
-                                <button type="submit" style={{ padding: '8px 16px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}>Lưu Giường</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal Assign Staff */}
-            {staffModalOpen && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-                    <div style={{ background: '#fff', borderRadius: '12px', width: '480px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-                        <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px', color: '#1e293b' }}>
-                            Phân công nhân viên vào {selectedFacility?.name}
-                        </h2>
-                        <form onSubmit={handleCreateStaffAssignment}>
-                            <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Mã người dùng (User ID / GUID) *</label>
-                                <input
-                                    required
-                                    value={staffForm.userId}
-                                    onChange={e => setStaffForm({ ...staffForm, userId: e.target.value })}
-                                    placeholder="Nhập User GUID của nhân viên..."
-                                    style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }}
-                                />
-                            </div>
-                            <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Vai trò nhiệm vụ tại cơ sở *</label>
-                                <select
-                                    value={staffForm.role}
-                                    onChange={e => setStaffForm({ ...staffForm, role: e.target.value })}
-                                    style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }}
-                                >
-                                    <option value="Receptionist">Lễ tân tiếp đón (Receptionist)</option>
-                                    <option value="Doctor">Bác sĩ khám bệnh (Doctor)</option>
-                                    <option value="Nurse">Điều dưỡng viên (Nurse)</option>
-                                    <option value="Cashier">Thu ngân (Cashier)</option>
-                                    <option value="Pharmacist">Dược sĩ cấp phát (Pharmacist)</option>
-                                    <option value="Radiologist">Bác sĩ CĐHA (Radiologist)</option>
-                                    <option value="LabTechnician">Kỹ thuật viên Xét nghiệm (LabTechnician)</option>
-                                    <option value="Admin">Quản trị viên (Admin)</option>
-                                </select>
-                            </div>
-                            <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Khoa phòng trực thuộc (nếu có)</label>
-                                <select
-                                    value={staffForm.departmentId}
-                                    onChange={e => setStaffForm({ ...staffForm, departmentId: Number(e.target.value) })}
-                                    style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }}
-                                >
-                                    <option value={0}>-- Toàn bộ cơ sở / Không gán khoa cụ thể --</option>
-                                    {departments.map(d => (
-                                        <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <input
-                                    type="checkbox"
-                                    id="isPrimaryAssignment"
-                                    checked={staffForm.isPrimary}
-                                    onChange={e => setStaffForm({ ...staffForm, isPrimary: e.target.checked })}
-                                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                                />
-                                <label htmlFor="isPrimaryAssignment" style={{ fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
-                                    Đặt làm Cơ sở công tác chính (Primary Facility)
-                                </label>
-                            </div>
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Ghi chú phân công</label>
-                                <input
-                                    value={staffForm.notes}
-                                    onChange={e => setStaffForm({ ...staffForm, notes: e.target.value })}
-                                    placeholder="VD: Ca trực sáng thứ 2 - 6..."
-                                    style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px' }}
-                                />
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                                <button type="button" onClick={() => setStaffModalOpen(false)} style={{ padding: '8px 16px', background: '#f1f5f9', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Hủy</button>
-                                <button type="submit" style={{ padding: '8px 16px', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}>Lưu Phân công</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+    return <div className={styles.page}>
+        <PageHeader title="Quản trị Mạng lưới Bệnh viện & Cơ sở" subtitle="Quản lý cây tổ chức: Cơ sở ➔ Tòa nhà ➔ Khoa phòng ➔ Phòng bệnh ➔ Giường bệnh" actions={<Button type="primary" icon={<Plus size={18} />} onClick={() => setFacilityModalOpen(true)}>Thêm Cơ sở Mới</Button>} />
+        {loading ? <LoadingState message="Đang tải dữ liệu mạng lưới cơ sở..." /> : facilityError ? <InlineError message={facilityError} onRetry={fetchFacilities} /> : facilities.length === 0 ? <EmptyState title="Chưa có cơ sở bệnh viện nào." /> : <>
+            <div className={styles.facilityGrid}>{facilities.map(fac => <Card key={fac.id} role="button" tabIndex={0} aria-pressed={selectedFacility?.id === fac.id} className={[styles.facilityCard, selectedFacility?.id === fac.id ? styles.selectedCard : ''].join(' ')} onClick={() => { void selectFacility(fac); }} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void selectFacility(fac); } }}>
+                <div className={styles.sectionHeading}><Tag color="processing">{fac.code}</Tag><StatusBadge status={fac.isActive ? 'Approved' : 'Rejected'} label={fac.isActive ? 'Hoạt động' : 'Tạm dừng'} /></div>
+                <h3>{fac.name}</h3><Typography.Text type="secondary">{fac.address}, {fac.city}</Typography.Text>
+                <div className={styles.facilityFacts}><span><Building2 size={16} /> {fac.buildingCount} Tòa nhà</span><span><Stethoscope size={16} /> {fac.departmentCount} Khoa/Phòng</span><span><Phone size={16} /> {fac.phone}</span></div>
+            </Card>)}</div>
+            {selectedFacility && <Card><Tabs activeKey={facilityTab} onChange={setFacilityTab} items={[
+                { key: 'structure', label: 'Cấu trúc Khoa & Phòng (' + rooms.length + ' phòng)', children: <>
+                    <div className={styles.sectionHeading}><div><h2>{'Cấu trúc Khoa phòng & Buồng Giường: ' + selectedFacility.name}</h2><Typography.Text type="secondary">Phân cấp chi tiết các đơn vị điều trị trực thuộc</Typography.Text></div><div className={styles.actions}>
+                        <Button type="primary" icon={<Plus size={16} />} disabled={structureLoading} onClick={() => { setDeptForm(initialDepartment); setDeptModalOpen(true); }}>Thêm Khoa Phòng</Button>
+                        <Button icon={<DoorOpen size={16} />} disabled={structureLoading} onClick={() => { if (departments.length) { setRoomForm({ ...initialRoom, departmentId: departments[0].id }); setRoomModalOpen(true); } else showAlert('Cần tạo ít nhất 1 khoa phòng trước khi tạo phòng.', 'Thông báo', 'warning'); }}>Thêm Phòng Bệnh</Button>
+                    </div></div>
+                    {structureLoading ? <LoadingState message="Đang tải cấu trúc khoa phòng..." /> : structureError ? <InlineError message={structureError} onRetry={() => { void selectFacility(selectedFacility); }} /> : <Row className={styles.structureRow}>
+                        <Col xs={24} lg={12} className={styles.structureColumn}><h3 className={styles.iconHeading}><Layers size={18} /> Danh sách Khoa & Phòng ({rooms.length} phòng)</h3>
+                            {rooms.length === 0 ? <EmptyState title="Chưa có phòng bệnh nào. Hãy thêm khoa và phòng mới." /> : <div className={styles.roomList}>{rooms.map(room => <button type="button" key={room.id} aria-pressed={selectedRoom?.id === room.id} className={[styles.roomButton, selectedRoom?.id === room.id ? styles.selectedRoom : ''].join(' ')} onClick={() => { void selectRoom(room); }}><span><strong>{room.roomNumber} - {room.name}</strong><span className={styles.secondary}>{room.departmentName} (Tầng {room.floorNumber})</span></span><Tag color="processing">{room.availableBedCount}/{room.bedCount} giường trống</Tag></button>)}</div>}
+                        </Col>
+                        <Col xs={24} lg={12} className={styles.structureColumn}><div className={styles.sectionHeading}><h3 className={styles.iconHeading}><BedDouble size={18} /> {selectedRoom ? 'Giường bệnh phòng ' + selectedRoom.roomNumber : 'Chọn phòng để quản lý giường'}</h3>{selectedRoom && <Button onClick={() => { setBedForm({ ...initialBed, roomId: selectedRoom.id }); setBedModalOpen(true); }}>+ Thêm Giường</Button>}</div>
+                            {!selectedRoom ? <EmptyState title="Vui lòng nhấp chọn một phòng bệnh ở cột bên trái để theo dõi và quản lý giường." /> : bedLoading ? <LoadingState message="Đang tải danh sách giường bệnh..." /> : bedError ? <InlineError message={bedError} onRetry={() => { void selectRoom(selectedRoom); }} /> : beds.length === 0 ? <EmptyState title="Chưa có giường bệnh trong phòng này." /> : <div className={styles.bedGrid}>{beds.map(bed => <Card key={bed.id} size="small"><div className={styles.sectionHeading}><strong>{bed.bedNumber}</strong><Tag color={bed.status === 1 ? 'success' : bed.status === 2 ? 'error' : 'warning'}>{bedStatuses[bed.status - 1] || 'Chưa cập nhật'}</Tag></div><div className={styles.secondary}>{bedTypes.find(type => type.value === bed.bedType)?.label || 'Chưa cập nhật'}</div><strong className={styles.bedPrice}>{bed.dailyRate.toLocaleString('vi-VN')} đ/ngày</strong></Card>)}</div>}
+                        </Col>
+                    </Row>}
+                </> },
+                { key: 'staff', label: 'Phân công nhân sự (' + staffAssignments.length + ')', children: <>
+                    <div className={styles.sectionHeading}><div><h2>{'Danh sách Nhân viên tại cơ sở: ' + selectedFacility.name}</h2><Typography.Text type="secondary">Phân công cán bộ y tế, bác sĩ, điều dưỡng, lễ tân và thu ngân làm việc tại cơ sở</Typography.Text></div><Button type="primary" icon={<UserPlus size={16} />} onClick={() => { void openStaffModal(); }}>Phân công nhân viên mới</Button></div>
+                    {staffLoading ? <LoadingState message="Đang tải danh sách nhân viên..." /> : staffError ? <InlineError message={staffError} onRetry={() => { void fetchStaffAssignments(selectedFacility.id); }} /> : staffAssignments.length === 0 ? <EmptyState title="Chưa có nhân viên nào được phân công tại cơ sở này." /> : <DataTable data={staffAssignments} keyExtractor={s => s.id} columns={[
+                        { header: 'Nhân viên', accessor: s => <><strong>{s.fullName || s.userName || 'Chưa cập nhật'}</strong><span className={styles.secondary}>ID: {s.userId}</span></> },
+                        { header: 'Email', accessor: s => s.email || '-' }, { header: 'Vai trò', accessor: s => <Tag>{s.role}</Tag> },
+                        { header: 'Khoa', accessor: s => s.departmentName || 'Toàn cơ sở' },
+                        { header: 'Cơ sở', accessor: s => <Tag color={s.isPrimary ? 'success' : 'default'}>{s.isPrimary ? 'Cơ sở chính' : 'Cơ sở phụ'}</Tag> },
+                        { header: 'Trạng thái', accessor: s => <StatusBadge status={s.isActive ? 'Approved' : 'Rejected'} label={s.isActive ? 'Hoạt động' : 'Tạm dừng'} /> },
+                        { header: 'Ngày phân công', accessor: s => new Date(s.assignedAtUtc).toLocaleDateString('vi-VN') },
+                        { header: 'Thao tác', align: 'center', accessor: s => <Button type="text" danger aria-label="Hủy phân công" title="Hủy phân công" icon={<Trash2 size={16} />} onClick={() => handleDeleteStaffAssignment(s.id)} /> },
+                    ]} />}
+                </> },
+            ]} /></Card>}
+        </>}
+        <Modal open={facilityModalOpen} title="Thêm Cơ sở Bệnh viện Mới" {...modalProps(facilitySubmitting)} onCancel={() => { if (!submitting.current.facility) setFacilityModalOpen(false); }}>
+            <Form layout="vertical" onSubmitCapture={handleCreateFacility}>
+                <Form.Item label="Mã cơ sở *" htmlFor="facilityCode"><Input id="facilityCode" required disabled={facilitySubmitting} value={facilityForm.code} onChange={e => setFacilityForm({ ...facilityForm, code: e.target.value })} placeholder="VD: FAC-CS04" /></Form.Item>
+                <Form.Item label="Tên bệnh viện / cơ sở *" htmlFor="facilityName"><Input id="facilityName" required disabled={facilitySubmitting} value={facilityForm.name} onChange={e => setFacilityForm({ ...facilityForm, name: e.target.value })} placeholder="VD: Bệnh viện Đa khoa ClinicCare CS4" /></Form.Item>
+                <div className={styles.formGrid}><Form.Item label="Tỉnh/Thành phố *" htmlFor="facilityCity"><Input id="facilityCity" required disabled={facilitySubmitting} value={facilityForm.city} onChange={e => setFacilityForm({ ...facilityForm, city: e.target.value })} placeholder="TP. Hồ Chí Minh" /></Form.Item><Form.Item label="Số điện thoại *" htmlFor="facilityPhone"><Input id="facilityPhone" required disabled={facilitySubmitting} value={facilityForm.phone} onChange={e => setFacilityForm({ ...facilityForm, phone: e.target.value })} placeholder="028 1234 5678" /></Form.Item></div>
+                <Form.Item label="Địa chỉ chi tiết *" htmlFor="facilityAddress"><Input id="facilityAddress" required disabled={facilitySubmitting} value={facilityForm.address} onChange={e => setFacilityForm({ ...facilityForm, address: e.target.value })} placeholder="Số 100 Đường ABC, Phường X, Quận Y" /></Form.Item>
+                {footer(facilitySubmitting, () => setFacilityModalOpen(false), 'Lưu Cơ sở')}
+            </Form>
+        </Modal>
+        <Modal open={deptModalOpen} title="Thêm Khoa Phòng Mới" {...modalProps(deptSubmitting)} onCancel={() => { if (!submitting.current.department) setDeptModalOpen(false); }}>
+            <Form layout="vertical" onSubmitCapture={handleCreateDepartment}>
+                <Form.Item label="Mã khoa *" htmlFor="departmentCode"><Input id="departmentCode" required disabled={deptSubmitting} value={deptForm.code} onChange={e => setDeptForm({ ...deptForm, code: e.target.value })} placeholder="VD: K-NOI" /></Form.Item>
+                <Form.Item label="Tên khoa *" htmlFor="departmentName"><Input id="departmentName" required disabled={deptSubmitting} value={deptForm.name} onChange={e => setDeptForm({ ...deptForm, name: e.target.value })} placeholder="VD: Khoa Nội Tiết" /></Form.Item>
+                <Form.Item label="Phân loại khoa" htmlFor="departmentType"><Select id="departmentType" aria-label="Phân loại khoa" disabled={deptSubmitting} value={deptForm.departmentType} onChange={value => setDeptForm({ ...deptForm, departmentType: value })} options={departmentTypes} /></Form.Item>
+                {footer(deptSubmitting, () => setDeptModalOpen(false), 'Lưu Khoa')}
+            </Form>
+        </Modal>
+        <Modal open={roomModalOpen} title="Thêm Phòng Mới" {...modalProps(roomSubmitting)} onCancel={() => { if (!submitting.current.room) setRoomModalOpen(false); }}>
+            <Form layout="vertical" onSubmitCapture={handleCreateRoom}>
+                <Form.Item label="Khoa trực thuộc" htmlFor="roomDepartment"><Select id="roomDepartment" aria-label="Khoa trực thuộc" disabled={roomSubmitting} value={roomForm.departmentId} onChange={value => setRoomForm({ ...roomForm, departmentId: value })} options={departmentOptions} /></Form.Item>
+                <div className={styles.formGrid}><Form.Item label="Số phòng *" htmlFor="roomNumber"><Input id="roomNumber" required disabled={roomSubmitting} value={roomForm.roomNumber} onChange={e => setRoomForm({ ...roomForm, roomNumber: e.target.value })} placeholder="VD: P402" /></Form.Item><Form.Item label="Tầng" htmlFor="roomFloor"><InputNumber id="roomFloor" min={1} disabled={roomSubmitting} value={roomForm.floorNumber} onChange={value => setRoomForm({ ...roomForm, floorNumber: value ?? 1 })} className={styles.numberInput} /></Form.Item></div>
+                <Form.Item label="Tên phòng *" htmlFor="roomName"><Input id="roomName" required disabled={roomSubmitting} value={roomForm.name} onChange={e => setRoomForm({ ...roomForm, name: e.target.value })} placeholder="VD: Phòng Điều Trị Bệnh Tim Mạch 1" /></Form.Item>
+                <Form.Item label="Sức chứa tối đa (giường)" htmlFor="roomCapacity"><InputNumber id="roomCapacity" min={1} precision={0} disabled={roomSubmitting} value={roomForm.maxCapacity} onChange={value => setRoomForm({ ...roomForm, maxCapacity: value ?? 4 })} className={styles.numberInput} /></Form.Item>
+                {footer(roomSubmitting, () => setRoomModalOpen(false), 'Lưu Phòng')}
+            </Form>
+        </Modal>
+        <Modal open={bedModalOpen} title="Thêm Giường Bệnh" {...modalProps(bedSubmitting)} onCancel={() => { if (!submitting.current.bed) setBedModalOpen(false); }}>
+            <Form layout="vertical" onSubmitCapture={handleCreateBed}>
+                <Form.Item label="Số/Mã giường *" htmlFor="bedNumber"><Input id="bedNumber" required disabled={bedSubmitting} value={bedForm.bedNumber} onChange={e => setBedForm({ ...bedForm, bedNumber: e.target.value })} placeholder="VD: G01" /></Form.Item>
+                <Form.Item label="Loại giường" htmlFor="bedType"><Select id="bedType" aria-label="Loại giường" disabled={bedSubmitting} value={bedForm.bedType} onChange={value => setBedForm({ ...bedForm, bedType: value })} options={bedTypes} /></Form.Item>
+                <Form.Item label="Giá viện phí / ngày (VNĐ)" htmlFor="bedRate"><InputNumber id="bedRate" min={0} step={50000} disabled={bedSubmitting} value={bedForm.dailyRate} onChange={value => setBedForm({ ...bedForm, dailyRate: value ?? 0 })} className={styles.numberInput} /></Form.Item>
+                <Form.Item label="Ghi chú" htmlFor="bedNotes"><Input id="bedNotes" disabled={bedSubmitting} value={bedForm.notes} onChange={e => setBedForm({ ...bedForm, notes: e.target.value })} placeholder="VD: Giường gần cửa sổ" /></Form.Item>
+                {footer(bedSubmitting, () => setBedModalOpen(false), 'Lưu Giường')}
+            </Form>
+        </Modal>
+        <Modal open={staffModalOpen} title={'Phân công nhân viên vào ' + (selectedFacility?.name || '')} {...modalProps(staffSubmitting)} onCancel={() => { if (!submitting.current.staff) { setStaffModalOpen(false); ++usersRequest.current; } }}>
+            <Form layout="vertical" onSubmitCapture={handleCreateStaffAssignment}>
+                {usersLoading ? <LoadingState message="Đang tải danh sách nhân viên..." /> : usersError && <Alert type="error" title={usersError} showIcon />}
+                <Form.Item label="Nhân viên *" htmlFor="assignedUser"><Select id="assignedUser" aria-label="Nhân viên *" showSearch optionFilterProp="label" disabled={usersLoading || !!usersError || staffSubmitting} value={staffForm.userId || undefined} onChange={value => setStaffForm({ ...staffForm, userId: value })} options={users.map(user => ({ value: user.id, label: user.fullName + ' (' + user.email + ')' }))} /></Form.Item>
+                <Form.Item label="Vai trò nhiệm vụ tại cơ sở *" htmlFor="assignmentRole"><Select id="assignmentRole" aria-label="Vai trò nhiệm vụ tại cơ sở *" disabled={staffSubmitting} value={staffForm.role} onChange={value => setStaffForm({ ...staffForm, role: value })} options={staffRoles} /></Form.Item>
+                <Form.Item label="Khoa phòng trực thuộc (nếu có)" htmlFor="assignmentDepartment"><Select id="assignmentDepartment" aria-label="Khoa phòng trực thuộc (nếu có)" disabled={staffSubmitting} value={staffForm.departmentId} onChange={value => setStaffForm({ ...staffForm, departmentId: value })} options={[{ value: 0, label: '-- Toàn bộ cơ sở / Không gán khoa cụ thể --' }, ...departmentOptions]} /></Form.Item>
+                <Form.Item htmlFor="isPrimaryAssignment"><Checkbox id="isPrimaryAssignment" disabled={staffSubmitting} checked={staffForm.isPrimary} onChange={e => setStaffForm({ ...staffForm, isPrimary: e.target.checked })}>Đặt làm Cơ sở công tác chính (Primary Facility)</Checkbox></Form.Item>
+                {footer(staffSubmitting, () => { setStaffModalOpen(false); ++usersRequest.current; }, 'Lưu Phân công', usersLoading || !!usersError)}
+            </Form>
+        </Modal>
+    </div>;
 };
