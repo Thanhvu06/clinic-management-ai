@@ -41,3 +41,4 @@
 @keyframes billingSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @media (max-width: 1023px) { .kpiGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 767px) { .kpiGrid { grid-template-columns: minmax(0, 1fr); } .filterSelect { width: 100%; } .dateRange { width: 100%; } .dateInput { flex: 1; } }
+.invoiceSourceSelect { width: 100%; }

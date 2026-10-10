@@ -152,7 +152,7 @@ export const PharmacyInventory: React.FC = () => {
                 {medicinesLoading ? <LoadingState message="Đang tải danh sách thuốc..." /> : medicinesError ? <InlineError message={medicinesError} onRetry={fetchMedicines} /> : filteredMedicines.length === 0 ? <EmptyState title="Chưa có thuốc phù hợp" description="Bạn thử tìm với tên hoặc mã thuốc khác nhé." /> : <Row gutter={[spacing.md, spacing.md]}>{filteredMedicines.map(medicine => <Col key={medicine.id} xs={24} sm={12} lg={6}><MedicineCard medicine={medicine} /></Col>)}</Row>}
             </section>
             <div hidden={view !== 'Bảng'}>
-                <div className={styles.tableScroll}><DataTable emptyText="" data={loading ? [] : filteredTransactions} keyExtractor={t => t.id} columns={[
+                {loading ? <LoadingState message="Đang tải lịch sử giao dịch kho..." /> : filteredTransactions.length === 0 ? <EmptyState title="Chưa có giao dịch biến động tồn kho nào." /> : <div className={styles.tableScroll}><DataTable data={filteredTransactions} keyExtractor={t => t.id} columns={[
                     {header:'Thời gian',className:styles.transactionTime,accessor:t => <div className={styles.inlineContent}><Clock size={14} /><span>{formatDateTime(t.createdAt)}</span></div>},
                     {header:'Mặt hàng thuốc',accessor:t => <><strong>{t.medicineName}</strong><div className={styles.secondary}>{t.medicineCode}</div></>},
                     {header:'Loại giao dịch',accessor:t => getTypeBadge(t.type,t.quantityChange)},
@@ -160,9 +160,8 @@ export const PharmacyInventory: React.FC = () => {
                     {header:'Tồn sau giao dịch',accessor:t => <strong>{t.balanceAfter} {t.unit}</strong>},
                     {header:'Lý do / Căn cứ',accessor:t => t.reason || (t.prescriptionId ? `Đơn thuốc #${t.prescriptionId}` : '-')},
                     {header:'Người thực hiện',accessor:t => <div className={styles.inlineContent}><User size={14} className={styles.actorIcon} /><span>{t.actorName}</span></div>}
-                ]} /></div>
-                {loading ? <LoadingState message="Đang tải lịch sử giao dịch kho..." /> : filteredTransactions.length === 0 ? <EmptyState title="Chưa có giao dịch biến động tồn kho nào." /> : null}
-                {totalItems > 15 && <div className={styles.pagination}><span className={styles.secondary}>Tổng số: {totalItems} giao dịch</span><div className={styles.pageControls}><Button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Trang trước</Button><span>Trang {page}</span><Button disabled={page * 15 >= totalItems} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
+                ]} /></div>}
+                {!loading && filteredTransactions.length > 0 && totalItems > 15 && <div className={styles.pagination}><span className={styles.secondary}>Tổng số: {totalItems} giao dịch</span><div className={styles.pageControls}><Button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Trang trước</Button><span>Trang {page}</span><Button disabled={page * 15 >= totalItems} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
             </div>
             <Modal open={modalOpen} onCancel={() => { if (!formLoading) setModalOpen(false); }} title="Nhập kho / Điều chỉnh tồn kho" width={520} className={styles.stockModal} mask={{closable:false}} keyboard={false} closable={{disabled:formLoading}} footer={<><Button htmlType="button" disabled={formLoading} onClick={() => setModalOpen(false)}>Hủy</Button><Button type="primary" htmlType="submit" form="pharmacy-stock-adjustment" disabled={formLoading}>{formLoading ? 'Đang lưu...' : 'Xác nhận nhập kho'}</Button></>}>
                 <form id="pharmacy-stock-adjustment" onSubmit={handleFormSubmit} className={styles.stockForm}>

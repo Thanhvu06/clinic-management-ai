@@ -179,10 +179,10 @@ describe('Connected Outpatient Care Journey - Frontend Tests', () => {
                 success: true,
                 message: 'OK',
                 data: {
-                    items: [],
+                    items: [{ visitId: 101, visitCode: 'VIS-20260913-0101', patientId: 42, patientName: 'NGUYỄN VĂN THỬ NGHIỆM', visitDate: '2026-09-13', departmentName: 'Khoa Nội', doctorName: 'BS Minh', status: 'ReadyForBilling', unbilledItemCount: 1, estimatedTotal: 200000 }],
                     page: 1,
                     pageSize: 10,
-                    totalItems: 0,
+                    totalItems: 1,
                     totalPages: 1,
                 },
             });
@@ -215,9 +215,10 @@ describe('Connected Outpatient Care Journey - Frontend Tests', () => {
             const visitRadio = screen.getByLabelText(/Lượt khám ngoại trú \(Visit\)/i);
             fireEvent.click(visitRadio);
 
-            // Enter Patient Visit ID
-            const input = screen.getByPlaceholderText(/Ví dụ: 1/i);
-            fireEvent.change(input, { target: { value: '101' } });
+            // Select the readable visit label instead of entering an internal ID.
+            const select = screen.getByRole('combobox', { name: 'Chọn lượt khám *' });
+            fireEvent.mouseDown(select);
+            fireEvent.click(await screen.findByText('VIS-20260913-0101 — NGUYỄN VĂN THỬ NGHIỆM — 13/9/2026'));
 
             // Submit
             const submitBtn = screen.getByRole('button', { name: /Tạo hóa đơn/i });
