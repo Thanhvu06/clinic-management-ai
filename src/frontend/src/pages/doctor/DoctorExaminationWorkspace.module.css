@@ -1,6 +1,6 @@
 /* DoctorExaminationWorkspace: style riêng không đáp ứng được bằng props antd thuần. Biến lấy từ --cc-*. */
 
-.tabBar {
+.workspaceTabs {
     display: flex;
     border-bottom: 2px solid var(--cc-color-border);
     margin-bottom: var(--cc-space-md);
@@ -9,7 +9,7 @@
     overflow-x: auto;
 }
 
-.tabButton {
+.workspaceTabButton {
     padding: var(--cc-space-sm) var(--cc-space-md);
     border: none;
     background: none;
@@ -24,61 +24,57 @@
     white-space: nowrap;
 }
 
-.tabButtonActive {
+.activeWorkspaceTab {
     color: var(--cc-color-primary);
     border-bottom: 3px solid var(--cc-color-primary);
 }
 
-.detail {
-    border-radius: var(--cc-radius-md);
-}
-
-.tabPanel {
+.workspaceCard {
     min-width: 0;
     border-radius: var(--cc-radius-md);
 }
 
-.tabPanel > :global(.ant-card-body) {
+.workspaceCard > :global(.ant-card-body) {
     padding: var(--cc-space-lg);
     min-width: 0;
 }
 
-.stackedTab > :global(.ant-card-body) {
+.stackedTabContent > :global(.ant-card-body) {
     display: flex;
     flex-direction: column;
     gap: var(--cc-space-lg);
 }
 
-.tableScroll {
+.dataTableScroll {
     max-width: 100%;
     overflow-x: auto;
 }
 
-.tableScroll :global(table) {
+.dataTableScroll :global(table) {
     min-width: 960px;
 }
 
-.responsiveRow {
+.responsiveFormRow {
     margin-inline: calc(-1 * var(--cc-space-xs));
     row-gap: var(--cc-space-md);
 }
 
-.column {
+.responsiveColumn {
     min-width: 0;
     padding-inline: var(--cc-space-xs);
 }
 
-.formItem {
+.formField {
     margin-bottom: var(--cc-space-md);
     min-width: 0;
 }
 
-.fieldControl {
+.formControl {
     width: 100%;
     min-width: 0;
 }
 
-.actionButton {
+.iconActionButton {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -103,13 +99,7 @@
     color: var(--cc-color-text-dark);
 }
 
-.detail2 {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cc-space-xs);
-}
-
-.sectionSpacing {
+.formRowSpacing {
     margin-bottom: var(--cc-space-md);
 }
 
@@ -121,28 +111,24 @@
     margin-bottom: var(--cc-space-xxs);
 }
 
-.detail3 {
-    width: 100%;
-}
-
-.icdCode {
+.diagnosisCodeInput {
     width: 100%;
     text-transform: uppercase;
 }
 
-.inlineGroup {
+.diagnosticOrderList {
     display: flex;
     flex-direction: column;
     gap: var(--cc-space-md);
 }
 
-.previousMeasurement {
+.previousMeasurementCard {
     border-radius: var(--cc-radius-md);
     border-left: 4px solid var(--cc-color-info);
     background-color: var(--cc-color-bg-subtle);
 }
 
-.detailText {
+.previousMeasurementTitle {
     font-size: 0.78rem;
     color: var(--cc-color-text-secondary);
     font-weight: 700;
@@ -150,18 +136,18 @@
     letter-spacing: 0.04em;
 }
 
-.detailText2 {
+.previousMeasurementDate {
     font-size: 0.9rem;
     color: var(--cc-color-text-dark);
     font-weight: 600;
     margin-top: var(--cc-space-xxs);
 }
 
-.sectionSpacing2 {
+.measurementGrid {
     margin-top: var(--cc-space-sm);
 }
 
-.measurementTile {
+.previousMeasurementTile {
     background-color: var(--cc-color-bg-container);
     padding: var(--cc-space-xs);
     border-radius: var(--cc-radius-sm);
@@ -169,24 +155,24 @@
     text-align: center;
 }
 
-.detailText3 {
+.secondaryCaption {
     font-size: 0.75rem;
     color: var(--cc-color-text-secondary);
 }
 
-.detailText4 {
+.previousMeasurementValue {
     font-size: 1.15rem;
     font-weight: 700;
     color: var(--cc-color-text-dark);
 }
 
-.detail6 {
+.measurementComparisonCard {
     border-radius: var(--cc-radius-md);
     border-left: 4px solid var(--cc-color-success);
     background-color: var(--cc-color-success-bg);
 }
 
-.detailText5 {
+.measurementComparisonTitle {
     font-size: 0.78rem;
     color: var(--cc-color-success);
     font-weight: 700;
@@ -194,14 +180,14 @@
     letter-spacing: 0.04em;
 }
 
-.detailText6 {
+.measurementComparisonSubtitle {
     font-size: 0.9rem;
     color: var(--cc-color-success);
     font-weight: 600;
     margin-top: var(--cc-space-xxs);
 }
 
-.outlinedPanel2 {
+.measurementDeltaTile {
     background-color: var(--cc-color-bg-container);
     padding: var(--cc-space-xs);
     border-radius: var(--cc-radius-sm);
@@ -209,58 +195,58 @@
     text-align: center;
 }
 
-.statusText {
+.deltaPositive {
     color: var(--cc-color-warning);
 }
 
-.statusText2 {
+.infoText {
     color: var(--cc-color-info);
 }
 
-.statusText3 {
+.successText {
     color: var(--cc-color-success);
 }
 
-.measurementValue {
+.measurementDeltaValue {
     font-size: 1.15rem;
     font-weight: 800;
 }
 
-.detailText7 {
+.heightDeltaValue {
     font-size: 1.15rem;
     font-weight: 800;
     color: var(--cc-color-success);
 }
 
-.detailText8 {
+.measurementHistoryNotice {
     border-radius: var(--cc-radius-md);
     background-color: var(--cc-color-bg-subtle);
     color: var(--cc-color-text-secondary);
     font-size: 0.88rem;
 }
 
-.description {
+.sectionDescription {
     margin: var(--cc-space-xxs) 0 0 0;
     font-size: 0.85rem;
     color: var(--cc-color-text-secondary);
 }
 
-.sectionSpacing3 {
+.vitalSignsGrid {
     margin-bottom: var(--cc-space-lg);
 }
 
-.inlineGroup2 {
+.iconTextRow {
     display: flex;
     align-items: center;
     gap: var(--cc-space-xs);
 }
 
-.detail8 {
+.bloodPressureSeparator {
     color: var(--cc-color-text-secondary);
     font-weight: 700;
 }
 
-.detailText9 {
+.secondaryLabel {
     font-size: 0.8rem;
     color: var(--cc-color-text-secondary);
 }
@@ -271,19 +257,19 @@
     align-items: center;
 }
 
-.fieldLabel2 {
+.heightFieldLabel {
     font-size: 0.85rem;
     font-weight: 600;
     color: var(--cc-color-text);
 }
 
-.detailText10 {
+.reuseHeightButton {
     font-size: 0.75rem;
     color: var(--cc-color-info);
     font-weight: 600;
 }
 
-.sectionHeader3 {
+.bmiSummary {
     background-color: var(--cc-color-bg-subtle);
     padding: var(--cc-space-md) var(--cc-space-lg);
     border-radius: var(--cc-radius-md);
@@ -295,38 +281,30 @@
     gap: var(--cc-space-md);
 }
 
-.detailText11 {
+.bmiHeading {
     font-size: 0.85rem;
     color: var(--cc-color-text-secondary);
     font-weight: 600;
 }
 
-.inlineGroup3 {
+.bmiValueRow {
     display: flex;
     align-items: center;
     gap: var(--cc-space-sm);
     margin-top: var(--cc-space-xs);
 }
 
-.detailText12 {
+.bmiValue {
     font-size: 1.8rem;
     font-weight: 800;
     color: var(--cc-color-text-dark);
 }
 
-.statusBackground {
+.successSurface {
     background-color: var(--cc-color-success-bg);
 }
 
-.statusBackground2 {
-    background-color: var(--cc-color-warning-bg);
-}
-
-.statusBackground3 {
-    background-color: var(--cc-color-danger-bg);
-}
-
-.statusText4 {
+.dangerText {
     color: var(--cc-color-danger);
 }
 
@@ -337,56 +315,71 @@
     font-size: 0.85rem;
 }
 
+.bmiUnderweight {
+    background-color: var(--cc-color-warning-bg);
+    color: var(--cc-color-warning);
+}
+
+.bmiNormal {
+    background-color: var(--cc-color-success-bg);
+    color: var(--cc-color-success);
+}
+
+.bmiElevated {
+    background-color: var(--cc-color-danger-bg);
+    color: var(--cc-color-danger);
+}
+
 .bmiExplanation {
     font-size: 0.8rem;
     color: var(--cc-color-text-secondary);
     max-width: 360px;
 }
 
-.regionTitle {
+.vitalHistoryTitle {
     margin: 0;
     font-size: 1.1rem;
     font-weight: 700;
     color: var(--cc-color-text-dark);
 }
 
-.detail10 {
+.vitalHistoryTableScroll {
     overflow-x: auto;
 }
 
-.inlineGroup5 {
+.diagnosticCategoryFilters {
     display: flex;
     gap: var(--cc-space-xs);
     margin-bottom: var(--cc-space-md);
     flex-wrap: wrap;
 }
 
-.statusBackground4 {
+.selectedOptionBorder {
     border-color: var(--cc-color-info);
 }
 
-.statusBackground5 {
+.defaultOptionBorder {
     border-color: var(--cc-color-border);
 }
 
-.statusBackground6 {
+.selectedCategorySurface {
     background-color: var(--cc-color-info-bg);
 }
 
-.statusBackground7 {
+.optionSurface {
     background-color: var(--cc-color-bg-container);
 }
 
-.statusText5 {
+.secondaryText {
     color: var(--cc-color-text-secondary);
 }
 
-.detail11 {
+.categoryFilterButton {
     font-size: 0.85rem;
     font-weight: 600;
 }
 
-.outlinedPanel3 {
+.diagnosticServiceList {
     max-height: 280px;
     overflow-y: auto;
     padding: var(--cc-space-xs);
@@ -396,7 +389,7 @@
     margin-bottom: var(--cc-space-md);
 }
 
-.statusBackground8 {
+.selectedSurface {
     background-color: var(--cc-color-primary-light);
 }
 
@@ -417,16 +410,16 @@
     flex-shrink: 0;
 }
 
-.serviceOption > .inlineGroup2 {
+.serviceOption > .iconTextRow {
     min-width: 0;
     flex: 1;
 }
 
-.statusSummary {
+.recordStatusSummary {
     flex-wrap: wrap;
 }
 
-.statusSummary > span {
+.recordStatusSummary > span {
     white-space: nowrap;
 }
 
@@ -444,31 +437,31 @@
     text-align: right;
 }
 
-.detailText17 {
+.selectedServicesCount {
     font-size: 0.88rem;
     color: var(--cc-color-text-secondary);
 }
 
-.refreshAction {
+.createOrderButton {
     display: inline-flex;
     align-items: center;
     gap: var(--cc-space-xs);
     font-weight: 600;
 }
 
-.inlineGroup6 {
+.refreshOrdersButton {
     font-size: 0.85rem;
     display: flex;
     align-items: center;
     gap: var(--cc-space-xxs);
 }
 
-.detail14 {
+.emptyStateIcon {
     margin: 0 auto var(--cc-space-xs) auto;
     color: var(--cc-color-border);
 }
 
-.orderCard {
+.diagnosticOrderCard {
     border-radius: var(--cc-radius-md);
     border: 1px solid var(--cc-color-border);
     background-color: var(--cc-color-bg-container);
@@ -476,7 +469,7 @@
     overflow: hidden;
 }
 
-.orderHeader {
+.diagnosticOrderHeader {
     padding: var(--cc-space-sm) var(--cc-space-md);
     background-color: var(--cc-color-bg-subtle);
     border-bottom: 1px solid var(--cc-color-border);
@@ -487,13 +480,13 @@
     gap: var(--cc-space-xs);
 }
 
-.orderHeader > .inlineGroup2 {
+.diagnosticOrderHeader > .iconTextRow {
     flex-wrap: wrap;
     min-width: 0;
     max-width: 100%;
 }
 
-.inlineGroup7 {
+.orderIdentity {
     display: flex;
     align-items: center;
     gap: var(--cc-space-sm);
@@ -507,7 +500,7 @@
     color: var(--cc-color-text-dark);
 }
 
-.reviewedBadge {
+.reviewedOrderBadge {
     background-color: var(--cc-color-success-bg);
     color: var(--cc-color-success);
     padding: var(--cc-space-xxs) var(--cc-space-xs);
@@ -519,7 +512,7 @@
     gap: var(--cc-space-xxs);
 }
 
-.unreviewedBadge {
+.unreviewedOrderBadge {
     background-color: var(--cc-color-danger-bg);
     color: var(--cc-color-danger);
     padding: var(--cc-space-xxs) var(--cc-space-xs);
@@ -528,12 +521,12 @@
     font-weight: 700;
 }
 
-.detailText21 {
+.orderCreatedTime {
     font-size: 0.82rem;
     color: var(--cc-color-text-secondary);
 }
 
-.inlineGroup8 {
+.printOrderButton {
     padding: var(--cc-space-xs) var(--cc-space-sm);
     font-size: 0.82rem;
     display: flex;
@@ -542,55 +535,46 @@
     text-decoration: none;
 }
 
-.inlineGroup9 {
+.reviewOrderButton {
     font-size: 0.82rem;
     display: flex;
     align-items: center;
     gap: var(--cc-space-xxs);
 }
 
-.detailText22 {
+.cancelOrderButton {
     font-size: 0.82rem;
     color: var(--cc-color-danger);
 }
 
-.detail15 {
+.orderContent {
     padding: var(--cc-space-md) var(--cc-space-md);
 }
 
-.detailText23 {
+.orderIndication {
     font-size: 0.85rem;
     color: var(--cc-color-text-secondary);
     margin-bottom: var(--cc-space-sm);
 }
 
-.medicineName {
+.itemTitle {
     font-weight: 600;
     color: var(--cc-color-text-dark);
 }
 
-.detail17 {
+.diagnosticResultText {
     font-weight: 700;
     color: var(--cc-color-text-dark);
 }
 
-.detail18 {
+.emptyValue {
     color: var(--cc-color-text-muted);
 }
 
-.detailText24 {
+.diagnosticResultMetadata {
     font-size: 0.72rem;
     color: var(--cc-color-text-muted);
     margin-top: var(--cc-space-xxs);
-}
-
-.prescriptionHeader {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--cc-space-md);
-    flex-wrap: wrap;
-    gap: var(--cc-space-sm);
 }
 
 .medicineSearchSection {
@@ -602,7 +586,7 @@
     position: relative;
 }
 
-.medicineResults {
+.medicineSearchResults {
     margin-top: var(--cc-space-xs);
     background-color: var(--cc-color-bg-container);
     border: 1px solid var(--cc-color-border);
@@ -632,12 +616,12 @@
     color: var(--cc-color-text-secondary);
 }
 
-.detail21 {
+.medicineStockQuantity {
     font-size: 0.8rem;
     font-weight: 600;
 }
 
-.detailText26 {
+.medicineUnitBadge {
     background-color: var(--cc-color-info);
     color: var(--cc-color-bg-container);
     padding: var(--cc-space-xxs) var(--cc-space-xs);
@@ -645,19 +629,19 @@
     font-size: 0.75rem;
 }
 
-.sectionSpacing5 {
+.prescriptionTable {
     overflow-x: auto;
     margin-bottom: var(--cc-space-md);
 }
 
-.historyTitle {
+.historySectionTitle {
     margin: 0 0 var(--cc-space-md) 0;
     font-size: 1.15rem;
     font-weight: 700;
     color: var(--cc-color-text-dark);
 }
 
-.historyList {
+.historyVisitList {
     display: flex;
     flex-direction: column;
     gap: var(--cc-space-sm);
@@ -670,7 +654,7 @@
     border: 1px solid var(--cc-color-border);
 }
 
-.historyHeader {
+.historyVisitHeader {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -679,37 +663,37 @@
     gap: var(--cc-space-xs);
 }
 
-.detailText27 {
+.historyVisitDate {
     font-weight: 700;
     color: var(--cc-color-text-dark);
     font-size: 1rem;
 }
 
-.detailText28 {
+.historyDoctorName {
     margin-left: var(--cc-space-xs);
     font-size: 0.85rem;
     color: var(--cc-color-text-secondary);
 }
 
-.detailText29 {
+.historySpecialtyName {
     font-size: 0.85rem;
     color: var(--cc-color-info);
     font-weight: 600;
 }
 
-.detailText30 {
+.historyDiagnosis {
     font-size: 0.9rem;
     color: var(--cc-color-text);
     margin-bottom: var(--cc-space-xxs);
 }
 
-.detailText31 {
+.historySummary {
     font-size: 0.85rem;
     color: var(--cc-color-text-secondary);
     margin-bottom: var(--cc-space-xs);
 }
 
-.inlineGroup11 {
+.historyPrescription {
     display: flex;
     align-items: center;
     gap: var(--cc-space-xs);
@@ -717,13 +701,13 @@
     margin-top: var(--cc-space-xs);
 }
 
-.detailText32 {
+.historyPrescriptionLabel {
     font-size: 0.8rem;
     font-weight: 600;
     color: var(--cc-color-text-secondary);
 }
 
-.detailText33 {
+.historyMedicineBadge {
     background-color: var(--cc-color-info-bg);
     color: var(--cc-color-info);
     font-size: 0.75rem;
@@ -731,24 +715,24 @@
     border-radius: var(--cc-radius-sm);
 }
 
-.missingAppointment {
+.missingAppointmentCard {
     padding: var(--cc-space-xl);
     text-align: center;
     margin: var(--cc-space-xl) auto;
     max-width: 500px;
 }
 
-.detail23 {
+.missingAppointmentIcon {
     color: var(--cc-color-danger);
     margin: 0 auto var(--cc-space-md) auto;
 }
 
-.description2 {
+.missingAppointmentMessage {
     color: var(--cc-color-text-muted);
     font-size: 0.9rem;
 }
 
-.sectionSpacing6 {
+.returnToWorkspaceButton {
     margin-top: var(--cc-space-md);
 }
 
@@ -756,7 +740,7 @@
     padding-bottom: var(--cc-space-xl);
 }
 
-.backLink {
+.backToWorkspaceLink {
     display: inline-flex;
     align-items: center;
     gap: var(--cc-space-xs);
@@ -766,7 +750,7 @@
     font-size: 0.9rem;
 }
 
-.inlineGroup12 {
+.completedBanner {
     display: flex;
     align-items: center;
     gap: var(--cc-space-sm);
@@ -778,16 +762,16 @@
     margin-bottom: var(--cc-space-md);
 }
 
-.detail25 {
+.completedBannerIcon {
     flex-shrink: 0;
 }
 
-.detailText35 {
+.completedBannerMessage {
     font-size: 0.9rem;
     color: var(--cc-color-warning);
 }
 
-.inlineGroup13 {
+.pendingDiagnosticBanner {
     display: flex;
     align-items: center;
     gap: var(--cc-space-sm);
@@ -799,16 +783,16 @@
     margin-bottom: var(--cc-space-md);
 }
 
-.detail26 {
+.pendingDiagnosticIcon {
     flex-shrink: 0;
     color: var(--cc-color-warning);
 }
 
-.detail27 {
+.diagnosticBannerMessage {
     font-size: 0.88rem;
 }
 
-.navigation {
+.unreviewedDiagnosticBanner {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -821,19 +805,19 @@
     margin-bottom: var(--cc-space-md);
 }
 
-.detail28 {
+.unreviewedDiagnosticIcon {
     flex-shrink: 0;
     color: var(--cc-color-success);
 }
 
-.sectionSpacing7 {
+.patientHeaderCard {
     margin-bottom: var(--cc-space-md);
     border-radius: var(--cc-radius-lg);
     background-color: var(--cc-color-bg-subtle);
     border-left: 5px solid var(--cc-color-primary);
 }
 
-.sectionHeader10 {
+.patientHeaderLayout {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
@@ -841,21 +825,21 @@
     gap: var(--cc-space-md);
 }
 
-.inlineGroup14 {
+.wrappingIconRow {
     display: flex;
     align-items: center;
     gap: var(--cc-space-xs);
     flex-wrap: wrap;
 }
 
-.detailText36 {
+.patientName {
     margin: 0;
     font-size: 1.4rem;
     font-weight: 800;
     color: var(--cc-color-text-dark);
 }
 
-.detailText37 {
+.appointmentCode {
     background-color: var(--cc-color-info-bg);
     color: var(--cc-color-info);
     padding: var(--cc-space-xxs) var(--cc-space-xs);
@@ -865,11 +849,11 @@
     font-family: monospace;
 }
 
-.statusText6 {
+.activeEncounterText {
     color: var(--cc-color-primary);
 }
 
-.detail29 {
+.encounterStatusPill {
     padding: var(--cc-space-xxs) var(--cc-space-xs);
     border-radius: var(--cc-radius-full);
     font-size: 0.8rem;
@@ -885,23 +869,23 @@
     color: var(--cc-color-text-secondary);
 }
 
-.detailText38 {
+.appointmentReason {
     margin-top: var(--cc-space-xs);
     font-size: 0.9rem;
     color: var(--cc-color-text);
 }
 
-.detail30 {
+.patientHistorySummary {
     text-align: right;
 }
 
-.detailText39 {
+.pastVisitCount {
     font-size: 1.2rem;
     font-weight: 800;
     color: var(--cc-color-text-dark);
 }
 
-.actionBar {
+.workspaceActionBar {
     margin-top: var(--cc-space-lg);
     background-color: var(--cc-color-bg-container);
     border-top: 1px solid var(--cc-color-border);
@@ -938,7 +922,7 @@
     font-weight: 600;
 }
 
-.inlineGroup16 {
+.completedRecordMessage {
     display: flex;
     align-items: center;
     gap: var(--cc-space-xs);
@@ -947,14 +931,7 @@
     font-size: 0.9rem;
 }
 
-.actionBarButtons {
-    display: flex;
-    gap: var(--cc-space-xs);
-    align-items: center;
-    flex-wrap: wrap;
-}
-
-.inlineGroup18 {
+.pendingOrderNotice {
     font-size: 0.82rem;
     color: var(--cc-color-warning);
     font-weight: 600;
@@ -963,7 +940,7 @@
     gap: var(--cc-space-xxs);
 }
 
-.inlineGroup19 {
+.unreviewedOrderNotice {
     font-size: 0.82rem;
     color: var(--cc-color-danger);
     font-weight: 600;
@@ -972,15 +949,15 @@
     gap: var(--cc-space-xxs);
 }
 
-.statusBackground9 {
+.completionBlockedSurface {
     background-color: var(--cc-color-text-muted);
 }
 
-.statusBackground10 {
+.completionReadySurface {
     background-color: var(--cc-color-success);
 }
 
-.completionButtonContent {
+.completeConsultationButton {
     display: flex;
     align-items: center;
     gap: var(--cc-space-xs);
@@ -988,56 +965,20 @@
     font-size: 0.95rem;
 }
 
-.modalOverlay {
-    position: fixed;
-    inset: 0;
-    background-color: color-mix(in srgb, var(--cc-color-text-dark) 50%, transparent);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: var(--cc-space-md);
-}
-
-.revisitDialog {
-    background-color: var(--cc-color-bg-container);
-    border-radius: var(--cc-radius-lg);
-    width: 100%;
-    max-width: 440px;
-    padding: var(--cc-space-lg);
-    box-shadow: var(--cc-shadow-sm);
-}
-
-.sectionTitle4 {
-    margin: 0 0 var(--cc-space-md) 0;
+.modalTitle {
+    margin: 0;
     font-size: 1.2rem;
     font-weight: 700;
     color: var(--cc-color-text-dark);
 }
 
-.inlineGroup22 {
+.modalFooterActions {
     display: flex;
     justify-content: flex-end;
     gap: var(--cc-space-xs);
 }
 
-.completionDialog {
-    background-color: var(--cc-color-bg-container);
-    border-radius: var(--cc-radius-lg);
-    width: 100%;
-    max-width: 520px;
-    padding: var(--cc-space-lg);
-    box-shadow: var(--cc-shadow-sm);
-}
-
-.inlineGroup23 {
-    display: flex;
-    align-items: center;
-    gap: var(--cc-space-xs);
-    margin-bottom: var(--cc-space-md);
-}
-
-.inlineGroup24 {
+.completionModalIcon {
     width: 40px;
     height: 40px;
     border-radius: 50%;
@@ -1048,14 +989,7 @@
     color: var(--cc-color-success);
 }
 
-.sectionTitle5 {
-    margin: 0;
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: var(--cc-color-text-dark);
-}
-
-.outlinedPanel7 {
+.completionSummary {
     background-color: var(--cc-color-bg-subtle);
     padding: var(--cc-space-sm);
     border-radius: var(--cc-radius-sm);
@@ -1064,11 +998,11 @@
     border: 1px solid var(--cc-color-border);
 }
 
-.sectionSpacing8 {
+.completionSummaryField {
     margin-bottom: var(--cc-space-xs);
 }
 
-.fieldLabel3 {
+.issuePrescriptionLabel {
     display: flex;
     align-items: center;
     gap: var(--cc-space-xs);
@@ -1077,28 +1011,28 @@
     color: var(--cc-color-text);
 }
 
-.confirmationCheckbox {
+.issuePrescriptionCheckbox {
     width: 16px;
     height: 16px;
     cursor: pointer;
 }
 
 @media (max-width: 767px) {
-    .tabPanel > :global(.ant-card-body) {
+    .workspaceCard > :global(.ant-card-body) {
         padding: var(--cc-space-md);
     }
 
-    .tabButton {
+    .workspaceTabButton {
         max-width: 100%;
         white-space: normal;
         text-align: left;
     }
 
-    .actionBarButtons {
+    .workspaceActionButtons {
         width: 100%;
     }
 
-    .actionBarButtons > .actionButton {
+    .workspaceActionButtons > .iconActionButton {
         width: 100%;
     }
 
@@ -1112,11 +1046,11 @@
         text-align: left;
     }
 
-    .orderHeader > .inlineGroup2 {
+    .diagnosticOrderHeader > .iconTextRow {
         width: 100%;
     }
 
-    .orderHeader > .inlineGroup2 > .actionButton {
+    .diagnosticOrderHeader > .iconTextRow > .iconActionButton {
         width: 100%;
     }
 }
