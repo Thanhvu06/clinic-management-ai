@@ -1,0 +1,5 @@
+.categoryManager { margin-top: var(--cc-space-lg); }
+.categoryError { margin-bottom: var(--cc-space-md); }
+.categoryRowActions { display: flex; flex-wrap: wrap; gap: var(--cc-space-xs); }
+.categoryForm { display: flex; flex-wrap: wrap; gap: var(--cc-space-sm); margin-top: var(--cc-space-md); align-items: flex-end; }
+.categoryForm :global(.ant-form-item) { margin: 0; }

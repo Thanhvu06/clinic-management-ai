@@ -1,0 +1,20 @@
+.medicinesPage { color: var(--cc-color-text); }
+.medicineSearch { flex: 1; min-width: 240px; }
+.medicineStatusFilter { width: 200px; }
+.medicinePrice { color: var(--cc-color-info); }
+.medicineStock { display: inline-flex; align-items: center; gap: var(--cc-space-xs); }
+.stockWarning { display: inline-flex; }
+.medicineRowActions, .medicineFormActions { display: flex; justify-content: flex-end; gap: var(--cc-space-xs); }
+.medicineTotal { margin-top: var(--cc-space-md); color: var(--cc-color-text-secondary); }
+.medicineFormAlert { margin-bottom: var(--cc-space-md); }
+.medicineModal :global(.ant-modal-body) { max-height: 75vh; overflow-y: auto; padding-right: var(--cc-space-xs); }
+.medicineFormGrid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--cc-space-sm); }
+.medicineNumber { width: 100%; }
+.medicineCategorySelect { width: 100%; min-height: var(--cc-control-height); padding-inline: var(--cc-space-sm); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); color: var(--cc-color-text); background: var(--cc-color-bg-container); font: inherit; }
+.medicineCategorySelect:focus-visible { outline: 2px solid var(--cc-color-primary); }
+.medicineCategorySelect:disabled { color: var(--cc-color-text-muted); background: var(--cc-color-bg-subtle); }
+.medicineImageInput { width: 100%; color: var(--cc-color-text); font: inherit; }
+.medicineImageInput::file-selector-button { padding: var(--cc-space-xs) var(--cc-space-sm); margin-right: var(--cc-space-xs); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); background: var(--cc-color-bg-container); color: var(--cc-color-text); font: inherit; cursor: pointer; }
+.medicineImagePreview { display: block; max-width: 180px; max-height: 160px; object-fit: contain; margin-bottom: var(--cc-space-sm); }
+.medicineImageDelete { margin-bottom: var(--cc-space-md); }
+@media (max-width: 600px) { .medicineFormGrid { grid-template-columns: 1fr; } .medicineStatusFilter { width: 100%; } }

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { Search, Plus, Edit, Package, X, CheckCircle2, XCircle, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Alert, Button, Checkbox, Form, Input, InputNumber, Modal, Select, Tag, Typography } from 'antd';
+import { PageHeader, FilterBar, DataTable, Pagination, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
+import styles from './AdminHealthPackages.module.css';
 import { useDialog } from '../../contexts/DialogContext';
 
 interface HealthPackage {
@@ -21,6 +24,7 @@ export const AdminHealthPackages: React.FC = () => {
     const { showAlert, showConfirm } = useDialog();
     const [packages, setPackages] = useState<HealthPackage[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [totalItems, setTotalItems] = useState(0);
     const [page, setPage] = useState(1);
 
@@ -39,6 +43,7 @@ export const AdminHealthPackages: React.FC = () => {
 
     const fetchPackages = async () => {
         setLoading(true);
+        setLoadError('');
         try {
             const params = new URLSearchParams({
                 page: page.toString(),
@@ -48,12 +53,13 @@ export const AdminHealthPackages: React.FC = () => {
             if (statusFilter !== '') params.append('isActive', statusFilter);
 
             const res = await axiosClient.get<any, ApiResponse<any>>(`/admin/health-packages?${params.toString()}`);
+            if (!res.success || !res.data) throw new Error(res.message || 'Không thể tải gói khám.');
             if (res.success && res.data) {
                 setPackages(res.data.items);
                 setTotalItems(res.data.totalItems);
             }
-        } catch {
-            // Handled
+        } catch (error) {
+            setLoadError((error as Error)?.message || 'Không thể tải gói khám.');
         } finally {
             setLoading(false);
         }
@@ -63,14 +69,12 @@ export const AdminHealthPackages: React.FC = () => {
         fetchPackages();
     }, [page, statusFilter]);
 
-    const handleSearchSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        setPage(1);
-        fetchPackages();
+    const handleSearchSubmit = () => {
+        if (page !== 1) setPage(1);
+        else fetchPackages();
     };
 
-    const handleFormSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleFormSubmit = async () => {
         setFormError('');
         setFormLoading(true);
 
@@ -134,313 +138,52 @@ export const AdminHealthPackages: React.FC = () => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
     };
 
+    const closeModal = () => { if (!formLoading) setModal({ isOpen: false, isEdit: false, data: {} }); };
+    const openModal = (data: Partial<HealthPackage>, isEdit: boolean) => { setFormError(''); setModal({ isOpen: true, isEdit, data }); };
+
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
-                <h2 style={{ color: 'var(--c-navy-dark)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                    <Package size={24} /> Quản lý gói khám sức khỏe
-                </h2>
-                <button
-                    className="btn-primary"
-                    onClick={() => setModal({
-                        isOpen: true,
-                        isEdit: false,
-                        data: { isActive: true, sortOrder: 0, price: 1000000 }
-                    })}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                    <Plus size={18} /> Thêm gói khám mới
-                </button>
-            </div>
-
-            {/* Filter Card */}
-            <div className="card" style={{ marginBottom: '24px' }}>
-                <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 250px' }}>
-                        <div style={{ position: 'relative' }}>
-                            <Search size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--c-muted)' }} />
-                            <input
-                                type="text"
-                                className="form-input"
-                                placeholder="Tìm theo tên hoặc mã gói..."
-                                style={{ paddingLeft: '40px' }}
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                            />
-                        </div>
+        <div className={styles.packagesPage}>
+            <PageHeader title="Quản lý gói khám sức khỏe" actions={<Button type="primary" icon={<Plus size={18} />} onClick={() => openModal({ isActive: true, sortOrder: 0, price: 1000000 }, false)}>Thêm gói khám mới</Button>} />
+            <FilterBar>
+                <Input.Search className={styles.packageSearch} placeholder="Tìm theo tên hoặc mã gói..." enterButton="Tìm kiếm" value={search} onChange={e => setSearch(e.target.value)} onSearch={handleSearchSubmit} />
+                <Select className={styles.packageStatusFilter} aria-label="Trạng thái" value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[
+                    { value: '', label: 'Tất cả trạng thái' }, { value: 'true', label: 'Đang hoạt động' }, { value: 'false', label: 'Tạm ẩn' }
+                ]} />
+            </FilterBar>
+            {loading ? <LoadingState /> : loadError ? <InlineError message={loadError} onRetry={fetchPackages} />
+                : packages.length === 0 ? <EmptyState title="Không tìm thấy gói khám nào phù hợp." /> : <>
+                    <DataTable data={packages} keyExtractor={pkg => pkg.id} columns={[
+                        { header: 'Mã gói', accessor: pkg => <Typography.Text strong>{pkg.code}</Typography.Text> },
+                        { header: 'Tên gói khám', accessor: pkg => <><Typography.Text strong>{pkg.name}</Typography.Text><div className={styles.packageDescription} title={pkg.description}>{pkg.description}</div></> },
+                        { header: 'Đối tượng phù hợp', accessor: pkg => <Tag>{pkg.targetGroup || 'Mọi đối tượng'}</Tag> },
+                        { header: 'Giá niêm yết', accessor: pkg => <Typography.Text strong className={styles.packagePrice}>{formatCurrency(pkg.price)}</Typography.Text> },
+                        { header: 'Thứ tự', accessor: 'sortOrder' },
+                        { header: 'Trạng thái', accessor: pkg => <StatusBadge status={pkg.isActive ? 'Approved' : 'Rejected'} label={pkg.isActive ? 'Đang mở' : 'Đã tắt'} /> },
+                        { header: 'Thao tác', align: 'right', accessor: pkg => <div className={styles.packageRowActions}>
+                            <Button size="small" title="Chỉnh sửa" icon={<Edit size={14} />} onClick={() => openModal({ ...pkg }, true)}>Sửa</Button>
+                            <Button size="small" danger title="Xóa gói khám" aria-label="Xóa gói khám" icon={<Trash2 size={14} />} onClick={() => handleDelete(pkg)} />
+                        </div> }
+                    ]} />
+                    <Pagination page={page} totalPages={Math.ceil(totalItems / 10)} totalRecords={totalItems} onPageChange={setPage} />
+                </>}
+            {!loading && !loadError && <div className={styles.packageTotal}>Tổng số: {totalItems} gói khám</div>}
+            <Modal title={modal.isEdit ? 'Chỉnh sửa gói khám' : 'Thêm gói khám mới'} open={modal.isOpen} onCancel={closeModal} footer={null} destroyOnHidden width={600}
+                maskClosable={!formLoading} closable={!formLoading} keyboard={!formLoading}>
+                {formError && <Alert className={styles.packageFormAlert} type="error" title={formError} showIcon />}
+                <Form layout="vertical" onFinish={handleFormSubmit} disabled={formLoading}>
+                    <div className={styles.packageFormGrid}>
+                        <Form.Item label="Mã gói (*)" htmlFor="packageCode"><Input id="packageCode" required disabled={modal.isEdit || formLoading} value={modal.data.code || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, code: e.target.value } })} placeholder="VD: PKG-STANDARD" /></Form.Item>
+                        <Form.Item label="Tên gói khám (*)" htmlFor="packageName"><Input id="packageName" required value={modal.data.name || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, name: e.target.value } })} placeholder="VD: Gói khám sức khỏe tổng quát tiêu chuẩn" /></Form.Item>
+                        <Form.Item label="Giá niêm yết (VNĐ) (*)" htmlFor="packagePrice"><InputNumber className={styles.packageNumber} id="packagePrice" required min={0} step={50000} value={modal.data.price ?? 0} onChange={value => setModal({ ...modal, data: { ...modal.data, price: value ?? 0 } })} /></Form.Item>
+                        <Form.Item label="Đối tượng phù hợp" htmlFor="packageTargetGroup"><Input id="packageTargetGroup" value={modal.data.targetGroup || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, targetGroup: e.target.value } })} placeholder="VD: Nam & Nữ mọi lứa tuổi" /></Form.Item>
                     </div>
-                    <div style={{ width: '200px' }}>
-                        <select className="form-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
-                            <option value="">Tất cả trạng thái</option>
-                            <option value="true">Đang hoạt động</option>
-                            <option value="false">Tạm ẩn</option>
-                        </select>
-                    </div>
-                    <button type="submit" className="btn-secondary">Tìm kiếm</button>
-                </form>
-            </div>
-
-            {/* Table */}
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div style={{ overflowX: 'auto' }}>
-                    <table className="table">
-                        <thead>
-                            <tr>
-                                <th>Mã gói</th>
-                                <th>Tên gói khám</th>
-                                <th>Đối tượng phù hợp</th>
-                                <th>Giá niêm yết</th>
-                                <th>Thứ tự</th>
-                                <th>Trạng thái</th>
-                                <th style={{ textAlign: 'right' }}>Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={7} style={{ textAlign: 'center', padding: '32px' }}>Đang tải dữ liệu...</td>
-                                </tr>
-                            ) : packages.length === 0 ? (
-                                <tr>
-                                    <td colSpan={7} style={{ textAlign: 'center', padding: '32px', color: 'var(--c-muted)' }}>
-                                        Không tìm thấy gói khám nào phù hợp.
-                                    </td>
-                                </tr>
-                            ) : (
-                                packages.map(pkg => (
-                                    <tr key={pkg.id}>
-                                        <td style={{ fontWeight: 600, color: 'var(--c-navy-dark)' }}>{pkg.code}</td>
-                                        <td>
-                                            <div style={{ fontWeight: 600 }}>{pkg.name}</div>
-                                            <div style={{ fontSize: '0.825rem', color: 'var(--c-muted)', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                {pkg.description}
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <span style={{ backgroundColor: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', fontSize: '0.8rem', color: '#475569' }}>
-                                                {pkg.targetGroup || 'Mọi đối tượng'}
-                                            </span>
-                                        </td>
-                                        <td style={{ fontWeight: 700, color: '#0284c7' }}>{formatCurrency(pkg.price)}</td>
-                                        <td>{pkg.sortOrder}</td>
-                                        <td>
-                                            {pkg.isActive ? (
-                                                <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                    <CheckCircle2 size={12} /> Đang mở
-                                                </span>
-                                            ) : (
-                                                <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                    <XCircle size={12} /> Đã tắt
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                                                <button
-                                                    className="btn-secondary"
-                                                    style={{ padding: '6px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                                    onClick={() => setModal({ isOpen: true, isEdit: true, data: { ...pkg } })}
-                                                    title="Chỉnh sửa"
-                                                >
-                                                    <Edit size={14} /> Sửa
-                                                </button>
-                                                <button
-                                                    className="btn-secondary"
-                                                    style={{ padding: '6px 10px', color: 'var(--c-danger)', borderColor: '#fecaca' }}
-                                                    onClick={() => handleDelete(pkg)}
-                                                    title="Xóa gói khám"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Pagination */}
-                {totalItems > 10 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderTop: '1px solid var(--c-border)' }}>
-                        <span style={{ fontSize: '0.875rem', color: 'var(--c-muted)' }}>Tổng số: {totalItems} gói khám</span>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                                className="btn-secondary"
-                                disabled={page === 1}
-                                onClick={() => setPage(p => Math.max(1, p - 1))}
-                            >
-                                Trang trước
-                            </button>
-                            <span style={{ display: 'flex', alignItems: 'center', padding: '0 8px', fontSize: '0.9rem' }}>Trang {page}</span>
-                            <button
-                                className="btn-secondary"
-                                disabled={page * 10 >= totalItems}
-                                onClick={() => setPage(p => p + 1)}
-                            >
-                                Trang sau
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Modal */}
-            {modal.isOpen && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                    backdropFilter: 'blur(4px)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999,
-                    padding: '16px'
-                }}>
-                    <div style={{
-                        backgroundColor: 'white',
-                        borderRadius: '16px',
-                        width: '100%',
-                        maxWidth: '600px',
-                        maxHeight: '90vh',
-                        overflowY: 'auto',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        display: 'flex',
-                        flexDirection: 'column'
-                    }}>
-                        <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--c-navy-dark)' }}>
-                                {modal.isEdit ? 'Chỉnh sửa gói khám' : 'Thêm gói khám mới'}
-                            </h3>
-                            <button onClick={() => setModal({ isOpen: false, isEdit: false, data: {} })} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleFormSubmit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            {formError && (
-                                <div style={{ padding: '10px 14px', backgroundColor: '#fef2f2', color: '#991b1b', borderRadius: '8px', fontSize: '0.875rem' }}>
-                                    {formError}
-                                </div>
-                            )}
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.875rem' }}>Mã gói (*)</label>
-                                    <input
-                                        type="text"
-                                        className="form-input"
-                                        required
-                                        disabled={modal.isEdit}
-                                        value={modal.data.code || ''}
-                                        onChange={e => setModal({ ...modal, data: { ...modal.data, code: e.target.value } })}
-                                        placeholder="VD: PKG-STANDARD"
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.875rem' }}>Tên gói khám (*)</label>
-                                    <input
-                                        type="text"
-                                        className="form-input"
-                                        required
-                                        value={modal.data.name || ''}
-                                        onChange={e => setModal({ ...modal, data: { ...modal.data, name: e.target.value } })}
-                                        placeholder="VD: Gói khám sức khỏe tổng quát tiêu chuẩn"
-                                    />
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.875rem' }}>Giá niêm yết (VNĐ) (*)</label>
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        step={50000}
-                                        className="form-input"
-                                        required
-                                        value={modal.data.price || 0}
-                                        onChange={e => setModal({ ...modal, data: { ...modal.data, price: Number(e.target.value) } })}
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.875rem' }}>Đối tượng phù hợp</label>
-                                    <input
-                                        type="text"
-                                        className="form-input"
-                                        value={modal.data.targetGroup || ''}
-                                        onChange={e => setModal({ ...modal, data: { ...modal.data, targetGroup: e.target.value } })}
-                                        placeholder="VD: Nam & Nữ mọi lứa tuổi"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.875rem' }}>Mô tả ngắn</label>
-                                <textarea
-                                    className="form-textarea"
-                                    rows={2}
-                                    value={modal.data.description || ''}
-                                    onChange={e => setModal({ ...modal, data: { ...modal.data, description: e.target.value } })}
-                                    placeholder="Mô tả lợi ích của gói khám..."
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.875rem' }}>Danh mục dịch vụ bao gồm (JSON hoặc danh sách)</label>
-                                <textarea
-                                    className="form-textarea"
-                                    rows={3}
-                                    value={modal.data.includedServices || ''}
-                                    onChange={e => setModal({ ...modal, data: { ...modal.data, includedServices: e.target.value } })}
-                                    placeholder='["Khám tổng quát", "Xét nghiệm máu 18 chỉ số", "Siêu âm bụng", "Chụp X-quang phổi"]'
-                                />
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', alignItems: 'center' }}>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.875rem' }}>Thứ tự ưu tiên hiển thị</label>
-                                    <input
-                                        type="number"
-                                        className="form-input"
-                                        value={modal.data.sortOrder ?? 0}
-                                        onChange={e => setModal({ ...modal, data: { ...modal.data, sortOrder: Number(e.target.value) } })}
-                                    />
-                                </div>
-                                <div style={{ paddingTop: '20px' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={modal.data.isActive ?? true}
-                                            onChange={e => setModal({ ...modal, data: { ...modal.data, isActive: e.target.checked } })}
-                                        />
-                                        Kích hoạt mở bán gói này
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
-                                <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    onClick={() => setModal({ isOpen: false, isEdit: false, data: {} })}
-                                >
-                                    Hủy
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="btn-primary"
-                                    disabled={formLoading}
-                                >
-                                    {formLoading ? 'Đang lưu...' : (modal.isEdit ? 'Lưu thay đổi' : 'Tạo gói khám')}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+                    <Form.Item label="Mô tả ngắn" htmlFor="packageDescription"><Input.TextArea id="packageDescription" rows={2} value={modal.data.description || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, description: e.target.value } })} placeholder="Mô tả lợi ích của gói khám..." /></Form.Item>
+                    <Form.Item label="Danh mục dịch vụ bao gồm (JSON hoặc danh sách)" htmlFor="packageServices"><Input.TextArea id="packageServices" rows={3} value={modal.data.includedServices || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, includedServices: e.target.value } })} placeholder='["Khám tổng quát", "Xét nghiệm máu 18 chỉ số", "Siêu âm bụng", "Chụp X-quang phổi"]' /></Form.Item>
+                    <Form.Item label="Thứ tự ưu tiên hiển thị" htmlFor="packageSortOrder"><InputNumber className={styles.packageNumber} id="packageSortOrder" value={modal.data.sortOrder ?? 0} onChange={value => setModal({ ...modal, data: { ...modal.data, sortOrder: value ?? 0 } })} /></Form.Item>
+                    <Form.Item><Checkbox checked={modal.data.isActive ?? true} onChange={e => setModal({ ...modal, data: { ...modal.data, isActive: e.target.checked } })}>Kích hoạt mở bán gói này</Checkbox></Form.Item>
+                    <div className={styles.packageFormActions}><Button disabled={formLoading} onClick={closeModal}>Hủy</Button><Button type="primary" htmlType="submit" disabled={formLoading}>{formLoading ? 'Đang lưu...' : (modal.isEdit ? 'Lưu thay đổi' : 'Tạo gói khám')}</Button></div>
+                </Form>
+            </Modal>
         </div>
     );
 };

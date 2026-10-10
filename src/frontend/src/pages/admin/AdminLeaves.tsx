@@ -26,6 +26,7 @@ export const AdminLeaves: React.FC = () => {
     const [doctorsError, setDoctorsError] = useState('');
     const [doctorsLoading, setDoctorsLoading] = useState(true);
     const [formError, setFormError] = useState('');
+    const [formErrorType, setFormErrorType] = useState<'warning' | 'error'>('error');
     const [totalItems, setTotalItems] = useState(0);
     const [page, setPage] = useState(1);
     
@@ -90,6 +91,7 @@ export const AdminLeaves: React.FC = () => {
         showConfirm(`Bạn có chắc chắn muốn ${action === 'approve' ? 'duyệt' : 'từ chối'} yêu cầu này?`, async () => {
             setActionLoading(true);
             setFormError('');
+            setFormErrorType('error');
             try {
                 const res = await axiosClient.post<any, ApiResponse<any>>(`/admin/leave-requests/${modal.req!.id}/${action}`, {
                     adminNote
@@ -100,11 +102,12 @@ export const AdminLeaves: React.FC = () => {
                     fetchRequests();
                 }
             } catch (error: any) {
-                setFormError(error?.message || 'Có lỗi xảy ra.');
                 if (error?.errorCode === 'LEAVE_HAS_AFFECTED_APPOINTMENTS') {
-                    showAlert('Bác sĩ đang có lịch hẹn bị ảnh hưởng. Hãy để lễ tân xử lý các lịch này trước khi duyệt nghỉ.', 'Cảnh báo', 'warning');
+                    setFormError('Bác sĩ đang có lịch hẹn bị ảnh hưởng. Hãy để lễ tân xử lý các lịch này trước khi duyệt nghỉ.');
+                    setFormErrorType('warning');
                 } else {
-                    showAlert(error?.message || 'Có lỗi xảy ra.', 'Lỗi', 'error');
+                    setFormError(error?.message || 'Có lỗi xảy ra.');
+                    setFormErrorType('error');
                 }
             } finally {
                 setActionLoading(false);
@@ -140,7 +143,7 @@ export const AdminLeaves: React.FC = () => {
         <div className={styles.leavesPage}>
             <PageHeader title="Quản lý yêu cầu nghỉ" />
             <FilterBar>
-                <Select className={styles.leaveDoctorFilter} aria-label="Bác sĩ" value={doctorIdFilter} loading={doctorsLoading}
+                <Select className={styles.leaveDoctorFilter} aria-label="Bác sĩ" value={doctorIdFilter} loading={doctorsLoading} disabled={!!doctorsError}
                     onChange={value => { setDoctorIdFilter(value); setPage(1); }}
                     options={[{ value: '', label: 'Tất cả bác sĩ' }, ...doctors.map(doctor => ({ value: String(doctor.id), label: doctor.fullName }))]} />
                 <Select className={styles.leaveStatusFilter} aria-label="Trạng thái" value={statusFilter}
@@ -148,9 +151,9 @@ export const AdminLeaves: React.FC = () => {
                         { value: '', label: 'Tất cả trạng thái' }, { value: 'Pending', label: 'Chờ xử lý' },
                         { value: 'Approved', label: 'Đã duyệt' }, { value: 'Rejected', label: 'Đã từ chối' }, { value: 'Cancelled', label: 'Đã hủy' }
                     ]} />
+                {doctorsError && <Alert className={styles.leaveDoctorWarning} type="warning" title={`Danh sách bác sĩ: ${doctorsError}`} showIcon action={<Button size="small" aria-label="Thử lại danh sách bác sĩ" onClick={fetchDoctors}>Thử lại</Button>} />}
             </FilterBar>
-            {loading || doctorsLoading ? <LoadingState /> : doctorsError ? <InlineError message={doctorsError} onRetry={fetchDoctors} />
-                : loadError ? <InlineError message={loadError} onRetry={fetchRequests} />
+            {loading ? <LoadingState /> : loadError ? <InlineError message={loadError} onRetry={fetchRequests} />
                 : requests.length === 0 ? <EmptyState title="Không tìm thấy yêu cầu nào." /> : <>
                     <div className={styles.leaveTable}>
                         <DataTable data={requests} keyExtractor={request => request.id} columns={[
@@ -162,11 +165,11 @@ export const AdminLeaves: React.FC = () => {
                     </div>
                     <Pagination page={page} totalPages={Math.ceil(totalItems / 10)} totalRecords={totalItems} onPageChange={setPage} />
                 </>}
-            {!loading && !doctorsLoading && !doctorsError && !loadError && <div className={styles.leaveTotal}>Tổng cộng: {totalItems} yêu cầu</div>}
+            {!loading && !loadError && <div className={styles.leaveTotal}>Tổng cộng: {totalItems} yêu cầu</div>}
             <Modal title="Chi tiết yêu cầu nghỉ" open={modal.isOpen} onCancel={closeModal} footer={null} destroyOnHidden
                 maskClosable={!actionLoading} closable={!actionLoading} keyboard={!actionLoading}>
                 {modal.req && <>
-                    {formError && <Alert className={styles.leaveFormError} type="error" title={formError} showIcon />}
+                    {formError && <Alert className={styles.leaveFormError} type={formErrorType} title={formError} showIcon />}
                     <Descriptions column={1} items={[
                         { key: 'doctor', label: 'Bác sĩ', children: <strong>{modal.req.doctorName}</strong> },
                         { key: 'time', label: 'Thời gian', children: <strong>{formatDate(modal.req.startDateTime)} - {formatDate(modal.req.endDateTime)}</strong> },

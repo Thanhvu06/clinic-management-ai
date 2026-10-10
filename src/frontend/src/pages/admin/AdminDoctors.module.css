@@ -1,0 +1,21 @@
+.doctorsPage { color: var(--cc-color-text); }
+.doctorSearch { flex: 1; min-width: 240px; }
+.doctorStatusFilter { width: 200px; }
+.doctorIdentity { display: flex; align-items: center; gap: var(--cc-space-sm); }
+.doctorEmail { color: var(--cc-color-text-secondary); }
+.doctorExperience { display: flex; align-items: center; gap: var(--cc-space-xs); margin-bottom: var(--cc-space-xxs); }
+.doctorExperience svg, .selectedSpecialtyName svg { color: var(--cc-color-teal); }
+.specialtyTags { display: flex; flex-wrap: wrap; gap: var(--cc-space-xxs); }
+.specialtyTags :global(.ant-tag) { display: inline-flex; align-items: center; gap: var(--cc-space-xxs); }
+.doctorTotal { margin-top: var(--cc-space-md); color: var(--cc-color-text-secondary); }
+.doctorFormAlert { margin-bottom: var(--cc-space-md); }
+.doctorFormGrid { display: grid; grid-template-columns: 1fr 150px; gap: var(--cc-space-md); }
+.doctorNumber { width: 100%; }
+.specialtyPicker { display: flex; gap: var(--cc-space-xs); margin-bottom: var(--cc-space-xs); }
+.specialtySelect { flex: 1; min-width: 0; }
+.selectedSpecialties { border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-sm); padding: var(--cc-space-sm); }
+.selectedSpecialtyRow { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; gap: var(--cc-space-xs); padding-block: var(--cc-space-xs); }
+.selectedSpecialtyRow + .selectedSpecialtyRow { border-top: 1px dashed var(--cc-color-border); }
+.selectedSpecialtyName, .specialtyActions { display: flex; align-items: center; gap: var(--cc-space-xs); }
+.doctorFormActions { display: flex; justify-content: flex-end; gap: var(--cc-space-sm); }
+@media (max-width: 600px) { .doctorFormGrid { grid-template-columns: 1fr; } .doctorStatusFilter { width: 100%; } }

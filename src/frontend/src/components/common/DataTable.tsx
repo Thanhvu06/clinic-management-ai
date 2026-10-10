@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Table } from 'antd';
 import type { TableColumnsType } from 'antd';
 import '../../theme/browserCompat';
@@ -20,6 +20,7 @@ interface DataTableProps<T> {
     keyExtractor: (item: T) => string | number;
     emptyText?: string;
     onRowClick?: (item: T) => void;
+    ariaLabel?: string;
 }
 
 /**
@@ -30,8 +31,12 @@ export function DataTable<T>({
     data,
     keyExtractor,
     emptyText = 'Không có dữ liệu hiển thị.',
-    onRowClick
+    onRowClick,
+    ariaLabel
 }: DataTableProps<T>) {
+    const accessibleTable = useMemo(() => ariaLabel
+        ? (props: React.HTMLAttributes<HTMLTableElement>) => <table {...props} aria-label={ariaLabel} />
+        : undefined, [ariaLabel]);
     const tableColumns: TableColumnsType<T> = columns.map((col, idx) => ({
         key: idx,
         title: col.header,
@@ -51,6 +56,7 @@ export function DataTable<T>({
     return (
         <Table<T>
             className={styles.dataTable}
+            components={accessibleTable ? { table: accessibleTable } : undefined}
             columns={tableColumns}
             dataSource={data ?? []}
             rowKey={keyExtractor}
