@@ -219,7 +219,7 @@ export const PharmacyPrescriptions: React.FC = () => {
                     <Button htmlType="submit">Tìm kiếm</Button>
                 </form>
             </Card>
-            <div className={styles.tableScroll}><DataTable emptyText="" data={loading ? [] : prescriptions} keyExtractor={p => p.id} columns={[
+            {loading ? <LoadingState message="Đang tải danh sách đơn thuốc..." /> : prescriptions.length === 0 ? <EmptyState title="Không có đơn thuốc nào phù hợp." /> : <div className={styles.tableScroll}><DataTable data={prescriptions} keyExtractor={p => p.id} columns={[
                 {header:'Mã đơn',accessor:p => <><strong>#{p.id}</strong><div className={styles.secondary}>{p.appointmentCode}</div></>},
                 {header:'Bệnh nhân',accessor:p => <><strong>{p.patientName}</strong><div className={styles.secondary}>{p.patientPhone}</div></>},
                 {header:'Bác sĩ chỉ định',accessor:'doctorName'},
@@ -227,9 +227,8 @@ export const PharmacyPrescriptions: React.FC = () => {
                 {header:'Số lượng thuốc',accessor:p => <span className={styles.itemCount}>{p.itemCount} loại thuốc</span>},
                 {header:'Trạng thái',accessor:p => <StatusBadge status={p.status === 'Dispensed' ? 'completed' : 'pending'} label={p.status === 'Dispensed' ? 'Đã cấp thuốc' : 'Chờ cấp thuốc'} />},
                 {header:'Thao tác',align:'right',accessor:p => <Button type="primary" onClick={() => handleOpenDetail(p.id)}><Eye size={14} aria-hidden="true" /> Xem & Cấp phát</Button>}
-            ]} /></div>
-            {loading ? <LoadingState message="Đang tải danh sách đơn thuốc..." /> : prescriptions.length === 0 ? <EmptyState title="Không có đơn thuốc nào phù hợp." /> : null}
-            {totalItems > 10 && <div className={styles.pagination}><span className={styles.secondary}>Tổng số: {totalItems} đơn thuốc</span><div className={styles.pageControls}><Button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Trang trước</Button><span>Trang {page}</span><Button disabled={page * 10 >= totalItems} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
+            ]} /></div>}
+            {!loading && prescriptions.length > 0 && totalItems > 10 && <div className={styles.pagination}><span className={styles.secondary}>Tổng số: {totalItems} đơn thuốc</span><div className={styles.pageControls}><Button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Trang trước</Button><span>Trang {page}</span><Button disabled={page * 10 >= totalItems} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
             <Modal open={detailModalOpen} onCancel={() => { if (!dispenseLoading) { setDetailModalOpen(false); setSelectedPrescription(null); } }} title={`Chi tiết đơn thuốc #${selectedPrescription?.id}`} width={740} className={styles.detailModal} mask={{closable:false}} keyboard={false} closable={{disabled:dispenseLoading}} footer={
                 <div className={styles.modalFooter}><Button htmlType="button" onClick={() => window.print()}><Printer size={16} aria-hidden="true" /> In đơn thuốc</Button><div className={styles.footerActions}><Button htmlType="button" disabled={dispenseLoading} onClick={() => { setDetailModalOpen(false); setSelectedPrescription(null); }}>Đóng</Button>{selectedPrescription?.status === 'Issued' && <button type="button" className={styles.dispenseButton} disabled={dispenseLoading || !canDispense} onClick={() => handleDispense(selectedPrescription.id)}>{dispenseLoading ? 'Đang xử lý...' : 'Xác nhận cấp thuốc & Trừ kho'}</button>}</div></div>
             }>

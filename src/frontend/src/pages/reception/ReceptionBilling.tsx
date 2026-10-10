@@ -1,5 +1,5 @@
 import { Button, Input, Select, Radio, Modal } from 'antd';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Receipt,
     Clock,
@@ -14,6 +14,7 @@ import {
     Ban,
 } from 'lucide-react';
 import { billingApi } from '../../api/billingApi';
+import axiosClient from '../../api/axiosClient';
 import type {
     InvoiceDto,
     InvoiceDetailDto,
@@ -21,6 +22,7 @@ import type {
     InvoiceSourceType,
     UnbilledVisitDto,
     PagedBillingResult,
+    ApiResponse,
 } from '../../types';
 import {
     InvoiceStatus,
@@ -28,7 +30,7 @@ import {
 } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { InvoiceReceiptModal } from '../../components/billing/InvoiceReceiptModal';
-import { DataTable, LoadingState, StatusBadge, PageHeader, StatCard } from '../../components/common';
+import { DataTable, LoadingState, StatusBadge, PageHeader, StatCard, InlineError } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import { getVisitStatusLabel } from '../../utils/visitStatusLabels';
 import styles from './ReceptionBilling.module.css';
@@ -70,6 +72,67 @@ export const ReceptionBilling: React.FC = () => {
     const [createSourceType, setCreateSourceType] = useState<'visit' | 'appointment' | 'package'>('visit');
     const [referenceId, setReferenceId] = useState<string>('');
     const [creatingInvoice, setCreatingInvoice] = useState<boolean>(false);
+    const [invoiceSourceOptions, setInvoiceSourceOptions] = useState<{ value: string; label: string }[]>([]);
+    const [invoiceSourcesLoading, setInvoiceSourcesLoading] = useState(false);
+    const [invoiceSourcesError, setInvoiceSourcesError] = useState('');
+    const invoiceSourceRequest = useRef(0);
+
+    const loadInvoiceSources = useCallback(async (source: 'visit' | 'appointment' | 'package') => {
+        const request = ++invoiceSourceRequest.current;
+        setInvoiceSourcesLoading(true);
+        setInvoiceSourcesError('');
+        setInvoiceSourceOptions([]);
+        setReferenceId('');
+        const options: { value: string; label: string }[] = [];
+        const label = (code: string, name: string, date: string) => {
+            const parsed = new Date(date);
+            return `${code} — ${name} — ${Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString('vi-VN')}`;
+        };
+        try {
+            let currentPage = 1;
+            let pages = 1;
+            do {
+                if (source === 'visit') {
+                    const response = await billingApi.reception.getUnbilledVisits(undefined, currentPage, 10);
+                    if (!response.success || !response.data) throw new Error('Không thể tải danh sách nguồn hóa đơn.');
+                    const data = response.data;
+                    const visits: UnbilledVisitDto[] = Array.isArray(data) ? data : data.items;
+                    options.push(...visits.map(visit => ({ value: String(visit.visitId), label: label(visit.visitCode, visit.patientName, visit.visitDate) })));
+                    pages = Array.isArray(data) ? 1 : data.totalPages ?? Math.ceil(data.totalItems / 10);
+                } else {
+                    const endpoint = source === 'appointment' ? '/reception/appointments' : '/reception/health-package-registrations';
+                    const status = source === 'appointment' ? 'Completed' : 'Confirmed';
+                    const params = new URLSearchParams({ status, page: String(currentPage), pageSize: '10' });
+                    const response = await axiosClient.get<unknown, ApiResponse<{
+                        items: { id: number; appointmentCode?: string; registrationCode?: string; patientName: string; appointmentDate?: string; preferredDate?: string; status: string }[];
+                        totalItems: number;
+                        totalPages?: number;
+                    }>>(`${endpoint}?${params}`);
+                    if (!response.success || !response.data) throw new Error('Không thể tải danh sách nguồn hóa đơn.');
+                    options.push(...response.data.items.filter(item => item.status === status).map(item => ({
+                        value: String(item.id),
+                        label: label(source === 'appointment' ? item.appointmentCode || '---' : item.registrationCode || '---', item.patientName, source === 'appointment' ? item.appointmentDate || '' : item.preferredDate || ''),
+                    })));
+                    pages = response.data.totalPages ?? Math.ceil(response.data.totalItems / 10);
+                }
+                if (request !== invoiceSourceRequest.current) return;
+                currentPage += 1;
+            } while (currentPage <= pages);
+            setInvoiceSourceOptions(options);
+        } catch {
+            if (request === invoiceSourceRequest.current) setInvoiceSourcesError('Không thể tải danh sách nguồn hóa đơn.');
+        } finally {
+            if (request === invoiceSourceRequest.current) setInvoiceSourcesLoading(false);
+        }
+    }, []);
+
+    useEffect(() => () => { invoiceSourceRequest.current += 1; }, []);
+
+    const changeInvoiceSource = (source: 'visit' | 'appointment' | 'package') => {
+        if (source === createSourceType) return;
+        setCreateSourceType(source);
+        void loadInvoiceSources(source);
+    };
 
     // Payment Modal
     const [paymentModalOpen, setPaymentModalOpen] = useState<boolean>(false);
@@ -231,6 +294,7 @@ export const ReceptionBilling: React.FC = () => {
         setCreateSourceType('visit');
         setReferenceId('');
         setCreateModalOpen(true);
+        void loadInvoiceSources('visit');
     };
 
     const handleCreateInvoice = async (e: React.FormEvent) => {
@@ -515,10 +579,14 @@ export const ReceptionBilling: React.FC = () => {
             </> : <div className={styles.tableCard}><div className={styles.queueHeader}><div><h3 className={styles.queueTitle}>Hàng đợi ca khám có chi phí chờ lập hóa đơn ({unbilledTotalCount})</h3><div className={styles.secondaryText}>Bao gồm công khám, cận lâm sàng chỉ định và đơn thuốc đã xác nhận mua</div></div><Button onClick={() => fetchUnbilledVisits(unbilledPage)} disabled={unbilledLoading} icon={<RefreshCw size={14} className={unbilledLoading ? styles.spin : ''} />}>Làm mới hàng đợi</Button></div>
                 {unbilledLoading ? <LoadingState message="Đang tải hàng đợi ca khám..." /> : <><div className={styles.tableScroll}><DataTable columns={unbilledColumns} data={unbilledVisits} keyExtractor={v => v.visitId} emptyText="Hiện không có lượt khám nào chờ lập hóa đơn." /></div>{unbilledTotalPages > 1 && <div className={styles.pagination}><Button disabled={unbilledPage <= 1 || unbilledLoading} onClick={() => { const prev = unbilledPage - 1; setUnbilledPage(prev); fetchUnbilledVisits(prev); }}>Trang trước</Button><span className={styles.pageInfo}>Trang {unbilledPage} / {unbilledTotalPages} (Tổng {unbilledTotalCount} ca khám)</span><Button disabled={unbilledPage >= unbilledTotalPages || unbilledLoading} onClick={() => { const next = unbilledPage + 1; setUnbilledPage(next); fetchUnbilledVisits(next); }}>Trang sau</Button></div>}</>}
             </div>}
-            {createModalOpen && <Modal open width={520} className={styles.formModal} onCancel={() => setCreateModalOpen(false)} title="Lập hóa đơn mới" footer={<><Button onClick={() => setCreateModalOpen(false)}>Hủy bỏ</Button><Button type="primary" htmlType="submit" form="reception-create-invoice" disabled={creatingInvoice}>{creatingInvoice ? 'Đang lập hóa đơn...' : 'Tạo hóa đơn'}</Button></>}>
+            {createModalOpen && <Modal open width={520} className={styles.formModal} onCancel={() => setCreateModalOpen(false)} title="Lập hóa đơn mới" footer={<><Button onClick={() => setCreateModalOpen(false)}>Hủy bỏ</Button><Button type="primary" htmlType="submit" form="reception-create-invoice" disabled={creatingInvoice || invoiceSourcesLoading || !!invoiceSourcesError || !invoiceSourceOptions.some(option => option.value === referenceId)}>{creatingInvoice ? 'Đang lập hóa đơn...' : 'Tạo hóa đơn'}</Button></>}>
                 <form id="reception-create-invoice" onSubmit={handleCreateInvoice} className={styles.modalForm}>
-                    <div className={styles.formField}><label className={styles.formLabel}>Chọn nguồn tạo hóa đơn</label><div className={styles.radioGroup}><Radio name="sourceType" checked={createSourceType === 'visit'} onChange={() => setCreateSourceType('visit')}>Lượt khám ngoại trú (Visit)</Radio><Radio name="sourceType" checked={createSourceType === 'appointment'} onChange={() => setCreateSourceType('appointment')}>Lịch khám bệnh (Appointment)</Radio><Radio name="sourceType" checked={createSourceType === 'package'} onChange={() => setCreateSourceType('package')}>Gói khám sức khỏe (Đã xác nhận)</Radio></div></div>
-                    <div className={styles.formField}><label className={styles.formLabel}>{createSourceType === 'visit' ? 'Patient Visit ID (Mã ID lượt khám) *' : createSourceType === 'appointment' ? 'Appointment ID (Mã lịch hẹn) *' : 'Health Package Registration ID *'}</label><Input type="number" placeholder={createSourceType === 'visit' ? 'Ví dụ: 1' : createSourceType === 'appointment' ? 'Ví dụ: 10' : 'Ví dụ: 5'} value={referenceId} onChange={e => setReferenceId(e.target.value)} required min="1" /><span className={styles.fieldHint}>{createSourceType === 'visit' ? 'Lượt khám ngoại trú đã hoàn tất khám, chỉ định cận lâm sàng và cấp thuốc (In-Billing hoặc sẵn sàng thanh toán).' : createSourceType === 'appointment' ? 'Lịch hẹn phải ở trạng thái "Completed" và chưa có hóa đơn còn hiệu lực.' : 'Đăng ký gói khám phải ở trạng thái "Confirmed" và chưa có hóa đơn còn hiệu lực.'}</span></div>
+                    <div className={styles.formField}><label className={styles.formLabel}>Chọn nguồn tạo hóa đơn</label><div className={styles.radioGroup}><Radio name="sourceType" checked={createSourceType === 'visit'} onChange={() => changeInvoiceSource('visit')}>Lượt khám ngoại trú (Visit)</Radio><Radio name="sourceType" checked={createSourceType === 'appointment'} onChange={() => changeInvoiceSource('appointment')}>Lịch khám bệnh (Appointment)</Radio><Radio name="sourceType" checked={createSourceType === 'package'} onChange={() => changeInvoiceSource('package')}>Gói khám sức khỏe (Đã xác nhận)</Radio></div></div>
+                    <div className={styles.formField}>
+                        <label htmlFor="invoice-source-reference" className={styles.formLabel}>{createSourceType === 'visit' ? 'Chọn lượt khám *' : createSourceType === 'appointment' ? 'Chọn lịch hẹn đã khám xong *' : 'Chọn đăng ký gói khám đã xác nhận *'}</label>
+                        <Select id="invoice-source-reference" className={styles.invoiceSourceSelect} showSearch={{ optionFilterProp: 'label' }} value={referenceId || undefined} onChange={value => setReferenceId(value)} options={invoiceSourceOptions} loading={invoiceSourcesLoading} disabled={creatingInvoice} notFoundContent={invoiceSourcesLoading ? <LoadingState message="Đang tải danh sách nguồn hóa đơn..." height="auto" /> : 'Không có mục nào chờ lập hóa đơn'} />
+                        {invoiceSourcesError && <InlineError title="" message={invoiceSourcesError} onRetry={() => { void loadInvoiceSources(createSourceType); }} />}
+                        <span className={styles.fieldHint}>{createSourceType === 'visit' ? 'Lượt khám ngoại trú đã hoàn tất khám, chỉ định cận lâm sàng và cấp thuốc (In-Billing hoặc sẵn sàng thanh toán).' : createSourceType === 'appointment' ? 'Lịch hẹn phải ở trạng thái "Completed" và chưa có hóa đơn còn hiệu lực.' : 'Đăng ký gói khám phải ở trạng thái "Confirmed" và chưa có hóa đơn còn hiệu lực.'}</span></div>
                 </form>
             </Modal>}
             {paymentModalOpen && paymentInvoice && <Modal open width={520} className={styles.formModal} onCancel={() => !processingPayment && setPaymentModalOpen(false)} closable={{disabled:processingPayment}} title={`Thu tiền hóa đơn ${paymentInvoice.invoiceCode}`} footer={<><Button disabled={processingPayment} onClick={() => setPaymentModalOpen(false)}>Đóng</Button><Button type="primary" htmlType="submit" form="reception-process-payment" disabled={processingPayment}>{processingPayment ? 'Đang xử lý...' : 'Xác nhận đã thu tiền'}</Button></>}>
