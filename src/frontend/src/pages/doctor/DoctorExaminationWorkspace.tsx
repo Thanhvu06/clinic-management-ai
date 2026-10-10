@@ -1,7 +1,7 @@
 import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Button, Card, Col, Form, Input, Row } from 'antd';
+import { Button, Card, Col, Form, Input, Modal, Row } from 'antd';
 import {
     Stethoscope, HeartPulse, Pill, History, Save, CheckCircle,
     AlertCircle, ArrowLeft, Trash2, Search, Clock, Calendar,
@@ -342,12 +342,12 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         return Math.round(bmi * 10) / 10;
     }, [weight, height]);
 
-    const bmiClassification = useMemo(() => {
+    const bmiClassification = useMemo<{ label: string; level: 'underweight' | 'normal' | 'overweight' | 'obese' } | null>(() => {
         if (!computedBmi) return null;
-        if (computedBmi < 18.5) return { label: 'Thiếu cân (Gầy)', color: '#d97706' };
-        if (computedBmi < 25.0) return { label: 'Bình thường (Lý tưởng)', color: '#15803d' };
-        if (computedBmi < 30.0) return { label: 'Tiền béo phì', color: '#ea580c' };
-        return { label: 'Béo phì', color: '#dc2626' };
+        if (computedBmi < 18.5) return { label: 'Thiếu cân (Gầy)', level: 'underweight' };
+        if (computedBmi < 25.0) return { label: 'Bình thường (Lý tưởng)', level: 'normal' };
+        if (computedBmi < 30.0) return { label: 'Tiền béo phì', level: 'overweight' };
+        return { label: 'Béo phì', level: 'obese' };
     }, [computedBmi]);
 
     const minRevisitDate = useMemo(() => {
@@ -780,12 +780,12 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
     if (!context) {
         return (
-            <Card className={tabStyles.missingAppointment}>
-                <AlertCircle size={48} className={tabStyles.detail23} />
+            <Card className={tabStyles.missingAppointmentCard}>
+                <AlertCircle size={48} className={tabStyles.missingAppointmentIcon} />
                 <h3>Không tìm thấy lịch hẹn</h3>
-                <p className={tabStyles.description2}>Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý của bạn.</p>
+                <p className={tabStyles.missingAppointmentMessage}>Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý của bạn.</p>
                 <Link to="/doctor">
-                    <Button type="primary" className={tabStyles.sectionSpacing6}>Quay lại bàn làm việc</Button>
+                    <Button type="primary" className={tabStyles.returnToWorkspaceButton}>Quay lại bàn làm việc</Button>
                 </Link>
             </Card>
         );
@@ -802,7 +802,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         <div className={tabStyles.workspace}>
             {/* Top Navigation Bar */}
             <div className={tabStyles.sectionHeader}>
-                <Link to="/doctor" className={tabStyles.backLink}>
+                <Link to="/doctor" className={tabStyles.backToWorkspaceLink}>
                     <ArrowLeft size={16} />
                     <span>Quay lại Bàn làm việc Bác sĩ</span>
                 </Link>
@@ -813,9 +813,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Read-only Banner if Completed */}
             {isCompleted && (
-                <div className={tabStyles.inlineGroup12}>
-                    <AlertCircle size={20} className={tabStyles.detail25} />
-                    <div className={tabStyles.detailText35}>
+                <div className={tabStyles.completedBanner}>
+                    <AlertCircle size={20} className={tabStyles.completedBannerIcon} />
+                    <div className={tabStyles.completedBannerMessage}>
                         <strong>Ca khám này đã hoàn tất:</strong> Hồ sơ bệnh án và đơn thuốc đang ở trạng thái lưu trữ chính thức (chỉ đọc) để bảo toàn tính xác thực y khoa.
                     </div>
                 </div>
@@ -823,19 +823,19 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Pending or Unreviewed Diagnostic Warning Banner */}
             {!isCompleted && pendingDiagnosticOrder && (
-                <div className={tabStyles.inlineGroup13}>
-                    <AlertTriangle size={20} className={tabStyles.detail26} />
-                    <div className={tabStyles.detail27}>
+                <div className={tabStyles.pendingDiagnosticBanner}>
+                    <AlertTriangle size={20} className={tabStyles.pendingDiagnosticIcon} />
+                    <div className={tabStyles.diagnosticBannerMessage}>
                         <strong>Chỉ định CLS đang chờ:</strong> Phiếu <code>{pendingDiagnosticOrder.orderCode}</code> đang được kỹ thuật viên tiếp nhận/thực hiện. Ca khám chưa thể kết thúc cho đến khi có kết quả đầy đủ.
                     </div>
                 </div>
             )}
 
             {!isCompleted && !pendingDiagnosticOrder && unreviewedDiagnosticOrder && (
-                <div className={tabStyles.navigation}>
-                    <div className={tabStyles.inlineGroup2}>
-                        <CheckCircle size={20} className={tabStyles.detail28} />
-                        <div className={tabStyles.detail27}>
+                <div className={tabStyles.unreviewedDiagnosticBanner}>
+                    <div className={tabStyles.iconTextRow}>
+                        <CheckCircle size={20} className={tabStyles.unreviewedDiagnosticIcon} />
+                        <div className={tabStyles.diagnosticBannerMessage}>
                             <strong>Đã có kết quả CLS:</strong> Phiếu <code>{unreviewedDiagnosticOrder.orderCode}</code> đã có kết quả. Vui lòng chuyển sang tab Cận lâm sàng và bấm "Xác nhận đã xem kết quả" để hoàn tất ca khám.
                         </div>
                     </div>
@@ -846,52 +846,52 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             )}
 
             {/* Patient Header Spotlight Banner */}
-            <Card className={[tabStyles.tabPanel, tabStyles.sectionSpacing7].join(' ')} >
-                <div className={tabStyles.sectionHeader10}>
+            <Card className={[tabStyles.workspaceCard, tabStyles.patientHeaderCard].join(' ')} >
+                <div className={tabStyles.patientHeaderLayout}>
                     <div>
-                        <div className={tabStyles.inlineGroup14}>
-                            <h2 className={tabStyles.detailText36}>
+                        <div className={tabStyles.wrappingIconRow}>
+                            <h2 className={tabStyles.patientName}>
                                 {patient.patientName}
                             </h2>
-                            <span className={tabStyles.detailText37}>
+                            <span className={tabStyles.appointmentCode}>
                                 #{apt.appointmentCode}
                             </span>
-                            <span className={[tabStyles.detail29, (isCompleted ? tabStyles.statusBackground : tabStyles.statusBackground8), (isCompleted ? tabStyles.statusText3 : tabStyles.statusText6)].join(' ')}>
+                            <span className={[tabStyles.encounterStatusPill, (isCompleted ? tabStyles.successSurface : tabStyles.selectedSurface), (isCompleted ? tabStyles.successText : tabStyles.activeEncounterText)].join(' ')}>
                                 {isCompleted ? 'Hồ sơ đã hoàn tất' : 'Phiên khám lâm sàng'}
                             </span>
                         </div>
 
                         <div className={tabStyles.patientMetadata}>
-                            <div className={tabStyles.inlineGroup2}>
-                                <User size={16} className={tabStyles.statusText5} />
+                            <div className={tabStyles.iconTextRow}>
+                                <User size={16} className={tabStyles.secondaryText} />
                                 <span>{patient.patientGender === 'Male' ? 'Nam' : patient.patientGender === 'Female' ? 'Nữ' : 'Khác'} {patient.patientDob ? `• NS: ${patient.patientDob}` : ''}</span>
                             </div>
-                            <div className={tabStyles.inlineGroup2}>
-                                <Phone size={16} className={tabStyles.statusText5} />
+                            <div className={tabStyles.iconTextRow}>
+                                <Phone size={16} className={tabStyles.secondaryText} />
                                 <span>{patient.patientPhone}</span>
                             </div>
                             {patient.address && (
-                                <div className={tabStyles.inlineGroup2}>
-                                    <MapPin size={16} className={tabStyles.statusText5} />
+                                <div className={tabStyles.iconTextRow}>
+                                    <MapPin size={16} className={tabStyles.secondaryText} />
                                     <span>{patient.address}</span>
                                 </div>
                             )}
                             {apt.startTime && (
-                                <div className={tabStyles.inlineGroup2}>
-                                    <Clock size={16} className={tabStyles.statusText5} />
+                                <div className={tabStyles.iconTextRow}>
+                                    <Clock size={16} className={tabStyles.secondaryText} />
                                     <span>Giờ hẹn: {apt.startTime.substring(0, 5)} - {apt.endTime ? apt.endTime.substring(0, 5) : ''}</span>
                                 </div>
                             )}
                         </div>
 
-                        <div className={tabStyles.detailText38}>
+                        <div className={tabStyles.appointmentReason}>
                             <strong>Lý do đến khám:</strong> {apt.reason || 'Khám theo lịch'}
                         </div>
                     </div>
 
-                    <div className={tabStyles.detail30}>
-                        <div className={tabStyles.detailText9}>Lịch sử tại phòng khám</div>
-                        <div className={tabStyles.detailText39}>
+                    <div className={tabStyles.patientHistorySummary}>
+                        <div className={tabStyles.secondaryLabel}>Lịch sử tại phòng khám</div>
+                        <div className={tabStyles.pastVisitCount}>
                             {patient.totalPastVisits} lượt khám trước
                         </div>
                     </div>
@@ -899,11 +899,11 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             </Card>
 
             {/* Workspace Tab Navigation */}
-            <div className={tabStyles.tabBar}>
+            <div className={tabStyles.workspaceTabs}>
                 <button
                     type="button"
                     onClick={() => setActiveTab('encounter')}
-                    className={`${tabStyles.tabButton} ${activeTab === 'encounter' ? tabStyles.tabButtonActive : ''}`}
+                    className={`${tabStyles.workspaceTabButton} ${activeTab === 'encounter' ? tabStyles.activeWorkspaceTab : ''}`}
                 >
                     <Stethoscope size={18} />
                     <span>Diễn tiến lâm sàng</span>
@@ -912,7 +912,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => setActiveTab('vitals')}
-                    className={`${tabStyles.tabButton} ${activeTab === 'vitals' ? tabStyles.tabButtonActive : ''}`}
+                    className={`${tabStyles.workspaceTabButton} ${activeTab === 'vitals' ? tabStyles.activeWorkspaceTab : ''}`}
                 >
                     <HeartPulse size={18} />
                     <span>Dấu hiệu sinh tồn {computedBmi ? `(BMI ${computedBmi})` : ''}</span>
@@ -921,7 +921,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => setActiveTab('diagnostics')}
-                    className={`${tabStyles.tabButton} ${activeTab === 'diagnostics' ? tabStyles.tabButtonActive : ''}`}
+                    className={`${tabStyles.workspaceTabButton} ${activeTab === 'diagnostics' ? tabStyles.activeWorkspaceTab : ''}`}
                 >
                     <FlaskConical size={18} />
                     <span>Chỉ định Cận lâm sàng ({diagnosticOrders.length})</span>
@@ -930,7 +930,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => setActiveTab('prescription')}
-                    className={`${tabStyles.tabButton} ${activeTab === 'prescription' ? tabStyles.tabButtonActive : ''}`}
+                    className={`${tabStyles.workspaceTabButton} ${activeTab === 'prescription' ? tabStyles.activeWorkspaceTab : ''}`}
                 >
                     <Pill size={18} />
                     <span>Kê đơn thuốc ({prescriptionItems.length})</span>
@@ -939,7 +939,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => setActiveTab('history')}
-                    className={`${tabStyles.tabButton} ${activeTab === 'history' ? tabStyles.tabButtonActive : ''}`}
+                    className={`${tabStyles.workspaceTabButton} ${activeTab === 'history' ? tabStyles.activeWorkspaceTab : ''}`}
                 >
                     <History size={18} />
                     <span>Lịch sử khám ({patient.totalPastVisits})</span>
@@ -948,14 +948,14 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Tab 1: Clinical Encounter */}
             {activeTab === 'encounter' && (
-                <Card className={[tabStyles.tabPanel].join(' ')} >
+                <Card className={[tabStyles.workspaceCard].join(' ')} >
                     <div className={tabStyles.sectionHeader}>
                         <h3 className={tabStyles.sectionTitle}>
                             Ghi nhận diễn tiến lâm sàng
                         </h3>
                         <Button
                             htmlType="button"
-                            className={[tabStyles.actionButton].join(' ')}
+                            className={[tabStyles.iconActionButton].join(' ')}
                             onClick={handleSaveEncounter}
                             disabled={savingEncounter}
                         >
@@ -964,9 +964,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         </Button>
                     </div>
 
-                    <Row className={[tabStyles.responsiveRow, tabStyles.sectionSpacing].join(' ')}>
-                        <Col xs={24} md={12} className={tabStyles.column}>
-                            <Form.Item className={tabStyles.formItem}>
+                    <Row className={[tabStyles.responsiveFormRow, tabStyles.formRowSpacing].join(' ')}>
+                        <Col xs={24} md={12} className={tabStyles.responsiveColumn}>
+                            <Form.Item className={tabStyles.formField}>
                                 <label className={tabStyles.fieldLabel}>
                                     Triệu chứng chính / Lý do khám
                                 </label>
@@ -975,15 +975,15 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                     value={chiefComplaint}
                                     onChange={(e) => setChiefComplaint(e.target.value)}
                                     placeholder="Ví dụ: Đau đầu, sốt nhẹ 2 ngày nay..."
-                                    className={[tabStyles.fieldControl].join(' ')}
+                                    className={[tabStyles.formControl].join(' ')}
                                 />
                             </Form.Item>
                         </Col>
 
-                        <Col xs={24} md={12} className={tabStyles.column}>
-                            <Row className={tabStyles.responsiveRow}>
-                                <Col xs={24} md={18} className={tabStyles.column}>
-                                    <Form.Item className={tabStyles.formItem}>
+                        <Col xs={24} md={12} className={tabStyles.responsiveColumn}>
+                            <Row className={tabStyles.responsiveFormRow}>
+                                <Col xs={24} md={18} className={tabStyles.responsiveColumn}>
+                                    <Form.Item className={tabStyles.formField}>
                                         <label className={tabStyles.fieldLabel}>
                                             Chẩn đoán bệnh *
                                         </label>
@@ -993,12 +993,12 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             onChange={(e) => setDiagnosis(e.target.value)}
                                             placeholder="Ví dụ: Viêm họng cấp / Tăng huyết áp độ 1..."
                                             required
-                                            className={[tabStyles.fieldControl].join(' ')}
+                                            className={[tabStyles.formControl].join(' ')}
                                         />
                                     </Form.Item>
                                 </Col>
-                                <Col xs={24} md={6} className={tabStyles.column}>
-                                    <Form.Item className={tabStyles.formItem}>
+                                <Col xs={24} md={6} className={tabStyles.responsiveColumn}>
+                                    <Form.Item className={tabStyles.formField}>
                                         <label className={tabStyles.fieldLabel}>
                                             Mã ICD-10
                                         </label>
@@ -1007,14 +1007,14 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             value={diagnosisCode}
                                             onChange={(e) => setDiagnosisCode(e.target.value)}
                                             placeholder="J02.9"
-                                            className={[tabStyles.fieldControl, tabStyles.icdCode].join(' ')}
+                                            className={[tabStyles.formControl, tabStyles.diagnosisCodeInput].join(' ')}
                                         />
                                     </Form.Item>
                                 </Col>
                             </Row></Col>
                     </Row>
 
-                    <Form.Item className={tabStyles.formItem}>
+                    <Form.Item className={tabStyles.formField}>
                         <label className={tabStyles.fieldLabel}>
                             Khám thực thể & Bệnh sử lâm sàng
                         </label>
@@ -1023,11 +1023,11 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             onChange={(e) => setClinicalFindings(e.target.value)}
                             rows={4}
                             placeholder="Ghi nhận các triệu chứng cơ năng, thực thể: họng đỏ, không có giả mạc, tim phổi bình thường..."
-                            className={[tabStyles.fieldControl].join(' ')}
+                            className={[tabStyles.formControl].join(' ')}
                         />
                     </Form.Item>
 
-                    <Form.Item className={tabStyles.formItem}>
+                    <Form.Item className={tabStyles.formField}>
                         <label className={tabStyles.fieldLabel}>
                             Hướng điều trị / Chỉ định
                         </label>
@@ -1036,11 +1036,11 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             onChange={(e) => setTreatmentPlan(e.target.value)}
                             rows={3}
                             placeholder="Kế hoạch điều trị: Sử dụng kháng sinh, hạ sốt, uống nhiều nước ấm, nghỉ ngơi..."
-                            className={[tabStyles.fieldControl].join(' ')}
+                            className={[tabStyles.formControl].join(' ')}
                         />
                     </Form.Item>
 
-                    <Form.Item className={tabStyles.formItem}>
+                    <Form.Item className={tabStyles.formField}>
                         <label className={tabStyles.fieldLabel}>
                             Tóm tắt kết luận buổi khám *
                         </label>
@@ -1050,11 +1050,11 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             rows={3}
                             placeholder="Tóm tắt chẩn đoán và tình trạng chung của bệnh nhân..."
                             required
-                            className={[tabStyles.fieldControl].join(' ')}
+                            className={[tabStyles.formControl].join(' ')}
                         />
                     </Form.Item>
 
-                    <Form.Item className={tabStyles.formItem}>
+                    <Form.Item className={tabStyles.formField}>
                         <label className={tabStyles.fieldLabel}>
                             Lời dặn dò & Lưu ý tái khám
                         </label>
@@ -1063,7 +1063,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             onChange={(e) => setFollowUpInstruction(e.target.value)}
                             rows={2}
                             placeholder="Tái khám sau 5 ngày nếu không thuyên giảm hoặc có biểu hiện sốt cao liên tục..."
-                            className={[tabStyles.fieldControl].join(' ')}
+                            className={[tabStyles.formControl].join(' ')}
                         />
                     </Form.Item>
                 </Card>
@@ -1071,34 +1071,34 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Tab 2: Longitudinal Vital Signs with 3 Distinct Regions */}
             {activeTab === 'vitals' && (
-                <Card className={[tabStyles.tabPanel, tabStyles.stackedTab].join(' ')}>
+                <Card className={[tabStyles.workspaceCard, tabStyles.stackedTabContent].join(' ')}>
                     {/* Region 2 & Region 3: Historical Comparison & Anthropometric Deltas */}
                     {prevMeasurement ? (
-                        <Row className={tabStyles.responsiveRow}>
+                        <Row className={tabStyles.responsiveFormRow}>
                             {/* Region 2: Previous Measurement */}
-                            <Col xs={24} md={12} className={tabStyles.column}><Card className={[tabStyles.tabPanel, tabStyles.previousMeasurement].join(' ')} >
-                                <div className={tabStyles.detailText}>
+                            <Col xs={24} md={12} className={tabStyles.responsiveColumn}><Card className={[tabStyles.workspaceCard, tabStyles.previousMeasurementCard].join(' ')} >
+                                <div className={tabStyles.previousMeasurementTitle}>
                                     VÙNG 2: SỐ LIỆU ĐO LẦN TRƯỚC
                                 </div>
-                                <div className={tabStyles.detailText2}>
+                                <div className={tabStyles.previousMeasurementDate}>
                                     Ngày đo: {new Date(prevMeasurement.recordedAtUtc).toLocaleDateString('vi-VN')} ({new Date(prevMeasurement.recordedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })})
                                 </div>
-                                <Row className={[tabStyles.responsiveRow, tabStyles.sectionSpacing2].join(' ')}>
-                                    <Col xs={24} md={8} className={tabStyles.column}><div className={tabStyles.measurementTile}>
-                                        <div className={tabStyles.detailText3}>Cân nặng</div>
-                                        <div className={tabStyles.detailText4}>
+                                <Row className={[tabStyles.responsiveFormRow, tabStyles.measurementGrid].join(' ')}>
+                                    <Col xs={24} md={8} className={tabStyles.responsiveColumn}><div className={tabStyles.previousMeasurementTile}>
+                                        <div className={tabStyles.secondaryCaption}>Cân nặng</div>
+                                        <div className={tabStyles.previousMeasurementValue}>
                                             {prevMeasurement.weight ? `${prevMeasurement.weight} kg` : '--'}
                                         </div>
                                     </div></Col>
-                                    <Col xs={24} md={8} className={tabStyles.column}><div className={tabStyles.measurementTile}>
-                                        <div className={tabStyles.detailText3}>Chiều cao</div>
-                                        <div className={tabStyles.detailText4}>
+                                    <Col xs={24} md={8} className={tabStyles.responsiveColumn}><div className={tabStyles.previousMeasurementTile}>
+                                        <div className={tabStyles.secondaryCaption}>Chiều cao</div>
+                                        <div className={tabStyles.previousMeasurementValue}>
                                             {prevMeasurement.height ? `${prevMeasurement.height} cm` : '--'}
                                         </div>
                                     </div></Col>
-                                    <Col xs={24} md={8} className={tabStyles.column}><div className={tabStyles.measurementTile}>
-                                        <div className={tabStyles.detailText3}>BMI cũ</div>
-                                        <div className={tabStyles.detailText4}>
+                                    <Col xs={24} md={8} className={tabStyles.responsiveColumn}><div className={tabStyles.previousMeasurementTile}>
+                                        <div className={tabStyles.secondaryCaption}>BMI cũ</div>
+                                        <div className={tabStyles.previousMeasurementValue}>
                                             {prevMeasurement.bmi ? prevMeasurement.bmi : '--'}
                                         </div>
                                     </div></Col>
@@ -1106,33 +1106,33 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </Card></Col>
 
                             {/* Region 3: Anthropometric Deltas (Color & Badge) */}
-                            <Col xs={24} md={12} className={tabStyles.column}><Card className={[tabStyles.tabPanel, tabStyles.detail6].join(' ')} >
-                                <div className={tabStyles.detailText5}>
+                            <Col xs={24} md={12} className={tabStyles.responsiveColumn}><Card className={[tabStyles.workspaceCard, tabStyles.measurementComparisonCard].join(' ')} >
+                                <div className={tabStyles.measurementComparisonTitle}>
                                     VÙNG 3: BIẾN ĐỘNG THỂ TRẠNG (DELTAS)
                                 </div>
-                                <div className={tabStyles.detailText6}>
+                                <div className={tabStyles.measurementComparisonSubtitle}>
                                     Chênh lệch so với lần khám trước
                                 </div>
-                                <Row className={[tabStyles.responsiveRow, tabStyles.sectionSpacing2].join(' ')}>
-                                    <Col xs={24} md={8} className={tabStyles.column}><div className={tabStyles.outlinedPanel2}>
-                                        <div className={tabStyles.detailText3}>Δ Cân nặng</div>
-                                        <div className={[tabStyles.measurementValue, ((comparison?.weightDeltaKg || 0) > 0 ? tabStyles.statusText : ((comparison?.weightDeltaKg || 0) < 0 ? tabStyles.statusText2 : tabStyles.statusText3))].join(' ')}>
+                                <Row className={[tabStyles.responsiveFormRow, tabStyles.measurementGrid].join(' ')}>
+                                    <Col xs={24} md={8} className={tabStyles.responsiveColumn}><div className={tabStyles.measurementDeltaTile}>
+                                        <div className={tabStyles.secondaryCaption}>Δ Cân nặng</div>
+                                        <div className={[tabStyles.measurementDeltaValue, ((comparison?.weightDeltaKg || 0) > 0 ? tabStyles.deltaPositive : ((comparison?.weightDeltaKg || 0) < 0 ? tabStyles.infoText : tabStyles.successText))].join(' ')}>
                                             {comparison?.weightDeltaKg !== undefined && comparison?.weightDeltaKg !== null
                                                 ? (comparison.weightDeltaKg > 0 ? `+${comparison.weightDeltaKg} kg` : `${comparison.weightDeltaKg} kg`)
                                                 : '--'}
                                         </div>
                                     </div></Col>
-                                    <Col xs={24} md={8} className={tabStyles.column}><div className={tabStyles.outlinedPanel2}>
-                                        <div className={tabStyles.detailText3}>Δ Chiều cao</div>
-                                        <div className={tabStyles.detailText7}>
+                                    <Col xs={24} md={8} className={tabStyles.responsiveColumn}><div className={tabStyles.measurementDeltaTile}>
+                                        <div className={tabStyles.secondaryCaption}>Δ Chiều cao</div>
+                                        <div className={tabStyles.heightDeltaValue}>
                                             {comparison?.heightDeltaCm !== undefined && comparison?.heightDeltaCm !== null
                                                 ? (comparison.heightDeltaCm > 0 ? `+${comparison.heightDeltaCm} cm` : `${comparison.heightDeltaCm} cm`)
                                                 : '--'}
                                         </div>
                                     </div></Col>
-                                    <Col xs={24} md={8} className={tabStyles.column}><div className={tabStyles.outlinedPanel2}>
-                                        <div className={tabStyles.detailText3}>Δ BMI</div>
-                                        <div className={[tabStyles.measurementValue, ((comparison?.bmiDelta || 0) > 0 ? tabStyles.statusText : ((comparison?.bmiDelta || 0) < 0 ? tabStyles.statusText2 : tabStyles.statusText3))].join(' ')}>
+                                    <Col xs={24} md={8} className={tabStyles.responsiveColumn}><div className={tabStyles.measurementDeltaTile}>
+                                        <div className={tabStyles.secondaryCaption}>Δ BMI</div>
+                                        <div className={[tabStyles.measurementDeltaValue, ((comparison?.bmiDelta || 0) > 0 ? tabStyles.deltaPositive : ((comparison?.bmiDelta || 0) < 0 ? tabStyles.infoText : tabStyles.successText))].join(' ')}>
                                             {comparison?.bmiDelta !== undefined && comparison?.bmiDelta !== null
                                                 ? (comparison.bmiDelta > 0 ? `+${comparison.bmiDelta}` : `${comparison.bmiDelta}`)
                                                 : '--'}
@@ -1142,25 +1142,25 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </Card></Col>
                         </Row>
                     ) : (
-                        <Card className={[tabStyles.tabPanel, tabStyles.detailText8].join(' ')} >
+                        <Card className={[tabStyles.workspaceCard, tabStyles.measurementHistoryNotice].join(' ')} >
                             ℹ️ Đây là lần đầu bệnh nhân ghi nhận dấu hiệu sinh tồn tại phòng khám. Dữ liệu so sánh thể trạng (deltas) sẽ xuất hiện từ lần khám kế tiếp.
                         </Card>
                     )}
 
                     {/* Region 1: Current Measurement Form */}
-                    <Card className={[tabStyles.tabPanel].join(' ')} >
+                    <Card className={[tabStyles.workspaceCard].join(' ')} >
                         <div className={tabStyles.sectionHeader}>
                             <div>
                                 <h3 className={tabStyles.sectionTitle}>
                                     VÙNG 1: ĐO LƯỜNG SINH HIỆU HIỆN TẠI
                                 </h3>
-                                <p className={tabStyles.description}>
+                                <p className={tabStyles.sectionDescription}>
                                     Nhập kết quả đo tại phòng khám hôm nay. BMI được tự động tính và phân loại.
                                 </p>
                             </div>
                             <Button
                                 htmlType="button"
-                                className={[tabStyles.actionButton].join(' ')}
+                                className={[tabStyles.iconActionButton].join(' ')}
                                 onClick={handleSaveVitals}
                                 disabled={savingVitals}
                             >
@@ -1169,9 +1169,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </Button>
                         </div>
 
-                        <Row className={[tabStyles.responsiveRow, tabStyles.sectionSpacing3].join(' ')}>
-                            <Col xs={24} md={12} xl={8} className={tabStyles.column}>
-                                <Form.Item className={tabStyles.formItem}>
+                        <Row className={[tabStyles.responsiveFormRow, tabStyles.vitalSignsGrid].join(' ')}>
+                            <Col xs={24} md={12} xl={8} className={tabStyles.responsiveColumn}>
+                                <Form.Item className={tabStyles.formField}>
                                     <label className={tabStyles.fieldLabel}>
                                         Nhiệt độ (°C)
                                     </label>
@@ -1183,17 +1183,17 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                         value={temperature}
                                         onChange={(e) => setTemperature(e.target.value)}
                                         placeholder="37.0"
-                                        className={[tabStyles.fieldControl].join(' ')}
+                                        className={[tabStyles.formControl].join(' ')}
                                     />
                                 </Form.Item>
                             </Col>
 
-                            <Col xs={24} md={12} xl={8} className={tabStyles.column}>
-                                <Form.Item className={tabStyles.formItem}>
+                            <Col xs={24} md={12} xl={8} className={tabStyles.responsiveColumn}>
+                                <Form.Item className={tabStyles.formField}>
                                     <label className={tabStyles.fieldLabel}>
                                         Huyết áp (Tâm thu / Tâm trương)
                                     </label>
-                                    <div className={tabStyles.inlineGroup2}>
+                                    <div className={tabStyles.iconTextRow}>
                                         <Input
                                             type="number"
                                             min="40"
@@ -1201,9 +1201,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             value={bpSystolic}
                                             onChange={(e) => setBpSystolic(e.target.value)}
                                             placeholder="120"
-                                            className={[tabStyles.fieldControl].join(' ')}
+                                            className={[tabStyles.formControl].join(' ')}
                                         />
-                                        <span className={tabStyles.detail8}>/</span>
+                                        <span className={tabStyles.bloodPressureSeparator}>/</span>
                                         <Input
                                             type="number"
                                             min="30"
@@ -1211,15 +1211,15 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             value={bpDiastolic}
                                             onChange={(e) => setBpDiastolic(e.target.value)}
                                             placeholder="80"
-                                            className={[tabStyles.fieldControl].join(' ')}
+                                            className={[tabStyles.formControl].join(' ')}
                                         />
-                                        <span className={tabStyles.detailText9}>mmHg</span>
+                                        <span className={tabStyles.secondaryLabel}>mmHg</span>
                                     </div>
                                 </Form.Item>
                             </Col>
 
-                            <Col xs={24} md={12} xl={8} className={tabStyles.column}>
-                                <Form.Item className={tabStyles.formItem}>
+                            <Col xs={24} md={12} xl={8} className={tabStyles.responsiveColumn}>
+                                <Form.Item className={tabStyles.formField}>
                                     <label className={tabStyles.fieldLabel}>
                                         Nhịp tim / Mạch (nhịp/phút)
                                     </label>
@@ -1230,13 +1230,13 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                         value={heartRate}
                                         onChange={(e) => setHeartRate(e.target.value)}
                                         placeholder="75"
-                                        className={[tabStyles.fieldControl].join(' ')}
+                                        className={[tabStyles.formControl].join(' ')}
                                     />
                                 </Form.Item>
                             </Col>
 
-                            <Col xs={24} md={12} xl={8} className={tabStyles.column}>
-                                <Form.Item className={tabStyles.formItem}>
+                            <Col xs={24} md={12} xl={8} className={tabStyles.responsiveColumn}>
+                                <Form.Item className={tabStyles.formField}>
                                     <label className={tabStyles.fieldLabel}>
                                         Nhịp thở (lần/phút)
                                     </label>
@@ -1247,14 +1247,14 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                         value={respiratoryRate}
                                         onChange={(e) => setRespiratoryRate(e.target.value)}
                                         placeholder="18"
-                                        className={[tabStyles.fieldControl].join(' ')}
+                                        className={[tabStyles.formControl].join(' ')}
                                     />
                                 </Form.Item>
                             </Col>
 
-                            <Col xs={24} md={12} xl={8} className={tabStyles.column}><div>
+                            <Col xs={24} md={12} xl={8} className={tabStyles.responsiveColumn}><div>
                                 <div className={tabStyles.fieldLabelRow}>
-                                    <label className={tabStyles.fieldLabel2}>
+                                    <label className={tabStyles.heightFieldLabel}>
                                         Chiều cao (cm)
                                     </label>
                                     {previousHeight && !height && (
@@ -1262,7 +1262,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             htmlType="button"
                                             onClick={() => setHeight(previousHeight.toString())}
 
-                                            title="Tái sử dụng chiều cao từ lần đo trước" className={[tabStyles.actionButton, tabStyles.detailText10].join(' ')}
+                                            title="Tái sử dụng chiều cao từ lần đo trước" className={[tabStyles.iconActionButton, tabStyles.reuseHeightButton].join(' ')}
                                         >
                                             Dùng chiều cao lần trước ({previousHeight} cm)
                                         </Button>
@@ -1276,12 +1276,12 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                     value={height}
                                     onChange={(e) => setHeight(e.target.value)}
                                     placeholder="170"
-                                    className={[tabStyles.fieldControl].join(' ')}
+                                    className={[tabStyles.formControl].join(' ')}
                                 />
                             </div></Col>
 
-                            <Col xs={24} md={12} xl={8} className={tabStyles.column}>
-                                <Form.Item className={tabStyles.formItem}>
+                            <Col xs={24} md={12} xl={8} className={tabStyles.responsiveColumn}>
+                                <Form.Item className={tabStyles.formField}>
                                     <label className={tabStyles.fieldLabel}>
                                         Cân nặng (kg)
                                     </label>
@@ -1293,13 +1293,13 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                         value={weight}
                                         onChange={(e) => setWeight(e.target.value)}
                                         placeholder="65.0"
-                                        className={[tabStyles.fieldControl].join(' ')}
+                                        className={[tabStyles.formControl].join(' ')}
                                     />
                                 </Form.Item>
                             </Col>
 
-                            <Col xs={24} md={12} xl={8} className={tabStyles.column}>
-                                <Form.Item className={tabStyles.formItem}>
+                            <Col xs={24} md={12} xl={8} className={tabStyles.responsiveColumn}>
+                                <Form.Item className={tabStyles.formField}>
                                     <label className={tabStyles.fieldLabel}>
                                         Nồng độ oxy SpO2 (%)
                                     </label>
@@ -1310,22 +1310,27 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                         value={spO2}
                                         onChange={(e) => setSpO2(e.target.value)}
                                         placeholder="98"
-                                        className={[tabStyles.fieldControl].join(' ')}
+                                        className={[tabStyles.formControl].join(' ')}
                                     />
                                 </Form.Item>
                             </Col>
                         </Row>
 
                         {/* Calculated BMI Badge Card */}
-                        <div className={tabStyles.sectionHeader3}>
+                        <div className={tabStyles.bmiSummary}>
                             <div>
-                                <div className={tabStyles.detailText11}>CHỈ SỐ KHỐI CƠ THỂ (BMI) TỰ ĐỘNG</div>
-                                <div className={tabStyles.inlineGroup3}>
-                                    <span className={tabStyles.detailText12}>
+                                <div className={tabStyles.bmiHeading}>CHỈ SỐ KHỐI CƠ THỂ (BMI) TỰ ĐỘNG</div>
+                                <div className={tabStyles.bmiValueRow}>
+                                    <span className={tabStyles.bmiValue}>
                                         {computedBmi !== null ? computedBmi : '--'}
                                     </span>
                                     {bmiClassification && (
-                                        <span className={[tabStyles.bmiBadge, (bmiClassification.color === '#15803d' ? tabStyles.statusBackground : (bmiClassification.color === '#d97706' ? tabStyles.statusBackground2 : tabStyles.statusBackground3)), (bmiClassification.color === '#15803d' ? tabStyles.statusText3 : bmiClassification.color === '#d97706' ? tabStyles.statusText : tabStyles.statusText4)].join(' ')}>
+                                        <span className={[tabStyles.bmiBadge, {
+                                            underweight: tabStyles.bmiUnderweight,
+                                            normal: tabStyles.bmiNormal,
+                                            overweight: tabStyles.bmiElevated,
+                                            obese: tabStyles.bmiElevated
+                                        }[bmiClassification.level]].join(' ')}>
                                             {bmiClassification.label}
                                         </span>
                                     )}
@@ -1339,9 +1344,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     </Card>
 
                     {/* Region 4: Vital Signs Longitudinal History Table */}
-                    <Card className={[tabStyles.tabPanel].join(' ')} >
+                    <Card className={[tabStyles.workspaceCard].join(' ')} >
                         <div className={tabStyles.sectionHeader}>
-                            <h3 className={tabStyles.regionTitle}>
+                            <h3 className={tabStyles.vitalHistoryTitle}>
                                 Bảng theo dõi lịch sử sinh hiệu qua các lần khám ({historyList.length} lần đo)
                             </h3>
                         </div>
@@ -1349,8 +1354,8 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         {historyList.length === 0 ? (
                             <EmptyState title="Chưa có dữ liệu lịch sử sinh hiệu từ các lần khám trước." />
                         ) : (
-                            <div className={tabStyles.detail10}>
-                                <div className={tabStyles.tableScroll}><DataTable data={historyList} keyExtractor={(item) => historyList.indexOf(item)} columns={[
+                            <div className={tabStyles.vitalHistoryTableScroll}>
+                                <div className={tabStyles.dataTableScroll}><DataTable data={historyList} keyExtractor={(item) => historyList.indexOf(item)} columns={[
                                     {
                                         header: "Thời điểm đo", accessor: (item) => {
                                             return <>
@@ -1381,7 +1386,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Tab 3: Diagnostic Orders (Chỉ định Cận lâm sàng) */}
             {activeTab === 'diagnostics' && (
-                <Card className={[tabStyles.tabPanel, tabStyles.stackedTab].join(' ')}>
+                <Card className={[tabStyles.workspaceCard, tabStyles.stackedTabContent].join(' ')}>
                     {pollError && (
                         <InlineError
                             title="Tự động cập nhật bị gián đoạn"
@@ -1391,26 +1396,26 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     )}
                     {/* Diagnostic Create Form */}
                     {!isCompleted && (
-                        <Card className={[tabStyles.tabPanel].join(' ')} >
+                        <Card className={[tabStyles.workspaceCard].join(' ')} >
                             <div className={tabStyles.sectionHeader}>
                                 <div>
                                     <h3 className={tabStyles.sectionTitle}>
                                         Tạo phiếu chỉ định Cận lâm sàng mới
                                     </h3>
-                                    <p className={tabStyles.description}>
+                                    <p className={tabStyles.sectionDescription}>
                                         Chọn các xét nghiệm hoặc chẩn đoán hình ảnh từ danh mục để chuyển đến Kỹ thuật viên.
                                     </p>
                                 </div>
                             </div>
 
                             {/* Category filter tabs */}
-                            <div className={tabStyles.inlineGroup5}>
+                            <div className={tabStyles.diagnosticCategoryFilters}>
                                 {['All', 'Laboratory', 'Ultrasound', 'Imaging', 'Other'].map(cat => (
                                     <Button
                                         key={cat}
                                         htmlType="button"
                                         onClick={() => setCatalogCategory(cat)}
-                                        className={[tabStyles.actionButton, tabStyles.detail11, (catalogCategory === cat ? tabStyles.statusBackground4 : tabStyles.statusBackground5), (catalogCategory === cat ? tabStyles.statusBackground6 : tabStyles.statusBackground7), (catalogCategory === cat ? tabStyles.statusText2 : tabStyles.statusText5)].join(' ')}
+                                        className={[tabStyles.iconActionButton, tabStyles.categoryFilterButton, (catalogCategory === cat ? tabStyles.selectedOptionBorder : tabStyles.defaultOptionBorder), (catalogCategory === cat ? tabStyles.selectedCategorySurface : tabStyles.optionSurface), (catalogCategory === cat ? tabStyles.infoText : tabStyles.secondaryText)].join(' ')}
                                     >
                                         {cat === 'All' ? 'Tất cả danh mục' : categoryMap[cat] || cat}
                                     </Button>
@@ -1418,16 +1423,16 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </div>
 
                             {/* Services Catalog Selection Grid */}
-                            <Row className={[tabStyles.responsiveRow, tabStyles.outlinedPanel3].join(' ')}>
+                            <Row className={[tabStyles.responsiveFormRow, tabStyles.diagnosticServiceList].join(' ')}>
                                 {filteredCatalog.map(srv => {
                                     const isSelected = selectedServiceIds.includes(srv.id);
                                     return (
-                                        <Col key={srv.id} xs={24} md={12} xl={8} className={tabStyles.column}><div
+                                        <Col key={srv.id} xs={24} md={12} xl={8} className={tabStyles.responsiveColumn}><div
                                             key={srv.id}
                                             onClick={() => handleToggleSelectService(srv.id)}
-                                            className={[tabStyles.serviceOption, (isSelected ? tabStyles.statusBackground4 : tabStyles.statusBackground5), (isSelected ? tabStyles.statusBackground8 : tabStyles.statusBackground7)].join(' ')}
+                                            className={[tabStyles.serviceOption, (isSelected ? tabStyles.selectedOptionBorder : tabStyles.defaultOptionBorder), (isSelected ? tabStyles.selectedSurface : tabStyles.optionSurface)].join(' ')}
                                         >
-                                            <div className={tabStyles.inlineGroup2}>
+                                            <div className={tabStyles.iconTextRow}>
                                                 <input
                                                     type="checkbox"
                                                     checked={isSelected}
@@ -1438,7 +1443,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                     <div className={tabStyles.serviceName}>
                                                         {srv.name}
                                                     </div>
-                                                    <div className={tabStyles.detailText3}>
+                                                    <div className={tabStyles.secondaryCaption}>
                                                         <code>{srv.code}</code> • {categoryMap[srv.category] || srv.category}
                                                     </div>
                                                 </div>
@@ -1454,9 +1459,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </Row>
 
                             {/* Indication and Notes */}
-                            <Row className={[tabStyles.responsiveRow, tabStyles.sectionSpacing].join(' ')}>
-                                <Col xs={24} md={12} className={tabStyles.column}>
-                                    <Form.Item className={tabStyles.formItem}>
+                            <Row className={[tabStyles.responsiveFormRow, tabStyles.formRowSpacing].join(' ')}>
+                                <Col xs={24} md={12} className={tabStyles.responsiveColumn}>
+                                    <Form.Item className={tabStyles.formField}>
                                         <label className={tabStyles.fieldLabel}>
                                             Chỉ định lâm sàng / Mục đích cận lâm sàng
                                         </label>
@@ -1465,12 +1470,12 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             value={clinicalIndication}
                                             onChange={(e) => setClinicalIndication(e.target.value)}
                                             placeholder="Ví dụ: Kiểm tra men gan / Nghi ngờ sỏi thận..."
-                                            className={[tabStyles.fieldControl].join(' ')}
+                                            className={[tabStyles.formControl].join(' ')}
                                         />
                                     </Form.Item>
                                 </Col>
-                                <Col xs={24} md={12} className={tabStyles.column}>
-                                    <Form.Item className={tabStyles.formItem}>
+                                <Col xs={24} md={12} className={tabStyles.responsiveColumn}>
+                                    <Form.Item className={tabStyles.formField}>
                                         <label className={tabStyles.fieldLabel}>
                                             Ghi chú / Lưu ý cho Kỹ thuật viên
                                         </label>
@@ -1479,21 +1484,21 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             value={orderNotes}
                                             onChange={(e) => setOrderNotes(e.target.value)}
                                             placeholder="Ví dụ: Bệnh nhân nhịn ăn sáng / Lấy máu cẩn thận..."
-                                            className={[tabStyles.fieldControl].join(' ')}
+                                            className={[tabStyles.formControl].join(' ')}
                                         />
                                     </Form.Item>
                                 </Col>
                             </Row>
 
                             <div className={tabStyles.fieldLabelRow}>
-                                <div className={tabStyles.detailText17}>
+                                <div className={tabStyles.selectedServicesCount}>
                                     Đã chọn: <strong>{selectedServiceIds.length}</strong> dịch vụ
                                 </div>
                                 <Button type="primary"
                                     htmlType="button"
                                     onClick={handleCreateDiagnosticOrder}
                                     disabled={creatingOrder || selectedServiceIds.length === 0}
-                                    className={[tabStyles.actionButton, tabStyles.refreshAction].join(' ')}
+                                    className={[tabStyles.iconActionButton, tabStyles.createOrderButton].join(' ')}
                                 >
                                     <FlaskConical size={16} />
                                     <span>{creatingOrder ? 'Đang tạo...' : 'Tạo phiếu chỉ định'}</span>
@@ -1503,7 +1508,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     )}
 
                     {/* Diagnostic Orders List */}
-                    <Card className={[tabStyles.tabPanel].join(' ')} >
+                    <Card className={[tabStyles.workspaceCard].join(' ')} >
                         <div className={tabStyles.sectionHeader}>
                             <h3 className={tabStyles.sectionTitle}>
                                 Danh sách phiếu chỉ định cận lâm sàng ({diagnosticOrders.length})
@@ -1511,7 +1516,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             <Button
                                 htmlType="button"
                                 onClick={() => void loadDiagnosticOrders()}
-                                className={[tabStyles.actionButton, tabStyles.inlineGroup6].join(' ')}
+                                className={[tabStyles.iconActionButton, tabStyles.refreshOrdersButton].join(' ')}
                             >
                                 <RefreshCw size={14} className={loadingOrders ? 'animate-spin' : ''} />
                                 <span>Cập nhật kết quả</span>
@@ -1519,45 +1524,45 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         </div>
 
                         {diagnosticOrders.length === 0 ? (
-                            <EmptyState icon={<FlaskConical size={36} className={tabStyles.detail14} />} title="Chưa có phiếu chỉ định cận lâm sàng nào trong ca khám này." description="Sử dụng danh mục phía trên để lập phiếu chỉ định gửi sang Kỹ thuật viên." />
+                            <EmptyState icon={<FlaskConical size={36} className={tabStyles.emptyStateIcon} />} title="Chưa có phiếu chỉ định cận lâm sàng nào trong ca khám này." description="Sử dụng danh mục phía trên để lập phiếu chỉ định gửi sang Kỹ thuật viên." />
                         ) : (
-                            <div className={tabStyles.inlineGroup}>
+                            <div className={tabStyles.diagnosticOrderList}>
                                 {diagnosticOrders.map(order => (
                                     <div
                                         key={order.id}
-                                        className={tabStyles.orderCard}
+                                        className={tabStyles.diagnosticOrderCard}
                                     >
                                         {/* Order Header */}
-                                        <div className={tabStyles.orderHeader}>
-                                            <div className={tabStyles.inlineGroup7}>
+                                        <div className={tabStyles.diagnosticOrderHeader}>
+                                            <div className={tabStyles.orderIdentity}>
                                                 <span className={tabStyles.orderCode}>
                                                     {order.orderCode}
                                                 </span>
                                                 {statusBadge(order.status)}
                                                 {order.reviewedAtUtc ? (
-                                                    <span className={tabStyles.reviewedBadge}>
+                                                    <span className={tabStyles.reviewedOrderBadge}>
                                                         <Check size={12} />
                                                         <span>Bác sĩ đã xem: {new Date(order.reviewedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
                                                     </span>
                                                 ) : (
                                                     order.status === 'Completed' && (
-                                                        <span className={tabStyles.unreviewedBadge}>
+                                                        <span className={tabStyles.unreviewedOrderBadge}>
                                                             Chưa duyệt kết quả
                                                         </span>
                                                     )
                                                 )}
-                                                <span className={tabStyles.detailText21}>
+                                                <span className={tabStyles.orderCreatedTime}>
                                                     Thời gian lập: {new Date(order.orderedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                                                 </span>
                                             </div>
 
-                                            <div className={tabStyles.inlineGroup2}>
+                                            <div className={tabStyles.iconTextRow}>
                                                 {/* Print Slip Button */}
                                                 <Button
                                                     href={`/doctor/diagnostic-orders/${order.id}/print`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className={[tabStyles.actionButton, tabStyles.inlineGroup8].join(' ')}
+                                                    className={[tabStyles.iconActionButton, tabStyles.printOrderButton].join(' ')}
                                                 >
                                                     <Printer size={14} />
                                                     <span>In phiếu chỉ định</span>
@@ -1569,7 +1574,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                         htmlType="button"
                                                         onClick={() => handleReviewOrder(order.id)}
                                                         disabled={actionOrderId === order.id}
-                                                        className={[tabStyles.actionButton, tabStyles.inlineGroup9].join(' ')}
+                                                        className={[tabStyles.iconActionButton, tabStyles.reviewOrderButton].join(' ')}
                                                     >
                                                         <Check size={14} />
                                                         <span>{actionOrderId === order.id ? 'Đang xử lý...' : 'Xác nhận đã xem kết quả'}</span>
@@ -1582,7 +1587,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                         htmlType="button"
                                                         onClick={() => handleCancelOrder(order.id)}
                                                         disabled={actionOrderId === order.id}
-                                                        className={[tabStyles.actionButton, tabStyles.detailText22].join(' ')}
+                                                        className={[tabStyles.iconActionButton, tabStyles.cancelOrderButton].join(' ')}
                                                     >
                                                         Hủy
                                                     </Button>
@@ -1591,19 +1596,19 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                         </div>
 
                                         {/* Order Items & Results Table */}
-                                        <div className={tabStyles.detail15}>
+                                        <div className={tabStyles.orderContent}>
                                             {order.clinicalIndication && (
-                                                <div className={tabStyles.detailText23}>
+                                                <div className={tabStyles.orderIndication}>
                                                     <strong>Chỉ định lâm sàng:</strong> {order.clinicalIndication}
                                                 </div>
                                             )}
 
-                                            <div className={tabStyles.tableScroll}><DataTable data={order.items} keyExtractor={(item) => item.id} columns={[
+                                            <div className={tabStyles.dataTableScroll}><DataTable data={order.items} keyExtractor={(item) => item.id} columns={[
                                                 {
                                                     header: "Dịch vụ chỉ định", accessor: (item) => {
                                                         return <>
-                                                            <div className={tabStyles.medicineName}>{item.serviceName}</div>
-                                                            <div className={tabStyles.detailText3}>{item.serviceCode}</div>
+                                                            <div className={tabStyles.itemTitle}>{item.serviceName}</div>
+                                                            <div className={tabStyles.secondaryCaption}>{item.serviceCode}</div>
                                                         </>;
                                                     }
                                                 },
@@ -1625,11 +1630,11 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                     header: "Kết quả đo / Trị số", accessor: (item) => {
                                                         return <>
                                                             {item.result ? (
-                                                                <div className={tabStyles.detail17}>
+                                                                <div className={tabStyles.diagnosticResultText}>
                                                                     {item.result.resultText || '--'} {item.result.unit}
                                                                 </div>
                                                             ) : (
-                                                                <span className={tabStyles.detail18}>Chưa có</span>
+                                                                <span className={tabStyles.emptyValue}>Chưa có</span>
                                                             )}
                                                         </>;
                                                     }
@@ -1647,14 +1652,14 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                             {item.result ? (
                                                                 <div>
                                                                     {item.result.conclusion && (
-                                                                        <div className={tabStyles.medicineName}>{item.result.conclusion}</div>
+                                                                        <div className={tabStyles.itemTitle}>{item.result.conclusion}</div>
                                                                     )}
-                                                                    <div className={tabStyles.detailText24}>
+                                                                    <div className={tabStyles.diagnosticResultMetadata}>
                                                                         KTV: {item.result.resultedByUserName} • {new Date(item.result.resultedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                                                                     </div>
                                                                 </div>
                                                             ) : (
-                                                                <span className={tabStyles.detail18}>--</span>
+                                                                <span className={tabStyles.emptyValue}>--</span>
                                                             )}
                                                         </>;
                                                     }
@@ -1671,21 +1676,21 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Tab 4: Prescription */}
             {activeTab === 'prescription' && (
-                <Card className={[tabStyles.tabPanel].join(' ')} >
-                    <Row className={tabStyles.responsiveRow}>
-                        <Col span={24} className={tabStyles.column}>
-                            <div className={tabStyles.prescriptionHeader}>
+                <Card className={[tabStyles.workspaceCard].join(' ')} >
+                    <Row className={tabStyles.responsiveFormRow}>
+                        <Col span={24} className={tabStyles.responsiveColumn}>
+                            <div className={tabStyles.sectionHeader}>
                                 <div>
                                     <h3 className={tabStyles.sectionTitle}>
                                         Kê đơn thuốc cho bệnh nhân
                                     </h3>
-                                    <p className={tabStyles.description}>
+                                    <p className={tabStyles.sectionDescription}>
                                         Tìm kiếm thuốc từ danh mục hoạt động của phòng khám và điều chỉnh liều dùng.
                                     </p>
                                 </div>
                                 <Button
                                     htmlType="button"
-                                    className={[tabStyles.actionButton].join(' ')}
+                                    className={[tabStyles.iconActionButton].join(' ')}
                                     onClick={handleSavePrescriptionDraft}
                                     disabled={savingPrescription}
                                 >
@@ -1703,13 +1708,13 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                         placeholder="Gõ tên thuốc hoặc mã thuốc để tìm kiếm và thêm vào đơn..."
                                         value={medicineSearch}
                                         onChange={(e) => setMedicineSearch(e.target.value)}
-                                        className={[tabStyles.fieldControl].join(' ')}
+                                        className={[tabStyles.formControl].join(' ')}
                                     />
                                 </div>
 
                                 {/* Search Dropdown Results */}
                                 {medicineSearch.trim() && (
-                                    <div className={tabStyles.medicineResults}>
+                                    <div className={tabStyles.medicineSearchResults}>
                                         {filteredMedicines.length === 0 ? (
                                             <EmptyState title={`Không tìm thấy thuốc khớp với "${medicineSearch}" trong kho.`} />
                                         ) : (
@@ -1719,16 +1724,16 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                     onClick={() => handleAddMedicine(med)} className={tabStyles.medicineOption}
                                                 >
                                                     <div>
-                                                        <span className={tabStyles.medicineName}>{med.name}</span>
+                                                        <span className={tabStyles.itemTitle}>{med.name}</span>
                                                         <span className={tabStyles.medicineCode}>
                                                             ({med.code}) • ĐVT: {med.unit}
                                                         </span>
                                                     </div>
-                                                    <div className={tabStyles.inlineGroup2}>
-                                                        <span className={[tabStyles.detail21, (med.stockQuantity > 0 ? tabStyles.statusText3 : tabStyles.statusText4)].join(' ')}>
+                                                    <div className={tabStyles.iconTextRow}>
+                                                        <span className={[tabStyles.medicineStockQuantity, (med.stockQuantity > 0 ? tabStyles.successText : tabStyles.dangerText)].join(' ')}>
                                                             Tồn: {med.stockQuantity} {med.unit}
                                                         </span>
-                                                        <span className={tabStyles.detailText26}>
+                                                        <span className={tabStyles.medicineUnitBadge}>
                                                             + Thêm
                                                         </span>
                                                     </div>
@@ -1741,16 +1746,16 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
                             {/* Prescription Items Table */}
                             {prescriptionItems.length === 0 ? (
-                                <EmptyState icon={<Pill size={36} className={tabStyles.detail14} />} title="Chưa có thuốc nào trong đơn." description="Sử dụng ô tìm kiếm phía trên để thêm thuốc vào đơn." />
+                                <EmptyState icon={<Pill size={36} className={tabStyles.emptyStateIcon} />} title="Chưa có thuốc nào trong đơn." description="Sử dụng ô tìm kiếm phía trên để thêm thuốc vào đơn." />
                             ) : (
-                                <div className={tabStyles.sectionSpacing5}>
-                                    <div className={tabStyles.tableScroll}><DataTable data={prescriptionItems} keyExtractor={(item) => item.medicineId} columns={[
+                                <div className={tabStyles.prescriptionTable}>
+                                    <div className={tabStyles.dataTableScroll}><DataTable data={prescriptionItems} keyExtractor={(item) => item.medicineId} columns={[
                                         { header: "#", accessor: (item) => { const idx = prescriptionItems.indexOf(item); return <>{idx + 1}</>; } },
                                         {
                                             header: "Tên thuốc", accessor: (item) => {
                                                 return <>
-                                                    <div className={tabStyles.medicineName}>{item.medicineName}</div>
-                                                    <div className={tabStyles.detailText3}>
+                                                    <div className={tabStyles.itemTitle}>{item.medicineName}</div>
+                                                    <div className={tabStyles.secondaryCaption}>
                                                         {item.medicineCode} • {item.unit}
                                                     </div>
                                                 </>;
@@ -1764,7 +1769,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                         min="1"
                                                         value={item.quantity}
                                                         onChange={(e) => handleItemChange(idx, 'quantity', parseInt(e.target.value, 10) || 1)}
-                                                        className={[tabStyles.fieldControl].join(' ')}
+                                                        className={[tabStyles.formControl].join(' ')}
                                                     />
                                                 </>;
                                             }
@@ -1777,7 +1782,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                         value={item.dosage}
                                                         onChange={(e) => handleItemChange(idx, 'dosage', e.target.value)}
                                                         placeholder="1 viên"
-                                                        className={[tabStyles.fieldControl].join(' ')}
+                                                        className={[tabStyles.formControl].join(' ')}
                                                     />
                                                 </>;
                                             }
@@ -1790,7 +1795,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                         value={item.frequency}
                                                         onChange={(e) => handleItemChange(idx, 'frequency', e.target.value)}
                                                         placeholder="Ngày 2 lần"
-                                                        className={[tabStyles.fieldControl].join(' ')}
+                                                        className={[tabStyles.formControl].join(' ')}
                                                     />
                                                 </>;
                                             }
@@ -1804,7 +1809,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                         max="90"
                                                         value={item.durationDays}
                                                         onChange={(e) => handleItemChange(idx, 'durationDays', parseInt(e.target.value, 10) || 1)}
-                                                        className={[tabStyles.fieldControl].join(' ')}
+                                                        className={[tabStyles.formControl].join(' ')}
                                                     />
                                                 </>;
                                             }
@@ -1817,7 +1822,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                         value={item.instructions}
                                                         onChange={(e) => handleItemChange(idx, 'instructions', e.target.value)}
                                                         placeholder="Uống sau khi ăn 30 phút..."
-                                                        className={[tabStyles.fieldControl].join(' ')}
+                                                        className={[tabStyles.formControl].join(' ')}
                                                     />
                                                 </>;
                                             }
@@ -1829,7 +1834,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                         htmlType="button"
                                                         onClick={() => handleRemoveMedicine(idx)}
 
-                                                        title="Xóa thuốc khỏi đơn" className={[tabStyles.actionButton, tabStyles.statusText4].join(' ')}
+                                                        title="Xóa thuốc khỏi đơn" className={[tabStyles.iconActionButton, tabStyles.dangerText].join(' ')}
                                                     >
                                                         <Trash2 size={16} />
                                                     </Button>
@@ -1840,7 +1845,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                 </div>
                             )}
 
-                            <Form.Item className={tabStyles.formItem}>
+                            <Form.Item className={tabStyles.formField}>
                                 <label className={tabStyles.fieldLabel}>
                                     Ghi chú đơn thuốc cho dược sĩ / bệnh nhân
                                 </label>
@@ -1849,7 +1854,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                     onChange={(e) => setPrescriptionNotes(e.target.value)}
                                     rows={2}
                                     placeholder="Lưu ý dị ứng hoặc hướng dẫn bảo quản thuốc..."
-                                    className={[tabStyles.fieldControl].join(' ')}
+                                    className={[tabStyles.formControl].join(' ')}
                                 />
                             </Form.Item>
                         </Col>
@@ -1859,50 +1864,50 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Tab 5: Past Visits History */}
             {activeTab === 'history' && (
-                <Card className={[tabStyles.tabPanel].join(' ')} >
-                    <Row className={tabStyles.responsiveRow}>
-                        <Col span={24} className={tabStyles.column}>
-                            <h3 className={tabStyles.historyTitle}>
+                <Card className={[tabStyles.workspaceCard].join(' ')} >
+                    <Row className={tabStyles.responsiveFormRow}>
+                        <Col span={24} className={tabStyles.responsiveColumn}>
+                            <h3 className={tabStyles.historySectionTitle}>
                                 Lịch sử các lần khám trước của bệnh nhân ({patient.pastVisits.length} lượt)
                             </h3>
 
                             {patient.pastVisits.length === 0 ? (
-                                <EmptyState icon={<History size={36} className={tabStyles.detail14} />} title="Đây là lần đầu bệnh nhân đến khám tại hệ thống phòng khám." />
+                                <EmptyState icon={<History size={36} className={tabStyles.emptyStateIcon} />} title="Đây là lần đầu bệnh nhân đến khám tại hệ thống phòng khám." />
                             ) : (
-                                <div className={tabStyles.historyList}>
+                                <div className={tabStyles.historyVisitList}>
                                     {patient.pastVisits.map(visit => (
                                         <div key={visit.appointmentId} className={tabStyles.historyVisit}>
-                                            <div className={tabStyles.historyHeader}>
+                                            <div className={tabStyles.historyVisitHeader}>
                                                 <div>
-                                                    <span className={tabStyles.detailText27}>
+                                                    <span className={tabStyles.historyVisitDate}>
                                                         Ngày: {visit.date}
                                                     </span>
-                                                    <span className={tabStyles.detailText28}>
+                                                    <span className={tabStyles.historyDoctorName}>
                                                         Mã: #{visit.appointmentCode}
                                                     </span>
                                                 </div>
-                                                <div className={tabStyles.detailText29}>
+                                                <div className={tabStyles.historySpecialtyName}>
                                                     BS: {visit.doctorName} • Khoa: {visit.specialtyName}
                                                 </div>
                                             </div>
 
                                             {visit.diagnosis && (
-                                                <div className={tabStyles.detailText30}>
+                                                <div className={tabStyles.historyDiagnosis}>
                                                     <strong>Chẩn đoán:</strong> {visit.diagnosis}
                                                 </div>
                                             )}
 
                                             {visit.summary && (
-                                                <div className={tabStyles.detailText31}>
+                                                <div className={tabStyles.historySummary}>
                                                     <strong>Kết luận:</strong> {visit.summary}
                                                 </div>
                                             )}
 
                                             {visit.prescriptionItemNames && visit.prescriptionItemNames.length > 0 && (
-                                                <div className={tabStyles.inlineGroup11}>
-                                                    <span className={tabStyles.detailText32}>Thuốc đã kê:</span>
+                                                <div className={tabStyles.historyPrescription}>
+                                                    <span className={tabStyles.historyPrescriptionLabel}>Thuốc đã kê:</span>
                                                     {visit.prescriptionItemNames.map((medName, mIdx) => (
-                                                        <span key={mIdx} className={tabStyles.detailText33}>
+                                                        <span key={mIdx} className={tabStyles.historyMedicineBadge}>
                                                             {medName}
                                                         </span>
                                                     ))}
@@ -1918,8 +1923,8 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             )}
 
             {/* Bottom Sticky Action Bar */}
-            <div className={tabStyles.actionBar}>
-                <div className={[tabStyles.inlineGroup2, tabStyles.statusSummary].join(' ')}>
+            <div className={tabStyles.workspaceActionBar}>
+                <div className={[tabStyles.iconTextRow, tabStyles.recordStatusSummary].join(' ')}>
                     <span className={tabStyles.recordStatusLabel}>Trạng thái hồ sơ:</span>
                     <StatusBadge status={isCompleted ? 'Completed' : 'InConsultation'} label={isCompleted ? 'Đã hoàn tất' : 'Đang khám'} />
                     {diagnosticOrders.length > 0 && (
@@ -1935,19 +1940,19 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 </div>
 
                 {isCompleted ? (
-                    <div className={tabStyles.inlineGroup16}>
+                    <div className={tabStyles.completedRecordMessage}>
                         <CheckCircle size={18} />
                         <span>Hồ sơ ca khám đã chốt và lưu trữ chính thức</span>
                     </div>
                 ) : (
-                    <div className={tabStyles.actionBarButtons}>
+                    <div className={[tabStyles.wrappingIconRow, tabStyles.workspaceActionButtons].join(' ')}>
                         {pendingDiagnosticOrder && (
-                            <span className={tabStyles.inlineGroup18}>
+                            <span className={tabStyles.pendingOrderNotice}>
                                 <AlertTriangle size={14} /> Có chỉ định CLS chờ xử lý
                             </span>
                         )}
                         {!pendingDiagnosticOrder && unreviewedDiagnosticOrder && (
-                            <span className={tabStyles.inlineGroup19}>
+                            <span className={tabStyles.unreviewedOrderNotice}>
                                 <AlertCircle size={14} /> Có kết quả CLS chưa duyệt
                             </span>
                         )}
@@ -1955,7 +1960,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         <Button
                             htmlType="button"
                             onClick={() => setIsRevisitModalOpen(true)}
-                            className={[tabStyles.actionButton, tabStyles.inlineGroup2].join(' ')}
+                            className={[tabStyles.iconActionButton, tabStyles.iconTextRow].join(' ')}
                         >
                             <Calendar size={16} />
                             <span>Hẹn tái khám</span>
@@ -1964,7 +1969,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         <Button type="primary"
                             htmlType="button"
                             onClick={handleOpenCompleteModal}
-                            className={[tabStyles.actionButton, tabStyles.completionButtonContent, ((pendingDiagnosticOrder || unreviewedDiagnosticOrder) ? tabStyles.statusBackground9 : tabStyles.statusBackground10)].join(' ')}
+                            className={[tabStyles.iconActionButton, tabStyles.completeConsultationButton, ((pendingDiagnosticOrder || unreviewedDiagnosticOrder) ? tabStyles.completionBlockedSurface : tabStyles.completionReadySurface)].join(' ')}
                         >
                             <CheckCircle size={18} />
                             <span>HOÀN TẤT KHÁM BỆNH</span>
@@ -1975,13 +1980,28 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Revisit Modal */}
             {isRevisitModalOpen && (
-                <div className={tabStyles.modalOverlay}>
-                    <div className={tabStyles.revisitDialog}>
-                        <h3 className={tabStyles.sectionTitle4}>
+                <Modal
+                    open={isRevisitModalOpen}
+                    onCancel={() => setIsRevisitModalOpen(false)}
+                    width={440}
+                    title={
+                        <h3 className={tabStyles.modalTitle}>
                             Đề xuất tái khám cho bệnh nhân
                         </h3>
-                        <form onSubmit={handleCreateRevisit}>
-                            <Form.Item className={tabStyles.formItem}>
+                    }
+                    footer={
+                        <div className={tabStyles.modalFooterActions}>
+                            <Button htmlType="button" onClick={() => setIsRevisitModalOpen(false)} className={tabStyles.iconActionButton} >
+                                Hủy
+                            </Button>
+                            <Button type="primary" htmlType="submit" form="revisit-proposal-form" disabled={savingRevisit} className={tabStyles.iconActionButton} >
+                                {savingRevisit ? 'Đang tạo...' : 'Xác nhận đề xuất'}
+                            </Button>
+                        </div>
+                    }
+                >
+                        <form id="revisit-proposal-form" onSubmit={handleCreateRevisit}>
+                            <Form.Item className={tabStyles.formField}>
                                 <label className={tabStyles.fieldLabel}>
                                     Ngày hẹn tái khám đề xuất *
                                 </label>
@@ -1991,10 +2011,10 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                     onChange={(e) => setRevisitDate(e.target.value)}
                                     min={minRevisitDate}
                                     required
-                                    className={[tabStyles.fieldControl].join(' ')}
+                                    className={[tabStyles.formControl].join(' ')}
                                 />
                             </Form.Item>
-                            <Form.Item className={tabStyles.formItem}>
+                            <Form.Item className={tabStyles.formField}>
                                 <label className={tabStyles.fieldLabel}>
                                     Ghi chú / Nhắc nhở tái khám
                                 </label>
@@ -2003,51 +2023,65 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                     onChange={(e) => setRevisitNote(e.target.value)}
                                     placeholder="Tái khám đánh giá lại triệu chứng hoặc kết quả xét nghiệm..."
                                     rows={3}
-                                    className={[tabStyles.fieldControl].join(' ')}
+                                    className={[tabStyles.formControl].join(' ')}
                                 />
                             </Form.Item>
-                            <div className={tabStyles.inlineGroup22}>
-                                <Button htmlType="button" onClick={() => setIsRevisitModalOpen(false)} className={tabStyles.actionButton} >
-                                    Hủy
-                                </Button>
-                                <Button type="primary" htmlType="submit" disabled={savingRevisit} className={tabStyles.actionButton} >
-                                    {savingRevisit ? 'Đang tạo...' : 'Xác nhận đề xuất'}
-                                </Button>
-                            </div>
                         </form>
-                    </div>
-                </div>
+                </Modal>
             )}
 
             {/* Complete Consultation Confirmation Modal */}
             {isCompleteModalOpen && (
-                <div className={tabStyles.modalOverlay}>
-                    <div className={tabStyles.completionDialog}>
-                        <div className={tabStyles.inlineGroup23}>
-                            <div className={tabStyles.inlineGroup24}>
+                <Modal
+                    open={isCompleteModalOpen}
+                    onCancel={() => setIsCompleteModalOpen(false)}
+                    width={520}
+                    title={
+                        <div className={tabStyles.iconTextRow}>
+                            <div className={tabStyles.completionModalIcon}>
                                 <CheckCircle size={24} />
                             </div>
                             <div>
-                                <h3 className={tabStyles.sectionTitle5}>
+                                <h3 className={tabStyles.modalTitle}>
                                     Xác nhận hoàn tất ca khám
                                 </h3>
-                                <p className={tabStyles.description}>
+                                <p className={tabStyles.sectionDescription}>
                                     Giao dịch nguyên tử: Chốt hồ sơ bệnh án và phát hành đơn thuốc.
                                 </p>
                             </div>
                         </div>
-
-                        <div className={tabStyles.outlinedPanel7}>
-                            <div className={tabStyles.sectionSpacing8}>
+                    }
+                    footer={
+                        <div className={tabStyles.modalFooterActions}>
+                            <Button
+                                htmlType="button"
+                                onClick={() => setIsCompleteModalOpen(false)}
+                                className={tabStyles.iconActionButton}
+                            >
+                                Quay lại chỉnh sửa
+                            </Button>
+                            <Button type="primary"
+                                htmlType="button"
+                                onClick={handleCompleteConsultation}
+                                disabled={completing || !diagnosis.trim() || !summary.trim() || Boolean(pendingDiagnosticOrder) || Boolean(unreviewedDiagnosticOrder)}
+                                className={tabStyles.iconActionButton}
+                            >
+                                {completing ? 'Đang hoàn tất...' : 'Xác nhận hoàn tất'}
+                            </Button>
+                        </div>
+                    }
+                >
+                        <div className={tabStyles.completionSummary}>
+                            <div className={tabStyles.completionSummaryField}>
                                 <strong>Bệnh nhân:</strong> {patient.patientName} ({patient.patientPhone})
                             </div>
-                            <div className={tabStyles.sectionSpacing8}>
+                            <div className={tabStyles.completionSummaryField}>
                                 <strong>Chẩn đoán:</strong> {diagnosis || '<Chưa nhập>'}
                             </div>
-                            <div className={tabStyles.sectionSpacing8}>
+                            <div className={tabStyles.completionSummaryField}>
                                 <strong>Tóm tắt:</strong> {summary || '<Chưa nhập>'}
                             </div>
-                            <div className={tabStyles.sectionSpacing8}>
+                            <div className={tabStyles.completionSummaryField}>
                                 <strong>Cận lâm sàng:</strong> {diagnosticOrders.length > 0 ? `${diagnosticOrders.length} phiếu chỉ định (Đã có kết quả & đã xem)` : 'Không có chỉ định CLS'}
                             </div>
                             <div>
@@ -2056,38 +2090,20 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         </div>
 
                         {prescriptionItems.length > 0 && (
-                            <Form.Item className={tabStyles.formItem}>
-                                <label className={tabStyles.fieldLabel3}>
+                            <Form.Item className={tabStyles.formField}>
+                                <label className={tabStyles.issuePrescriptionLabel}>
                                     <input
                                         type="checkbox"
                                         checked={issuePrescriptionCheck}
                                         onChange={(e) => setIssuePrescriptionCheck(e.target.checked)}
-                                        className={tabStyles.confirmationCheckbox}
+                                        className={tabStyles.issuePrescriptionCheckbox}
                                     />
                                     <span>Chốt và phát hành đơn thuốc sang Dược sĩ (Trạng thái Issued)</span>
                                 </label>
                             </Form.Item>
                         )}
 
-                        <div className={tabStyles.inlineGroup22}>
-                            <Button
-                                htmlType="button"
-                                onClick={() => setIsCompleteModalOpen(false)}
-                                className={tabStyles.actionButton}
-                            >
-                                Quay lại chỉnh sửa
-                            </Button>
-                            <Button type="primary"
-                                htmlType="button"
-                                onClick={handleCompleteConsultation}
-                                disabled={completing || !diagnosis.trim() || !summary.trim() || Boolean(pendingDiagnosticOrder) || Boolean(unreviewedDiagnosticOrder)}
-                                className={tabStyles.actionButton}
-                            >
-                                {completing ? 'Đang hoàn tất...' : 'Xác nhận hoàn tất'}
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+                </Modal>
             )}
         </div>
     );
