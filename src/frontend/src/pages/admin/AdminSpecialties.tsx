@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { Search, Plus, Edit, Stethoscope, Sparkles, X, AlertTriangle } from 'lucide-react';
+import { Plus, Edit, Sparkles } from 'lucide-react';
+import { Alert, Button, Checkbox, Form, Input, Modal, Select, Tag, Typography } from 'antd';
+import { PageHeader, FilterBar, DataTable, Pagination, EmptyState, LoadingState, InlineError } from '../../components/common';
+import styles from './AdminSpecialties.module.css';
 import { useDialog } from '../../contexts/DialogContext';
 
 interface Specialty {
@@ -17,6 +20,7 @@ export const AdminSpecialties: React.FC = () => {
     const { showAlert, showConfirm } = useDialog();
     const [specialties, setSpecialties] = useState<Specialty[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [totalItems, setTotalItems] = useState(0);
     const [page, setPage] = useState(1);
     
@@ -31,6 +35,7 @@ export const AdminSpecialties: React.FC = () => {
 
     const fetchSpecialties = async () => {
         setLoading(true);
+        setLoadError('');
         try {
             const params = new URLSearchParams({
                 page: page.toString(),
@@ -40,12 +45,13 @@ export const AdminSpecialties: React.FC = () => {
             if (statusFilter !== '') params.append('isActive', statusFilter);
 
             const res = await axiosClient.get<any, ApiResponse<any>>(`/admin/specialties?${params.toString()}`);
+            if (!res.success || !res.data) throw new Error(res.message || 'Không thể tải chuyên khoa.');
             if (res.success && res.data) {
                 setSpecialties(res.data.items);
                 setTotalItems(res.data.totalItems);
             }
         } catch (error) {
-            // Error
+            setLoadError((error as Error)?.message || 'Không thể tải chuyên khoa.');
         } finally {
             setLoading(false);
         }
@@ -55,14 +61,12 @@ export const AdminSpecialties: React.FC = () => {
         fetchSpecialties();
     }, [page, statusFilter]);
 
-    const handleSearchSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        setPage(1);
-        fetchSpecialties();
+    const handleSearchSubmit = () => {
+        if (page !== 1) setPage(1);
+        else fetchSpecialties();
     };
 
-    const handleFormSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleFormSubmit = async () => {
         setFormError('');
         
         const submitData = async () => {
@@ -109,182 +113,57 @@ export const AdminSpecialties: React.FC = () => {
     };
 
     const openCreateModal = () => {
+        setFormError('');
         setModal({ isOpen: true, isEdit: false, data: { isActive: true } });
     };
 
     const openEditModal = (spec: Specialty) => {
+        setFormError('');
         setModal({ isOpen: true, isEdit: true, data: { ...spec } });
     };
 
+    const closeModal = () => { if (!formLoading) setModal({ isOpen: false, isEdit: false, data: {} }); };
+
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h2 style={{ color: 'var(--c-navy-dark)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Stethoscope size={24} /> Quản lý chuyên khoa
-                </h2>
-                <button className="btn-primary" onClick={openCreateModal}>
-                    <Plus size={18} /> Thêm chuyên khoa
-                </button>
-            </div>
-
-            <div className="card" style={{ marginBottom: '24px' }}>
-                <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 250px' }}>
-                        <div style={{ position: 'relative' }}>
-                            <Search size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--c-muted)' }} />
-                            <input 
-                                type="text" 
-                                className="form-input" 
-                                placeholder="Tìm theo mã, tên..." 
-                                style={{ paddingLeft: '40px' }}
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                            />
-                        </div>
+        <div className={styles.specialtiesPage}>
+            <PageHeader title="Quản lý chuyên khoa" actions={<Button type="primary" icon={<Plus size={18} />} onClick={openCreateModal}>Thêm chuyên khoa</Button>} />
+            <FilterBar>
+                <Input.Search className={styles.specialtySearch} placeholder="Tìm theo mã, tên..." value={search}
+                    onChange={e => setSearch(e.target.value)} onSearch={handleSearchSubmit} enterButton="Lọc" />
+                <Select className={styles.specialtyFilter} aria-label="Trạng thái" value={statusFilter}
+                    onChange={value => { setStatusFilter(value); setPage(1); }} options={[
+                        { value: '', label: 'Tất cả trạng thái' }, { value: 'true', label: 'Đang hoạt động' }, { value: 'false', label: 'Ngừng hoạt động' }
+                    ]} />
+            </FilterBar>
+            {loading ? <LoadingState /> : loadError ? <InlineError message={loadError} onRetry={fetchSpecialties} />
+                : specialties.length === 0 ? <EmptyState title="Không tìm thấy dữ liệu." /> : <>
+                    <div className={styles.specialtyTable}>
+                        <DataTable data={specialties} keyExtractor={specialty => specialty.id} columns={[
+                            { header: 'Mã Khoa', accessor: specialty => <Typography.Text strong>{specialty.specialtyCode}</Typography.Text> },
+                            { header: 'Tên chuyên khoa', accessor: specialty => <><Typography.Text strong>{specialty.name}</Typography.Text><Typography.Paragraph className={styles.specialtyDescription} type="secondary" ellipsis={{ rows: 1, tooltip: specialty.description }}>{specialty.description || 'Không có mô tả'}</Typography.Paragraph></> },
+                            { header: 'Trạng thái', accessor: specialty => <Tag color={specialty.isActive ? 'success' : 'error'}>{specialty.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}</Tag> },
+                            { header: 'Tính năng AI', accessor: specialty => specialty.aiEnabled ? <Tag color="processing" icon={<Sparkles size={12} />}>Cho phép gợi ý</Tag> : <Tag>Tắt</Tag> },
+                            { header: 'Thao tác', align: 'right', accessor: specialty => <Button size="small" icon={<Edit size={14} />} onClick={() => openEditModal(specialty)}>Sửa</Button> }
+                        ]} />
                     </div>
-                    <div style={{ width: '200px' }}>
-                        <select className="form-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
-                            <option value="">Tất cả trạng thái</option>
-                            <option value="true">Đang hoạt động</option>
-                            <option value="false">Ngừng hoạt động</option>
-                        </select>
+                    <Pagination page={page} totalPages={Math.ceil(totalItems / 10)} totalRecords={totalItems} onPageChange={setPage} />
+                </>}
+            {!loading && !loadError && <div className={styles.specialtyTotal}>Tổng cộng: {totalItems} chuyên khoa</div>}
+            <Modal title={modal.isEdit ? 'Cập nhật chuyên khoa' : 'Thêm chuyên khoa'} open={modal.isOpen} onCancel={closeModal}
+                footer={null} destroyOnHidden maskClosable={!formLoading} closable={!formLoading} keyboard={!formLoading}>
+                {formError && <Alert className={styles.specialtyFormError} type="error" title={formError} showIcon />}
+                <Form layout="vertical" onFinish={handleFormSubmit}>
+                    <Form.Item label="Mã chuyên khoa (*)" htmlFor="specialtyCode"><Input id="specialtyCode" required disabled={modal.isEdit} value={modal.data.specialtyCode || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, specialtyCode: e.target.value } })} placeholder="VD: CARDIO" /></Form.Item>
+                    <Form.Item label="Tên chuyên khoa (*)" htmlFor="specialtyName"><Input id="specialtyName" required value={modal.data.name || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, name: e.target.value } })} placeholder="VD: Tim mạch" /></Form.Item>
+                    <Form.Item label="Mô tả" htmlFor="specialtyDescription"><Input.TextArea id="specialtyDescription" rows={3} value={modal.data.description || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, description: e.target.value } })} /></Form.Item>
+                    <Form.Item><Checkbox checked={modal.data.isActive ?? true} onChange={e => setModal({ ...modal, data: { ...modal.data, isActive: e.target.checked } })}>Đang hoạt động</Checkbox></Form.Item>
+                    {!modal.data.isActive && modal.isEdit && <Alert className={styles.specialtyWarning} type="warning" title="Ngừng hoạt động sẽ làm chuyên khoa bị ẩn khỏi form đặt lịch mới." showIcon />}
+                    <div className={styles.specialtyFormActions}>
+                        <Button disabled={formLoading} onClick={closeModal}>Hủy</Button>
+                        <Button type="primary" htmlType="submit" loading={formLoading}>{formLoading ? 'Đang lưu...' : 'Xác nhận lưu'}</Button>
                     </div>
-                    <button type="submit" className="btn-secondary">Lọc</button>
-                </form>
-            </div>
-
-            <div className="card table-responsive" style={{ padding: 0 }}>
-                {loading ? (
-                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
-                ) : (
-                    <table className="table" style={{ width: '100%' }}>
-                        <thead>
-                            <tr>
-                                <th>Mã Khoa</th>
-                                <th>Tên chuyên khoa</th>
-                                <th>Trạng thái</th>
-                                <th>Tính năng AI</th>
-                                <th style={{ textAlign: 'right' }}>Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {specialties.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>
-                                        Không tìm thấy dữ liệu.
-                                    </td>
-                                </tr>
-                            ) : specialties.map(s => (
-                                <tr key={s.id}>
-                                    <td style={{ fontWeight: 500 }}>{s.specialtyCode}</td>
-                                    <td>
-                                        <div style={{ fontWeight: 600 }}>{s.name}</div>
-                                        <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', marginTop: '4px', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {s.description || 'Không có mô tả'}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        {s.isActive ? 
-                                            <span className="badge badge-success">Đang hoạt động</span> : 
-                                            <span className="badge badge-danger">Ngừng hoạt động</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        {s.aiEnabled ? 
-                                            <span className="badge badge-info" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                <Sparkles size={12}/> Cho phép gợi ý
-                                            </span> : 
-                                            <span className="badge badge-muted">Tắt</span>
-                                        }
-                                    </td>
-                                    <td style={{ textAlign: 'right' }}>
-                                        <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => openEditModal(s)}>
-                                            <Edit size={14} style={{ marginRight: '4px' }}/> Sửa
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-            
-            <div style={{ marginTop: '16px', color: 'var(--c-muted)', fontSize: '0.9rem' }}>
-                Tổng cộng: {totalItems} chuyên khoa
-            </div>
-
-            {/* Form Modal */}
-            {modal.isOpen && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-                    <div style={{ background: 'white', padding: '24px', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: '500px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h3 style={{ margin: 0 }}>{modal.isEdit ? 'Cập nhật chuyên khoa' : 'Thêm chuyên khoa'}</h3>
-                            <button onClick={() => setModal({ isOpen: false, isEdit: false, data: {} })} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
-                        </div>
-                        
-                        {formError && <div style={{ color: 'var(--c-danger)', background: 'var(--c-danger-bg)', padding: '10px', borderRadius: '6px', marginBottom: '16px', fontSize: '0.9rem' }}>{formError}</div>}
-
-                        <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div className="form-group">
-                                <label className="form-label">Mã chuyên khoa (*)</label>
-                                <input 
-                                    type="text" 
-                                    className="form-input" 
-                                    required 
-                                    value={modal.data.specialtyCode || ''} 
-                                    onChange={e => setModal({ ...modal, data: { ...modal.data, specialtyCode: e.target.value } })} 
-                                    disabled={modal.isEdit}
-                                    placeholder="VD: CARDIO"
-                                    style={{ backgroundColor: modal.isEdit ? 'var(--c-bg)' : 'white' }}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Tên chuyên khoa (*)</label>
-                                <input 
-                                    type="text" 
-                                    className="form-input" 
-                                    required 
-                                    value={modal.data.name || ''} 
-                                    onChange={e => setModal({ ...modal, data: { ...modal.data, name: e.target.value } })} 
-                                    placeholder="VD: Tim mạch"
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Mô tả</label>
-                                <textarea 
-                                    className="form-textarea" 
-                                    rows={3}
-                                    value={modal.data.description || ''} 
-                                    onChange={e => setModal({ ...modal, data: { ...modal.data, description: e.target.value } })} 
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, cursor: 'pointer' }}>
-                                    <input 
-                                        type="checkbox" 
-                                        checked={modal.data.isActive ?? true}
-                                        onChange={e => setModal({ ...modal, data: { ...modal.data, isActive: e.target.checked } })}
-                                        style={{ width: '18px', height: '18px' }}
-                                    />
-                                    Đang hoạt động
-                                </label>
-                                {!modal.data.isActive && modal.isEdit && (
-                                    <div style={{ color: 'var(--c-warning)', fontSize: '0.85rem', marginTop: '8px', display: 'flex', gap: '4px', alignItems: 'flex-start' }}>
-                                        <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: '2px' }}/>
-                                        Ngừng hoạt động sẽ làm chuyên khoa bị ẩn khỏi form đặt lịch mới.
-                                    </div>
-                                )}
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                                <button type="button" className="btn-secondary" onClick={() => setModal({ isOpen: false, isEdit: false, data: {} })}>Hủy</button>
-                                <button type="submit" className="btn-primary" disabled={formLoading}>
-                                    {formLoading ? 'Đang lưu...' : 'Xác nhận lưu'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+                </Form>
+            </Modal>
         </div>
     );
 };
