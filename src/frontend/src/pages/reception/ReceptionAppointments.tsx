@@ -1,9 +1,13 @@
+import { Button, Input, Select, Modal } from 'antd';
+import { PageHeader, DataTable, StatusBadge, LoadingState, EmptyState, InlineError } from '../../components/common';
+import type { DataTableColumn } from '../../components/common';
+import styles from './ReceptionAppointments.module.css';
 import React, { useState, useEffect, useRef } from 'react';
 import axiosClient from '../../api/axiosClient';
 import { patientVisitApi } from '../../api/patientVisitApi';
 import { organizationApi, type DepartmentDto } from '../../api/organizationApi';
 import type { ApiResponse, CheckInTicketDto } from '../../types';
-import { Search, CalendarDays, Eye, X, Clock, RefreshCw, UserCheck } from 'lucide-react';
+import { Search, CalendarDays, Eye, Clock, RefreshCw, UserCheck } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
 import { CheckInTicketModal } from '../../components/CheckInTicketModal';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
@@ -295,21 +299,11 @@ export const ReceptionAppointments: React.FC = () => {
             case 'Completed': return 'Đã hoàn thành';
             case 'Cancelled': return 'Đã hủy';
             case 'NoShow': return 'Không đến khám';
-            default: return status;
+            default: return '—';
         }
     };
 
-    const getStatusBadge = (status: string) => {
-        switch(status) {
-            case 'Pending': return <span className="badge badge-warning">{translateStatus(status)}</span>;
-            case 'Confirmed': return <span className="badge badge-info">{translateStatus(status)}</span>;
-            case 'CheckedIn': return <span className="badge badge-success">{translateStatus(status)}</span>;
-            case 'Completed': return <span className="badge badge-success">{translateStatus(status)}</span>;
-            case 'Cancelled': return <span className="badge badge-danger">{translateStatus(status)}</span>;
-            case 'NoShow': return <span className="badge badge-muted">{translateStatus(status)}</span>;
-            default: return <span className="badge badge-muted">{status}</span>;
-        }
-    };
+    const getStatusBadge = (status: string) => <StatusBadge status={status} label={translateStatus(status)} />;
 
     const translateAction = (action: string) => {
         switch (action) {
@@ -323,241 +317,53 @@ export const ReceptionAppointments: React.FC = () => {
         }
     };
 
+    const columns: DataTableColumn<ReceptionAppointment>[] = [
+        { header: 'Lịch khám', accessor: apt => <><div className={styles.primaryText}>{apt.appointmentCode}</div><div className={styles.appointmentTime}><Clock size={12} /> {formatDate(apt.appointmentDate)} {apt.startTime.substring(0,5)}</div></> },
+        { header: 'Bệnh nhân', accessor: apt => <><div className={styles.primaryText}>{apt.patientName}</div><div className={styles.secondaryText}>{apt.patientPhone}</div></> },
+        { header: 'Bác sĩ & Chuyên khoa', accessor: apt => <><div className={styles.primaryText}>{apt.doctorName}</div><div className={styles.secondaryText}>{apt.specialtyName}</div></> },
+        { header: 'Trạng thái', accessor: apt => getStatusBadge(apt.status) },
+        { header: 'Thao tác', align: 'right', className: styles.actionsCell, accessor: apt => <>
+            {apt.status === 'Confirmed' && <Button type="primary" className={styles.checkInButton} style={{ minHeight: '40px' }} onClick={() => handleCheckIn(apt)} disabled={checkingInId === apt.id || apt.appointmentDate !== toLocalDateString()} title={apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${apt.appointmentDate.split('-').reverse().join('/')}` : undefined} icon={<UserCheck size={14} />}>{checkingInId === apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận'}</Button>}
+            <Button onClick={() => openDetail(apt)} icon={<Eye size={14} />}>Chi tiết</Button>
+        </> },
+    ];
+
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h2 style={{ color: 'var(--c-navy-dark)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <CalendarDays size={24} /> Quản lý lịch hẹn
-                </h2>
-                <button className="btn-secondary" onClick={() => fetchAppointments()} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <RefreshCw size={14} /> Làm mới
-                </button>
-            </div>
-
-            <div className="card" style={{ marginBottom: '24px' }}>
-                <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 250px' }}>
-                        <div style={{ position: 'relative' }}>
-                            <Search size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--c-muted)' }} />
-                            <input 
-                                type="text" 
-                                className="form-input" 
-                                placeholder="Tìm theo mã lịch, tên, SĐT..." 
-                                style={{ paddingLeft: '40px' }}
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                    <div style={{ width: '200px' }}>
-                        <select className="form-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
-                            <option value="">Tất cả trạng thái</option>
-                            <option value="Pending">Chờ xác nhận</option>
-                            <option value="Confirmed">Đã xác nhận</option>
-                            <option value="Completed">Đã hoàn thành</option>
-                            <option value="Cancelled">Đã hủy</option>
-                        </select>
-                    </div>
-                    <button type="submit" className="btn-secondary">Tìm kiếm</button>
-                </form>
-            </div>
-
-            <div className="card" style={{ padding: 0 }}>
-                {loading ? (
-                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>Đang tải dữ liệu...</div>
-                ) : (
-                    <div className="table-responsive">
-                        <table className="table">
-                            <thead>
-                                <tr>
-                                    <th>Lịch khám</th>
-                                    <th>Bệnh nhân</th>
-                                    <th>Bác sĩ & Chuyên khoa</th>
-                                    <th>Trạng thái</th>
-                                    <th style={{ textAlign: 'right' }}>Thao tác</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            {appointments.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)' }}>
-                                        Không tìm thấy lịch hẹn nào.
-                                    </td>
-                                </tr>
-                            ) : appointments.map(apt => (
-                                <tr key={apt.id} style={{ borderBottom: '1px solid var(--c-border)' }}>
-                                    <td style={{ padding: '16px' }}>
-                                        <div style={{ fontWeight: 600, color: 'var(--c-text-dark)' }}>{apt.appointmentCode}</div>
-                                        <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                                            <Clock size={12}/> {formatDate(apt.appointmentDate)} {apt.startTime.substring(0,5)}
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '16px' }}>
-                                        <div style={{ fontWeight: 500 }}>{apt.patientName}</div>
-                                        <div style={{ fontSize: '0.9rem', color: 'var(--c-muted)' }}>{apt.patientPhone}</div>
-                                    </td>
-                                    <td style={{ padding: '16px' }}>
-                                        <div style={{ fontWeight: 500 }}>{apt.doctorName}</div>
-                                        <div style={{ fontSize: '0.9rem', color: 'var(--c-muted)' }}>{apt.specialtyName}</div>
-                                    </td>
-                                    <td style={{ padding: '16px' }}>
-                                        {getStatusBadge(apt.status)}
-                                    </td>
-                                    <td style={{ padding: '16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                        {apt.status === 'Confirmed' && (
-                                            <button 
-                                                className="btn-primary" 
-                                                style={{ padding: '6px 12px', minHeight: '40px', fontSize: '0.85rem', marginRight: '8px', backgroundColor: '#059669', borderColor: '#059669' }}
-                                                onClick={() => handleCheckIn(apt)}
-                                                disabled={checkingInId === apt.id || apt.appointmentDate !== toLocalDateString()}
-                                                title={apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${apt.appointmentDate.split('-').reverse().join('/')}` : undefined}
-                                            >
-                                                <UserCheck size={14} style={{ marginRight: '4px' }} />
-                                                {checkingInId === apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận'}
-                                            </button>
-                                        )}
-                                        <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => openDetail(apt)}>
-                                            <Eye size={14} style={{ marginRight: '4px' }}/> Chi tiết
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    </div>
-                )}
-            </div>
-
-            <div style={{ marginTop: '16px', color: 'var(--c-muted)', fontSize: '0.9rem' }}>
-                Tổng cộng: {totalItems} lịch hẹn
-            </div>
-
-            {/* Detail Modal */}
-            {modal.isOpen && modal.apt && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
-                    <div style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                Chi tiết lịch hẹn <span style={{ color: 'var(--c-teal)' }}>#{modal.apt.appointmentCode}</span>
-                            </h3>
-                            <button aria-label="Đóng chi tiết lịch hẹn" onClick={closeDetail} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="var(--c-muted)"/></button>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-                            <div style={{ background: 'var(--c-bg)', padding: '16px', borderRadius: '8px' }}>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', marginBottom: '4px' }}>Bệnh nhân</div>
-                                <div style={{ fontWeight: 600 }}>{modal.apt.patientName}</div>
-                                <div>{modal.apt.patientPhone}</div>
-                            </div>
-                            <div style={{ background: 'var(--c-bg)', padding: '16px', borderRadius: '8px' }}>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', marginBottom: '4px' }}>Bác sĩ & Chuyên khoa</div>
-                                <div style={{ fontWeight: 600 }}>{modal.apt.doctorName}</div>
-                                <div>{modal.apt.specialtyName}</div>
-                            </div>
-                            <div style={{ background: 'var(--c-bg)', padding: '16px', borderRadius: '8px', gridColumn: '1 / -1' }}>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', marginBottom: '4px' }}>Thời gian khám</div>
-                                <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <Clock size={16} color="var(--c-teal)"/> 
-                                    {formatDate(modal.apt.appointmentDate)} ({modal.apt.startTime.substring(0,5)} - {modal.apt.endTime.substring(0,5)})
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style={{ marginBottom: '24px' }}>
-                            <div style={{ fontWeight: 500, marginBottom: '8px' }}>Lý do khám:</div>
-                            <div style={{ background: 'var(--c-bg)', padding: '12px', borderRadius: '6px', fontSize: '0.95rem' }}>
-                                {modal.apt.reason || <span style={{ color: 'var(--c-muted)' }}>Không có ghi chú</span>}
-                            </div>
-                        </div>
-
-                        <div style={{ marginBottom: '24px', padding: '14px', border: '1px solid var(--c-border)', borderRadius: '8px' }}>
-                            <label htmlFor="copilot-checkin-department" style={{ display: 'block', fontWeight: 600, marginBottom: '8px' }}>
-                                Khoa tiếp nhận cho Copilot *
-                            </label>
-                            <select
-                                id="copilot-checkin-department"
-                                className="form-select"
-                                value={selectedDepartmentId ?? ''}
-                                onChange={event => setSelectedDepartmentId(event.target.value ? Number(event.target.value) : null)}
-                                disabled={!modal.apt.facilityId || departmentsLoading}
-                            >
-                                <option value="">{departmentsLoading ? 'Đang tải khoa theo cơ sở…' : 'Chọn khoa từ cơ sở của lịch hẹn'}</option>
-                                {departments.map(department => <option key={department.id} value={department.id}>{department.name} ({department.code})</option>)}
-                            </select>
-                            {departmentsError && <div role="alert" style={{ color: 'var(--c-danger, #b91c1c)', marginTop: '8px' }}>{departmentsError}</div>}
-                            <small style={{ display: 'block', color: 'var(--c-muted)', marginTop: '8px' }}>
-                                Đã chọn sẵn khoa theo chuyên khoa của lịch hẹn; bạn có thể đổi. Backend vẫn kiểm tra lại cơ sở, quyền và lịch hẹn.
-                            </small>
-                        </div>
-
-                        <div style={{ marginBottom: '24px' }}>
-                            <div style={{ fontWeight: 500, marginBottom: '12px', display: 'flex', justifyContent: 'space-between' }}>
-                                <span>Tiến trình xử lý</span>
-                                {getStatusBadge(modal.apt.status)}
-                            </div>
-                            
-                            {historyLoading ? (
-                                <div style={{ color: 'var(--c-muted)', fontSize: '0.9rem' }}>Đang tải lịch sử...</div>
-                            ) : historyError ? (
-                                <div style={{ color: 'var(--c-warning)', fontSize: '0.9rem', background: 'var(--c-warning-bg)', padding: '12px', borderRadius: '6px' }}>{historyError}</div>
-                            ) : history.length === 0 ? (
-                                <div style={{ color: 'var(--c-muted)', fontSize: '0.9rem' }}>Không có dữ liệu lịch sử.</div>
-                            ) : (
-                                <div style={{ borderLeft: '2px solid var(--c-border)', marginLeft: '8px', paddingLeft: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                    {history.map(h => (
-                                        <div key={h.id} style={{ position: 'relative' }}>
-                                            <div style={{ position: 'absolute', left: '-21px', top: '2px', width: '10px', height: '10px', borderRadius: '50%', background: 'var(--c-teal)' }}></div>
-                                            <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)' }}>{formatDateTime(h.createdAt)}</div>
-                                            <div style={{ fontWeight: 500 }}>{translateAction(h.action)}</div>
-                                            {h.note && <div style={{ fontSize: '0.9rem', marginTop: '4px', background: 'var(--c-bg)', padding: '6px 10px', borderRadius: '4px' }}>{h.note}</div>}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {modal.apt.status === 'Pending' && (
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid var(--c-border)' }}>
-                                <button className="btn-secondary" onClick={closeDetail}>Đóng</button>
-                                <button 
-                                    className="btn-primary" 
-                                    onClick={handleConfirm}
-                                    disabled={actionLoading}
-                                >
-                                    {actionLoading ? 'Đang xử lý...' : 'Xác nhận lịch hẹn'}
-                                </button>
-                            </div>
-                        )}
-                        {modal.apt.status === 'Confirmed' && (
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid var(--c-border)' }}>
-                                <button className="btn-secondary" onClick={closeDetail}>Đóng</button>
-                                <button 
-                                    className="btn-primary" 
-                                    style={{ minHeight: '40px', backgroundColor: '#059669', borderColor: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}
-                                    onClick={() => handleCheckIn(modal.apt!)}
-                                    disabled={checkingInId === modal.apt.id || modal.apt.appointmentDate !== toLocalDateString()}
-                                    title={modal.apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${modal.apt.appointmentDate.split('-').reverse().join('/')}` : undefined}
-                                >
-                                    <UserCheck size={16} />
-                                    {checkingInId === modal.apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận & Cấp phiếu STT'}
-                                </button>
-                            </div>
-                        )}
-                        {modal.apt.status !== 'Pending' && modal.apt.status !== 'Confirmed' && (
-                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                <button className="btn-secondary" onClick={closeDetail}>Đóng</button>
-                            </div>
-                        )}
-                    </div>
+        <div className={styles.page}>
+            <PageHeader title="Quản lý lịch hẹn" badge={<CalendarDays size={24} className={styles.primaryIcon} />} actions={<Button onClick={() => fetchAppointments()} icon={<RefreshCw size={14} />}>Làm mới</Button>} />
+            <form onSubmit={handleSearchSubmit} className={styles.filterForm}>
+                <Input className={styles.searchInput} prefix={<Search size={18} />} placeholder="Tìm theo mã lịch, tên, SĐT..." value={search} onChange={e => setSearch(e.target.value)} />
+                <Select className={styles.statusFilter} value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả trạng thái'},{value:'Pending',label:'Chờ xác nhận'},{value:'Confirmed',label:'Đã xác nhận'},{value:'Completed',label:'Đã hoàn thành'},{value:'Cancelled',label:'Đã hủy'}]} />
+                <Button htmlType="submit">Tìm kiếm</Button>
+            </form>
+            {loading ? <LoadingState message="Đang tải dữ liệu..." /> : appointments.length === 0 ? <EmptyState title="Không tìm thấy lịch hẹn nào." /> : <div className={styles.tableScroll}><DataTable columns={columns} data={appointments} keyExtractor={apt => apt.id} /></div>}
+            <div className={styles.secondaryText}>Tổng cộng: {totalItems} lịch hẹn</div>
+            {modal.isOpen && modal.apt && <Modal open onCancel={closeDetail} width={600} className={styles.detailModal} mask={{closable:false}} keyboard={false} closable={{'aria-label':'Đóng chi tiết lịch hẹn'}} title={<>Chi tiết lịch hẹn <span className={styles.detailCode}>#{modal.apt.appointmentCode}</span></>} footer={<>
+                <Button onClick={closeDetail}>Đóng</Button>
+                {modal.apt.status === 'Pending' && <Button type="primary" onClick={handleConfirm} disabled={actionLoading}>{actionLoading ? 'Đang xử lý...' : 'Xác nhận lịch hẹn'}</Button>}
+                {modal.apt.status === 'Confirmed' && <Button type="primary" className={styles.checkInButton} style={{ minHeight: '40px' }} onClick={() => handleCheckIn(modal.apt!)} disabled={checkingInId === modal.apt.id || modal.apt.appointmentDate !== toLocalDateString()} title={modal.apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${modal.apt.appointmentDate.split('-').reverse().join('/')}` : undefined} icon={<UserCheck size={16} />}>{checkingInId === modal.apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận & Cấp phiếu STT'}</Button>}
+            </>}>
+                <div className={styles.detailGrid}>
+                    <div className={styles.factCard}><div className={styles.factLabel}>Bệnh nhân</div><div className={styles.primaryText}>{modal.apt.patientName}</div><div>{modal.apt.patientPhone}</div></div>
+                    <div className={styles.factCard}><div className={styles.factLabel}>Bác sĩ & Chuyên khoa</div><div className={styles.primaryText}>{modal.apt.doctorName}</div><div>{modal.apt.specialtyName}</div></div>
+                    <div className={styles.timeCard}><div className={styles.factLabel}>Thời gian khám</div><div className={styles.appointmentTime}><Clock size={16} className={styles.primaryIcon} />{formatDate(modal.apt.appointmentDate)} ({modal.apt.startTime.substring(0,5)} - {modal.apt.endTime.substring(0,5)})</div></div>
                 </div>
-            )}
-
-            {/* Check-In Ticket Printable Modal */}
-            <CheckInTicketModal
-                isOpen={ticketModalOpen}
-                ticket={currentTicket}
-                onClose={() => setTicketModalOpen(false)}
-            />
+                <section className={styles.detailSection}><div className={styles.sectionLabel}>Lý do khám:</div><div className={styles.notePanel}>{modal.apt.reason || <span className={styles.secondaryText}>Không có ghi chú</span>}</div></section>
+                <section className={styles.departmentPanel}>
+                    <label htmlFor="copilot-checkin-department" className={styles.sectionLabel}>Khoa tiếp nhận cho Copilot *</label>
+                    <select id="copilot-checkin-department" className={`form-select ${styles.departmentSelect}`} value={selectedDepartmentId ?? ''} onChange={event => setSelectedDepartmentId(event.target.value ? Number(event.target.value) : null)} disabled={!modal.apt.facilityId || departmentsLoading}>
+                        <option value="">{departmentsLoading ? 'Đang tải khoa theo cơ sở…' : 'Chọn khoa từ cơ sở của lịch hẹn'}</option>
+                        {departments.map(department => <option key={department.id} value={department.id}>{department.name} ({department.code})</option>)}
+                    </select>
+                    {departmentsError && <div role="alert" className={styles.departmentError}>{departmentsError}</div>}
+                    <small className={styles.departmentHint}>Đã chọn sẵn khoa theo chuyên khoa của lịch hẹn; bạn có thể đổi. Backend vẫn kiểm tra lại cơ sở, quyền và lịch hẹn.</small>
+                </section>
+                <section className={styles.detailSection}>
+                    <div className={styles.workflowHeading}><span>Tiến trình xử lý</span>{getStatusBadge(modal.apt.status)}</div>
+                    {historyLoading ? <LoadingState message="Đang tải lịch sử..." /> : historyError ? <InlineError title="" message={historyError} /> : history.length === 0 ? <EmptyState title="Không có dữ liệu lịch sử." /> : <div className={styles.timeline}>{history.map(h => <div key={h.id} className={styles.timelineEntry}><div className={styles.secondaryText}>{formatDateTime(h.createdAt)}</div><div className={styles.primaryText}>{translateAction(h.action)}</div>{h.note && <div className={styles.historyNote}>{h.note}</div>}</div>)}</div>}
+                </section>
+            </Modal>}
+            <CheckInTicketModal isOpen={ticketModalOpen} ticket={currentTicket} onClose={() => setTicketModalOpen(false)} />
         </div>
     );
 };

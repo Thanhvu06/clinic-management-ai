@@ -339,7 +339,6 @@ export const ReceptionWorkspace: React.FC = () => {
                     {searchTerm && <Button htmlType="button" onClick={() => { setSearchTerm(''); setPage(1); fetchWorklist(); }}>Xóa tìm kiếm</Button>}
                 </form>
             </Card>
-            <>
                 <section className={styles.worklistCard}>
                     <div className={styles.worklistTabs}>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'today' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('today'); setPage(1); }}><span>Hôm nay (Ưu tiên tiếp nhận)</span><span className={styles.tabCount}>{activeTab === 'today' ? totalItems : (stats?.appointmentsToday ?? 0)}</span></Button>
@@ -358,7 +357,6 @@ export const ReceptionWorkspace: React.FC = () => {
                     <Card className={styles.actionCard}><div className={styles.actionCardHeader}><CreditCard size={20} className={styles.billingActionIcon} /><h3 className={styles.actionCardTitle}>Hàng đợi viện phí & Thu ngân</h3>{stats?.unbilledCount !== undefined && stats.unbilledCount > 0 && <span className={styles.unbilledCount}>{stats.unbilledCount} chờ thu</span>}</div><p className={styles.actionCardDescription}>Thu tiền công khám, dịch vụ cận lâm sàng và đơn thuốc đã xác nhận mua theo cơ chế khóa chống thu trùng.</p><Link to="/reception/billing" className={styles.actionLink}><CreditCard size={16} /> Mở thu ngân viện phí</Link></Card>
                     <Card className={styles.actionCard}><div className={styles.actionCardHeader}><Package size={20} className={styles.packageActionIcon} /><h3 className={styles.actionCardTitle}>Gói khám sức khỏe</h3></div><p className={styles.actionCardDescription}>Tiếp đón và kích hoạt lượt khám cho người bệnh đăng ký gói khám sức khỏe tổng quát.</p><Link to="/reception/package-registrations" className={styles.actionLink}><Package size={16} /> Quản lý đăng ký gói khám</Link></Card>
                 </div>
-            </>
             <MpiPatientSearchModal isOpen={mpiModalOpen} onClose={() => setMpiModalOpen(false)} onSelectPatient={(patient) => { setMpiModalOpen(false); navigate(`/reception/walk-in?existingPatientId=${patient.id}`); }} />
             <CheckInTicketModal isOpen={ticketModalOpen} ticket={currentTicket} onClose={() => setTicketModalOpen(false)} />
         </div>

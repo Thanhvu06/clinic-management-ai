@@ -1,0 +1,33 @@
+.page { display: flex; flex-direction: column; gap: var(--cc-space-lg); min-width: 0; }
+.primaryIcon { color: var(--cc-color-primary); flex-shrink: 0; }
+.filterForm { display: flex; flex-wrap: wrap; gap: var(--cc-space-md); padding: var(--cc-space-md); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-lg); background: var(--cc-color-bg-container); }
+.searchInput { flex: 1 1 250px; min-width: 0; }
+.statusFilter { width: 200px; max-width: 100%; }
+.tableScroll { overflow-x: auto; min-width: 0; }
+.tableScroll :global(.ant-table) { min-width: 850px; }
+.primaryText { font-weight: 600; color: var(--cc-color-text); overflow-wrap: anywhere; }
+.secondaryText, .factLabel { color: var(--cc-color-text-secondary); font-size: 0.85rem; }
+.appointmentTime { display: flex; align-items: center; gap: var(--cc-space-xxs); margin-top: var(--cc-space-xxs); color: var(--cc-color-text-secondary); }
+.appointmentTime svg { flex-shrink: 0; }
+.actionsCell { min-width: 200px; }
+.actionsCell :global(.ant-btn) { margin-inline-start: var(--cc-space-xs); margin-block: var(--cc-space-xxs); white-space: nowrap; }
+.checkInButton { background: var(--cc-color-success); border-color: var(--cc-color-success); }
+.detailModal :global(.ant-modal-body) { max-height: 65vh; overflow-y: auto; }
+.detailModal :global(.ant-modal-footer) { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--cc-space-xs); }
+.detailModal :global(.ant-modal-footer > .ant-btn) { margin: 0; height: auto; min-height: var(--cc-control-height); white-space: normal; }
+.detailCode { color: var(--cc-color-teal); }
+.detailGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cc-space-md); margin-bottom: var(--cc-space-lg); }
+.factCard, .timeCard, .notePanel { padding: var(--cc-space-md); border-radius: var(--cc-radius-md); background: var(--cc-color-bg-subtle); overflow-wrap: anywhere; }
+.timeCard { grid-column: 1 / -1; }
+.factLabel { margin-bottom: var(--cc-space-xxs); }
+.detailSection { margin-bottom: var(--cc-space-lg); }
+.sectionLabel { display: block; font-weight: 600; margin-bottom: var(--cc-space-xs); }
+.departmentPanel { padding: var(--cc-space-md); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); margin-bottom: var(--cc-space-lg); }
+.departmentSelect { width: 100%; min-width: 0; color: var(--cc-color-text); background: var(--cc-color-bg-container); border-color: var(--cc-color-border); }
+.departmentError { color: var(--cc-color-danger); margin-top: var(--cc-space-xs); }
+.departmentHint { display: block; color: var(--cc-color-text-secondary); margin-top: var(--cc-space-xs); }
+.workflowHeading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--cc-space-xs); margin-bottom: var(--cc-space-sm); font-weight: 600; }
+.timeline { border-inline-start: 2px solid var(--cc-color-border); padding-inline-start: var(--cc-space-md); display: flex; flex-direction: column; gap: var(--cc-space-md); }
+.timelineEntry { border-inline-start: 3px solid var(--cc-color-teal); padding-inline-start: var(--cc-space-xs); }
+.historyNote { margin-top: var(--cc-space-xxs); padding: var(--cc-space-xs); border-radius: var(--cc-radius-sm); background: var(--cc-color-bg-subtle); }
+@media (max-width: 767px) { .statusFilter { width: 100%; } .detailGrid { grid-template-columns: minmax(0, 1fr); } }

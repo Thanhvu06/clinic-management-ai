@@ -1,0 +1,28 @@
+.page { display: flex; flex-direction: column; gap: var(--cc-space-lg); min-width: 0; }
+.primaryIcon, .registrationCode { color: var(--cc-color-primary); }
+.registrationCode { font-family: monospace; font-weight: 600; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cc-space-md); padding: var(--cc-space-md); background: var(--cc-color-bg-container); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-lg); }
+.searchForm { display: flex; flex: 1 1 350px; gap: var(--cc-space-xs); min-width: 0; }
+.searchInput { flex: 1; min-width: 0; }
+.statusFilter { width: 200px; max-width: 100%; }
+.tableScroll { overflow-x: auto; min-width: 0; }
+.tableScroll :global(.ant-table) { min-width: 1050px; }
+.primaryText { color: var(--cc-color-text); font-weight: 600; overflow-wrap: anywhere; }
+.secondaryText, .patientNote { color: var(--cc-color-text-secondary); font-size: 0.85rem; }
+.patientNote { font-style: italic; max-width: 250px; overflow-wrap: anywhere; margin-top: var(--cc-space-xxs); }
+.staffNote { color: var(--cc-color-info); margin-top: var(--cc-space-xxs); }
+.cancellationReason { color: var(--cc-color-danger); margin-top: var(--cc-space-xxs); }
+.price { font-weight: 600; white-space: nowrap; color: var(--cc-color-text); }
+.actionsCell { min-width: 170px; }
+.actionsCell :global(.ant-btn) { white-space: nowrap; margin-inline-start: var(--cc-space-xs); margin-block: var(--cc-space-xxs); }
+.pagination { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); }
+.paginationActions { display: flex; gap: var(--cc-space-xs); }
+.confirmTitle, .cancelTitle { display: flex; align-items: center; gap: var(--cc-space-xs); }
+.confirmTitle { color: var(--cc-color-primary); }
+.cancelTitle { color: var(--cc-color-danger); }
+.actionModal :global(.ant-modal-body) { max-height: 65vh; overflow-y: auto; }
+.actionModal :global(.ant-modal-footer) { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--cc-space-xs); }
+.actionModal :global(.ant-modal-footer > .ant-btn) { margin: 0; height: auto; min-height: var(--cc-control-height); white-space: normal; }
+.actionDescription { color: var(--cc-color-text-secondary); line-height: 1.6; margin-bottom: var(--cc-space-md); }
+.noteLabel { display: block; font-weight: 600; margin-block: var(--cc-space-sm) var(--cc-space-xs); }
+@media (max-width: 767px) { .statusFilter { width: 100%; } .searchForm { flex-wrap: wrap; } .searchInput { flex-basis: 100%; } }
