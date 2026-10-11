@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Avatar, Button, Collapse, Flex } from 'antd';
 import {
     Search, Calendar, Bot, Stethoscope, ChevronRight, CheckCircle2,
-    ShieldCheck, Clock, FileText, User, MapPin,
+    ShieldCheck, Clock, FileText, MapPin,
     Phone, Award, Sparkles, Check, CalendarCheck, Package, Pill
 } from 'lucide-react';
 import styles from './PublicLanding.module.css';
@@ -112,17 +112,17 @@ export const PublicLanding: React.FC = () => {
                             </p>
                             
                             <Flex className={styles.heroActions}>
-                                <Button type="primary" size="large" href="/patient/book" title="Đặt lịch khám" icon={<Calendar size={18} />}>
-                                    Đặt lịch khám
-                                </Button>
-                                <Button size="large" href="/patient/ai-consultation" icon={<Bot size={18} />}>
-                                    Trò chuyện với Trợ lý AI
-                                </Button>
+                                <Link to="/patient/book" className={styles.btnPrimary} title="Đặt lịch khám">
+                                    <Calendar size={18} /> Đặt lịch khám
+                                </Link>
+                                <Link to="/patient/ai-consultation" className={styles.btnSecondary}>
+                                    <Bot size={18} /> Trò chuyện với Trợ lý AI
+                                </Link>
                             </Flex>
                             <Flex wrap className={styles.heroTools}>
-                                <Button type="link" href="/specialties" title="Xem danh mục chuyên khoa" icon={<Stethoscope size={16} />}>
-                                    Tìm chuyên khoa
-                                </Button>
+                                <Link to="/specialties" className={styles.heroToolLink} title="Xem danh mục chuyên khoa">
+                                    <Stethoscope size={16} /> Tìm chuyên khoa
+                                </Link>
                                 <Button
                                     type="link"
                                     onClick={() => setIsLookupModalOpen(true)}
@@ -262,7 +262,7 @@ export const PublicLanding: React.FC = () => {
                                                             {filteredDoctors.map(d => (
                                                                 <li key={d.id}>
                                                                     <Link to={`/doctors/${d.id}`} onClick={() => setShowDropdown(false)}>
-                                                                        <User size={16} /> {formatDoctorName(d.academicTitle, d.fullName)} <span className={styles.mutedText}>- {d.specialtyName || 'Đa khoa'}</span>
+                                                                        <Stethoscope size={16} /> {formatDoctorName(d.academicTitle, d.fullName)} <span className={styles.mutedText}>- {d.specialtyName || 'Đa khoa'}</span>
                                                                     </Link>
                                                                 </li>
                                                             ))}
@@ -429,7 +429,7 @@ export const PublicLanding: React.FC = () => {
                                 <Link to="/patient/ai-consultation" className={styles.btnAi}>
                                     <Bot size={20} /> Trò chuyện với Trợ lý AI
                                 </Link>
-                                <Button size="large" href="/patient/book" className={styles.aiBooking}>Đặt lịch khám ngay</Button>
+                                <Link to="/patient/book" className={styles.aiBooking}>Đặt lịch khám ngay</Link>
                             </Flex>
                         </div>
                         <div className={styles.aiTeaserVisual}>
@@ -485,7 +485,7 @@ export const PublicLanding: React.FC = () => {
                         <div className={styles.emptyState}>Chưa có dữ liệu bác sĩ</div>
                     )}
                     <div className={styles.doctorBooking}>
-                        <Button type="primary" size="large" href="/patient/book">Đặt lịch khám với bác sĩ</Button>
+                        <Link to="/patient/book" className={`${styles.btnPrimary} ${styles.actionLink}`}>Đặt lịch khám với bác sĩ</Link>
                     </div>
                 </div>
             </section>
@@ -592,8 +592,8 @@ export const PublicLanding: React.FC = () => {
                     <h2 id="landing-booking-title">Sẵn sàng đặt lịch khám?</h2>
                     <p>Chọn bác sĩ và giờ khám trực tuyến, nhận mã lịch hẹn ngay.</p>
                     <Flex className={styles.finalActions}>
-                        <Button type="primary" size="large" href="/patient/book">Đặt lịch khám</Button>
-                        <Button size="large" href="/patient/ai-consultation">Trò chuyện với Trợ lý AI</Button>
+                        <Link to="/patient/book" className={`${styles.btnPrimary} ${styles.actionLink}`}>Đặt lịch khám</Link>
+                        <Link to="/patient/ai-consultation" className={`${styles.btnSecondary} ${styles.actionLink}`}>Trò chuyện với Trợ lý AI</Link>
                     </Flex>
                 </div>
             </section>
