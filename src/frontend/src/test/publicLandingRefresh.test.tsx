@@ -131,3 +131,15 @@ describe('Public landing refresh L1–L7', () => {
         expect(within(section).getByRole('link', { name: 'Trò chuyện với Trợ lý AI' })).toHaveAttribute('href', '/patient/ai-consultation');
     });
 });
+
+describe('Public landing SPA links', () => {
+    it('navigates from hero booking to /patient/book without reloading the page', async () => {
+        const { container } = await mount();
+        const hero = container.querySelector('main > section')!;
+        const routeProbe = screen.getByLabelText('Đường dẫn hiện tại');
+        fireEvent.click(within(hero as HTMLElement).getByRole('link', { name: 'Đặt lịch khám' }));
+        expect(routeProbe).toHaveTextContent('/patient/book');
+        expect(screen.getByLabelText('Đường dẫn hiện tại')).toBe(routeProbe);
+        expect(mocks.get).toHaveBeenCalledTimes(4);
+    });
+});

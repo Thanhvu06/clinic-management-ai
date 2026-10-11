@@ -69,6 +69,15 @@
     color: var(--cc-color-primary);
 }
 
+.heroToolLink {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cc-space-xs);
+    min-height: var(--cc-control-height);
+    font-size: 0.875rem;
+    text-decoration: none;
+}
+
 .sectionEyebrow {
     display: block;
     margin-bottom: var(--cc-space-xs);
@@ -120,6 +129,11 @@
 .btnSecondary:hover {
     background-color: var(--cc-color-primary-light);
     transform: translateY(-2px);
+}
+
+.actionLink {
+    display: inline-flex;
+    justify-content: center;
 }
 
 .trustPoints {
@@ -463,13 +477,17 @@
 }
 
 .aiActions .aiBooking {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     height: auto;
     padding: var(--cc-space-md) var(--cc-space-lg);
     border-radius: var(--cc-radius-full);
     background: transparent;
     color: var(--cc-color-bg-container);
-    border-color: var(--cc-color-bg-container);
+    border: 1px solid var(--cc-color-bg-container);
     font-weight: 600;
+    text-decoration: none;
 }
 
 .aiWarning {
@@ -1092,8 +1110,12 @@
     min-height: calc(var(--cc-control-height) + var(--cc-space-sm));
     height: auto;
     padding: var(--cc-space-sm);
-    font-size: 0.875rem;
+    font-size: 1rem;
     line-height: 1.5;
+}
+
+.heroActions .btnPrimary {
+    border: 1px solid var(--cc-color-primary);
 }
 
 .heroActions svg,
