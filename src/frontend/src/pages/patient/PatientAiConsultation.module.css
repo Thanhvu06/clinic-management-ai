@@ -1,0 +1,5 @@
+.suggestionActions { display: flex; gap: var(--cc-space-xs); }
+.suggestionActions > :first-child { flex: 1; }
+.disclaimerIcon { flex-shrink: 0; margin-top: 1px; }
+.replyIndicator { display: flex; align-items: center; padding: var(--cc-space-xxs); }
+.errorMessage { display: block; font-size: .85rem; margin-top: var(--cc-space-xs); padding-left: var(--cc-space-md); }

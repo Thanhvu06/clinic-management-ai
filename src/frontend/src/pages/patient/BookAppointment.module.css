@@ -1,327 +1,40 @@
-/* BookAppointment 2-Column Responsive Layout */
-
-.pageWrapper {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 32px 24px 80px 24px;
-    width: 100%;
-}
-
-.pageHeader {
-    text-align: center;
-    margin-bottom: 32px;
-}
-
-.pageTitle {
-    font-size: 2rem;
-    font-weight: 800;
-    color: var(--c-navy);
-    margin: 0 0 8px 0;
-}
-
-.pageSubtitle {
-    color: var(--c-text-muted);
-    font-size: 1rem;
-    margin: 0;
-}
-
-/* Stepper */
-.stepperContainer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 36px;
-    max-width: 800px;
-    margin-left: auto;
-    margin-right: auto;
-}
-
-.stepItem {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    position: relative;
-    flex: 1;
-}
-
-.stepCircle {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    background-color: #f1f5f9;
-    border: 2px solid var(--c-border);
-    color: var(--c-text-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 0.95rem;
-    margin-bottom: 8px;
-    z-index: 2;
-    transition: all 0.25s;
-}
-
-.stepLabel {
-    font-size: 0.85rem;
-    color: var(--c-text-muted);
-    font-weight: 500;
-    transition: all 0.25s;
-    white-space: nowrap;
-}
-
-.stepLine {
-    position: absolute;
-    top: 19px;
-    left: 50%;
-    right: -50%;
-    height: 2px;
-    background-color: var(--c-border);
-    z-index: 1;
-    transition: all 0.25s;
-}
-
-.stepItemActive .stepCircle {
-    background-color: var(--c-primary);
-    border-color: var(--c-primary);
-    color: white;
-    box-shadow: 0 0 0 4px rgba(14, 116, 144, 0.15);
-}
-
-.stepItemActive .stepLabel {
-    color: var(--c-navy);
-    font-weight: 700;
-}
-
-.stepItemActive .stepLine {
-    background-color: var(--c-primary);
-}
-
-/* 2-Column Booking Layout */
-.bookingLayout {
-    display: grid;
-    grid-template-columns: 1fr 360px;
-    gap: 32px;
-    align-items: start;
-}
-
-/* Main Step Card */
-.mainCard {
-    background: #ffffff;
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-    border: 1px solid var(--c-border);
-    padding: 32px;
-}
-
-.stepTitle {
-    font-size: 1.3rem;
-    font-weight: 700;
-    color: var(--c-navy);
-    margin: 0 0 8px 0;
-}
-
-.stepSubtitle {
-    font-size: 0.9rem;
-    color: var(--c-text-muted);
-    margin: 0 0 24px 0;
-}
-
-/* Selection Grids */
-.selectionGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
-}
-
-.selectionCard {
-    border: 1.5px solid var(--c-border);
-    border-radius: var(--radius-md);
-    padding: 20px 16px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    background: #ffffff;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.selectionCard:hover {
-    border-color: var(--c-primary);
-    background-color: #f8fafc;
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-sm);
-}
-
-.selectionCardActive {
-    border-color: var(--c-primary);
-    background-color: rgba(14, 116, 144, 0.05);
-    box-shadow: 0 0 0 2px rgba(14, 116, 144, 0.2);
-}
-
-.cardIcon {
-    color: var(--c-primary);
-    margin-bottom: 12px;
-}
-
-.selectionCard h4 {
-    margin: 0 0 6px 0;
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--c-navy);
-}
-
-.selectionCard p {
-    margin: 0;
-    font-size: 0.825rem;
-    color: var(--c-text-muted);
-    line-height: 1.4;
-}
-
-/* Slot grid */
-.slotGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-    gap: 12px;
-    margin-top: 12px;
-}
-
-.slotBtn {
-    min-height: 44px;
-    padding: 10px 14px;
-    border-radius: var(--radius-md);
-    font-size: 0.95rem;
-    font-weight: 600;
-    border: 1px solid var(--c-border);
-    background: #ffffff;
-    color: var(--c-text);
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-}
-
-.slotBtn:hover {
-    border-color: var(--c-primary);
-    color: var(--c-primary);
-    background-color: #f0fdf4;
-}
-
-.slotBtnActive {
-    border-color: var(--c-primary) !important;
-    background: var(--c-primary) !important;
-    color: #ffffff !important;
-    box-shadow: 0 2px 8px rgba(14, 116, 144, 0.25);
-}
-
-/* Step Footer Navigation */
-.stepFooter {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 32px;
-    padding-top: 24px;
-    border-top: 1px solid var(--c-border-light);
-}
-
-/* Sticky Summary Card (Right Column) */
-.summaryCard {
-    background: #ffffff;
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-    border: 1px solid var(--c-border);
-    padding: 24px;
-    position: sticky;
-    top: 96px;
-}
-
-.summaryTitle {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: var(--c-navy);
-    margin: 0 0 16px 0;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--c-border-light);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.summaryList {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    margin-bottom: 24px;
-}
-
-.summaryItem {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-}
-
-.summaryItemIcon {
-    width: 32px;
-    height: 32px;
-    border-radius: var(--radius-sm);
-    background: #f1f5f9;
-    color: var(--c-primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    margin-top: 2px;
-}
-
-.summaryItemLabel {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--c-text-muted);
-    font-weight: 600;
-    margin-bottom: 2px;
-}
-
-.summaryItemValue {
-    font-size: 0.925rem;
-    font-weight: 600;
-    color: var(--c-navy);
-}
-
-.summaryItemEmpty {
-    font-size: 0.9rem;
-    color: #94a3b8;
-    font-style: italic;
-}
-
-/* Responsive */
-@media (max-width: 900px) {
-    .bookingLayout {
-        grid-template-columns: 1fr;
-    }
-    .summaryCard {
-        position: static;
-        order: -1;
-    }
-}
-
-@media (max-width: 640px) {
-    .pageWrapper {
-        padding: 20px 16px 60px 16px;
-    }
-    .mainCard {
-        padding: 20px 16px;
-    }
-    .stepLabel {
-        display: none;
-    }
-    .stepperContainer {
-        margin-bottom: 24px;
-    }
-    .selectionGrid {
-        grid-template-columns: 1fr;
-    }
-}
+.pageWrapper { max-width: 1200px; width: 100%; margin: 0 auto; padding: var(--cc-space-xl) var(--cc-space-lg); }
+.pageHeader { text-align: center; margin-bottom: var(--cc-space-xl); }
+.pageTitle { font-size: 2rem; color: var(--cc-color-navy); margin: 0 0 var(--cc-space-xs); }
+.pageSubtitle, .stepSubtitle, .consultationHint { color: var(--cc-color-text-secondary); }
+.pageSubtitle { margin: 0; }
+.stepperContainer { max-width: 900px; margin: 0 auto var(--cc-space-xl); }
+.bookingLayout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--cc-space-lg); align-items: start; }
+.mainCard { min-width: 0; }
+.stepTitle { font-size: 1.3rem; color: var(--cc-color-navy); margin: 0 0 var(--cc-space-xs); }
+.stepSubtitle { margin: 0 0 var(--cc-space-lg); }
+.selectionGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--cc-space-md); }
+.selectionCard { text-align: center; cursor: pointer; }
+.selectionCard:focus-visible { outline: 2px solid var(--cc-color-primary); outline-offset: 2px; }
+.selectionCardActive { border-color: var(--cc-color-primary); background: var(--cc-color-primary-light); }
+.selectionCard h4 { margin: var(--cc-space-xs) 0; color: var(--cc-color-navy); }
+.selectionCard p { margin: 0; color: var(--cc-color-text-secondary); }
+.cardIcon { color: var(--cc-color-primary); }
+.aiTag { margin: var(--cc-space-xs) 0 0; }
+.doctorAvatar { color: var(--cc-color-primary); background: var(--cc-color-primary-light); }
+.slotGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--cc-space-sm); }
+.slotBtn { min-height: var(--cc-control-height); font-weight: 600; }
+.slotBtnActive { border-color: var(--cc-color-primary); }
+.dateField { max-width: 320px; }
+.stepFooter { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--cc-space-md); margin-top: var(--cc-space-xl); padding-top: var(--cc-space-lg); border-top: 1px solid var(--cc-color-border-light); }
+.consultationLink { color: var(--cc-color-primary); font-weight: 600; }
+.summaryTitle { display: flex; align-items: center; gap: var(--cc-space-xs); color: var(--cc-color-navy); }
+.summaryList { display: flex; flex-direction: column; gap: var(--cc-space-md); }
+.summaryItem { display: flex; align-items: flex-start; gap: var(--cc-space-sm); }
+.summaryItemIcon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: var(--cc-radius-sm); background: var(--cc-color-bg-subtle); color: var(--cc-color-primary); }
+.summaryItemLabel { font-size: .75rem; color: var(--cc-color-text-secondary); }
+.summaryItemValue { font-weight: 600; color: var(--cc-color-navy); }
+.summaryItemEmpty { color: var(--cc-color-text-muted); font-style: italic; }
+.notice { margin-bottom: var(--cc-space-lg); }
+.successPanel { max-width: 740px; margin: 0 auto; }
+.successPanel .notice { margin-top: var(--cc-space-lg); }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--cc-space-sm); }
+.loadingPanel { display: flex; flex-direction: column; align-items: center; gap: var(--cc-space-md); padding: var(--cc-space-xl); color: var(--cc-color-text-secondary); }
+.reviewPanel { margin-bottom: var(--cc-space-lg); }
+@media (max-width: 900px) { .bookingLayout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) { .pageWrapper { padding: var(--cc-space-lg) var(--cc-space-md); } .selectionGrid { grid-template-columns: minmax(0, 1fr); } .pageTitle { font-size: 1.6rem; } .stepFooter > :last-child { width: 100%; } }

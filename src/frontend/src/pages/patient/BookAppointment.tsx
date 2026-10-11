@@ -1,12 +1,14 @@
 import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useRef } from "react";
+import { Alert, Avatar, Button, Card, Descriptions, Empty, Form, Input, Result, Spin, Steps, Tag } from 'antd';
+import '../../theme/browserCompat';
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import axiosClient from "../../api/axiosClient";
 import styles from "./BookAppointment.module.css";
 import type { ApiResponse } from "../../types";
 import { 
-    CheckCircle2, User, Clock, Stethoscope, FileText, 
-    ArrowRight, ArrowLeft, Calendar, ShieldCheck, Sparkles, AlertCircle 
+    User, Clock, Stethoscope, FileText,
+    ArrowRight, ArrowLeft, Calendar, Sparkles
 } from "lucide-react";
 import {
     useChatContext,
@@ -18,7 +20,6 @@ import {
 import { useDialog } from "../../contexts/DialogContext";
 import { useAuth } from "../../auth/AuthContext";
 import { Breadcrumb } from "../../components/Breadcrumb";
-import { Button, FormField, TextInput, Textarea, FormError } from "../../components/forms";
 import { formatDoctorName, getNextWorkingDateString, isSundayDateString } from "../../utils/doctorNameHelper";
 import { isValidBookingReason, normalizeBookingReason } from "../../hooks/useAiBookingFlow";
 
@@ -109,6 +110,12 @@ export const BookAppointment: React.FC = () => {
     const [loadingSpecs, setLoadingSpecs] = useState(true);
     const [loadingDocs, setLoadingDocs] = useState(false);
     const [loadingSlots, setLoadingSlots] = useState(false);
+    const [specialtiesError, setSpecialtiesError] = useState(false);
+    const [doctorsError, setDoctorsError] = useState(false);
+    const [slotsError, setSlotsError] = useState(false);
+    const [specialtiesReloadKey, setSpecialtiesReloadKey] = useState(0);
+    const [doctorsReloadKey, setDoctorsReloadKey] = useState(0);
+    const [slotsReloadKey, setSlotsReloadKey] = useState(0);
 
     const [submitting, setSubmitting] = useState(false);
     const isSubmittingRef = useRef(false);
@@ -229,18 +236,24 @@ export const BookAppointment: React.FC = () => {
         const fetchSpecs = async () => {
             try {
                 setLoadingSpecs(true);
+                setSpecialtiesError(false);
                 const res = await axiosClient.get<unknown, ApiResponse<Specialty[]>>("/specialties");
                 if (res.success && res.data) {
                     setSpecialties(res.data);
+                } else {
+                    setSpecialties([]);
+                    setSpecialtiesError(true);
                 }
             } catch (err) {
                 console.error("Failed to load specialties", err);
+                setSpecialties([]);
+                setSpecialtiesError(true);
             } finally {
                 setLoadingSpecs(false);
             }
         };
         fetchSpecs();
-    }, []);
+    }, [specialtiesReloadKey]);
 
     // 2. Parse URL parameters and AI context safely
     useEffect(() => {
@@ -325,6 +338,7 @@ export const BookAppointment: React.FC = () => {
         const fetchDoctors = async () => {
             try {
                 setLoadingDocs(true);
+                setDoctorsError(false);
                 const res = await axiosClient.get<unknown, ApiResponse<Doctor[] | { items?: Doctor[] }>>(`/specialties/${specialtyId}/doctors`);
                 if (!active) return;
                 if (res.success && res.data) {
@@ -350,10 +364,15 @@ export const BookAppointment: React.FC = () => {
                     } else if (revisitRequestId && doctorId) {
                         setStep(3);
                     }
+                } else {
+                    setDoctors([]);
+                    setDoctorsError(true);
                 }
             } catch (err) {
                 if (!active) return;
                 console.error("Failed to fetch doctors", err);
+                setDoctors([]);
+                setDoctorsError(true);
             } finally {
                 if (active) setLoadingDocs(false);
             }
@@ -363,7 +382,7 @@ export const BookAppointment: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [specialtyId, doctorId, revisitRequestId, setActiveDraft, showAlert]);
+    }, [specialtyId, doctorId, revisitRequestId, setActiveDraft, showAlert, doctorsReloadKey]);
 
     // 4. Fetch Slots when doctorId and slotDate are set
     useEffect(() => {
@@ -384,6 +403,7 @@ export const BookAppointment: React.FC = () => {
         const fetchSlots = async () => {
             try {
                 setLoadingSlots(true);
+                setSlotsError(false);
                 const specParam = specialtyId ? `&specialtyId=${specialtyId}` : '';
                 const res = await axiosClient.get<unknown, ApiResponse<Slot[]>>(
                     `/doctors/${doctorId}/available-slots?fromDate=${slotDate}&toDate=${slotDate}${specParam}`
@@ -405,11 +425,13 @@ export const BookAppointment: React.FC = () => {
                     }
                 } else {
                     setSlots([]);
+                    setSlotsError(true);
                 }
             } catch (err) {
                 if (!active) return;
                 console.error("Failed to fetch slots", err);
                 setSlots([]);
+                setSlotsError(true);
             } finally {
                 if (active) setLoadingSlots(false);
             }
@@ -419,7 +441,7 @@ export const BookAppointment: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [doctorId, slotDate, specialtyId, slotId, setActiveDraft]);
+    }, [doctorId, slotDate, specialtyId, slotId, setActiveDraft, slotsReloadKey]);
 
     // Handler when selecting specialty: discards doctor & slot
     const handleSelectSpecialty = (id: number) => {
@@ -819,543 +841,170 @@ export const BookAppointment: React.FC = () => {
     if (successBooking) {
         return (
             <div className={styles.pageWrapper}>
-                <div style={{ maxWidth: '680px', margin: '20px auto', background: '#ffffff', borderRadius: '16px', border: '1px solid var(--c-border)', padding: '40px', textAlign: 'center', boxShadow: 'var(--shadow-md)' }}>
-                    <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: '#ecfdf5', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px auto' }}>
-                        <CheckCircle2 size={44} />
+                <Card className={styles.successPanel}>
+                    <Result status="success" title="Đặt lịch khám thành công!" subTitle="Lịch hẹn của bạn đã được ghi nhận vào hệ thống phòng khám ClinicCare." />
+                    <Descriptions bordered column={1} items={[
+                        { key: 'code', label: 'Mã lịch hẹn:', children: <strong>#{successBooking.appointmentCode}</strong> },
+                        { key: 'specialty', label: 'Chuyên khoa:', children: successBooking.specialtyName },
+                        { key: 'doctor', label: 'Bác sĩ khám:', children: successBooking.doctorName },
+                        { key: 'time', label: 'Thời gian hẹn:', children: <strong>{successBooking.startTime} - {successBooking.endTime} ({successBooking.slotDate})</strong> },
+                        { key: 'reason', label: 'Lý do khám:', children: successBooking.reason ? `"${successBooking.reason}"` : 'Không có' }
+                    ]} />
+                    <Alert className={styles.notice} type="info" showIcon title={<><strong>Lưu ý:</strong> Vui lòng có mặt tại quầy lễ tân trước giờ hẹn 10-15 phút và cung cấp mã lịch hẹn <strong>#{successBooking.appointmentCode}</strong> để được tiếp đón ưu tiên.</>} />
+                    <div className={styles.actions}>
+                        <Button type="primary" onClick={() => navigate('/patient/appointments')}>Xem lịch hẹn của tôi</Button>
+                        <Button onClick={() => {
+                            setSuccessBooking(null);
+                            setStep(1);
+                            setPageSpecialtyId("");
+                            setPageDoctorId("");
+                            setPageSlotId("");
+                            setPageReason("");
+                            setActiveDraft(null);
+                        }}>Đặt thêm lịch hẹn khác</Button>
                     </div>
-
-                    <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--c-navy)', margin: '0 0 8px 0' }}>
-                        Đặt lịch khám thành công!
-                    </h1>
-                    <p style={{ color: 'var(--c-text-muted)', fontSize: '0.95rem', margin: '0 0 24px 0' }}>
-                        Lịch hẹn của bạn đã được ghi nhận vào hệ thống phòng khám ClinicCare.
-                    </p>
-
-                    <div style={{ background: '#f8fafc', border: '1px solid var(--c-border-light)', borderRadius: '12px', padding: '24px', textAlign: 'left', marginBottom: '28px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid #e2e8f0', marginBottom: '12px' }}>
-                            <span style={{ color: 'var(--c-text-muted)', fontSize: '0.9rem' }}>Mã lịch hẹn:</span>
-                            <strong style={{ fontSize: '1.2rem', color: 'var(--c-primary)', letterSpacing: '0.05em' }}>
-                                #{successBooking.appointmentCode}
-                            </strong>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <span style={{ color: 'var(--c-text-muted)', fontSize: '0.9rem' }}>Chuyên khoa:</span>
-                            <span style={{ fontWeight: 600, color: 'var(--c-navy)' }}>{successBooking.specialtyName}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <span style={{ color: 'var(--c-text-muted)', fontSize: '0.9rem' }}>Bác sĩ khám:</span>
-                            <span style={{ fontWeight: 600, color: 'var(--c-navy)' }}>{successBooking.doctorName}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <span style={{ color: 'var(--c-text-muted)', fontSize: '0.9rem' }}>Thời gian hẹn:</span>
-                            <strong style={{ color: 'var(--c-primary)' }}>
-                                {successBooking.startTime} - {successBooking.endTime} ({successBooking.slotDate})
-                            </strong>
-                        </div>
-                        {successBooking.reason && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: 'var(--c-text-muted)', fontSize: '0.9rem' }}>Lý do khám:</span>
-                                <span style={{ fontStyle: 'italic', maxWidth: '300px', textAlign: 'right' }}>"{successBooking.reason}"</span>
-                            </div>
-                        )}
-                    </div>
-
-                    <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '14px', marginBottom: '28px', textAlign: 'left', fontSize: '0.85rem', color: '#1e40af' }}>
-                        <Clock size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-                        <strong>Lưu ý:</strong> Vui lòng có mặt tại quầy lễ tân trước giờ hẹn 10-15 phút và cung cấp mã lịch hẹn <strong>#{successBooking.appointmentCode}</strong> để được tiếp đón ưu tiên.
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                        <Link to="/patient/appointments" className="btn btn-primary" style={{ textDecoration: 'none', padding: '12px 24px' }}>
-                            Xem lịch hẹn của tôi
-                        </Link>
-                        <button 
-                            type="button" 
-                            className="btn btn-secondary"
-                            onClick={() => {
-                                setSuccessBooking(null);
-                                setStep(1);
-                                setPageSpecialtyId("");
-                                setPageDoctorId("");
-                                setPageSlotId("");
-                                setPageReason("");
-                                setActiveDraft(null);
-                            }}
-                            style={{ padding: '12px 24px' }}
-                        >
-                            Đặt thêm lịch hẹn khác
-                        </button>
-                    </div>
-                </div>
+                </Card>
             </div>
         );
     }
 
     if (loadingSpecs) {
-        return (
-            <div className={styles.pageWrapper}>
-                <div style={{ padding: '40px', background: '#ffffff', borderRadius: '12px', border: '1px solid var(--c-border)', textAlign: 'center' }}>
-                    Đang tải dữ liệu phòng khám...
-                </div>
-            </div>
-        );
+        return <div className={styles.pageWrapper}><Card><div className={styles.loadingPanel}><Spin /><span>Đang tải dữ liệu phòng khám...</span></div></Card></div>;
     }
 
     return (
         <div className={styles.pageWrapper}>
-            <Breadcrumb items={[
-                { label: 'Trang chủ', path: '/' },
-                { label: 'Đặt lịch khám' }
-            ]} />
-
-            {revisitRequestId && (
-                <div
-                    role="status"
-                    style={{
-                        marginBottom: "16px",
-                        padding: "12px 16px",
-                        borderRadius: "10px",
-                        border: "1px solid #bfdbfe",
-                        background: "#eff6ff",
-                        color: "#1e40af"
-                    }}
-                >
-                    Bạn đang chọn khung giờ cho một đề xuất tái khám. Lịch mới chỉ được tạo sau khi xác nhận ở bước cuối.
-                </div>
-            )}
-
+            <Breadcrumb items={[{ label: 'Trang chủ', path: '/' }, { label: 'Đặt lịch khám' }]} />
+            {revisitRequestId && <Alert className={styles.notice} role="status" type="info" showIcon title="Bạn đang chọn khung giờ cho một đề xuất tái khám. Lịch mới chỉ được tạo sau khi xác nhận ở bước cuối." />}
             <div className={styles.pageHeader}>
                 <h1 className={styles.pageTitle}>Đặt lịch khám Chuyên khoa</h1>
-                <p className={styles.pageSubtitle}>
-                    Chọn chuyên khoa, bác sĩ và khung giờ 30 phút thuận tiện để được tiếp đón chu đáo không phải chờ đợi.
-                </p>
+                <p className={styles.pageSubtitle}>Chọn chuyên khoa, bác sĩ và khung giờ 30 phút thuận tiện để được tiếp đón chu đáo không phải chờ đợi.</p>
             </div>
-
-            {/* Stepper Progress Bar */}
             <div className={styles.stepperContainer} role="progressbar" aria-valuenow={displayStep} aria-valuemin={1} aria-valuemax={4}>
-                {[
-                    { num: 1, label: "1. Chuyên khoa" },
-                    { num: 2, label: "2. Bác sĩ" },
-                    { num: 3, label: "3. Thời gian" },
-                    { num: 4, label: "4. Xác nhận" }
-                ].map((s, idx) => (
-                    <div key={s.num} className={`${styles.stepItem} ${displayStep >= s.num ? styles.stepItemActive : ""}`}>
-                        <div className={styles.stepCircle}>
-                            {displayStep > s.num ? <CheckCircle2 size={20} /> : s.num}
-                        </div>
-                        <span className={styles.stepLabel}>{s.label}</span>
-                        {idx < 3 && <div className={styles.stepLine}></div>}
-                    </div>
-                ))}
+                <Steps current={displayStep - 1} items={[
+                    { title: '1. Chuyên khoa' }, { title: '2. Bác sĩ' }, { title: '3. Thời gian' }, { title: '4. Xác nhận' }
+                ]} />
             </div>
-
-            {/* 2-Column Responsive Layout */}
             <div className={styles.bookingLayout}>
-                {/* Left Column: Current Wizard Step */}
-                <div className={styles.mainCard}>
-                    {uncertainAttempt && (
-                        <div
-                            role="status"
-                            style={{
-                                marginBottom: "20px",
-                                padding: "14px 16px",
-                                borderRadius: "10px",
-                                border: "1px solid #f59e0b",
-                                background: "#fffbeb",
-                                color: "#92400e",
-                                fontSize: "0.9rem"
-                            }}
-                        >
-                            <div style={{ fontWeight: 700, marginBottom: "6px" }}>
-                                Lượt đặt lịch trước đó đang chưa rõ kết quả do gián đoạn kết nối
+                <Card className={styles.mainCard}>
+                    {specialtiesError && displayStep > 1 && <Alert className={styles.notice} type="warning" showIcon title="Không tải được danh sách chuyên khoa." action={<Button onClick={() => setSpecialtiesReloadKey(key => key + 1)}>Thử lại</Button>} />}
+                    {uncertainAttempt && <Alert className={styles.notice} role="status" type="warning" showIcon
+                        title="Lượt đặt lịch trước đó đang chưa rõ kết quả do gián đoạn kết nối"
+                        description={<>
+                            <p>Nếu bạn giữ/chọn lại đúng thông tin cũ và bấm Xác nhận, hệ thống sẽ tự động gửi lại mã đối soát cũ để nhận kết quả mà không tạo lịch thứ hai. Hoặc bạn có thể kiểm tra danh sách lịch hẹn đã tạo trước khi bắt đầu lượt mới.</p>
+                            <div className={styles.actions}>
+                                <Button onClick={() => navigate('/patient/appointments')}>Đối soát lịch hẹn đã tạo</Button>
+                                <Button onClick={handleDiscardUncertainAndStartNewTurn}>Hủy & bắt đầu lượt đặt lịch mới</Button>
                             </div>
-                            <div style={{ marginBottom: "10px", lineHeight: 1.5 }}>
-                                Nếu bạn giữ/chọn lại đúng thông tin cũ và bấm Xác nhận, hệ thống sẽ tự động gửi lại mã đối soát cũ (Idempotency-Key) để nhận kết quả mà không tạo lịch thứ hai. Hoặc bạn có thể kiểm tra danh sách lịch hẹn đã tạo trước khi bắt đầu lượt mới.
+                        </>} />}
+                    {bookingError && <Alert className={styles.notice} type="error" showIcon title={bookingError} />}
+                    {displayStep === 1 && <div>
+                        <h2 className={styles.stepTitle}>Bước 1: Chọn chuyên khoa khám</h2>
+                        <p className={styles.stepSubtitle}>Vui lòng chọn một chuyên khoa phù hợp với tình trạng sức khỏe hiện tại của bạn.</p>
+                        {specialtiesError ? <Alert type="error" showIcon title="Không tải được danh sách chuyên khoa." action={<Button onClick={() => setSpecialtiesReloadKey(key => key + 1)}>Thử lại</Button>} /> : specialties.length === 0 ? <Empty description="Chưa có chuyên khoa để đặt lịch." /> : <div className={styles.selectionGrid}>
+                            {specialties.map(s => <Card key={s.id} hoverable role="button" tabIndex={0} aria-pressed={specialtyId === s.id}
+                                className={`${styles.selectionCard} ${specialtyId === s.id ? styles.selectionCardActive : ''}`}
+                                onClick={() => handleSelectSpecialty(s.id)}
+                                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectSpecialty(s.id); } }}>
+                                <Stethoscope size={30} className={styles.cardIcon} />
+                                <h4>{s.specialtyName}</h4><p>{s.description || 'Khám và điều trị chuyên sâu'}</p>
+                                {s.aiEnabled && <Tag className={styles.aiTag} icon={<Sparkles size={12} />}>Hỗ trợ AI</Tag>}
+                            </Card>)}
+                        </div>}
+                        <div className={styles.stepFooter}>
+                            <span className={styles.consultationHint}>Chưa biết nên chọn khoa nào? <Link to="/patient/ai-consultation" className={styles.consultationLink}>Tư vấn cùng AI &rarr;</Link></span>
+                            <Button type="primary" size="large" onClick={() => setStep(2)} disabled={!specialtyId}>Tiếp tục: Chọn bác sĩ <ArrowRight size={18} /></Button>
+                        </div>
+                    </div>}
+                    {displayStep === 2 && <div>
+                        <h2 className={styles.stepTitle}>Bước 2: Chọn bác sĩ ({selectedSpec?.specialtyName})</h2>
+                        <p className={styles.stepSubtitle}>Chọn bác sĩ mà bạn muốn trực tiếp thăm khám và tư vấn.</p>
+                        {loadingDocs ? <div className={styles.loadingPanel}><Spin /><span>Đang tải danh sách bác sĩ thuộc chuyên khoa...</span></div>
+                            : doctorsError ? <Alert type="error" showIcon title="Không tải được danh sách bác sĩ." action={<Button onClick={() => setDoctorsReloadKey(key => key + 1)}>Thử lại</Button>} />
+                            : doctors.length === 0 ? <Empty description={<><p>Chưa có bác sĩ thuộc chuyên khoa này</p><p>Vui lòng quay lại chọn chuyên khoa khác hoặc liên hệ hotline phòng khám.</p></>}>
+                                <Button onClick={() => setStep(1)}><ArrowLeft size={16} /> Chọn lại chuyên khoa</Button>
+                            </Empty> : <div className={styles.selectionGrid}>
+                                {doctors.map(d => <Card key={d.id} hoverable role="button" tabIndex={0} aria-pressed={doctorId === d.id}
+                                    className={`${styles.selectionCard} ${doctorId === d.id ? styles.selectionCardActive : ''}`}
+                                    onClick={() => handleSelectDoctor(d.id)}
+                                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectDoctor(d.id); } }}>
+                                    <Avatar size={48} icon={<User size={26} />} className={styles.doctorAvatar} />
+                                    <h4>{formatDoctorName(d.academicTitle, d.fullName)}</h4><p>{d.experienceYears ? `${d.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật kinh nghiệm'}</p>
+                                </Card>)}
+                            </div>}
+                        <div className={styles.stepFooter}>
+                            <Button onClick={() => setStep(1)}><ArrowLeft size={16} /> Quay lại</Button>
+                            <Button type="primary" size="large" onClick={() => setStep(3)} disabled={!doctorId}>Tiếp tục: Chọn giờ khám <ArrowRight size={18} /></Button>
+                        </div>
+                    </div>}
+                    {displayStep === 3 && <div>
+                        <h2 className={styles.stepTitle}>Bước 3: Chọn ngày & giờ khám</h2>
+                        <p className={styles.stepSubtitle}>Lịch trống của {formatDoctorName(selectedDoc?.academicTitle, selectedDoc?.fullName)}</p>
+                        <Form layout="vertical" component="div">
+                            <Form.Item className={styles.dateField} label="Chọn ngày khám" htmlFor="slotDate" required>
+                                <Input type="date" id="slotDate" min={toLocalDateString()} value={slotDate} onChange={e => handleSlotDateChange(e.target.value)} />
+                            </Form.Item>
+                            <Form.Item label="Khung giờ khám còn trống (*)">
+                                {isSundayDateString(slotDate) ? <Alert type="warning" showIcon title={<><strong>Lưu ý:</strong> Phòng khám không mở lịch bác sĩ vào Chủ nhật. Vui lòng chọn ngày từ Thứ Hai đến Thứ Bảy.</>} />
+                                    : loadingSlots ? <div className={styles.loadingPanel}><Spin /><span>Đang kiểm tra lịch trống của bác sĩ...</span></div>
+                                    : slotsError ? <Alert type="error" showIcon title="Không tải được khung giờ khám." action={<Button onClick={() => setSlotsReloadKey(key => key + 1)}>Thử lại</Button>} />
+                                    : slots.length === 0 ? <Empty description={`Bác sĩ chưa có lịch trống trong ngày ${slotDate}. Quý khách vui lòng chọn một ngày khám khác.`} />
+                                    : <div className={styles.slotGrid}>{slots.map(s => <Button key={s.slotId} className={`${styles.slotBtn} ${slotId === s.slotId ? styles.slotBtnActive : ""}`} type={slotId === s.slotId ? 'primary' : 'default'} aria-pressed={slotId === s.slotId} onClick={() => handleSelectSlot(s)}><Clock size={14} />{s.startTime.substring(0, 5)}</Button>)}</div>}
+                            </Form.Item>
+                            <Form.Item label="Triệu chứng hoặc lý do thăm khám (*)" htmlFor="reason" required
+                                extra={`Tối thiểu 10 ký tự, tối đa 500 ký tự. (${reason.trim().length}/500 ký tự)`}
+                                validateStatus={reason.trim().length > 0 && (reason.trim().length < 10 || reason.trim().length > 500) ? 'error' : undefined}
+                                help={reason.trim().length > 0 && reason.trim().length < 10 ? 'Lý do khám phải có tối thiểu 10 ký tự.' : reason.trim().length > 500 ? 'Lý do khám vượt quá 500 ký tự.' : undefined}>
+                                <Input.TextArea id="reason" placeholder="Ví dụ: Đau đầu kéo dài 3 ngày, ho sốt nhẹ, cần tư vấn khám định kỳ..." value={reason} onChange={e => handleReasonChange(e.target.value)} rows={3} />
+                            </Form.Item>
+                        </Form>
+                        <div className={styles.stepFooter}>
+                            <Button onClick={() => {
+                                setPageSlotId("");
+                                setActiveDraft(previous => previous ? { ...previous, slotId: undefined, startTime: undefined, endTime: undefined, isComplete: false } : previous);
+                                setStep(2);
+                            }}><ArrowLeft size={16} /> Quay lại</Button>
+                            <Button type="primary" size="large" onClick={() => setStep(4)} disabled={!slotDate || !slotId || reason.trim().length < 10 || reason.trim().length > 500}>Tiếp tục: Xác nhận <ArrowRight size={18} /></Button>
+                        </div>
+                    </div>}
+                    {displayStep === 4 && <div>
+                        <h2 className={styles.stepTitle}>Bước 4: Kiểm tra & Xác nhận thông tin</h2>
+                        <p className={styles.stepSubtitle}>Vui lòng kiểm tra lại toàn bộ chi tiết lịch hẹn trước khi gửi yêu cầu đặt khám.</p>
+                        <Descriptions className={styles.reviewPanel} bordered column={1} items={[
+                            { key: 'specialty', label: 'Chuyên khoa', children: selectedSpec?.specialtyName },
+                            { key: 'doctor', label: 'Bác sĩ phụ trách', children: formatDoctorName(selectedDoc?.academicTitle, selectedDoc?.fullName) },
+                            { key: 'time', label: 'Thời gian khám', children: `${selectedSlot?.startTime.substring(0, 5) ?? ''} - ${selectedSlot?.endTime.substring(0, 5) ?? ''}` },
+                            { key: 'date', label: 'Ngày', children: slotDate.split('-').reverse().join('/') },
+                            { key: 'reason', label: 'Triệu chứng/Ghi chú', children: reason ? `"${reason}"` : 'Không có' }
+                        ]} />
+                        <Alert className={styles.notice} type="success" showIcon title="Phòng khám cam kết giữ đúng lịch hẹn và bảo mật thông tin hồ sơ y tế." />
+                        <div className={styles.stepFooter}>
+                            <Button onClick={() => setStep(3)} disabled={submitting}><ArrowLeft size={16} /> Quay lại</Button>
+                            <Button type="primary" size="large" onClick={handleConfirm} disabled={submitting}>{submitting ? 'Đang đặt lịch...' : 'Xác nhận & Đặt lịch'}</Button>
+                        </div>
+                    </div>}
+                </Card>
+                <aside>
+                    <Card className={styles.summaryCard} title={<span className={styles.summaryTitle}><FileText size={18} /> Tóm tắt lịch khám</span>}>
+                        <div className={styles.summaryList}>
+                            <div className={styles.summaryItem}>
+                                <div className={styles.summaryItemIcon}><Stethoscope size={18} /></div>
+                                <div><div className={styles.summaryItemLabel}>Chuyên khoa</div><div className={selectedSpec ? styles.summaryItemValue : styles.summaryItemEmpty}>{selectedSpec?.specialtyName || 'Chưa chọn'}</div></div>
                             </div>
-                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={() => navigate("/patient/appointments")}
-                                    style={{ padding: "6px 12px", fontSize: "0.85rem" }}
-                                >
-                                    Đối soát lịch hẹn đã tạo
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={handleDiscardUncertainAndStartNewTurn}
-                                    style={{ padding: "6px 12px", fontSize: "0.85rem" }}
-                                >
-                                    Hủy & bắt đầu lượt đặt lịch mới
-                                </button>
+                            <div className={styles.summaryItem}>
+                                <div className={styles.summaryItemIcon}><User size={18} /></div>
+                                <div><div className={styles.summaryItemLabel}>Bác sĩ</div><div className={selectedDoc ? styles.summaryItemValue : styles.summaryItemEmpty}>{selectedDoc ? formatDoctorName(selectedDoc.academicTitle, selectedDoc.fullName) : 'Chưa chọn'}</div></div>
+                            </div>
+                            <div className={styles.summaryItem}>
+                                <div className={styles.summaryItemIcon}><Calendar size={18} /></div>
+                                <div><div className={styles.summaryItemLabel}>Ngày khám</div><div className={slotDate ? styles.summaryItemValue : styles.summaryItemEmpty}>{slotDate ? slotDate.split('-').reverse().join('/') : 'Chưa chọn'}</div></div>
+                            </div>
+                            <div className={styles.summaryItem}>
+                                <div className={styles.summaryItemIcon}><Clock size={18} /></div>
+                                <div><div className={styles.summaryItemLabel}>Khung giờ (30 phút)</div><div className={selectedSlot ? styles.summaryItemValue : styles.summaryItemEmpty}>{selectedSlot ? `${selectedSlot.startTime.substring(0, 5)} - ${selectedSlot.endTime.substring(0, 5)}` : 'Chưa chọn'}</div></div>
                             </div>
                         </div>
-                    )}
-
-                    {bookingError && (
-                        <div style={{ marginBottom: '20px' }}>
-                            <FormError message={bookingError} />
-                        </div>
-                    )}
-
-                    {/* Step 1: Chọn Chuyên khoa */}
-                    {displayStep === 1 && (
-                        <div>
-                            <h2 className={styles.stepTitle}>Bước 1: Chọn chuyên khoa khám</h2>
-                            <p className={styles.stepSubtitle}>
-                                Vui lòng chọn một chuyên khoa phù hợp với tình trạng sức khỏe hiện tại của bạn.
-                            </p>
-
-                            <div className={styles.selectionGrid}>
-                                {specialties.map(s => (
-                                    <div 
-                                        key={s.id} 
-                                        className={`${styles.selectionCard} ${specialtyId === s.id ? styles.selectionCardActive : ""}`}
-                                        onClick={() => handleSelectSpecialty(s.id)}
-                                        role="button"
-                                        tabIndex={0}
-                                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelectSpecialty(s.id); }}
-                                    >
-                                        <Stethoscope size={30} className={styles.cardIcon} />
-                                        <h4>{s.specialtyName}</h4>
-                                        <p>{s.description || "Khám và điều trị chuyên sâu"}</p>
-                                        {s.aiEnabled && (
-                                            <span style={{ fontSize: '0.75rem', color: 'var(--c-primary)', fontWeight: 600, marginTop: '8px', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                                <Sparkles size={12} /> Hỗ trợ AI
-                                            </span>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className={styles.stepFooter}>
-                                <span style={{ fontSize: '0.875rem', color: 'var(--c-text-muted)' }}>
-                                    Chưa biết nên chọn khoa nào? <Link to="/patient/ai-consultation" style={{ color: 'var(--c-primary)', fontWeight: 600 }}>Tư vấn cùng AI &rarr;</Link>
-                                </span>
-                                <Button 
-                                    variant="primary" 
-                                    size="lg" 
-                                    onClick={() => setStep(2)} 
-                                    disabled={!specialtyId}
-                                >
-                                    Tiếp tục: Chọn bác sĩ <ArrowRight size={18} />
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Step 2: Chọn Bác sĩ */}
-                    {displayStep === 2 && (
-                        <div>
-                            <h2 className={styles.stepTitle}>
-                                Bước 2: Chọn bác sĩ ({selectedSpec?.specialtyName})
-                            </h2>
-                            <p className={styles.stepSubtitle}>
-                                Chọn bác sĩ mà bạn muốn trực tiếp thăm khám và tư vấn.
-                            </p>
-
-                            {loadingDocs ? (
-                                <div style={{ padding: '36px', textAlign: 'center', color: 'var(--c-text-muted)' }}>
-                                    Đang tải danh sách bác sĩ thuộc chuyên khoa...
-                                </div>
-                            ) : doctors.length === 0 ? (
-                                <div style={{ padding: '36px', background: '#f8fafc', borderRadius: '12px', textAlign: 'center' }}>
-                                    <AlertCircle size={36} color="var(--c-text-muted)" style={{ marginBottom: '8px' }} />
-                                    <p style={{ color: 'var(--c-text)', fontWeight: 600, margin: '0 0 6px 0' }}>
-                                        Chưa có bác sĩ thuộc chuyên khoa này
-                                    </p>
-                                    <p style={{ color: 'var(--c-text-muted)', fontSize: '0.9rem', margin: '0 0 16px 0' }}>
-                                        Vui lòng quay lại chọn chuyên khoa khác hoặc liên hệ hotline phòng khám.
-                                    </p>
-                                    <Button variant="secondary" size="md" onClick={() => setStep(1)}>
-                                        <ArrowLeft size={16} /> Chọn lại chuyên khoa
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className={styles.selectionGrid}>
-                                    {doctors.map(d => (
-                                        <div 
-                                            key={d.id} 
-                                            className={`${styles.selectionCard} ${doctorId === d.id ? styles.selectionCardActive : ""}`}
-                                            onClick={() => handleSelectDoctor(d.id)}
-                                            role="button"
-                                            tabIndex={0}
-                                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelectDoctor(d.id); }}
-                                        >
-                                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#e0f2fe', color: 'var(--c-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
-                                                <User size={26} />
-                                            </div>
-                                            <h4>{formatDoctorName(d.academicTitle, d.fullName)}</h4>
-                                            <p>{d.experienceYears ? `${d.experienceYears} năm kinh nghiệm` : "Chưa cập nhật kinh nghiệm"}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            <div className={styles.stepFooter}>
-                                <Button variant="secondary" size="md" onClick={() => setStep(1)}>
-                                    <ArrowLeft size={16} /> Quay lại
-                                </Button>
-                                <Button 
-                                    variant="primary" 
-                                    size="lg" 
-                                    onClick={() => setStep(3)} 
-                                    disabled={!doctorId}
-                                >
-                                    Tiếp tục: Chọn giờ khám <ArrowRight size={18} />
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Step 3: Chọn Ngày, Giờ & Triệu chứng */}
-                    {displayStep === 3 && (
-                        <div>
-                            <h2 className={styles.stepTitle}>
-                                Bước 3: Chọn ngày & giờ khám
-                            </h2>
-                            <p className={styles.stepSubtitle}>
-                                Lịch trống của {formatDoctorName(selectedDoc?.academicTitle, selectedDoc?.fullName)}
-                            </p>
-
-                            <div style={{ maxWidth: '320px', marginBottom: '24px' }}>
-                                <FormField id="slotDate" label="Chọn ngày khám" required>
-                                    <TextInput
-                                        id="slotDate"
-                                        type="date"
-                                        min={toLocalDateString()}
-                                        value={slotDate}
-                                        onChange={(e) => handleSlotDateChange(e.target.value)}
-                                    />
-                                </FormField>
-                            </div>
-
-                            <div style={{ marginBottom: '28px' }}>
-                                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: 'var(--c-navy)', marginBottom: '8px' }}>
-                                    Khung giờ khám còn trống (*)
-                                </label>
-                                {isSundayDateString(slotDate) ? (
-                                    <div style={{
-                                        padding: '16px 20px',
-                                        background: '#fffbeb',
-                                        border: '1px solid #fef3c7',
-                                        borderRadius: '10px',
-                                        color: '#b45309',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '12px',
-                                        fontSize: '0.925rem'
-                                    }}>
-                                        <AlertCircle size={20} color="#d97706" style={{ flexShrink: 0 }} />
-                                        <span><strong>Lưu ý:</strong> Phòng khám không mở lịch bác sĩ vào Chủ nhật. Vui lòng chọn ngày từ Thứ Hai đến Thứ Bảy.</span>
-                                    </div>
-                                ) : loadingSlots ? (
-                                    <div style={{ padding: '24px', background: '#f8fafc', borderRadius: '8px', textAlign: 'center', color: 'var(--c-text-muted)' }}>
-                                        Đang kiểm tra lịch trống của bác sĩ...
-                                    </div>
-                                ) : slots.length === 0 ? (
-                                    <div style={{ padding: '24px', background: '#f8fafc', borderRadius: '8px', textAlign: 'center', color: 'var(--c-text-muted)' }}>
-                                        Bác sĩ chưa có lịch trống trong ngày {slotDate}. Quý khách vui lòng chọn một ngày khám khác.
-                                    </div>
-                                ) : (
-                                    <div className={styles.slotGrid}>
-                                        {slots.map(s => (
-                                            <button
-                                                key={s.slotId}
-                                                type="button"
-                                                className={`${styles.slotBtn} ${slotId === s.slotId ? styles.slotBtnActive : ""}`}
-                                                onClick={() => handleSelectSlot(s)}
-                                            >
-                                                <Clock size={14} />
-                                                {s.startTime.substring(0, 5)}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div style={{ marginBottom: '20px' }}>
-                                <FormField 
-                                    id="reason" 
-                                    label="Triệu chứng hoặc lý do thăm khám (*)"
-                                    required
-                                    helpText={`Tối thiểu 10 ký tự, tối đa 500 ký tự. (${reason.trim().length}/500 ký tự)`}
-                                    error={reason.trim().length > 0 && reason.trim().length < 10 ? "Lý do khám phải có tối thiểu 10 ký tự." : reason.trim().length > 500 ? "Lý do khám vượt quá 500 ký tự." : undefined}
-                                >
-                                    <Textarea
-                                        id="reason"
-                                        placeholder="Ví dụ: Đau đầu kéo dài 3 ngày, ho sốt nhẹ, cần tư vấn khám định kỳ..."
-                                        value={reason}
-                                        onChange={(e) => handleReasonChange(e.target.value)}
-                                        rows={3}
-                                    />
-                                </FormField>
-                            </div>
-
-                            <div className={styles.stepFooter}>
-                                <Button
-                                    variant="secondary"
-                                    size="md"
-                                    onClick={() => {
-                                        setPageSlotId("");
-                                        setActiveDraft(previous => previous ? {
-                                            ...previous,
-                                            slotId: undefined,
-                                            startTime: undefined,
-                                            endTime: undefined,
-                                            isComplete: false
-                                        } : previous);
-                                        setStep(2);
-                                    }}
-                                >
-                                    <ArrowLeft size={16} /> Quay lại
-                                </Button>
-                                <Button 
-                                    variant="primary" 
-                                    size="lg" 
-                                    onClick={() => setStep(4)} 
-                                    disabled={!slotDate || !slotId || reason.trim().length < 10 || reason.trim().length > 500}
-                                >
-                                    Tiếp tục: Xác nhận <ArrowRight size={18} />
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Step 4: Xác nhận & Đặt hẹn */}
-                    {displayStep === 4 && (
-                        <div>
-                            <h2 className={styles.stepTitle}>
-                                Bước 4: Kiểm tra & Xác nhận thông tin
-                            </h2>
-                            <p className={styles.stepSubtitle}>
-                                Vui lòng kiểm tra lại toàn bộ chi tiết lịch hẹn trước khi gửi yêu cầu đặt khám.
-                            </p>
-
-                            <div style={{ background: '#f8fafc', border: '1px solid var(--c-border-light)', borderRadius: '12px', padding: '24px', marginBottom: '24px' }}>
-                                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                                    <Stethoscope size={22} color="var(--c-primary)" style={{ marginTop: '2px', flexShrink: 0 }} />
-                                    <div>
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)', display: 'block' }}>CHUYÊN KHOA</span>
-                                        <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--c-navy)' }}>{selectedSpec?.specialtyName}</span>
-                                    </div>
-                                </div>
-
-                                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                                    <User size={22} color="var(--c-primary)" style={{ marginTop: '2px', flexShrink: 0 }} />
-                                    <div>
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)', display: 'block' }}>BÁC SĨ PHỤ TRÁCH</span>
-                                        <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--c-navy)' }}>
-                                            {formatDoctorName(selectedDoc?.academicTitle, selectedDoc?.fullName)}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                                    <Clock size={22} color="var(--c-primary)" style={{ marginTop: '2px', flexShrink: 0 }} />
-                                    <div>
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)', display: 'block' }}>THỜI GIAN KHÁM TIÊU CHUẨN</span>
-                                        <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--c-navy)' }}>
-                                            {selectedSlot?.startTime.substring(0, 5)} - {selectedSlot?.endTime.substring(0, 5)}
-                                        </span>
-                                        <div style={{ fontSize: '0.9rem', color: 'var(--c-text-muted)' }}>
-                                            Ngày {slotDate.split("-").reverse().join("/")}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {reason && (
-                                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                                        <FileText size={22} color="var(--c-primary)" style={{ marginTop: '2px', flexShrink: 0 }} />
-                                        <div>
-                                            <span style={{ fontSize: '0.8rem', color: 'var(--c-text-muted)', display: 'block' }}>TRIỆU CHỨNG / GHI CHÚ</span>
-                                            <span style={{ fontSize: '0.95rem', color: 'var(--c-text)', fontStyle: 'italic' }}>
-                                                "{reason}"
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#047857', background: '#ecfdf5', padding: '12px 16px', borderRadius: '8px', fontSize: '0.875rem', marginBottom: '24px' }}>
-                                <ShieldCheck size={18} style={{ flexShrink: 0 }} />
-                                <span>Phòng khám cam kết giữ đúng lịch hẹn và bảo mật thông tin hồ sơ y tế.</span>
-                            </div>
-
-                            <div className={styles.stepFooter}>
-                                <Button variant="secondary" size="md" onClick={() => setStep(3)} disabled={submitting}>
-                                    <ArrowLeft size={16} /> Quay lại
-                                </Button>
-                                <Button 
-                                    variant="primary" 
-                                    size="lg" 
-                                    onClick={handleConfirm} 
-                                    loading={submitting}
-                                    disabled={submitting}
-                                >
-                                    Xác nhận & Đặt lịch
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Right Column: Sticky Appointment Summary */}
-                <aside className={styles.summaryCard}>
-                    <h3 className={styles.summaryTitle}>
-                        <FileText size={18} color="var(--c-primary)" /> Tóm tắt lịch khám
-                    </h3>
-
-                    <div className={styles.summaryList}>
-                        <div className={styles.summaryItem}>
-                            <div className={styles.summaryItemIcon}>
-                                <Stethoscope size={18} />
-                            </div>
-                            <div>
-                                <div className={styles.summaryItemLabel}>Chuyên khoa</div>
-                                <div className={selectedSpec ? styles.summaryItemValue : styles.summaryItemEmpty}>
-                                    {selectedSpec?.specialtyName || "Chưa chọn"}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className={styles.summaryItem}>
-                            <div className={styles.summaryItemIcon}>
-                                <User size={18} />
-                            </div>
-                            <div>
-                                <div className={styles.summaryItemLabel}>Bác sĩ</div>
-                                <div className={selectedDoc ? styles.summaryItemValue : styles.summaryItemEmpty}>
-                                    {selectedDoc ? formatDoctorName(selectedDoc.academicTitle, selectedDoc.fullName) : "Chưa chọn"}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className={styles.summaryItem}>
-                            <div className={styles.summaryItemIcon}>
-                                <Calendar size={18} />
-                            </div>
-                            <div>
-                                <div className={styles.summaryItemLabel}>Ngày khám</div>
-                                <div className={slotDate ? styles.summaryItemValue : styles.summaryItemEmpty}>
-                                    {slotDate ? slotDate.split("-").reverse().join("/") : "Chưa chọn"}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className={styles.summaryItem}>
-                            <div className={styles.summaryItemIcon}>
-                                <Clock size={18} />
-                            </div>
-                            <div>
-                                <div className={styles.summaryItemLabel}>Khung giờ (30 phút)</div>
-                                <div className={selectedSlot ? styles.summaryItemValue : styles.summaryItemEmpty}>
-                                    {selectedSlot ? `${selectedSlot.startTime.substring(0, 5)} - ${selectedSlot.endTime.substring(0, 5)}` : "Chưa chọn"}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    </Card>
                 </aside>
             </div>
         </div>
