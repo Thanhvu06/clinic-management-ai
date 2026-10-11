@@ -1,0 +1,27 @@
+.page { width: 100%; max-width: 1000px; margin: 0 auto; }
+.appointments, .history { display: flex; flex-direction: column; gap: var(--cc-space-md); }
+.appointmentCard, .highlightedCard { transition: border-color 0.3s ease, box-shadow 0.3s ease; }
+.highlightedCard { border-color: var(--cc-color-primary); box-shadow: var(--cc-shadow-md); }
+.cardHeader, .historyHeader { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--cc-space-md); flex-wrap: wrap; }
+.identity, .schedule, .actions, .infoLine { display: flex; align-items: center; gap: var(--cc-space-xs); flex-wrap: wrap; }
+.identity { margin-bottom: var(--cc-space-xs); color: var(--cc-color-primary); }
+.actions { justify-content: flex-end; }
+.infoLine { margin-bottom: var(--cc-space-xs); }
+.infoLine svg { color: var(--cc-color-primary); flex-shrink: 0; }
+.pendingAlert { margin-top: var(--cc-space-md); }
+.requestReason { font-style: italic; color: var(--cc-color-text); }
+.filters { display: flex; gap: var(--cc-space-xs); flex-wrap: wrap; margin-bottom: var(--cc-space-lg); }
+.details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: var(--cc-space-md); padding: var(--cc-space-md); background: var(--cc-color-bg-subtle); border-radius: var(--cc-radius-md); gap: var(--cc-space-md); }
+.sectionTitle { margin: 0 0 var(--cc-space-xs); color: var(--cc-color-text-secondary); font-size: 0.85rem; text-transform: uppercase; }
+.notes, .statusChange, .historyNote { margin: 0; }
+.modalAlert, .currentAppointment { margin-bottom: var(--cc-space-md); }
+.currentAppointment { padding: var(--cc-space-sm); background: var(--cc-color-success-bg); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); }
+.dateInput { width: 100%; }
+.slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--cc-space-xs); max-height: 160px; overflow-y: auto; padding: var(--cc-space-xxs); }
+.history { max-height: 300px; overflow-y: auto; padding-right: var(--cc-space-xxs); }
+.historyHeader { margin-bottom: var(--cc-space-xs); }
+.historyHeader strong { color: var(--cc-color-primary); }
+.historyHeader span, .historyNote { color: var(--cc-color-text-secondary); }
+.statusChange { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xxs); }
+.historyNote { margin-top: var(--cc-space-xxs); font-style: italic; }
+@media (max-width: 768px) { .details { grid-template-columns: minmax(0, 1fr); } }
