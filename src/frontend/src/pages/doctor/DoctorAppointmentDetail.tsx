@@ -11,6 +11,7 @@ import { useDialog } from '../../contexts/DialogContext';
 import { LoadingState, StatusBadge, DataTable } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import styles from './DoctorAppointmentDetail.module.css';
+import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
 
 export const DoctorAppointmentDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -115,7 +116,7 @@ export const DoctorAppointmentDetail: React.FC = () => {
                         <Flex align="center" gap={10}>
                             <h1 className={styles.patientName}>{context.patientName}</h1>
                             <span className={styles.codeTag}>#{apt.appointmentCode}</span>
-                            <StatusBadge status={apt.status} label={apt.status === 'Completed' ? 'Đã hoàn tất khám' : apt.status} />
+                            <StatusBadge status={apt.status} label={getAppointmentStatusLabel(apt.status)} />
                         </Flex>
                         <div className={styles.metaRow}>
                             <span>{context.patientGender === 'Male' ? 'Nam' : context.patientGender === 'Female' ? 'Nữ' : 'Khác'} {context.patientDob ? `• ${context.patientDob}` : ''}</span>
