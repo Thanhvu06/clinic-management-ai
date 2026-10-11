@@ -5,6 +5,8 @@ import { BookingActionChoices } from "../../components/BookingActionChoices";
 import { ProviderStatus } from "../../components/copilot/ProviderStatus";
 import { patientSuggestions, isAdditionalCopy } from "../../components/copilot/patientPresentation";
 import React, { useRef, useEffect } from "react";
+import { Spin, Typography } from 'antd';
+import consultationStyles from './PatientAiConsultation.module.css';
 import { useNavigate } from "react-router-dom";
 import { useChatContext } from "../../contexts/ChatContext";
 import { useAiBookingFlow } from "../../hooks/useAiBookingFlow";
@@ -105,11 +107,10 @@ export const PatientAiConsultation: React.FC = () => {
                                                     <span className={styles.fitBadge}>Phù hợp tham khảo</span>
                                                 </div>
                                                 <p className={styles.specialtyReason}>{s.reason}</p>
-                                                <div style={{ display: "flex", gap: "8px" }}>
+                                                <div className={consultationStyles.suggestionActions}>
                                                     <button
                                                         type="button"
                                                         className={`${styles.actionBtn} ${styles.btnPrimary}`}
-                                                        style={{ flex: 1 }}
                                                         onClick={() => handleSendMessage(`Tìm lịch khám khoa ${s.specialtyName}`, { specialtyId: s.specialtyId })}
                                                     >
                                                         Xem lịch khám <ArrowRight size={14} />
@@ -221,7 +222,7 @@ export const PatientAiConsultation: React.FC = () => {
                     {/* Welcome Disclaimer */}
                     <div className={styles.welcomeContainer}>
                         <div className={styles.disclaimerBadge}>
-                            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+                            <AlertTriangle size={18} className={consultationStyles.disclaimerIcon} />
                             <span>Trợ lý hỗ trợ định hướng chuyên khoa và đặt lịch khám. Thông tin chỉ mang tính tham khảo, không thay thế chẩn đoán y khoa.</span>
                         </div>
 
@@ -250,11 +251,7 @@ export const PatientAiConsultation: React.FC = () => {
                     {loading && (
                         <div className={`${styles.messageRow} ${styles.rowModel}`}>
                             <div className={`${styles.bubble} ${styles.bubbleModel}`}>
-                                <div style={{ display: "flex", gap: "6px", padding: "4px" }}>
-                                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--chat-accent)", animation: "pulse 1.4s infinite" }} />
-                                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--chat-accent)", animation: "pulse 1.4s infinite 0.2s" }} />
-                                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--chat-accent)", animation: "pulse 1.4s infinite 0.4s" }} />
-                                </div>
+                                <div className={consultationStyles.replyIndicator}><Spin size="small" aria-label="Trợ lý đang trả lời" /></div>
                             </div>
                         </div>
                     )}
@@ -284,16 +281,10 @@ export const PatientAiConsultation: React.FC = () => {
                             <Send size={18} />
                         </button>
                     </div>
-                    {errorMsg && <div style={{ color: 'var(--c-danger)', fontSize: '0.85rem', marginTop: '8px', paddingLeft: '16px' }}>{errorMsg}</div>}
+                    {errorMsg && <Typography.Text type="danger" role="alert" className={consultationStyles.errorMessage}>{errorMsg}</Typography.Text>}
                 </div>
             </div>
 
-            <style>{`
-                @keyframes pulse {
-                    0%, 100% { opacity: 0.3; transform: scale(0.8); }
-                    50% { opacity: 1; transform: scale(1.2); }
-                }
-            `}</style>
         </div>
     );
 };
