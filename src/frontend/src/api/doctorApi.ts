@@ -44,20 +44,6 @@ export const doctorApi = {
         return axiosClient.get<any, ApiResponse<DoctorQueueItemDto[]>>(`/doctor/appointments/queue${query}`);
     },
 
-    getAppointments: async (params: { date?: string; status?: string; search?: string; page?: number; pageSize?: number } = {}): Promise<ApiResponse<any>> => {
-        const queryParams = new URLSearchParams();
-        if (params.date) queryParams.append('date', params.date);
-        if (params.status) queryParams.append('status', params.status);
-        if (params.search) queryParams.append('search', params.search);
-        queryParams.append('page', (params.page || 1).toString());
-        queryParams.append('pageSize', (params.pageSize || 10).toString());
-        return axiosClient.get<any, ApiResponse<any>>(`/doctor/appointments?${queryParams.toString()}`);
-    },
-
-    getAppointmentById: async (id: number): Promise<ApiResponse<any>> => {
-        return axiosClient.get<any, ApiResponse<any>>(`/doctor/appointments/${id}`);
-    },
-
     getAppointmentHistory: async (id: number): Promise<ApiResponse<any[]>> => {
         return axiosClient.get<any, ApiResponse<any[]>>(`/doctor/appointments/${id}/history`);
     },
@@ -74,24 +60,12 @@ export const doctorApi = {
         return axiosClient.post<any, ApiResponse<any>>(`/doctor/appointments/${id}/start-consultation`);
     },
 
-    getEncounter: async (id: number): Promise<ApiResponse<ClinicalEncounterDto | null>> => {
-        return axiosClient.get<any, ApiResponse<ClinicalEncounterDto | null>>(`/doctor/appointments/${id}/encounter`);
-    },
-
     saveEncounter: async (id: number, request: SaveEncounterRequest): Promise<ApiResponse<ClinicalEncounterDto>> => {
         return axiosClient.put<any, ApiResponse<ClinicalEncounterDto>>(`/doctor/appointments/${id}/encounter`, request);
     },
 
-    getVitalSigns: async (id: number): Promise<ApiResponse<VitalSignsDto | null>> => {
-        return axiosClient.get<any, ApiResponse<VitalSignsDto | null>>(`/doctor/appointments/${id}/vitals`);
-    },
-
     saveVitalSigns: async (id: number, request: SaveVitalSignsRequest): Promise<ApiResponse<VitalSignsDto>> => {
         return axiosClient.put<any, ApiResponse<VitalSignsDto>>(`/doctor/appointments/${id}/vitals`, request);
-    },
-
-    getPrescriptionDraft: async (id: number): Promise<ApiResponse<PrescriptionDraftDto | null>> => {
-        return axiosClient.get<any, ApiResponse<PrescriptionDraftDto | null>>(`/doctor/appointments/${id}/prescription-draft`);
     },
 
     savePrescriptionDraft: async (id: number, request: SavePrescriptionDraftRequest): Promise<ApiResponse<PrescriptionDraftDto>> => {
@@ -111,24 +85,12 @@ export const doctorApi = {
         return axiosClient.post<any, ApiResponse<any>>(`/doctor/visits/${visitId}/start-consultation`);
     },
 
-    getVisitEncounter: async (visitId: number): Promise<ApiResponse<ClinicalEncounterDto | null>> => {
-        return axiosClient.get<any, ApiResponse<ClinicalEncounterDto | null>>(`/doctor/visits/${visitId}/encounter`);
-    },
-
     saveVisitEncounter: async (visitId: number, request: SaveEncounterRequest): Promise<ApiResponse<ClinicalEncounterDto>> => {
         return axiosClient.put<any, ApiResponse<ClinicalEncounterDto>>(`/doctor/visits/${visitId}/encounter`, request);
     },
 
-    getVisitVitalSigns: async (visitId: number): Promise<ApiResponse<VitalSignsDto | null>> => {
-        return axiosClient.get<any, ApiResponse<VitalSignsDto | null>>(`/doctor/visits/${visitId}/vitals`);
-    },
-
     saveVisitVitalSigns: async (visitId: number, request: SaveVitalSignsRequest): Promise<ApiResponse<VitalSignsDto>> => {
         return axiosClient.put<any, ApiResponse<VitalSignsDto>>(`/doctor/visits/${visitId}/vitals`, request);
-    },
-
-    getVisitPrescriptionDraft: async (visitId: number): Promise<ApiResponse<PrescriptionDraftDto | null>> => {
-        return axiosClient.get<any, ApiResponse<PrescriptionDraftDto | null>>(`/doctor/visits/${visitId}/prescription-draft`);
     },
 
     saveVisitPrescriptionDraft: async (visitId: number, request: SavePrescriptionDraftRequest): Promise<ApiResponse<PrescriptionDraftDto>> => {
