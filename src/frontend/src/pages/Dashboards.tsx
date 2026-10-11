@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext';
 import styles from './Dashboards.module.css';
 import axiosClient from '../api/axiosClient';
 import type { ApiResponse } from '../types';
@@ -8,43 +7,6 @@ import {
     CalendarCheck, Users, Stethoscope, ShieldPlus, 
     CalendarDays, History, Package, Pill 
 } from 'lucide-react';
-
-export const PatientDashboard: React.FC = () => {
-    const { user } = useAuth();
-    return (
-        <div>
-            <div className={styles.hero}>
-                <h1 className={styles.heroTitle}>Xin chào, {user?.fullName}!</h1>
-                <p className={styles.heroSubtitle}>Chào mừng bạn đến với hệ thống chăm sóc sức khỏe thông minh ClinicCare AI.</p>
-                <div style={{ marginTop: '20px' }}>
-                    <Link to="/patient/book" className="btn-primary" style={{ backgroundColor: 'white', color: 'var(--c-navy)' }}>
-                        <CalendarCheck size={20} />
-                        Đặt lịch khám ngay
-                    </Link>
-                </div>
-            </div>
-
-            <h2 className={styles.sectionTitle}>Truy cập nhanh</h2>
-            <div className="grid-cards">
-                <Link to="/patient/appointments" className={styles.actionCard}>
-                    <div className={styles.actionIcon}><CalendarDays size={24} /></div>
-                    <div className={styles.actionTitle}>Lịch hẹn của tôi</div>
-                    <div className={styles.actionDesc}>Theo dõi các lịch hẹn sắp tới và trạng thái.</div>
-                </Link>
-                <Link to="/patient/revisit" className={styles.actionCard}>
-                    <div className={styles.actionIcon}><CalendarDays size={24} /></div>
-                    <div className={styles.actionTitle}>Tái khám</div>
-                    <div className={styles.actionDesc}>Phản hồi các đề xuất tái khám từ bác sĩ.</div>
-                </Link>
-                <Link to="/patient/profile" className={styles.actionCard}>
-                    <div className={styles.actionIcon}><Users size={24} /></div>
-                    <div className={styles.actionTitle}>Hồ sơ cá nhân</div>
-                    <div className={styles.actionDesc}>Cập nhật thông tin liên hệ và tình trạng sức khỏe.</div>
-                </Link>
-            </div>
-        </div>
-    );
-};
 
 export const AdminDashboard: React.FC = () => {
     const [stats, setStats] = useState<any>(null);
@@ -146,103 +108,6 @@ export const AdminDashboard: React.FC = () => {
                     <div className={styles.actionIcon}><History size={24} /></div>
                     <div className={styles.actionTitle}>Nhật ký hệ thống</div>
                     <div className={styles.actionDesc}>Tra cứu sự kiện và kiểm toán dữ liệu.</div>
-                </Link>
-            </div>
-        </div>
-    );
-};
-
-export const ReceptionistDashboard: React.FC = () => {
-    const [stats, setStats] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        axiosClient.get<any, ApiResponse<any>>('/reception/stats')
-            .then(res => {
-                if (res.success && res.data) setStats(res.data);
-            })
-            .catch(() => {})
-            .finally(() => setLoading(false));
-    }, []);
-
-    return (
-        <div>
-            <div className={styles.hero}>
-                <h1 className={styles.heroTitle}>Bàn làm việc lễ tân</h1>
-                <p className={styles.heroSubtitle}>Tiếp đón bệnh nhân → Xác nhận lịch → Điều phối ca khám → Xử lý yêu cầu đổi/hủy.</p>
-            </div>
-            
-            <h2 className={styles.sectionTitle}>Tình trạng lịch hẹn hôm nay</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-                <div className="card" style={{ padding: '20px', borderLeft: '4px solid #0284c7' }}>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', fontWeight: 600 }}>TỔNG LỊCH HÔM NAY</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--c-navy-dark)', marginTop: '4px' }}>
-                        {loading ? '...' : (stats?.appointmentsToday ?? 0)}
-                    </div>
-                </div>
-                <div className="card" style={{ padding: '20px', borderLeft: '4px solid #f59e0b' }}>
-                    <div style={{ fontSize: '0.85rem', color: '#b45309', fontWeight: 600 }}>CHỜ XÁC NHẬN</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#b45309', marginTop: '4px' }}>
-                        {loading ? '...' : (stats?.pendingAppointmentsToday ?? 0)}
-                    </div>
-                </div>
-                <div className="card" style={{ padding: '20px', borderLeft: '4px solid #3b82f6' }}>
-                    <div style={{ fontSize: '0.85rem', color: '#1d4ed8', fontWeight: 600 }}>ĐÃ XÁC NHẬN (CHỜ KHÁM)</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#1d4ed8', marginTop: '4px' }}>
-                        {loading ? '...' : (stats?.confirmedAppointmentsToday ?? 0)}
-                    </div>
-                </div>
-                <div className="card" style={{ padding: '20px', borderLeft: '4px solid #10b981' }}>
-                    <div style={{ fontSize: '0.85rem', color: '#047857', fontWeight: 600 }}>ĐÃ KHÁM XONG</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#047857', marginTop: '4px' }}>
-                        {loading ? '...' : (stats?.completedAppointmentsToday ?? 0)}
-                    </div>
-                </div>
-                <div className="card" style={{ padding: '20px', borderLeft: stats?.pendingChangeRequests > 0 ? '4px solid #dc2626' : '4px solid #94a3b8' }}>
-                    <div style={{ fontSize: '0.85rem', color: stats?.pendingChangeRequests > 0 ? '#dc2626' : 'var(--c-muted)', fontWeight: 600 }}>YÊU CẦU ĐỔI / HỦY CHỜ DUYỆT</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: stats?.pendingChangeRequests > 0 ? '#dc2626' : 'var(--c-navy-dark)', marginTop: '4px' }}>
-                        {loading ? '...' : (stats?.pendingChangeRequests ?? 0)}
-                    </div>
-                </div>
-            </div>
-
-            <h2 className={styles.sectionTitle}>Nghiệp vụ hằng ngày</h2>
-            <div className="grid-cards">
-                <Link to="/reception/appointments" className={styles.actionCard}>
-                    <div className={styles.actionIcon}><CalendarCheck size={24} /></div>
-                    <div className={styles.actionTitle}>Quản lý lịch hẹn</div>
-                    <div className={styles.actionDesc}>Xác nhận và điều phối lịch hẹn của bệnh nhân.</div>
-                </Link>
-                <Link to="/reception/change-requests" className={styles.actionCard}>
-                    <div className={styles.actionIcon}><History size={24} /></div>
-                    <div className={styles.actionTitle}>Yêu cầu đổi/hủy lịch</div>
-                    <div className={styles.actionDesc}>Hàng chờ duyệt và xử lý đổi/hủy lịch từ bệnh nhân.</div>
-                </Link>
-            </div>
-        </div>
-    );
-};
-
-export const DoctorDashboard: React.FC = () => {
-    const { user } = useAuth();
-    return (
-        <div>
-            <div className={styles.hero}>
-                <h1 className={styles.heroTitle}>Xin chào, Bác sĩ {user?.fullName || ''}</h1>
-                <p className={styles.heroSubtitle}>Xem lịch khám và xử lý các ca bệnh hôm nay.</p>
-            </div>
-            
-            <h2 className={styles.sectionTitle}>Chức năng</h2>
-            <div className="grid-cards">
-                <Link to="/doctor/appointments" className={styles.actionCard}>
-                    <div className={styles.actionIcon}><CalendarDays size={24} /></div>
-                    <div className={styles.actionTitle}>Lịch khám của tôi</div>
-                    <div className={styles.actionDesc}>Danh sách bệnh nhân và cập nhật kết quả.</div>
-                </Link>
-                <Link to="/doctor/leave-requests" className={styles.actionCard}>
-                    <div className={styles.actionIcon}><CalendarCheck size={24} /></div>
-                    <div className={styles.actionTitle}>Yêu cầu nghỉ</div>
-                    <div className={styles.actionDesc}>Đăng ký nghỉ phép và theo dõi trạng thái duyệt.</div>
                 </Link>
             </div>
         </div>

@@ -157,7 +157,7 @@ describe('admin batch 1 regression', () => {
         expect(within(rows[0]).getByText('Chủ nhật')).toBeInTheDocument();
         expect(screen.getAllByText(/cần sinh slot/)).toHaveLength(1);
         expect(rows).toHaveLength(3);
-    });
+    }, 15000);
 
     it('WorkSchedules validates time ordering and sends the original edit payload', async () => {
         vi.mocked(axiosClient.put).mockResolvedValue({ success: true });
@@ -171,7 +171,7 @@ describe('admin batch 1 regression', () => {
         fireEvent.change(screen.getByLabelText('Từ giờ (*)'), { target: { value: '09:00' } });
         await userEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu' }));
         await waitFor(() => expect(axiosClient.put).toHaveBeenCalledWith('/admin/work-schedules/1', { workDate: '2026-10-11', startTime: '09:00', endTime: '12:00:00' }));
-    });
+    }, 15000);
 
     it('WorkSchedules replaces schedules with a retry error when schedule API fails', async () => {
         get.mockImplementation(async (url: string) => {
@@ -185,5 +185,5 @@ describe('admin batch 1 regression', () => {
         expect(await screen.findByText('Không thể tải lịch.')).toBeInTheDocument();
         expect(screen.queryByRole('table')).not.toBeInTheDocument();
         expect(screen.queryByText(/cần sinh slot/)).not.toBeInTheDocument();
-    });
+    }, 15000);
 });

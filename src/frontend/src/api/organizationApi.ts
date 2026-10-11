@@ -17,17 +17,6 @@ export interface FacilityDto {
     departmentCount: number;
 }
 
-export interface BuildingDto {
-    id: number;
-    facilityId: number;
-    facilityName: string;
-    code: string;
-    name: string;
-    numberOfFloors: number;
-    isActive: boolean;
-    roomCount: number;
-}
-
 export interface DepartmentDto {
     id: number;
     specialtyId?: number | null;
@@ -115,22 +104,6 @@ export const organizationApi = {
         return axiosClient.post<any, ApiResponse<FacilityDto>>('/facilities', data);
     },
 
-    updateFacility: async (id: number, data: Partial<FacilityDto>): Promise<ApiResponse<FacilityDto>> => {
-        return axiosClient.put<any, ApiResponse<FacilityDto>>(`/facilities/${id}`, data);
-    },
-
-    toggleFacilityStatus: async (id: number): Promise<ApiResponse<FacilityDto>> => {
-        return axiosClient.patch<any, ApiResponse<FacilityDto>>(`/facilities/${id}/toggle-status`);
-    },
-
-    getBuildings: async (facilityId: number): Promise<ApiResponse<BuildingDto[]>> => {
-        return axiosClient.get<any, ApiResponse<BuildingDto[]>>(`/facilities/${facilityId}/buildings`);
-    },
-
-    createBuilding: async (facilityId: number, data: { code: string; name: string; numberOfFloors: number }): Promise<ApiResponse<BuildingDto>> => {
-        return axiosClient.post<any, ApiResponse<BuildingDto>>(`/facilities/${facilityId}/buildings`, data);
-    },
-
     getDepartments: async (facilityId?: number, signal?: AbortSignal): Promise<ApiResponse<DepartmentDto[]>> => {
         const query = facilityId ? `?facilityId=${facilityId}` : '';
         return axiosClient.get<any, ApiResponse<DepartmentDto[]>>(`/departments${query}`, signal ? { signal } : undefined);
@@ -156,16 +129,8 @@ export const organizationApi = {
         return axiosClient.get<any, ApiResponse<BedDto[]>>(`/beds/by-room/${roomId}`);
     },
 
-    getBedsByDepartment: async (departmentId: number): Promise<ApiResponse<BedDto[]>> => {
-        return axiosClient.get<any, ApiResponse<BedDto[]>>(`/beds/by-department/${departmentId}`);
-    },
-
     createBed: async (data: { roomId: number; bedNumber: string; bedType: number; dailyRate: number; notes?: string }): Promise<ApiResponse<BedDto>> => {
         return axiosClient.post<any, ApiResponse<BedDto>>('/beds', data);
-    },
-
-    updateBedStatus: async (id: number, data: { status: number; notes?: string }): Promise<ApiResponse<BedDto>> => {
-        return axiosClient.patch<any, ApiResponse<BedDto>>(`/beds/${id}/status`, data);
     },
 
     getStaffAssignments: async (facilityId?: number): Promise<ApiResponse<StaffFacilityAssignmentDto[]>> => {

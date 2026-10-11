@@ -45,6 +45,7 @@ export const PatientAppointments: React.FC = () => {
     const [activeTab, setActiveTab] = useState(() => ({ upcoming: 'Upcoming', past: 'Past', all: 'All' }[searchParams.get('tab') ?? ''] ?? 'All'));
     const [highlightedAppId, setHighlightedAppId] = useState<number | null>(null);
     const handledDeepLink = useRef<string | null>(null);
+    const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const slotsRequest = useRef(0);
     const withdrawing = useRef<number | null>(null);
     const [withdrawingId, setWithdrawingId] = useState<number | null>(null);
@@ -250,6 +251,13 @@ export const PatientAppointments: React.FC = () => {
         }
     };
 
+    useEffect(() => () => {
+        if (scrollTimer.current !== null) {
+            clearTimeout(scrollTimer.current);
+            scrollTimer.current = null;
+        }
+    }, []);
+
     // Deep-link handling for ?appointmentId=...&action=...
     useEffect(() => {
         const appointmentIdParam = searchParams.get("appointmentId");
@@ -268,7 +276,9 @@ export const PatientAppointments: React.FC = () => {
 
         setHighlightedAppId(targetId);
 
-        setTimeout(() => {
+        if (scrollTimer.current !== null) clearTimeout(scrollTimer.current);
+        scrollTimer.current = setTimeout(() => {
+            scrollTimer.current = null;
             const el = document.getElementById(`appointment-card-${targetId}`);
             el?.scrollIntoView({ behavior: "smooth", block: "center" });
         }, 150);

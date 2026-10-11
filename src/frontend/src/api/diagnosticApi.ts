@@ -82,10 +82,6 @@ export const diagnosticApi = {
         return axiosClient.get<any, ApiResponse<PagedResult<DiagnosticOrderDto>>>('/patients/me/diagnostic-orders', { params: { page, pageSize } });
     },
 
-    getPatientOrderById: async (orderId: number): Promise<ApiResponse<DiagnosticOrderDto>> => {
-        return axiosClient.get<any, ApiResponse<DiagnosticOrderDto>>(`/patients/me/diagnostic-orders/${orderId}`);
-    },
-
     getPatientVitals: async (limit = 20): Promise<ApiResponse<any[]>> => {
         return axiosClient.get<any, ApiResponse<any[]>>('/patients/me/vitals', { params: { limit } });
     },
@@ -96,6 +92,6 @@ export const diagnosticApi = {
     },
 
     updateDiagnosticPrice: async (id: number, price: number): Promise<ApiResponse<DiagnosticServiceDto>> => {
-        return axiosClient.put<any, ApiResponse<DiagnosticServiceDto>>(`/admin/diagnostic-services/pricing/${id}`, { price });
+        return axiosClient.put<any, ApiResponse<DiagnosticServiceDto>>(`/admin/diagnostic-services/${id}/pricing`, { price });
     }
 };

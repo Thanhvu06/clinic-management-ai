@@ -93,8 +93,3 @@
     color: var(--c-muted);
     text-align: center;
 }
-
-.emptyIcon {
-    margin-bottom: 16px;
-    color: #cbd5e1;
-}

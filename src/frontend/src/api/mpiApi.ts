@@ -106,10 +106,6 @@ export const mpiApi = {
         return axiosClient.post<any, ApiResponse<MpiPatientDto>>('/mpi/patients/walk-in', payload);
     },
 
-    updatePatientMpi: async (id: number, payload: Partial<MpiPatientDto>): Promise<ApiResponse<MpiPatientDto>> => {
-        return axiosClient.put<any, ApiResponse<MpiPatientDto>>(`/mpi/patients/${id}`, payload);
-    },
-
     addAllergy: async (patientId: number, data: { allergenType: number; allergenName: string; severity: number; reactionDescription?: string }): Promise<ApiResponse<PatientAllergyDto>> => {
         return axiosClient.post<any, ApiResponse<PatientAllergyDto>>(`/mpi/patients/${patientId}/allergies`, data);
     },
