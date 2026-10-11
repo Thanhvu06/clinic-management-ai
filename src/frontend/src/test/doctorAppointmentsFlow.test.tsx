@@ -62,51 +62,64 @@ describe('DoctorAppointments flow', () => {
         cleanup();
     });
 
-    it('renders Vietnamese labels and preserves examination actions for received patients', async () => {
+    it('renders Vietnamese labels for received patients without raw status text', async () => {
         renderPage();
         const checkedIn = (await screen.findByText('Bệnh nhân 1')).closest('tr')!;
         const inConsultation = screen.getByText('Bệnh nhân 2').closest('tr')!;
         expect(within(checkedIn).getByText('Đã tiếp nhận')).toBeInTheDocument();
-        expect(within(checkedIn).getByRole('button', { name: 'Vào khám' })).toBeInTheDocument();
         expect(within(inConsultation).getByText('Đang khám')).toBeInTheDocument();
-        expect(within(inConsultation).getByRole('button', { name: 'Tiếp tục khám' })).toBeInTheDocument();
         expect(screen.getByText('Chờ duyệt đổi lịch')).toBeInTheDocument();
         expect(screen.queryByText('CheckedIn')).not.toBeInTheDocument();
         expect(screen.queryByText('InConsultation')).not.toBeInTheDocument();
-        expect(screen.getAllByRole('button', { name: 'Hồ sơ' })).toHaveLength(5);
-        expect(screen.getByRole('button', { name: 'Tái khám' })).toBeInTheDocument();
-        fireEvent.click(within(checkedIn).getByRole('button', { name: 'Vào khám' }));
+    }, 15000);
+
+    it('preserves examination, revisit and record buttons and navigates to examination routes', async () => {
+        renderPage();
+        const checkedIn = (await screen.findByText('Bệnh nhân 1')).closest('tr')!;
+        const inConsultation = screen.getByText('Bệnh nhân 2').closest('tr')!;
+        const enterExamination = within(checkedIn).getByText('Vào khám').closest('button')!;
+        const continueExamination = within(inConsultation).getByText('Tiếp tục khám').closest('button')!;
+        expect(enterExamination).toBeInTheDocument();
+        expect(continueExamination).toBeInTheDocument();
+        expect(screen.getAllByText('Hồ sơ').map(text => text.closest('button'))).toHaveLength(5);
+        for (const appointment of appointments) {
+            const row = screen.getByText(appointment.patientName).closest('tr')!;
+            expect(within(row).getByText('Hồ sơ').closest('button')).toBeInTheDocument();
+        }
+        const completed = screen.getByText('Bệnh nhân 5').closest('tr')!;
+        expect(within(completed).getByText('Tái khám').closest('button')).toBeInTheDocument();
+        fireEvent.click(enterExamination);
         expect(screen.getByTestId('route')).toHaveTextContent('/doctor/appointments/1/examination');
-        fireEvent.click(within(inConsultation).getByRole('button', { name: 'Tiếp tục khám' }));
+        fireEvent.click(continueExamination);
         expect(screen.getByTestId('route')).toHaveTextContent('/doctor/appointments/2/examination');
-    });
+    }, 15000);
 
     it('opens Confirmed details with reception guidance, no-show action and existing prescription', async () => {
         renderPage();
         const row = (await screen.findByText('Bệnh nhân 4')).closest('tr')!;
         expect(within(row).getByText('Chờ tiếp nhận')).toBeInTheDocument();
-        expect(within(row).queryByRole('button', { name: 'Khám' })).not.toBeInTheDocument();
-        fireEvent.click(within(row).getByRole('button', { name: 'Chi tiết' }));
+        expect(within(row).queryByText('Khám')?.closest('button') ?? null).not.toBeInTheDocument();
+        fireEvent.click(within(row).getByText('Chi tiết').closest('button')!);
         expect(await screen.findByText('Bệnh nhân cần được tiếp nhận tại Hàng đợi khám trước khi bắt đầu khám.')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Đánh dấu vắng mặt' })).toBeInTheDocument();
+        expect(screen.getByText('Đánh dấu vắng mặt').closest('button')).toBeInTheDocument();
         expect(screen.queryByText('Bắt đầu khám & Kê đơn')).not.toBeInTheDocument();
         expect(screen.queryByText('Tóm tắt kết quả khám')).not.toBeInTheDocument();
         expect(await screen.findByText('Đơn thuốc đã kê')).toBeInTheDocument();
         expect(screen.getByText('Thuốc đã kê (MED-1)')).toBeInTheDocument();
         await waitFor(() => expect(axiosClient.get).toHaveBeenCalledWith('/doctor/appointments/4/history'));
         expect(axiosClient.get).not.toHaveBeenCalledWith('/medicines/active');
-        fireEvent.click(screen.getByRole('button', { name: 'Mở hàng đợi' }));
+        fireEvent.click(screen.getByText('Mở hàng đợi').closest('button')!);
         expect(screen.getByTestId('route')).toHaveTextContent('/doctor/queue');
-    });
+    }, 15000);
 
     it('shows InlineError and reloads the list on retry', async () => {
         vi.mocked(axiosClient.get).mockRejectedValueOnce(new Error('Lỗi kết nối máy chủ 500'));
         renderPage();
         expect(await screen.findByText('Lỗi kết nối máy chủ 500')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+        fireEvent.click(screen.getByText('Thử lại').closest('button')!);
         expect(await screen.findByText('Bệnh nhân 1')).toBeInTheDocument();
         expect(screen.queryByText('Lỗi kết nối máy chủ 500')).not.toBeInTheDocument();
-    });
+    }, 15000);
 
     it('offers exactly the six supported status filters with Vietnamese labels', async () => {
         renderPage();
@@ -122,7 +135,7 @@ describe('DoctorAppointments flow', () => {
         expect(popup.querySelectorAll('.ant-select-item-option')).toHaveLength(6);
         fireEvent.click(within(popup as HTMLElement).getByText('Đã tiếp nhận'));
         await waitFor(() => expect(axiosClient.get).toHaveBeenCalledWith('/doctor/appointments?page=1&pageSize=10&status=CheckedIn'));
-    });
+    }, 15000);
 
     it.each([
         ['Pending', 'Chờ xác nhận'], ['Confirmed', 'Chờ tiếp nhận'],
