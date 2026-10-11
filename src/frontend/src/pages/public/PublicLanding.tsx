@@ -1,17 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Button, Flex } from 'antd';
+import { Avatar, Button, Collapse, Flex } from 'antd';
 import {
     Search, Calendar, Bot, Stethoscope, ChevronRight, CheckCircle2,
-    ShieldCheck, Clock, FileText, User, ChevronDown, ChevronUp, MapPin,
+    ShieldCheck, Clock, FileText, User, MapPin,
     Phone, Award, Sparkles, Check, CalendarCheck, Package, Pill
 } from 'lucide-react';
 import styles from './PublicLanding.module.css';
+import landingHero from '../../assets/landing-hero.jpg';
 import axiosClient from '../../api/axiosClient';
 import { AppointmentLookupModal } from '../../components/AppointmentLookupModal';
 import type { ClinicLocationDto } from '../../types';
 import { parseIncludedServices, formatVndCurrency } from '../../utils/formatters';
 import { formatDoctorName } from '../../utils/doctorNameHelper';
+
+const SectionTitle = ({ eyebrow, children }: { eyebrow: string; children: React.ReactNode }) => (
+    <>
+        <span className={styles.sectionEyebrow}>{eyebrow}</span>
+        <h2>{children}</h2>
+    </>
+);
+
+const doctorInitials = (fullName: string = '') => {
+    const name = fullName.replace(/^(?:(?:PGS|GS|ThS|TS|BS|CKII|CKI)\.?\s*)+/i, '').trim();
+    return name.split(/\s+/).filter(Boolean).slice(-2).map(word => word[0]).join('').toLocaleUpperCase('vi-VN');
+};
 
 export const PublicLanding: React.FC = () => {
     const navigate = useNavigate();
@@ -25,7 +38,7 @@ export const PublicLanding: React.FC = () => {
     const [isSearching, setIsSearching] = useState(false);
     const [showDropdown, setShowDropdown] = useState(false);
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
-    const [openFaq, setOpenFaq] = useState<number | null>(0);
+    const [openFaq, setOpenFaq] = useState<string | undefined>('0');
     
     // Filtered results for quick search dropdown
     const [filteredSpecialties, setFilteredSpecialties] = useState<any[]>([]);
@@ -83,10 +96,6 @@ export const PublicLanding: React.FC = () => {
         }
     };
 
-    const toggleFaq = (index: number) => {
-        setOpenFaq(openFaq === index ? null : index);
-    };
-
     return (
         <main className={styles.mainContainer}>
             <AppointmentLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} />
@@ -102,26 +111,29 @@ export const PublicLanding: React.FC = () => {
                                 Đặt khám chuyên khoa dễ dàng, định tuyến triệu chứng chuẩn xác bằng Trí tuệ Nhân tạo và quản lý hồ sơ bệnh án trực tuyến 24/7.
                             </p>
                             
-                            <Flex wrap className={styles.heroActions}>
-                                <Link to="/patient/book" className={styles.btnPrimary} title="Đặt lịch khám">
-                                    <Calendar size={18} /> Đặt lịch khám
-                                </Link>
-                                <Link to="/specialties" className={styles.btnSecondary} title="Xem danh mục chuyên khoa">
-                                    <Stethoscope size={18} /> Tìm chuyên khoa
-                                </Link>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsLookupModalOpen(true)}
-                                    className={`${styles.btnSecondary} ${styles.btnLookup}`}
-                                    title="Tra cứu lịch hẹn"
-                                >
-                                    <Search size={18} /> Tra cứu lịch hẹn
-                                </button>
+                            <Flex className={styles.heroActions}>
+                                <Button type="primary" size="large" href="/patient/book" title="Đặt lịch khám" icon={<Calendar size={18} />}>
+                                    Đặt lịch khám
+                                </Button>
+                                <Button size="large" href="/patient/ai-consultation" icon={<Bot size={18} />}>
+                                    Trò chuyện với Trợ lý AI
+                                </Button>
+                            </Flex>
+                            <Flex wrap className={styles.heroTools}>
+                                <Button type="link" href="/specialties" title="Xem danh mục chuyên khoa" icon={<Stethoscope size={16} />}>
+                                    Tìm chuyên khoa
+                                </Button>
                                 <Button
-                                    type="default"
-                                    size="large"
-                                    className={styles.btnMedicine}
-                                    icon={<Pill size={18} />}
+                                    type="link"
+                                    onClick={() => setIsLookupModalOpen(true)}
+                                    title="Tra cứu lịch hẹn"
+                                    icon={<Search size={16} />}
+                                >
+                                    Tra cứu lịch hẹn
+                                </Button>
+                                <Button
+                                    type="link"
+                                    icon={<Pill size={16} />}
                                     onClick={() => navigate('/medicines')}
                                     title="Tra giá thuốc"
                                 >
@@ -139,7 +151,7 @@ export const PublicLanding: React.FC = () => {
                         <div className={styles.heroImageWrapper}>
                             <div className={styles.imageDecoration}></div>
                             <img 
-                                src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=800" 
+                                src={landingHero}
                                 alt="Bác sĩ chuyên khoa ClinicCare" 
                                 className={styles.heroImage}
                             />
@@ -282,7 +294,7 @@ export const PublicLanding: React.FC = () => {
                 <div className={styles.container}>
                     <div className={styles.sectionHeader}>
                         <div>
-                            <h2>Danh mục Chuyên khoa</h2>
+                            <SectionTitle eyebrow="CHUYÊN KHOA">Danh mục <span className={styles.titleAccent}>Chuyên khoa</span></SectionTitle>
                             <p className={styles.sectionDescription}>Đa dạng chuyên khoa y tế phục vụ khám chữa bệnh toàn diện</p>
                         </div>
                         <Link to="/specialties" className={styles.viewAll}>
@@ -327,7 +339,7 @@ export const PublicLanding: React.FC = () => {
                 <div className={styles.container}>
                     <div className={styles.sectionHeader}>
                         <div>
-                            <h2>Gói Chăm Sóc Sức Khỏe ClinicCare</h2>
+                            <SectionTitle eyebrow="GÓI KHÁM">Gói <span className={styles.titleAccent}>Chăm Sóc Sức Khỏe</span> ClinicCare</SectionTitle>
                             <p className={styles.sectionDescription}>Thiết kế khoa học, tiết kiệm chi phí và tầm soát toàn diện từng đối tượng</p>
                         </div>
                         <Link to="/health-packages" className={styles.viewAll}>
@@ -405,18 +417,20 @@ export const PublicLanding: React.FC = () => {
                             <h2>Bạn chưa rõ nên khám chuyên khoa nào?</h2>
                             <p>Trợ lý AI của ClinicCare giúp bạn phân tích sơ bộ các biểu hiện bất thường để gợi ý chuyên khoa phù hợp và tiết kiệm thời gian nhất.</p>
                             <div className={styles.symptomChips}>
-                                <span className={styles.chip}>Đau tức ngực, hồi hộp</span>
-                                <span className={styles.chip}>Đau đầu, chóng mặt kéo dài</span>
-                                <span className={styles.chip}>Ho sốt, đau rát họng</span>
-                                <span className={styles.chip}>Đau nhức khớp gối, thắt lưng</span>
+                                {['Đau tức ngực, hồi hộp', 'Đau đầu, chóng mặt kéo dài', 'Ho sốt, đau rát họng', 'Đau nhức khớp gối, thắt lưng'].map(symptom => (
+                                    <Button key={symptom} shape="round" className={styles.chip} onClick={() => navigate('/patient/ai-consultation')}>{symptom}</Button>
+                                ))}
                             </div>
                             <div className={styles.aiWarning}>
                                 <ShieldCheck size={18} /> 
                                 <span>Lưu ý an toàn: Trợ lý AI chỉ mang tính định tuyến tham khảo, không chẩn đoán hay kê đơn thuốc.</span>
                             </div>
-                            <Link to="/patient/ai-consultation" className={styles.btnAi}>
-                                <Bot size={20} /> Trò chuyện với Trợ lý AI
-                            </Link>
+                            <Flex wrap className={styles.aiActions}>
+                                <Link to="/patient/ai-consultation" className={styles.btnAi}>
+                                    <Bot size={20} /> Trò chuyện với Trợ lý AI
+                                </Link>
+                                <Button size="large" href="/patient/book" className={styles.aiBooking}>Đặt lịch khám ngay</Button>
+                            </Flex>
                         </div>
                         <div className={styles.aiTeaserVisual}>
                             <div className={styles.aiCircle}>
@@ -432,7 +446,7 @@ export const PublicLanding: React.FC = () => {
                 <div className={styles.container}>
                     <div className={styles.sectionHeader}>
                         <div>
-                            <h2>Đội ngũ Bác sĩ Chuyên khoa</h2>
+                            <SectionTitle eyebrow="ĐỘI NGŨ BÁC SĨ">Đội ngũ <span className={styles.titleAccent}>Bác sĩ Chuyên khoa</span></SectionTitle>
                             <p className={styles.sectionDescription}>Bác sĩ giỏi chuyên môn, giàu y đức và giàu kinh nghiệm điều trị</p>
                         </div>
                         <Link to="/doctors" className={styles.viewAll}>
@@ -450,9 +464,7 @@ export const PublicLanding: React.FC = () => {
                         <div className={styles.grid4}>
                             {doctors.slice(0, 4).map(doc => (
                                 <div key={doc.id} className={styles.doctorCard}>
-                                    <div className={styles.doctorAvatar}>
-                                        <User size={40} className={styles.placeholderAvatar} />
-                                    </div>
+                                    <Avatar size={100} className={styles.doctorAvatar}>{doctorInitials(doc.fullName)}</Avatar>
                                     <div className={styles.doctorInfo}>
                                         <h3>{formatDoctorName(doc.academicTitle, doc.fullName)}</h3>
                                         <p className={styles.doctorSpec}>{doc.specialtyName || 'Bác sĩ Đa khoa'}</p>
@@ -472,6 +484,9 @@ export const PublicLanding: React.FC = () => {
                     ) : (
                         <div className={styles.emptyState}>Chưa có dữ liệu bác sĩ</div>
                     )}
+                    <div className={styles.doctorBooking}>
+                        <Button type="primary" size="large" href="/patient/book">Đặt lịch khám với bác sĩ</Button>
+                    </div>
                 </div>
             </section>
 
@@ -480,7 +495,7 @@ export const PublicLanding: React.FC = () => {
                 <div className={styles.container}>
                     <div className={styles.sectionHeader}>
                         <div>
-                            <h2>Hệ thống Điểm khám ClinicCare</h2>
+                            <SectionTitle eyebrow="ĐIỂM KHÁM">Hệ thống <span className={styles.titleAccent}>Điểm khám</span> ClinicCare</SectionTitle>
                             <p className={styles.sectionDescription}>Mạng lưới phòng khám rộng khắp, cơ sở vật chất khang trang, hiện đại</p>
                         </div>
                         <Link to="/locations" className={styles.viewAll}>
@@ -517,30 +532,30 @@ export const PublicLanding: React.FC = () => {
             <section className={styles.processSection}>
                 <div className={styles.container}>
                     <div className={styles.sectionHeaderCenter}>
-                        <h2>Quy trình đặt lịch 4 bước đơn giản</h2>
+                        <SectionTitle eyebrow="QUY TRÌNH">Quy trình đặt lịch <span className={styles.titleAccent}>4 bước đơn giản</span></SectionTitle>
                         <p>Tiết kiệm thời gian, tối ưu trải nghiệm khám chữa bệnh</p>
                     </div>
                     <div className={styles.processSteps}>
                         <div className={styles.stepCard}>
-                            <div className={styles.stepNumber}>1</div>
+                            <div className={styles.stepNumber}>01</div>
                             <div className={styles.stepIcon}><Stethoscope size={24} /></div>
                             <h3>Chọn chuyên khoa</h3>
                             <p>Tự chọn chuyên khoa mong muốn hoặc nhờ AI phân tích triệu chứng.</p>
                         </div>
                         <div className={styles.stepCard}>
-                            <div className={styles.stepNumber}>2</div>
+                            <div className={styles.stepNumber}>02</div>
                             <div className={styles.stepIcon}><Calendar size={24} /></div>
                             <h3>Chọn bác sĩ & Giờ khám</h3>
                             <p>Chọn khung giờ 30 phút thuận tiện với lịch trình của bạn.</p>
                         </div>
                         <div className={styles.stepCard}>
-                            <div className={styles.stepNumber}>3</div>
+                            <div className={styles.stepNumber}>03</div>
                             <div className={styles.stepIcon}><Clock size={24} /></div>
                             <h3>Nhận mã hẹn tức thì</h3>
                             <p>Hệ thống tự động xác nhận và lưu trữ trong tài khoản của bạn.</p>
                         </div>
                         <div className={styles.stepCard}>
-                            <div className={styles.stepNumber}>4</div>
+                            <div className={styles.stepNumber}>04</div>
                             <div className={styles.stepIcon}><FileText size={24} /></div>
                             <h3>Khám & Nhận đơn thuốc</h3>
                             <p>Đến khám đúng giờ và tra cứu kết quả, đơn thuốc trực tuyến.</p>
@@ -553,29 +568,33 @@ export const PublicLanding: React.FC = () => {
             <section className={styles.faqSection}>
                 <div className={styles.container}>
                     <div className={styles.sectionHeaderCenter}>
-                        <h2>Câu hỏi thường gặp</h2>
+                        <SectionTitle eyebrow="HỎI ĐÁP">Câu hỏi <span className={styles.titleAccent}>thường gặp</span></SectionTitle>
                         <p>Giải đáp thắc mắc phổ biến về quy trình khám bệnh tại ClinicCare</p>
                     </div>
 
                     <div className={styles.faqContainer}>
-                        {faqItems.map((item, idx) => (
-                            <div key={idx} className={styles.faqItem}>
-                                <button 
-                                    type="button" 
-                                    onClick={() => toggleFaq(idx)} 
-                                    className={styles.faqQuestion}
-                                >
-                                    <span>{item.question}</span>
-                                    {openFaq === idx ? <ChevronUp size={20} color="var(--cc-color-info)" /> : <ChevronDown size={20} color="var(--cc-color-text-secondary)" />}
-                                </button>
-                                {openFaq === idx && (
-                                    <div className={styles.faqAnswer}>
-                                        {item.answer}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
+                        <Collapse accordion collapsible="icon" activeKey={openFaq ? [openFaq] : []}
+                            onChange={keys => setOpenFaq(Array.isArray(keys) ? keys[0] : keys)}
+                            items={faqItems.map((item, idx) => ({
+                                key: String(idx),
+                                label: <Button type="text" className={styles.faqQuestion}
+                                    aria-expanded={openFaq === String(idx)}
+                                    onClick={() => setOpenFaq(openFaq === String(idx) ? undefined : String(idx))}>
+                                    {item.question}
+                                </Button>,
+                                children: <p className={styles.faqAnswer}>{item.answer}</p>
+                            }))} />
                     </div>
+                </div>
+            </section>
+            <section className={styles.finalCallToAction} aria-labelledby="landing-booking-title">
+                <div className={styles.container}>
+                    <h2 id="landing-booking-title">Sẵn sàng đặt lịch khám?</h2>
+                    <p>Chọn bác sĩ và giờ khám trực tuyến, nhận mã lịch hẹn ngay.</p>
+                    <Flex className={styles.finalActions}>
+                        <Button type="primary" size="large" href="/patient/book">Đặt lịch khám</Button>
+                        <Button size="large" href="/patient/ai-consultation">Trò chuyện với Trợ lý AI</Button>
+                    </Flex>
                 </div>
             </section>
         </main>
