@@ -22,7 +22,7 @@
 }
 
 .heroText {
-    flex: 1;
+    flex: 1.2;
     min-width: 0;
 }
 
@@ -55,8 +55,31 @@
 .heroActions {
     display: flex;
     gap: var(--cc-space-md);
-    margin-bottom: var(--cc-space-xl);
+    margin-bottom: var(--cc-space-sm);
     align-items: center;
+}
+
+.heroTools {
+    gap: var(--cc-space-xxs);
+    margin-bottom: var(--cc-space-lg);
+}
+
+.heroTools > * {
+    padding-inline: var(--cc-space-xs);
+    color: var(--cc-color-primary);
+}
+
+.sectionEyebrow {
+    display: block;
+    margin-bottom: var(--cc-space-xs);
+    color: var(--cc-color-secondary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+}
+
+.titleAccent {
+    color: var(--cc-color-primary);
 }
 
 .btnPrimary {
@@ -426,11 +449,27 @@
 }
 
 .chip {
+    color: var(--cc-color-bg-container);
     background: color-mix(in srgb, var(--cc-color-bg-container) 15%, transparent);
     padding: var(--cc-space-xs) var(--cc-space-md);
     border-radius: var(--cc-radius-full);
     font-size: 0.9rem;
     border: 1px solid color-mix(in srgb, var(--cc-color-bg-container) 20%, transparent);
+}
+
+.aiActions {
+    align-items: center;
+    gap: var(--cc-space-md);
+}
+
+.aiActions .aiBooking {
+    height: auto;
+    padding: var(--cc-space-md) var(--cc-space-lg);
+    border-radius: var(--cc-radius-full);
+    background: transparent;
+    color: var(--cc-color-bg-container);
+    border-color: var(--cc-color-bg-container);
+    font-weight: 600;
 }
 
 .aiWarning {
@@ -484,6 +523,8 @@
 
 /* Doctor Cards */
 .doctorCard {
+    display: flex;
+    flex-direction: column;
     background: var(--cc-color-bg-container);
     border: 1px solid var(--cc-color-border);
     border-radius: 16px;
@@ -499,21 +540,25 @@
 }
 
 .doctorAvatar {
-    width: 100px;
-    height: 100px;
-    background-color: var(--cc-color-bg-layout);
+    flex-shrink: 0;
+    background-color: var(--cc-color-primary-light);
+    color: var(--cc-color-primary);
+    font-weight: 700;
     border-radius: 50%;
     margin: 0 auto var(--cc-space-md);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     overflow: hidden;
     border: 3px solid var(--cc-color-primary-light);
 }
 
-.placeholderAvatar {
-    color: var(--cc-color-text-secondary);
-    opacity: 0.5;
+.doctorInfo {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.doctorBooking {
+    margin-top: var(--cc-space-xl);
+    text-align: center;
 }
 
 .doctorInfo h3 {
@@ -555,7 +600,23 @@
 /* Process Section */
 .processSection {
     padding: calc(var(--cc-space-xl) * 2 + var(--cc-space-md)) 0;
-    background-color: var(--cc-color-bg-layout);
+    background-color: var(--cc-color-navy);
+    color: var(--cc-color-bg-container);
+}
+
+.processSection h2,
+.processSection .stepCard h3 {
+    color: var(--cc-color-bg-container);
+}
+
+.processSection .sectionHeaderCenter p,
+.processSection .stepCard p {
+    color: var(--cc-color-border);
+}
+
+.processSection .sectionEyebrow,
+.processSection .titleAccent {
+    color: var(--cc-color-primary-light);
 }
 
 .processSteps {
@@ -569,22 +630,20 @@
 .processSteps::before {
     content: '';
     position: absolute;
-    top: 50px;
+    top: 42px;
     left: 12%;
     right: 12%;
     height: 2px;
-    background-color: var(--cc-color-border);
+    background-color: color-mix(in srgb, var(--cc-color-bg-container) 25%, transparent);
     z-index: 0;
 }
 
 .stepCard {
-    background: var(--cc-color-bg-container);
-    padding: var(--cc-space-xl) var(--cc-space-lg);
+    padding: 0 var(--cc-space-lg);
     border-radius: 16px;
     text-align: center;
     position: relative;
     z-index: 1;
-    box-shadow: var(--cc-shadow-sm);
     transition: transform 0.3s;
 }
 
@@ -594,21 +653,17 @@
 }
 
 .stepNumber {
-    position: absolute;
-    top: -15px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 30px;
-    height: 30px;
-    background-color: var(--cc-color-primary);
-    color: var(--cc-color-bg-container);
-    border-radius: 50%;
+    position: relative;
+    width: 100px;
+    height: 84px;
+    margin: 0 auto var(--cc-space-md);
+    background-color: var(--cc-color-navy);
+    color: var(--cc-color-primary-light);
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: bold;
-    font-size: 0.9rem;
-    border: 3px solid var(--cc-color-bg-layout);
+    font-size: 3.5rem;
 }
 
 .stepIcon {
@@ -744,7 +799,7 @@
     .heroText p {
         margin: 0 auto var(--cc-space-xl);
     }
-    .heroActions, .trustPoints {
+    .heroActions, .heroTools, .trustPoints {
         justify-content: center;
     }
     .processSteps {
@@ -979,21 +1034,23 @@
 
 .faqQuestion {
     width: 100%;
-    padding: var(--cc-space-lg) var(--cc-space-lg);
+    height: auto;
+    padding: 0;
     background: none;
     border: none;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     font-size: 1rem;
     font-weight: 600;
     color: var(--cc-color-text-dark);
     cursor: pointer;
     text-align: left;
+    white-space: normal;
 }
 
 .faqAnswer {
-    padding: 0 var(--cc-space-lg) var(--cc-space-lg);
+    margin: 0;
     font-size: 0.95rem;
     color: var(--cc-color-text-secondary);
     line-height: 1.6;
@@ -1029,13 +1086,13 @@
 }
 
 .heroActions > * {
-    flex: 0 0 auto;
+    flex: 1 1 0;
     justify-content: center;
     white-space: nowrap;
     min-height: calc(var(--cc-control-height) + var(--cc-space-sm));
     height: auto;
-    padding: var(--cc-space-sm) var(--cc-space-lg);
-    font-size: 1rem;
+    padding: var(--cc-space-sm);
+    font-size: 0.875rem;
     line-height: 1.5;
 }
 
@@ -1053,18 +1110,6 @@
 .btnSearch,
 .viewAll {
     white-space: nowrap;
-}
-
-.heroActions .btnMedicine {
-    border-radius: var(--cc-radius-full);
-    color: var(--cc-color-primary);
-    border-color: var(--cc-color-primary);
-}
-
-.heroActions .btnLookup {
-    background: var(--cc-color-info-bg);
-    border-color: var(--cc-color-info);
-    color: var(--cc-color-info);
 }
 
 .searchInputWrapper:focus-within {
@@ -1206,7 +1251,8 @@
 .doctorActions {
     display: flex;
     gap: var(--cc-space-xs);
-    margin-top: var(--cc-space-sm);
+    margin-top: auto;
+    padding-top: var(--cc-space-sm);
 }
 
 .doctorAction {
@@ -1229,4 +1275,38 @@
 .faqSection {
     padding: calc(var(--cc-space-xl) * 2) 0;
     background-color: var(--cc-color-bg-subtle);
+}
+
+.finalCallToAction {
+    padding: calc(var(--cc-space-xl) * 2) 0;
+    background: var(--cc-color-primary-light);
+    text-align: center;
+}
+
+.finalCallToAction h2 {
+    color: var(--cc-color-text-dark);
+    font-size: 2rem;
+    margin-bottom: var(--cc-space-sm);
+}
+
+.finalCallToAction p {
+    color: var(--cc-color-text-secondary);
+    margin-bottom: var(--cc-space-lg);
+}
+
+.finalActions {
+    justify-content: center;
+    gap: var(--cc-space-md);
+}
+
+@media (max-width: 576px) {
+    .aiActions,
+    .finalActions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .aiActions > * {
+        justify-content: center;
+    }
 }
