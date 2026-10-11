@@ -98,17 +98,6 @@
     position: relative;
 }
 
-.medicineRow {
-    background-color: var(--cc-color-bg-subtle);
-    padding: 12px;
-    border-radius: var(--cc-radius-md);
-    border: 1px solid var(--cc-color-border);
-}
-
-.medicineRow + .medicineRow {
-    margin-top: 10px;
-}
-
 .infoBanner {
     padding: 12px;
     border-radius: var(--cc-radius-sm);
@@ -123,4 +112,87 @@
 .infoBannerWarning {
     background-color: var(--cc-color-warning-bg);
     color: var(--cc-color-warning);
+}
+
+.clockIcon {
+    margin-right: var(--cc-space-xxs);
+    vertical-align: -2px;
+}
+
+.mediumText {
+    font-weight: 500;
+}
+
+.strongText {
+    font-weight: 600;
+}
+
+.searchInput {
+    flex: 1 1 250px;
+}
+
+.mutedIcon {
+    color: var(--cc-color-text-muted);
+}
+
+.dateFilter {
+    width: 200px;
+}
+
+.statusFilter {
+    width: 220px;
+}
+
+.modalPatientName {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.detailBlock {
+    margin-bottom: var(--cc-space-lg);
+}
+
+.statusRow {
+    margin-bottom: var(--cc-space-xs);
+}
+
+.historyAction {
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.historyNote {
+    font-size: 0.85rem;
+    color: var(--cc-color-text);
+    margin-top: var(--cc-space-xxs);
+}
+
+.detailActions {
+    margin-top: var(--cc-space-lg);
+}
+
+.prescriptionSection {
+    margin-top: var(--cc-space-lg);
+    border-top: 1px solid var(--cc-color-border);
+    padding-top: var(--cc-space-md);
+}
+
+.prescriptionHeader {
+    margin-bottom: var(--cc-space-sm);
+}
+
+.primaryIcon {
+    color: var(--cc-color-primary);
+}
+
+.prescriptionTitle {
+    margin: 0;
+    color: var(--cc-color-text-dark);
+}
+
+.prescriptionNotes {
+    font-size: 0.9rem;
+    color: var(--cc-color-text);
+    margin-bottom: var(--cc-space-sm);
+    font-style: italic;
 }
