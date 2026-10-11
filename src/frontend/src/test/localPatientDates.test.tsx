@@ -23,7 +23,7 @@ beforeEach(() => {
         url.includes('available-slots') ? [] :
         url === '/specialties' ? [{ id: 1, specialtyName: 'Nội khoa' }] :
         url.includes('/doctors') && !url.includes('available-slots') ? [{ id: 2, fullName: 'Lan', specialtyId: 1 }] :
-        url.startsWith('/appointments/my') ? { items: [{ id: 1, appointmentCode: 'LOCAL', status: 'Confirmed', slotDate: '2026-10-05', doctorId: 2, specialtyId: 1, startTime: '08:00', endTime: '08:30' }] } : { items: [] } }));
+        url.startsWith('/appointments/my') ? { items: [{ id: 1, appointmentCode: 'LOCAL', status: 'Confirmed', appointmentDate: '2026-10-05', doctorId: 2, specialtyId: 1, startTime: '08:00', endTime: '08:30' }] } : { items: [] } }));
 });
 afterEach(() => { vi.useRealTimers(); if (oldTZ === undefined) delete process.env.TZ; else process.env.TZ = oldTZ; });
 const mount = (node: React.ReactNode) => render(<MemoryRouter><ChatProvider>{node}</ChatProvider></MemoryRouter>);
