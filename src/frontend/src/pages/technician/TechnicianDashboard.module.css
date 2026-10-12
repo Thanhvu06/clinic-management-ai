@@ -1,21 +1,31 @@
 .dashboard { min-width: 0; }
 .statGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--cc-space-md); margin-bottom: var(--cc-space-lg); }
+.statFilter { min-width: 0; border-radius: var(--cc-radius-lg); cursor: pointer; }
+.statFilterActive, .statFilter:focus-visible { outline: 2px solid var(--cc-color-primary); outline-offset: 2px; }
+.updatedAt { color: var(--cc-color-text-muted); font-size: 12px; margin: 0 0 var(--cc-space-sm); text-align: right; }
 .filters { margin-bottom: var(--cc-space-lg); }
 .filterRow, .filterControls, .searchForm { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); min-width: 0; }
 .filterRow { gap: var(--cc-space-md); }
 .searchForm { flex: 1; }
 .searchForm > :first-child { flex: 1; min-width: 200px; }
 .statusFilter { width: 190px; }
+.categoryFilter { width: 210px; }
 .dateFilter { width: 160px; }
 .tableScroll { min-width: 0; max-width: 100%; overflow-x: auto; }
 .tableScroll table { min-width: 1000px; }
 .orderCode { color: var(--cc-color-primary); }
 .secondary, .serviceNames { color: var(--cc-color-text-secondary); font-size: 12px; }
-.serviceNames { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.serviceNames { max-width: 260px; overflow-wrap: anywhere; line-height: 1.5; }
+.categoryTags { display: flex; flex-wrap: wrap; gap: var(--cc-space-xxs); margin-bottom: var(--cc-space-xxs); }
+.categoryTag { display: inline-flex; align-items: center; gap: var(--cc-space-xxs); margin: 0; color: var(--cc-color-primary); background: var(--cc-color-primary-light); border-color: var(--cc-color-border-light); }
+.waitTime, .waitWarning, .waitDanger { display: inline-block; white-space: nowrap; }
+.waitWarning, .waitDanger { padding: var(--cc-space-xxs) var(--cc-space-xs); border-radius: var(--cc-radius-sm); font-weight: 600; }
+.waitWarning { color: var(--cc-color-warning); background: var(--cc-color-warning-bg); }
+.waitDanger { color: var(--cc-color-danger); background: var(--cc-color-danger-bg); }
 .dashboard :global(.ant-btn) { white-space: nowrap; }
 @media (max-width: 767px) {
     .statGrid { grid-template-columns: 1fr; }
     .filterControls { width: 100%; }
-    .statusFilter, .dateFilter { flex: 1; min-width: 140px; }
+    .statusFilter, .dateFilter, .categoryFilter { flex: 1; min-width: 140px; }
 }
 @media (max-width: 480px) { .searchForm { width: 100%; flex: auto; } .searchForm > :first-child { min-width: 0; width: 100%; } }
