@@ -304,6 +304,11 @@ using (var scope = app.Services.CreateScope())
     if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("DemoSeed:Enabled"))
     {
         await ClinicManagement.Infrastructure.Persistence.DevelopmentDataSeeder.SeedAsync(scope.ServiceProvider);
+        await MedicineImageSeeder.SeedAsync(db,
+            scope.ServiceProvider.GetRequiredService<MedicineImageStorage>(),
+            scope.ServiceProvider.GetRequiredService<IWebHostEnvironment>(),
+            scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(MedicineImageSeeder)),
+            app.Lifetime.ApplicationStopping);
     }
 }
 
