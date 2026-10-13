@@ -15,6 +15,24 @@ namespace ClinicManagement.Api.Controllers;
 [Authorize(Roles = RoleNames.DiagnosticTechnician)]
 public class DiagnosticTechnicianController : ControllerBase
 {
+    [HttpPost("orders/{orderId}/items/{itemId}/specimen/collect")]
+    public async Task<IActionResult> CollectSpecimen(long orderId, long itemId, [FromBody] CollectSpecimenRequest request)
+    {
+        return Ok(ApiResponse<DiagnosticOrderDto>.Ok(await _workflowService.CollectSpecimenAsync(orderId, itemId, request)));
+    }
+
+    [HttpPost("orders/{orderId}/items/{itemId}/specimen/receive")]
+    public async Task<IActionResult> ReceiveSpecimen(long orderId, long itemId, [FromBody] ReceiveSpecimenRequest request)
+    {
+        return Ok(ApiResponse<DiagnosticOrderDto>.Ok(await _workflowService.ReceiveSpecimenAsync(orderId, itemId, request)));
+    }
+
+    [HttpPost("orders/{orderId}/items/{itemId}/specimen/reject")]
+    public async Task<IActionResult> RejectSpecimen(long orderId, long itemId, [FromBody] RejectSpecimenRequest request)
+    {
+        return Ok(ApiResponse<DiagnosticOrderDto>.Ok(await _workflowService.RejectSpecimenAsync(orderId, itemId, request)));
+    }
+
     private readonly IDiagnosticWorkflowService _workflowService;
 
     public DiagnosticTechnicianController(IDiagnosticWorkflowService workflowService)

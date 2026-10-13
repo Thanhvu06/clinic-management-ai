@@ -624,6 +624,14 @@ public static class DevelopmentDataSeeder
 
         foreach (var ds in diagnosticServiceDefs)
         {
+            // Only laboratory services declare a specimen workflow; existing items keep NotRequired.
+            (ds.SpecimenType, ds.ContainerType) = ds.Code switch
+            {
+                "LAB-CBC" => ("Máu toàn phần", "Ống EDTA (nắp tím)"),
+                "LAB-GLU" => ("Huyết tương", "Ống Natri Fluoride (nắp xám)"),
+                "LAB-LIPID" or "LAB-LFT" or "LAB-RFT" => ("Huyết thanh", "Ống Serum có hạt (nắp đỏ)"),
+                _ => ((string?)null, (string?)null)
+            };
             var existing = await db.DiagnosticServices.FirstOrDefaultAsync(s => s.Code == ds.Code);
             if (existing == null)
             {
@@ -634,6 +642,8 @@ public static class DevelopmentDataSeeder
                 existing.Name = ds.Name;
                 existing.Category = ds.Category;
                 existing.PreparationInstructions = ds.PreparationInstructions;
+                existing.SpecimenType = ds.SpecimenType;
+                existing.ContainerType = ds.ContainerType;
                 existing.IsActive = true;
                 if (!existing.Price.HasValue || existing.Price.Value <= 0)
                 {

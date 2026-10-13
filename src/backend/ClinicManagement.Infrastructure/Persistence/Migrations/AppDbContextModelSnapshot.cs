@@ -1164,6 +1164,12 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<DateTime?>("CollectedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CollectedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<long>("DiagnosticOrderId")
                         .HasColumnType("bigint");
 
@@ -1178,10 +1184,46 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Property<long?>("PackageRegistrationId")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTime?>("ReceivedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ReceivedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("RecollectCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("RejectedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("RejectedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RejectionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
+
+                    b.Property<string>("SpecimenBarcode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("SpecimenStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("NotRequired");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1192,6 +1234,10 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.HasIndex("DiagnosticServiceId");
 
                     b.HasIndex("PackageRegistrationId");
+
+                    b.HasIndex("SpecimenBarcode")
+                        .IsUnique()
+                        .HasFilter("[SpecimenBarcode] IS NOT NULL");
 
                     b.HasIndex("DiagnosticOrderId", "DiagnosticServiceId")
                         .IsUnique();
@@ -1336,6 +1382,10 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("ContainerType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -1353,6 +1403,10 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Property<decimal?>("Price")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("SpecimenType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
 

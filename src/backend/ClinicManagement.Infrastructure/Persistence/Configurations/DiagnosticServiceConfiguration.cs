@@ -23,6 +23,8 @@ public class DiagnosticServiceConfiguration : IEntityTypeConfiguration<Diagnosti
             .HasConversion<string>();
 
         builder.Property(s => s.PreparationInstructions).HasMaxLength(1000);
+        builder.Property(s => s.SpecimenType).HasMaxLength(100);
+        builder.Property(s => s.ContainerType).HasMaxLength(100);
         builder.Property(s => s.Price).HasPrecision(18, 2);
         builder.Property(s => s.IsActive).IsRequired().HasDefaultValue(true);
     }

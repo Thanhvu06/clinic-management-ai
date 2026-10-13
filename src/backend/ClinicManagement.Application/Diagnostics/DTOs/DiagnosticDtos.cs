@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using ClinicManagement.Domain.Enums;
 
 namespace ClinicManagement.Application.Diagnostics.DTOs;
 
@@ -87,6 +88,39 @@ public class DiagnosticOrderItemDto
     public string? RowVersion { get; set; }
     public DiagnosticResultDto? Result { get; set; }
     public List<DiagnosticServiceParameterDto> Parameters { get; set; } = new();
+    public string SpecimenStatus { get; set; } = string.Empty;
+    public string? SpecimenType { get; set; }
+    public string? ContainerType { get; set; }
+    public string? SpecimenBarcode { get; set; }
+    public DateTime? CollectedAtUtc { get; set; }
+    public string? CollectedByUserName { get; set; }
+    public DateTime? ReceivedAtUtc { get; set; }
+    public string? ReceivedByUserName { get; set; }
+    public DateTime? RejectedAtUtc { get; set; }
+    public string? RejectedByUserName { get; set; }
+    public string? RejectionReason { get; set; }
+    public string? RejectionNote { get; set; }
+    public int RecollectCount { get; set; }
+}
+
+public class CollectSpecimenRequest
+{
+    public string? RowVersion { get; set; }
+    [MaxLength(500)]
+    public string? Note { get; set; }
+}
+
+public class ReceiveSpecimenRequest
+{
+    public string? RowVersion { get; set; }
+}
+
+public class RejectSpecimenRequest
+{
+    public SpecimenRejectionReason Reason { get; set; }
+    [MaxLength(500)]
+    public string? Note { get; set; }
+    public string? RowVersion { get; set; }
 }
 
 public class DiagnosticOrderDto

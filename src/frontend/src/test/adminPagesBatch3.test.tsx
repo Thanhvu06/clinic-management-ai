@@ -173,7 +173,7 @@ describe('Admin Billing batch 3', () => {
         const today = new Date(); const from = new Date(today); from.setDate(from.getDate() - 30);
         const date = (value: Date) => [value.getFullYear(), String(value.getMonth() + 1).padStart(2, '0'), String(value.getDate()).padStart(2, '0')].join('-');
         await waitFor(() => expect(billingApi.admin.getRevenueReport).toHaveBeenCalledWith(date(from), date(today)));
-        expect(screen.getByRole('textbox', { name: 'Từ ngày' })).toHaveValue(date(from));
+        await waitFor(() => expect(screen.getByRole('textbox', { name: 'Từ ngày' })).toHaveValue(date(from)));
     });
     it('rejects an inverted date range without requesting a report', async () => {
         showBilling(); await screen.findByText('45 lượt');

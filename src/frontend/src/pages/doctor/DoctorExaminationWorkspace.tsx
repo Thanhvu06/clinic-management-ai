@@ -11,6 +11,7 @@ import {
 import { doctorApi } from '../../api/doctorApi';
 import { diagnosticApi } from '../../api/diagnosticApi';
 import { diagnosticResultFlagLabels, diagnosticFlagTone } from '../../utils/diagnosticLabels';
+import { specimenStatusLabels, specimenRejectionLabels } from '../../utils/diagnosticLabels';
 import type {
     PatientClinicalContextDto,
     SaveEncounterRequest,
@@ -1609,6 +1610,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                     header: "Dịch vụ chỉ định", accessor: (item) => {
                                                         return <>
                                                             <div className={tabStyles.itemTitle}>{item.serviceName}</div>
+                                                            {item.specimenStatus && item.specimenStatus !== 'NotRequired' && <span className={item.specimenStatus === 'Rejected' ? tabStyles.specimenRejected : tabStyles.specimenStatus}>
+                                                                {item.specimenStatus === 'Rejected' ? `Mẫu bị từ chối – đang lấy lại: ${item.rejectionReason ? specimenRejectionLabels[item.rejectionReason] : '—'}` : specimenStatusLabels[item.specimenStatus]}
+                                                            </span>}
                                                             {item.result?.hasCriticalValue && <span className={tabStyles.criticalBadge}>Giá trị nguy hiểm</span>}
                                                             <div className={tabStyles.secondaryCaption}>{item.serviceCode}</div>
                                                         </>;

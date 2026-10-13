@@ -2,6 +2,12 @@ export type DiagnosticCategory = 'Laboratory' | 'Ultrasound' | 'Imaging' | 'Othe
 export type DiagnosticOrderStatus = 'Ordered' | 'InProgress' | 'Completed' | 'Cancelled';
 export type DiagnosticItemStatus = 'Ordered' | 'InProgress' | 'Completed' | 'Cancelled';
 export type DiagnosticResultFlag = 'Normal' | 'Low' | 'High' | 'CriticalLow' | 'CriticalHigh';
+export type SpecimenStatus = 'NotRequired' | 'PendingCollection' | 'Collected' | 'Received' | 'Rejected';
+export type SpecimenRejectionReason = 'Hemolyzed' | 'Clotted' | 'InsufficientVolume' | 'WrongContainer' | 'LeakedOrBroken' | 'LabelMismatch' | 'PatientNotPrepared' | 'Other';
+
+export interface CollectSpecimenRequest { rowVersion?: string | null; note?: string; }
+export interface ReceiveSpecimenRequest { rowVersion?: string | null; }
+export interface RejectSpecimenRequest { reason: number; note?: string; rowVersion?: string | null; }
 
 export interface DiagnosticServiceParameterDto {
     id: number;
@@ -67,6 +73,19 @@ export interface DiagnosticOrderItemDto {
     status: DiagnosticItemStatus;
     result?: DiagnosticResultDto | null;
     parameters?: DiagnosticServiceParameterDto[];
+    specimenStatus?: SpecimenStatus | null;
+    specimenType?: string | null;
+    containerType?: string | null;
+    specimenBarcode?: string | null;
+    collectedAtUtc?: string | null;
+    collectedByUserName?: string | null;
+    receivedAtUtc?: string | null;
+    receivedByUserName?: string | null;
+    rejectedAtUtc?: string | null;
+    rejectedByUserName?: string | null;
+    rejectionReason?: SpecimenRejectionReason | null;
+    rejectionNote?: string | null;
+    recollectCount?: number;
     rowVersion?: string | null;
 }
 

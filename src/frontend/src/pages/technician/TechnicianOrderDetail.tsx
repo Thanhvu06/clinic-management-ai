@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { 
     ArrowLeft, CheckCircle, PlayCircle, Save, Check, FlaskConical, Waves, Scan, Stethoscope
 } from 'lucide-react';
-import { Alert, Button, Card, Input, Tag } from 'antd';
+import { Alert, Button, Card, Input, Modal, Select, Tag } from 'antd';
 import { DataTable, EmptyState, LoadingState, StatusBadge, InlineError } from '../../components/common';
 import { diagnosticCategoryLabels, diagnosticStatusLabels, diagnosticStatusTone, diagnosticResultFlagLabels, diagnosticFlagTone, previewDiagnosticFlag, isCriticalDiagnosticFlag, diagnosticNotificationTime } from '../../utils/diagnosticLabels';
 import styles from './TechnicianOrderDetail.module.css';
+import { specimenStatusLabels, specimenRejectionLabels, specimenRejectionValues } from '../../utils/diagnosticLabels';
+import type { SpecimenRejectionReason } from '../../types/diagnostic';
 import { diagnosticApi } from '../../api/diagnosticApi';
 import type { DiagnosticOrderDto, RecordDiagnosticResultRequest } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
@@ -41,6 +43,13 @@ export const TechnicianOrderDetail: React.FC = () => {
     const [savingItemId, setSavingItemId] = useState<number | null>(null);
     const [parameterValues, setParameterValues] = useState<Record<number, Record<number, string>>>({});
     const [parameterErrors, setParameterErrors] = useState<Record<number, string>>({});
+    const [specimenNotes, setSpecimenNotes] = useState<Record<number, string>>({});
+    const [specimenBusy, setSpecimenBusy] = useState<number | null>(null);
+    const [specimenError, setSpecimenError] = useState('');
+    const [rejectItemId, setRejectItemId] = useState<number | null>(null);
+    const [rejectionReason, setRejectionReason] = useState<SpecimenRejectionReason>('Hemolyzed');
+    const [rejectionNote, setRejectionNote] = useState('');
+    const [rejectionError, setRejectionError] = useState('');
 
     useEffect(() => {
         const selectedOrderId = order?.id;
@@ -195,6 +204,41 @@ export const TechnicianOrderDetail: React.FC = () => {
         }
     };
 
+    const handleSpecimen = async (itemId: number, action: 'collect' | 'receive' | 'reject') => {
+        if (!order || specimenBusy !== null) return;
+        const item = order.items.find(current => current.id === itemId);
+        if (!item) return;
+        if (action === 'reject' && rejectionReason === 'Other' && rejectionNote.trim().length < 5) {
+            setRejectionError('Lý do Khác cần ghi chú ít nhất 5 ký tự.');
+            return;
+        }
+        setSpecimenBusy(itemId); setSpecimenError(''); setRejectionError('');
+        const version = requestVersion.current;
+        try {
+            const response = action === 'collect'
+                ? await diagnosticApi.collectSpecimen(order.id, itemId, { rowVersion: item.rowVersion, note: specimenNotes[itemId]?.trim() || undefined })
+                : action === 'receive' ? await diagnosticApi.receiveSpecimen(order.id, itemId, { rowVersion: item.rowVersion })
+                : await diagnosticApi.rejectSpecimen(order.id, itemId, { rowVersion: item.rowVersion, reason: specimenRejectionValues[rejectionReason], note: rejectionNote.trim() || undefined });
+            if (!isMounted.current || version !== requestVersion.current) return;
+            if (!response.success || !response.data) throw new Error(response.message || 'Không thể cập nhật mẫu bệnh phẩm.');
+            setOrder(response.data);
+            setRejectItemId(null);
+            setSpecimenNotes(previous => ({ ...previous, [itemId]: '' }));
+        } catch (err: unknown) {
+            if (!isMounted.current || version !== requestVersion.current) return;
+            const failure = err as { message?: string; errorCode?: string };
+            if (failure.errorCode === 'STATE_CONFLICT' || failure.errorCode === 'CONCURRENCY_CONFLICT' || failure.message?.includes('phiên làm việc khác')) {
+                setSpecimenError('Dữ liệu đã được cập nhật từ phiên khác. Phiếu đã được tải lại.');
+                setRejectItemId(null);
+                await loadOrder();
+            } else {
+                const message = failure.message || 'Không thể cập nhật mẫu bệnh phẩm.';
+                if (action === 'reject') setRejectionError(message);
+                else setSpecimenError(message);
+            }
+        } finally { if (isMounted.current) setSpecimenBusy(null); }
+    };
+
     const handleCompleteOrder = async () => {
         if (!order) return;
 
@@ -228,6 +272,7 @@ export const TechnicianOrderDetail: React.FC = () => {
     const allItemsCompleted = order.items.every(i => i.status === 'Completed' || i.status === 'Cancelled');
     const activeItems = order.items.filter(item => item.status !== 'Cancelled');
     const resultedItems = activeItems.filter(item => item.result).length;
+    const specimenItems = activeItems.filter(item => item.specimenStatus && item.specimenStatus !== 'NotRequired');
     const milestones = [
         { label: 'Chỉ định', time: order.orderedAtUtc, actor: order.orderingDoctorName },
         { label: 'Tiếp nhận', time: order.startedAtUtc, actor: order.startedByUserName },
@@ -237,6 +282,17 @@ export const TechnicianOrderDetail: React.FC = () => {
 
     return (
         <div className={styles.detail}>
+            <Modal title="Từ chối mẫu" open={rejectItemId !== null} getContainer={false} onCancel={() => { if (specimenBusy === null) setRejectItemId(null); }}
+                footer={<><Button disabled={specimenBusy !== null} onClick={() => setRejectItemId(null)}>Hủy</Button><Button danger type="primary" disabled={specimenBusy !== null} onClick={() => { if (rejectItemId !== null) void handleSpecimen(rejectItemId, 'reject'); }}>{specimenBusy !== null ? 'Đang từ chối...' : 'Xác nhận từ chối'}</Button></>}>
+                <div className={styles.rejectionForm}>
+                    {rejectionError && <Alert type="error" showIcon title={rejectionError} />}
+                    <label htmlFor="specimen-rejection-reason" className={styles.fieldLabel}>Lý do từ chối</label>
+                    <Select id="specimen-rejection-reason" aria-label="Lý do từ chối" value={rejectionReason} disabled={specimenBusy !== null}
+                        options={Object.entries(specimenRejectionLabels).map(([value, label]) => ({ value, label }))} onChange={value => { setRejectionReason(value); setRejectionError(''); }} />
+                    <label htmlFor="specimen-rejection-note" className={styles.fieldLabel}>Ghi chú {rejectionReason === 'Other' ? '(bắt buộc, ít nhất 5 ký tự)' : '(không bắt buộc)'}</label>
+                    <Input.TextArea id="specimen-rejection-note" aria-label="Ghi chú từ chối" rows={3} maxLength={500} disabled={specimenBusy !== null} value={rejectionNote} onChange={event => { setRejectionNote(event.target.value); setRejectionError(''); }} />
+                </div>
+            </Modal>
             <div className={styles.navigation}>
                 <Button onClick={() => navigate('/diagnostics')}><ArrowLeft size={16} aria-hidden="true" /> Quay lại danh sách</Button>
                 <div className={styles.orderStatus}><span>Trạng thái phiếu:</span><StatusBadge status={diagnosticStatusTone[order.status]} label={diagnosticStatusLabels[order.status]} /></div>
@@ -256,6 +312,7 @@ export const TechnicianOrderDetail: React.FC = () => {
             </Card>
             <Card className={styles.progressCard}>
                 <strong>{resultedItems}/{activeItems.length} dịch vụ đã có kết quả</strong>
+                {specimenItems.length > 0 && <p className={styles.secondary}>{specimenItems.filter(item => item.specimenStatus === 'Received').length}/{specimenItems.length} mẫu đã nhận</p>}
                 <div className={styles.resultProgress} role="progressbar" aria-label="Tiến độ kết quả dịch vụ" aria-valuemin={0} aria-valuemax={Math.max(1, activeItems.length)} aria-valuenow={resultedItems}>
                     {activeItems.map(item => <span key={item.id} className={`${styles.progressSegment} ${item.result ? styles.progressSegmentDone : ''}`} />)}
                 </div>
@@ -264,6 +321,7 @@ export const TechnicianOrderDetail: React.FC = () => {
                 </li>)}</ol>
             </Card>
             <section className={styles.services}>
+                {specimenError && <Alert type="error" showIcon title={specimenError} />}
                 <h2 className={styles.sectionTitle}>Danh sách dịch vụ chỉ định ({order.items.length})</h2>
                 <div className={styles.serviceList}>
                     {order.items.map((item, idx) => {
@@ -273,6 +331,8 @@ export const TechnicianOrderDetail: React.FC = () => {
                         const CategoryIcon = categoryIcons[item.category];
                         const parameters = item.parameters || [];
                         const hasParameters = parameters.length > 0;
+                        const requiresSpecimen = !!item.specimenStatus && item.specimenStatus !== 'NotRequired';
+                        const canEnterResults = !requiresSpecimen || item.specimenStatus === 'Received';
                         const criticalPreview = parameters.some(parameter => {
                             const raw = parameterValues[item.id]?.[parameter.id] ?? '';
                             return raw.trim() !== '' && Number.isFinite(Number(raw)) && isCriticalDiagnosticFlag(previewDiagnosticFlag(Number(raw), parameter));
@@ -285,6 +345,29 @@ export const TechnicianOrderDetail: React.FC = () => {
                                     <StatusBadge status={diagnosticStatusTone[item.status]} label={diagnosticStatusLabels[item.status]} />
                                 </div>
                                 {item.preparationInstructions && <div className={styles.preparationNote}><strong>Chuẩn bị:</strong> {item.preparationInstructions}</div>}
+                                {requiresSpecimen && <section className={styles.specimenPanel} aria-label={`Mẫu bệnh phẩm: ${item.serviceName}`}>
+                                    <div className={styles.specimenHeading}><h3>Mẫu bệnh phẩm</h3><Tag className={item.specimenStatus === 'Rejected' ? styles.rejectedSpecimenTag : styles.specimenTag}>{specimenStatusLabels[item.specimenStatus!]}</Tag></div>
+                                    <p>{item.specimenType || '—'} • {item.containerType || '—'}</p>
+                                    {item.specimenBarcode && <p>Mã vạch: <strong>{item.specimenBarcode}</strong></p>}
+                                    <div className={styles.specimenTimeline}>
+                                        {item.collectedAtUtc && <p>Lấy: {diagnosticNotificationTime(item.collectedAtUtc)} • {item.collectedByUserName}</p>}
+                                        {item.receivedAtUtc && <p>Nhận: {diagnosticNotificationTime(item.receivedAtUtc)} • {item.receivedByUserName}</p>}
+                                        {item.rejectedAtUtc && <p>Từ chối: {diagnosticNotificationTime(item.rejectedAtUtc)} • {item.rejectedByUserName}</p>}
+                                    </div>
+                                    <p>Số lần lấy lại: {item.recollectCount ?? 0}</p>
+                                    {item.specimenStatus === 'Rejected' && <Alert type="error" showIcon title={`Mẫu bị từ chối: ${item.rejectionReason ? specimenRejectionLabels[item.rejectionReason] : '—'}${item.rejectionNote ? ` — ${item.rejectionNote}` : ''}`} />}
+                                    {order.status === 'InProgress' && !item.result && item.status !== 'Cancelled' && <div className={styles.specimenActions}>
+                                        {(item.specimenStatus === 'PendingCollection' || item.specimenStatus === 'Rejected') && <>
+                                            <div className={styles.collectionNote}><label htmlFor={`specimen-note-${item.id}`} className={styles.fieldLabel}>Ghi chú lấy mẫu (không bắt buộc)</label><Input id={`specimen-note-${item.id}`} maxLength={500} value={specimenNotes[item.id] || ''} onChange={event => setSpecimenNotes(previous => ({ ...previous, [item.id]: event.target.value }))} disabled={specimenBusy !== null} /></div>
+                                            <Button type="primary" disabled={specimenBusy !== null} onClick={() => void handleSpecimen(item.id, 'collect')}>{specimenBusy === item.id ? 'Đang xác nhận...' : item.specimenStatus === 'Rejected' ? 'Lấy lại mẫu' : 'Xác nhận đã lấy mẫu'}</Button>
+                                        </>}
+                                        {item.specimenStatus === 'Collected' && <>
+                                            <Button type="primary" disabled={specimenBusy !== null} onClick={() => void handleSpecimen(item.id, 'receive')}>{specimenBusy === item.id ? 'Đang cập nhật...' : 'Nhận mẫu đạt'}</Button>
+                                            <Button danger disabled={specimenBusy !== null} onClick={() => { setRejectItemId(item.id); setRejectionReason('Hemolyzed'); setRejectionNote(''); setRejectionError(''); }}>Từ chối mẫu</Button>
+                                        </>}
+                                    </div>}
+                                    {item.specimenStatus === 'Collected' && <Link className={styles.specimenPrintLink} to={`/diagnostics/orders/${order.id}/labels`}>In nhãn</Link>}
+                                </section>}
                                 {!!item.result?.values?.length && <div className={styles.parameterTable}>
                                     <DataTable ariaLabel={`Chỉ số đã lưu: ${item.serviceName}`} data={item.result.values} keyExtractor={value => value.parameterId} columns={[
                                         { header: 'Chỉ số', accessor: value => `${value.parameterName} (${value.parameterCode})` },
@@ -296,7 +379,7 @@ export const TechnicianOrderDetail: React.FC = () => {
                                     {item.result.hasCriticalValue && item.result.criticalNotifiedAtUtc && <p className={styles.critical}>Đã báo bác sĩ lúc {diagnosticNotificationTime(item.result.criticalNotifiedAtUtc)}</p>}
                                 </div>}
                                 {order.status === 'InProgress' && item.result && <Button className={styles.resultToggle} aria-expanded={!collapsed} aria-controls={`result-form-${item.id}`} onClick={() => setExpandedResults(previous => ({ ...previous, [item.id]: !previous[item.id] }))}>{collapsed ? 'Xem/Sửa kết quả' : 'Thu gọn kết quả'}</Button>}
-                                {order.status === 'Ordered' ? <div className={styles.startHint}>Nhấn "Bắt đầu thực hiện" ở trên để tiếp nhận và nhập kết quả cho dịch vụ này.</div> : !collapsed && (
+                                {!canEnterResults ? <div className={styles.startHint}>Cần nhận mẫu đạt trước khi nhập kết quả</div> : order.status === 'Ordered' ? <div className={styles.startHint}>Nhấn "Bắt đầu thực hiện" ở trên để tiếp nhận và nhập kết quả cho dịch vụ này.</div> : !collapsed && (
                                     <div id={`result-form-${item.id}`} className={styles.resultForm}>
                                         {hasParameters && order.status !== 'Completed' && <>
                                             {criticalPreview && <Alert type="error" showIcon title="Có giá trị nguy hiểm — hệ thống sẽ báo ngay cho bác sĩ chỉ định khi lưu." />}
