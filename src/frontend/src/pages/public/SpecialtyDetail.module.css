@@ -1,0 +1,75 @@
+.pageContainer {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: var(--cc-space-xl) var(--cc-content-padding);
+    color: var(--cc-color-text);
+    overflow-wrap: anywhere;
+}
+
+.breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cc-space-xs);
+    margin-bottom: var(--cc-space-lg);
+    font-size: 0.875rem;
+    color: var(--cc-color-text-secondary);
+}
+
+.breadcrumb a, .profileLink { color: var(--cc-color-primary); text-decoration: none; }
+.breadcrumb a:hover, .profileLink:hover { color: var(--cc-color-primary-hover); text-decoration: underline; }
+.detailLayout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: var(--cc-space-xl); align-items: start; }
+.mainColumn { min-width: 0; }
+.detailHeader { margin-bottom: var(--cc-space-xl); }
+.headerIdentity { display: flex; align-items: center; gap: var(--cc-space-sm); margin-bottom: var(--cc-space-sm); }
+.specialtyIcon { display: flex; align-items: center; justify-content: center; padding: var(--cc-space-sm); background: var(--cc-color-primary-light); color: var(--cc-color-primary); border-radius: var(--cc-radius-lg); flex-shrink: 0; }
+.specialtyCode { font-size: 0.8rem; color: var(--cc-color-text-secondary); font-weight: 600; }
+.pageTitle { font-size: 1.85rem; margin: 0; color: var(--cc-color-navy); line-height: 1.3; }
+.aiBadge { display: inline-flex; align-items: center; gap: var(--cc-space-xs); padding: var(--cc-space-xs) var(--cc-space-sm); border-radius: var(--cc-radius-lg); background: var(--cc-color-success-bg); border: 1px solid var(--cc-color-success); color: var(--cc-color-secondary-hover); font-size: 0.85rem; font-weight: 600; }
+.aiBadge svg { flex-shrink: 0; }
+.sectionTitle { font-size: 1.25rem; color: var(--cc-color-navy); margin: 0 0 var(--cc-space-md); }
+.specialtyDescription { line-height: 1.7; font-size: 1rem; margin-bottom: var(--cc-space-xl); }
+.recommendationsSection { margin-bottom: var(--cc-space-xl); }
+.recommendationsExplanation { font-size: 0.875rem; color: var(--cc-color-text-secondary); margin: 0 0 var(--cc-space-md); line-height: 1.5; }
+.doctorGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--cc-space-md); }
+.doctorCard, .recommendationCard { min-width: 0; display: flex; flex-direction: column; padding: var(--cc-space-md); background: var(--cc-color-bg-container); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-lg); box-shadow: var(--cc-shadow-sm); }
+.doctorCard { align-items: center; text-align: center; }
+.recommendationCard { border-top: 3px solid var(--cc-color-secondary); }
+.bestMatchBadge { align-self: flex-start; margin: 0 0 var(--cc-space-sm); color: var(--cc-color-secondary-hover); background: var(--cc-color-success-bg); border-color: var(--cc-color-success); }
+.doctorAvatar { display: flex; align-items: center; justify-content: center; padding: var(--cc-space-md); border-radius: var(--cc-radius-full); color: var(--cc-color-primary); background: var(--cc-color-primary-light); margin-bottom: var(--cc-space-sm); }
+.doctorName { margin: 0 0 var(--cc-space-xs); font-size: 1rem; line-height: 1.5; color: var(--cc-color-navy); }
+.doctorSpecialty { color: var(--cc-color-secondary-hover); font-size: 0.875rem; margin-bottom: var(--cc-space-xs); }
+.doctorExperience { font-size: 0.875rem; color: var(--cc-color-text-secondary); margin: 0 0 var(--cc-space-sm); }
+.availableSlot { line-height: 1.6; font-size: 0.875rem; margin: 0 0 var(--cc-space-md); }
+.scoreSummary { display: flex; justify-content: space-between; gap: var(--cc-space-xs); font-size: 0.875rem; margin-top: auto; margin-bottom: var(--cc-space-xs); }
+.scoreBar { display: grid; grid-template-columns: repeat(100, minmax(0, 1fr)); height: var(--cc-space-xs); overflow: hidden; border-radius: var(--cc-radius-full); margin-bottom: var(--cc-space-md); }
+.scoreFilled { background: var(--cc-color-secondary); }
+.scoreEmpty { background: var(--cc-color-border); }
+.recommendationActions, .doctorActions { display: flex; flex-direction: column; gap: var(--cc-space-sm); }
+.doctorActions { margin-top: auto; width: 100%; }
+.bookingLink, .aiLink, .profileLink { display: inline-flex; align-items: center; justify-content: center; gap: var(--cc-space-xs); font-size: 0.875rem; line-height: 1.5; font-weight: 600; }
+.bookingLink, .aiLink { min-height: var(--cc-control-height); padding: var(--cc-space-xs) var(--cc-space-sm); border-radius: var(--cc-radius-md); text-decoration: none; text-align: center; }
+.bookingLink { background: var(--cc-color-primary); color: var(--cc-color-text-on-dark); }
+.bookingLink:hover { background: var(--cc-color-primary-hover); color: var(--cc-color-text-on-dark); }
+.aiLink { border: 1px solid var(--cc-color-secondary); background: var(--cc-color-bg-container); color: var(--cc-color-secondary-hover); }
+.aiLink:hover { background: var(--cc-color-success-bg); }
+.bookingLink svg, .aiLink svg, .profileLink svg { flex-shrink: 0; }
+.bookingLink:focus-visible, .aiLink:focus-visible, .profileLink:focus-visible { outline: 2px solid var(--cc-color-primary); outline-offset: 2px; }
+.sidebarCard { position: sticky; top: calc(var(--cc-header-height) + var(--cc-space-lg)); display: flex; flex-direction: column; gap: var(--cc-space-sm); padding: var(--cc-space-lg); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-lg); background: var(--cc-color-bg-container); box-shadow: var(--cc-shadow-sm); }
+.sidebarTitle { font-size: 1.2rem; font-weight: 700; color: var(--cc-color-navy); margin: 0; }
+.sidebarDescription { font-size: 0.9rem; color: var(--cc-color-text-secondary); line-height: 1.5; margin: 0 0 var(--cc-space-xs); }
+.doctorsEmpty, .emptyState { padding: var(--cc-space-lg); background: var(--cc-color-bg-subtle); border-radius: var(--cc-radius-md); color: var(--cc-color-text-secondary); text-align: center; }
+.emptyState { padding: var(--cc-space-xl); }
+.emptyIcon { color: var(--cc-color-text-muted); margin-bottom: var(--cc-space-sm); }
+.emptyStateTitle { color: var(--cc-color-navy); font-size: 1.25rem; font-weight: 600; }
+.emptyDescription { margin-bottom: var(--cc-space-lg); }
+.pageSkeleton, .recommendationSkeleton { border-radius: var(--cc-radius-lg); background: var(--cc-color-border-light); animation: loadingPulse 1.5s ease-in-out infinite; }
+.pageSkeleton { min-height: 400px; }
+.recommendationSkeleton { min-height: 280px; }
+@keyframes loadingPulse { 50% { background: var(--cc-color-border); } }
+@media (prefers-reduced-motion: reduce) { .pageSkeleton, .recommendationSkeleton { animation: none; } }
+@media (max-width: 768px) {
+    .pageContainer { padding: var(--cc-space-lg) var(--cc-space-md); }
+    .detailLayout, .doctorGrid { grid-template-columns: minmax(0, 1fr); }
+    .sidebarCard { position: static; }
+    .pageTitle { font-size: 1.5rem; }
+}
