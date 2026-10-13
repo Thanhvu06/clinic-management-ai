@@ -91,6 +91,7 @@ export interface DiagnosticOrderItemDto {
 
 export interface DiagnosticOrderDto {
     id: number;
+    facilityName?: string | null;
     appointmentId: number;
     appointmentCode: string;
     orderCode: string;
@@ -114,6 +115,17 @@ export interface DiagnosticOrderDto {
     completedByUserName?: string | null;
     reviewedAtUtc?: string | null;
     reviewedByDoctorName?: string | null;
+    verificationStatus?: DiagnosticVerificationStatus | null;
+    submittedForVerificationAtUtc?: string | null;
+    submittedForVerificationByUserName?: string | null;
+    verifiedAtUtc?: string | null;
+    verifiedByUserName?: string | null;
+    verificationNote?: string | null;
+    returnedAtUtc?: string | null;
+    returnedByUserName?: string | null;
+    returnReason?: string | null;
+    returnCount?: number;
+    canCurrentUserVerify?: boolean;
     rowVersion?: string | null;
     items: DiagnosticOrderItemDto[];
 }
@@ -136,6 +148,10 @@ export interface RecordDiagnosticResultRequest {
 export interface TransitionDiagnosticOrderRequest {
     rowVersion?: string | null;
 }
+
+export type DiagnosticVerificationStatus = 'NotRequired' | 'Pending' | 'Verified' | 'Returned';
+export interface VerifyDiagnosticOrderRequest { note?: string; rowVersion?: string | null; }
+export interface ReturnDiagnosticOrderRequest { reason: string; rowVersion?: string | null; }
 
 export interface CancelDiagnosticOrderRequest {
     reason?: string;

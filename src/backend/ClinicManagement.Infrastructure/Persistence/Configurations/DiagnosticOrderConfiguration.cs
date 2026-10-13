@@ -70,5 +70,11 @@ public class DiagnosticOrderConfiguration : IEntityTypeConfiguration<DiagnosticO
             .HasFilter("[SourceAiActionId] IS NOT NULL");
 
         builder.Property(o => o.RowVersion).IsRowVersion();
+        builder.Property(o => o.VerificationStatus).HasConversion<string>().HasMaxLength(30)
+            .HasDefaultValue(ClinicManagement.Domain.Enums.DiagnosticVerificationStatus.NotRequired);
+        builder.HasIndex(o => o.VerificationStatus);
+        builder.Property(o => o.VerificationNote).HasMaxLength(500);
+        builder.Property(o => o.ReturnReason).HasMaxLength(500);
+        builder.Property(o => o.ReturnCount).HasDefaultValue(0);
     }
 }

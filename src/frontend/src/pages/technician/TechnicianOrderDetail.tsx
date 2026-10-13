@@ -50,6 +50,11 @@ export const TechnicianOrderDetail: React.FC = () => {
     const [rejectionReason, setRejectionReason] = useState<SpecimenRejectionReason>('Hemolyzed');
     const [rejectionNote, setRejectionNote] = useState('');
     const [rejectionError, setRejectionError] = useState('');
+    const [verificationNote, setVerificationNote] = useState('');
+    const [returnOpen, setReturnOpen] = useState(false);
+    const [returnReason, setReturnReason] = useState('');
+    const [verificationBusy, setVerificationBusy] = useState(false);
+    const [verificationError, setVerificationError] = useState('');
 
     useEffect(() => {
         const selectedOrderId = order?.id;
@@ -152,7 +157,7 @@ export const TechnicianOrderDetail: React.FC = () => {
     };
 
     const handleSaveItemResult = async (itemId: number) => {
-        if (!order) return;
+        if (!order || order.verificationStatus === 'Pending') return;
         const currentData = itemResults[itemId];
         const item = order.items.find(i => i.id === itemId);
         const parameters = item?.parameters || [];
@@ -205,7 +210,7 @@ export const TechnicianOrderDetail: React.FC = () => {
     };
 
     const handleSpecimen = async (itemId: number, action: 'collect' | 'receive' | 'reject') => {
-        if (!order || specimenBusy !== null) return;
+        if (!order || specimenBusy !== null || order.verificationStatus === 'Pending') return;
         const item = order.items.find(current => current.id === itemId);
         if (!item) return;
         if (action === 'reject' && rejectionReason === 'Other' && rejectionNote.trim().length < 5) {
@@ -239,6 +244,31 @@ export const TechnicianOrderDetail: React.FC = () => {
         } finally { if (isMounted.current) setSpecimenBusy(null); }
     };
 
+    const handleVerification = async (action: 'verify' | 'return') => {
+        if (!order || verificationBusy || !order.canCurrentUserVerify || order.verificationStatus !== 'Pending') return;
+        if (action === 'return' && returnReason.trim().length < 5) {
+            setVerificationError('Lý do trả lại phải có ít nhất 5 ký tự.');
+            return;
+        }
+        setVerificationBusy(true); setVerificationError('');
+        const version = requestVersion.current;
+        try {
+            const response = action === 'verify'
+                ? await diagnosticApi.verifyOrder(order.id, { note: verificationNote.trim() || undefined, rowVersion: order.rowVersion })
+                : await diagnosticApi.returnOrder(order.id, { reason: returnReason.trim(), rowVersion: order.rowVersion });
+            if (!isMounted.current || version !== requestVersion.current) return;
+            if (!response.success || !response.data) throw new Error(response.message || 'Không thể cập nhật duyệt kết quả.');
+            setOrder(response.data); setReturnOpen(false); setVerificationNote(''); setReturnReason('');
+        } catch (failure: unknown) {
+            if (!isMounted.current || version !== requestVersion.current) return;
+            const problem = failure as { errorCode?: string; message?: string };
+            if (problem.errorCode === 'STATE_CONFLICT' || problem.errorCode === 'CONCURRENCY_CONFLICT') {
+                setVerificationError('Dữ liệu đã thay đổi. Phiếu đã được tải lại.');
+                setReturnOpen(false); await loadOrder();
+            } else setVerificationError(problem.message || 'Không thể cập nhật duyệt kết quả.');
+        } finally { if (isMounted.current) setVerificationBusy(false); }
+    };
+
     const handleCompleteOrder = async () => {
         if (!order) return;
 
@@ -249,13 +279,13 @@ export const TechnicianOrderDetail: React.FC = () => {
             return;
         }
 
-        showConfirm('Xác nhận hoàn tất phiếu chỉ định và gửi kết quả về cho Bác sĩ?', async () => {
+        showConfirm(needsVerification ? 'Xác nhận gửi duyệt kết quả cho kỹ thuật viên khác?' : 'Xác nhận hoàn tất phiếu chỉ định và gửi kết quả về cho Bác sĩ?', async () => {
             setActionLoading(true);
             try {
                 const res = await diagnosticApi.completeTechnicianOrder(order.id, { rowVersion: order.rowVersion });
                 if (res.success && res.data) {
                     setOrder(res.data);
-                    showToast('Đã hoàn tất phiếu chỉ định cận lâm sàng!', 'success');
+                    showToast(res.data.verificationStatus === 'Pending' ? 'Đã gửi duyệt kết quả.' : 'Đã hoàn tất phiếu chỉ định cận lâm sàng!', 'success');
                 }
             } catch (err: any) {
                 showAlert(err.message || 'Không thể hoàn tất phiếu chỉ định.', 'Lỗi', 'error');
@@ -273,6 +303,8 @@ export const TechnicianOrderDetail: React.FC = () => {
     const activeItems = order.items.filter(item => item.status !== 'Cancelled');
     const resultedItems = activeItems.filter(item => item.result).length;
     const specimenItems = activeItems.filter(item => item.specimenStatus && item.specimenStatus !== 'NotRequired');
+    const verificationPending = order.verificationStatus === 'Pending';
+    const needsVerification = order.verificationStatus != null && (order.verificationStatus !== 'NotRequired' || activeItems.some(item => item.specimenType != null));
     const milestones = [
         { label: 'Chỉ định', time: order.orderedAtUtc, actor: order.orderingDoctorName },
         { label: 'Tiếp nhận', time: order.startedAtUtc, actor: order.startedByUserName },
@@ -282,15 +314,19 @@ export const TechnicianOrderDetail: React.FC = () => {
 
     return (
         <div className={styles.detail}>
+            <Modal title="Trả lại kết quả" open={returnOpen} getContainer={false} onCancel={() => { if (!verificationBusy) setReturnOpen(false); }} footer={<><Button disabled={verificationBusy} onClick={() => setReturnOpen(false)}>Hủy</Button><Button danger type="primary" disabled={verificationBusy} onClick={() => void handleVerification('return')}>{verificationBusy ? 'Đang trả lại...' : 'Xác nhận trả lại'}</Button></>}>
+                {verificationError && <Alert type="error" showIcon title={verificationError} />}
+                <label htmlFor="verification-return-reason" className={styles.fieldLabel}>Lý do trả lại (bắt buộc, ít nhất 5 ký tự)</label><Input.TextArea id="verification-return-reason" rows={3} maxLength={500} value={returnReason} disabled={verificationBusy} onChange={event => { setReturnReason(event.target.value); setVerificationError(''); }} />
+            </Modal>
             <Modal title="Từ chối mẫu" open={rejectItemId !== null} getContainer={false} onCancel={() => { if (specimenBusy === null) setRejectItemId(null); }}
-                footer={<><Button disabled={specimenBusy !== null} onClick={() => setRejectItemId(null)}>Hủy</Button><Button danger type="primary" disabled={specimenBusy !== null} onClick={() => { if (rejectItemId !== null) void handleSpecimen(rejectItemId, 'reject'); }}>{specimenBusy !== null ? 'Đang từ chối...' : 'Xác nhận từ chối'}</Button></>}>
+                footer={<><Button disabled={specimenBusy !== null || verificationPending} onClick={() => setRejectItemId(null)}>Hủy</Button><Button danger type="primary" disabled={specimenBusy !== null || verificationPending} onClick={() => { if (rejectItemId !== null) void handleSpecimen(rejectItemId, 'reject'); }}>{specimenBusy !== null ? 'Đang từ chối...' : 'Xác nhận từ chối'}</Button></>}>
                 <div className={styles.rejectionForm}>
                     {rejectionError && <Alert type="error" showIcon title={rejectionError} />}
                     <label htmlFor="specimen-rejection-reason" className={styles.fieldLabel}>Lý do từ chối</label>
-                    <Select id="specimen-rejection-reason" aria-label="Lý do từ chối" value={rejectionReason} disabled={specimenBusy !== null}
+                    <Select id="specimen-rejection-reason" aria-label="Lý do từ chối" value={rejectionReason} disabled={specimenBusy !== null || verificationPending}
                         options={Object.entries(specimenRejectionLabels).map(([value, label]) => ({ value, label }))} onChange={value => { setRejectionReason(value); setRejectionError(''); }} />
                     <label htmlFor="specimen-rejection-note" className={styles.fieldLabel}>Ghi chú {rejectionReason === 'Other' ? '(bắt buộc, ít nhất 5 ký tự)' : '(không bắt buộc)'}</label>
-                    <Input.TextArea id="specimen-rejection-note" aria-label="Ghi chú từ chối" rows={3} maxLength={500} disabled={specimenBusy !== null} value={rejectionNote} onChange={event => { setRejectionNote(event.target.value); setRejectionError(''); }} />
+                    <Input.TextArea id="specimen-rejection-note" aria-label="Ghi chú từ chối" rows={3} maxLength={500} disabled={specimenBusy !== null || verificationPending} value={rejectionNote} onChange={event => { setRejectionNote(event.target.value); setRejectionError(''); }} />
                 </div>
             </Modal>
             <div className={styles.navigation}>
@@ -321,13 +357,17 @@ export const TechnicianOrderDetail: React.FC = () => {
                 </li>)}</ol>
             </Card>
             <section className={styles.services}>
+                {!returnOpen && verificationError && <Alert type="error" showIcon title={verificationError} />}
+                {order.verificationStatus === 'Returned' && <Alert type="error" showIcon title={`Bị trả lại bởi ${order.returnedByUserName || '—'} lúc ${order.returnedAtUtc ? diagnosticNotificationTime(order.returnedAtUtc) : '—'}: ${order.returnReason || '—'}`} />}
+                {verificationPending && <Card className={styles.verificationPanel}><Alert type="info" showIcon title="Đang chờ kỹ thuật viên khác duyệt" />{order.canCurrentUserVerify ? <div className={styles.verificationActions}><div className={styles.verificationNote}><label htmlFor="verification-note" className={styles.fieldLabel}>Ghi chú duyệt (không bắt buộc)</label><Input id="verification-note" maxLength={500} disabled={verificationBusy} value={verificationNote} onChange={event => setVerificationNote(event.target.value)} /></div><Button type="primary" disabled={verificationBusy} onClick={() => void handleVerification('verify')}>{verificationBusy ? 'Đang cập nhật...' : 'Duyệt kết quả'}</Button><Button danger disabled={verificationBusy} onClick={() => { setReturnOpen(true); setVerificationError(''); }}>Trả lại</Button></div> : <p>Bạn là người nhập kết quả nên không thể tự duyệt.</p>}</Card>}
+                {order.verificationStatus === 'Verified' && <Card className={styles.verificationPanel}><p>Đã duyệt bởi {order.verifiedByUserName || '—'} lúc {order.verifiedAtUtc ? diagnosticNotificationTime(order.verifiedAtUtc) : '—'}</p><Link className={styles.resultPrintLink} to={`/diagnostics/orders/${order.id}/result-print`}>In phiếu kết quả</Link></Card>}
                 {specimenError && <Alert type="error" showIcon title={specimenError} />}
                 <h2 className={styles.sectionTitle}>Danh sách dịch vụ chỉ định ({order.items.length})</h2>
                 <div className={styles.serviceList}>
                     {order.items.map((item, idx) => {
                         const current = itemResults[item.id] || { resultText: '', conclusion: '', referenceRange: '', unit: '' };
                         const isCompleted = item.status === 'Completed';
-                        const collapsed = order.status === 'InProgress' && !!item.result && !expandedResults[item.id];
+                        const collapsed = order.status === 'InProgress' && !!item.result && !expandedResults[item.id] && !verificationPending;
                         const CategoryIcon = categoryIcons[item.category];
                         const parameters = item.parameters || [];
                         const hasParameters = parameters.length > 0;
@@ -358,12 +398,12 @@ export const TechnicianOrderDetail: React.FC = () => {
                                     {item.specimenStatus === 'Rejected' && <Alert type="error" showIcon title={`Mẫu bị từ chối: ${item.rejectionReason ? specimenRejectionLabels[item.rejectionReason] : '—'}${item.rejectionNote ? ` — ${item.rejectionNote}` : ''}`} />}
                                     {order.status === 'InProgress' && !item.result && item.status !== 'Cancelled' && <div className={styles.specimenActions}>
                                         {(item.specimenStatus === 'PendingCollection' || item.specimenStatus === 'Rejected') && <>
-                                            <div className={styles.collectionNote}><label htmlFor={`specimen-note-${item.id}`} className={styles.fieldLabel}>Ghi chú lấy mẫu (không bắt buộc)</label><Input id={`specimen-note-${item.id}`} maxLength={500} value={specimenNotes[item.id] || ''} onChange={event => setSpecimenNotes(previous => ({ ...previous, [item.id]: event.target.value }))} disabled={specimenBusy !== null} /></div>
-                                            <Button type="primary" disabled={specimenBusy !== null} onClick={() => void handleSpecimen(item.id, 'collect')}>{specimenBusy === item.id ? 'Đang xác nhận...' : item.specimenStatus === 'Rejected' ? 'Lấy lại mẫu' : 'Xác nhận đã lấy mẫu'}</Button>
+                                            <div className={styles.collectionNote}><label htmlFor={`specimen-note-${item.id}`} className={styles.fieldLabel}>Ghi chú lấy mẫu (không bắt buộc)</label><Input id={`specimen-note-${item.id}`} maxLength={500} value={specimenNotes[item.id] || ''} onChange={event => setSpecimenNotes(previous => ({ ...previous, [item.id]: event.target.value }))} disabled={specimenBusy !== null || verificationPending} /></div>
+                                            <Button type="primary" disabled={specimenBusy !== null || verificationPending} onClick={() => void handleSpecimen(item.id, 'collect')}>{specimenBusy === item.id ? 'Đang xác nhận...' : item.specimenStatus === 'Rejected' ? 'Lấy lại mẫu' : 'Xác nhận đã lấy mẫu'}</Button>
                                         </>}
                                         {item.specimenStatus === 'Collected' && <>
-                                            <Button type="primary" disabled={specimenBusy !== null} onClick={() => void handleSpecimen(item.id, 'receive')}>{specimenBusy === item.id ? 'Đang cập nhật...' : 'Nhận mẫu đạt'}</Button>
-                                            <Button danger disabled={specimenBusy !== null} onClick={() => { setRejectItemId(item.id); setRejectionReason('Hemolyzed'); setRejectionNote(''); setRejectionError(''); }}>Từ chối mẫu</Button>
+                                            <Button type="primary" disabled={specimenBusy !== null || verificationPending} onClick={() => void handleSpecimen(item.id, 'receive')}>{specimenBusy === item.id ? 'Đang cập nhật...' : 'Nhận mẫu đạt'}</Button>
+                                            <Button danger disabled={specimenBusy !== null || verificationPending} onClick={() => { setRejectItemId(item.id); setRejectionReason('Hemolyzed'); setRejectionNote(''); setRejectionError(''); }}>Từ chối mẫu</Button>
                                         </>}
                                     </div>}
                                     {item.specimenStatus === 'Collected' && <Link className={styles.specimenPrintLink} to={`/diagnostics/orders/${order.id}/labels`}>In nhãn</Link>}
@@ -386,7 +426,7 @@ export const TechnicianOrderDetail: React.FC = () => {
                                             {parameterErrors[item.id] && <Alert type="error" showIcon title={parameterErrors[item.id]} />}
                                             <div className={styles.parameterTable}><DataTable ariaLabel={`Nhập chỉ số: ${item.serviceName}`} data={parameters} keyExtractor={parameter => parameter.id} columns={[
                                                 { header: 'Chỉ số', accessor: parameter => `${parameter.name} (${parameter.code})` },
-                                                { header: 'Kết quả', accessor: parameter => <Input type="number" step="any" min={0} aria-label={`Kết quả ${parameter.name} (${parameter.code})`} disabled={savingItemId === item.id}
+                                                { header: 'Kết quả', accessor: parameter => <Input type="number" step="any" min={0} aria-label={`Kết quả ${parameter.name} (${parameter.code})`} disabled={savingItemId === item.id || verificationPending}
                                                     value={parameterValues[item.id]?.[parameter.id] ?? ''} onChange={event => {
                                                         setParameterValues(previous => ({ ...previous, [item.id]: { ...previous[item.id], [parameter.id]: event.target.value } }));
                                                         setParameterErrors(previous => ({ ...previous, [item.id]: '' }));
@@ -402,16 +442,16 @@ export const TechnicianOrderDetail: React.FC = () => {
                                             ]} /></div>
                                         </>}
                                         <div><label htmlFor={`result-text-${item.id}`} className={styles.fieldLabel}>{hasParameters ? 'Nhận xét (không bắt buộc)' : <>Kết quả chi tiết / Mô tả tổn thương <span className={styles.required}>*</span></>}</label>
-                                            <Input.TextArea id={`result-text-${item.id}`} rows={3} disabled={order.status === 'Completed'} value={current.resultText} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], resultText: e.target.value }}))} placeholder="Nhập chi tiết thông số xét nghiệm, mô tả hình ảnh siêu âm..." />
+                                            <Input.TextArea id={`result-text-${item.id}`} rows={3} disabled={order.status === 'Completed' || verificationPending} value={current.resultText} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], resultText: e.target.value }}))} placeholder="Nhập chi tiết thông số xét nghiệm, mô tả hình ảnh siêu âm..." />
                                         </div>
                                         <div className={styles.resultFields}>
-                                            <div><label htmlFor={`conclusion-${item.id}`} className={styles.fieldLabel}>Kết luận / Đánh giá</label><Input id={`conclusion-${item.id}`} type="text" disabled={order.status === 'Completed'} value={current.conclusion} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], conclusion: e.target.value }}))} placeholder="VD: Bình thường, Gan nhiễm mỡ độ 1..." />
-                                                {order.status !== 'Completed' && <div className={styles.conclusionChips}>{quickConclusions.map(conclusion => <Button key={conclusion} size="small" disabled={savingItemId === item.id} onClick={() => setItemResults(previous => ({ ...previous, [item.id]: { ...previous[item.id], conclusion } }))}>{conclusion}</Button>)}</div>}
+                                            <div><label htmlFor={`conclusion-${item.id}`} className={styles.fieldLabel}>Kết luận / Đánh giá</label><Input id={`conclusion-${item.id}`} type="text" disabled={order.status === 'Completed' || verificationPending} value={current.conclusion} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], conclusion: e.target.value }}))} placeholder="VD: Bình thường, Gan nhiễm mỡ độ 1..." />
+                                                {order.status !== 'Completed' && <div className={styles.conclusionChips}>{quickConclusions.map(conclusion => <Button key={conclusion} size="small" disabled={savingItemId === item.id || verificationPending} onClick={() => setItemResults(previous => ({ ...previous, [item.id]: { ...previous[item.id], conclusion } }))}>{conclusion}</Button>)}</div>}
                                             </div>
-                                            {!hasParameters && <><div><label htmlFor={`reference-range-${item.id}`} className={styles.fieldLabel}>Chỉ số bình thường</label><Input id={`reference-range-${item.id}`} type="text" disabled={order.status === 'Completed'} value={current.referenceRange} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], referenceRange: e.target.value }}))} placeholder="VD: 70 - 100 mg/dL" /></div>
-                                            <div><label htmlFor={`unit-${item.id}`} className={styles.fieldLabel}>Đơn vị tính</label><Input id={`unit-${item.id}`} type="text" disabled={order.status === 'Completed'} value={current.unit} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], unit: e.target.value }}))} placeholder="VD: U/L, mg/dL" /></div></>}
+                                            {!hasParameters && <><div><label htmlFor={`reference-range-${item.id}`} className={styles.fieldLabel}>Chỉ số bình thường</label><Input id={`reference-range-${item.id}`} type="text" disabled={order.status === 'Completed' || verificationPending} value={current.referenceRange} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], referenceRange: e.target.value }}))} placeholder="VD: 70 - 100 mg/dL" /></div>
+                                            <div><label htmlFor={`unit-${item.id}`} className={styles.fieldLabel}>Đơn vị tính</label><Input id={`unit-${item.id}`} type="text" disabled={order.status === 'Completed' || verificationPending} value={current.unit} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], unit: e.target.value }}))} placeholder="VD: U/L, mg/dL" /></div></>}
                                         </div>
-                                        {order.status !== 'Completed' && <div className={styles.saveActions}><Button type="primary" onClick={() => handleSaveItemResult(item.id)} disabled={savingItemId === item.id}><Save size={15} aria-hidden="true" /> {savingItemId === item.id ? 'Đang lưu...' : 'Lưu kết quả dịch vụ'}</Button></div>}
+                                        {order.status !== 'Completed' && <div className={styles.saveActions}><Button type="primary" onClick={() => handleSaveItemResult(item.id)} disabled={savingItemId === item.id || verificationPending}><Save size={15} aria-hidden="true" /> {savingItemId === item.id ? 'Đang lưu...' : 'Lưu kết quả dịch vụ'}</Button></div>}
                                         {item.result && <div className={styles.resultAuthor}>Nhập bởi: {item.result.resultedByUserName} • {new Date(item.result.resultedAtUtc).toLocaleString('vi-VN')}</div>}
                                     </div>
                                 )}
@@ -420,7 +460,7 @@ export const TechnicianOrderDetail: React.FC = () => {
                     })}
                 </div>
             </section>
-            {order.status === 'InProgress' && <Card className={styles.completionBar}><div className={styles.completionActions}><div><strong>Hoàn tất phiếu chỉ định cận lâm sàng</strong><div className={styles.secondary}>{allItemsCompleted ? 'Tất cả các dịch vụ đã có kết quả. Bạn có thể chốt phiếu.' : 'Vui lòng lưu kết quả cho từng dịch vụ trước khi hoàn tất.'}</div></div><Button type="primary" className={styles.completeButton} onClick={handleCompleteOrder} disabled={!allItemsCompleted || actionLoading}><Check size={18} aria-hidden="true" /> {actionLoading ? 'Đang gửi kết quả...' : 'Hoàn tất và gửi kết quả'}</Button></div></Card>}
+            {order.status === 'InProgress' && !verificationPending && <Card className={styles.completionBar}><div className={styles.completionActions}><div><strong>{needsVerification ? 'Gửi duyệt kết quả cận lâm sàng' : 'Hoàn tất phiếu chỉ định cận lâm sàng'}</strong><div className={styles.secondary}>{allItemsCompleted ? needsVerification ? 'Tất cả dịch vụ đã có kết quả. Gửi kỹ thuật viên khác duyệt.' : 'Tất cả các dịch vụ đã có kết quả. Bạn có thể chốt phiếu.' : 'Vui lòng lưu kết quả cho từng dịch vụ trước khi hoàn tất.'}</div></div><Button type="primary" className={styles.completeButton} onClick={handleCompleteOrder} disabled={!allItemsCompleted || actionLoading}><Check size={18} aria-hidden="true" /> {actionLoading ? 'Đang gửi kết quả...' : needsVerification ? 'Gửi duyệt kết quả' : 'Hoàn tất và gửi kết quả'}</Button></div></Card>}
             {order.status === 'Completed' && <Card className={styles.completedCard}><div className={styles.completionActions}><div><div className={styles.completedTitle}><CheckCircle size={18} /> Phiếu chỉ định đã được hoàn tất</div><div className={styles.secondary}>Hoàn tất bởi: {order.completedByUserName} lúc {new Date(order.completedAtUtc!).toLocaleString('vi-VN')}</div></div>{order.reviewedAtUtc ? <div className={styles.reviewInfo}><strong>Bác sĩ đã xem:</strong> {order.reviewedByDoctorName} ({new Date(order.reviewedAtUtc).toLocaleString('vi-VN')})</div> : <div className={styles.reviewPending}>Chờ bác sĩ khám xác nhận đã xem</div>}</div></Card>}
         </div>
     );

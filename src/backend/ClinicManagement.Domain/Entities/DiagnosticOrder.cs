@@ -21,6 +21,16 @@ public class DiagnosticOrder
     public string? Note { get; set; }
 
     public DiagnosticOrderStatus Status { get; set; } = DiagnosticOrderStatus.Ordered;
+    public DiagnosticVerificationStatus VerificationStatus { get; set; } = DiagnosticVerificationStatus.NotRequired;
+    public DateTime? SubmittedForVerificationAtUtc { get; set; }
+    public Guid? SubmittedForVerificationByUserId { get; set; }
+    public DateTime? VerifiedAtUtc { get; set; }
+    public Guid? VerifiedByUserId { get; set; }
+    public string? VerificationNote { get; set; }
+    public DateTime? ReturnedAtUtc { get; set; }
+    public Guid? ReturnedByUserId { get; set; }
+    public string? ReturnReason { get; set; }
+    public int ReturnCount { get; set; }
 
     public DateTime OrderedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? StartedAtUtc { get; set; }

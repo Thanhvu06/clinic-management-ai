@@ -56,6 +56,8 @@ import { DiagnosticOrderPrint } from './pages/doctor/DiagnosticOrderPrint';
 import { TechnicianDashboard } from './pages/technician/TechnicianDashboard';
 import { TechnicianOrderDetail } from './pages/technician/TechnicianOrderDetail';
 import { SpecimenLabelPrint } from './pages/technician/SpecimenLabelPrint';
+import { TechnicianVerificationQueue } from './pages/technician/TechnicianVerificationQueue';
+import { DiagnosticResultPrint } from './pages/common/DiagnosticResultPrint';
 import { PatientDiagnosticResults } from './pages/patient/PatientDiagnosticResults';
 import { ChatProvider } from './contexts/ChatContext';
 import { DialogProvider } from './contexts/DialogContext';
@@ -134,6 +136,7 @@ function App() {
                                         <Route path="/doctor/appointments/:id/examination" element={<DoctorExaminationWorkspace />} />
                                         <Route path="/doctor/visits/:visitId/examination" element={<DoctorExaminationWorkspace />} />
                                         <Route path="/doctor/diagnostic-orders/:id/print" element={<DiagnosticOrderPrint />} />
+                                        <Route path="/doctor/diagnostic-orders/:id/result-print" element={<DiagnosticResultPrint actor="doctor" />} />
                                         <Route path="/doctor/leave-requests" element={<DoctorLeaveRequests />} />
                                     </Route>
 
@@ -163,8 +166,10 @@ function App() {
                                     {/* Diagnostic Technician Routes */}
                                     <Route element={<RoleRoute roles={['DiagnosticTechnician']} />}>
                                         <Route path="/diagnostics" element={<TechnicianDashboard />} />
+                                        <Route path="/diagnostics/verification" element={<TechnicianVerificationQueue />} />
                                         <Route path="/diagnostics/orders/:id" element={<TechnicianOrderDetail />} />
                                         <Route path="/diagnostics/orders/:id/labels" element={<SpecimenLabelPrint />} />
+                                        <Route path="/diagnostics/orders/:id/result-print" element={<DiagnosticResultPrint />} />
                                     </Route>
                                 </Route>
                             </Route>

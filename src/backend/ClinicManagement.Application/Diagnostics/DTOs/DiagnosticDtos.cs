@@ -126,6 +126,7 @@ public class RejectSpecimenRequest
 public class DiagnosticOrderDto
 {
     public long Id { get; set; }
+    public string? FacilityName { get; set; }
     public string OrderCode { get; set; } = string.Empty;
     public long? AppointmentId { get; set; }
     public string AppointmentCode { get; set; } = string.Empty;
@@ -158,6 +159,18 @@ public class DiagnosticOrderDto
 
     public DateTime? ReviewedAtUtc { get; set; }
     public string? ReviewedByDoctorName { get; set; }
+
+    public string VerificationStatus { get; set; } = string.Empty;
+    public DateTime? SubmittedForVerificationAtUtc { get; set; }
+    public string? SubmittedForVerificationByUserName { get; set; }
+    public DateTime? VerifiedAtUtc { get; set; }
+    public string? VerifiedByUserName { get; set; }
+    public string? VerificationNote { get; set; }
+    public DateTime? ReturnedAtUtc { get; set; }
+    public string? ReturnedByUserName { get; set; }
+    public string? ReturnReason { get; set; }
+    public int ReturnCount { get; set; }
+    public bool CanCurrentUserVerify { get; set; }
 
     public string? RowVersion { get; set; }
     public List<DiagnosticOrderItemDto> Items { get; set; } = new();
@@ -197,6 +210,20 @@ public class RecordDiagnosticResultRequest
 
 public class TransitionDiagnosticOrderRequest
 {
+    public string? RowVersion { get; set; }
+}
+
+public class VerifyDiagnosticOrderRequest
+{
+    [MaxLength(500)]
+    public string? Note { get; set; }
+    public string? RowVersion { get; set; }
+}
+
+public class ReturnDiagnosticOrderRequest
+{
+    [MaxLength(500)]
+    public string Reason { get; set; } = string.Empty;
     public string? RowVersion { get; set; }
 }
 

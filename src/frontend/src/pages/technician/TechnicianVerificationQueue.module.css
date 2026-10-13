@@ -1,0 +1,4 @@
+.page { padding: var(--cc-space-lg); min-width: 0; }
+.table { overflow-x: auto; }
+.critical { color: var(--cc-color-danger); background: var(--cc-color-danger-bg); border-color: var(--cc-color-danger); margin-top: var(--cc-space-xs); }
+.link { color: var(--cc-color-primary); font-weight: 600; }
