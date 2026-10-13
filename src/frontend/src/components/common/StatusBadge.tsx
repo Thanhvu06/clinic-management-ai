@@ -18,9 +18,51 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     const normalize = (status || '').toLowerCase().trim();
 
     let color: TagColor = 'default';
-    let text = label || status;
+    let text = 'Không xác định';
 
     switch (normalize) {
+        case 'registered':
+            color = 'processing';
+            text = label || 'Đã đăng ký';
+            break;
+        case 'waitingfordoctor':
+        case 'waitingdoctor':
+            color = 'warning';
+            text = label || 'Chờ khám';
+            break;
+        case 'waitingfordiagnostics':
+        case 'indiagnostics':
+            color = 'processing';
+            text = label || 'Đang làm cận lâm sàng';
+            break;
+        case 'resultsready':
+            color = 'success';
+            text = label || 'Đã có kết quả CLS';
+            break;
+        case 'consultationcompleted':
+            color = 'success';
+            text = label || 'Đã khám xong';
+            break;
+        case 'transferred':
+            color = 'processing';
+            text = label || 'Đã chuyển khoa';
+            break;
+        case 'pendingreschedule':
+            color = 'warning';
+            text = label || 'Chờ đổi lịch';
+            break;
+        case 'pendingcancellation':
+            color = 'warning';
+            text = label || 'Chờ hủy lịch';
+            break;
+        case 'inpharmacy':
+            color = 'processing';
+            text = label || 'Đang cấp thuốc';
+            break;
+        case 'inbilling':
+            color = 'warning';
+            text = label || 'Đang thanh toán';
+            break;
         case 'confirmed':
         case 'daxacnhan':
         case 'đã xác nhận':
