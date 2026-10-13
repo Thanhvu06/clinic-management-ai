@@ -1104,6 +1104,21 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Property<long?>("PerformingDepartmentId")
                         .HasColumnType("bigint");
 
+                    b.Property<int>("ReturnCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("ReturnReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ReturnedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ReturnedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("ReviewedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -1128,6 +1143,29 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<DateTime?>("SubmittedForVerificationAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("SubmittedForVerificationByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("VerificationNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("VerificationStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("NotRequired");
+
+                    b.Property<DateTime?>("VerifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("VerifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AppointmentId");
@@ -1144,6 +1182,8 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.HasIndex("SourceAiActionId")
                         .IsUnique()
                         .HasFilter("[SourceAiActionId] IS NOT NULL");
+
+                    b.HasIndex("VerificationStatus");
 
                     b.HasIndex("OrderingDoctorId", "Status");
 

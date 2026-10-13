@@ -53,6 +53,10 @@ export const diagnosticStatusLabels: Record<DiagnosticOrderStatus, string> = {
     Cancelled: 'Đã hủy',
 };
 
+export const diagnosticVerificationLabels = {
+    NotRequired: 'Không cần duyệt', Pending: 'Chờ duyệt', Verified: 'Đã duyệt', Returned: 'Bị trả lại',
+};
+
 export const diagnosticStatusTone: Record<DiagnosticOrderStatus, string> = {
     Ordered: 'pending', InProgress: 'confirmed', Completed: 'completed', Cancelled: 'cancelled',
 };

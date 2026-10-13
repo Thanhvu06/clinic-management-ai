@@ -15,6 +15,24 @@ namespace ClinicManagement.Api.Controllers;
 [Authorize(Roles = RoleNames.DiagnosticTechnician)]
 public class DiagnosticTechnicianController : ControllerBase
 {
+    [HttpGet("orders/verification-queue")]
+    public async Task<IActionResult> GetVerificationQueue([FromQuery] int page = 1, [FromQuery] int pageSize = 15)
+    {
+        return Ok(ApiResponse<PagedResult<DiagnosticOrderDto>>.Ok(await _workflowService.GetVerificationQueueAsync(page, pageSize)));
+    }
+
+    [HttpPost("orders/{orderId}/verify")]
+    public async Task<IActionResult> VerifyOrder(long orderId, [FromBody] VerifyDiagnosticOrderRequest request)
+    {
+        return Ok(ApiResponse<DiagnosticOrderDto>.Ok(await _workflowService.VerifyOrderAsync(orderId, request)));
+    }
+
+    [HttpPost("orders/{orderId}/return")]
+    public async Task<IActionResult> ReturnOrder(long orderId, [FromBody] ReturnDiagnosticOrderRequest request)
+    {
+        return Ok(ApiResponse<DiagnosticOrderDto>.Ok(await _workflowService.ReturnOrderAsync(orderId, request)));
+    }
+
     [HttpPost("orders/{orderId}/items/{itemId}/specimen/collect")]
     public async Task<IActionResult> CollectSpecimen(long orderId, long itemId, [FromBody] CollectSpecimenRequest request)
     {

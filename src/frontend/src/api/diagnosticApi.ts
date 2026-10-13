@@ -18,6 +18,15 @@ export interface PagedResult<T> {
 }
 
 export const diagnosticApi = {
+    getVerificationQueue: async (params: { page?: number; pageSize?: number } = {}): Promise<ApiResponse<PagedResult<DiagnosticOrderDto>>> => {
+        return axiosClient.get<any, ApiResponse<PagedResult<DiagnosticOrderDto>>>('/diagnostics/orders/verification-queue', { params });
+    },
+    verifyOrder: async (orderId: number, data: import('../types/diagnostic').VerifyDiagnosticOrderRequest): Promise<ApiResponse<DiagnosticOrderDto>> => {
+        return axiosClient.post<any, ApiResponse<DiagnosticOrderDto>>(`/diagnostics/orders/${orderId}/verify`, data);
+    },
+    returnOrder: async (orderId: number, data: import('../types/diagnostic').ReturnDiagnosticOrderRequest): Promise<ApiResponse<DiagnosticOrderDto>> => {
+        return axiosClient.post<any, ApiResponse<DiagnosticOrderDto>>(`/diagnostics/orders/${orderId}/return`, data);
+    },
     collectSpecimen: async (orderId: number, itemId: number, data: import('../types/diagnostic').CollectSpecimenRequest): Promise<ApiResponse<DiagnosticOrderDto>> => {
         return axiosClient.post<any, ApiResponse<DiagnosticOrderDto>>(`/diagnostics/orders/${orderId}/items/${itemId}/specimen/collect`, data);
     },

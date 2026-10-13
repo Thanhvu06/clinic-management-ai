@@ -73,3 +73,7 @@
 .collectionNote { flex: 1 1 240px; }
 .specimenPrintLink { display: inline-block; margin-top: var(--cc-space-sm); color: var(--cc-color-primary); }
 .rejectionForm { display: flex; flex-direction: column; gap: var(--cc-space-xs); }
+.verificationPanel { margin-bottom: var(--cc-space-md); }
+.verificationActions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--cc-space-sm); margin-top: var(--cc-space-md); }
+.verificationNote { flex: 1 1 240px; }
+.resultPrintLink { color: var(--cc-color-primary); font-weight: 600; }

@@ -1554,6 +1554,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                     )
                                                 )}
                                                 <span className={tabStyles.orderCreatedTime}>
+                                                    {(order.verificationStatus === 'Pending' || order.verificationStatus === 'Returned') && <span className={tabStyles.verificationPending}>Chờ duyệt kết quả</span>}
                                                     Thời gian lập: {new Date(order.orderedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                                                 </span>
                                             </div>
@@ -1569,6 +1570,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                     <Printer size={14} />
                                                     <span>In phiếu chỉ định</span>
                                                 </Button>
+                                                {order.status === 'Completed' && <Button href={`/doctor/diagnostic-orders/${order.id}/result-print`} target="_blank" rel="noopener noreferrer" className={[tabStyles.iconActionButton, tabStyles.printOrderButton].join(' ')}><Printer size={14} /><span>In phiếu kết quả</span></Button>}
 
                                                 {/* Doctor Review Confirmation Button */}
                                                 {order.status === 'Completed' && !order.reviewedAtUtc && (
@@ -1635,7 +1637,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                 {
                                                     header: "Kết quả đo / Trị số", accessor: (item) => {
                                                         return <>
-                                                            {item.result?.values?.length ? (
+                                                            {order.verificationStatus === 'Pending' || order.verificationStatus === 'Returned' ? <span className={tabStyles.emptyValue}>Đang chờ duyệt</span> : item.result?.values?.length ? (
                                                                 <div className={tabStyles.parameterTable}><DataTable ariaLabel={`Chỉ số: ${item.serviceName}`} data={item.result.values} keyExtractor={value => value.parameterId} columns={[
                                                                     { header: 'Chỉ số', accessor: value => `${value.parameterName} (${value.parameterCode})` },
                                                                     { header: 'Kết quả + đơn vị', accessor: value => <span className={tabStyles[diagnosticFlagTone(value.flag)]}>{value.value} {value.unit}</span> },

@@ -1,0 +1,30 @@
+.page { padding: var(--cc-space-lg); min-width: 0; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--cc-space-md); }
+.toolbar a { color: var(--cc-color-primary); }
+.sheet { max-width: 210mm; padding: var(--cc-space-xl); margin: 0 auto; background: var(--cc-color-bg-container); color: var(--cc-color-text-dark); border: 1px solid var(--cc-color-border); font-size: 10pt; }
+.header { text-align: center; border-bottom: 1px solid var(--cc-color-border); margin-bottom: var(--cc-space-md); }
+.header h1 { font-size: 16pt; margin: var(--cc-space-md) 0; }
+.patient p, .footer p { margin: var(--cc-space-sm) 0; }
+.service { margin-top: var(--cc-space-lg); break-inside: avoid; }
+.service h2 { font-size: 12pt; margin-bottom: var(--cc-space-sm); }
+.code { font-weight: 400; font-size: 10pt; }
+.values { width: 100%; border-collapse: collapse; }
+.values th, .values td { border: 1px solid var(--cc-color-border); padding: var(--cc-space-sm); text-align: left; }
+.values thead { display: table-header-group; }
+.values tr { break-inside: avoid; }
+.critical { font-weight: 700; }
+.textResult { white-space: pre-wrap; }
+.barcodeBlock { width: 50mm; text-align: center; margin-top: var(--cc-space-sm); font-size: 8pt; break-inside: avoid; }
+.barcode { width: 100%; height: 8mm; fill: var(--cc-color-text-dark); shape-rendering: crispEdges; }
+.footer { margin-top: var(--cc-space-lg); border-top: 1px solid var(--cc-color-border); padding-top: var(--cc-space-md); break-inside: avoid; }
+.signature { text-align: right; height: 25mm; padding-top: var(--cc-space-md); }
+@media print {
+    @page diagnostic-result { size: A4; margin: 12mm; }
+    :global(body):has(.page) { page: diagnostic-result; }
+    :global(body):has(.page) * { visibility: hidden; }
+    :global(body):has(.page), :global(body):has(.page) :global(#root) { height: auto; overflow: visible; }
+    .toolbar { display: none; }
+    .page { padding: 0; }
+    .sheet { page: diagnostic-result; position: absolute; top: 0; left: 0; width: 100%; max-width: none; box-sizing: border-box; border: 0; padding: 0; margin: 0; }
+    .sheet, .sheet * { visibility: visible !important; }
+}

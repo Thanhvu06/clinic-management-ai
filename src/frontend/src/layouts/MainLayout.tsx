@@ -8,7 +8,7 @@ import {
     LayoutDashboard, CalendarDays, CalendarCheck,
     History, Users, Stethoscope,
     ShieldPlus, LogOut, Menu as MenuIcon, X, ShieldAlert, Pill, Package, Calendar,
-    Receipt, TrendingUp, FlaskConical, Building2, UserPlus
+    Receipt, TrendingUp, FlaskConical, Building2, UserPlus, ClipboardCheck
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { NotificationBell } from '../components/common/NotificationBell';
@@ -60,6 +60,7 @@ const NAV_BY_ROLE: Record<string, NavEntry[]> = {
     ],
     DiagnosticTechnician: [
         { to: '/diagnostics', icon: FlaskConical, label: 'Hàng đợi chỉ định' },
+        { to: '/diagnostics/verification', icon: ClipboardCheck, label: 'Chờ duyệt kết quả' },
     ],
 };
 
@@ -100,6 +101,7 @@ export const MainLayout: React.FC = () => {
     };
 
     const getPageTitle = (pathname: string) => {
+        if (pathname.endsWith('/result-print')) return 'Phiếu kết quả cận lâm sàng';
         if (pathname.startsWith('/doctor/queue')) return 'Hàng đợi khám bệnh';
         if (pathname.startsWith('/doctor/schedule')) return 'Lịch trực & ca khám';
         if (pathname.startsWith('/doctor/appointments') && pathname.includes('/examination')) return 'Bàn khám lâm sàng';
@@ -131,6 +133,7 @@ export const MainLayout: React.FC = () => {
         if (pathname.startsWith('/pharmacy/inventory')) return 'Biến động tồn kho';
         if (pathname.startsWith('/pharmacy')) return 'Bàn làm việc Dược sĩ';
 
+        if (pathname.startsWith('/diagnostics/verification')) return 'Chờ duyệt kết quả';
         if (pathname.startsWith('/diagnostics/orders/')) return 'Thực hiện phiếu chỉ định CLS';
         if (pathname.startsWith('/diagnostics')) return 'Bàn làm việc Cận lâm sàng';
 
