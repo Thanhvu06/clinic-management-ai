@@ -24,6 +24,8 @@ Mật khẩu chung cho tất cả các tài khoản demo: **`Demo@12345`**
 | **Admin** | `admin@cliniccare.local` | Quản trị viên | Toàn quyền cấu hình phòng khám |
 | **Receptionist** | `reception@cliniccare.local` | Lễ tân Nguyễn Thu Trang | Tiếp nhận & check-in bệnh nhân |
 | **Pharmacist** | `pharmacist@cliniccare.local` | Dược sĩ Lâm Sàng | Cấp phát & quản lý kho thuốc |
+| **LabSupervisor** | `labsupervisor@cliniccare.local` | Trưởng khoa Xét nghiệm Đỗ Thị Lan | Duyệt kết quả xét nghiệm tại cơ sở được phân công |
+| **DiagnosticTechnician 2** | `technician.02@cliniccare.local` | Kỹ thuật viên Phạm Quốc Bảo | Lấy mẫu, nhập kết quả và duyệt phiếu do KTV khác nhập |
 | **Patient** | `patient@cliniccare.local` | Bệnh nhân Demo | Hồ sơ đặt lịch mẫu |
 | **Doctor (Chính)** | `doctor@cliniccare.local` | **BS.CKI Nguyễn Minh Khải** | **Nội Tổng Quát & Tim Mạch (12 năm KN)** |
 | Doctor 2 | `bacsi.02@cliniccare.local` | BS Trần Thu Hà | Sản - Phụ Khoa |

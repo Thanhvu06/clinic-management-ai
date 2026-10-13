@@ -165,6 +165,7 @@ public class DiagnosticOrderDto
     public string? SubmittedForVerificationByUserName { get; set; }
     public DateTime? VerifiedAtUtc { get; set; }
     public string? VerifiedByUserName { get; set; }
+    public string? VerifiedByRole { get; set; }
     public string? VerificationNote { get; set; }
     public DateTime? ReturnedAtUtc { get; set; }
     public string? ReturnedByUserName { get; set; }

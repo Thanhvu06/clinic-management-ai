@@ -13,6 +13,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { NotificationBell } from '../components/common/NotificationBell';
 import { RoleCopilotPanel } from '../components/RoleCopilotPanel';
+import { COPILOT_ROLE_CONFIG } from '../components/copilot/copilotConfig';
 import { CopilotResourceProvider } from '../components/copilot/copilotResourceContext';
 import { layout } from '../theme/tokens';
 
@@ -30,6 +31,7 @@ const NAV_BY_ROLE: Record<string, NavEntry[]> = {
         { to: '/doctor/schedule', icon: CalendarCheck, label: 'Lịch trực & ca khám' },
         { to: '/doctor/appointments', icon: CalendarDays, label: 'Danh sách lịch khám' },
         { to: '/doctor/leave-requests', icon: History, label: 'Yêu cầu nghỉ phép' },
+        { to: '/doctor/diagnostic-verification', icon: ClipboardCheck, label: 'Duyệt kết quả CLS' },
     ],
     Receptionist: [
         { to: '/reception', icon: LayoutDashboard, label: 'Bàn làm việc' },
@@ -62,10 +64,13 @@ const NAV_BY_ROLE: Record<string, NavEntry[]> = {
         { to: '/diagnostics', icon: FlaskConical, label: 'Hàng đợi chỉ định' },
         { to: '/diagnostics/verification', icon: ClipboardCheck, label: 'Chờ duyệt kết quả' },
     ],
+    LabSupervisor: [
+        { to: '/lab', icon: FlaskConical, label: 'Tổng quan xét nghiệm' },
+    ],
 };
 
 // Trang gốc theo vai trò chỉ sáng khi khớp chính xác, không khớp theo tiền tố.
-const ROLE_HOME_ROUTES = new Set(['/doctor', '/admin', '/reception', '/pharmacy', '/diagnostics']);
+const ROLE_HOME_ROUTES = new Set(['/doctor', '/admin', '/reception', '/pharmacy', '/diagnostics', '/lab']);
 
 const isNavActive = (to: string, pathname: string) =>
     pathname === to || (!ROLE_HOME_ROUTES.has(to) && pathname.startsWith(to));
@@ -95,6 +100,7 @@ export const MainLayout: React.FC = () => {
             case 'Admin': return 'Quản trị viên';
             case 'Pharmacist': return 'Dược sĩ';
             case 'DiagnosticTechnician': return 'Kỹ thuật viên CLS';
+            case 'LabSupervisor': return 'Trưởng khoa xét nghiệm';
             case 'Patient': return 'Bệnh nhân';
             default: return role || 'Người dùng';
         }
@@ -102,6 +108,10 @@ export const MainLayout: React.FC = () => {
 
     const getPageTitle = (pathname: string) => {
         if (pathname.endsWith('/result-print')) return 'Phiếu kết quả cận lâm sàng';
+        if (pathname.startsWith('/lab/orders/')) return 'Duyệt kết quả xét nghiệm';
+        if (pathname === '/lab') return 'Tổng quan xét nghiệm';
+        if (pathname.startsWith('/doctor/diagnostic-verification/')) return 'Duyệt phiếu kết quả CLS';
+        if (pathname.startsWith('/doctor/diagnostic-verification')) return 'Duyệt kết quả CLS';
         if (pathname.startsWith('/doctor/queue')) return 'Hàng đợi khám bệnh';
         if (pathname.startsWith('/doctor/schedule')) return 'Lịch trực & ca khám';
         if (pathname.startsWith('/doctor/appointments') && pathname.includes('/examination')) return 'Bàn khám lâm sàng';
@@ -264,7 +274,7 @@ export const MainLayout: React.FC = () => {
                     <Layout.Content className={styles.content}>
                         <Outlet />
                     </Layout.Content>
-                    <RoleCopilotPanel />
+                    {user?.role && Object.hasOwn(COPILOT_ROLE_CONFIG, user.role) && <RoleCopilotPanel />}
                 </CopilotResourceProvider>
             </Layout>
         </Layout>

@@ -8,7 +8,7 @@ import { diagnosticNotificationTime, isCriticalDiagnosticFlag } from '../../util
 import { encodeCode39 } from '../../utils/code39';
 import styles from './DiagnosticResultPrint.module.css';
 
-export const DiagnosticResultPrint = ({ actor = 'technician' }: { actor?: 'technician' | 'doctor' }) => {
+export const DiagnosticResultPrint = ({ actor = 'technician', returnPath }: { actor?: 'technician' | 'doctor' | 'verification'; returnPath?: string }) => {
     const { id } = useParams<{ id: string }>();
     const [order, setOrder] = useState<DiagnosticOrderDto | null>(null);
     const [loading, setLoading] = useState(true);
@@ -16,7 +16,7 @@ export const DiagnosticResultPrint = ({ actor = 'technician' }: { actor?: 'techn
     const load = useCallback(async (signal?: AbortSignal) => {
         setLoading(true); setError(''); setOrder(null);
         try {
-            const response = await (actor === 'doctor' ? diagnosticApi.getDoctorOrderById(Number(id)) : diagnosticApi.getTechnicianOrderById(Number(id)));
+            const response = await (actor === 'verification' ? diagnosticApi.getVerificationOrder(Number(id)) : actor === 'doctor' ? diagnosticApi.getDoctorOrderById(Number(id)) : diagnosticApi.getTechnicianOrderById(Number(id)));
             if (signal?.aborted) return;
             if (!response.success) throw new Error(response.message || 'Không thể tải phiếu kết quả.');
             setOrder(response.data || null);
@@ -36,7 +36,7 @@ export const DiagnosticResultPrint = ({ actor = 'technician' }: { actor?: 'techn
     const performedBy = [...new Set(order.items.map(item => item.result?.resultedByUserName).filter(Boolean))].join(', ') || order.completedByUserName || '—';
     const time = (value?: string | null) => value ? diagnosticNotificationTime(/(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}Z`) : '—';
     return <div className={styles.page}>
-        <div className={styles.toolbar}><Link to={actor === 'doctor' ? '/doctor/appointments' : `/diagnostics/orders/${order.id}`}>Quay lại</Link><Button type="primary" onClick={() => window.print()}>In</Button></div>
+        <div className={styles.toolbar}><Link to={returnPath || (actor === 'doctor' ? '/doctor/appointments' : `/diagnostics/orders/${order.id}`)}>Quay lại</Link><Button type="primary" onClick={() => window.print()}>In</Button></div>
         <article className={styles.sheet} aria-label="Phiếu kết quả cận lâm sàng">
             <header className={styles.header}><strong>{order.facilityName || 'ClinicCare AI'}</strong><h1>PHIẾU KẾT QUẢ CẬN LÂM SÀNG</h1><p>Mã phiếu: <strong>{order.orderCode}</strong></p></header>
             <section className={styles.patient} aria-label="Thông tin bệnh nhân">
