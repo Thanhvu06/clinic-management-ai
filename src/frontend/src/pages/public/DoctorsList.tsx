@@ -90,7 +90,7 @@ export const DoctorsList: React.FC = () => {
     return (
         <div className={styles.pageContainer}>
             <div className={styles.pageHeader}>
-                <nav className={styles.breadcrumb} aria-label="Breadcrumb">
+                <nav className={styles.breadcrumb} aria-label="Đường dẫn trang">
                     <Link to="/">Trang chủ</Link>
                     <span>/</span>
                     <span aria-current="page">Đội ngũ Bác sĩ</span>

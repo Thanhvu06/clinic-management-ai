@@ -211,7 +211,7 @@ export const AdminWorkSchedules: React.FC = () => {
                             { header: 'Trạng thái', accessor: schedule => <Tag color={schedule.isActive ? 'success' : 'error'}>{schedule.isActive ? 'Đang hoạt động' : 'Đã khóa'}</Tag> },
                             { header: 'Thao tác', align: 'right', accessor: schedule => <Space wrap>
                                 <Button size="small" type="primary" icon={<PlayCircle size={14} />} loading={actionLoading === schedule.id} disabled={actionLoading === schedule.id}
-                                    title="Tự động chia thời gian thành các khung giờ khám (slots)" onClick={() => handleGenerateSlots(schedule.id)}>Sinh Slot</Button>
+                                    title="Tự động chia thời gian thành các khung giờ khám" onClick={() => handleGenerateSlots(schedule.id)}>Tạo khung giờ</Button>
                                 <Button size="small" icon={<Edit size={14} />} onClick={() => { setFormError(''); setModal({ isOpen: true, isEdit: true, data: { ...schedule } }); }}>Sửa</Button>
                                 <Button size="small" danger={schedule.isActive} icon={schedule.isActive ? <XCircle size={14} /> : <CheckCircle size={14} />}
                                     onClick={() => handleToggleStatus(schedule.id, schedule.isActive)}>{schedule.isActive ? 'Khóa' : 'Mở khóa'}</Button>

@@ -4,6 +4,7 @@ using ClinicManagement.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace ClinicManagement.Infrastructure.Persistence;
 
@@ -124,6 +125,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         });
             
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+        // SQL datetime values do not retain Kind. Mark UTC columns on materialization
+        // without shifting their stored ticks or changing local date/time properties.
+        var utcConverter = new ValueConverter<DateTime, DateTime>(
+            value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
+        foreach (var property in builder.Model.GetEntityTypes().SelectMany(entity => entity.GetProperties()))
+        {
+            if (property.Name.EndsWith("Utc", StringComparison.Ordinal) &&
+                (property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTime?)))
+                property.SetValueConverter(utcConverter);
+        }
 
         if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
         {

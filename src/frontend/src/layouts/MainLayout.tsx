@@ -242,7 +242,7 @@ export const MainLayout: React.FC = () => {
                         type="button"
                         className={styles.hamburgerBtn}
                         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                        aria-label="Toggle Navigation"
+                        aria-label="Mở/đóng menu"
                     >
                         {isMobileMenuOpen ? <X size={24} /> : <MenuIcon size={24} />}
                     </button>

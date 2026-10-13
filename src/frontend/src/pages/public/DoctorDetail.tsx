@@ -108,7 +108,7 @@ export const DoctorDetail: React.FC = () => {
 
     return (
         <div className={styles.pageContainer}>
-            <nav className={styles.breadcrumb} aria-label="Breadcrumb">
+            <nav className={styles.breadcrumb} aria-label="Đường dẫn trang">
                 <Link to="/">Trang chủ</Link>
                 <span>/</span>
                 <Link to="/doctors">Bác sĩ</Link>

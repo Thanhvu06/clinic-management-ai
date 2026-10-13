@@ -145,7 +145,7 @@ export const SpecialtyDetail: React.FC = () => {
     </div>;
 
     return <div className={styles.pageContainer}>
-        <nav className={styles.breadcrumb} aria-label="Breadcrumb">
+        <nav className={styles.breadcrumb} aria-label="Đường dẫn trang">
             <Link to="/">Trang chủ</Link><span>/</span><Link to="/specialties">Chuyên khoa</Link><span>/</span>
             <span aria-current="page">{specialty.specialtyName}</span>
         </nav>
