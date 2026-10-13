@@ -1,0 +1,21 @@
+.page { padding: var(--cc-space-lg); min-width: 0; }
+.toolbar { display: flex; gap: var(--cc-space-md); align-items: center; margin-bottom: var(--cc-space-lg); }
+.toolbar a { color: var(--cc-color-primary); }
+.title { font-size: 1.25rem; color: var(--cc-color-text); }
+.labels { display: flex; flex-wrap: wrap; gap: var(--cc-space-md); }
+.label { width: 50mm; height: 25mm; box-sizing: border-box; padding: 1mm 2mm; background: var(--cc-color-bg-container); color: var(--cc-color-text-dark); border: 1px solid var(--cc-color-border); font-size: 5pt; line-height: 1.1; overflow: hidden; break-inside: avoid; }
+.patientName { display: block; font-size: 7pt; }
+.serviceName, .sampleType { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.barcode { display: block; width: 100%; height: 6mm; margin-top: 0.5mm; fill: var(--cc-color-text-dark); shape-rendering: crispEdges; }
+.barcodeText { text-align: center; font-size: 6pt; letter-spacing: 0.5pt; }
+@media print {
+    @page { size: 50mm 25mm; margin: 0; }
+    :global(body):has(.page) * { visibility: hidden; }
+    :global(body):has(.page), :global(body):has(.page) :global(#root) { height: auto; overflow: visible; }
+    .page { padding: 0; }
+    .toolbar, .title { display: none; }
+    .labels { position: absolute; top: 0; left: 0; display: block; margin: 0; }
+    .labels, .labels * { visibility: visible !important; }
+    .label { border: 0; break-after: page; break-inside: avoid; }
+    .label:last-child { break-after: auto; }
+}

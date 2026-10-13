@@ -18,6 +18,15 @@ export interface PagedResult<T> {
 }
 
 export const diagnosticApi = {
+    collectSpecimen: async (orderId: number, itemId: number, data: import('../types/diagnostic').CollectSpecimenRequest): Promise<ApiResponse<DiagnosticOrderDto>> => {
+        return axiosClient.post<any, ApiResponse<DiagnosticOrderDto>>(`/diagnostics/orders/${orderId}/items/${itemId}/specimen/collect`, data);
+    },
+    receiveSpecimen: async (orderId: number, itemId: number, data: import('../types/diagnostic').ReceiveSpecimenRequest): Promise<ApiResponse<DiagnosticOrderDto>> => {
+        return axiosClient.post<any, ApiResponse<DiagnosticOrderDto>>(`/diagnostics/orders/${orderId}/items/${itemId}/specimen/receive`, data);
+    },
+    rejectSpecimen: async (orderId: number, itemId: number, data: import('../types/diagnostic').RejectSpecimenRequest): Promise<ApiResponse<DiagnosticOrderDto>> => {
+        return axiosClient.post<any, ApiResponse<DiagnosticOrderDto>>(`/diagnostics/orders/${orderId}/items/${itemId}/specimen/reject`, data);
+    },
     // Catalog
     getCatalog: async (): Promise<ApiResponse<DiagnosticServiceDto[]>> => {
         return axiosClient.get<any, ApiResponse<DiagnosticServiceDto[]>>('/diagnostic-services');

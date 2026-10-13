@@ -39,5 +39,12 @@ public class DiagnosticOrderItemConfiguration : IEntityTypeConfiguration<Diagnos
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(i => i.RowVersion).IsRowVersion();
+        builder.Property(i => i.SpecimenStatus).HasConversion<string>().HasMaxLength(30)
+            .HasDefaultValue(ClinicManagement.Domain.Enums.SpecimenStatus.NotRequired);
+        builder.Property(i => i.SpecimenBarcode).HasMaxLength(40);
+        builder.HasIndex(i => i.SpecimenBarcode).IsUnique().HasFilter("[SpecimenBarcode] IS NOT NULL");
+        builder.Property(i => i.RejectionReason).HasConversion<string>().HasMaxLength(30);
+        builder.Property(i => i.RejectionNote).HasMaxLength(500);
+        builder.Property(i => i.RecollectCount).HasDefaultValue(0);
     }
 }

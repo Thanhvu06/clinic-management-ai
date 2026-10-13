@@ -1039,6 +1039,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         var order = await _dbContext.DiagnosticOrders
             .Include(o => o.Items)
+                .ThenInclude(i => i.DiagnosticService)
             .Include(o => o.Appointment)
             .Include(o => o.PatientVisit)
             .FirstOrDefaultAsync(o => o.Id == orderId);
@@ -1065,6 +1066,13 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         foreach (var item in order.Items.Where(i => i.Status == DiagnosticItemStatus.Ordered))
         {
             item.Status = DiagnosticItemStatus.InProgress;
+            item.RowVersion = Guid.NewGuid().ToByteArray();
+        }
+
+        foreach (var item in order.Items.Where(i => i.Status != DiagnosticItemStatus.Cancelled &&
+                     i.DiagnosticService.SpecimenType != null && i.SpecimenStatus == SpecimenStatus.NotRequired))
+        {
+            item.SpecimenStatus = SpecimenStatus.PendingCollection;
             item.RowVersion = Guid.NewGuid().ToByteArray();
         }
 
@@ -1119,6 +1127,9 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         if (item.Status == DiagnosticItemStatus.Cancelled)
             throw new BusinessException("ITEM_CANCELLED", "Dịch vụ chỉ định này đã bị hủy, không thể nhập kết quả.");
+
+        if (item.SpecimenStatus is SpecimenStatus.PendingCollection or SpecimenStatus.Collected or SpecimenStatus.Rejected)
+            throw new BusinessException("SPECIMEN_NOT_RECEIVED", "Chỉ nhập kết quả sau khi phòng xét nghiệm đã nhận mẫu đạt yêu cầu.");
 
         if (request?.RowVersion != null)
         {
@@ -1239,6 +1250,108 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         return (await GetOrderDtoByIdAsync(orderId))!;
     }
+
+    public async Task<DiagnosticOrderDto> CollectSpecimenAsync(long orderId, long itemId, CollectSpecimenRequest request)
+    {
+        var (order, item) = await LoadSpecimenItemAsync(orderId, itemId, request.RowVersion);
+        if (item.SpecimenStatus is not (SpecimenStatus.PendingCollection or SpecimenStatus.Rejected))
+            throw InvalidSpecimenState();
+        if (item.SpecimenStatus == SpecimenStatus.Rejected) item.RecollectCount++;
+        item.RejectedAtUtc = null;
+        item.RejectedByUserId = null;
+        item.RejectionReason = null;
+        item.RejectionNote = null;
+        item.ReceivedAtUtc = null;
+        item.ReceivedByUserId = null;
+        item.SpecimenBarcode = $"S{item.Id:D7}-{item.RecollectCount + 1}";
+        item.SpecimenStatus = SpecimenStatus.Collected;
+        item.CollectedAtUtc = DateTime.UtcNow;
+        item.CollectedByUserId = GetUserId();
+        return await SaveSpecimenStepAsync(order, item, "SpecimenCollected", request.Note);
+    }
+
+    public async Task<DiagnosticOrderDto> ReceiveSpecimenAsync(long orderId, long itemId, ReceiveSpecimenRequest request)
+    {
+        var (order, item) = await LoadSpecimenItemAsync(orderId, itemId, request.RowVersion);
+        if (item.SpecimenStatus != SpecimenStatus.Collected) throw InvalidSpecimenState();
+        item.SpecimenStatus = SpecimenStatus.Received;
+        item.ReceivedAtUtc = DateTime.UtcNow;
+        item.ReceivedByUserId = GetUserId();
+        return await SaveSpecimenStepAsync(order, item, "SpecimenReceived", null);
+    }
+
+    public async Task<DiagnosticOrderDto> RejectSpecimenAsync(long orderId, long itemId, RejectSpecimenRequest request)
+    {
+        var (order, item) = await LoadSpecimenItemAsync(orderId, itemId, request.RowVersion);
+        if (item.SpecimenStatus != SpecimenStatus.Collected) throw InvalidSpecimenState();
+        if (!Enum.IsDefined(request.Reason) || (request.Reason == SpecimenRejectionReason.Other && (request.Note?.Trim().Length ?? 0) < 5))
+            throw new BusinessException("VALIDATION_ERROR", "Vui lòng chọn lý do hợp lệ; lý do Khác cần ghi chú ít nhất 5 ký tự.");
+        item.SpecimenStatus = SpecimenStatus.Rejected;
+        item.RejectedAtUtc = DateTime.UtcNow;
+        item.RejectedByUserId = GetUserId();
+        item.RejectionReason = request.Reason;
+        item.RejectionNote = request.Note?.Trim();
+        var reason = SpecimenReasonLabel(request.Reason);
+        var doctorUser = await (from d in _dbContext.Doctors join u in _dbContext.Users on d.UserId equals u.Id
+                                where d.Id == order.OrderingDoctorId select u).FirstOrDefaultAsync();
+        if (doctorUser != null)
+        {
+            var message = $"Phiếu #{order.OrderCode}, dịch vụ {item.DiagnosticService.Name}: {reason}.";
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = doctorUser.Id, Type = NotificationType.Diagnostic,
+                Title = "Mẫu xét nghiệm bị từ chối — cần lấy lại", Message = message[..Math.Min(1000, message.Length)],
+                Route = order.AppointmentId.HasValue ? $"/doctor/appointments/{order.AppointmentId}/examination" : $"/doctor/visits/{order.PatientVisitId}/examination",
+                RelatedEntityType = "DiagnosticOrder", RelatedEntityId = order.Id.ToString(),
+                DedupeKey = $"diag_specimen_rejected_{item.Id}_{item.RecollectCount}", CreatedAtUtc = DateTime.UtcNow
+            });
+        }
+        return await SaveSpecimenStepAsync(order, item, "SpecimenRejected", $"{reason}; {item.RejectionNote}");
+    }
+
+    private async Task<(DiagnosticOrder Order, DiagnosticOrderItem Item)> LoadSpecimenItemAsync(long orderId, long itemId, string? rowVersion)
+    {
+        GetUserId();
+        var order = await _dbContext.DiagnosticOrders.Include(o => o.Appointment).Include(o => o.PatientVisit)
+            .Include(o => o.Items).ThenInclude(i => i.DiagnosticService)
+            .Include(o => o.Items).ThenInclude(i => i.Result).FirstOrDefaultAsync(o => o.Id == orderId);
+        if (order == null) throw new NotFoundException("Phiếu chỉ định không tồn tại.");
+        await LoadLinkedVisitAppointmentAsync(order);
+        await EnsureTechnicianFacilityScopeAsync(order);
+        var item = order.Items.FirstOrDefault(i => i.Id == itemId);
+        if (item == null) throw new NotFoundException("Dịch vụ chỉ định không tồn tại trong phiếu này.");
+        if (rowVersion != null) ValidateRowVersion(item.RowVersion, rowVersion);
+        if (order.Status != DiagnosticOrderStatus.InProgress || item.Status == DiagnosticItemStatus.Cancelled || item.Result != null)
+            throw InvalidSpecimenState();
+        return (order, item);
+    }
+
+    private async Task<DiagnosticOrderDto> SaveSpecimenStepAsync(DiagnosticOrder order, DiagnosticOrderItem item, string action, string? note)
+    {
+        item.RowVersion = Guid.NewGuid().ToByteArray();
+        _dbContext.SystemAuditLogs.Add(new SystemAuditLog
+        {
+            UserId = GetUserId(), Action = action, EntityName = "DiagnosticOrderItem", EntityId = item.Id.ToString(),
+            Description = $"Phiếu #{order.OrderCode}; mẫu {item.SpecimenBarcode}; lần lấy lại {item.RecollectCount}; {note?.Trim()}", CreatedAt = DateTime.UtcNow
+        });
+        try { await _dbContext.SaveChangesAsync(); }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ConflictException("Dữ liệu đã bị thay đổi bởi phiên làm việc khác. Vui lòng tải lại trang.");
+        }
+        return (await GetOrderDtoByIdAsync(order.Id))!;
+    }
+
+    private static BusinessException InvalidSpecimenState() =>
+        new("INVALID_SPECIMEN_STATE", "Trạng thái mẫu không phù hợp để thực hiện thao tác này.");
+
+    private static string SpecimenReasonLabel(SpecimenRejectionReason reason) => reason switch
+    {
+        SpecimenRejectionReason.Hemolyzed => "Mẫu tán huyết", SpecimenRejectionReason.Clotted => "Mẫu đông",
+        SpecimenRejectionReason.InsufficientVolume => "Không đủ thể tích", SpecimenRejectionReason.WrongContainer => "Sai loại ống",
+        SpecimenRejectionReason.LeakedOrBroken => "Ống vỡ/rò rỉ", SpecimenRejectionReason.LabelMismatch => "Thông tin nhãn không khớp",
+        SpecimenRejectionReason.PatientNotPrepared => "Bệnh nhân chưa chuẩn bị đúng", _ => "Khác"
+    };
 
     private static bool IsCritical(DiagnosticResultFlag flag) => flag is DiagnosticResultFlag.CriticalLow or DiagnosticResultFlag.CriticalHigh;
 
@@ -1443,12 +1556,17 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
     private static DiagnosticOrderDto RedactUnpublishedResultsForPatient(DiagnosticOrderDto order)
     {
-        if (Enum.TryParse<DiagnosticOrderStatus>(order.Status, out var status) &&
-            DiagnosticResultPublicationPolicy.IsPublishedToPatient(status, order.ReviewedAtUtc))
-            return order;
-
+        var published = Enum.TryParse<DiagnosticOrderStatus>(order.Status, out var status) &&
+            DiagnosticResultPublicationPolicy.IsPublishedToPatient(status, order.ReviewedAtUtc);
         foreach (var item in order.Items)
-            item.Result = null;
+        {
+            if (!published) item.Result = null;
+            item.SpecimenBarcode = null;
+            item.CollectedByUserName = null;
+            item.ReceivedByUserName = null;
+            item.RejectedByUserName = null;
+            item.RejectionNote = null;
+        }
         return order;
     }
 
@@ -1476,7 +1594,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 order.Patient.UserId, order.OrderingDoctor.UserId, order.ReviewedByDoctor?.UserId,
                 order.StartedByUserId, order.CompletedByUserId
             }.Concat(order.Items.Where(item => item.Result != null)
-                .Select(item => (Guid?)item.Result!.ResultedByUserId)))
+                .Select(item => (Guid?)item.Result!.ResultedByUserId))
+                .Concat(order.Items.SelectMany(item => new[] { item.CollectedByUserId, item.ReceivedByUserId, item.RejectedByUserId })))
             .Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
         var users = (await _dbContext.Users.AsNoTracking().Where(user => userIds.Contains(user.Id))
             .Select(user => new { user.Id, user.FullName, user.PhoneNumber }).ToListAsync())
@@ -1549,6 +1668,12 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 Status = i.Status.ToString(),
                 RowVersion = i.RowVersion != null ? Convert.ToBase64String(i.RowVersion) : null,
                 Parameters = MapParameters(i.DiagnosticService, order.Patient.Gender),
+                SpecimenStatus = i.SpecimenStatus.ToString(), SpecimenType = i.DiagnosticService?.SpecimenType,
+                ContainerType = i.DiagnosticService?.ContainerType, SpecimenBarcode = i.SpecimenBarcode,
+                CollectedAtUtc = i.CollectedAtUtc, CollectedByUserName = UserName(i.CollectedByUserId),
+                ReceivedAtUtc = i.ReceivedAtUtc, ReceivedByUserName = UserName(i.ReceivedByUserId),
+                RejectedAtUtc = i.RejectedAtUtc, RejectedByUserName = UserName(i.RejectedByUserId),
+                RejectionReason = i.RejectionReason?.ToString(), RejectionNote = i.RejectionNote, RecollectCount = i.RecollectCount,
                 Result = resDto
             };
         }).ToList();

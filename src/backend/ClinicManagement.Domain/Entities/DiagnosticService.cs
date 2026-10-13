@@ -12,5 +12,7 @@ public class DiagnosticService
     public string? PreparationInstructions { get; set; }
     public decimal? Price { get; set; }
     public bool IsActive { get; set; } = true;
+    public string? SpecimenType { get; set; }
+    public string? ContainerType { get; set; }
     public ICollection<DiagnosticServiceParameter> Parameters { get; set; } = new List<DiagnosticServiceParameter>();
 }

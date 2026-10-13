@@ -1060,3 +1060,6 @@
 .critical { color: var(--cc-color-danger); font-weight: 700; }
 .parameterTable :global(tr):has(.critical) > :global(td) { background: var(--cc-color-danger-bg); }
 .criticalBadge { display: inline-block; padding: var(--cc-space-xxs) var(--cc-space-xs); margin-top: var(--cc-space-xxs); border-radius: var(--cc-radius-sm); color: var(--cc-color-danger); background: var(--cc-color-danger-bg); font-weight: 700; }
+.specimenStatus, .specimenRejected { display: inline-block; padding: var(--cc-space-xxs) var(--cc-space-xs); margin-top: var(--cc-space-xxs); border-radius: var(--cc-radius-sm); font-size: 0.8rem; }
+.specimenStatus { color: var(--cc-color-primary); background: var(--cc-color-primary-light); }
+.specimenRejected { color: var(--cc-color-danger); background: var(--cc-color-danger-bg); }

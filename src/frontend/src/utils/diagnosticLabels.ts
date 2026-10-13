@@ -1,5 +1,17 @@
 import type { DiagnosticCategory, DiagnosticOrderStatus } from '../types';
 import type { DiagnosticResultFlag, DiagnosticServiceParameterDto } from '../types/diagnostic';
+import type { SpecimenStatus, SpecimenRejectionReason } from '../types/diagnostic';
+
+export const specimenStatusLabels: Record<SpecimenStatus, string> = {
+    NotRequired: 'Không cần mẫu', PendingCollection: 'Chờ lấy mẫu', Collected: 'Đã lấy mẫu', Received: 'Đã nhận mẫu', Rejected: 'Mẫu bị từ chối',
+};
+export const specimenRejectionLabels: Record<SpecimenRejectionReason, string> = {
+    Hemolyzed: 'Mẫu tán huyết', Clotted: 'Mẫu đông', InsufficientVolume: 'Không đủ thể tích', WrongContainer: 'Sai loại ống',
+    LeakedOrBroken: 'Ống vỡ/rò rỉ', LabelMismatch: 'Thông tin nhãn không khớp', PatientNotPrepared: 'Bệnh nhân chưa chuẩn bị đúng', Other: 'Khác',
+};
+export const specimenRejectionValues: Record<SpecimenRejectionReason, number> = {
+    Hemolyzed: 1, Clotted: 2, InsufficientVolume: 3, WrongContainer: 4, LeakedOrBroken: 5, LabelMismatch: 6, PatientNotPrepared: 7, Other: 99,
+};
 
 export const diagnosticResultFlagLabels: Record<DiagnosticResultFlag, string> = {
     Normal: 'Bình thường', Low: 'Thấp', High: 'Cao',

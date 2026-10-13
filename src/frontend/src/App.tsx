@@ -55,6 +55,7 @@ import { NotificationsPage } from './pages/common/NotificationsPage';
 import { DiagnosticOrderPrint } from './pages/doctor/DiagnosticOrderPrint';
 import { TechnicianDashboard } from './pages/technician/TechnicianDashboard';
 import { TechnicianOrderDetail } from './pages/technician/TechnicianOrderDetail';
+import { SpecimenLabelPrint } from './pages/technician/SpecimenLabelPrint';
 import { PatientDiagnosticResults } from './pages/patient/PatientDiagnosticResults';
 import { ChatProvider } from './contexts/ChatContext';
 import { DialogProvider } from './contexts/DialogContext';
@@ -163,6 +164,7 @@ function App() {
                                     <Route element={<RoleRoute roles={['DiagnosticTechnician']} />}>
                                         <Route path="/diagnostics" element={<TechnicianDashboard />} />
                                         <Route path="/diagnostics/orders/:id" element={<TechnicianOrderDetail />} />
+                                        <Route path="/diagnostics/orders/:id/labels" element={<SpecimenLabelPrint />} />
                                     </Route>
                                 </Route>
                             </Route>

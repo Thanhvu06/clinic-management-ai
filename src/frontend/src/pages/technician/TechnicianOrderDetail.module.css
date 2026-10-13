@@ -62,3 +62,14 @@
     .navigation > :first-child, .startActions > :first-child, .completionActions > :global(.ant-btn) { width: 100%; }
     .startActions :global(.ant-btn) { height: auto; white-space: normal; }
 }
+.specimenPanel { margin-bottom: var(--cc-space-md); padding: var(--cc-space-md); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); background: var(--cc-color-bg-subtle); }
+.specimenPanel p { margin: var(--cc-space-xs) 0; }
+.specimenHeading, .specimenActions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-sm); }
+.specimenHeading { justify-content: space-between; }
+.specimenHeading h3 { margin: 0; font-size: 1rem; }
+.specimenTag { color: var(--cc-color-primary); background: var(--cc-color-primary-light); border-color: var(--cc-color-border); }
+.rejectedSpecimenTag { color: var(--cc-color-danger); background: var(--cc-color-danger-bg); border-color: var(--cc-color-danger); }
+.specimenTimeline { color: var(--cc-color-text-secondary); font-size: 0.875rem; }
+.collectionNote { flex: 1 1 240px; }
+.specimenPrintLink { display: inline-block; margin-top: var(--cc-space-sm); color: var(--cc-color-primary); }
+.rejectionForm { display: flex; flex-direction: column; gap: var(--cc-space-xs); }
