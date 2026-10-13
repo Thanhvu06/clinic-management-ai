@@ -11,6 +11,9 @@ public class DiagnosticResult
     public string? Conclusion { get; set; }
     public string? ReferenceRange { get; set; }
     public string? Unit { get; set; }
+    public bool HasCriticalValue { get; set; }
+    public DateTime? CriticalNotifiedAtUtc { get; set; }
+    public ICollection<DiagnosticResultValue> Values { get; set; } = new List<DiagnosticResultValue>();
 
     public DateTime ResultedAtUtc { get; set; } = DateTime.UtcNow;
     public Guid ResultedByUserId { get; set; }

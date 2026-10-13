@@ -1,4 +1,9 @@
 .detail { min-width: 0; max-width: 1100px; margin: 0 auto; padding-bottom: calc(var(--cc-control-height) + var(--cc-space-xl)); }
+.parameterTable { min-width: 0; overflow-x: auto; margin-bottom: var(--cc-space-md); }
+.parameterTable :global(.ant-input) { min-width: 100px; }
+.normal { color: var(--cc-color-text); }
+.warning { color: var(--cc-color-warning); }
+.critical { color: var(--cc-color-danger); font-weight: 700; }
 .navigation, .orderStatus, .orderHeading, .serviceHeader, .serviceIdentity, .completionActions { display: flex; align-items: center; gap: var(--cc-space-sm); flex-wrap: wrap; }
 .navigation, .orderHeading, .serviceHeader, .completionActions { justify-content: space-between; }
 .navigation, .orderCard, .services { margin-bottom: var(--cc-space-lg); }

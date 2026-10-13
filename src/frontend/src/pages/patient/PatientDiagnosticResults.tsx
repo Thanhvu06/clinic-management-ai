@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Card, Collapse, Tabs, Tag } from 'antd';
 import { CheckCircle } from 'lucide-react';
 import { diagnosticApi } from '../../api/diagnosticApi';
+import { diagnosticFlagTone, patientDiagnosticFlagLabel } from '../../utils/diagnosticLabels';
 import type { DiagnosticOrderDto } from '../../types';
 import { PageHeader } from '../../components/common/PageHeader';
 import { DataTable } from '../../components/common/DataTable';
@@ -48,7 +49,12 @@ export const PatientDiagnosticResults: React.FC = () => {
                 </div>
                 {order.items.map((item, index) => <Card size="small" key={item.id} title={`${index + 1}. ${item.serviceName} (${item.serviceCode})`} extra={<Tag>{item.category === 'Laboratory' ? 'Xét nghiệm' : item.category === 'Ultrasound' ? 'Siêu âm' : item.category === 'Imaging' ? 'Chẩn đoán hình ảnh' : item.category}</Tag>}>
                     {item.result ? <div className={styles.results}>
-                        <div className={`${styles.resultLine} ${styles.resultText}`}><strong>Kết quả:</strong> {item.result.resultText}</div>
+                        {item.result.values?.length ? <div className={styles.parameterTable}><DataTable ariaLabel={`Chỉ số: ${item.serviceName}`} data={item.result.values} keyExtractor={value => value.parameterId} columns={[
+                            { header: 'Chỉ số', accessor: value => `${value.parameterName} (${value.parameterCode})` },
+                            { header: 'Kết quả + đơn vị', accessor: value => `${value.value} ${value.unit}` },
+                            { header: 'Tham chiếu', accessor: 'referenceRangeText' },
+                            { header: 'Đánh giá', accessor: value => <span className={styles[diagnosticFlagTone(value.flag)]}>{patientDiagnosticFlagLabel(value.flag)}</span> },
+                        ]} /></div> : <div className={`${styles.resultLine} ${styles.resultText}`}><strong>Kết quả:</strong> {item.result.resultText}</div>}
                         <div className={styles.resultSummary}>
                             {item.result.conclusion && <div className={styles.resultLine}><strong>Kết luận:</strong> {item.result.conclusion}</div>}
                             {item.result.referenceRange && <div className={styles.resultLine}><strong>Chỉ số bình thường:</strong> {item.result.referenceRange}</div>}

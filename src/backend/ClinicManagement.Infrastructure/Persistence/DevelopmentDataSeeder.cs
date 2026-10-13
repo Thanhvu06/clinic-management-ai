@@ -23,6 +23,57 @@ public class DevelopmentDataSeederOptions
 public static class DevelopmentDataSeeder
 {
     public static Task SeedMedicineCatalogAsync(AppDbContext db) => MedicineCatalogDevelopmentSeed.SeedAsync(db);
+
+    public static async Task SeedDiagnosticParametersAsync(AppDbContext db)
+    {
+        // Khoảng tham chiếu minh họa, không dùng cho chẩn đoán thật
+        var definitions = new (string Service, string Code, string Name, string Unit, decimal? Low,
+            decimal? High, decimal? FemaleLow, decimal? FemaleHigh, decimal? CriticalLow, decimal? CriticalHigh)[]
+        {
+            ("LAB-CBC", "WBC", "Bạch cầu", "10^9/L", 4m, 10m, null, null, 2m, 30m),
+            ("LAB-CBC", "RBC", "Hồng cầu", "10^12/L", 4.5m, 5.9m, 4m, 5.2m, null, null),
+            ("LAB-CBC", "HGB", "Huyết sắc tố", "g/L", 130m, 170m, 120m, 150m, 70m, 200m),
+            ("LAB-CBC", "HCT", "Hematocrit", "%", 40m, 50m, 36m, 46m, null, null),
+            ("LAB-CBC", "PLT", "Tiểu cầu", "10^9/L", 150m, 400m, null, null, 50m, 1000m),
+            ("LAB-CBC", "NEU%", "Bạch cầu trung tính", "%", 40m, 75m, null, null, null, null),
+            ("LAB-CBC", "LYM%", "Bạch cầu lympho", "%", 20m, 40m, null, null, null, null),
+            ("LAB-GLU", "GLU", "Glucose máu lúc đói", "mmol/L", 3.9m, 6.4m, null, null, 2.8m, 22.2m),
+            ("LAB-LIPID", "CHOL", "Cholesterol toàn phần", "mmol/L", null, 5.2m, null, null, null, null),
+            ("LAB-LIPID", "TG", "Triglycerid", "mmol/L", null, 1.7m, null, null, null, null),
+            ("LAB-LIPID", "HDL", "HDL-C", "mmol/L", 1m, null, null, null, null, null),
+            ("LAB-LIPID", "LDL", "LDL-C", "mmol/L", null, 3.4m, null, null, null, null),
+            ("LAB-LFT", "AST", "AST", "U/L", null, 40m, null, null, null, 1000m),
+            ("LAB-LFT", "ALT", "ALT", "U/L", null, 40m, null, null, null, 1000m),
+            ("LAB-RFT", "URE", "Ure", "mmol/L", 2.5m, 7.5m, null, null, null, null),
+            ("LAB-RFT", "CREA", "Creatinin", "µmol/L", 62m, 106m, 44m, 80m, null, 700m)
+        };
+        var codes = definitions.Select(d => d.Service).Distinct().ToList();
+        var services = await db.DiagnosticServices.Where(s => codes.Contains(s.Code)).Include(s => s.Parameters).ToListAsync();
+        foreach (var service in services)
+        {
+            var sortOrder = 0;
+            foreach (var definition in definitions.Where(d => d.Service == service.Code))
+            {
+                var parameter = service.Parameters.FirstOrDefault(p => p.Code == definition.Code);
+                if (parameter == null)
+                {
+                    parameter = new DiagnosticServiceParameter { Code = definition.Code };
+                    service.Parameters.Add(parameter);
+                }
+                parameter.Name = definition.Name;
+                parameter.Unit = definition.Unit;
+                parameter.RefLow = definition.Low;
+                parameter.RefHigh = definition.High;
+                parameter.RefLowFemale = definition.FemaleLow;
+                parameter.RefHighFemale = definition.FemaleHigh;
+                parameter.CriticalLow = definition.CriticalLow;
+                parameter.CriticalHigh = definition.CriticalHigh;
+                parameter.SortOrder = sortOrder++;
+                parameter.IsActive = true;
+            }
+        }
+        await db.SaveChangesAsync();
+    }
     public static async Task SeedAsync(IServiceProvider serviceProvider, DevelopmentDataSeederOptions? options = null)
     {
         var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DevelopmentDataSeeder");
@@ -592,6 +643,7 @@ public static class DevelopmentDataSeeder
         }
         await db.SaveChangesAsync();
         logger.LogInformation("Diagnostic Services catalog seeded.");
+        await SeedDiagnosticParametersAsync(db);
 
         // 11. Facility BV-TW-01, Departments, Rooms & Staff Facility Assignments
         var fac = await db.Facilities.FirstOrDefaultAsync(f => f.Code == "BV-TW-01");
