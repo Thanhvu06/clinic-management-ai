@@ -3,9 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
     ArrowLeft, CheckCircle, PlayCircle, Save, Check, FlaskConical, Waves, Scan, Stethoscope
 } from 'lucide-react';
-import { Button, Card, Input, Tag } from 'antd';
-import { EmptyState, LoadingState, StatusBadge, InlineError } from '../../components/common';
-import { diagnosticCategoryLabels, diagnosticStatusLabels, diagnosticStatusTone } from '../../utils/diagnosticLabels';
+import { Alert, Button, Card, Input, Tag } from 'antd';
+import { DataTable, EmptyState, LoadingState, StatusBadge, InlineError } from '../../components/common';
+import { diagnosticCategoryLabels, diagnosticStatusLabels, diagnosticStatusTone, diagnosticResultFlagLabels, diagnosticFlagTone, previewDiagnosticFlag, isCriticalDiagnosticFlag, diagnosticNotificationTime } from '../../utils/diagnosticLabels';
 import styles from './TechnicianOrderDetail.module.css';
 import { diagnosticApi } from '../../api/diagnosticApi';
 import type { DiagnosticOrderDto, RecordDiagnosticResultRequest } from '../../types';
@@ -39,6 +39,8 @@ export const TechnicianOrderDetail: React.FC = () => {
     }>>({});
     const [copilotItemId, setCopilotItemId] = useState<number | null>(null);
     const [savingItemId, setSavingItemId] = useState<number | null>(null);
+    const [parameterValues, setParameterValues] = useState<Record<number, Record<number, string>>>({});
+    const [parameterErrors, setParameterErrors] = useState<Record<number, string>>({});
 
     useEffect(() => {
         const selectedOrderId = order?.id;
@@ -82,15 +84,22 @@ export const TechnicianOrderDetail: React.FC = () => {
                 
                 // Prepopulate results
                 const initial: typeof itemResults = {};
+                const initialValues: typeof parameterValues = {};
                 res.data.items.forEach(item => {
+                    const firstValue = item.result?.values?.[0];
+                    const savedText = item.result?.resultText || '';
+                    const summaryStart = firstValue ? savedText.indexOf(`${firstValue.parameterName} (${firstValue.parameterCode}):`) : -1;
                     initial[item.id] = {
-                        resultText: item.result?.resultText || '',
+                        resultText: summaryStart >= 0 ? savedText.slice(0, summaryStart).trim() : savedText,
                         conclusion: item.result?.conclusion || '',
                         referenceRange: item.result?.referenceRange || '',
                         unit: item.result?.unit || ''
                     };
+                    initialValues[item.id] = Object.fromEntries((item.result?.values || []).map(value => [value.parameterId, String(value.value)]));
                 });
                 setItemResults(initial);
+                setParameterValues(initialValues);
+                setParameterErrors({});
             } else setOrder(null);
         } catch (err: unknown) {
             if (isMounted.current && version === requestVersion.current) {
@@ -136,12 +145,25 @@ export const TechnicianOrderDetail: React.FC = () => {
     const handleSaveItemResult = async (itemId: number) => {
         if (!order) return;
         const currentData = itemResults[itemId];
-        if (!currentData || !currentData.resultText.trim()) {
+        const item = order.items.find(i => i.id === itemId);
+        const parameters = item?.parameters || [];
+        const missing = parameters.filter(parameter => !(parameterValues[itemId]?.[parameter.id] ?? '').trim());
+        const invalid = parameters.filter(parameter => {
+            const value = Number(parameterValues[itemId]?.[parameter.id]);
+            return !Number.isFinite(value) || value < 0 || value >= 1_000_000;
+        });
+        if (missing.length > 0 || invalid.length > 0) {
+            setParameterErrors(previous => ({ ...previous, [itemId]: missing.length > 0
+                ? `Vui lòng nhập đủ chỉ số: ${missing.map(parameter => parameter.name).join(', ')}.`
+                : 'Giá trị chỉ số phải từ 0 đến dưới 1.000.000.' }));
+            return;
+        }
+        if (!currentData || (parameters.length === 0 && !currentData.resultText.trim())) {
             showAlert('Vui lòng nhập kết quả chi tiết cho dịch vụ này.', 'Thiếu dữ liệu', 'warning');
             return;
         }
 
-        const item = order.items.find(i => i.id === itemId);
+        setParameterErrors(previous => ({ ...previous, [itemId]: '' }));
         setSavingItemId(itemId);
         try {
             const req: RecordDiagnosticResultRequest = {
@@ -151,6 +173,11 @@ export const TechnicianOrderDetail: React.FC = () => {
                 unit: currentData.unit.trim() || undefined,
                 rowVersion: item?.rowVersion
             };
+            if (parameters.length > 0) {
+                req.values = parameters.map(parameter => ({ parameterId: parameter.id, value: Number(parameterValues[itemId][parameter.id]) }));
+                req.referenceRange = undefined;
+                req.unit = undefined;
+            }
             const res = await diagnosticApi.recordTechnicianItemResult(order.id, itemId, req);
             if (res.success && res.data) {
                 setOrder(res.data);
@@ -244,6 +271,12 @@ export const TechnicianOrderDetail: React.FC = () => {
                         const isCompleted = item.status === 'Completed';
                         const collapsed = order.status === 'InProgress' && !!item.result && !expandedResults[item.id];
                         const CategoryIcon = categoryIcons[item.category];
+                        const parameters = item.parameters || [];
+                        const hasParameters = parameters.length > 0;
+                        const criticalPreview = parameters.some(parameter => {
+                            const raw = parameterValues[item.id]?.[parameter.id] ?? '';
+                            return raw.trim() !== '' && Number.isFinite(Number(raw)) && isCriticalDiagnosticFlag(previewDiagnosticFlag(Number(raw), parameter));
+                        });
                         return (
                             <Card key={item.id}>
                                 <div className={styles.serviceHeader}>
@@ -252,18 +285,48 @@ export const TechnicianOrderDetail: React.FC = () => {
                                     <StatusBadge status={diagnosticStatusTone[item.status]} label={diagnosticStatusLabels[item.status]} />
                                 </div>
                                 {item.preparationInstructions && <div className={styles.preparationNote}><strong>Chuẩn bị:</strong> {item.preparationInstructions}</div>}
+                                {!!item.result?.values?.length && <div className={styles.parameterTable}>
+                                    <DataTable ariaLabel={`Chỉ số đã lưu: ${item.serviceName}`} data={item.result.values} keyExtractor={value => value.parameterId} columns={[
+                                        { header: 'Chỉ số', accessor: value => `${value.parameterName} (${value.parameterCode})` },
+                                        { header: 'Kết quả', accessor: value => value.value },
+                                        { header: 'Đơn vị', accessor: 'unit' },
+                                        { header: 'Khoảng tham chiếu', accessor: 'referenceRangeText' },
+                                        { header: 'Đánh giá', accessor: value => <span className={styles[diagnosticFlagTone(value.flag)]}>{diagnosticResultFlagLabels[value.flag]}</span> },
+                                    ]} />
+                                    {item.result.hasCriticalValue && item.result.criticalNotifiedAtUtc && <p className={styles.critical}>Đã báo bác sĩ lúc {diagnosticNotificationTime(item.result.criticalNotifiedAtUtc)}</p>}
+                                </div>}
                                 {order.status === 'InProgress' && item.result && <Button className={styles.resultToggle} aria-expanded={!collapsed} aria-controls={`result-form-${item.id}`} onClick={() => setExpandedResults(previous => ({ ...previous, [item.id]: !previous[item.id] }))}>{collapsed ? 'Xem/Sửa kết quả' : 'Thu gọn kết quả'}</Button>}
                                 {order.status === 'Ordered' ? <div className={styles.startHint}>Nhấn "Bắt đầu thực hiện" ở trên để tiếp nhận và nhập kết quả cho dịch vụ này.</div> : !collapsed && (
                                     <div id={`result-form-${item.id}`} className={styles.resultForm}>
-                                        <div><label htmlFor={`result-text-${item.id}`} className={styles.fieldLabel}>Kết quả chi tiết / Mô tả tổn thương <span className={styles.required}>*</span></label>
+                                        {hasParameters && order.status !== 'Completed' && <>
+                                            {criticalPreview && <Alert type="error" showIcon title="Có giá trị nguy hiểm — hệ thống sẽ báo ngay cho bác sĩ chỉ định khi lưu." />}
+                                            {parameterErrors[item.id] && <Alert type="error" showIcon title={parameterErrors[item.id]} />}
+                                            <div className={styles.parameterTable}><DataTable ariaLabel={`Nhập chỉ số: ${item.serviceName}`} data={parameters} keyExtractor={parameter => parameter.id} columns={[
+                                                { header: 'Chỉ số', accessor: parameter => `${parameter.name} (${parameter.code})` },
+                                                { header: 'Kết quả', accessor: parameter => <Input type="number" step="any" min={0} aria-label={`Kết quả ${parameter.name} (${parameter.code})`} disabled={savingItemId === item.id}
+                                                    value={parameterValues[item.id]?.[parameter.id] ?? ''} onChange={event => {
+                                                        setParameterValues(previous => ({ ...previous, [item.id]: { ...previous[item.id], [parameter.id]: event.target.value } }));
+                                                        setParameterErrors(previous => ({ ...previous, [item.id]: '' }));
+                                                    }} /> },
+                                                { header: 'Đơn vị', accessor: 'unit' },
+                                                { header: 'Khoảng tham chiếu', accessor: 'referenceRangeText' },
+                                                { header: 'Đánh giá', accessor: parameter => {
+                                                    const raw = parameterValues[item.id]?.[parameter.id] ?? '';
+                                                    if (!raw.trim() || !Number.isFinite(Number(raw))) return '—';
+                                                    const flag = previewDiagnosticFlag(Number(raw), parameter);
+                                                    return <span className={styles[diagnosticFlagTone(flag)]}>{diagnosticResultFlagLabels[flag]}</span>;
+                                                } },
+                                            ]} /></div>
+                                        </>}
+                                        <div><label htmlFor={`result-text-${item.id}`} className={styles.fieldLabel}>{hasParameters ? 'Nhận xét (không bắt buộc)' : <>Kết quả chi tiết / Mô tả tổn thương <span className={styles.required}>*</span></>}</label>
                                             <Input.TextArea id={`result-text-${item.id}`} rows={3} disabled={order.status === 'Completed'} value={current.resultText} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], resultText: e.target.value }}))} placeholder="Nhập chi tiết thông số xét nghiệm, mô tả hình ảnh siêu âm..." />
                                         </div>
                                         <div className={styles.resultFields}>
                                             <div><label htmlFor={`conclusion-${item.id}`} className={styles.fieldLabel}>Kết luận / Đánh giá</label><Input id={`conclusion-${item.id}`} type="text" disabled={order.status === 'Completed'} value={current.conclusion} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], conclusion: e.target.value }}))} placeholder="VD: Bình thường, Gan nhiễm mỡ độ 1..." />
                                                 {order.status !== 'Completed' && <div className={styles.conclusionChips}>{quickConclusions.map(conclusion => <Button key={conclusion} size="small" disabled={savingItemId === item.id} onClick={() => setItemResults(previous => ({ ...previous, [item.id]: { ...previous[item.id], conclusion } }))}>{conclusion}</Button>)}</div>}
                                             </div>
-                                            <div><label htmlFor={`reference-range-${item.id}`} className={styles.fieldLabel}>Chỉ số bình thường</label><Input id={`reference-range-${item.id}`} type="text" disabled={order.status === 'Completed'} value={current.referenceRange} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], referenceRange: e.target.value }}))} placeholder="VD: 70 - 100 mg/dL" /></div>
-                                            <div><label htmlFor={`unit-${item.id}`} className={styles.fieldLabel}>Đơn vị tính</label><Input id={`unit-${item.id}`} type="text" disabled={order.status === 'Completed'} value={current.unit} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], unit: e.target.value }}))} placeholder="VD: U/L, mg/dL" /></div>
+                                            {!hasParameters && <><div><label htmlFor={`reference-range-${item.id}`} className={styles.fieldLabel}>Chỉ số bình thường</label><Input id={`reference-range-${item.id}`} type="text" disabled={order.status === 'Completed'} value={current.referenceRange} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], referenceRange: e.target.value }}))} placeholder="VD: 70 - 100 mg/dL" /></div>
+                                            <div><label htmlFor={`unit-${item.id}`} className={styles.fieldLabel}>Đơn vị tính</label><Input id={`unit-${item.id}`} type="text" disabled={order.status === 'Completed'} value={current.unit} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], unit: e.target.value }}))} placeholder="VD: U/L, mg/dL" /></div></>}
                                         </div>
                                         {order.status !== 'Completed' && <div className={styles.saveActions}><Button type="primary" onClick={() => handleSaveItemResult(item.id)} disabled={savingItemId === item.id}><Save size={15} aria-hidden="true" /> {savingItemId === item.id ? 'Đang lưu...' : 'Lưu kết quả dịch vụ'}</Button></div>}
                                         {item.result && <div className={styles.resultAuthor}>Nhập bởi: {item.result.resultedByUserName} • {new Date(item.result.resultedAtUtc).toLocaleString('vi-VN')}</div>}

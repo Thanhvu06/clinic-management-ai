@@ -1,6 +1,32 @@
 export type DiagnosticCategory = 'Laboratory' | 'Ultrasound' | 'Imaging' | 'Other';
 export type DiagnosticOrderStatus = 'Ordered' | 'InProgress' | 'Completed' | 'Cancelled';
 export type DiagnosticItemStatus = 'Ordered' | 'InProgress' | 'Completed' | 'Cancelled';
+export type DiagnosticResultFlag = 'Normal' | 'Low' | 'High' | 'CriticalLow' | 'CriticalHigh';
+
+export interface DiagnosticServiceParameterDto {
+    id: number;
+    code: string;
+    name: string;
+    unit: string;
+    refLow: number | null;
+    refHigh: number | null;
+    criticalLow: number | null;
+    criticalHigh: number | null;
+    referenceRangeText: string;
+}
+
+export interface DiagnosticResultValueDto {
+    parameterId: number;
+    parameterCode: string;
+    parameterName: string;
+    unit: string;
+    value: number;
+    refLow: number | null;
+    refHigh: number | null;
+    referenceRangeText: string;
+    flag: DiagnosticResultFlag;
+    sortOrder: number;
+}
 
 export interface DiagnosticServiceDto {
     id: number;
@@ -22,6 +48,9 @@ export interface DiagnosticResultDto {
     resultedAtUtc: string;
     resultedByUserId: string;
     resultedByUserName: string;
+    values?: DiagnosticResultValueDto[];
+    hasCriticalValue?: boolean;
+    criticalNotifiedAtUtc?: string | null;
     rowVersion?: string | null;
 }
 
@@ -37,6 +66,7 @@ export interface DiagnosticOrderItemDto {
     isPackageCovered?: boolean;
     status: DiagnosticItemStatus;
     result?: DiagnosticResultDto | null;
+    parameters?: DiagnosticServiceParameterDto[];
     rowVersion?: string | null;
 }
 
@@ -77,6 +107,7 @@ export interface CreateDiagnosticOrderRequest {
 
 export interface RecordDiagnosticResultRequest {
     resultText: string;
+    values?: { parameterId: number; value: number }[];
     conclusion?: string;
     referenceRange?: string;
     unit?: string;

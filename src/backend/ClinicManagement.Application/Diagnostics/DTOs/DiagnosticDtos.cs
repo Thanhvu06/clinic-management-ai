@@ -33,6 +33,42 @@ public class DiagnosticResultDto
     public Guid ResultedByUserId { get; set; }
     public string ResultedByUserName { get; set; } = string.Empty;
     public string? RowVersion { get; set; }
+    public List<DiagnosticResultValueDto> Values { get; set; } = new();
+    public bool HasCriticalValue { get; set; }
+    public DateTime? CriticalNotifiedAtUtc { get; set; }
+}
+
+public class DiagnosticServiceParameterDto
+{
+    public long Id { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
+    public decimal? RefLow { get; set; }
+    public decimal? RefHigh { get; set; }
+    public decimal? CriticalLow { get; set; }
+    public decimal? CriticalHigh { get; set; }
+    public string ReferenceRangeText { get; set; } = string.Empty;
+}
+
+public class DiagnosticResultValueDto
+{
+    public long ParameterId { get; set; }
+    public string ParameterCode { get; set; } = string.Empty;
+    public string ParameterName { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
+    public decimal Value { get; set; }
+    public decimal? RefLow { get; set; }
+    public decimal? RefHigh { get; set; }
+    public string ReferenceRangeText { get; set; } = string.Empty;
+    public string Flag { get; set; } = string.Empty;
+    public int SortOrder { get; set; }
+}
+
+public class DiagnosticResultValueInput
+{
+    public long ParameterId { get; set; }
+    public decimal Value { get; set; }
 }
 
 public class DiagnosticOrderItemDto
@@ -50,6 +86,7 @@ public class DiagnosticOrderItemDto
     public string Status { get; set; } = string.Empty;
     public string? RowVersion { get; set; }
     public DiagnosticResultDto? Result { get; set; }
+    public List<DiagnosticServiceParameterDto> Parameters { get; set; } = new();
 }
 
 public class DiagnosticOrderDto
@@ -108,9 +145,9 @@ public class CreateDiagnosticOrderRequest
 
 public class RecordDiagnosticResultRequest
 {
-    [Required(ErrorMessage = "Kết quả xét nghiệm không được để trống.")]
     [MaxLength(4000)]
     public string ResultText { get; set; } = string.Empty;
+    public List<DiagnosticResultValueInput>? Values { get; set; }
 
     [MaxLength(2000)]
     public string? Conclusion { get; set; }

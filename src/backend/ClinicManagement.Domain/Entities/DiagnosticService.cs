@@ -12,4 +12,5 @@ public class DiagnosticService
     public string? PreparationInstructions { get; set; }
     public decimal? Price { get; set; }
     public bool IsActive { get; set; } = true;
+    public ICollection<DiagnosticServiceParameter> Parameters { get; set; } = new List<DiagnosticServiceParameter>();
 }

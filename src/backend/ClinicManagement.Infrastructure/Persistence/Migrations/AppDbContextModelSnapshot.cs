@@ -1211,8 +1211,16 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<DateTime?>("CriticalNotifiedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<long>("DiagnosticOrderItemId")
                         .HasColumnType("bigint");
+
+                    b.Property<bool>("HasCriticalValue")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("ReferenceRange")
                         .HasMaxLength(200)
@@ -1244,6 +1252,71 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("DiagnosticResults", (string)null);
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticResultValue", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal?>("CriticalHigh")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("CriticalLow")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<long>("DiagnosticResultId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DiagnosticServiceParameterId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Flag")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("NumericValue")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("ParameterCode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("ParameterName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<decimal?>("RefHigh")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("RefLow")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DiagnosticServiceParameterId");
+
+                    b.HasIndex("DiagnosticResultId", "DiagnosticServiceParameterId")
+                        .IsUnique();
+
+                    b.ToTable("DiagnosticResultValues", (string)null);
                 });
 
             modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticService", b =>
@@ -1287,6 +1360,70 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("DiagnosticServices", (string)null);
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticServiceParameter", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<decimal?>("CriticalHigh")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("CriticalLow")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<long>("DiagnosticServiceId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<decimal?>("RefHigh")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("RefHighFemale")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("RefLow")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("RefLowFemale")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DiagnosticServiceId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("DiagnosticServiceParameters", (string)null);
                 });
 
             modelBuilder.Entity("ClinicManagement.Domain.Entities.Doctor", b =>
@@ -3303,6 +3440,36 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("DiagnosticOrderItem");
                 });
 
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticResultValue", b =>
+                {
+                    b.HasOne("ClinicManagement.Domain.Entities.DiagnosticResult", "DiagnosticResult")
+                        .WithMany("Values")
+                        .HasForeignKey("DiagnosticResultId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ClinicManagement.Domain.Entities.DiagnosticServiceParameter", "DiagnosticServiceParameter")
+                        .WithMany()
+                        .HasForeignKey("DiagnosticServiceParameterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DiagnosticResult");
+
+                    b.Navigation("DiagnosticServiceParameter");
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticServiceParameter", b =>
+                {
+                    b.HasOne("ClinicManagement.Domain.Entities.DiagnosticService", "DiagnosticService")
+                        .WithMany("Parameters")
+                        .HasForeignKey("DiagnosticServiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DiagnosticService");
+                });
+
             modelBuilder.Entity("ClinicManagement.Domain.Entities.Doctor", b =>
                 {
                     b.HasOne("ClinicManagement.Infrastructure.Identity.ApplicationUser", null)
@@ -3795,6 +3962,16 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticOrderItem", b =>
                 {
                     b.Navigation("Result");
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticResult", b =>
+                {
+                    b.Navigation("Values");
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticService", b =>
+                {
+                    b.Navigation("Parameters");
                 });
 
             modelBuilder.Entity("ClinicManagement.Domain.Entities.Doctor", b =>

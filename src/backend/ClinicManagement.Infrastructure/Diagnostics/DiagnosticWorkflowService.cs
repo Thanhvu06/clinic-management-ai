@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
@@ -1096,6 +1097,9 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         var order = await _dbContext.DiagnosticOrders
             .Include(o => o.Items)
                 .ThenInclude(i => i.Result)
+                    .ThenInclude(r => r!.Values)
+            .Include(o => o.Items).ThenInclude(i => i.DiagnosticService).ThenInclude(s => s.Parameters)
+            .Include(o => o.Patient)
             .Include(o => o.Appointment)
             .Include(o => o.PatientVisit)
             .FirstOrDefaultAsync(o => o.Id == orderId);
@@ -1121,33 +1125,94 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             ValidateRowVersion(item.RowVersion, request.RowVersion);
         }
 
-        if (request == null || string.IsNullOrWhiteSpace(request.ResultText))
+        var structured = request?.Values?.Count > 0;
+        if (request == null || (!structured && string.IsNullOrWhiteSpace(request.ResultText)))
             throw new BusinessException("VALIDATION_ERROR", "Kết quả cận lâm sàng không được để trống.");
 
+        var values = new List<DiagnosticResultValue>();
+        if (structured)
+        {
+            var parameters = item.DiagnosticService.Parameters.Where(p => p.IsActive)
+                .OrderBy(p => p.SortOrder).ThenBy(p => p.Id).ToList();
+            var inputs = request.Values!;
+            if (parameters.Count == 0 || inputs.Any(v => parameters.All(p => p.Id != v.ParameterId)))
+                throw new BusinessException("VALIDATION_ERROR", "Chỉ số không thuộc dịch vụ này.");
+            if (inputs.Select(v => v.ParameterId).Distinct().Count() != inputs.Count)
+                throw new BusinessException("VALIDATION_ERROR", "Không được nhập trùng chỉ số.");
+            var missing = parameters.Where(p => inputs.All(v => v.ParameterId != p.Id)).ToList();
+            if (missing.Count > 0)
+                throw new BusinessException("VALIDATION_ERROR", $"Thiếu chỉ số: {string.Join(", ", missing.Select(p => p.Name))}.");
+            if (inputs.Any(v => v.Value < 0 || v.Value >= 1_000_000))
+                throw new BusinessException("VALIDATION_ERROR", "Giá trị chỉ số phải từ 0 đến dưới 1.000.000.");
+            foreach (var parameter in parameters)
+            {
+                var (low, high) = SelectReferenceRange(parameter, order.Patient.Gender);
+                var value = inputs.Single(v => v.ParameterId == parameter.Id).Value;
+                values.Add(new DiagnosticResultValue
+                {
+                    DiagnosticServiceParameterId = parameter.Id, ParameterCode = parameter.Code,
+                    ParameterName = parameter.Name, Unit = parameter.Unit, RefLow = low, RefHigh = high,
+                    CriticalLow = parameter.CriticalLow, CriticalHigh = parameter.CriticalHigh,
+                    NumericValue = value, Flag = ResultFlag(value, low, high, parameter.CriticalLow, parameter.CriticalHigh),
+                    SortOrder = parameter.SortOrder
+                });
+            }
+        }
+
+        var result = item.Result ?? new DiagnosticResult { DiagnosticOrderItemId = item.Id };
+        var oldCritical = result.Values.Where(v => IsCritical(v.Flag)).OrderBy(v => v.DiagnosticServiceParameterId)
+            .Select(v => (v.DiagnosticServiceParameterId, v.NumericValue, v.Flag)).ToList();
+        var newCritical = values.Where(v => IsCritical(v.Flag)).OrderBy(v => v.DiagnosticServiceParameterId)
+            .Select(v => (v.DiagnosticServiceParameterId, v.NumericValue, v.Flag)).ToList();
+        var now = DateTime.UtcNow;
+        var resultText = request.ResultText?.Trim() ?? string.Empty;
+        if (structured)
+        {
+            var summary = string.Join("\n", values.Select(v =>
+                $"{v.ParameterName} ({v.ParameterCode}): {v.NumericValue.ToString("0.####", CultureInfo.InvariantCulture)} {v.Unit} [{FlagLabel(v.Flag)}]"));
+            // Reserve space for every numeric row even when the optional comment is long.
+            var commentLimit = Math.Max(0, 4000 - summary.Length - 2);
+            resultText = string.IsNullOrEmpty(resultText) ? summary : resultText[..Math.Min(resultText.Length, commentLimit)] + "\n\n" + summary;
+        }
+        result.ResultText = resultText[..Math.Min(4000, resultText.Length)];
+        result.Conclusion = request.Conclusion?.Trim();
+        result.ReferenceRange = structured ? null : request.ReferenceRange?.Trim();
+        result.Unit = structured ? null : request.Unit?.Trim();
+        result.ResultedAtUtc = now;
+        result.ResultedByUserId = userId;
+        result.RowVersion = Guid.NewGuid().ToByteArray();
+        result.HasCriticalValue = newCritical.Count > 0;
+        _dbContext.DiagnosticResultValues.RemoveRange(result.Values);
+        result.Values = values;
         if (item.Result == null)
         {
-            item.Result = new DiagnosticResult
-            {
-                DiagnosticOrderItemId = item.Id,
-                ResultText = request.ResultText.Trim(),
-                Conclusion = request.Conclusion?.Trim(),
-                ReferenceRange = request.ReferenceRange?.Trim(),
-                Unit = request.Unit?.Trim(),
-                ResultedAtUtc = DateTime.UtcNow,
-                ResultedByUserId = userId,
-                RowVersion = Guid.NewGuid().ToByteArray()
-            };
-            _dbContext.DiagnosticResults.Add(item.Result);
+            item.Result = result;
+            _dbContext.DiagnosticResults.Add(result);
         }
-        else
+
+        if (result.HasCriticalValue && (result.CriticalNotifiedAtUtc == null || !oldCritical.SequenceEqual(newCritical)))
         {
-            item.Result.ResultText = request.ResultText.Trim();
-            item.Result.Conclusion = request.Conclusion?.Trim();
-            item.Result.ReferenceRange = request.ReferenceRange?.Trim();
-            item.Result.Unit = request.Unit?.Trim();
-            item.Result.ResultedAtUtc = DateTime.UtcNow;
-            item.Result.ResultedByUserId = userId;
-            item.Result.RowVersion = Guid.NewGuid().ToByteArray();
+            var doctorUser = await (from d in _dbContext.Doctors join u in _dbContext.Users on d.UserId equals u.Id
+                                    where d.Id == order.OrderingDoctorId select u).FirstOrDefaultAsync();
+            if (doctorUser != null)
+            {
+                var message = $"Phiếu #{order.OrderCode}: " + string.Join(", ", values.Where(v => IsCritical(v.Flag))
+                    .Select(v => $"{v.ParameterName} ({v.ParameterCode}): {v.NumericValue.ToString("0.####", CultureInfo.InvariantCulture)} {v.Unit}"));
+                _dbContext.Notifications.Add(new Notification
+                {
+                    UserId = doctorUser.Id, Type = NotificationType.Diagnostic,
+                    Title = "CẢNH BÁO: kết quả có giá trị nguy hiểm", Message = message[..Math.Min(1000, message.Length)],
+                    Route = order.AppointmentId.HasValue ? $"/doctor/appointments/{order.AppointmentId}/examination" : $"/doctor/visits/{order.PatientVisitId}/examination",
+                    RelatedEntityType = "DiagnosticOrder", RelatedEntityId = order.Id.ToString(),
+                    DedupeKey = $"diag_critical_{item.Id}_{Convert.ToHexString(result.RowVersion)}", CreatedAtUtc = now
+                });
+                result.CriticalNotifiedAtUtc = now;
+                _dbContext.SystemAuditLogs.Add(new SystemAuditLog
+                {
+                    UserId = userId, Action = "DiagnosticCriticalValueNotified", EntityName = "DiagnosticOrderItem",
+                    EntityId = item.Id.ToString(), Description = $"Đã báo bác sĩ chỉ định về giá trị nguy hiểm của phiếu #{order.OrderCode}.", CreatedAt = now
+                });
+            }
         }
 
         item.Status = DiagnosticItemStatus.Completed;
@@ -1174,6 +1239,51 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         return (await GetOrderDtoByIdAsync(orderId))!;
     }
+
+    private static bool IsCritical(DiagnosticResultFlag flag) => flag is DiagnosticResultFlag.CriticalLow or DiagnosticResultFlag.CriticalHigh;
+
+    private static DiagnosticResultFlag ResultFlag(decimal value, decimal? low, decimal? high, decimal? criticalLow, decimal? criticalHigh) =>
+        criticalLow.HasValue && value <= criticalLow.Value ? DiagnosticResultFlag.CriticalLow :
+        criticalHigh.HasValue && value >= criticalHigh.Value ? DiagnosticResultFlag.CriticalHigh :
+        low.HasValue && value < low.Value ? DiagnosticResultFlag.Low :
+        high.HasValue && value > high.Value ? DiagnosticResultFlag.High : DiagnosticResultFlag.Normal;
+
+    private static string FlagLabel(DiagnosticResultFlag flag) => flag switch
+    {
+        DiagnosticResultFlag.Low => "Thấp", DiagnosticResultFlag.High => "Cao",
+        DiagnosticResultFlag.CriticalLow => "Thấp – NGUY HIỂM", DiagnosticResultFlag.CriticalHigh => "Cao – NGUY HIỂM",
+        _ => "Bình thường"
+    };
+
+    private static (decimal? Low, decimal? High) SelectReferenceRange(DiagnosticServiceParameter parameter, Gender? gender) =>
+        gender == Gender.Female ? (parameter.RefLowFemale ?? parameter.RefLow, parameter.RefHighFemale ?? parameter.RefHigh) :
+            (parameter.RefLow, parameter.RefHigh);
+
+    private static string ReferenceRangeText(decimal? low, decimal? high)
+    {
+        string Number(decimal value) => value.ToString("0.0###", CultureInfo.InvariantCulture);
+        return low.HasValue && high.HasValue ? $"{Number(low.Value)} – {Number(high.Value)}" :
+            high.HasValue ? $"≤ {Number(high.Value)}" : low.HasValue ? $"≥ {Number(low.Value)}" : string.Empty;
+    }
+
+    private static List<DiagnosticServiceParameterDto> MapParameters(DiagnosticService? service, Gender? gender) =>
+        service?.Parameters.Where(p => p.IsActive).OrderBy(p => p.SortOrder).ThenBy(p => p.Id).Select(p =>
+        {
+            var (low, high) = SelectReferenceRange(p, gender);
+            return new DiagnosticServiceParameterDto
+            {
+                Id = p.Id, Code = p.Code, Name = p.Name, Unit = p.Unit, RefLow = low, RefHigh = high,
+                CriticalLow = p.CriticalLow, CriticalHigh = p.CriticalHigh, ReferenceRangeText = ReferenceRangeText(low, high)
+            };
+        }).ToList() ?? new();
+
+    private static List<DiagnosticResultValueDto> MapValues(DiagnosticResult result) => result.Values
+        .OrderBy(v => v.SortOrder).ThenBy(v => v.Id).Select(v => new DiagnosticResultValueDto
+        {
+            ParameterId = v.DiagnosticServiceParameterId, ParameterCode = v.ParameterCode,
+            ParameterName = v.ParameterName, Unit = v.Unit, Value = v.NumericValue, RefLow = v.RefLow, RefHigh = v.RefHigh,
+            ReferenceRangeText = ReferenceRangeText(v.RefLow, v.RefHigh), Flag = v.Flag.ToString(), SortOrder = v.SortOrder
+        }).ToList();
 
     public async Task<DiagnosticOrderDto> CompleteOrderAsync(long orderId, TransitionDiagnosticOrderRequest? request)
     {
@@ -1349,9 +1459,18 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             .Include(o => o.Appointment).Include(o => o.PatientVisit).Include(o => o.Patient)
             .Include(o => o.OrderingDoctor).ThenInclude(d => d.DoctorSpecialties).ThenInclude(ds => ds.Specialty)
             .Include(o => o.ReviewedByDoctor)
-            .Include(o => o.Items).ThenInclude(i => i.DiagnosticService)
-            .Include(o => o.Items).ThenInclude(i => i.Result)
             .Where(o => orderIds.Contains(o.Id)).ToListAsync();
+
+        // Keep root/specialties split, but load the entire item graph in its existing
+        // single command so parameter/value collections do not add split commands.
+        var items = await _dbContext.DiagnosticOrderItems.AsNoTrackingWithIdentityResolution().AsSingleQuery()
+            .Include(i => i.DiagnosticService).ThenInclude(s => s.Parameters.Where(p => p.IsActive))
+            .Include(i => i.Result).ThenInclude(r => r!.Values)
+            .Where(i => orderIds.Contains(i.DiagnosticOrderId)).OrderBy(i => i.Id).ToListAsync();
+        var itemsByOrder = items.ToLookup(i => i.DiagnosticOrderId);
+        foreach (var order in orders)
+            order.Items = itemsByOrder[order.Id].ToList();
+
         var userIds = orders.SelectMany(order => new Guid?[]
             {
                 order.Patient.UserId, order.OrderingDoctor.UserId, order.ReviewedByDoctor?.UserId,
@@ -1391,7 +1510,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             order.OrderingDoctor.DoctorSpecialties.FirstOrDefault()?.Specialty?.Name ??
             "Chuyên khoa";
 
-        var itemDtos = order.Items.Select(i =>
+        var itemDtos = order.Items.OrderBy(i => i.Id).Select(i =>
         {
             DiagnosticResultDto? resDto = null;
             if (i.Result != null)
@@ -1405,6 +1524,9 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                     Conclusion = i.Result.Conclusion,
                     ReferenceRange = i.Result.ReferenceRange,
                     Unit = i.Result.Unit,
+                    Values = MapValues(i.Result),
+                    HasCriticalValue = i.Result.HasCriticalValue,
+                    CriticalNotifiedAtUtc = i.Result.CriticalNotifiedAtUtc,
                     ResultedAtUtc = i.Result.ResultedAtUtc,
                     ResultedByUserId = i.Result.ResultedByUserId,
                     ResultedByUserName = recorderName ?? "Kỹ thuật viên",
@@ -1426,6 +1548,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 PackageRegistrationId = i.PackageRegistrationId,
                 Status = i.Status.ToString(),
                 RowVersion = i.RowVersion != null ? Convert.ToBase64String(i.RowVersion) : null,
+                Parameters = MapParameters(i.DiagnosticService, order.Patient.Gender),
                 Result = resDto
             };
         }).ToList();
@@ -1466,134 +1589,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
     private async Task<DiagnosticOrderDto?> GetOrderDtoByIdAsync(long orderId)
     {
-        var order = await _dbContext.DiagnosticOrders
-            .AsNoTracking()
-            .Include(o => o.Appointment)
-            .Include(o => o.PatientVisit)
-            .Include(o => o.Patient)
-            .Include(o => o.OrderingDoctor)
-                .ThenInclude(d => d.DoctorSpecialties)
-                    .ThenInclude(ds => ds.Specialty)
-            .Include(o => o.ReviewedByDoctor)
-            .Include(o => o.Items)
-                .ThenInclude(i => i.DiagnosticService)
-            .Include(o => o.Items)
-                .ThenInclude(i => i.Result)
-            .FirstOrDefaultAsync(o => o.Id == orderId);
-
-        if (order == null) return null;
-
-        var patientUser = order.Patient.UserId.HasValue
-            ? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == order.Patient.UserId.Value)
-            : null;
-        var orderingDocUser = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == order.OrderingDoctor.UserId);
-        var reviewedDocUser = order.ReviewedByDoctor != null
-            ? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == order.ReviewedByDoctor.UserId)
-            : null;
-
-        var startedUser = order.StartedByUserId.HasValue
-            ? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == order.StartedByUserId.Value)
-            : null;
-
-        var completedUser = order.CompletedByUserId.HasValue
-            ? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == order.CompletedByUserId.Value)
-            : null;
-
-        var resultRecorderIds = order.Items
-            .Where(i => i.Result != null)
-            .Select(i => i.Result!.ResultedByUserId)
-            .Distinct()
-            .ToList();
-
-        var resultRecorders = await _dbContext.Users
-            .AsNoTracking()
-            .Where(u => resultRecorderIds.Contains(u.Id))
-            .ToDictionaryAsync(u => u.Id, u => u.FullName);
-
-        int? patientAge = null;
-        if (order.Patient.DateOfBirth.HasValue)
-        {
-            var today = _dateTimeProvider.VietnamToday;
-            var age = today.Year - order.Patient.DateOfBirth.Value.Year;
-            if (today < order.Patient.DateOfBirth.Value.AddYears(age)) age--;
-            patientAge = age;
-        }
-
-        var specialtyName = order.OrderingDoctor.DoctorSpecialties
-            .FirstOrDefault(ds => ds.IsPrimary)?.Specialty?.Name ??
-            order.OrderingDoctor.DoctorSpecialties.FirstOrDefault()?.Specialty?.Name ??
-            "Chuyên khoa";
-
-        var itemDtos = order.Items.Select(i =>
-        {
-            DiagnosticResultDto? resDto = null;
-            if (i.Result != null)
-            {
-                resultRecorders.TryGetValue(i.Result.ResultedByUserId, out var recorderName);
-                resDto = new DiagnosticResultDto
-                {
-                    Id = i.Result.Id,
-                    DiagnosticOrderItemId = i.Result.DiagnosticOrderItemId,
-                    ResultText = i.Result.ResultText,
-                    Conclusion = i.Result.Conclusion,
-                    ReferenceRange = i.Result.ReferenceRange,
-                    Unit = i.Result.Unit,
-                    ResultedAtUtc = i.Result.ResultedAtUtc,
-                    ResultedByUserId = i.Result.ResultedByUserId,
-                    ResultedByUserName = recorderName ?? "Kỹ thuật viên",
-                    RowVersion = i.Result.RowVersion != null ? Convert.ToBase64String(i.Result.RowVersion) : null
-                };
-            }
-
-            return new DiagnosticOrderItemDto
-            {
-                Id = i.Id,
-                DiagnosticOrderId = i.DiagnosticOrderId,
-                DiagnosticServiceId = i.DiagnosticServiceId,
-                ServiceCode = i.DiagnosticService?.Code ?? string.Empty,
-                ServiceName = i.DiagnosticService?.Name ?? string.Empty,
-                Category = i.DiagnosticService?.Category.ToString() ?? string.Empty,
-                PreparationInstructions = i.DiagnosticService?.PreparationInstructions,
-                Price = i.DiagnosticService?.Price,
-                IsPackageCovered = i.IsPackageCovered,
-                PackageRegistrationId = i.PackageRegistrationId,
-                Status = i.Status.ToString(),
-                RowVersion = i.RowVersion != null ? Convert.ToBase64String(i.RowVersion) : null,
-                Result = resDto
-            };
-        }).ToList();
-
-        return new DiagnosticOrderDto
-        {
-            Id = order.Id,
-            OrderCode = order.OrderCode,
-            AppointmentId = order.AppointmentId,
-            AppointmentCode = order.Appointment?.AppointmentCode ?? (order.PatientVisit != null ? order.PatientVisit.VisitCode : string.Empty),
-            PatientVisitId = order.PatientVisitId,
-            VisitCode = order.PatientVisit?.VisitCode,
-            AppointmentDate = order.Appointment?.AppointmentDate ?? (order.PatientVisit != null ? order.PatientVisit.VisitDate : DateOnly.FromDateTime(order.OrderedAtUtc)),
-            PatientId = order.PatientId,
-            PatientName = patientUser?.FullName ?? order.Patient.FullName ?? "Bệnh nhân",
-            PatientPhone = patientUser?.PhoneNumber ?? order.Patient.PhoneNumber ?? string.Empty,
-            PatientGender = order.Patient.Gender.HasValue ? order.Patient.Gender.Value.ToString() : string.Empty,
-            PatientDob = order.Patient.DateOfBirth,
-            PatientAge = patientAge,
-            OrderingDoctorId = order.OrderingDoctorId,
-            OrderingDoctorName = orderingDocUser != null ? (string.IsNullOrWhiteSpace(order.OrderingDoctor.AcademicTitle) ? orderingDocUser.FullName : $"{order.OrderingDoctor.AcademicTitle}. {orderingDocUser.FullName}") : "Bác sĩ",
-            SpecialtyName = specialtyName,
-            ClinicalIndication = order.ClinicalIndication,
-            Note = order.Note,
-            Status = order.Status.ToString(),
-            OrderedAtUtc = order.OrderedAtUtc,
-            StartedAtUtc = order.StartedAtUtc,
-            CompletedAtUtc = order.CompletedAtUtc,
-            CancelledAtUtc = order.CancelledAtUtc,
-            StartedByUserName = startedUser?.FullName,
-            CompletedByUserName = completedUser?.FullName,
-            ReviewedAtUtc = order.ReviewedAtUtc,
-            ReviewedByDoctorName = reviewedDocUser?.FullName,
-            RowVersion = order.RowVersion != null ? Convert.ToBase64String(order.RowVersion) : null,
-            Items = itemDtos
-        };
+        // A shared query and mapper keep single/list DTOs and the user lookup identical.
+        return (await GetOrderDtosByIdsAsync(new List<long> { orderId })).SingleOrDefault();
     }
 }

@@ -12,3 +12,7 @@
 @media (max-width: 767px) {
     .resultSummary { grid-template-columns: 1fr; }
 }
+.parameterTable { min-width: 0; overflow-x: auto; }
+.normal { color: var(--cc-color-text); }
+.warning { color: var(--cc-color-warning); }
+.critical { color: var(--cc-color-warning); font-weight: 700; }

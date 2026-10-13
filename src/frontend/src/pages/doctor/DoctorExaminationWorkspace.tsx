@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
 import { diagnosticApi } from '../../api/diagnosticApi';
+import { diagnosticResultFlagLabels, diagnosticFlagTone } from '../../utils/diagnosticLabels';
 import type {
     PatientClinicalContextDto,
     SaveEncounterRequest,
@@ -1608,6 +1609,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                     header: "Dịch vụ chỉ định", accessor: (item) => {
                                                         return <>
                                                             <div className={tabStyles.itemTitle}>{item.serviceName}</div>
+                                                            {item.result?.hasCriticalValue && <span className={tabStyles.criticalBadge}>Giá trị nguy hiểm</span>}
                                                             <div className={tabStyles.secondaryCaption}>{item.serviceCode}</div>
                                                         </>;
                                                     }
@@ -1629,7 +1631,14 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                 {
                                                     header: "Kết quả đo / Trị số", accessor: (item) => {
                                                         return <>
-                                                            {item.result ? (
+                                                            {item.result?.values?.length ? (
+                                                                <div className={tabStyles.parameterTable}><DataTable ariaLabel={`Chỉ số: ${item.serviceName}`} data={item.result.values} keyExtractor={value => value.parameterId} columns={[
+                                                                    { header: 'Chỉ số', accessor: value => `${value.parameterName} (${value.parameterCode})` },
+                                                                    { header: 'Kết quả + đơn vị', accessor: value => <span className={tabStyles[diagnosticFlagTone(value.flag)]}>{value.value} {value.unit}</span> },
+                                                                    { header: 'Tham chiếu', accessor: 'referenceRangeText' },
+                                                                    { header: 'Đánh giá', accessor: value => <span className={tabStyles[diagnosticFlagTone(value.flag)]}>{diagnosticResultFlagLabels[value.flag]}</span> },
+                                                                ]} /></div>
+                                                            ) : item.result ? (
                                                                 <div className={tabStyles.diagnosticResultText}>
                                                                     {item.result.resultText || '--'} {item.result.unit}
                                                                 </div>

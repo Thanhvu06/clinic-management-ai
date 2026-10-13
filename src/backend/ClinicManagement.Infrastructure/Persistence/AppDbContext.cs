@@ -80,10 +80,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<DiagnosticOrder> DiagnosticOrders { get; set; } = null!;
     public DbSet<DiagnosticOrderItem> DiagnosticOrderItems { get; set; } = null!;
     public DbSet<DiagnosticResult> DiagnosticResults { get; set; } = null!;
+    public DbSet<DiagnosticServiceParameter> DiagnosticServiceParameters { get; set; } = null!;
+    public DbSet<DiagnosticResultValue> DiagnosticResultValues { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.Entity<DiagnosticResult>().Property(r => r.HasCriticalValue).HasDefaultValue(false);
         
         builder.Entity<PrescriptionItem>()
             .HasKey(pi => new { pi.PrescriptionId, pi.MedicineId });
