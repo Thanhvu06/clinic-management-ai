@@ -58,6 +58,9 @@ import { TechnicianOrderDetail } from './pages/technician/TechnicianOrderDetail'
 import { SpecimenLabelPrint } from './pages/technician/SpecimenLabelPrint';
 import { TechnicianVerificationQueue } from './pages/technician/TechnicianVerificationQueue';
 import { DiagnosticResultPrint } from './pages/common/DiagnosticResultPrint';
+import { LabSupervisorDashboard } from './pages/lab/LabSupervisorDashboard';
+import { DiagnosticVerificationReview, VerificationResultPrint } from './pages/common/DiagnosticVerificationReview';
+import { DoctorDiagnosticVerification } from './pages/doctor/DoctorDiagnosticVerification';
 import { PatientDiagnosticResults } from './pages/patient/PatientDiagnosticResults';
 import { ChatProvider } from './contexts/ChatContext';
 import { DialogProvider } from './contexts/DialogContext';
@@ -137,6 +140,8 @@ function App() {
                                         <Route path="/doctor/visits/:visitId/examination" element={<DoctorExaminationWorkspace />} />
                                         <Route path="/doctor/diagnostic-orders/:id/print" element={<DiagnosticOrderPrint />} />
                                         <Route path="/doctor/diagnostic-orders/:id/result-print" element={<DiagnosticResultPrint actor="doctor" />} />
+                                        <Route path="/doctor/diagnostic-verification" element={<DoctorDiagnosticVerification />} />
+                                        <Route path="/doctor/diagnostic-verification/:id" element={<DiagnosticVerificationReview />} />
                                         <Route path="/doctor/leave-requests" element={<DoctorLeaveRequests />} />
                                     </Route>
 
@@ -164,6 +169,13 @@ function App() {
                                     </Route>
 
                                     {/* Diagnostic Technician Routes */}
+                                    <Route element={<RoleRoute roles={['LabSupervisor']} />}>
+                                        <Route path="/lab" element={<LabSupervisorDashboard />} />
+                                        <Route path="/lab/orders/:id" element={<DiagnosticVerificationReview />} />
+                                    </Route>
+                                    <Route element={<RoleRoute roles={['LabSupervisor', 'DiagnosticTechnician', 'Doctor']} />}>
+                                        <Route path="/diagnostic-verification/orders/:id/result-print" element={<VerificationResultPrint />} />
+                                    </Route>
                                     <Route element={<RoleRoute roles={['DiagnosticTechnician']} />}>
                                         <Route path="/diagnostics" element={<TechnicianDashboard />} />
                                         <Route path="/diagnostics/verification" element={<TechnicianVerificationQueue />} />

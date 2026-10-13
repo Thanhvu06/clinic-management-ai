@@ -1,0 +1,7 @@
+.page { display: flex; flex-direction: column; gap: var(--cc-space-lg); min-width: 0; }
+.stats { display: flex; flex-wrap: wrap; gap: var(--cc-space-md); }
+.stats > * { flex: 1 1 200px; }
+.table { overflow-x: auto; background: var(--cc-color-bg-container); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-lg); }
+.link { color: var(--cc-color-primary); font-weight: 600; white-space: nowrap; }
+.danger { color: var(--cc-color-danger); border-color: var(--cc-color-danger); background: var(--cc-color-danger-bg); }
+.warning { color: var(--cc-color-warning); }

@@ -1,0 +1,12 @@
+.page { display: flex; flex-direction: column; gap: var(--cc-space-lg); min-width: 0; }
+.panel { background: var(--cc-color-bg-container); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-lg); padding: var(--cc-space-lg); }
+.panel h2 { margin-top: 0; font-size: 1.125rem; }
+.panel p { margin: var(--cc-space-sm) 0; }
+.panel label { display: block; margin-bottom: var(--cc-space-sm); }
+.specimen { padding: var(--cc-space-md); margin-bottom: var(--cc-space-md); background: var(--cc-color-bg-layout); border-radius: var(--cc-radius-md); }
+.table { overflow-x: auto; margin-top: var(--cc-space-md); }
+.critical { color: var(--cc-color-danger); border-color: var(--cc-color-danger); font-weight: 700; }
+.muted { color: var(--cc-color-text-secondary); font-size: 0.875rem; }
+.resultText { white-space: pre-wrap; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--cc-space-sm); justify-content: flex-end; margin-top: var(--cc-space-md); }
+.link { display: inline-block; color: var(--cc-color-primary); margin-top: var(--cc-space-md); font-weight: 600; }

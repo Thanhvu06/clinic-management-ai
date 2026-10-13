@@ -14,6 +14,8 @@ export const getRoleDashboardPath = (role?: string): string => {
             return '/pharmacy';
         case 'DiagnosticTechnician':
             return '/diagnostics';
+        case 'LabSupervisor':
+            return '/lab';
         case 'Patient':
             return '/patient';
         default:
@@ -61,6 +63,7 @@ export const isPathAllowedForRole = (role?: string, path?: string | null): boole
     }
 
     // Role-specific sections
+    if (cleanPath === '/lab' || cleanPath.startsWith('/lab/')) return role === 'LabSupervisor';
     if (cleanPath.startsWith('/doctor')) return role === 'Doctor';
     if (cleanPath.startsWith('/patient')) return role === 'Patient';
     if (cleanPath.startsWith('/admin')) return role === 'Admin';

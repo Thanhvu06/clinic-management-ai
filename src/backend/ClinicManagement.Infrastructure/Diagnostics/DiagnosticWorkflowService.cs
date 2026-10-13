@@ -794,7 +794,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
     private static DiagnosticOrderDto RedactUnverifiedResultsForDoctor(DiagnosticOrderDto order)
     {
-        if (order.VerificationStatus != nameof(DiagnosticVerificationStatus.Verified) &&
+        if (!(order.Status == nameof(DiagnosticOrderStatus.Completed) && order.VerificationStatus == nameof(DiagnosticVerificationStatus.NotRequired)) &&
+            order.VerificationStatus != nameof(DiagnosticVerificationStatus.Verified) &&
             order.Items.Any(item => item.Status != nameof(DiagnosticItemStatus.Cancelled) && item.SpecimenType != null))
         {
             foreach (var item in order.Items) item.Result = null;
@@ -1463,6 +1464,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 UserId = userId, Action = "DiagnosticResultsSubmittedForVerification", EntityName = "DiagnosticOrder",
                 EntityId = order.Id.ToString(), Description = $"Gửi duyệt kết quả phiếu #{order.OrderCode}.", CreatedAt = DateTime.UtcNow
             });
+            await NotifyLabSupervisorsAsync(order);
         }
         else
         {
@@ -1513,32 +1515,95 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
     public async Task<PagedResult<DiagnosticOrderDto>> GetVerificationQueueAsync(int page, int pageSize)
     {
+        var role = GetVerificationRole();
         var userId = GetUserId();
-        var facilityIds = await _dbContext.StaffFacilityAssignments.AsNoTracking()
-            .Where(assignment => assignment.UserId == userId && assignment.IsActive && assignment.Role == RoleNames.DiagnosticTechnician)
-            .Select(assignment => assignment.FacilityId).Distinct().ToListAsync();
+        var facilityIds = await GetVerificationFacilityIdsAsync(role);
         page = Math.Max(1, page);
         pageSize = pageSize < 1 ? 15 : Math.Min(pageSize, 100);
         var query = WhereTechnicianFacilityScope(_dbContext.DiagnosticOrders.AsNoTracking(), facilityIds)
             .Where(order => order.Status == DiagnosticOrderStatus.InProgress && order.VerificationStatus == DiagnosticVerificationStatus.Pending);
+        if (role == RoleNames.Doctor) query = query.Where(order => order.OrderingDoctor.UserId != userId);
         var count = await query.CountAsync();
         var ids = await query.OrderBy(order => order.SubmittedForVerificationAtUtc).ThenBy(order => order.Id)
             .Skip((page - 1) * pageSize).Take(pageSize).Select(order => order.Id).ToListAsync();
         return new PagedResult<DiagnosticOrderDto>(await GetOrderDtosByIdsAsync(ids), count, page, pageSize);
     }
 
+    public async Task<DiagnosticOrderDto> GetOrderForVerificationAsync(long orderId)
+    {
+        var role = GetVerificationRole();
+        var facilityIds = await GetVerificationFacilityIdsAsync(role);
+        var order = await WhereTechnicianFacilityScope(_dbContext.DiagnosticOrders.AsNoTracking(), facilityIds)
+            .Where(order => order.Id == orderId)
+            .Select(order => new { order.Status, order.VerificationStatus, OrderingDoctorUserId = order.OrderingDoctor.UserId }).FirstOrDefaultAsync();
+        if (order == null || !(order.Status == DiagnosticOrderStatus.Completed || order.VerificationStatus == DiagnosticVerificationStatus.Pending || order.VerificationStatus == DiagnosticVerificationStatus.Returned))
+            throw new NotFoundException("Phiếu chỉ định không tồn tại hoặc chưa gửi duyệt.");
+        if (role == RoleNames.Doctor && order.OrderingDoctorUserId == GetUserId() && order.VerificationStatus == DiagnosticVerificationStatus.Pending)
+            throw OrderingDoctorVerificationError();
+        return (await GetOrderDtoByIdAsync(orderId))!;
+    }
+
+    private string? CurrentVerificationRole()
+    {
+        var principal = _httpContextAccessor?.HttpContext?.User;
+        return new[] { RoleNames.DiagnosticTechnician, RoleNames.LabSupervisor, RoleNames.Doctor }
+            .FirstOrDefault(role => principal?.IsInRole(role) == true);
+    }
+
+    private string GetVerificationRole() => CurrentVerificationRole() ??
+        throw new NotFoundException("Không có quyền duyệt kết quả.");
+
+    private Task<List<long>> GetVerificationFacilityIdsAsync(string role)
+    {
+        var userId = GetUserId();
+        return _dbContext.StaffFacilityAssignments.AsNoTracking()
+            .Where(assignment => assignment.UserId == userId && assignment.IsActive && assignment.Role == role)
+            .Select(assignment => assignment.FacilityId).Distinct().ToListAsync();
+    }
+
+    private static BusinessException OrderingDoctorVerificationError() => new("ORDERING_DOCTOR_CANNOT_VERIFY", "Bác sĩ chỉ định không được tự duyệt kết quả phiếu của mình.");
+
+    private async Task NotifyLabSupervisorsAsync(DiagnosticOrder order)
+    {
+        var facilityId = order.FacilityId ?? order.PatientVisit?.FacilityId ?? order.Appointment?.FacilityId;
+        var userIds = await (from assignment in _dbContext.StaffFacilityAssignments
+            join user in _dbContext.Users on assignment.UserId equals user.Id
+            join userRole in _dbContext.UserRoles on user.Id equals userRole.UserId
+            join role in _dbContext.Roles on userRole.RoleId equals role.Id
+            where assignment.FacilityId == facilityId && assignment.IsActive && assignment.Role == RoleNames.LabSupervisor &&
+                user.IsActive && role.Name == RoleNames.LabSupervisor
+            select user.Id).Distinct().ToListAsync();
+        foreach (var userId in userIds)
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = userId, Type = NotificationType.Diagnostic, Title = "Có phiếu kết quả chờ duyệt",
+                Message = $"Phiếu #{order.OrderCode} đang chờ duyệt kết quả.", Route = $"/lab/orders/{order.Id}",
+                RelatedEntityType = "DiagnosticOrder", RelatedEntityId = order.Id.ToString(),
+                DedupeKey = $"diag_pending_{order.Id}_{userId}_{order.ReturnCount}", CreatedAtUtc = DateTime.UtcNow
+            });
+    }
+
     private async Task<DiagnosticOrder> LoadPendingVerificationAsync(long orderId, string? rowVersion)
     {
         var order = await _dbContext.DiagnosticOrders.Include(order => order.Appointment).Include(order => order.PatientVisit)
+            .Include(order => order.OrderingDoctor)
             .Include(order => order.Items).ThenInclude(item => item.Result)
             .Include(order => order.Items).ThenInclude(item => item.DiagnosticService).FirstOrDefaultAsync(order => order.Id == orderId);
         if (order == null) throw new NotFoundException("Phiếu chỉ định không tồn tại.");
         await LoadLinkedVisitAppointmentAsync(order);
-        await EnsureTechnicianFacilityScopeAsync(order);
+        var role = GetVerificationRole();
+        if (role == RoleNames.DiagnosticTechnician) await EnsureTechnicianFacilityScopeAsync(order);
+        else
+        {
+            var facilityIds = await GetVerificationFacilityIdsAsync(role);
+            if (!await WhereTechnicianFacilityScope(_dbContext.DiagnosticOrders.AsNoTracking(), facilityIds).AnyAsync(candidate => candidate.Id == order.Id))
+                throw new NotFoundException("Phiếu chỉ định không tồn tại hoặc không thuộc cơ sở được phân công.");
+        }
         if (rowVersion != null) ValidateRowVersion(order.RowVersion, rowVersion);
         if (order.Status != DiagnosticOrderStatus.InProgress || order.VerificationStatus != DiagnosticVerificationStatus.Pending || !order.SubmittedForVerificationByUserId.HasValue)
             throw new BusinessException("INVALID_STATE", "Phiếu không ở trạng thái chờ duyệt.");
         var userId = GetUserId();
+        if (role == RoleNames.Doctor && order.OrderingDoctor.UserId == userId) throw OrderingDoctorVerificationError();
         if (userId == order.SubmittedForVerificationByUserId || order.Items.Any(item => item.Result?.ResultedByUserId == userId))
             throw new BusinessException("SELF_VERIFICATION_NOT_ALLOWED", "Người nhập kết quả không được tự duyệt. Cần một kỹ thuật viên khác duyệt.");
         return order;
@@ -1547,7 +1612,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
     private void AddVerificationAudit(DiagnosticOrder order, string action, string? note) => _dbContext.SystemAuditLogs.Add(new SystemAuditLog
     {
         UserId = GetUserId(), Action = action, EntityName = "DiagnosticOrder", EntityId = order.Id.ToString(),
-        Description = $"Phiếu #{order.OrderCode}; {note}", CreatedAt = DateTime.UtcNow
+        Description = $"VerifiedByRole={GetVerificationRole()}; Phiếu #{order.OrderCode}; {note}", CreatedAt = DateTime.UtcNow
     });
 
     private async Task<DiagnosticOrderDto> SaveVerificationAsync(DiagnosticOrder order)
@@ -1693,6 +1758,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             DiagnosticResultPublicationPolicy.IsPublishedToPatient(status, order.ReviewedAtUtc);
         order.SubmittedForVerificationByUserName = null;
         order.VerifiedByUserName = null;
+        order.VerifiedByRole = null;
         order.ReturnedByUserName = null;
         order.VerificationNote = null;
         order.ReturnReason = null;
@@ -1711,12 +1777,20 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
     private async Task<List<DiagnosticOrderDto>> GetOrderDtosByIdsAsync(List<long> orderIds)
     {
         if (orderIds.Count == 0) return new();
-        var orders = await _dbContext.DiagnosticOrders.AsNoTracking().AsSplitQuery()
+        var rows = await _dbContext.DiagnosticOrders.AsNoTracking().AsSplitQuery()
             .Include(o => o.Facility)
             .Include(o => o.Appointment).Include(o => o.PatientVisit).Include(o => o.Patient)
             .Include(o => o.OrderingDoctor).ThenInclude(d => d.DoctorSpecialties).ThenInclude(ds => ds.Specialty)
             .Include(o => o.ReviewedByDoctor)
-            .Where(o => orderIds.Contains(o.Id)).ToListAsync();
+            .Where(o => orderIds.Contains(o.Id))
+            .Select(order => new
+            {
+                Order = order,
+                VerificationAudit = _dbContext.SystemAuditLogs.Where(audit => audit.EntityName == "DiagnosticOrder" &&
+                    audit.EntityId == order.Id.ToString() && audit.Action == "DiagnosticResultsVerified")
+                    .OrderByDescending(audit => audit.Id).Select(audit => audit.Description).FirstOrDefault()
+            }).ToListAsync();
+        var orders = rows.Select(row => row.Order).ToList();
 
         // Keep root/specialties split, but load the entire item graph in its existing
         // single command so parameter/value collections do not add split commands.
@@ -1740,12 +1814,12 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         var users = (await _dbContext.Users.AsNoTracking().Where(user => userIds.Contains(user.Id))
             .Select(user => new { user.Id, user.FullName, user.PhoneNumber }).ToListAsync())
             .ToDictionary(user => user.Id, user => (user.FullName, user.PhoneNumber));
-        var byId = orders.ToDictionary(order => order.Id, order => MapBatchedOrder(order, users));
+        var byId = rows.ToDictionary(row => row.Order.Id, row => MapBatchedOrder(row.Order, users, row.VerificationAudit));
         return orderIds.Where(byId.ContainsKey).Select(id => byId[id]).ToList();
     }
 
     private DiagnosticOrderDto MapBatchedOrder(DiagnosticOrder order,
-        IReadOnlyDictionary<Guid, (string FullName, string? PhoneNumber)> users)
+        IReadOnlyDictionary<Guid, (string FullName, string? PhoneNumber)> users, string? verificationAudit)
     {
         string? UserName(Guid? id) => id.HasValue && users.TryGetValue(id.Value, out var user) ? user.FullName : null;
         var patientUserName = UserName(order.Patient.UserId);
@@ -1852,10 +1926,13 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             SubmittedForVerificationAtUtc = AsUtc(order.SubmittedForVerificationAtUtc),
             SubmittedForVerificationByUserName = UserName(order.SubmittedForVerificationByUserId),
             VerifiedAtUtc = AsUtc(order.VerifiedAtUtc), VerifiedByUserName = UserName(order.VerifiedByUserId),
+            VerifiedByRole = new[] { RoleNames.DiagnosticTechnician, RoleNames.LabSupervisor, RoleNames.Doctor }
+                .FirstOrDefault(role => verificationAudit?.StartsWith($"VerifiedByRole={role};", StringComparison.Ordinal) == true),
             VerificationNote = order.VerificationNote, ReturnedAtUtc = AsUtc(order.ReturnedAtUtc),
             ReturnedByUserName = UserName(order.ReturnedByUserId), ReturnReason = order.ReturnReason, ReturnCount = order.ReturnCount,
             CanCurrentUserVerify = order.Status == DiagnosticOrderStatus.InProgress && order.VerificationStatus == DiagnosticVerificationStatus.Pending &&
-                _httpContextAccessor?.HttpContext?.User.IsInRole(RoleNames.DiagnosticTechnician) == true && _currentUserService.UserId.HasValue &&
+                CurrentVerificationRole() != null && _currentUserService.UserId.HasValue &&
+                (CurrentVerificationRole() != RoleNames.Doctor || order.OrderingDoctor.UserId != _currentUserService.UserId) &&
                 _currentUserService.UserId != order.SubmittedForVerificationByUserId &&
                 order.Items.All(item => item.Result == null || item.Result.ResultedByUserId != _currentUserService.UserId),
             RowVersion = order.RowVersion != null ? Convert.ToBase64String(order.RowVersion) : null,

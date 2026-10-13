@@ -120,6 +120,7 @@ export interface DiagnosticOrderDto {
     submittedForVerificationByUserName?: string | null;
     verifiedAtUtc?: string | null;
     verifiedByUserName?: string | null;
+    verifiedByRole?: 'DiagnosticTechnician' | 'LabSupervisor' | 'Doctor' | null;
     verificationNote?: string | null;
     returnedAtUtc?: string | null;
     returnedByUserName?: string | null;

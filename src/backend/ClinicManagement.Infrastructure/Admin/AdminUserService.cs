@@ -116,7 +116,7 @@ public class AdminUserService : IAdminUserService
 
     public async Task<UserDto> CreateStaffUserAsync(CreateStaffUserDto request)
     {
-        if (request.Role is not (RoleNames.Doctor or RoleNames.Receptionist or RoleNames.Admin or RoleNames.Pharmacist or RoleNames.DiagnosticTechnician))
+        if (request.Role is not (RoleNames.Doctor or RoleNames.Receptionist or RoleNames.Admin or RoleNames.Pharmacist or RoleNames.DiagnosticTechnician or RoleNames.LabSupervisor))
         {
             throw new BusinessException("INVALID_ROLE", "Vai trò không hợp lệ để tạo tài khoản nhân sự.");
         }

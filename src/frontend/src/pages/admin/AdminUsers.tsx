@@ -120,6 +120,7 @@ export const AdminUsers: React.FC = () => {
             case 'Patient': return 'Bệnh nhân';
             case 'Pharmacist': return 'Dược sĩ';
             case 'DiagnosticTechnician': return 'Kỹ thuật viên';
+            case 'LabSupervisor': return 'Trưởng khoa XN';
             default: return r;
         }
     };
@@ -134,9 +135,9 @@ export const AdminUsers: React.FC = () => {
 
     const roleColors: Record<string, string> = {
         Admin: 'error', Doctor: 'processing', Receptionist: 'default', Patient: 'default',
-        Pharmacist: 'green', DiagnosticTechnician: 'purple'
+        Pharmacist: 'green', DiagnosticTechnician: 'purple', LabSupervisor: 'processing'
     };
-    const roleOptions = ['Admin', 'Doctor', 'Receptionist', 'Patient', 'Pharmacist', 'DiagnosticTechnician']
+    const roleOptions = ['Admin', 'Doctor', 'Receptionist', 'Patient', 'Pharmacist', 'DiagnosticTechnician', 'LabSupervisor']
         .map(role => ({ value: role, label: translateRole(role) }));
 
     return (

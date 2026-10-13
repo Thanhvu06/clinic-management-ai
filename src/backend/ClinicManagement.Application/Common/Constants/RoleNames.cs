@@ -8,4 +8,5 @@ public static class RoleNames
     public const string Admin = "Admin";
     public const string Pharmacist = "Pharmacist";
     public const string DiagnosticTechnician = "DiagnosticTechnician";
+    public const string LabSupervisor = "LabSupervisor";
 }

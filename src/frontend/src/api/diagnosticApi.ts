@@ -18,6 +18,18 @@ export interface PagedResult<T> {
 }
 
 export const diagnosticApi = {
+    getSharedVerificationQueue: async (params: { page?: number; pageSize?: number } = {}): Promise<ApiResponse<PagedResult<DiagnosticOrderDto>>> => {
+        return axiosClient.get<any, ApiResponse<PagedResult<DiagnosticOrderDto>>>('/diagnostic-verification/queue', { params });
+    },
+    getVerificationOrder: async (orderId: number): Promise<ApiResponse<DiagnosticOrderDto>> => {
+        return axiosClient.get<any, ApiResponse<DiagnosticOrderDto>>(`/diagnostic-verification/orders/${orderId}`);
+    },
+    verifySharedOrder: async (orderId: number, data: import('../types/diagnostic').VerifyDiagnosticOrderRequest): Promise<ApiResponse<DiagnosticOrderDto>> => {
+        return axiosClient.post<any, ApiResponse<DiagnosticOrderDto>>(`/diagnostic-verification/orders/${orderId}/verify`, data);
+    },
+    returnSharedOrder: async (orderId: number, data: import('../types/diagnostic').ReturnDiagnosticOrderRequest): Promise<ApiResponse<DiagnosticOrderDto>> => {
+        return axiosClient.post<any, ApiResponse<DiagnosticOrderDto>>(`/diagnostic-verification/orders/${orderId}/return`, data);
+    },
     getVerificationQueue: async (params: { page?: number; pageSize?: number } = {}): Promise<ApiResponse<PagedResult<DiagnosticOrderDto>>> => {
         return axiosClient.get<any, ApiResponse<PagedResult<DiagnosticOrderDto>>>('/diagnostics/orders/verification-queue', { params });
     },

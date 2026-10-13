@@ -104,6 +104,8 @@ public static class DevelopmentDataSeeder
 
         var pharmacist = await SeedUserAsync(userManager, "pharmacist@cliniccare.local", "Dược sĩ Lâm Sàng", "0977777777", "Pharmacist", password);
         var technician = await SeedUserAsync(userManager, "technician@cliniccare.local", "Kỹ thuật viên cận lâm sàng", "0966666666", ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician, password);
+        var labSupervisor = await SeedUserAsync(userManager, "labsupervisor@cliniccare.local", "Trưởng khoa Xét nghiệm Đỗ Thị Lan", "0966666601", ClinicManagement.Application.Common.Constants.RoleNames.LabSupervisor, password);
+        var technician02 = await SeedUserAsync(userManager, "technician.02@cliniccare.local", "Kỹ thuật viên Phạm Quốc Bảo", "0966666602", ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician, password);
 
         var rec1 = await SeedUserAsync(userManager, "reception@cliniccare.local", "Lễ tân Nguyễn Thu Trang", "0900000002", "Receptionist", password);
         var rec2 = await SeedUserAsync(userManager, "letan.02@cliniccare.local", "Lễ tân Trần Mai Anh", "0981000002", "Receptionist", password);
@@ -770,7 +772,9 @@ public static class DevelopmentDataSeeder
             (rec2, "Receptionist"),
             (rec3, "Receptionist"),
             (pharmacist, "Pharmacist"),
-            (technician, ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician)
+            (technician, ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician),
+            (labSupervisor, ClinicManagement.Application.Common.Constants.RoleNames.LabSupervisor),
+            (technician02, ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician)
         };
 
         foreach (var du in docUsers)
