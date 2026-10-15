@@ -1,0 +1,31 @@
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.flexLayout1.flexLayout1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 24px;
+    font-size: 0.9rem;
+    color: var(--cc-color-text-secondary);
+}
+
+.icon1.icon1 {
+    color: var(--cc-color-text-secondary);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.state1.state1.state1 {
+    color: var(--cc-color-navy);
+}
+
+.state2.state2.state2 {
+    color: inherit;
+}
+
+.state3.state3.state3 {
+    font-weight: 600;
+}
+
+.state4.state4.state4 {
+    font-weight: 400;
+}

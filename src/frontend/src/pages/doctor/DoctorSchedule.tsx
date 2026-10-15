@@ -150,7 +150,7 @@ export const DoctorSchedule: React.FC = () => {
                         <Button danger type="primary" icon={<CalendarPlus size={15} />} onClick={() => setIsLeaveModalOpen(true)}>
                             Đăng ký nghỉ phép
                         </Button>
-                        <Flex align="center" style={{ border: '1px solid var(--cc-color-border)', borderRadius: 8, overflow: 'hidden' }}>
+                        <Flex align="center" className={styles.surface1}>
                             <Button type="text" onClick={handlePrevWeek} title="Tuần trước" icon={<ChevronLeft size={18} />} />
                             <Button type="text" onClick={handleTodayWeek}>Hôm nay</Button>
                             <Button type="text" onClick={handleNextWeek} title="Tuần sau" icon={<ChevronRight size={18} />} />
@@ -205,7 +205,7 @@ export const DoctorSchedule: React.FC = () => {
                                         <div key={shift.workScheduleId} className={styles.shiftBox}>
                                             <Flex justify="space-between" align="center" wrap gap="small" className={styles.shiftTitleRow}>
                                                 <Flex align="center" gap="small">
-                                                    <Clock size={16} style={{ color: 'var(--cc-color-info)' }} />
+                                                    <Clock size={16} className={styles.icon1} />
                                                     <span className={styles.shiftName}>
                                                         {shift.shiftName}: {shift.startTime.substring(0, 5)} - {shift.endTime.substring(0, 5)}
                                                     </span>
@@ -246,7 +246,7 @@ export const DoctorSchedule: React.FC = () => {
             <Modal
                 title={
                     <Flex align="center" gap={8}>
-                        <CalendarPlus size={20} style={{ color: 'var(--cc-color-danger)' }} />
+                        <CalendarPlus size={20} className={styles.icon2} />
                         <span>Đăng ký nghỉ phép</span>
                     </Flex>
                 }
@@ -257,11 +257,11 @@ export const DoctorSchedule: React.FC = () => {
             >
                 <Form form={leaveForm} layout="vertical" onFinish={handleSubmitLeave} onValuesChange={handleLeaveValuesChange}>
                     <Flex gap="small">
-                        <Form.Item name="startDate" label="Từ ngày" rules={[{ required: true, message: 'Vui lòng chọn từ ngày' }]} style={{ flex: 1 }}>
-                            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                        <Form.Item name="startDate" label="Từ ngày" rules={[{ required: true, message: 'Vui lòng chọn từ ngày' }]} className={styles.icon3}>
+                            <DatePicker className={styles.control1} format="DD/MM/YYYY" />
                         </Form.Item>
-                        <Form.Item name="endDate" label="Đến ngày" rules={[{ required: true, message: 'Vui lòng chọn đến ngày' }]} style={{ flex: 1 }}>
-                            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                        <Form.Item name="endDate" label="Đến ngày" rules={[{ required: true, message: 'Vui lòng chọn đến ngày' }]} className={styles.icon3}>
+                            <DatePicker className={styles.control1} format="DD/MM/YYYY" />
                         </Form.Item>
                     </Flex>
 
@@ -270,7 +270,7 @@ export const DoctorSchedule: React.FC = () => {
                     </Form.Item>
 
                     {previewLoading && (
-                        <Flex align="center" justify="center" gap={6} style={{ fontSize: '0.85rem', color: 'var(--cc-color-text-muted)', padding: '10px 0' }}>
+                        <Flex align="center" justify="center" gap={6} className={styles.text1}>
                             <RefreshCw size={14} className="animate-spin" />
                             <span>Đang kiểm tra lịch hẹn bị ảnh hưởng...</span>
                         </Flex>
@@ -278,7 +278,7 @@ export const DoctorSchedule: React.FC = () => {
 
                     {leavePreview && (
                         <div className={`${styles.previewBanner} ${leavePreview.affectedAppointmentCount > 0 ? styles.previewBannerWarn : styles.previewBannerOk}`}>
-                            <Flex align="center" gap={8} style={{ fontWeight: 600, fontSize: '0.9rem' }} className={leavePreview.affectedAppointmentCount > 0 ? styles.previewHeadWarn : styles.previewHeadOk}>
+                            <Flex align="center" gap={8} className={[leavePreview.affectedAppointmentCount > 0 ? styles.previewHeadWarn : styles.previewHeadOk, styles.text2].join(' ')}>
                                 {leavePreview.affectedAppointmentCount > 0 ? <AlertTriangle size={18} /> : <ShieldAlert size={18} />}
                                 <span>
                                     {leavePreview.affectedAppointmentCount > 0
@@ -288,7 +288,7 @@ export const DoctorSchedule: React.FC = () => {
                             </Flex>
                             {leavePreview.affectedAppointmentCount > 0 && (
                                 <div className={styles.previewList}>
-                                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                                    <ul className={styles.spacing1}>
                                         {leavePreview.affectedAppointments.map(a => (
                                             <li key={a.id}>
                                                 {a.appointmentDate} ({a.startTime.substring(0, 5)} - {a.endTime.substring(0, 5)}): {a.patientName} ({a.patientPhone})
@@ -303,8 +303,8 @@ export const DoctorSchedule: React.FC = () => {
                         </div>
                     )}
 
-                    <Form.Item style={{ textAlign: 'right', marginBottom: 0, marginTop: 16 }}>
-                        <Button onClick={closeLeaveModal} style={{ marginRight: 8 }}>Hủy</Button>
+                    <Form.Item className={styles.icon4}>
+                        <Button onClick={closeLeaveModal} className={styles.button1}>Hủy</Button>
                         <Button danger type="primary" htmlType="submit" loading={submittingLeave}>
                             Gửi đơn nghỉ phép
                         </Button>

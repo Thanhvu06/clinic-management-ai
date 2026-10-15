@@ -182,3 +182,75 @@
     color: var(--cc-color-text-muted);
     font-size: 0.8rem;
 }
+
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.icon1.icon1 {
+    color: var(--cc-color-danger);
+    margin: 0 auto 12px auto;
+}
+
+.paragraph1.paragraph1 {
+    color: var(--cc-color-text-muted);
+    font-size: 0.9rem;
+}
+
+.button1.button1 {
+    margin-top: 14px;
+}
+
+.text1.text1 {
+    font-weight: 600;
+    color: var(--cc-color-text-dark);
+}
+
+.text2.text2 {
+    font-size: 0.75rem;
+    color: var(--cc-color-text-muted);
+}
+
+.text3.text3 {
+    font-weight: 700;
+}
+
+.icon2.icon2 {
+    color: var(--cc-color-primary);
+}
+
+.text4.text4 {
+    font-size: 0.92rem;
+}
+
+.spacing1.spacing1 {
+    white-space: pre-wrap;
+}
+
+.icon3.icon3 {
+    color: var(--cc-color-danger);
+}
+
+.text5.text5 {
+    font-size: 1.1rem;
+}
+
+.text6.text6 {
+    font-weight: 800;
+}
+
+.icon4.icon4 {
+    color: var(--cc-color-success);
+}
+
+.spacing2.spacing2 {
+    margin-bottom: 14px;
+}
+
+.icon5.icon5 {
+    color: var(--cc-color-text-muted);
+}
+
+.heading1.heading1 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--cc-color-text-dark);
+}

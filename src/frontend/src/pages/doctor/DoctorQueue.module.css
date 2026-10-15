@@ -39,3 +39,27 @@
     font-size: 0.8rem;
     font-style: italic;
 }
+
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.text1.text1 {
+    font-weight: 600;
+    color: var(--cc-color-text-dark);
+}
+
+.icon1.icon1 {
+    color: var(--cc-color-teal);
+}
+
+.text2.text2 {
+    font-family: monospace;
+    font-size: 0.84rem;
+    color: var(--cc-color-text-muted);
+}
+
+.button1.button1 {
+    min-height: 40px;
+}
+
+.icon2.icon2 {
+    color: var(--cc-color-primary);
+}

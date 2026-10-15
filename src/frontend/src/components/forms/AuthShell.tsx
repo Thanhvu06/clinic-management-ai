@@ -34,28 +34,18 @@ export const AuthShell: React.FC<AuthShellProps> = ({
         <div className={styles.authContainer}>
             <div className={styles.authBox}>
                 <div className={styles.authFormCol}>
-                    <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-                        <div style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: '56px',
-                            height: '56px',
-                            borderRadius: '16px',
-                            backgroundColor: 'var(--c-primary-light)',
-                            color: 'var(--c-primary)',
-                            marginBottom: '14px'
-                        }}>
+                    <div className={styles.spacing1}>
+                        <div className={styles.flexLayout1}>
                             <ShieldPlus size={32} />
                         </div>
-                        <h1 style={{ fontSize: '1.65rem', margin: 0, color: 'var(--c-navy)', fontWeight: 700 }}>{title}</h1>
-                        <p style={{ color: 'var(--c-text-light)', marginTop: '6px', fontSize: '0.925rem' }}>{subtitle}</p>
+                        <h1 className={styles.heading1}>{title}</h1>
+                        <p className={styles.paragraph1}>{subtitle}</p>
                     </div>
                     
                     {children}
 
                     {footerLink && (
-                        <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '0.925rem', color: 'var(--c-text-muted)' }}>
+                        <div className={styles.text1}>
                             {footerLink}
                         </div>
                     )}
@@ -69,7 +59,7 @@ export const AuthShell: React.FC<AuthShellProps> = ({
                         <img 
                             src={heroImageUrl} 
                             alt="Visual" 
-                            style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', borderRadius: '12px', marginBottom: '20px', boxShadow: 'var(--shadow-sm)' }} 
+                            className={styles.image1}
                         />
                     )}
                     <h2 className={styles.authVisualTitle}>{displayVisualTitle}</h2>

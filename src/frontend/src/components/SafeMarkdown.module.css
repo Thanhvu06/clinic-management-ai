@@ -1,0 +1,23 @@
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.tone1.tone1 {
+    color: var(--cc-color-secondary);
+    text-decoration: underline;
+    word-break: break-word;
+}
+
+.spacing1.spacing1 {
+    margin-bottom: 2px;
+}
+
+.spacing2.spacing2 {
+    margin: 4px 0;
+    padding-left: 20px;
+}
+
+.spacing3.spacing3 {
+    height: 6px;
+}
+
+.paragraph1.paragraph1 {
+    margin: 2px 0;
+}

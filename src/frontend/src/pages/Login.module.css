@@ -1,0 +1,44 @@
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.icon1.icon1 {
+    color: var(--cc-color-primary);
+    font-weight: 600;
+}
+
+.spacing1.spacing1 {
+    margin-bottom: 20px;
+}
+
+.spacing2.spacing2 {
+    margin-top: 18px;
+}
+
+.flexLayout1.flexLayout1 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.label1.label1 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--cc-color-navy);
+}
+
+.text1.text1 {
+    color: var(--cc-color-danger);
+}
+
+.button1.button1 {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--cc-color-primary);
+    font-size: 0.825rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.spacing3.spacing3 {
+    margin-top: 28px;
+}

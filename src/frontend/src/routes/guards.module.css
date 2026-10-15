@@ -1,0 +1,6 @@
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.tone1.tone1 {
+    padding: 20px;
+    text-align: center;
+    color: var(--cc-color-text-muted);
+}

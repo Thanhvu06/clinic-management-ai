@@ -7,6 +7,7 @@ import { useDialog } from '../contexts/DialogContext';
 import { ForgotPasswordModal } from '../components/ForgotPasswordModal';
 import { AuthShell, FormField, TextInput, PasswordInput, Button, FormError } from '../components/forms';
 import { sanitizeReturnUrl, getRedirectAfterLogin } from '../utils/roleRoutes';
+import styles from './Login.module.css';
 
 export const Login: React.FC = () => {
     const [emailOrPhone, setEmailOrPhone] = useState('');
@@ -70,14 +71,14 @@ export const Login: React.FC = () => {
             footerLink={
                 <span>
                     Chưa có tài khoản?{' '}
-                    <Link to={registerUrl} style={{ color: 'var(--c-primary)', fontWeight: 600 }}>
+                    <Link to={registerUrl} className={styles.icon1}>
                         Đăng ký tài khoản mới &rarr;
                     </Link>
                 </span>
             }
         >
             {errorMessage && (
-                <div style={{ marginBottom: '20px' }}>
+                <div className={styles.spacing1}>
                     <FormError message={errorMessage} />
                 </div>
             )}
@@ -96,26 +97,18 @@ export const Login: React.FC = () => {
                     />
                 </FormField>
 
-                <div style={{ marginTop: '18px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <div className={styles.spacing2}>
+                    <div className={styles.flexLayout1}>
                         <label 
                             htmlFor="password" 
-                            style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--c-navy)' }}
+                            className={styles.label1}
                         >
-                            Mật khẩu <span style={{ color: 'var(--c-danger)' }}>*</span>
+                            Mật khẩu <span className={styles.text1}>*</span>
                         </label>
                         <button
                             type="button"
                             onClick={() => setShowForgotModal(true)}
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                padding: 0,
-                                color: 'var(--c-primary)',
-                                fontSize: '0.825rem',
-                                fontWeight: 600,
-                                cursor: 'pointer'
-                            }}
+                            className={styles.button1}
                         >
                             Quên mật khẩu?
                         </button>
@@ -131,7 +124,7 @@ export const Login: React.FC = () => {
                     />
                 </div>
 
-                <div style={{ marginTop: '28px' }}>
+                <div className={styles.spacing3}>
                     <Button
                         type="submit"
                         variant="primary"

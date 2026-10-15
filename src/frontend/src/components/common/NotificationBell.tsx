@@ -223,7 +223,7 @@ export const NotificationBell: React.FC = () => {
                             disabled={unreadCount === 0 || isMarkingAll}
                             title="Đánh dấu tất cả là đã đọc"
                         >
-                            <CheckCheck size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                            <CheckCheck size={14} className={styles.icon1} />
                             Đã đọc tất cả
                         </button>
                     </div>
@@ -235,7 +235,7 @@ export const NotificationBell: React.FC = () => {
                             </div>
                         ) : recentNotifications.length === 0 ? (
                             <div className={styles.emptyState}>
-                                <Inbox size={32} style={{ opacity: 0.5 }} />
+                                <Inbox size={32} className={styles.icon2} />
                                 <span>Không có thông báo mới nào</span>
                             </div>
                         ) : (
