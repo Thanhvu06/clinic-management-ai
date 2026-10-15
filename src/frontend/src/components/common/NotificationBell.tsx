@@ -1,20 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { 
-    Bell, 
-    Calendar, 
-    FileText, 
-    Pill, 
-    UserX, 
-    PackageCheck, 
-    RefreshCw, 
-    CheckCheck,
-    Inbox
-} from 'lucide-react';
+import { Bell, CheckCheck, Inbox } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { notificationApi } from '../../api/notificationApi';
 import type { NotificationDto } from '../../types/notification';
-import { NotificationType } from '../../types/notification';
+import { notificationTypeIcon, notificationTypeLabel, notificationTypeTone } from '../../utils/notificationLabels';
 import styles from './NotificationBell.module.css';
 
 export const NotificationBell: React.FC = () => {
@@ -172,25 +162,6 @@ export const NotificationBell: React.FC = () => {
         }
     };
 
-    const renderTypeIcon = (type: NotificationType) => {
-        switch (type) {
-            case NotificationType.Appointment:
-                return <Calendar size={16} />;
-            case NotificationType.AppointmentChangeRequest:
-                return <RefreshCw size={16} />;
-            case NotificationType.Revisit:
-                return <FileText size={16} />;
-            case NotificationType.LeaveRequest:
-                return <UserX size={16} />;
-            case NotificationType.Prescription:
-                return <Pill size={16} />;
-            case NotificationType.HealthPackage:
-                return <PackageCheck size={16} />;
-            default:
-                return <Bell size={16} />;
-        }
-    };
-
     if (!isAuthenticated) return null;
 
     return (
@@ -239,26 +210,29 @@ export const NotificationBell: React.FC = () => {
                                 <span>Không có thông báo mới nào</span>
                             </div>
                         ) : (
-                            recentNotifications.map((n) => (
-                                <button
-                                    type="button"
-                                    key={n.id}
-                                    className={`${styles.item} ${!n.isRead ? styles.unread : ''}`}
-                                    onClick={() => handleItemClick(n)}
-                                >
-                                    <div className={`${styles.iconWrapper} ${styles[`type${n.type}`] || ''}`}>
-                                        {renderTypeIcon(n.type)}
-                                    </div>
-                                    <div className={styles.content}>
-                                        <div className={styles.itemHeader}>
-                                            <span className={styles.title}>{n.title}</span>
-                                            <span className={styles.time}>{formatRelativeTime(n.createdAtUtc)}</span>
+                            recentNotifications.map((n) => {
+                                const TypeIcon = notificationTypeIcon(n.type);
+                                return (
+                                    <button
+                                        type="button"
+                                        key={n.id}
+                                        className={`${styles.item} ${!n.isRead ? styles.unread : ''}`}
+                                        onClick={() => handleItemClick(n)}
+                                    >
+                                        <div className={`${styles.iconWrapper} ${styles[notificationTypeTone(n.type)]}`}>
+                                            <TypeIcon size={16} />
                                         </div>
-                                        <p className={styles.message}>{n.message}</p>
-                                    </div>
-                                    {!n.isRead && <span className={styles.unreadDot} />}
-                                </button>
-                            ))
+                                        <div className={styles.content}>
+                                            <div className={styles.itemHeader}>
+                                                <span className={styles.title}>{n.title}<span className={styles.typeBadge}>{notificationTypeLabel(n.type)}</span></span>
+                                                <span className={styles.time}>{formatRelativeTime(n.createdAtUtc)}</span>
+                                            </div>
+                                            <p className={styles.message}>{n.message}</p>
+                                        </div>
+                                        {!n.isRead && <span className={styles.unreadDot} />}
+                                    </button>
+                                );
+                            })
                         )}
                     </div>
 

@@ -1,11 +1,14 @@
 export const NotificationType = {
-    System: 1,
-    Appointment: 2,
-    AppointmentChangeRequest: 3,
-    Revisit: 4,
-    LeaveRequest: 5,
-    Prescription: 6,
-    HealthPackage: 7
+    System: 0,
+    Appointment: 1,
+    AppointmentChangeRequest: 2,
+    Revisit: 3,
+    LeaveRequest: 4,
+    Prescription: 5,
+    HealthPackage: 6,
+    Invoice: 7,
+    Payment: 8,
+    Diagnostic: 9
 } as const;
 
 export type NotificationType = typeof NotificationType[keyof typeof NotificationType];

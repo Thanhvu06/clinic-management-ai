@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.Notifications.DTOs;
 using ClinicManagement.Application.Notifications.Interfaces;
+using ClinicManagement.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -23,9 +24,10 @@ public class NotificationController : ControllerBase
     public async Task<IActionResult> GetMyNotifications(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
-        [FromQuery] bool? isRead = null)
+        [FromQuery] bool? isRead = null,
+        [FromQuery] NotificationType? type = null)
     {
-        var result = await _notificationService.GetCurrentUserNotificationsAsync(page, pageSize, isRead, HttpContext.RequestAborted);
+        var result = await _notificationService.GetCurrentUserNotificationsAsync(page, pageSize, isRead, type, HttpContext.RequestAborted);
         return Ok(ApiResponse<PagedResult<NotificationDto>>.Ok(result));
     }
 

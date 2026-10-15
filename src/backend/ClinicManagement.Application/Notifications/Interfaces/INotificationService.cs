@@ -6,7 +6,7 @@ namespace ClinicManagement.Application.Notifications.Interfaces;
 
 public interface INotificationService
 {
-    Task<PagedResult<NotificationDto>> GetCurrentUserNotificationsAsync(int page = 1, int pageSize = 20, bool? isRead = null, CancellationToken cancellationToken = default);
+    Task<PagedResult<NotificationDto>> GetCurrentUserNotificationsAsync(int page = 1, int pageSize = 20, bool? isRead = null, NotificationType? type = null, CancellationToken cancellationToken = default);
     Task<UnreadNotificationCountDto> GetCurrentUserUnreadCountAsync(CancellationToken cancellationToken = default);
     Task<bool> MarkAsReadAsync(long id, CancellationToken cancellationToken = default);
     Task<int> MarkAllAsReadAsync(CancellationToken cancellationToken = default);

@@ -74,7 +74,7 @@
 .tabsContainer {
     display: flex;
     border-bottom: 1px solid var(--cc-color-border);
-    margin-bottom: 20px;
+    margin-bottom: 0;
     gap: 8px;
 }
 
@@ -151,13 +151,13 @@
     justify-content: center;
 }
 
-.iconWrapper.type1 { background-color: var(--cc-color-border-light); color: var(--cc-color-text-secondary); }
-.iconWrapper.type2 { background-color: var(--cc-color-teal-light); color: var(--cc-color-info); }
-.iconWrapper.type3 { background-color: var(--cc-color-warning-bg); color: var(--cc-color-warning); }
-.iconWrapper.type4 { background-color: var(--cc-color-primary-light); color: var(--cc-color-primary); }
-.iconWrapper.type5 { background-color: var(--cc-color-danger-bg); color: var(--cc-color-danger); }
-.iconWrapper.type6 { background-color: var(--cc-color-success-bg); color: var(--cc-color-success); }
-.iconWrapper.type7 { background-color: color-mix(in srgb, var(--cc-color-secondary) 15%, transparent); color: var(--cc-color-secondary); }
+.iconWrapper.toneSystem { background-color: var(--cc-color-border-light); color: var(--cc-color-text-secondary); }
+.iconWrapper.toneAppointment { background-color: var(--cc-color-teal-light); color: var(--cc-color-info); }
+.iconWrapper.toneAppointmentChangeRequest { background-color: var(--cc-color-warning-bg); color: var(--cc-color-warning); }
+.iconWrapper.toneRevisit { background-color: var(--cc-color-primary-light); color: var(--cc-color-primary); }
+.iconWrapper.toneLeaveRequest { background-color: var(--cc-color-danger-bg); color: var(--cc-color-danger); }
+.iconWrapper.tonePrescription { background-color: var(--cc-color-success-bg); color: var(--cc-color-success); }
+.iconWrapper.toneHealthPackage { background-color: color-mix(in srgb, var(--cc-color-secondary) 15%, transparent); color: var(--cc-color-secondary); }
 
 .content {
     flex: 1;
@@ -296,3 +296,13 @@
 .icon1.icon1 {
     color: var(--cc-color-primary);
 }
+
+.iconWrapper.toneInvoice,
+.iconWrapper.tonePayment { background-color: var(--cc-color-info-bg); color: var(--cc-color-info); }
+.iconWrapper.toneDiagnostic { background-color: color-mix(in srgb, var(--cc-color-danger) 12%, transparent); color: var(--cc-color-danger); }
+
+.filterBar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.typeControls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.typeFilter { min-width: 200px; }
+.card:focus-visible { outline: 2px solid var(--cc-color-primary); outline-offset: 2px; }
+.markReadBtn:disabled { cursor: not-allowed; opacity: 0.5; }
