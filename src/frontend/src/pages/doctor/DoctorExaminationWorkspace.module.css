@@ -1064,3 +1064,6 @@
 .specimenStatus { color: var(--cc-color-primary); background: var(--cc-color-primary-light); }
 .specimenRejected { color: var(--cc-color-danger); background: var(--cc-color-danger-bg); }
 .verificationPending { display: inline-block; padding: var(--cc-space-xxs) var(--cc-space-xs); margin-right: var(--cc-space-sm); border-radius: var(--cc-radius-sm); color: var(--cc-color-warning); background: var(--cc-color-warning-bg); font-weight: 600; }
+
+.diagnosticOrderGroup { display: flex; flex-direction: column; gap: var(--cc-space-md); }
+.orderFlagSummary { display: inline-block; padding: var(--cc-space-xxs) var(--cc-space-xs); border: 1px solid currentColor; border-radius: var(--cc-radius-sm); background: var(--cc-color-bg-container); }

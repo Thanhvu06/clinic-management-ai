@@ -98,6 +98,7 @@ export const TechnicianDashboard: React.FC = () => {
         { status: 'Ordered' as const, title: 'Chờ thực hiện', value: stats?.orderedCount ?? 0, icon: Clock, color: 'warning' as const },
         { status: 'InProgress' as const, title: 'Đang thực hiện', value: stats?.inProgressCount ?? 0, icon: PlayCircle, color: 'info' as const },
         { status: 'Completed' as const, title: 'Hoàn tất hôm nay', value: stats?.completedTodayCount ?? 0, icon: CheckCircle, color: 'success' as const },
+        { status: 'InProgress' as const, title: 'Bị trả lại cần sửa', value: stats?.returnedCount ?? 0, icon: FileText, color: 'warning' as const },
     ];
     // The API has no category parameter: this filter applies only to the current page.
     const visibleOrders = categoryFilter ? orders.filter(order => order.items.some(item => item.category === categoryFilter)) : orders;
@@ -111,15 +112,17 @@ export const TechnicianDashboard: React.FC = () => {
 
     return (
         <div className={styles.dashboard}>
-            <PageHeader title="Bàn Làm Việc Cận Lâm Sàng" subtitle="Quản lý tiếp nhận mẫu, thực hiện xét nghiệm & chẩn đoán hình ảnh" actions={<Button onClick={() => loadData(false)}><RefreshCw size={15} aria-hidden="true" /> Làm mới</Button>} />
+            <PageHeader title="Bàn Làm Việc Cận Lâm Sàng" subtitle="Quản lý tiếp nhận mẫu, thực hiện xét nghiệm & chẩn đoán hình ảnh" actions={<Button disabled={loading} onClick={() => loadData(false)}><RefreshCw size={15} aria-hidden="true" />{loading ? 'Đang tải...' : 'Làm mới'}</Button>} />
             <div className={styles.statGrid}>
                 {statFilters.map(stat => {
                     const Icon = stat.icon;
                     const active = statusFilter === stat.status && (stat.status !== 'Completed' || dateFilter === toLocalDateString(new Date()));
-                    return <div key={stat.status} role="button" tabIndex={0} aria-label={`Lọc: ${stat.title}`} aria-pressed={active} className={`${styles.statFilter} ${active ? styles.statFilterActive : ''}`} onClick={event => { if (event.target === event.currentTarget) selectStat(stat.status); }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectStat(stat.status); } }}>
+                    return <div key={stat.title} role="button" tabIndex={0} aria-label={`Lọc: ${stat.title}`} aria-pressed={active} className={`${styles.statFilter} ${active ? styles.statFilterActive : ''}`} onClick={event => { if (event.target === event.currentTarget) selectStat(stat.status); }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectStat(stat.status); } }}>
                         <StatCard title={stat.title} value={stat.value} icon={<Icon size={24} />} color={stat.color} onClick={() => selectStat(stat.status)} />
                     </div>;
                 })}
+                <StatCard title="Chờ trưởng khoa duyệt" value={stats?.pendingVerificationCount ?? 0} icon={<Clock size={24} />} color="info" />
+                <StatCard title="Chờ quá 30 phút" value={stats?.overdueCount ?? 0} icon={<Clock size={24} />} color="warning" />
             </div>
             {lastUpdated && <p className={styles.updatedAt}>Cập nhật lúc {lastUpdated.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>}
             <Card className={styles.filters}>
@@ -146,8 +149,8 @@ export const TechnicianDashboard: React.FC = () => {
                         {header:'Bác sĩ & Chuyên khoa',accessor:order => <><div>{order.orderingDoctorName}</div><div className={styles.secondary}>{order.specialtyName || '---'}</div></>},
                         {header:'Dịch vụ chỉ định',accessor:order => <><div className={styles.categoryTags}>{[...new Set(order.items.map(item => item.category))].map(category => { const Icon = categoryIcons[category]; return <Tag key={category} className={styles.categoryTag}><Icon size={13} aria-hidden="true" />{diagnosticCategoryLabels[category]}</Tag>; })}</div><div className={styles.serviceNames}>{order.items.slice(0, 2).map(item => <div key={item.id}>{item.serviceName}</div>)}{order.items.length > 2 && <span>+{order.items.length - 2}</span>}</div></>},
                         {header:'Thời gian chờ',accessor:waitTime},
-                        {header:'Trạng thái',align:'center',accessor:order => <><StatusBadge status={diagnosticStatusTone[order.status]} label={diagnosticStatusLabels[order.status]} />{order.verificationStatus === 'Pending' && <Tag>Chờ duyệt</Tag>}{order.verificationStatus === 'Returned' && <Tag>Bị trả lại</Tag>}</>},
-                        {header:'Thao tác',align:'right',accessor:order => <Button type={order.status === 'Ordered' || order.status === 'InProgress' ? 'primary' : 'default'} onClick={() => navigate(`/diagnostics/orders/${order.id}`)}>{order.status === 'Ordered' ? 'Tiếp nhận' : order.status === 'InProgress' ? 'Nhập kết quả' : 'Xem chi tiết'}<ArrowRight size={14} aria-hidden="true" /></Button>}
+                        {header:'Trạng thái',align:'center',accessor:order => <><StatusBadge status={diagnosticStatusTone[order.status]} label={diagnosticStatusLabels[order.status]} />{order.verificationStatus === 'Pending' && <Tag color="processing">Chờ duyệt</Tag>}{order.verificationStatus === 'Returned' && <Tag color="warning">Bị trả lại</Tag>}</>},
+                        {header:'Thao tác',align:'right',accessor:order => <Button type={order.verificationStatus !== 'Pending' && (order.status === 'Ordered' || order.status === 'InProgress') ? 'primary' : 'default'} onClick={() => navigate(`/diagnostics/orders/${order.id}`)}>{order.status === 'Ordered' ? 'Tiếp nhận' : order.status === 'InProgress' ? order.verificationStatus === 'Pending' ? 'Xem (đang chờ duyệt)' : order.verificationStatus === 'Returned' ? 'Sửa kết quả' : 'Nhập kết quả' : 'Xem chi tiết'}<ArrowRight size={14} aria-hidden="true" /></Button>}
                     ]} />
                 </div>
             )}

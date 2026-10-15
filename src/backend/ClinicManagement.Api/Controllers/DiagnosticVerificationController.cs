@@ -12,6 +12,10 @@ namespace ClinicManagement.Api.Controllers;
 [Authorize(Roles = RoleNames.DiagnosticTechnician + "," + RoleNames.LabSupervisor + "," + RoleNames.Doctor)]
 public class DiagnosticVerificationController(IDiagnosticWorkflowService workflowService) : ControllerBase
 {
+    [HttpGet("stats")]
+    public async Task<IActionResult> Stats() =>
+        Ok(ApiResponse<VerificationStatsDto>.Ok(await workflowService.GetVerificationStatsAsync()));
+
     [HttpGet("queue")]
     public async Task<IActionResult> Queue([FromQuery] int page = 1, [FromQuery] int pageSize = 15) =>
         Ok(ApiResponse<PagedResult<DiagnosticOrderDto>>.Ok(await workflowService.GetVerificationQueueAsync(page, pageSize)));

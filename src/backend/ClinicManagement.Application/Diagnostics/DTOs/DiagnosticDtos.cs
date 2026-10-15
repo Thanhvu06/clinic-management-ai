@@ -240,4 +240,17 @@ public class TechnicianDiagnosticStatsDto
     public int OrderedCount { get; set; }
     public int InProgressCount { get; set; }
     public int CompletedTodayCount { get; set; }
+    public int PendingVerificationCount { get; set; }
+    public int ReturnedCount { get; set; }
+    public int OverdueCount { get; set; }
+}
+
+public class VerificationStatsDto
+{
+    public int PendingCount { get; set; }
+    public int CriticalPendingCount { get; set; }
+    public int OverduePendingCount { get; set; }
+    public int OldestPendingMinutes { get; set; }
+    public int ReturnedTodayCount { get; set; }
+    public int VerifiedTodayCount { get; set; }
 }

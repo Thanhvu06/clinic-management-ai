@@ -163,4 +163,16 @@ export interface TechnicianDiagnosticStatsDto {
     orderedCount: number;
     inProgressCount: number;
     completedTodayCount: number;
+    pendingVerificationCount?: number;
+    returnedCount?: number;
+    overdueCount?: number;
+}
+
+export interface VerificationStatsDto {
+    pendingCount: number;
+    criticalPendingCount: number;
+    overduePendingCount: number;
+    oldestPendingMinutes: number;
+    returnedTodayCount: number;
+    verifiedTodayCount: number;
 }
