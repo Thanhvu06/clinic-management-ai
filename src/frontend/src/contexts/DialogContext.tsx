@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { CheckCircle, AlertTriangle, Info, XCircle } from 'lucide-react';
+import styles from './DialogContext.module.css';
 
 type DialogType = 'success' | 'error' | 'warning' | 'info';
 
@@ -83,10 +84,10 @@ export const DialogProvider: React.FC< { children: ReactNode }> = ({ children })
 
     const renderIcon = (type: DialogType) => {
         switch (type) {
-            case 'success': return <CheckCircle size={48} className="" style={{ color: 'var(--c-success)' }} />;
-            case 'error': return <XCircle size={48} className="" style={{ color: 'var(--c-danger)' }} />;
-            case 'warning': return <AlertTriangle size={48} className="" style={{ color: 'var(--c-warning)' }} />;
-            case 'info': return <Info size={48} className="" style={{ color: 'var(--c-info)' }} />;
+            case 'success': return <CheckCircle size={48} className={["", styles.icon1].join(' ')} />;
+            case 'error': return <XCircle size={48} className={["", styles.icon2].join(' ')} />;
+            case 'warning': return <AlertTriangle size={48} className={["", styles.icon3].join(' ')} />;
+            case 'info': return <Info size={48} className={["", styles.icon4].join(' ')} />;
         }
     };
 
@@ -95,34 +96,26 @@ export const DialogProvider: React.FC< { children: ReactNode }> = ({ children })
             {children}
             
             {dialog.isOpen && (
-                <div className="dialog-overlay" role="dialog" aria-modal="true" style={{
-                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-                    backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999
-                }}>
-                    <div className="dialog-content" style={{
-                        background: 'white', padding: '24px', borderRadius: '12px',
-                        width: '90%', maxWidth: '400px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center'
-                    }}>
-                        <div style={{ marginBottom: '16px' }}>
+                <div className={["dialog-overlay", styles.overlay1].join(' ')} role="dialog" aria-modal="true">
+                    <div className={["dialog-content", styles.stackLayout1].join(' ')}>
+                        <div className={styles.spacing1}>
                             {renderIcon(dialog.type)}
                         </div>
-                        <h3 style={{ margin: '0 0 12px 0', fontSize: '1.25rem', color: 'var(--c-navy)' }}>{dialog.title}</h3>
-                        <p style={{ margin: '0 0 24px 0', color: 'var(--c-text)', fontSize: '0.95rem' }}>{dialog.message}</p>
+                        <h3 className={styles.heading1}>{dialog.title}</h3>
+                        <p className={styles.paragraph1}>{dialog.message}</p>
                         
-                        <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'center' }}>
+                        <div className={styles.flexLayout1}>
                             {dialog.isConfirm ? (
                                 <>
-                                    <button className="btn-secondary" style={{ flex: 1 }} onClick={closeDialog}>
+                                    <button className={["btn-secondary", styles.button1].join(' ')} onClick={closeDialog}>
                                         {dialog.cancelText || 'Hủy'}
                                     </button>
-                                    <button className="btn-primary" style={{ flex: 1, backgroundColor: 'var(--c-danger)', borderColor: 'var(--c-danger)' }} onClick={handleConfirm}>
+                                    <button className={["btn-primary", styles.button2].join(' ')} onClick={handleConfirm}>
                                         {dialog.confirmText || 'Xác nhận'}
                                     </button>
                                 </>
                             ) : (
-                                <button className="btn-primary" style={{ minWidth: '120px' }} onClick={closeDialog}>
+                                <button className={["btn-primary", styles.button3].join(' ')} onClick={closeDialog}>
                                     Đóng
                                 </button>
                             )}
@@ -131,16 +124,9 @@ export const DialogProvider: React.FC< { children: ReactNode }> = ({ children })
                 </div>
             )}
 
-            <div style={{
-                position: 'fixed', bottom: '24px', right: '24px', display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 9999
-            }}>
+            <div className={styles.overlay2}>
                 {toasts.map(toast => (
-                    <div key={toast.id} style={{
-                        background: toast.type === 'error' ? 'var(--c-danger)' : 'var(--c-navy)',
-                        color: 'white', padding: '12px 20px', borderRadius: '8px',
-                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                        display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem'
-                    }}>
+                    <div key={toast.id} className={[styles.flexLayout2, (toast.type === 'error' ? styles.state1 : styles.state2)].join(' ')}>
                         {toast.message}
                     </div>
                 ))}

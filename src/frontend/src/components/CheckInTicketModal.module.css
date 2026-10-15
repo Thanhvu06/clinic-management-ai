@@ -1,0 +1,195 @@
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.overlay1.overlay1 {
+    position: fixed;
+    inset: 0;
+    background-color: color-mix(in srgb, var(--cc-color-text-dark) 60%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.stackLayout1.stackLayout1 {
+    background: var(--cc-color-bg-container);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 20px 25px -5px color-mix(in srgb, var(--cc-color-text-dark) 10%, transparent), 0 10px 10px -5px color-mix(in srgb, var(--cc-color-text-dark) 4%, transparent);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.flexLayout1.flexLayout1 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--cc-color-border);
+    background: var(--cc-color-bg-subtle);
+}
+
+.flexLayout2.flexLayout2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--cc-color-secondary-hover);
+    font-weight: 600;
+}
+
+.flexLayout3.flexLayout3 {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--cc-color-text-secondary);
+    padding: 4px;
+    display: flex;
+    align-items: center;
+}
+
+.tone1.tone1 {
+    padding: 24px;
+    color: var(--cc-color-text);
+    font-family: Inter, system-ui, sans-serif;
+}
+
+.spacing1.spacing1 {
+    text-align: center;
+    border-bottom: 2px dashed var(--cc-color-border);
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+}
+
+.text1.text1 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--cc-color-secondary-hover);
+}
+
+.text2.text2 {
+    font-size: 0.85rem;
+    color: var(--cc-color-text-secondary);
+    margin-top: 4px;
+}
+
+.surface1.surface1 {
+    text-align: center;
+    background: var(--cc-color-success-bg);
+    border: 2px solid var(--cc-color-secondary);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.text3.text3 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--cc-color-secondary-hover);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.text4.text4 {
+    font-size: 3rem;
+    font-weight: 800;
+    color: var(--cc-color-secondary-hover);
+    line-height: 1.1;
+    margin: 8px 0;
+}
+
+.text5.text5 {
+    font-size: 0.85rem;
+    color: var(--cc-color-text-secondary);
+}
+
+.stackLayout2.stackLayout2 {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 0.92rem;
+}
+
+.flexLayout4.flexLayout4 {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--cc-color-border-light);
+}
+
+.flexLayout5.flexLayout5 {
+    color: var(--cc-color-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.text6.text6 {
+    font-weight: 700;
+}
+
+.text7.text7 {
+    color: var(--cc-color-text-secondary);
+}
+
+.text8.text8 {
+    font-weight: 600;
+    color: var(--cc-color-secondary-hover);
+}
+
+.text9.text9 {
+    font-weight: 600;
+}
+
+.text10.text10 {
+    font-weight: 600;
+    color: var(--cc-color-warning);
+}
+
+.flexLayout6.flexLayout6 {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+}
+
+.text11.text11 {
+    margin-top: 18px;
+    padding-top: 12px;
+    border-top: 2px dashed var(--cc-color-border);
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--cc-color-text-secondary);
+}
+
+.flexLayout7.flexLayout7 {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--cc-color-border);
+    background: var(--cc-color-bg-subtle);
+}
+
+.button1.button1 {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--cc-color-border);
+    background: var(--cc-color-bg-container);
+    color: var(--cc-color-text);
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.flexLayout8.flexLayout8 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: none;
+    background: var(--cc-color-secondary);
+    color: var(--cc-color-bg-container);
+    font-weight: 600;
+    cursor: pointer;
+}

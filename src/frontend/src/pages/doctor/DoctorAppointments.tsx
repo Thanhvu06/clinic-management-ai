@@ -418,7 +418,7 @@ export const DoctorAppointments: React.FC = () => {
                         {modal.view === 'revisit' && (
                             <Form form={revisitForm} layout="vertical" onFinish={handleRevisit}>
                                 <Form.Item name="revisitDate" label="Ngày hẹn tái khám đề nghị" rules={[{ required: true, message: 'Vui lòng chọn ngày tái khám' }]}>
-                                    <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                                    <DatePicker className={styles.control1} format="DD/MM/YYYY" />
                                 </Form.Item>
                                 <Form.Item name="revisitNote" label="Tin nhắn / Lý do tái khám (Tùy chọn)">
                                     <Input.TextArea rows={3} placeholder="Ví dụ: Tái khám sau khi uống hết thuốc..." />

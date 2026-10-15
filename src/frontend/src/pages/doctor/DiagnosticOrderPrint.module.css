@@ -1,0 +1,298 @@
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.spacing1.spacing1 {
+    padding: 60px 24px;
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+.spacing2.spacing2 {
+    margin-top: 16px;
+}
+
+.surface1.surface1 {
+    min-height: 100vh;
+    background: var(--cc-color-bg-subtle);
+    padding: 24px;
+}
+
+.spacing3.spacing3 {
+    max-width: 800px;
+    margin: 0 auto 16px;
+}
+
+.surface2.surface2 {
+    max-width: 800px;
+    margin: 0 auto;
+    background: var(--cc-color-bg-container);
+    padding: 40px;
+    border-radius: 8px;
+    border: 1px solid var(--cc-color-border);
+    box-shadow: 0 4px 6px -1px color-mix(in srgb, var(--cc-color-text-dark) 10%, transparent);
+    color: var(--cc-color-text-dark);
+    font-family: Arial, sans-serif;
+}
+
+.flexLayout1.flexLayout1 {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid var(--cc-color-info);
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+}
+
+.flexLayout2.flexLayout2 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.flexLayout3.flexLayout3 {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    background: var(--cc-color-teal-light);
+    color: var(--cc-color-info);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.text1.text1 {
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--cc-color-info);
+    text-transform: uppercase;
+}
+
+.text2.text2 {
+    font-size: 12px;
+    color: var(--cc-color-text-secondary);
+}
+
+.spacing4.spacing4 {
+    text-align: right;
+}
+
+.text3.text3 {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--cc-color-text-dark);
+}
+
+.spacing5.spacing5 {
+    text-align: center;
+    margin: 20px 0;
+}
+
+.heading1.heading1 {
+    font-size: 22px;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin: 0;
+    color: var(--cc-color-text-dark);
+    letter-spacing: 0.5px;
+}
+
+.text4.text4 {
+    font-size: 12px;
+    color: var(--cc-color-text-secondary);
+    font-style: italic;
+    margin-top: 4px;
+}
+
+.text5.text5 {
+    background: var(--cc-color-bg-subtle);
+    border: 1px solid var(--cc-color-border);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.gridLayout1.gridLayout1 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.text6.text6 {
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.spacing6.spacing6 {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--cc-color-border);
+}
+
+.spacing7.spacing7 {
+    margin-top: 4px;
+}
+
+.spacing8.spacing8 {
+    margin-bottom: 24px;
+}
+
+.text7.text7 {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: var(--cc-color-info);
+    text-transform: uppercase;
+}
+
+.tableLayout1.tableLayout1 {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.tableRow1.tableRow1 {
+    background: var(--cc-color-border-light);
+    border-top: 1px solid var(--cc-color-border);
+    border-bottom: 2px solid var(--cc-color-text-muted);
+}
+
+.tableHeading1.tableHeading1 {
+    padding: 8px 10px;
+    text-align: center;
+    width: 40px;
+}
+
+.tableHeading2.tableHeading2 {
+    padding: 8px 10px;
+    text-align: left;
+    width: 110px;
+}
+
+.tableHeading3.tableHeading3 {
+    padding: 8px 10px;
+    text-align: left;
+}
+
+.tableHeading4.tableHeading4 {
+    padding: 8px 10px;
+    text-align: left;
+    width: 140px;
+}
+
+.tableHeading5.tableHeading5 {
+    padding: 8px 10px;
+    text-align: center;
+    width: 120px;
+}
+
+.tableRow2.tableRow2 {
+    border-bottom: 1px solid var(--cc-color-border);
+}
+
+.tableCell1.tableCell1 {
+    padding: 10px;
+    text-align: center;
+    color: var(--cc-color-text-secondary);
+}
+
+.tableCell2.tableCell2 {
+    padding: 10px;
+    font-weight: 600;
+    color: var(--cc-color-text);
+}
+
+.tableCell3.tableCell3 {
+    padding: 10px;
+    font-weight: 500;
+}
+
+.text8.text8 {
+    font-size: 11px;
+    color: var(--cc-color-text-secondary);
+    font-style: italic;
+    margin-top: 2px;
+}
+
+.tableCell4.tableCell4 {
+    padding: 10px;
+    color: var(--cc-color-text-secondary);
+}
+
+.tableCell5.tableCell5 {
+    padding: 10px;
+    text-align: center;
+}
+
+.state1.state1.state1 {
+    background: var(--cc-color-success-bg);
+}
+
+.state2.state2.state2 {
+    background: var(--cc-color-primary-light);
+}
+
+.state3.state3.state3 {
+    background: var(--cc-color-warning-bg);
+}
+
+.state4.state4.state4 {
+    color: var(--cc-color-success);
+}
+
+.state5.state5.state5 {
+    color: var(--cc-color-primary);
+}
+
+.state6.state6.state6 {
+    color: var(--cc-color-warning);
+}
+
+.text9.text9 {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.gridLayout2.gridLayout2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 40px;
+    margin-top: 40px;
+    text-align: center;
+    page-break-inside: avoid;
+}
+
+.text10.text10 {
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.text11.text11 {
+    font-size: 11px;
+    color: var(--cc-color-text-secondary);
+    font-style: italic;
+    margin-bottom: 60px;
+}
+
+.text12.text12 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cc-color-text);
+}
+
+.text13.text13 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cc-color-info);
+}
+
+.text14.text14 {
+    margin-top: 30px;
+    padding-top: 10px;
+    border-top: 1px solid var(--cc-color-border);
+    font-size: 11px;
+    color: var(--cc-color-text-muted);
+    text-align: center;
+}

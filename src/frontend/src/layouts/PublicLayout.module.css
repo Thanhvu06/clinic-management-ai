@@ -581,3 +581,111 @@
     color: var(--cc-color-text-on-dark-muted);
     line-height: 1.5;
 }
+
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.overlay1.overlay1 {
+    position: fixed;
+    inset: 0;
+    background-color: color-mix(in srgb, var(--cc-color-text-dark) 60%, transparent);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.surface1.surface1 {
+    background-color: var(--cc-color-bg-container);
+    border-radius: 16px;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 0 20px 25px -5px color-mix(in srgb, var(--cc-color-text-dark) 10%, transparent), 0 10px 10px -5px color-mix(in srgb, var(--cc-color-text-dark) 4%, transparent);
+    overflow: hidden;
+}
+
+.flexLayout1.flexLayout1 {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--cc-color-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: var(--cc-color-text-dark);
+    color: var(--cc-color-bg-container);
+}
+
+.flexLayout2.flexLayout2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.button1.button1 {
+    background: transparent;
+    border: none;
+    color: var(--cc-color-text-muted);
+    cursor: pointer;
+}
+
+.spacing1.spacing1 {
+    padding: 24px;
+    text-align: center;
+}
+
+.flexLayout3.flexLayout3 {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: var(--cc-color-success-bg);
+    color: var(--cc-color-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.heading1.heading1 {
+    margin: 0 0 8px 0;
+    font-size: 1.2rem;
+    color: var(--cc-color-text-dark);
+}
+
+.paragraph1.paragraph1 {
+    margin: 0 0 12px 0;
+    color: var(--cc-color-text);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.paragraph2.paragraph2 {
+    margin: 0 0 24px 0;
+    color: var(--cc-color-text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.stackLayout1.stackLayout1 {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.button2.button2 {
+    padding: 12px;
+    background-color: var(--cc-color-secondary);
+    color: var(--cc-color-bg-container);
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.button3.button3 {
+    padding: 10px;
+    background-color: transparent;
+    color: var(--cc-color-text-secondary);
+    border: 1px solid var(--cc-color-border);
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+}

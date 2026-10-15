@@ -133,7 +133,7 @@ export const PublicLayout: React.FC = () => {
                                         <span className={styles.userName}>
                                             {user?.fullName}
                                         </span>
-                                        <ChevronDown size={16} color="var(--c-text-light)" />
+                                        <ChevronDown size={16} color="var(--cc-color-text-secondary)" />
                                     </button>
                                     
                                     {isDropdownOpen && (
@@ -323,100 +323,50 @@ export const PublicLayout: React.FC = () => {
             </footer>
 
             {isStaffAiModalOpen && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                    zIndex: 10000,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '16px'
-                }}>
-                    <div style={{
-                        backgroundColor: '#ffffff',
-                        borderRadius: '16px',
-                        maxWidth: '480px',
-                        width: '100%',
-                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            padding: '16px 20px',
-                            borderBottom: '1px solid #e2e8f0',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            backgroundColor: '#0f172a',
-                            color: '#ffffff'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-                                <ShieldPlus size={20} color="#0d9488" />
+                <div className={styles.overlay1}>
+                    <div className={styles.surface1}>
+                        <div className={styles.flexLayout1}>
+                            <div className={styles.flexLayout2}>
+                                <ShieldPlus size={20} color="var(--cc-color-secondary)" />
                                 <span>ClinicCare AI (Dành cho Bệnh nhân)</span>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setIsStaffAiModalOpen(false)}
-                                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                                className={styles.button1}
                                 aria-label="Đóng"
                             >
                                 <X size={20} />
                             </button>
                         </div>
-                        <div style={{ padding: '24px', textAlign: 'center' }}>
-                            <div style={{
-                                width: '56px',
-                                height: '56px',
-                                borderRadius: '50%',
-                                backgroundColor: '#f0fdfa',
-                                color: '#0d9488',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                marginBottom: '16px'
-                            }}>
+                        <div className={styles.spacing1}>
+                            <div className={styles.flexLayout3}>
                                 <ShieldPlus size={32} />
                             </div>
-                            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', color: '#0f172a' }}>
+                            <h3 className={styles.heading1}>
                                 Tính năng dành cho Bệnh nhân
                             </h3>
-                            <p style={{ margin: '0 0 12px 0', color: '#334155', fontSize: '0.95rem', lineHeight: 1.5 }}>
+                            <p className={styles.paragraph1}>
                                 Bạn đang đăng nhập bằng tài khoản nhân viên: <strong>{user?.fullName}</strong> (Vai trò: {user?.role}).
                             </p>
-                            <p style={{ margin: '0 0 24px 0', color: '#64748b', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                            <p className={styles.paragraph2}>
                                 Tính năng Tư vấn & Đặt lịch AI trực tuyến phục vụ Bệnh nhân. Nhân viên y tế vui lòng làm việc tại Không gian làm việc chuyên môn hoặc đăng nhập tài khoản Bệnh nhân.
                             </p>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <div className={styles.stackLayout1}>
                                 <button
                                     type="button"
                                     onClick={() => {
                                         setIsStaffAiModalOpen(false);
                                         navigate(getRoleDashboardPath(user?.role));
                                     }}
-                                    style={{
-                                        padding: '12px',
-                                        backgroundColor: '#0d9488',
-                                        color: '#ffffff',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
-                                    }}
+                                    className={styles.button2}
                                 >
                                     Về Không gian làm việc ({user?.role})
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setIsStaffAiModalOpen(false)}
-                                    style={{
-                                        padding: '10px',
-                                        backgroundColor: 'transparent',
-                                        color: '#64748b',
-                                        border: '1px solid #cbd5e1',
-                                        borderRadius: '8px',
-                                        fontWeight: 500,
-                                        cursor: 'pointer'
-                                    }}
+                                    className={styles.button3}
                                 >
                                     Đóng
                                 </button>

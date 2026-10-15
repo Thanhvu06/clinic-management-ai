@@ -33,3 +33,35 @@
     font-size: 0.9rem;
     color: var(--cc-color-danger);
 }
+
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.icon1.icon1 {
+    margin-right: 6px;
+    color: var(--cc-color-teal);
+    vertical-align: -2px;
+}
+
+.control1.control1 {
+    width: 250px;
+}
+
+.text1.text1 {
+    padding: 12px;
+    background: var(--cc-color-info-bg);
+    color: var(--cc-color-info);
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.control2.control2 {
+    width: 100%;
+}
+
+.icon2.icon2 {
+    text-align: right;
+    margin-bottom: 0;
+}
+
+.button1.button1 {
+    margin-right: 8px;
+}

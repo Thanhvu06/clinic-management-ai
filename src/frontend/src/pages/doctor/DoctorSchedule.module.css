@@ -187,3 +187,52 @@
     margin-top: var(--cc-space-xs);
     font-style: italic;
 }
+
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.surface1.surface1 {
+    border: 1px solid var(--cc-color-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.icon1.icon1 {
+    color: var(--cc-color-info);
+}
+
+.icon2.icon2 {
+    color: var(--cc-color-danger);
+}
+
+.icon3.icon3 {
+    flex: 1;
+}
+
+.control1.control1 {
+    width: 100%;
+}
+
+.text1.text1 {
+    font-size: 0.85rem;
+    color: var(--cc-color-text-muted);
+    padding: 10px 0;
+}
+
+.text2.text2 {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.spacing1.spacing1 {
+    margin: 0;
+    padding-left: 16px;
+}
+
+.icon4.icon4 {
+    text-align: right;
+    margin-bottom: 0;
+    margin-top: 16px;
+}
+
+.button1.button1 {
+    margin-right: 8px;
+}

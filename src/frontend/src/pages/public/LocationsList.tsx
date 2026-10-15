@@ -58,24 +58,13 @@ export const LocationsList: React.FC = () => {
             </div>
 
             <div className={styles.toolbar}>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <div className={styles.flexLayout12}>
                     {cities.map(c => (
                         <button
                             key={c.id}
                             type="button"
                             onClick={() => setSelectedCity(c.id)}
-                            style={{
-                                padding: '8px 18px',
-                                borderRadius: '20px',
-                                border: '1px solid',
-                                borderColor: selectedCity === c.id ? 'var(--c-primary)' : 'var(--c-border)',
-                                background: selectedCity === c.id ? 'var(--c-primary)' : '#ffffff',
-                                color: selectedCity === c.id ? '#ffffff' : 'var(--c-text)',
-                                fontWeight: 600,
-                                fontSize: '0.9rem',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
+                            className={[styles.button2, (selectedCity === c.id ? styles.state10 : styles.state11), (selectedCity === c.id ? styles.state12 : styles.state4), (selectedCity === c.id ? styles.state13 : styles.state14)].join(' ')}
                         >
                             {c.name}
                         </button>
@@ -89,69 +78,62 @@ export const LocationsList: React.FC = () => {
             {loading ? (
                 <div className={styles.grid3}>
                     {[1, 2, 3].map(i => (
-                        <div key={i} className={styles.skeletonCard} style={{ height: '240px' }}></div>
+                        <div key={i} className={[styles.skeletonCard, styles.spacing2].join(' ')}></div>
                     ))}
                 </div>
             ) : error ? (
-                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#dc2626' }}>
+                <div className={styles.tone1}>
                     <p>{error}</p>
                     <button
                         type="button"
-                        className="btn btn-primary btn-sm"
+                        className={["btn btn-primary btn-sm", styles.button3].join(' ')}
                         onClick={() => window.location.reload()}
-                        style={{ marginTop: '12px' }}
                     >
                         Thử lại
                     </button>
                 </div>
             ) : filteredLocations.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--c-text-muted)' }}>
+                <div className={styles.tone2}>
                     Chưa có cơ sở nào trong khu vực đã chọn.
                 </div>
             ) : (
                 <div className={styles.grid3}>
                     {filteredLocations.map(loc => (
                         <div key={loc.id} className={styles.card}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                                <div className={styles.cardIcon} style={{ margin: 0, background: 'rgba(14, 116, 144, 0.08)' }}>
+                            <div className={styles.flexLayout13}>
+                                <div className={[styles.cardIcon, styles.surface4].join(' ')}>
                                     <Building size={24} />
                                 </div>
                                 <div>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--c-primary)', textTransform: 'uppercase' }}>
+                                    <span className={styles.text9}>
                                         {loc.city}
                                     </span>
-                                    <h2 className={styles.cardTitle} style={{ fontSize: '1.15rem', margin: 0 }}>
+                                    <h2 className={[styles.cardTitle, styles.heading4].join(' ')}>
                                         {loc.name}
                                     </h2>
                                 </div>
                             </div>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', margin: '12px 0 20px 0', flexGrow: 1 }}>
-                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.9rem', color: 'var(--c-text)' }}>
-                                    <MapPin size={16} color="var(--c-primary)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                            <div className={styles.stackLayout1}>
+                                <div className={styles.flexLayout10}>
+                                    <MapPin size={16} color="var(--cc-color-primary)" className={styles.icon4} />
                                     <span>{loc.address}</span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', color: 'var(--c-text-muted)' }}>
-                                    <Clock size={16} color="var(--c-text-muted)" style={{ flexShrink: 0 }} />
+                                <div className={styles.flexLayout14}>
+                                    <Clock size={16} color="var(--cc-color-text-muted)" className={styles.icon7} />
                                     <span>{loc.openingHours}</span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', color: 'var(--c-text-muted)' }}>
-                                    <Phone size={16} color="var(--c-text-muted)" style={{ flexShrink: 0 }} />
+                                <div className={styles.flexLayout14}>
+                                    <Phone size={16} color="var(--cc-color-text-muted)" className={styles.icon7} />
                                     <span>{loc.phone}</span>
                                 </div>
 
                                 {loc.services && loc.services.length > 0 && (
-                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                                    <div className={styles.flexLayout15}>
                                         {loc.services.map((srv, idx) => (
                                             <span
                                                 key={idx}
-                                                style={{
-                                                    fontSize: '0.75rem',
-                                                    padding: '2px 8px',
-                                                    borderRadius: '4px',
-                                                    background: '#f1f5f9',
-                                                    color: '#475569'
-                                                }}
+                                                className={styles.text10}
                                             >
                                                 {srv}
                                             </span>
@@ -171,8 +153,7 @@ export const LocationsList: React.FC = () => {
                                 </a>
                                 <Link 
                                     to="/patient/book"
-                                    className="btn btn-primary btn-sm"
-                                    style={{ textDecoration: 'none' }}
+                                    className={["btn btn-primary btn-sm", styles.icon8].join(' ')}
                                 >
                                     <Calendar size={14} /> Đặt khám
                                 </Link>

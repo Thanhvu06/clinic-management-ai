@@ -127,7 +127,7 @@ export const DoctorLeaveRequests: React.FC = () => {
             accessor: (req) => (
                 <div>
                     <div className={styles.leaveTime}>
-                        <Clock size={14} style={{ marginRight: 6, color: 'var(--cc-color-teal)', verticalAlign: -2 }} />
+                        <Clock size={14} className={styles.icon1} />
                         Từ: {formatDateTime(req.startDateTime)}
                     </div>
                     <div className={styles.leaveTimeMuted}>Đến: {formatDateTime(req.endDateTime)}</div>
@@ -166,7 +166,7 @@ export const DoctorLeaveRequests: React.FC = () => {
 
             <Card size="small" className={styles.filterCard}>
                 <Select
-                    style={{ width: 250 }}
+                    className={styles.control1}
                     value={statusFilter || undefined}
                     placeholder="Tất cả trạng thái"
                     allowClear
@@ -201,21 +201,21 @@ export const DoctorLeaveRequests: React.FC = () => {
                     <Form.Item
                         label="Lưu ý"
                     >
-                        <div style={{ padding: 12, background: 'var(--cc-color-info-bg)', color: 'var(--cc-color-info)', borderRadius: 6, fontSize: '0.9rem' }}>
+                        <div className={styles.text1}>
                             Yêu cầu nghỉ sẽ cần được Quản trị viên duyệt. Vui lòng nộp yêu cầu trước ít nhất 1-2 ngày để tránh ảnh hưởng lịch bệnh nhân.
                         </div>
                     </Form.Item>
                     <Form.Item name="startDate" label="Từ thời gian" rules={[{ required: true, message: 'Vui lòng chọn thời gian bắt đầu' }]}>
-                        <DatePicker showTime style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" />
+                        <DatePicker showTime className={styles.control2} format="DD/MM/YYYY HH:mm" />
                     </Form.Item>
                     <Form.Item name="endDate" label="Đến thời gian" rules={[{ required: true, message: 'Vui lòng chọn thời gian kết thúc' }]}>
-                        <DatePicker showTime style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" />
+                        <DatePicker showTime className={styles.control2} format="DD/MM/YYYY HH:mm" />
                     </Form.Item>
                     <Form.Item name="reason" label="Lý do nghỉ" rules={[{ required: true, message: 'Vui lòng nêu rõ lý do' }]}>
                         <Input.TextArea rows={3} placeholder="Nêu rõ lý do..." />
                     </Form.Item>
-                    <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
-                        <Button onClick={() => setModalOpen(false)} style={{ marginRight: 8 }}>Hủy</Button>
+                    <Form.Item className={styles.icon2}>
+                        <Button onClick={() => setModalOpen(false)} className={styles.button1}>Hủy</Button>
                         <Button type="primary" htmlType="submit" loading={formLoading}>Gửi yêu cầu</Button>
                     </Form.Item>
                 </Form>

@@ -9,7 +9,7 @@
     background: transparent;
     border: none;
     cursor: pointer;
-    color: var(--c-text-muted, #64748b);
+    color: var(--cc-color-text-muted);
     padding: 8px;
     border-radius: 8px;
     display: flex;
@@ -20,16 +20,16 @@
 
 .bellButton:hover,
 .bellButton.active {
-    background-color: var(--c-bg-subtle, #f1f5f9);
-    color: var(--c-primary, #0284c7);
+    background-color: var(--cc-color-bg-subtle);
+    color: var(--cc-color-primary);
 }
 
 .badge {
     position: absolute;
     top: 2px;
     right: 2px;
-    background-color: #ef4444;
-    color: #ffffff;
+    background-color: var(--cc-color-danger);
+    color: var(--cc-color-bg-container);
     font-size: 0.65rem;
     font-weight: 700;
     line-height: 1;
@@ -40,7 +40,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid #ffffff;
+    border: 2px solid var(--cc-color-bg-container);
     pointer-events: none;
 }
 
@@ -50,10 +50,10 @@
     right: 0;
     width: 380px;
     max-width: 90vw;
-    background-color: #ffffff;
-    border: 1px solid var(--c-border, #e2e8f0);
+    background-color: var(--cc-color-bg-container);
+    border: 1px solid var(--cc-color-border);
     border-radius: 12px;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 10px 25px -5px color-mix(in srgb, var(--cc-color-text-dark) 10%, transparent), 0 8px 10px -6px color-mix(in srgb, var(--cc-color-text-dark) 10%, transparent);
     z-index: 1000;
     display: flex;
     flex-direction: column;
@@ -77,14 +77,14 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    border-bottom: 1px solid var(--c-border, #e2e8f0);
-    background-color: #fafafa;
+    border-bottom: 1px solid var(--cc-color-border);
+    background-color: var(--cc-color-bg-subtle);
 }
 
 .headerTitle {
     font-weight: 700;
     font-size: 0.95rem;
-    color: #0f172a;
+    color: var(--cc-color-text-dark);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -94,7 +94,7 @@
     background: none;
     border: none;
     font-size: 0.8rem;
-    color: var(--c-primary, #0284c7);
+    color: var(--cc-color-primary);
     cursor: pointer;
     font-weight: 600;
     padding: 2px 6px;
@@ -103,12 +103,12 @@
 }
 
 .markAllBtn:hover:not(:disabled) {
-    background-color: rgba(2, 132, 199, 0.1);
+    background-color: color-mix(in srgb, var(--cc-color-info) 10%, transparent);
     text-decoration: underline;
 }
 
 .markAllBtn:disabled {
-    color: #94a3b8;
+    color: var(--cc-color-text-muted);
     cursor: not-allowed;
 }
 
@@ -124,7 +124,7 @@
     align-items: flex-start;
     gap: 12px;
     padding: 12px 16px;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--cc-color-border-light);
     cursor: pointer;
     transition: background-color 0.15s;
     text-align: left;
@@ -136,15 +136,15 @@
 }
 
 .item:hover {
-    background-color: #f8fafc;
+    background-color: var(--cc-color-bg-subtle);
 }
 
 .item.unread {
-    background-color: #f0f9ff;
+    background-color: var(--cc-color-info-bg);
 }
 
 .item.unread:hover {
-    background-color: #e0f2fe;
+    background-color: var(--cc-color-teal-light);
 }
 
 .iconWrapper {
@@ -155,18 +155,18 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: #e2e8f0;
-    color: #334155;
+    background-color: var(--cc-color-border);
+    color: var(--cc-color-text);
     margin-top: 2px;
 }
 
-.iconWrapper.type1 { background-color: #f1f5f9; color: #475569; } /* System */
-.iconWrapper.type2 { background-color: #e0f2fe; color: #0284c7; } /* Appointment */
-.iconWrapper.type3 { background-color: #fef3c7; color: #d97706; } /* ChangeRequest */
-.iconWrapper.type4 { background-color: #ede9fe; color: #7c3aed; } /* Revisit */
-.iconWrapper.type5 { background-color: #fee2e2; color: #dc2626; } /* Leave */
-.iconWrapper.type6 { background-color: #dcfce7; color: #16a34a; } /* Prescription */
-.iconWrapper.type7 { background-color: #ccfbf1; color: #0d9488; } /* HealthPackage */
+.iconWrapper.type1 { background-color: var(--cc-color-border-light); color: var(--cc-color-text-secondary); } /* System */
+.iconWrapper.type2 { background-color: var(--cc-color-teal-light); color: var(--cc-color-info); } /* Appointment */
+.iconWrapper.type3 { background-color: var(--cc-color-warning-bg); color: var(--cc-color-warning); } /* ChangeRequest */
+.iconWrapper.type4 { background-color: var(--cc-color-primary-light); color: var(--cc-color-primary); } /* Revisit */
+.iconWrapper.type5 { background-color: var(--cc-color-danger-bg); color: var(--cc-color-danger); } /* Leave */
+.iconWrapper.type6 { background-color: var(--cc-color-success-bg); color: var(--cc-color-success); } /* Prescription */
+.iconWrapper.type7 { background-color: color-mix(in srgb, var(--cc-color-secondary) 15%, transparent); color: var(--cc-color-secondary); } /* HealthPackage */
 
 .content {
     flex: 1;
@@ -184,24 +184,24 @@
 .title {
     font-size: 0.85rem;
     font-weight: 600;
-    color: #0f172a;
+    color: var(--cc-color-text-dark);
     line-height: 1.3;
 }
 
 .item.unread .title {
-    color: #0369a1;
+    color: var(--cc-color-info);
     font-weight: 700;
 }
 
 .time {
     font-size: 0.72rem;
-    color: #94a3b8;
+    color: var(--cc-color-text-muted);
     white-space: nowrap;
 }
 
 .message {
     font-size: 0.8rem;
-    color: #475569;
+    color: var(--cc-color-text-secondary);
     line-height: 1.4;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -213,7 +213,7 @@
     width: 7px;
     height: 7px;
     border-radius: 9999px;
-    background-color: #0284c7;
+    background-color: var(--cc-color-info);
     flex-shrink: 0;
     margin-top: 6px;
 }
@@ -221,7 +221,7 @@
 .emptyState {
     padding: 32px 16px;
     text-align: center;
-    color: #94a3b8;
+    color: var(--cc-color-text-muted);
     font-size: 0.85rem;
     display: flex;
     flex-direction: column;
@@ -231,19 +231,30 @@
 
 .footer {
     padding: 10px 16px;
-    border-top: 1px solid var(--c-border, #e2e8f0);
+    border-top: 1px solid var(--cc-color-border);
     text-align: center;
-    background-color: #fafafa;
+    background-color: var(--cc-color-bg-subtle);
 }
 
 .viewAllLink {
     font-size: 0.82rem;
     font-weight: 600;
-    color: var(--c-primary, #0284c7);
+    color: var(--cc-color-primary);
     text-decoration: none;
     display: inline-block;
 }
 
 .viewAllLink:hover {
     text-decoration: underline;
+}
+
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.icon1.icon1 {
+    display: inline;
+    vertical-align: middle;
+    margin-right: 4px;
+}
+
+.icon2.icon2 {
+    opacity: 0.5;
 }

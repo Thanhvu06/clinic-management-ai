@@ -4,7 +4,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(15, 23, 42, 0.6);
+    background-color: color-mix(in srgb, var(--cc-color-text-dark) 60%, transparent);
     backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
@@ -15,31 +15,31 @@
 }
 
 .modal {
-    background: #ffffff;
+    background: var(--cc-color-bg-container);
     border-radius: 16px;
     width: 100%;
     max-width: 680px;
     max-height: 90vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 20px 25px -5px color-mix(in srgb, var(--cc-color-text-dark) 10%, transparent), 0 10px 10px -5px color-mix(in srgb, var(--cc-color-text-dark) 4%, transparent);
     overflow: hidden;
 }
 
 .header {
     padding: 16px 24px;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--cc-color-border);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: #f8fafc;
+    background: var(--cc-color-bg-subtle);
 }
 
 .headerTitle {
     margin: 0;
     font-size: 1.15rem;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--cc-color-text-dark);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -48,7 +48,7 @@
 .closeBtn {
     background: transparent;
     border: none;
-    color: #64748b;
+    color: var(--cc-color-text-secondary);
     padding: 6px;
     border-radius: 8px;
     cursor: pointer;
@@ -59,8 +59,8 @@
 }
 
 .closeBtn:hover {
-    background: #e2e8f0;
-    color: #0f172a;
+    background: var(--cc-color-border);
+    color: var(--cc-color-text-dark);
 }
 
 .body {
@@ -70,8 +70,8 @@
 }
 
 .receiptContainer {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
+    background: var(--cc-color-bg-container);
+    border: 1px solid var(--cc-color-border);
     border-radius: 12px;
     padding: 24px;
 }
@@ -79,14 +79,14 @@
 .clinicHeader {
     text-align: center;
     margin-bottom: 20px;
-    border-bottom: 2px dashed #e2e8f0;
+    border-bottom: 2px dashed var(--cc-color-border);
     padding-bottom: 16px;
 }
 
 .clinicName {
     font-size: 1.2rem;
     font-weight: 800;
-    color: #0f4c81;
+    color: var(--cc-color-primary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: 4px;
@@ -94,7 +94,7 @@
 
 .clinicSub {
     font-size: 0.8rem;
-    color: #64748b;
+    color: var(--cc-color-text-secondary);
     line-height: 1.4;
 }
 
@@ -106,21 +106,21 @@
 .receiptTitle h3 {
     font-size: 1.35rem;
     font-weight: 800;
-    color: #0f172a;
+    color: var(--cc-color-text-dark);
     margin: 0 0 6px;
     letter-spacing: 0.02em;
 }
 
 .receiptTitle .meta {
     font-size: 0.85rem;
-    color: #64748b;
+    color: var(--cc-color-text-secondary);
 }
 
 .infoGrid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
-    background: #f8fafc;
+    background: var(--cc-color-bg-subtle);
     border-radius: 8px;
     padding: 14px 16px;
     margin-bottom: 20px;
@@ -136,13 +136,13 @@
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    color: #64748b;
+    color: var(--cc-color-text-secondary);
     font-weight: 600;
     margin-bottom: 2px;
 }
 
 .infoValue {
-    color: #0f172a;
+    color: var(--cc-color-text-dark);
     font-weight: 600;
 }
 
@@ -154,24 +154,24 @@
 }
 
 .itemsTable th {
-    background: #f1f5f9;
+    background: var(--cc-color-border-light);
     padding: 10px 12px;
     text-align: left;
     font-weight: 700;
-    color: #334155;
-    border-bottom: 1px solid #cbd5e1;
+    color: var(--cc-color-text);
+    border-bottom: 1px solid var(--cc-color-border);
     font-size: 0.8rem;
     text-transform: uppercase;
 }
 
 .itemsTable td {
     padding: 10px 12px;
-    border-bottom: 1px solid #e2e8f0;
-    color: #1e293b;
+    border-bottom: 1px solid var(--cc-color-border);
+    color: var(--cc-color-text);
 }
 
 .totalSection {
-    border-top: 2px solid #0f172a;
+    border-top: 2px solid var(--cc-color-text-dark);
     padding-top: 12px;
     margin-bottom: 20px;
 }
@@ -187,12 +187,12 @@
 .grandTotal {
     font-size: 1.15rem;
     font-weight: 800;
-    color: #0f4c81;
+    color: var(--cc-color-primary);
 }
 
 .paymentBox {
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
+    background: var(--cc-color-success-bg);
+    border: 1px solid color-mix(in srgb, var(--cc-color-success) 30%, transparent);
     border-radius: 8px;
     padding: 14px 16px;
     margin-top: 16px;
@@ -200,7 +200,7 @@
 
 .paymentTitle {
     font-weight: 700;
-    color: #166534;
+    color: var(--cc-color-success);
     margin-bottom: 8px;
     display: flex;
     align-items: center;
@@ -213,16 +213,16 @@
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
     font-size: 0.825rem;
-    color: #15803d;
+    color: var(--cc-color-success);
 }
 
 .cancelledBox {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
+    background: var(--cc-color-danger-bg);
+    border: 1px solid color-mix(in srgb, var(--cc-color-danger) 30%, transparent);
     border-radius: 8px;
     padding: 14px 16px;
     margin-top: 16px;
-    color: #991b1b;
+    color: var(--cc-color-danger);
     font-size: 0.85rem;
 }
 
@@ -241,13 +241,13 @@
 .signatureTitle {
     font-size: 0.85rem;
     font-weight: 600;
-    color: #334155;
+    color: var(--cc-color-text);
     margin-bottom: 4px;
 }
 
 .signatureNote {
     font-size: 0.75rem;
-    color: #94a3b8;
+    color: var(--cc-color-text-muted);
     font-style: italic;
     margin-bottom: 48px;
 }
@@ -255,16 +255,16 @@
 .signatureName {
     font-size: 0.85rem;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--cc-color-text-dark);
 }
 
 .footer {
     padding: 16px 24px;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid var(--cc-color-border);
     display: flex;
     justify-content: flex-end;
     gap: 12px;
-    background: #f8fafc;
+    background: var(--cc-color-bg-subtle);
 }
 
 /* Print Stylesheet */
@@ -308,4 +308,76 @@
         border: none !important;
         padding: 20px !important;
     }
+}
+
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.tone1.tone1 {
+    text-align: center;
+    padding: 40px;
+    color: var(--cc-color-text-secondary);
+}
+
+.tableHeading1.tableHeading1 {
+    width: 40px;
+}
+
+.tableHeading2.tableHeading2 {
+    text-align: center;
+    width: 70px;
+}
+
+.tableHeading3.tableHeading3 {
+    text-align: right;
+    width: 130px;
+}
+
+.tableHeading4.tableHeading4 {
+    text-align: right;
+    width: 140px;
+}
+
+.text1.text1 {
+    font-weight: 600;
+}
+
+.text2.text2 {
+    font-size: 0.75rem;
+    color: var(--cc-color-text-secondary);
+}
+
+.tableCell1.tableCell1 {
+    text-align: center;
+}
+
+.tableCell2.tableCell2 {
+    text-align: right;
+}
+
+.tableCell3.tableCell3 {
+    text-align: right;
+    font-weight: 600;
+}
+
+.tableCell4.tableCell4 {
+    text-align: center;
+    color: var(--cc-color-text-muted);
+}
+
+.text3.text3 {
+    color: var(--cc-color-text-secondary);
+}
+
+.text4.text4 {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--cc-color-text-dark);
+}
+
+.spacing1.spacing1 {
+    grid-column: span 2;
+}
+
+.text5.text5 {
+    font-size: 0.8rem;
+    color: var(--cc-color-text-secondary);
 }

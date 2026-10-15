@@ -76,7 +76,7 @@ export const SpecialtiesList: React.FC = () => {
             </div>
 
             {error && (
-                <div style={{ padding: '16px 20px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#b91c1c', marginBottom: '24px' }}>
+                <div className={styles.surface6}>
                     {error}
                 </div>
             )}
@@ -91,16 +91,12 @@ export const SpecialtiesList: React.FC = () => {
                 <div className={styles.grid3}>
                     {filteredSpecialties.map(spec => (
                         <div key={spec.id} className={styles.card}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div className={styles.flexLayout24}>
                                 <div className={styles.cardIcon}>
                                     <Stethoscope size={24} />
                                 </div>
                                 {spec.aiEnabled && (
-                                    <span style={{ 
-                                        display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                        fontSize: '0.75rem', fontWeight: 600, color: 'var(--c-primary)',
-                                        background: 'rgba(14, 116, 144, 0.1)', padding: '4px 8px', borderRadius: '12px' 
-                                    }}>
+                                    <span className={styles.flexLayout25}>
                                         <Sparkles size={12} /> Hỗ trợ AI
                                     </span>
                                 )}
@@ -115,8 +111,7 @@ export const SpecialtiesList: React.FC = () => {
                                 </Link>
                                 <Link 
                                     to={`/patient/book?specialtyId=${spec.id}`} 
-                                    className={styles.cardActionLink}
-                                    style={{ color: 'var(--c-secondary)' }}
+                                    className={[styles.cardActionLink, styles.icon11].join(' ')}
                                 >
                                     <Calendar size={15} /> Đặt lịch
                                 </Link>
@@ -126,7 +121,7 @@ export const SpecialtiesList: React.FC = () => {
                 </div>
             ) : (
                 <div className={styles.emptyState}>
-                    <Stethoscope size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                    <Stethoscope size={48} className={styles.icon1} />
                     <div className={styles.emptyStateTitle}>Không tìm thấy chuyên khoa phù hợp</div>
                     <p>Vui lòng thử tìm kiếm với từ khóa khác.</p>
                 </div>

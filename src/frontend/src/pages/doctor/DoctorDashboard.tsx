@@ -147,8 +147,8 @@ export const DoctorDashboard: React.FC = () => {
             header: 'Bệnh nhân',
             accessor: (item) => (
                 <div>
-                    <div style={{ fontWeight: 600, color: 'var(--cc-color-text-dark)' }}>{item.patientName}</div>
-                    <Typography.Text type="secondary" style={{ fontSize: '0.78rem' }}>
+                    <div className={styles.text1}>{item.patientName}</div>
+                    <Typography.Text type="secondary" className={styles.icon1}>
                         {item.patientPhone} {item.patientGender === 'Male' ? '• Nam' : item.patientGender === 'Female' ? '• Nữ' : ''} {item.patientAge ? `• ${item.patientAge}t` : ''}
                     </Typography.Text>
                 </div>
@@ -171,6 +171,7 @@ export const DoctorDashboard: React.FC = () => {
                         <>
                             <Button
                                 size="small"
+                                className={styles.button1}
                                 style={{ minHeight: 40 }}
                                 onClick={() => handleCheckIn(item.appointmentId)}
                                 loading={actionLoadingId === item.appointmentId}
@@ -224,8 +225,8 @@ export const DoctorDashboard: React.FC = () => {
             header: 'Bệnh nhân',
             accessor: (item) => (
                 <div>
-                    <div style={{ fontWeight: 600, color: 'var(--cc-color-text-dark)' }}>{item.patientName}</div>
-                    <Typography.Text type="secondary" style={{ fontSize: '0.78rem' }}>
+                    <div className={styles.text1}>{item.patientName}</div>
+                    <Typography.Text type="secondary" className={styles.icon1}>
                         {item.patientPhone} {item.patientGender === 'Male' ? '• Nam' : item.patientGender === 'Female' ? '• Nữ' : ''} {item.patientAge ? `• ${item.patientAge}t` : ''}
                     </Typography.Text>
                 </div>
@@ -355,8 +356,8 @@ export const DoctorDashboard: React.FC = () => {
 
             <Card className={styles.nextPatientBanner}>
                 <Flex justify="space-between" align="center" wrap gap="middle">
-                    <div style={{ flex: 1, minWidth: 280 }}>
-                        <Flex align="center" gap="small" style={{ marginBottom: 8 }}>
+                    <div className={styles.spacing1}>
+                        <Flex align="center" gap="small" className={styles.spacing2}>
                             <span className={styles.nextPatientTag}>BỆNH NHÂN TIẾP THEO</span>
                             {nextPatient && <StatusBadge status={nextPatient.status} />}
                         </Flex>
@@ -369,14 +370,14 @@ export const DoctorDashboard: React.FC = () => {
                                         (#{nextPatient.appointmentCode}) • {nextPatient.patientGender === 'Male' ? 'Nam' : nextPatient.patientGender === 'Female' ? 'Nữ' : 'Khác'} {nextPatient.patientAge ? `• ${nextPatient.patientAge} tuổi` : ''}
                                     </span>
                                 </span>
-                                <div style={{ fontSize: '0.88rem', color: 'var(--cc-color-text)', marginTop: 4 }}>
+                                <div className={styles.text2}>
                                     <strong>Khung giờ:</strong> {nextPatient.startTime?.substring(0, 5) || '--:--'} - {nextPatient.endTime?.substring(0, 5) || '--:--'} | <strong>SĐT:</strong> {nextPatient.patientPhone}
                                 </div>
-                                <div style={{ fontSize: '0.88rem', color: 'var(--cc-color-text-muted)', marginTop: 2 }}>
+                                <div className={styles.text3}>
                                     <strong>Lý do khám:</strong> {nextPatient.reason || 'Khám tổng quát theo lịch hẹn'}
                                 </div>
                                 {nextPatient.vitalSummaryText && (
-                                    <Flex align="center" gap={5} style={{ fontSize: '0.82rem', color: 'var(--cc-color-teal)', marginTop: 6, fontWeight: 500 }}>
+                                    <Flex align="center" gap={5} className={styles.text4}>
                                         <HeartPulse size={14} />
                                         <span>Dấu hiệu sinh tồn: {nextPatient.vitalSummaryText}</span>
                                     </Flex>
@@ -427,7 +428,7 @@ export const DoctorDashboard: React.FC = () => {
             </Card>
 
             <Card className={styles.sectionCard}>
-                <Flex justify="space-between" align="center" wrap gap="small" style={{ marginBottom: 18 }}>
+                <Flex justify="space-between" align="center" wrap gap="small" className={styles.spacing3}>
                     <Flex align="center" gap="small">
                         <div className={styles.sectionIcon}><Users size={18} /></div>
                         <h2 className={styles.sectionTitle}>
@@ -435,7 +436,7 @@ export const DoctorDashboard: React.FC = () => {
                         </h2>
                     </Flex>
                     <Link to="/doctor/queue">
-                        <Flex align="center" gap={4} style={{ fontSize: '0.88rem', color: 'var(--cc-color-primary)', fontWeight: 600 }}>
+                        <Flex align="center" gap={4} className={styles.text5}>
                             <span>Xem chế độ hàng đợi đầy đủ</span>
                             <ArrowRight size={14} />
                         </Flex>
@@ -459,7 +460,7 @@ export const DoctorDashboard: React.FC = () => {
             </Card>
 
             <Card className={styles.sectionCard}>
-                <Flex justify="space-between" align="center" wrap gap="small" style={{ marginBottom: 18 }}>
+                <Flex justify="space-between" align="center" wrap gap="small" className={styles.spacing3}>
                     <Flex align="center" gap="small">
                         <div className={`${styles.sectionIcon} ${styles.sectionIconInfo}`}><CalendarDays size={18} /></div>
                         <h2 className={styles.sectionTitle}>
@@ -467,7 +468,7 @@ export const DoctorDashboard: React.FC = () => {
                         </h2>
                     </Flex>
                     <Link to="/doctor/appointments">
-                        <Flex align="center" gap={4} style={{ fontSize: '0.88rem', color: 'var(--cc-color-primary)', fontWeight: 600 }}>
+                        <Flex align="center" gap={4} className={styles.text5}>
                             <span>Xem tất cả lịch hẹn</span>
                             <ArrowRight size={14} />
                         </Flex>

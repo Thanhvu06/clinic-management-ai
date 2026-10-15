@@ -98,7 +98,7 @@ export const SearchResults: React.FC = () => {
 
             {/* Search Bar */}
             <div className={styles.toolbar}>
-                <form onSubmit={handleSearchSubmit} className={styles.searchBox} style={{ width: '100%' }}>
+                <form onSubmit={handleSearchSubmit} className={[styles.searchBox, styles.spacing4].join(' ')}>
                     <Search className={styles.searchBoxIcon} size={20} />
                     <input
                         type="text"
@@ -111,7 +111,7 @@ export const SearchResults: React.FC = () => {
             </div>
 
             {/* Category Tabs */}
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '28px', borderBottom: '1px solid var(--c-border)', paddingBottom: '12px' }}>
+            <div className={styles.flexLayout19}>
                 {[
                     { id: 'all', label: `Tất cả (${totalMatches})` },
                     { id: 'specialties', label: `Chuyên khoa (${matchedSpecialties.length})` },
@@ -122,17 +122,7 @@ export const SearchResults: React.FC = () => {
                         key={tab.id}
                         type="button"
                         onClick={() => setActiveTab(tab.id as any)}
-                        style={{
-                            padding: '8px 16px',
-                            borderRadius: '8px',
-                            border: 'none',
-                            background: activeTab === tab.id ? 'var(--c-primary)' : 'transparent',
-                            color: activeTab === tab.id ? '#ffffff' : 'var(--c-text)',
-                            fontWeight: 600,
-                            fontSize: '0.9rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s'
-                        }}
+                        className={[styles.button4, (activeTab === tab.id ? styles.state12 : styles.state15), (activeTab === tab.id ? styles.state13 : styles.state14)].join(' ')}
                     >
                         {tab.label}
                     </button>
@@ -147,25 +137,24 @@ export const SearchResults: React.FC = () => {
                 </div>
             ) : totalMatches === 0 ? (
                 <div className={styles.emptyState}>
-                    <Search size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                    <Search size={48} className={styles.icon1} />
                     <div className={styles.emptyStateTitle}>Không tìm thấy kết quả phù hợp</div>
                     <p>Hãy thử tìm với các từ khóa ngắn hơn, tên chuyên khoa (Nội khoa, Tim mạch...) hoặc liên hệ trợ lý AI.</p>
                     <Link 
                         to="/patient/ai-consultation"
-                        className="btn btn-secondary"
-                        style={{ display: 'inline-flex', marginTop: '16px', textDecoration: 'none' }}
+                        className={["btn btn-secondary", styles.flexLayout20].join(' ')}
                     >
                         Nhờ Trợ lý AI định tuyến triệu chứng
                     </Link>
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
+                <div className={styles.stackLayout2}>
                     {/* Specialties Section */}
                     {(activeTab === 'all' || activeTab === 'specialties') && matchedSpecialties.length > 0 && (
                         <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--c-navy)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Stethoscope size={20} color="var(--c-primary)" /> Chuyên khoa ({matchedSpecialties.length})
+                            <div className={styles.flexLayout21}>
+                                <h2 className={styles.flexLayout22}>
+                                    <Stethoscope size={20} color="var(--cc-color-primary)" /> Chuyên khoa ({matchedSpecialties.length})
                                 </h2>
                                 <Link to="/specialties" className={styles.cardActionLink}>
                                     Tất cả chuyên khoa <ChevronRight size={16} />
@@ -180,7 +169,7 @@ export const SearchResults: React.FC = () => {
                                             <Link to={`/specialties/${spec.id}`} className={styles.cardActionLink}>
                                                 Xem chi tiết <ChevronRight size={16} />
                                             </Link>
-                                            <Link to={`/patient/book?specialtyId=${spec.id}`} className={styles.cardActionLink} style={{ color: 'var(--c-secondary)' }}>
+                                            <Link to={`/patient/book?specialtyId=${spec.id}`} className={[styles.cardActionLink, styles.icon11].join(' ')}>
                                                 <Calendar size={14} /> Đặt khám
                                             </Link>
                                         </div>
@@ -193,9 +182,9 @@ export const SearchResults: React.FC = () => {
                     {/* Doctors Section */}
                     {(activeTab === 'all' || activeTab === 'doctors') && matchedDoctors.length > 0 && (
                         <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--c-navy)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <User size={20} color="var(--c-primary)" /> Bác sĩ chuyên khoa ({matchedDoctors.length})
+                            <div className={styles.flexLayout21}>
+                                <h2 className={styles.flexLayout22}>
+                                    <User size={20} color="var(--cc-color-primary)" /> Bác sĩ chuyên khoa ({matchedDoctors.length})
                                 </h2>
                                 <Link to="/doctors" className={styles.cardActionLink}>
                                     Tất cả bác sĩ <ChevronRight size={16} />
@@ -214,13 +203,12 @@ export const SearchResults: React.FC = () => {
                                             {doc.specialtyName || 'Bác sĩ Đa khoa'}
                                         </span>
                                         <div className={styles.doctorActions}>
-                                            <Link to={`/doctors/${doc.id}`} className={styles.cardActionLink} style={{ justifyContent: 'center' }}>
+                                            <Link to={`/doctors/${doc.id}`} className={[styles.cardActionLink, styles.icon12].join(' ')}>
                                                 Xem hồ sơ <ChevronRight size={15} />
                                             </Link>
                                             <Link 
                                                 to={`/patient/book?doctorId=${doc.id}${doc.specialtyId ? `&specialtyId=${doc.specialtyId}` : ''}`}
-                                                className="btn btn-primary btn-sm"
-                                                style={{ textDecoration: 'none', justifyContent: 'center' }}
+                                                className={["btn btn-primary btn-sm", styles.icon13].join(' ')}
                                             >
                                                 <Calendar size={14} /> Đặt lịch
                                             </Link>
@@ -234,9 +222,9 @@ export const SearchResults: React.FC = () => {
                     {/* Packages Section */}
                     {(activeTab === 'all' || activeTab === 'packages') && matchedPackages.length > 0 && (
                         <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--c-navy)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Package size={20} color="var(--c-primary)" /> Gói khám sức khỏe ({matchedPackages.length})
+                            <div className={styles.flexLayout21}>
+                                <h2 className={styles.flexLayout22}>
+                                    <Package size={20} color="var(--cc-color-primary)" /> Gói khám sức khỏe ({matchedPackages.length})
                                 </h2>
                                 <Link to="/health-packages" className={styles.cardActionLink}>
                                     Tất cả gói khám <ChevronRight size={16} />
@@ -250,11 +238,11 @@ export const SearchResults: React.FC = () => {
                                         <p className={styles.packageDesc}>{pkg.description}</p>
                                         <div className={styles.packagePriceRow}>
                                             <div className={styles.packagePrice}>{formatVndCurrency(pkg.price)}</div>
-                                            <div style={{ display: 'flex', gap: '8px' }}>
-                                                <Link to={`/health-packages/${pkg.id}`} className="btn btn-secondary btn-sm" style={{ textDecoration: 'none' }}>
+                                            <div className={styles.flexLayout23}>
+                                                <Link to={`/health-packages/${pkg.id}`} className={["btn btn-secondary btn-sm", styles.icon8].join(' ')}>
                                                     Chi tiết
                                                 </Link>
-                                                <Link to={`/patient/health-packages/${pkg.id}/register`} className="btn btn-primary btn-sm" style={{ textDecoration: 'none' }}>
+                                                <Link to={`/patient/health-packages/${pkg.id}/register`} className={["btn btn-primary btn-sm", styles.icon8].join(' ')}>
                                                     <CalendarCheck size={14} /> Đăng ký
                                                 </Link>
                                             </div>

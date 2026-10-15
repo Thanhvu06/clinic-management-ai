@@ -174,18 +174,18 @@ export const DoctorQueue: React.FC = () => {
             header: 'Khung giờ',
             width: 130,
             accessor: (item) => (
-                <Flex align="center" gap={6} style={{ fontWeight: 600, color: 'var(--cc-color-text-dark)' }}>
-                    <Clock size={14} style={{ color: 'var(--cc-color-teal)' }} />
+                <Flex align="center" gap={6} className={styles.text1}>
+                    <Clock size={14} className={styles.icon1} />
                     <span>{item.startTime.substring(0, 5)} - {item.endTime.substring(0, 5)}</span>
                 </Flex>
             )
         },
-        { header: 'Mã lịch', width: 130, accessor: (item) => <span style={{ fontFamily: 'monospace', fontSize: '0.84rem', color: 'var(--cc-color-text-muted)' }}>{item.appointmentCode}</span> },
+        { header: 'Mã lịch', width: 130, accessor: (item) => <span className={styles.text2}>{item.appointmentCode}</span> },
         {
             header: 'Bệnh nhân',
             accessor: (item) => (
                 <div>
-                    <div style={{ fontWeight: 600, color: 'var(--cc-color-text-dark)' }}>{item.patientName}</div>
+                    <div className={styles.text1}>{item.patientName}</div>
                     <div className={styles.patientMeta}>
                         {item.patientPhone}
                         {item.patientGender === 'Male' ? ' • Nam' : item.patientGender === 'Female' ? ' • Nữ' : ''}
@@ -221,6 +221,7 @@ export const DoctorQueue: React.FC = () => {
                         <>
                             <Button
                                 size="small"
+                                className={styles.button1}
                                 style={{ minHeight: 40 }}
                                 onClick={() => item.appointmentId && handleCheckIn(item.appointmentId)}
                                 loading={actionLoadingId === item.appointmentId}
@@ -300,7 +301,7 @@ export const DoctorQueue: React.FC = () => {
                         <Input
                             type="date"
                             className={styles.dateInput}
-                            prefix={<Calendar size={16} style={{ color: 'var(--cc-color-primary)' }} />}
+                            prefix={<Calendar size={16} className={styles.icon2} />}
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
                         />

@@ -60,11 +60,11 @@ export const DoctorAppointmentDetail: React.FC = () => {
     if (!context) {
         return (
             <Card className={styles.notFoundCard}>
-                <AlertCircle size={40} style={{ color: 'var(--cc-color-danger)', margin: '0 auto 12px auto' }} />
+                <AlertCircle size={40} className={styles.icon1} />
                 <h3>Không tìm thấy lịch khám</h3>
-                <p style={{ color: 'var(--cc-color-text-muted)', fontSize: '0.9rem' }}>Hồ sơ không tồn tại hoặc không thuộc quyền quản lý của bạn.</p>
+                <p className={styles.paragraph1}>Hồ sơ không tồn tại hoặc không thuộc quyền quản lý của bạn.</p>
                 <Link to="/doctor/appointments">
-                    <Button type="primary" style={{ marginTop: 14 }}>Quay lại danh sách</Button>
+                    <Button type="primary" className={styles.button1}>Quay lại danh sách</Button>
                 </Link>
             </Card>
         );
@@ -79,12 +79,12 @@ export const DoctorAppointmentDetail: React.FC = () => {
             header: 'Tên thuốc',
             accessor: (item) => (
                 <div>
-                    <div style={{ fontWeight: 600, color: 'var(--cc-color-text-dark)' }}>{item.medicineName}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--cc-color-text-muted)' }}>{item.medicineCode}</div>
+                    <div className={styles.text1}>{item.medicineName}</div>
+                    <div className={styles.text2}>{item.medicineCode}</div>
                 </div>
             )
         },
-        { header: 'Số lượng', accessor: (item) => <span style={{ fontWeight: 700 }}>{item.quantity} {item.unit}</span> },
+        { header: 'Số lượng', accessor: (item) => <span className={styles.text3}>{item.quantity} {item.unit}</span> },
         { header: 'Liều dùng', accessor: 'dosage' },
         { header: 'Tần suất', accessor: 'frequency' },
         { header: 'Số ngày', accessor: (item) => item.durationDays ? `${item.durationDays} ngày` : '--' },
@@ -129,12 +129,12 @@ export const DoctorAppointmentDetail: React.FC = () => {
 
             <Card className={styles.sectionCard}>
                 <div className={styles.sectionTitleRow}>
-                    <Stethoscope size={20} style={{ color: 'var(--cc-color-primary)' }} />
+                    <Stethoscope size={20} className={styles.icon2} />
                     <h2 className={styles.sectionTitle}>Hồ sơ khám lâm sàng</h2>
                 </div>
 
                 {encounter ? (
-                    <Flex vertical gap={14} style={{ fontSize: '0.92rem' }}>
+                    <Flex vertical gap={14} className={styles.text4}>
                         <div>
                             <div className={styles.fieldLabel}>Chẩn đoán bệnh</div>
                             <div className={styles.fieldValue}>
@@ -155,7 +155,7 @@ export const DoctorAppointmentDetail: React.FC = () => {
                         {encounter.clinicalFindings && (
                             <div>
                                 <div className={styles.fieldLabel}>Bệnh sử & Khám thực thể</div>
-                                <div className={styles.plainValue} style={{ whiteSpace: 'pre-wrap' }}>{encounter.clinicalFindings}</div>
+                                <div className={[styles.plainValue, styles.spacing1].join(' ')}>{encounter.clinicalFindings}</div>
                             </div>
                         )}
 
@@ -190,7 +190,7 @@ export const DoctorAppointmentDetail: React.FC = () => {
             {vitalSigns && (
                 <Card className={styles.sectionCard}>
                     <div className={styles.sectionTitleRow}>
-                        <HeartPulse size={20} style={{ color: 'var(--cc-color-danger)' }} />
+                        <HeartPulse size={20} className={styles.icon3} />
                         <h2 className={styles.sectionTitle}>Dấu hiệu sinh tồn</h2>
                     </div>
 
@@ -217,13 +217,13 @@ export const DoctorAppointmentDetail: React.FC = () => {
                         </div>
                         <div className={styles.vitalBox}>
                             <div className={styles.vitalLabel}>CHIỀU CAO / CÂN NẶNG</div>
-                            <div className={styles.vitalValue} style={{ fontSize: '1.1rem' }}>
+                            <div className={[styles.vitalValue, styles.text5].join(' ')}>
                                 {vitalSigns.height ? `${vitalSigns.height}cm` : '--'} / {vitalSigns.weight ? `${vitalSigns.weight}kg` : '--'}
                             </div>
                         </div>
                         <div className={styles.vitalBox}>
                             <div className={styles.vitalLabel}>CHỈ SỐ BMI</div>
-                            <div className={styles.vitalValue} style={{ fontWeight: 800 }}>{vitalSigns.bmi ?? '--'}</div>
+                            <div className={[styles.vitalValue, styles.text6].join(' ')}>{vitalSigns.bmi ?? '--'}</div>
                         </div>
                         <div className={styles.vitalBox}>
                             <div className={styles.vitalLabel}>SPO2</div>
@@ -237,7 +237,7 @@ export const DoctorAppointmentDetail: React.FC = () => {
                 <Card className={styles.sectionCard}>
                     <Flex justify="space-between" align="center" className={styles.sectionTitleRow}>
                         <Flex align="center" gap={8}>
-                            <Pill size={20} style={{ color: 'var(--cc-color-success)' }} />
+                            <Pill size={20} className={styles.icon4} />
                             <h2 className={styles.sectionTitle}>Đơn thuốc đã cấp</h2>
                         </Flex>
                         <StatusBadge
@@ -262,9 +262,9 @@ export const DoctorAppointmentDetail: React.FC = () => {
 
             {histories.length > 0 && (
                 <Card>
-                    <Flex align="center" gap={8} style={{ marginBottom: 14 }}>
-                        <History size={18} style={{ color: 'var(--cc-color-text-muted)' }} />
-                        <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: 'var(--cc-color-text-dark)' }}>
+                    <Flex align="center" gap={8} className={styles.spacing2}>
+                        <History size={18} className={styles.icon5} />
+                        <h3 className={styles.heading1}>
                             Nhật ký điều phối & Thao tác
                         </h3>
                     </Flex>
