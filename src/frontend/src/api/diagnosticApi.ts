@@ -9,6 +9,7 @@ import type {
     CancelDiagnosticOrderRequest, 
     TechnicianDiagnosticStatsDto 
 } from '../types';
+import type { DiagnosticTurnaroundReportDto, DiagnosticTurnaroundReportParams } from '../types/diagnostic';
 
 export interface PagedResult<T> {
     items: T[];
@@ -92,6 +93,9 @@ export const diagnosticApi = {
 
     getTechnicianStats: async (): Promise<ApiResponse<TechnicianDiagnosticStatsDto>> => {
         return axiosClient.get<any, ApiResponse<TechnicianDiagnosticStatsDto>>('/diagnostics/orders/stats');
+    },
+    getTurnaroundReport: async ({ from, to, category }: DiagnosticTurnaroundReportParams): Promise<ApiResponse<DiagnosticTurnaroundReportDto>> => {
+        return axiosClient.get<any, ApiResponse<DiagnosticTurnaroundReportDto>>('/lab-reports/turnaround', { params: { from, to, ...(category ? { category } : {}) } });
     },
 
     getTechnicianOrderById: async (orderId: number): Promise<ApiResponse<DiagnosticOrderDto>> => {

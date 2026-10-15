@@ -254,3 +254,48 @@ public class VerificationStatsDto
     public int ReturnedTodayCount { get; set; }
     public int VerifiedTodayCount { get; set; }
 }
+
+public class DiagnosticTurnaroundReportDto
+{
+    public DateOnly From { get; set; }
+    public DateOnly To { get; set; }
+    public string? Category { get; set; }
+    public int OrderCount { get; set; }
+    public List<DiagnosticTurnaroundSegmentDto> Segments { get; set; } = new();
+    public int WithinTargetCount { get; set; }
+    public double? WithinTargetPercent { get; set; }
+    public List<DiagnosticTurnaroundServiceDto> ByService { get; set; } = new();
+    public List<DiagnosticTurnaroundOrderDto> SlowestOrders { get; set; } = new();
+}
+
+public class DiagnosticTurnaroundSegmentDto
+{
+    public string Key { get; set; } = string.Empty;
+    public int Count { get; set; }
+    public double? MedianMinutes { get; set; }
+    public double? P90Minutes { get; set; }
+}
+
+public class DiagnosticTurnaroundServiceDto
+{
+    public string ServiceCode { get; set; } = string.Empty;
+    public string ServiceName { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public int OrderCount { get; set; }
+    public double? MedianTotalMinutes { get; set; }
+    public double? P90TotalMinutes { get; set; }
+    public int TargetMinutes { get; set; }
+    public double? WithinTargetPercent { get; set; }
+}
+
+public class DiagnosticTurnaroundOrderDto
+{
+    public long OrderId { get; set; }
+    public string OrderCode { get; set; } = string.Empty;
+    public string PatientName { get; set; } = string.Empty;
+    public List<string> ServiceNames { get; set; } = new();
+    public DateTime OrderedAtUtc { get; set; }
+    public DateTime CompletedAtUtc { get; set; }
+    public double TotalMinutes { get; set; }
+    public int TargetMinutes { get; set; }
+}
