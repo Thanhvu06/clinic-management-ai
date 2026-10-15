@@ -160,13 +160,13 @@
     margin-top: 2px;
 }
 
-.iconWrapper.type1 { background-color: var(--cc-color-border-light); color: var(--cc-color-text-secondary); } /* System */
-.iconWrapper.type2 { background-color: var(--cc-color-teal-light); color: var(--cc-color-info); } /* Appointment */
-.iconWrapper.type3 { background-color: var(--cc-color-warning-bg); color: var(--cc-color-warning); } /* ChangeRequest */
-.iconWrapper.type4 { background-color: var(--cc-color-primary-light); color: var(--cc-color-primary); } /* Revisit */
-.iconWrapper.type5 { background-color: var(--cc-color-danger-bg); color: var(--cc-color-danger); } /* Leave */
-.iconWrapper.type6 { background-color: var(--cc-color-success-bg); color: var(--cc-color-success); } /* Prescription */
-.iconWrapper.type7 { background-color: color-mix(in srgb, var(--cc-color-secondary) 15%, transparent); color: var(--cc-color-secondary); } /* HealthPackage */
+.iconWrapper.toneSystem { background-color: var(--cc-color-border-light); color: var(--cc-color-text-secondary); } /* System */
+.iconWrapper.toneAppointment { background-color: var(--cc-color-teal-light); color: var(--cc-color-info); } /* Appointment */
+.iconWrapper.toneAppointmentChangeRequest { background-color: var(--cc-color-warning-bg); color: var(--cc-color-warning); } /* ChangeRequest */
+.iconWrapper.toneRevisit { background-color: var(--cc-color-primary-light); color: var(--cc-color-primary); } /* Revisit */
+.iconWrapper.toneLeaveRequest { background-color: var(--cc-color-danger-bg); color: var(--cc-color-danger); } /* Leave */
+.iconWrapper.tonePrescription { background-color: var(--cc-color-success-bg); color: var(--cc-color-success); } /* Prescription */
+.iconWrapper.toneHealthPackage { background-color: color-mix(in srgb, var(--cc-color-secondary) 15%, transparent); color: var(--cc-color-secondary); } /* HealthPackage */
 
 .content {
     flex: 1;
@@ -258,3 +258,9 @@
 .icon2.icon2 {
     opacity: 0.5;
 }
+
+.iconWrapper.toneInvoice,
+.iconWrapper.tonePayment { background-color: var(--cc-color-info-bg); color: var(--cc-color-info); }
+.iconWrapper.toneDiagnostic { background-color: color-mix(in srgb, var(--cc-color-danger) 12%, transparent); color: var(--cc-color-danger); }
+
+.typeBadge { display: block; font-size: 0.72rem; font-weight: 400; color: var(--cc-color-text-secondary); margin-top: 2px; }

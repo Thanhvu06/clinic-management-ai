@@ -30,6 +30,7 @@ public class NotificationService : INotificationService
         int page = 1,
         int pageSize = 20,
         bool? isRead = null,
+        NotificationType? type = null,
         CancellationToken cancellationToken = default)
     {
         var userId = _currentUserService.UserId;
@@ -49,6 +50,11 @@ public class NotificationService : INotificationService
         if (isRead.HasValue)
         {
             query = query.Where(n => n.IsRead == isRead.Value);
+        }
+
+        if (type.HasValue)
+        {
+            query = query.Where(n => n.Type == type.Value);
         }
 
         var totalItems = await query.CountAsync(cancellationToken);

@@ -1,14 +1,17 @@
 import axiosClient from './axiosClient';
 import type { ApiResponse } from '../types';
-import type { NotificationDto, UnreadNotificationCountDto, PagedResult } from '../types/notification';
+import type { NotificationDto, NotificationType, UnreadNotificationCountDto, PagedResult } from '../types/notification';
 
 export const notificationApi = {
-    getMyNotifications: async (page = 1, pageSize = 20, isRead?: boolean): Promise<ApiResponse<PagedResult<NotificationDto>>> => {
+    getMyNotifications: async (page = 1, pageSize = 20, isRead?: boolean, type?: NotificationType): Promise<ApiResponse<PagedResult<NotificationDto>>> => {
         const params = new URLSearchParams();
         params.append('page', page.toString());
         params.append('pageSize', pageSize.toString());
         if (isRead !== undefined) {
             params.append('isRead', isRead.toString());
+        }
+        if (type !== undefined) {
+            params.append('type', type.toString());
         }
         return axiosClient.get<any, ApiResponse<PagedResult<NotificationDto>>>(`/notifications?${params.toString()}`);
     },
