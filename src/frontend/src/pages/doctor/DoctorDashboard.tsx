@@ -172,6 +172,7 @@ export const DoctorDashboard: React.FC = () => {
                             <Button
                                 size="small"
                                 className={styles.button1}
+                                style={{ minHeight: 40 }}
                                 onClick={() => handleCheckIn(item.appointmentId)}
                                 loading={actionLoadingId === item.appointmentId}
                                 disabled={item.appointmentDate !== toLocalDateString()}

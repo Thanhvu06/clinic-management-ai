@@ -296,7 +296,7 @@ export const ReceptionWorkspace: React.FC = () => {
         { header: 'Thao tác', align: 'right', className: styles.queueActionsCell, accessor: item => (
             <>
                 {item.status === 'Confirmed' && (
-                    <Button type="primary" htmlType="button" className={[styles.checkInButton, styles.button1].join(' ')}
+                    <Button type="primary" htmlType="button" className={[styles.checkInButton, styles.button1].join(' ')} style={{ minHeight: '40px' }}
                         onClick={() => handleFastCheckIn(item)}
                         disabled={actionLoadingId === item.id || item.appointmentDate !== toLocalDateString()}
                         title={item.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${item.appointmentDate.split('-').reverse().join('/')}` : 'Tiếp nhận ngay và cấp số thứ tự vào hàng đợi bác sĩ'}>

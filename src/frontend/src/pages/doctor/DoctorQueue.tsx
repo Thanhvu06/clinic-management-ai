@@ -222,6 +222,7 @@ export const DoctorQueue: React.FC = () => {
                             <Button
                                 size="small"
                                 className={styles.button1}
+                                style={{ minHeight: 40 }}
                                 onClick={() => item.appointmentId && handleCheckIn(item.appointmentId)}
                                 loading={actionLoadingId === item.appointmentId}
                                 disabled={item.appointmentDate !== toLocalDateString()}
