@@ -35,6 +35,7 @@ public interface IDiagnosticWorkflowService
     Task<PagedResult<DiagnosticOrderDto>> GetVerificationQueueAsync(int page, int pageSize);
     Task<VerificationStatsDto> GetVerificationStatsAsync();
     Task<DiagnosticOrderDto> GetOrderForVerificationAsync(long orderId);
+    Task<DiagnosticTurnaroundReportDto> GetTurnaroundReportAsync(DateOnly from, DateOnly to, DiagnosticCategory? category);
     Task<DiagnosticOrderDto> CollectSpecimenAsync(long orderId, long itemId, CollectSpecimenRequest request);
     Task<DiagnosticOrderDto> ReceiveSpecimenAsync(long orderId, long itemId, ReceiveSpecimenRequest request);
     Task<DiagnosticOrderDto> RejectSpecimenAsync(long orderId, long itemId, RejectSpecimenRequest request);

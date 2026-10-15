@@ -208,6 +208,7 @@ builder.Services.AddScoped<ClinicManagement.Application.Pharmacy.Interfaces.IPha
 builder.Services.AddScoped<ClinicManagement.Application.Pharmacy.Interfaces.IPrescriptionPaymentEligibilityService, ClinicManagement.Infrastructure.Pharmacy.PrescriptionPaymentEligibilityService>();
 builder.Services.AddScoped<ClinicManagement.Application.Notifications.Interfaces.INotificationService, ClinicManagement.Infrastructure.Notifications.NotificationService>();
 builder.Services.AddScoped<ClinicManagement.Application.Billing.Interfaces.IBillingService, ClinicManagement.Infrastructure.Billing.BillingService>();
+builder.Services.Configure<ClinicManagement.Application.Diagnostics.DiagnosticTatOptions>(builder.Configuration.GetSection(ClinicManagement.Application.Diagnostics.DiagnosticTatOptions.SectionName));
 builder.Services.AddScoped<ClinicManagement.Application.Diagnostics.Interfaces.IDiagnosticWorkflowService, ClinicManagement.Infrastructure.Diagnostics.DiagnosticWorkflowService>();
 builder.Services.AddScoped<ClinicManagement.Application.Organization.Interfaces.IOrganizationService, ClinicManagement.Infrastructure.Organization.OrganizationService>();
 builder.Services.AddScoped<ClinicManagement.Application.Mpi.Interfaces.IMpiPatientService, ClinicManagement.Infrastructure.Mpi.MpiPatientService>();

@@ -8,7 +8,7 @@ import {
     LayoutDashboard, CalendarDays, CalendarCheck,
     History, Users, Stethoscope,
     ShieldPlus, LogOut, Menu as MenuIcon, X, ShieldAlert, Pill, Package, Calendar,
-    Receipt, TrendingUp, FlaskConical, Building2, UserPlus, ClipboardCheck
+    Receipt, TrendingUp, FlaskConical, Building2, UserPlus, ClipboardCheck, Timer
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { NotificationBell } from '../components/common/NotificationBell';
@@ -66,6 +66,7 @@ const NAV_BY_ROLE: Record<string, NavEntry[]> = {
     ],
     LabSupervisor: [
         { to: '/lab', icon: FlaskConical, label: 'Tổng quan xét nghiệm' },
+        { to: '/lab/tat', icon: Timer, label: 'Thời gian trả kết quả' },
     ],
 };
 
@@ -108,6 +109,7 @@ export const MainLayout: React.FC = () => {
 
     const getPageTitle = (pathname: string) => {
         if (pathname.endsWith('/result-print')) return 'Phiếu kết quả cận lâm sàng';
+        if (pathname === '/lab/tat') return 'Thời gian trả kết quả';
         if (pathname.startsWith('/lab/orders/')) return 'Duyệt kết quả xét nghiệm';
         if (pathname === '/lab') return 'Tổng quan xét nghiệm';
         if (pathname.startsWith('/doctor/diagnostic-verification/')) return 'Duyệt phiếu kết quả CLS';
