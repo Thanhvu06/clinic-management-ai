@@ -2,7 +2,7 @@ import { Button, Input, Select, Modal } from 'antd';
 import { PageHeader, DataTable, StatusBadge, LoadingState, EmptyState, InlineError } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import styles from './ReceptionChangeRequests.module.css';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { History, Eye, CheckCircle, XCircle, ArrowRight, RefreshCw, Filter } from 'lucide-react';
@@ -67,7 +67,7 @@ export const ReceptionChangeRequests: React.FC = () => {
     const [appointmentInfo, setAppointmentInfo] = useState<AppointmentInfo | null>(null);
     const [aptLoading, setAptLoading] = useState(false);
 
-    const fetchRequests = async () => {
+    const fetchRequests = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
@@ -91,11 +91,11 @@ export const ReceptionChangeRequests: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [page, statusFilter, typeFilter]);
 
     useEffect(() => {
         fetchRequests();
-    }, [page, statusFilter, typeFilter]);
+    }, [fetchRequests]);
 
     const openDetail = async (req: ChangeRequest) => {
         setModal({ isOpen: true, req });
@@ -109,7 +109,7 @@ export const ReceptionChangeRequests: React.FC = () => {
             if (res.success && res.data) {
                 setAppointmentInfo(res.data);
             }
-        } catch (_) {
+        } catch {
             // Optional appointment info fetch
         } finally {
             setAptLoading(false);

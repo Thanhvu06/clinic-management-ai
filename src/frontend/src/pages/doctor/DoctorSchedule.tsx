@@ -95,7 +95,7 @@ export const DoctorSchedule: React.FC = () => {
                 if (res.success && res.data) {
                     setLeavePreview(res.data);
                 }
-            } catch (err) {
+            } catch {
                 setLeavePreview(null);
             } finally {
                 setPreviewLoading(false);
@@ -168,8 +168,8 @@ export const DoctorSchedule: React.FC = () => {
                     <span className={styles.weekLabel}>
                         Tuần từ {currentMonday.toLocaleDateString('vi-VN')} đến {sunday.toLocaleDateString('vi-VN')}
                     </span>
-                    <Button type="link" onClick={loadSchedule} disabled={loading} icon={<RefreshCw size={14} className={loading ? 'animate-spin' : ''} />}>
-                        Làm mới
+                    <Button type="link" onClick={loadSchedule} disabled={loading} icon={<RefreshCw size={14} />}>
+                        {loading ? 'Đang tải...' : 'Làm mới'}
                     </Button>
                 </Flex>
             </Card>
@@ -271,7 +271,7 @@ export const DoctorSchedule: React.FC = () => {
 
                     {previewLoading && (
                         <Flex align="center" justify="center" gap={6} className={styles.text1}>
-                            <RefreshCw size={14} className="animate-spin" />
+                            <RefreshCw size={14} />
                             <span>Đang kiểm tra lịch hẹn bị ảnh hưởng...</span>
                         </Flex>
                     )}

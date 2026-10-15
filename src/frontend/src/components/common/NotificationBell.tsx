@@ -27,7 +27,7 @@ export const NotificationBell: React.FC = () => {
             if (res.data) {
                 setUnreadCount(res.data.unreadCount);
             }
-        } catch (err) {
+        } catch {
             // Silently fail for polling
         }
     }, [isAuthenticated]);

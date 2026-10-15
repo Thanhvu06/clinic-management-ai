@@ -79,7 +79,7 @@ function parseInline(text: string): React.ReactNode[] {
         }
 
         // Next closest delimiter
-        const nextSpecial = remaining.search(/[`*_\[]/);
+        const nextSpecial = remaining.search(/[`*_[]/);
         if (nextSpecial === -1) {
             nodes.push(remaining);
             break;

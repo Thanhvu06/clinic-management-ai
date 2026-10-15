@@ -48,7 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const logout = async () => {
         try {
             await axiosClient.post('/auth/logout');
-        } catch (error) {
+        } catch {
             // Ignore logout errors
         } finally {
             localStorage.removeItem('token');

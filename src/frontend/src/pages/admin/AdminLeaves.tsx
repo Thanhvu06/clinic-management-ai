@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { User, CheckCircle, XCircle, Eye } from 'lucide-react';
@@ -57,7 +57,7 @@ export const AdminLeaves: React.FC = () => {
         fetchDoctors();
     }, []);
 
-    const fetchRequests = async () => {
+    const fetchRequests = useCallback(async () => {
         setLoading(true);
         setLoadError('');
         try {
@@ -79,11 +79,11 @@ export const AdminLeaves: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [page, statusFilter, doctorIdFilter]);
 
     useEffect(() => {
         fetchRequests();
-    }, [page, statusFilter, doctorIdFilter]);
+    }, [fetchRequests]);
 
     const handleProcess = async (action: 'approve' | 'reject') => {
         if (!modal.req) return;

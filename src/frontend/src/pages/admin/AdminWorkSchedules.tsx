@@ -1,5 +1,5 @@
 import { toLocalDateString } from '../../utils/formatters';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { CalendarDays, Plus, Clock, Edit, CheckCircle, XCircle, PlayCircle } from 'lucide-react';
@@ -58,7 +58,7 @@ export const AdminWorkSchedules: React.FC = () => {
         fetchDoctors();
     }, []);
 
-    const fetchSchedules = async () => {
+    const fetchSchedules = useCallback(async () => {
         setLoading(true);
         setLoadError('');
         try {
@@ -78,7 +78,7 @@ export const AdminWorkSchedules: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [selectedDoctorId]);
 
     useEffect(() => {
         if (!selectedDoctorId) {
@@ -86,7 +86,7 @@ export const AdminWorkSchedules: React.FC = () => {
             return;
         }
         fetchSchedules();
-    }, [selectedDoctorId]);
+    }, [selectedDoctorId, fetchSchedules]);
 
     const handleFormSubmit = async () => {
         setFormError('');

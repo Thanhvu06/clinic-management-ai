@@ -305,8 +305,8 @@ export const DoctorQueue: React.FC = () => {
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
                         />
-                        <Button icon={<RefreshCw size={15} className={loading ? 'animate-spin' : ''} />} onClick={() => loadQueue(false)} disabled={loading} title="Tải lại danh sách">
-                            Làm mới
+                        <Button icon={<RefreshCw size={15} />} onClick={() => loadQueue(false)} disabled={loading} title="Tải lại danh sách">
+                            {loading ? 'Đang tải...' : 'Làm mới'}
                         </Button>
                     </Flex>
                 }
