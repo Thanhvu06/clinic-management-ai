@@ -1,4 +1,5 @@
 import React from "react";
+import styles from './SafeMarkdown.module.css';
 
 interface SafeMarkdownProps {
     content: string;
@@ -65,7 +66,7 @@ function parseInline(text: string): React.ReactNode[] {
                         href={rawUrl}
                         target={isExternal ? "_blank" : undefined}
                         rel={isExternal ? "noopener noreferrer" : undefined}
-                        style={{ color: "#0d9488", textDecoration: "underline", wordBreak: "break-word" }}
+                        className={styles.tone1}
                     >
                         {label}
                     </a>
@@ -106,12 +107,12 @@ export const SafeMarkdown: React.FC<SafeMarkdownProps> = ({ content, className }
     const flushList = () => {
         if (currentList.length > 0) {
             const listItems = currentList.map((item, idx) => (
-                <li key={idx} style={{ marginBottom: "2px" }}>
+                <li key={idx} className={styles.spacing1}>
                     {parseInline(item)}
                 </li>
             ));
             elements.push(
-                <ul key={`ul-${elements.length}`} style={{ margin: "4px 0", paddingLeft: "20px" }}>
+                <ul key={`ul-${elements.length}`} className={styles.spacing2}>
                     {listItems}
                 </ul>
             );
@@ -135,10 +136,10 @@ export const SafeMarkdown: React.FC<SafeMarkdownProps> = ({ content, className }
 
         if (trimmed === "") {
             // Empty line translates to spacing between blocks
-            elements.push(<div key={`br-${i}`} style={{ height: "6px" }} />);
+            elements.push(<div key={`br-${i}`} className={styles.spacing3} />);
         } else {
             elements.push(
-                <p key={`p-${i}`} style={{ margin: "2px 0" }}>
+                <p key={`p-${i}`} className={styles.paragraph1}>
                     {parseInline(trimmed)}
                 </p>
             );

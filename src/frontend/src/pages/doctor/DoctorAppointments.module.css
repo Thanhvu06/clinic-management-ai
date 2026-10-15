@@ -196,3 +196,8 @@
     margin-bottom: var(--cc-space-sm);
     font-style: italic;
 }
+
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.control1.control1 {
+    width: 100%;
+}

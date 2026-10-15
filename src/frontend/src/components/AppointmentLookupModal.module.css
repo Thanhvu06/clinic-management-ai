@@ -1,0 +1,299 @@
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.flexLayout1.flexLayout1 {
+    background-color: var(--cc-color-success-bg);
+    color: var(--cc-color-success);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.flexLayout2.flexLayout2 {
+    background-color: var(--cc-color-warning-bg);
+    color: var(--cc-color-warning);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.flexLayout3.flexLayout3 {
+    background-color: var(--cc-color-primary-light);
+    color: var(--cc-color-primary);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.flexLayout4.flexLayout4 {
+    background-color: var(--cc-color-danger-bg);
+    color: var(--cc-color-danger);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.text1.text1 {
+    background-color: var(--cc-color-bg-subtle);
+    color: var(--cc-color-text);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.overlay1.overlay1 {
+    position: fixed;
+    inset: 0;
+    background-color: color-mix(in srgb, var(--cc-color-text-dark) 65%, transparent);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 16px;
+}
+
+.stackLayout1.stackLayout1 {
+    background-color: var(--cc-color-bg-container);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 620px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 50px -12px color-mix(in srgb, var(--cc-color-text-dark) 25%, transparent);
+    display: flex;
+    flex-direction: column;
+}
+
+.flexLayout5.flexLayout5 {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--cc-color-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--cc-color-bg-subtle);
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+}
+
+.heading1.heading1 {
+    margin: 0;
+    color: var(--cc-color-text-dark);
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.paragraph1.paragraph1 {
+    margin: 4px 0 0;
+    color: var(--cc-color-text-secondary);
+    font-size: 0.875rem;
+}
+
+.flexLayout6.flexLayout6 {
+    background: none;
+    border: none;
+    color: var(--cc-color-text-secondary);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.spacing1.spacing1 {
+    padding: 24px;
+}
+
+.flexLayout7.flexLayout7 {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.spacing2.spacing2 {
+    position: relative;
+    flex: 1;
+}
+
+.icon1.icon1 {
+    position: absolute;
+    left: 14px;
+    top: 13px;
+    color: var(--cc-color-text-muted);
+}
+
+.control1.control1 {
+    width: 100%;
+    padding: 10px 14px 10px 42px;
+    border-radius: 10px;
+    border: 1.5px solid var(--cc-color-border);
+    font-size: 0.95rem;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.control2.control2 {
+    min-width: 0;
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1.5px solid var(--cc-color-border);
+    font-size: 0.95rem;
+}
+
+.state1.state1.state1 {
+    cursor: not-allowed;
+}
+
+.state2.state2.state2 {
+    cursor: pointer;
+}
+
+.button1.button1 {
+    padding: 10px 20px;
+    background-color: var(--cc-color-info);
+    color: var(--cc-color-bg-container);
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.flexLayout8.flexLayout8 {
+    padding: 12px 16px;
+    background-color: var(--cc-color-danger-bg);
+    border: 1px solid color-mix(in srgb, var(--cc-color-danger) 30%, transparent);
+    border-radius: 10px;
+    color: var(--cc-color-danger);
+    font-size: 0.875rem;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tone1.tone1 {
+    text-align: center;
+    padding: 36px 16px;
+    color: var(--cc-color-text-secondary);
+}
+
+.icon2.icon2 {
+    margin: 0 auto 12px;
+    color: var(--cc-color-text-muted);
+}
+
+.heading2.heading2 {
+    margin: 0 0 6px;
+    color: var(--cc-color-text);
+}
+
+.paragraph2.paragraph2 {
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.stackLayout2.stackLayout2 {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.text2.text2 {
+    font-size: 0.875rem;
+    color: var(--cc-color-text-secondary);
+    font-weight: 600;
+}
+
+.surface1.surface1 {
+    border: 1px solid var(--cc-color-border);
+    border-radius: 12px;
+    padding: 16px;
+    background-color: var(--cc-color-bg-container);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--cc-color-text-dark) 2%, transparent);
+}
+
+.flexLayout9.flexLayout9 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--cc-color-border-light);
+    padding-bottom: 10px;
+}
+
+.text3.text3 {
+    font-size: 0.8rem;
+    color: var(--cc-color-text-secondary);
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.text4.text4 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--cc-color-info);
+}
+
+.gridLayout1.gridLayout1 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    font-size: 0.875rem;
+}
+
+.flexLayout10.flexLayout10 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--cc-color-text);
+}
+
+.flexLayout11.flexLayout11 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--cc-color-text-secondary);
+    grid-column: 1 / -1;
+    border-top: 1px dashed var(--cc-color-border-light);
+    padding-top: 8px;
+    margin-top: 4px;
+}
+
+.flexLayout12.flexLayout12 {
+    padding: 14px 24px;
+    border-top: 1px solid var(--cc-color-border);
+    display: flex;
+    justify-content: flex-end;
+    background-color: var(--cc-color-bg-subtle);
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
+}
+
+.button2.button2 {
+    padding: 8px 18px;
+    background-color: var(--cc-color-border);
+    color: var(--cc-color-text);
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}

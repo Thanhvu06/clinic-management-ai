@@ -1,0 +1,19 @@
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.icon1.icon1 {
+    color: var(--cc-color-primary);
+    font-weight: 600;
+}
+
+.spacing1.spacing1 {
+    margin-bottom: 20px;
+}
+
+.stackLayout1.stackLayout1 {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.spacing2.spacing2 {
+    margin-top: 10px;
+}

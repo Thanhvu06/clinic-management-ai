@@ -85,7 +85,7 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
 
                 <div className={styles.body}>
                     {loading || !invoice ? (
-                        <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                        <div className={styles.tone1}>
                             Đang tải chi tiết hóa đơn...
                         </div>
                     ) : (
@@ -133,11 +133,11 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
                             <table className={styles.itemsTable}>
                                 <thead>
                                     <tr>
-                                        <th style={{ width: '40px' }}>STT</th>
+                                        <th className={styles.tableHeading1}>STT</th>
                                         <th>Mô tả khoản mục</th>
-                                        <th style={{ textAlign: 'center', width: '70px' }}>SL</th>
-                                        <th style={{ textAlign: 'right', width: '130px' }}>Đơn giá</th>
-                                        <th style={{ textAlign: 'right', width: '140px' }}>Thành tiền</th>
+                                        <th className={styles.tableHeading2}>SL</th>
+                                        <th className={styles.tableHeading3}>Đơn giá</th>
+                                        <th className={styles.tableHeading4}>Thành tiền</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -146,17 +146,17 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
                                             <tr key={item.id || idx}>
                                                 <td>{idx + 1}</td>
                                                 <td>
-                                                    <div style={{ fontWeight: 600 }}>{item.description}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Mã: {item.itemCode}</div>
+                                                    <div className={styles.text1}>{item.description}</div>
+                                                    <div className={styles.text2}>Mã: {item.itemCode}</div>
                                                 </td>
-                                                <td style={{ textAlign: 'center' }}>{item.quantity}</td>
-                                                <td style={{ textAlign: 'right' }}>{formatCurrency(item.unitPrice)}</td>
-                                                <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(item.lineTotal)}</td>
+                                                <td className={styles.tableCell1}>{item.quantity}</td>
+                                                <td className={styles.tableCell2}>{formatCurrency(item.unitPrice)}</td>
+                                                <td className={styles.tableCell3}>{formatCurrency(item.lineTotal)}</td>
                                             </tr>
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan={5} style={{ textAlign: 'center', color: '#94a3b8' }}>
+                                            <td colSpan={5} className={styles.tableCell4}>
                                                 Không có chi tiết khoản mục.
                                             </td>
                                         </tr>
@@ -167,11 +167,11 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
                             {/* Total Section */}
                             <div className={styles.totalSection}>
                                 <div className={styles.totalRow}>
-                                    <span style={{ color: '#64748b' }}>Tổng tiền dịch vụ:</span>
+                                    <span className={styles.text3}>Tổng tiền dịch vụ:</span>
                                     <span>{formatCurrency(invoice.subtotal)}</span>
                                 </div>
                                 <div className={styles.totalRow}>
-                                    <span style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a' }}>TỔNG CỘNG THANH TOÁN:</span>
+                                    <span className={styles.text4}>TỔNG CỘNG THANH TOÁN:</span>
                                     <span className={styles.grandTotal}>{formatCurrency(invoice.totalAmount)}</span>
                                 </div>
                             </div>
@@ -188,12 +188,12 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
                                         <div><strong>Thời gian thu:</strong> {formatDateTime(latestPayment.receivedAtUtc)}</div>
                                         <div><strong>Thu ngân:</strong> {latestPayment.receivedByUserName || 'Lễ tân tiếp nhận'}</div>
                                         {latestPayment.referenceCode && (
-                                            <div style={{ gridColumn: 'span 2' }}>
+                                            <div className={styles.spacing1}>
                                                 <strong>Mã tham chiếu:</strong> {latestPayment.referenceCode}
                                             </div>
                                         )}
                                         {latestPayment.note && (
-                                            <div style={{ gridColumn: 'span 2' }}>
+                                            <div className={styles.spacing1}>
                                                 <strong>Ghi chú:</strong> {latestPayment.note}
                                             </div>
                                         )}
@@ -205,7 +205,7 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
                             {invoice.status === InvoiceStatus.Cancelled && (
                                 <div className={styles.cancelledBox}>
                                     <strong>Hóa đơn đã bị hủy:</strong> {invoice.cancellationReason || 'Không có lý do'}<br />
-                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                    <span className={styles.text5}>
                                         Thời điểm hủy: {formatDateTime(invoice.cancelledAtUtc)}
                                     </span>
                                 </div>

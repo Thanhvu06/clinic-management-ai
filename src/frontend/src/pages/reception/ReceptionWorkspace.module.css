@@ -64,3 +64,8 @@
     .facilitySelect { width: 100%; }
     .liveClock { border-radius: var(--cc-radius-md); }
 }
+
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.button1.button1 {
+    min-height: 40px;
+}

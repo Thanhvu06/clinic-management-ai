@@ -161,7 +161,7 @@ export const NotificationsPage: React.FC = () => {
         <div className={styles.container}>
             <div className={styles.pageHeader}>
                 <div className={styles.titleArea}>
-                    <h1><Bell size={26} style={{ color: 'var(--c-primary, #0284c7)' }} /> Trung tâm thông báo</h1>
+                    <h1><Bell size={26} className={styles.icon1} /> Trung tâm thông báo</h1>
                     <p>Quản lý toàn bộ thông báo và cập nhật mới nhất từ phòng khám ClinicCare AI</p>
                 </div>
                 <div className={styles.headerActions}>

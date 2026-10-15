@@ -5,6 +5,7 @@ import { User, Mail, Phone, ArrowRight } from 'lucide-react';
 import { useDialog } from '../contexts/DialogContext';
 import { AuthShell, FormField, TextInput, PasswordInput, Button, FormError } from '../components/forms';
 import { sanitizeReturnUrl } from '../utils/roleRoutes';
+import styles from './Register.module.css';
 
 export const Register: React.FC = () => {
     const { showAlert, showToast } = useDialog();
@@ -92,19 +93,19 @@ export const Register: React.FC = () => {
             footerLink={
                 <span>
                     Đã có tài khoản?{' '}
-                    <Link to={loginUrl} style={{ color: 'var(--c-primary)', fontWeight: 600 }}>
+                    <Link to={loginUrl} className={styles.icon1}>
                         Đăng nhập ngay &rarr;
                     </Link>
                 </span>
             }
         >
             {generalError && (
-                <div style={{ marginBottom: '20px' }}>
+                <div className={styles.spacing1}>
                     <FormError message={generalError} />
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <form onSubmit={handleSubmit} className={styles.stackLayout1}>
                 <FormField id="fullName" label="Họ và tên" required error={fieldErrors.fullName}>
                     <TextInput
                         id="fullName"
@@ -165,7 +166,7 @@ export const Register: React.FC = () => {
                     />
                 </FormField>
 
-                <div style={{ marginTop: '10px' }}>
+                <div className={styles.spacing2}>
                     <Button
                         type="submit"
                         variant="secondary"

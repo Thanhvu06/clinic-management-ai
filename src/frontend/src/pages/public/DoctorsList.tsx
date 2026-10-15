@@ -143,7 +143,7 @@ export const DoctorsList: React.FC = () => {
             </div>
 
             {error && (
-                <div style={{ padding: '16px 20px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#b91c1c', marginBottom: '24px' }}>
+                <div className={styles.surface6}>
                     {error}
                 </div>
             )}
@@ -158,7 +158,7 @@ export const DoctorsList: React.FC = () => {
                 <div className={styles.grid4}>
                     {filteredDoctors.map(doc => (
                         <div key={doc.id} className={styles.doctorCard}>
-                            <div className={styles.doctorAvatar} style={{ background: '#f1f5f9', color: 'var(--c-primary)', fontWeight: 700, fontSize: '1.1rem' }}>
+                            <div className={[styles.doctorAvatar, styles.text16].join(' ')}>
                                 {getDoctorInitials(doc.fullName)}
                             </div>
                             <h2 className={styles.doctorName}>
@@ -171,22 +171,20 @@ export const DoctorsList: React.FC = () => {
                                 {doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật'}
                             </span>
                             
-                            <p style={{ fontSize: '0.85rem', color: 'var(--c-text-muted)', lineClamp: 2, overflow: 'hidden', textOverflow: 'ellipsis', margin: '0 0 16px 0', minHeight: '38px' }}>
+                            <p className={styles.paragraph10}>
                                 {doc.description || 'Bác sĩ chuyên khoa tại hệ thống phòng khám ClinicCare.'}
                             </p>
 
                             <div className={styles.doctorActions}>
                                 <Link 
                                     to={`/doctors/${doc.id}`} 
-                                    className={styles.cardActionLink}
-                                    style={{ justifyContent: 'center' }}
+                                    className={[styles.cardActionLink, styles.icon12].join(' ')}
                                 >
                                     Xem lý lịch & hồ sơ <ChevronRight size={15} />
                                 </Link>
                                 <Link 
                                     to={`/patient/book?doctorId=${doc.id}${doc.specialtyId ? `&specialtyId=${doc.specialtyId}` : ''}`}
-                                    className="btn btn-primary btn-sm"
-                                    style={{ textDecoration: 'none', justifyContent: 'center' }}
+                                    className={["btn btn-primary btn-sm", styles.icon13].join(' ')}
                                 >
                                     <Calendar size={14} /> Đặt lịch khám
                                 </Link>
@@ -196,7 +194,7 @@ export const DoctorsList: React.FC = () => {
                 </div>
             ) : (
                 <div className={styles.emptyState}>
-                    <User size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                    <User size={48} className={styles.icon1} />
                     <div className={styles.emptyStateTitle}>Không tìm thấy bác sĩ phù hợp</div>
                     <p>Vui lòng thử tìm kiếm với từ khóa hoặc chuyên khoa khác.</p>
                 </div>

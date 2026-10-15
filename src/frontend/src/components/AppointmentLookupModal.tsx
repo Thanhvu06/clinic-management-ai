@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, Calendar, Clock, User, Stethoscope, AlertCircle, X, CheckCircle, Clock4, XCircle } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import type { ApiResponse } from '../types';
+import styles from './AppointmentLookupModal.module.css';
 
 interface AppointmentLookupDto {
     appointmentCode: string;
@@ -66,31 +67,31 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
         switch (status) {
             case 'Confirmed':
                 return (
-                    <span style={{ backgroundColor: '#DEF7EC', color: '#03543F', padding: '4px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <span className={styles.flexLayout1}>
                         <CheckCircle size={14} /> Đã xác nhận
                     </span>
                 );
             case 'Pending':
                 return (
-                    <span style={{ backgroundColor: '#FEF08A', color: '#854D0E', padding: '4px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <span className={styles.flexLayout2}>
                         <Clock4 size={14} /> Đang chờ duyệt
                     </span>
                 );
             case 'Completed':
                 return (
-                    <span style={{ backgroundColor: '#E0E7FF', color: '#3730A3', padding: '4px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <span className={styles.flexLayout3}>
                         <CheckCircle size={14} /> Đã khám xong
                     </span>
                 );
             case 'Cancelled':
                 return (
-                    <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', padding: '4px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <span className={styles.flexLayout4}>
                         <XCircle size={14} /> Đã hủy
                     </span>
                 );
             default:
                 return (
-                    <span style={{ backgroundColor: '#F3F4F6', color: '#374151', padding: '4px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 600 }}>
+                    <span className={styles.text1}>
                         {status}
                     </span>
                 );
@@ -98,71 +99,32 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
     };
 
     return (
-        <div style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.65)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '16px'
-        }}>
-            <div style={{
-                backgroundColor: 'white',
-                borderRadius: '16px',
-                width: '100%',
-                maxWidth: '620px',
-                maxHeight: '90vh',
-                overflowY: 'auto',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                display: 'flex',
-                flexDirection: 'column'
-            }}>
+        <div className={styles.overlay1}>
+            <div className={styles.stackLayout1}>
                 {/* Header */}
-                <div style={{
-                    padding: '20px 24px',
-                    borderBottom: '1px solid #e2e8f0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    backgroundColor: '#f8fafc',
-                    borderTopLeftRadius: '16px',
-                    borderTopRightRadius: '16px'
-                }}>
+                <div className={styles.flexLayout5}>
                     <div>
-                        <h3 style={{ margin: 0, color: '#0f172a', fontSize: '1.25rem', fontWeight: 700 }}>
+                        <h3 className={styles.heading1}>
                             Tra cứu lịch hẹn khám bệnh
                         </h3>
-                        <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.875rem' }}>
+                        <p className={styles.paragraph1}>
                             Nhập mã lịch hẹn (APT-...) và số điện thoại đã đăng ký
                         </p>
                     </div>
                     <button
                         onClick={onClose}
                         aria-label="Đóng cửa sổ tra cứu"
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#64748b',
-                            cursor: 'pointer',
-                            padding: '6px',
-                            borderRadius: '8px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}
+                        className={styles.flexLayout6}
                     >
                         <X size={20} />
                     </button>
                 </div>
 
                 {/* Body */}
-                <div style={{ padding: '24px' }}>
-                    <form onSubmit={handleSearch} style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '20px' }}>
-                        <div style={{ position: 'relative', flex: 1 }}>
-                            <Search size={18} style={{ position: 'absolute', left: '14px', top: '13px', color: '#94a3b8' }} />
+                <div className={styles.spacing1}>
+                    <form onSubmit={handleSearch} className={styles.flexLayout7}>
+                        <div className={styles.spacing2}>
+                            <Search size={18} className={styles.icon1} />
                             <input
                                 type="text"
                                 required
@@ -170,52 +132,23 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
                                 placeholder="Ví dụ: APT-260829-0001"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    padding: '10px 14px 10px 42px',
-                                    borderRadius: '10px',
-                                    border: '1.5px solid #cbd5e1',
-                                    fontSize: '0.95rem',
-                                    outline: 'none',
-                                    boxSizing: 'border-box'
-                                }}
+                                className={styles.control1}
                             />
                         </div>
                         <input type="tel" aria-label="Số điện thoại chủ lịch hẹn" placeholder="Số điện thoại đã đăng ký" required
                             value={phone} onChange={event => setPhone(event.target.value)}
-                            style={{ minWidth: 0, flex: 1, padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #cbd5e1', fontSize: '0.95rem' }} />
+                            className={styles.control2} />
                         <button
                             type="submit"
                             disabled={loading}
-                            style={{
-                                padding: '10px 20px',
-                                backgroundColor: '#0284c7',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '10px',
-                                fontWeight: 600,
-                                cursor: loading ? 'not-allowed' : 'pointer',
-                                transition: 'background-color 0.2s',
-                                whiteSpace: 'nowrap'
-                            }}
+                            className={[styles.button1, (loading ? styles.state1 : styles.state2)].join(' ')}
                         >
                             {loading ? 'Đang tìm...' : 'Tra cứu'}
                         </button>
                     </form>
 
                     {errorMsg && (
-                        <div style={{
-                            padding: '12px 16px',
-                            backgroundColor: '#fef2f2',
-                            border: '1px solid #fecaca',
-                            borderRadius: '10px',
-                            color: '#991b1b',
-                            fontSize: '0.875rem',
-                            marginBottom: '16px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px'
-                        }}>
+                        <div className={styles.flexLayout8}>
                             <AlertCircle size={18} />
                             <span>{errorMsg}</span>
                         </div>
@@ -225,59 +158,49 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
                     {searched && !loading && (
                         <div>
                             {results.length === 0 ? (
-                                <div style={{
-                                    textAlign: 'center',
-                                    padding: '36px 16px',
-                                    color: '#64748b'
-                                }}>
-                                    <AlertCircle size={40} style={{ margin: '0 auto 12px', color: '#94a3b8' }} />
-                                    <h4 style={{ margin: '0 0 6px', color: '#334155' }}>Không tìm thấy lịch hẹn</h4>
-                                    <p style={{ margin: 0, fontSize: '0.875rem' }}>
+                                <div className={styles.tone1}>
+                                    <AlertCircle size={40} className={styles.icon2} />
+                                    <h4 className={styles.heading2}>Không tìm thấy lịch hẹn</h4>
+                                    <p className={styles.paragraph2}>
                                         Vui lòng kiểm tra lại mã lịch hẹn hoặc số điện thoại chính xác.
                                     </p>
                                 </div>
                             ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                                    <div style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 600 }}>
+                                <div className={styles.stackLayout2}>
+                                    <div className={styles.text2}>
                                         Tìm thấy {results.length} lịch hẹn:
                                     </div>
                                     {results.map((item, idx) => (
                                         <div
                                             key={idx}
-                                            style={{
-                                                border: '1px solid #e2e8f0',
-                                                borderRadius: '12px',
-                                                padding: '16px',
-                                                backgroundColor: '#ffffff',
-                                                boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-                                            }}
+                                            className={styles.surface1}
                                         >
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' }}>
+                                            <div className={styles.flexLayout9}>
                                                 <div>
-                                                    <span style={{ fontSize: '0.8rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Mã lịch hẹn</span>
-                                                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0284c7' }}>{item.appointmentCode}</div>
+                                                    <span className={styles.text3}>Mã lịch hẹn</span>
+                                                    <div className={styles.text4}>{item.appointmentCode}</div>
                                                 </div>
                                                 <div>{getStatusBadge(item.status)}</div>
                                             </div>
 
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', fontSize: '0.875rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
-                                                    <Calendar size={16} color="#0284c7" />
+                                            <div className={styles.gridLayout1}>
+                                                <div className={styles.flexLayout10}>
+                                                    <Calendar size={16} color="var(--cc-color-info)" />
                                                     <span>Ngày khám: <strong>{item.appointmentDate}</strong></span>
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
-                                                    <Clock size={16} color="#0284c7" />
+                                                <div className={styles.flexLayout10}>
+                                                    <Clock size={16} color="var(--cc-color-info)" />
                                                     <span>Giờ khám: <strong>{item.startTime} - {item.endTime}</strong></span>
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
-                                                    <Stethoscope size={16} color="#0284c7" />
+                                                <div className={styles.flexLayout10}>
+                                                    <Stethoscope size={16} color="var(--cc-color-info)" />
                                                     <span>Chuyên khoa: <strong>{item.specialtyName}</strong></span>
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#334155' }}>
-                                                    <User size={16} color="#0284c7" />
+                                                <div className={styles.flexLayout10}>
+                                                    <User size={16} color="var(--cc-color-info)" />
                                                     <span>Bác sĩ: <strong>{item.doctorName}</strong></span>
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b', gridColumn: '1 / -1', borderTop: '1px dashed #f1f5f9', paddingTop: '8px', marginTop: '4px' }}>
+                                                <div className={styles.flexLayout11}>
                                                     <span>Bệnh nhân: <strong>{item.maskedPatientName}</strong> ({item.maskedPhoneNumber})</span>
                                                 </div>
                                             </div>
@@ -290,26 +213,10 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
                 </div>
 
                 {/* Footer */}
-                <div style={{
-                    padding: '14px 24px',
-                    borderTop: '1px solid #e2e8f0',
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    backgroundColor: '#f8fafc',
-                    borderBottomLeftRadius: '16px',
-                    borderBottomRightRadius: '16px'
-                }}>
+                <div className={styles.flexLayout12}>
                     <button
                         onClick={onClose}
-                        style={{
-                            padding: '8px 18px',
-                            backgroundColor: '#e2e8f0',
-                            color: '#334155',
-                            border: 'none',
-                            borderRadius: '8px',
-                            fontWeight: 600,
-                            cursor: 'pointer'
-                        }}
+                        className={styles.button2}
                     >
                         Đóng
                     </button>

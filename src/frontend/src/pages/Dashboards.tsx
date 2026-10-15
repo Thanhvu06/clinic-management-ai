@@ -29,41 +29,41 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             <h2 className={styles.sectionTitle}>Chỉ số hệ thống thời gian thực</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-                <div className="card" style={{ padding: '20px', borderLeft: '4px solid #0284c7' }}>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', fontWeight: 600 }}>LỊCH HÔM NAY</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--c-navy-dark)', marginTop: '4px' }}>
+            <div className={styles.gridLayout1}>
+                <div className={["card", styles.spacing1].join(' ')}>
+                    <div className={styles.text1}>LỊCH HÔM NAY</div>
+                    <div className={styles.text2}>
                         {loading ? '...' : (stats?.totalAppointmentsToday ?? 0)}
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)', marginTop: '4px' }}>Tổng: {stats?.totalAppointmentsAll ?? 0} lượt đặt</div>
+                    <div className={styles.text3}>Tổng: {stats?.totalAppointmentsAll ?? 0} lượt đặt</div>
                 </div>
-                <div className="card" style={{ padding: '20px', borderLeft: '4px solid #10b981' }}>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', fontWeight: 600 }}>BỆNH NHÂN HỆ THỐNG</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--c-navy-dark)', marginTop: '4px' }}>
+                <div className={["card", styles.spacing2].join(' ')}>
+                    <div className={styles.text1}>BỆNH NHÂN HỆ THỐNG</div>
+                    <div className={styles.text2}>
                         {loading ? '...' : (stats?.totalPatients ?? 0)}
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)', marginTop: '4px' }}>Hồ sơ y tế điện tử</div>
+                    <div className={styles.text3}>Hồ sơ y tế điện tử</div>
                 </div>
-                <div className="card" style={{ padding: '20px', borderLeft: '4px solid #6366f1' }}>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', fontWeight: 600 }}>ĐỘI NGŨ BÁC SĨ</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--c-navy-dark)', marginTop: '4px' }}>
+                <div className={["card", styles.spacing3].join(' ')}>
+                    <div className={styles.text1}>ĐỘI NGŨ BÁC SĨ</div>
+                    <div className={styles.text2}>
                         {loading ? '...' : (stats?.totalDoctors ?? 0)}
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)', marginTop: '4px' }}>Đang công tác</div>
+                    <div className={styles.text3}>Đang công tác</div>
                 </div>
-                <div className="card" style={{ padding: '20px', borderLeft: '4px solid #f59e0b' }}>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--c-muted)', fontWeight: 600 }}>ĐƠN THUỐC ĐÃ KÊ</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--c-navy-dark)', marginTop: '4px' }}>
+                <div className={["card", styles.spacing4].join(' ')}>
+                    <div className={styles.text1}>ĐƠN THUỐC ĐÃ KÊ</div>
+                    <div className={styles.text2}>
                         {loading ? '...' : (stats?.totalPrescriptions ?? 0)}
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)', marginTop: '4px' }}>Toàn hệ thống</div>
+                    <div className={styles.text3}>Toàn hệ thống</div>
                 </div>
-                <div className="card" style={{ padding: '20px', borderLeft: stats?.lowStockMedicinesCount > 0 ? '4px solid #dc2626' : '4px solid #10b981' }}>
-                    <div style={{ fontSize: '0.85rem', color: stats?.lowStockMedicinesCount > 0 ? '#dc2626' : 'var(--c-muted)', fontWeight: 600 }}>THUỐC SẮP HẾT HÀNG</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: stats?.lowStockMedicinesCount > 0 ? '#dc2626' : 'var(--c-navy-dark)', marginTop: '4px' }}>
+                <div className={["card", styles.spacing5, (stats?.lowStockMedicinesCount > 0 ? styles.state1 : styles.state2)].join(' ')}>
+                    <div className={[styles.text4, (stats?.lowStockMedicinesCount > 0 ? styles.state3 : styles.state4)].join(' ')}>THUỐC SẮP HẾT HÀNG</div>
+                    <div className={[styles.text5, (stats?.lowStockMedicinesCount > 0 ? styles.state3 : styles.state5)].join(' ')}>
                         {loading ? '...' : (stats?.lowStockMedicinesCount ?? 0)}
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--c-muted)', marginTop: '4px' }}>Cần nhập bổ sung</div>
+                    <div className={styles.text3}>Cần nhập bổ sung</div>
                 </div>
             </div>
 
@@ -116,21 +116,21 @@ export const AdminDashboard: React.FC = () => {
 
 export const ForbiddenPage: React.FC = () => {
     return (
-        <div className={styles.emptyState} style={{ minHeight: '80vh', border: 'none', background: 'transparent' }}>
-            <ShieldPlus size={64} style={{ color: 'var(--c-danger)', marginBottom: '20px' }} />
-            <h1 style={{ color: 'var(--c-text-dark)', marginBottom: '10px' }}>403 - Truy cập bị từ chối</h1>
+        <div className={[styles.emptyState, styles.surface1].join(' ')}>
+            <ShieldPlus size={64} className={styles.icon1} />
+            <h1 className={styles.heading1}>403 - Truy cập bị từ chối</h1>
             <p>Tài khoản của bạn không có quyền xem trang này.</p>
-            <Link to="/" className="btn-primary" style={{ marginTop: '20px' }}>Quay lại trang chủ</Link>
+            <Link to="/" className={["btn-primary", styles.icon2].join(' ')}>Quay lại trang chủ</Link>
         </div>
     );
 };
 
 export const NotFoundPage: React.FC = () => {
     return (
-        <div className={styles.emptyState} style={{ minHeight: '80vh', border: 'none', background: 'transparent' }}>
-            <h1 style={{ color: 'var(--c-text-dark)', marginBottom: '10px', fontSize: '3rem' }}>404</h1>
+        <div className={[styles.emptyState, styles.surface1].join(' ')}>
+            <h1 className={styles.heading2}>404</h1>
             <p>Trang bạn yêu cầu không tồn tại.</p>
-            <Link to="/" className="btn-primary" style={{ marginTop: '20px' }}>Quay lại trang chủ</Link>
+            <Link to="/" className={["btn-primary", styles.icon2].join(' ')}>Quay lại trang chủ</Link>
         </div>
     );
 };

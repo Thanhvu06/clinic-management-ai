@@ -83,7 +83,7 @@ export const HealthPackagesList: React.FC = () => {
             </div>
 
             {error && (
-                <div style={{ padding: '16px 20px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#b91c1c', marginBottom: '24px' }}>
+                <div className={styles.surface6}>
                     {error}
                 </div>
             )}
@@ -105,7 +105,7 @@ export const HealthPackagesList: React.FC = () => {
                                 <span className={styles.packageBadge}>{pkg.code}</span>
                                 <h2 className={styles.packageName}>{pkg.name}</h2>
                                 <div className={styles.packageAudience}>
-                                    <Users size={15} color="var(--c-primary)" /> {pkg.targetAudience}
+                                    <Users size={15} color="var(--cc-color-primary)" /> {pkg.targetAudience}
                                 </div>
                                 <p className={styles.packageDesc}>
                                     {pkg.description}
@@ -120,7 +120,7 @@ export const HealthPackagesList: React.FC = () => {
                                             </li>
                                         ))}
                                         {services.length > 4 && (
-                                            <li style={{ color: 'var(--c-primary)', fontWeight: 600, fontSize: '0.8rem', paddingLeft: '24px' }}>
+                                            <li className={styles.text15}>
                                                 + {services.length - 4} danh mục & xét nghiệm khác
                                             </li>
                                         )}
@@ -132,18 +132,16 @@ export const HealthPackagesList: React.FC = () => {
                                         <span className={styles.packagePriceLabel}>Chi phí trọn gói</span>
                                         <div className={styles.packagePrice}>{formatVndCurrency(pkg.price)}</div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                    <div className={styles.flexLayout23}>
                                         <Link 
                                             to={`/health-packages/${pkg.id}`}
-                                            className="btn btn-secondary btn-sm"
-                                            style={{ textDecoration: 'none' }}
+                                            className={["btn btn-secondary btn-sm", styles.icon8].join(' ')}
                                         >
                                             Chi tiết
                                         </Link>
                                         <Link 
                                             to={`/patient/health-packages/${pkg.id}/register`}
-                                            className="btn btn-primary btn-sm"
-                                            style={{ textDecoration: 'none' }}
+                                            className={["btn btn-primary btn-sm", styles.icon8].join(' ')}
                                         >
                                             <CalendarCheck size={14} /> Đăng ký
                                         </Link>
@@ -155,7 +153,7 @@ export const HealthPackagesList: React.FC = () => {
                 </div>
             ) : (
                 <div className={styles.emptyState}>
-                    <Package size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                    <Package size={48} className={styles.icon1} />
                     <div className={styles.emptyStateTitle}>Không tìm thấy gói khám phù hợp</div>
                     <p>Vui lòng thử từ khóa tìm kiếm khác hoặc liên hệ hotline để được tư vấn.</p>
                 </div>

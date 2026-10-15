@@ -1,0 +1,30 @@
+/* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
+.stackLayout1.stackLayout1 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+    text-align: center;
+    background: var(--cc-color-bg-layout);
+}
+
+.icon1.icon1 {
+    margin-bottom: 20px;
+}
+
+.heading1.heading1 {
+    color: var(--cc-color-navy-dark);
+    margin-bottom: 10px;
+}
+
+.paragraph1.paragraph1 {
+    color: var(--cc-color-text-muted);
+    margin-bottom: 30px;
+    max-width: 400px;
+}
+
+.icon2.icon2 {
+    text-decoration: none;
+}
