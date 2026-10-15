@@ -309,6 +309,32 @@ public class LabTurnaroundReportTests(CustomWebApplicationFactory factory) : Int
     }
 
     [Fact]
+    public async Task Report_PrefersLinkedUserAccountNameForPatient()
+    {
+        using var serviceScope = Factory.Services.CreateScope();
+        var db = serviceScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var scope = await SeedScopeAsync(db);
+        var code = Code();
+        var patientUserId = Guid.NewGuid();
+        db.Users.Add(new ApplicationUser { Id = patientUserId, UserName = "tat-pat-" + code, Email = "tat-pat-" + code + "@test.com", PhoneNumber = Phone(), FullName = "Tên tài khoản TAT", IsActive = true });
+        var linkedPatient = new Patient { UserId = patientUserId, FullName = "Tên hồ sơ TAT", MedicalRecordNumber = "TATU-" + code[..20] };
+        db.Patients.Add(linkedPatient);
+        await db.SaveChangesAsync();
+        var lab = Catalog(DiagnosticCategory.Laboratory, "Men gan");
+        var linkedLate = Completed(scope, T0, 90, null, Item(scope, lab));
+        linkedLate.PatientId = linkedPatient.Id;
+        var unlinkedLate = Completed(scope, T0, 80, null, Item(scope, lab));
+        db.DiagnosticOrders.AddRange(linkedLate, unlinkedLate);
+        await db.SaveChangesAsync();
+
+        var report = await Service(db, scope.SupervisorId).GetTurnaroundReportAsync(Day, Day, null);
+
+        Assert.Equal(new[] { linkedLate.Id, unlinkedLate.Id }, report.SlowestOrders.Select(order => order.OrderId));
+        Assert.Equal("Tên tài khoản TAT", report.SlowestOrders[0].PatientName);
+        Assert.Equal("Bệnh nhân TAT", report.SlowestOrders[1].PatientName);
+    }
+
+    [Fact]
     public async Task Report_FiltersByCategoryOfActiveItems()
     {
         using var serviceScope = Factory.Services.CreateScope();

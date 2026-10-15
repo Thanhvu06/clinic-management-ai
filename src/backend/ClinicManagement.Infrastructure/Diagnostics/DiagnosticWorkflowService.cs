@@ -1623,7 +1623,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
     {
         public long Id { get; init; }
         public string OrderCode { get; init; } = string.Empty;
-        public string PatientName { get; init; } = string.Empty;
+        public Guid? PatientUserId { get; init; }
+        public string? PatientFullName { get; init; }
         public DateTime OrderedAtUtc { get; init; }
         public DateTime? CompletedAtUtc { get; init; }
         public DiagnosticVerificationStatus VerificationStatus { get; init; }
@@ -1667,7 +1668,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             {
                 Id = order.Id,
                 OrderCode = order.OrderCode,
-                PatientName = order.Patient.FullName,
+                PatientUserId = order.Patient.UserId,
+                PatientFullName = order.Patient.FullName,
                 OrderedAtUtc = order.OrderedAtUtc,
                 CompletedAtUtc = order.CompletedAtUtc,
                 VerificationStatus = order.VerificationStatus,
@@ -1686,6 +1688,16 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                     }).ToList()
             })
             .ToListAsync();
+
+        // Same patient name fallback as MapBatchedOrder: linked user account → patient record → generic label.
+        var patientUserIds = rows.Where(row => row.PatientUserId.HasValue).Select(row => row.PatientUserId!.Value).Distinct().ToList();
+        var patientUserNames = patientUserIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _dbContext.Users.AsNoTracking().Where(user => patientUserIds.Contains(user.Id))
+                .Select(user => new { user.Id, user.FullName }).ToDictionaryAsync(user => user.Id, user => user.FullName);
+        string PatientName(TurnaroundOrderRow row) =>
+            (row.PatientUserId.HasValue && patientUserNames.TryGetValue(row.PatientUserId.Value, out var userName) ? userName : null)
+            ?? row.PatientFullName ?? "Bệnh nhân";
 
         var orders = rows.Select(row =>
         {
@@ -1750,7 +1762,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             {
                 OrderId = order.Row.Id,
                 OrderCode = order.Row.OrderCode,
-                PatientName = order.Row.PatientName,
+                PatientName = PatientName(order.Row),
                 ServiceNames = order.Row.Items.Select(item => item.ServiceName).Distinct().ToList(),
                 OrderedAtUtc = DateTime.SpecifyKind(order.Row.OrderedAtUtc, DateTimeKind.Utc),
                 CompletedAtUtc = DateTime.SpecifyKind(order.Row.CompletedAtUtc!.Value, DateTimeKind.Utc),
