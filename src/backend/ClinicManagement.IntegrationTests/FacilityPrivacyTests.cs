@@ -121,7 +121,7 @@ public class FacilityPrivacyTests(CustomWebApplicationFactory factory) : Integra
     public async Task A5_Authenticated_token_cannot_select_a_facility_outside_the_eligible_list()
     {
         using var scope = Factory.Services.CreateScope();
-        var slot = await CreateAvailableSlotAsync(DoctorEntityId, GetFutureWorkingDate(4), new(12, 9), new(12, 39));
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, GetFutureWorkingDate(5), new(12, 9), new(12, 39));
         var session = "p5_" + Guid.NewGuid().ToString("N");
         var tokens = scope.ServiceProvider.GetRequiredService<AiBookingWizardTokens>();
         var token = tokens.Issue(Patient1Id, session, new(Guid.NewGuid(), BookingWizardStage.Reason, SpecialtyEntityId, DoctorEntityId, slot.SlotDate.DayNumber, slot.Id, FacilityId: long.MaxValue), BookingWizardOperation.Reason);
