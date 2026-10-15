@@ -64,6 +64,12 @@ public class DiagnosticResultValueDto
     public string ReferenceRangeText { get; set; } = string.Empty;
     public string Flag { get; set; } = string.Empty;
     public int SortOrder { get; set; }
+    public decimal? PreviousValue { get; set; }
+    public DateTime? PreviousResultedAtUtc { get; set; }
+    public string? PreviousOrderCode { get; set; }
+    public decimal? DeltaChange { get; set; }
+    public decimal? DeltaPercent { get; set; }
+    public bool IsDeltaFailure { get; set; }
 }
 
 public class DiagnosticResultValueInput
@@ -172,6 +178,7 @@ public class DiagnosticOrderDto
     public string? ReturnReason { get; set; }
     public int ReturnCount { get; set; }
     public bool CanCurrentUserVerify { get; set; }
+    public bool HasDeltaFailure { get; set; }
 
     public string? RowVersion { get; set; }
     public List<DiagnosticOrderItemDto> Items { get; set; } = new();

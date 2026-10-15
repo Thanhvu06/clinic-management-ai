@@ -1193,18 +1193,22 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 throw new BusinessException("VALIDATION_ERROR", $"Thiếu chỉ số: {string.Join(", ", missing.Select(p => p.Name))}.");
             if (inputs.Any(v => v.Value < 0 || v.Value >= 1_000_000))
                 throw new BusinessException("VALIDATION_ERROR", "Giá trị chỉ số phải từ 0 đến dưới 1.000.000.");
+            var deltaNow = _dateTimeProvider.UtcNow;
+            var history = await LoadDeltaHistoryAsync(order, parameters, deltaNow);
             foreach (var parameter in parameters)
             {
                 var (low, high) = SelectReferenceRange(parameter, order.Patient.Gender);
                 var value = inputs.Single(v => v.ParameterId == parameter.Id).Value;
-                values.Add(new DiagnosticResultValue
+                var resultValue = new DiagnosticResultValue
                 {
                     DiagnosticServiceParameterId = parameter.Id, ParameterCode = parameter.Code,
                     ParameterName = parameter.Name, Unit = parameter.Unit, RefLow = low, RefHigh = high,
                     CriticalLow = parameter.CriticalLow, CriticalHigh = parameter.CriticalHigh,
                     NumericValue = value, Flag = ResultFlag(value, low, high, parameter.CriticalLow, parameter.CriticalHigh),
                     SortOrder = parameter.SortOrder
-                });
+                };
+                ApplyDeltaCheck(resultValue, parameter, history, deltaNow);
+                values.Add(resultValue);
             }
         }
 
@@ -1392,6 +1396,47 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         SpecimenRejectionReason.PatientNotPrepared => "Bệnh nhân chưa chuẩn bị đúng", _ => "Khác"
     };
 
+    // Parameters without their own window still show the latest prior value, but are never flagged.
+    private const int DefaultDeltaLookbackDays = 30;
+    private const decimal MaxStoredDeltaPercent = 9_999_999.99m;
+
+    private sealed record DeltaHistoryRow(string ParameterCode, string Unit, decimal NumericValue, DateTime ResultedAtUtc, string OrderCode);
+
+    private async Task<List<DeltaHistoryRow>> LoadDeltaHistoryAsync(DiagnosticOrder order, List<DiagnosticServiceParameter> parameters, DateTime now)
+    {
+        var codes = parameters.Select(p => p.Code).Distinct().ToList();
+        var since = now.AddDays(-parameters.Max(p => p.DeltaWindowDays ?? DefaultDeltaLookbackDays));
+        // Only released results (Completed order, active item) of the same patient count as "previous".
+        return await _dbContext.DiagnosticResultValues.AsNoTracking()
+            .Where(v => v.DiagnosticResult.DiagnosticOrderItem.DiagnosticOrder.PatientId == order.PatientId &&
+                v.DiagnosticResult.DiagnosticOrderItem.DiagnosticOrderId != order.Id &&
+                v.DiagnosticResult.DiagnosticOrderItem.DiagnosticOrder.Status == DiagnosticOrderStatus.Completed &&
+                v.DiagnosticResult.DiagnosticOrderItem.Status != DiagnosticItemStatus.Cancelled &&
+                codes.Contains(v.ParameterCode) && v.DiagnosticResult.ResultedAtUtc >= since)
+            .Select(v => new DeltaHistoryRow(v.ParameterCode, v.Unit, v.NumericValue, v.DiagnosticResult.ResultedAtUtc,
+                v.DiagnosticResult.DiagnosticOrderItem.DiagnosticOrder.OrderCode))
+            .ToListAsync();
+    }
+
+    private static void ApplyDeltaCheck(DiagnosticResultValue value, DiagnosticServiceParameter parameter,
+        IEnumerable<DeltaHistoryRow> history, DateTime now)
+    {
+        var since = now.AddDays(-(parameter.DeltaWindowDays ?? DefaultDeltaLookbackDays));
+        var previous = history.Where(h => h.ParameterCode == parameter.Code && h.Unit == parameter.Unit && h.ResultedAtUtc >= since)
+            .OrderByDescending(h => h.ResultedAtUtc).FirstOrDefault();
+        value.PreviousNumericValue = previous?.NumericValue;
+        value.PreviousResultedAtUtc = previous == null ? null : DateTime.SpecifyKind(previous.ResultedAtUtc, DateTimeKind.Utc);
+        value.PreviousOrderCode = previous?.OrderCode;
+        value.DeltaChange = previous == null ? null : value.NumericValue - previous.NumericValue;
+        decimal? percent = previous == null || previous.NumericValue == 0 ? null :
+            Math.Round((value.NumericValue - previous.NumericValue) / previous.NumericValue * 100m, 2, MidpointRounding.AwayFromZero);
+        // The flag uses the exact percent; the stored snapshot is capped to fit decimal(9,2).
+        value.DeltaPercent = percent.HasValue ? Math.Clamp(percent.Value, -MaxStoredDeltaPercent, MaxStoredDeltaPercent) : null;
+        value.IsDeltaFailure = previous != null &&
+            ((parameter.DeltaAbsoluteLimit.HasValue && Math.Abs(value.DeltaChange!.Value) > parameter.DeltaAbsoluteLimit.Value) ||
+             (parameter.DeltaPercentLimit.HasValue && percent.HasValue && Math.Abs(percent.Value) > parameter.DeltaPercentLimit.Value));
+    }
+
     private static bool IsCritical(DiagnosticResultFlag flag) => flag is DiagnosticResultFlag.CriticalLow or DiagnosticResultFlag.CriticalHigh;
 
     private static DiagnosticResultFlag ResultFlag(decimal value, decimal? low, decimal? high, decimal? criticalLow, decimal? criticalHigh) =>
@@ -1434,7 +1479,10 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         {
             ParameterId = v.DiagnosticServiceParameterId, ParameterCode = v.ParameterCode,
             ParameterName = v.ParameterName, Unit = v.Unit, Value = v.NumericValue, RefLow = v.RefLow, RefHigh = v.RefHigh,
-            ReferenceRangeText = ReferenceRangeText(v.RefLow, v.RefHigh), Flag = v.Flag.ToString(), SortOrder = v.SortOrder
+            ReferenceRangeText = ReferenceRangeText(v.RefLow, v.RefHigh), Flag = v.Flag.ToString(), SortOrder = v.SortOrder,
+            PreviousValue = v.PreviousNumericValue, PreviousResultedAtUtc = AsUtc(v.PreviousResultedAtUtc),
+            PreviousOrderCode = v.PreviousOrderCode, DeltaChange = v.DeltaChange, DeltaPercent = v.DeltaPercent,
+            IsDeltaFailure = v.IsDeltaFailure
         }).ToList();
 
     public async Task<DiagnosticOrderDto> CompleteOrderAsync(long orderId, TransitionDiagnosticOrderRequest? request)
@@ -1503,6 +1551,12 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
     public async Task<DiagnosticOrderDto> VerifyOrderAsync(long orderId, VerifyDiagnosticOrderRequest request)
     {
         var order = await LoadPendingVerificationAsync(orderId, request.RowVersion);
+        var hasDeltaFailure = await _dbContext.DiagnosticResultValues.AnyAsync(v => v.IsDeltaFailure &&
+            v.DiagnosticResult.DiagnosticOrderItem.DiagnosticOrderId == order.Id &&
+            v.DiagnosticResult.DiagnosticOrderItem.Status != DiagnosticItemStatus.Cancelled);
+        if (hasDeltaFailure && (request.Note?.Trim().Length ?? 0) < 5)
+            throw new BusinessException("DELTA_NOTE_REQUIRED",
+                "Kết quả lệch delta so với lần trước, vui lòng ghi chú đã kiểm tra (nhầm mẫu/nhầm bệnh nhân/diễn tiến lâm sàng).");
         order.VerificationStatus = DiagnosticVerificationStatus.Verified;
         order.VerifiedAtUtc = DateTime.UtcNow;
         order.VerifiedByUserId = GetUserId();
@@ -2033,9 +2087,19 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         order.ReturnedByUserName = null;
         order.VerificationNote = null;
         order.ReturnReason = null;
+        order.HasDeltaFailure = false;
         foreach (var item in order.Items)
         {
             if (!published) item.Result = null;
+            foreach (var value in item.Result?.Values ?? new List<DiagnosticResultValueDto>())
+            {
+                value.PreviousValue = null;
+                value.PreviousResultedAtUtc = null;
+                value.PreviousOrderCode = null;
+                value.DeltaChange = null;
+                value.DeltaPercent = null;
+                value.IsDeltaFailure = false;
+            }
             item.SpecimenBarcode = null;
             item.CollectedByUserName = null;
             item.ReceivedByUserName = null;
@@ -2207,6 +2271,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 _currentUserService.UserId != order.SubmittedForVerificationByUserId &&
                 order.Items.All(item => item.Result == null || item.Result.ResultedByUserId != _currentUserService.UserId),
             RowVersion = order.RowVersion != null ? Convert.ToBase64String(order.RowVersion) : null,
+            HasDeltaFailure = order.Items.Any(item => item.Status != DiagnosticItemStatus.Cancelled &&
+                item.Result?.Values.Any(value => value.IsDeltaFailure) == true),
             Items = itemDtos
         };
     }

@@ -1356,6 +1356,14 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<decimal?>("DeltaChange")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("DeltaPercent")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(9,2)");
+
                     b.Property<long>("DiagnosticResultId")
                         .HasColumnType("bigint");
 
@@ -1364,6 +1372,11 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Flag")
                         .HasColumnType("int");
+
+                    b.Property<bool>("IsDeltaFailure")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<decimal>("NumericValue")
                         .HasPrecision(18, 4)
@@ -1378,6 +1391,17 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<decimal?>("PreviousNumericValue")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("PreviousOrderCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("PreviousResultedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<decimal?>("RefHigh")
                         .HasPrecision(18, 4)
@@ -1476,6 +1500,17 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Property<decimal?>("CriticalLow")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("DeltaAbsoluteLimit")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("DeltaPercentLimit")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(9,2)");
+
+                    b.Property<int?>("DeltaWindowDays")
+                        .HasColumnType("int");
 
                     b.Property<long>("DiagnosticServiceId")
                         .HasColumnType("bigint");

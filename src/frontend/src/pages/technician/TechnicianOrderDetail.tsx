@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Alert, Button, Card, Input, Modal, Select, Tag } from 'antd';
 import { DataTable, EmptyState, LoadingState, StatusBadge, InlineError } from '../../components/common';
-import { diagnosticCategoryLabels, diagnosticStatusLabels, diagnosticStatusTone, diagnosticResultFlagLabels, diagnosticFlagTone, previewDiagnosticFlag, isCriticalDiagnosticFlag, diagnosticNotificationTime } from '../../utils/diagnosticLabels';
+import { diagnosticCategoryLabels, diagnosticStatusLabels, diagnosticStatusTone, diagnosticResultFlagLabels, diagnosticFlagTone, previewDiagnosticFlag, isCriticalDiagnosticFlag, diagnosticNotificationTime, formatDelta } from '../../utils/diagnosticLabels';
 import styles from './TechnicianOrderDetail.module.css';
 import { specimenStatusLabels, specimenRejectionLabels, specimenRejectionValues } from '../../utils/diagnosticLabels';
 import type { SpecimenRejectionReason } from '../../types/diagnostic';
@@ -409,12 +409,14 @@ export const TechnicianOrderDetail: React.FC = () => {
                                     {item.specimenStatus === 'Collected' && <Link className={styles.specimenPrintLink} to={`/diagnostics/orders/${order.id}/labels`}>In nhãn</Link>}
                                 </section>}
                                 {!!item.result?.values?.length && <div className={styles.parameterTable}>
+                                    {item.result.values.some(value => value.isDeltaFailure) && <Alert type="warning" showIcon title="Có chỉ số lệch delta so với lần trước, kiểm tra mẫu/nhãn trước khi gửi duyệt." />}
                                     <DataTable ariaLabel={`Chỉ số đã lưu: ${item.serviceName}`} data={item.result.values} keyExtractor={value => value.parameterId} columns={[
                                         { header: 'Chỉ số', accessor: value => `${value.parameterName} (${value.parameterCode})` },
                                         { header: 'Kết quả', accessor: value => value.value },
                                         { header: 'Đơn vị', accessor: 'unit' },
                                         { header: 'Khoảng tham chiếu', accessor: 'referenceRangeText' },
                                         { header: 'Đánh giá', accessor: value => <span className={styles[diagnosticFlagTone(value.flag)]}>{diagnosticResultFlagLabels[value.flag]}</span> },
+                                        { header: 'So với lần trước', accessor: value => <>{formatDelta(value)}{value.isDeltaFailure && <> <Tag color="warning">Lệch delta</Tag></>}</> },
                                     ]} />
                                     {item.result.hasCriticalValue && item.result.criticalNotifiedAtUtc && <p className={styles.critical}>Đã báo bác sĩ lúc {diagnosticNotificationTime(item.result.criticalNotifiedAtUtc)}</p>}
                                 </div>}

@@ -1,5 +1,5 @@
 import type { DiagnosticCategory, DiagnosticOrderStatus } from '../types';
-import type { DiagnosticResultFlag, DiagnosticServiceParameterDto } from '../types/diagnostic';
+import type { DiagnosticResultFlag, DiagnosticResultValueDto, DiagnosticServiceParameterDto } from '../types/diagnostic';
 import type { SpecimenStatus, SpecimenRejectionReason } from '../types/diagnostic';
 
 export const specimenStatusLabels: Record<SpecimenStatus, string> = {
@@ -44,6 +44,23 @@ export function diagnosticNotificationTime(value: string): string {
     }).formatToParts(new Date(value));
     const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value;
     return `${part('hour')}:${part('minute')} ${part('day')}/${part('month')}`;
+}
+
+type DeltaValue = Pick<DiagnosticResultValueDto, 'previousValue' | 'previousResultedAtUtc' | 'deltaChange' | 'deltaPercent'>;
+
+const deltaNumber = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 });
+const deltaPercentNumber = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 });
+const signed = (value: number, format: Intl.NumberFormat) => `${value > 0 ? '+' : value < 0 ? '-' : ''}${format.format(Math.abs(value))}`;
+
+export function formatDelta(value: DeltaValue): string {
+    if (value.previousValue == null) return '—';
+    const date = value.previousResultedAtUtc
+        ? diagnosticNotificationTime(/(?:Z|[+-]\d{2}:\d{2})$/.test(value.previousResultedAtUtc) ? value.previousResultedAtUtc : `${value.previousResultedAtUtc}Z`).split(' ')[1]
+        : null;
+    const previous = `Trước: ${deltaNumber.format(value.previousValue)}${date ? ` (${date})` : ''}`;
+    if (value.deltaChange == null) return previous;
+    const percent = value.deltaPercent == null ? '' : ` (${signed(value.deltaPercent, deltaPercentNumber)}%)`;
+    return `${previous} → Δ ${signed(value.deltaChange, deltaNumber)}${percent}`;
 }
 
 export const diagnosticStatusLabels: Record<DiagnosticOrderStatus, string> = {

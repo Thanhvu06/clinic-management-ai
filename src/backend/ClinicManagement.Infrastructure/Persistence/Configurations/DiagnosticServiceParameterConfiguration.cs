@@ -20,6 +20,8 @@ public class DiagnosticServiceParameterConfiguration : IEntityTypeConfiguration<
         builder.Property(p => p.RefHighFemale).HasPrecision(18, 4);
         builder.Property(p => p.CriticalLow).HasPrecision(18, 4);
         builder.Property(p => p.CriticalHigh).HasPrecision(18, 4);
+        builder.Property(p => p.DeltaAbsoluteLimit).HasPrecision(18, 4);
+        builder.Property(p => p.DeltaPercentLimit).HasPrecision(9, 2);
         builder.HasOne(p => p.DiagnosticService).WithMany(s => s.Parameters)
             .HasForeignKey(p => p.DiagnosticServiceId).OnDelete(DeleteBehavior.Restrict);
     }
