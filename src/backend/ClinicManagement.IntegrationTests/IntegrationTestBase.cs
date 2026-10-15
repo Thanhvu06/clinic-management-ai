@@ -363,12 +363,36 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
         await db.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// The n-th Mon–Sat working day after today (Vietnam time). Distinct offsets always map to distinct dates.
+    /// </summary>
     protected static DateOnly GetFutureWorkingDate(int daysFromNow)
     {
-        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7).AddDays(daysFromNow));
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+        return WorkingDateAfter(today, daysFromNow);
+    }
+
+    /// <summary>
+    /// n &lt;= 0: today, rolled forward to Monday when today is Sunday.
+    /// n &gt;= 1: the n-th working day (Mon–Sat) after that n = 0 date, skipping Sundays while counting,
+    /// so a Sunday "today" never makes n = 0 and n = 1 land on the same Monday.
+    /// </summary>
+    internal static DateOnly WorkingDateAfter(DateOnly today, int n)
+    {
+        var date = today;
         while (date.DayOfWeek == DayOfWeek.Sunday)
         {
             date = date.AddDays(1);
+        }
+
+        var remaining = n;
+        while (remaining > 0)
+        {
+            date = date.AddDays(1);
+            if (date.DayOfWeek != DayOfWeek.Sunday)
+            {
+                remaining--;
+            }
         }
 
         return date;
