@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
 import { diagnosticApi } from '../../api/diagnosticApi';
-import { diagnosticResultFlagLabels, diagnosticFlagTone } from '../../utils/diagnosticLabels';
+import { diagnosticResultFlagLabels, diagnosticFlagTone, isCriticalDiagnosticFlag } from '../../utils/diagnosticLabels';
 import { specimenStatusLabels, specimenRejectionLabels } from '../../utils/diagnosticLabels';
 import type {
     PatientClinicalContextDto,
@@ -81,12 +81,28 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const [orderNotes, setOrderNotes] = useState('');
     const [diagnosticOrders, setDiagnosticOrders] = useState<DiagnosticOrderDto[]>([]);
     const [loadingOrders, setLoadingOrders] = useState(false);
+    const [ordersLoadedOnce, setOrdersLoadedOnce] = useState(false);
     const [creatingOrder, setCreatingOrder] = useState(false);
     const [actionOrderId, setActionOrderId] = useState<number | null>(null);
     const [catalogCategory, setCatalogCategory] = useState<string>('All');
     const [pollError, setPollError] = useState(false);
     const inFlightPollRef = useRef(false);
     const pollSeqRef = useRef(0);
+
+    const orderGroups = [
+        { title: 'Chờ kết quả', orders: diagnosticOrders.filter(order => order.status === 'Ordered' || order.status === 'InProgress') },
+        { title: 'Đã có kết quả', orders: diagnosticOrders.filter(order => order.status === 'Completed').sort((a, b) => Number(Boolean(a.reviewedAtUtc)) - Number(Boolean(b.reviewedAtUtc))) },
+        { title: 'Đã hủy', orders: diagnosticOrders.filter(order => order.status === 'Cancelled') },
+    ].filter(group => group.orders.length > 0);
+    const resultSummary = (order: DiagnosticOrderDto) => {
+        const abnormal = order.items.filter(item => item.status !== 'Cancelled')
+            .flatMap(item => item.result?.values ?? []).filter(value => value.flag !== 'Normal');
+        const criticalCount = abnormal.filter(value => isCriticalDiagnosticFlag(value.flag)).length;
+        const tone = diagnosticFlagTone(criticalCount ? 'CriticalHigh' : abnormal.length ? 'High' : 'Normal');
+        return <span className={`${tabStyles.orderFlagSummary} ${tabStyles[tone]}`}>
+            {criticalCount ? `${criticalCount} chỉ số NGUY HIỂM` : abnormal.length ? `${abnormal.length} chỉ số bất thường` : 'Chỉ số trong giới hạn'}
+        </span>;
+    };
 
     // Tab 4: Prescription Form
     const [prescriptionNotes, setPrescriptionNotes] = useState('');
@@ -133,6 +149,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         if (prevIdRef.current !== currentId) {
             prevIdRef.current = currentId;
             setDiagnosticOrders([]);
+            setOrdersLoadedOnce(false);
             setPollError(false);
             pollSeqRef.current++;
             inFlightPollRef.current = false;
@@ -159,6 +176,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             if (currentSeq === pollSeqRef.current && activeIdRef.current === targetId && isMountedRef.current) {
                 if (res.success && res.data) {
                     setDiagnosticOrders(res.data);
+                    setOrdersLoadedOnce(true);
                     setPollError(false);
                 } else {
                     setPollError(true);
@@ -1518,18 +1536,24 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             <Button
                                 htmlType="button"
                                 onClick={() => void loadDiagnosticOrders()}
+                                disabled={loadingOrders}
                                 className={[tabStyles.iconActionButton, tabStyles.refreshOrdersButton].join(' ')}
                             >
-                                <RefreshCw size={14} className={loadingOrders ? 'animate-spin' : ''} />
-                                <span>Cập nhật kết quả</span>
+                                <RefreshCw size={14} />
+                                <span>{loadingOrders ? 'Đang cập nhật...' : 'Cập nhật kết quả'}</span>
                             </Button>
                         </div>
 
-                        {diagnosticOrders.length === 0 ? (
+                        {!ordersLoadedOnce ? (
+                            loadingOrders ? <LoadingState message="Đang tải phiếu chỉ định..." /> : null
+                        ) : diagnosticOrders.length === 0 ? (
                             <EmptyState icon={<FlaskConical size={36} className={tabStyles.emptyStateIcon} />} title="Chưa có phiếu chỉ định cận lâm sàng nào trong ca khám này." description="Sử dụng danh mục phía trên để lập phiếu chỉ định gửi sang Kỹ thuật viên." />
                         ) : (
                             <div className={tabStyles.diagnosticOrderList}>
-                                {diagnosticOrders.map(order => (
+                                {orderGroups.map(group => (
+                                <section key={group.title} aria-label={group.title} className={tabStyles.diagnosticOrderGroup}>
+                                    <h4 className={tabStyles.sectionTitle}>{group.title} ({group.orders.length})</h4>
+                                    {group.orders.map(order => (
                                     <div
                                         key={order.id}
                                         className={tabStyles.diagnosticOrderCard}
@@ -1549,19 +1573,21 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                 ) : (
                                                     order.status === 'Completed' && (
                                                         <span className={tabStyles.unreviewedOrderBadge}>
-                                                            Chưa duyệt kết quả
+                                                            Chưa duyệt kết quả – bác sĩ cần xác nhận đã xem
                                                         </span>
                                                     )
                                                 )}
+                                                {order.status === 'Completed' && resultSummary(order)}
+                                                {order.verificationStatus === 'Pending' && <span className={tabStyles.verificationPending}>Phòng xét nghiệm đang duyệt</span>}
+                                                {order.verificationStatus === 'Returned' && <span className={tabStyles.verificationPending}>Bị trả lại – KTV đang sửa kết quả</span>}
                                                 <span className={tabStyles.orderCreatedTime}>
-                                                    {(order.verificationStatus === 'Pending' || order.verificationStatus === 'Returned') && <span className={tabStyles.verificationPending}>Chờ duyệt kết quả</span>}
                                                     Thời gian lập: {new Date(order.orderedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                                                 </span>
                                             </div>
 
                                             <div className={tabStyles.iconTextRow}>
                                                 {/* Print Slip Button */}
-                                                <Button
+                                                {order.status !== 'Cancelled' && <Button
                                                     href={`/doctor/diagnostic-orders/${order.id}/print`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
@@ -1569,7 +1595,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                 >
                                                     <Printer size={14} />
                                                     <span>In phiếu chỉ định</span>
-                                                </Button>
+                                                </Button>}
                                                 {order.status === 'Completed' && <Button href={`/doctor/diagnostic-orders/${order.id}/result-print`} target="_blank" rel="noopener noreferrer" className={[tabStyles.iconActionButton, tabStyles.printOrderButton].join(' ')}><Printer size={14} /><span>In phiếu kết quả</span></Button>}
 
                                                 {/* Doctor Review Confirmation Button */}
@@ -1637,7 +1663,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                 {
                                                     header: "Kết quả đo / Trị số", accessor: (item) => {
                                                         return <>
-                                                            {order.verificationStatus === 'Pending' || order.verificationStatus === 'Returned' ? <span className={tabStyles.emptyValue}>Đang chờ duyệt</span> : item.result?.values?.length ? (
+                                                            {order.verificationStatus === 'Pending' ? <span className={tabStyles.emptyValue}>Đang chờ phòng xét nghiệm duyệt</span> : order.verificationStatus === 'Returned' ? <span className={tabStyles.emptyValue}>KTV đang sửa kết quả</span> : item.result?.values?.length ? (
                                                                 <div className={tabStyles.parameterTable}><DataTable ariaLabel={`Chỉ số: ${item.serviceName}`} data={item.result.values} keyExtractor={value => value.parameterId} columns={[
                                                                     { header: 'Chỉ số', accessor: value => `${value.parameterName} (${value.parameterCode})` },
                                                                     { header: 'Kết quả + đơn vị', accessor: value => <span className={tabStyles[diagnosticFlagTone(value.flag)]}>{value.value} {value.unit}</span> },
@@ -1682,6 +1708,8 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             ]} /></div>
                                         </div>
                                     </div>
+                                    ))}
+                                </section>
                                 ))}
                             </div>
                         )}

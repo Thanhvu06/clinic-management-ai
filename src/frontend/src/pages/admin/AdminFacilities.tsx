@@ -7,6 +7,7 @@ import type { ApiResponse } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { PageHeader, DataTable, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './AdminFacilities.module.css';
+import { staffAssignmentRoleLabels, getStaffAssignmentRoleLabel } from '../../utils/roleLabels';
 
 interface AssignableUser { id: string; fullName: string; email: string; roles: string[] }
 type CreateKind = 'facility' | 'department' | 'room' | 'bed' | 'staff';
@@ -16,19 +17,14 @@ const initialRoom = { departmentId: 0, roomNumber: '', name: '', roomType: 2, fl
 const initialBed = { roomId: 0, bedNumber: '', bedType: 1, dailyRate: 200000, notes: '' };
 const initialStaff = { userId: '', role: 'Receptionist', departmentId: 0, isPrimary: true };
 const departmentTypes = [
-    { value: 1, label: 'Lâm sàng (Clinical)' }, { value: 2, label: 'Cận lâm sàng (Paraclinical)' },
-    { value: 3, label: 'Hành chính (Administrative)' }, { value: 4, label: 'Dược (Pharmacy)' },
-    { value: 5, label: 'Cấp cứu (Emergency)' }, { value: 6, label: 'Ngoại khoa (Surgical)' },
-    { value: 7, label: 'Điều trị nội trú (Inpatient)' },
+    { value: 1, label: 'Lâm sàng' }, { value: 2, label: 'Cận lâm sàng' },
+    { value: 3, label: 'Hành chính' }, { value: 4, label: 'Dược' },
+    { value: 5, label: 'Cấp cứu' }, { value: 6, label: 'Ngoại khoa' },
+    { value: 7, label: 'Điều trị nội trú' },
 ];
 const bedTypes = ['Giường thường', 'Giường điện', 'Giường hồi sức (ICU)', 'Giường nhi', 'Giường cách ly', 'Cáng cấp cứu'].map((label, index) => ({ value: index + 1, label }));
 const bedStatuses = ['Trống', 'Đang sử dụng', 'Đang vệ sinh', 'Bảo trì', 'Đã đặt trước'];
-const staffRoles = [
-    ['Receptionist', 'Lễ tân tiếp đón (Receptionist)'], ['Doctor', 'Bác sĩ khám bệnh (Doctor)'],
-    ['Nurse', 'Điều dưỡng viên (Nurse)'], ['Cashier', 'Thu ngân (Cashier)'],
-    ['Pharmacist', 'Dược sĩ cấp phát (Pharmacist)'], ['Radiologist', 'Bác sĩ CĐHA (Radiologist)'],
-    ['LabTechnician', 'Kỹ thuật viên Xét nghiệm (LabTechnician)'], ['Admin', 'Quản trị viên (Admin)'],
-].map(([value, label]) => ({ value, label }));
+const staffRoles = Object.entries(staffAssignmentRoleLabels).map(([value, label]) => ({ value, label }));
 const errorMessage = (error: unknown, fallback: string) => (error as { message?: string })?.message || fallback;
 
 export const AdminFacilities: React.FC = () => {
@@ -217,7 +213,7 @@ export const AdminFacilities: React.FC = () => {
                     <div className={styles.sectionHeading}><div><h2>{'Danh sách Nhân viên tại cơ sở: ' + selectedFacility.name}</h2><Typography.Text type="secondary">Phân công cán bộ y tế, bác sĩ, điều dưỡng, lễ tân và thu ngân làm việc tại cơ sở</Typography.Text></div><Button type="primary" icon={<UserPlus size={16} />} onClick={() => { void openStaffModal(); }}>Phân công nhân viên mới</Button></div>
                     {staffLoading ? <LoadingState message="Đang tải danh sách nhân viên..." /> : staffError ? <InlineError message={staffError} onRetry={() => { void fetchStaffAssignments(selectedFacility.id); }} /> : staffAssignments.length === 0 ? <EmptyState title="Chưa có nhân viên nào được phân công tại cơ sở này." /> : <DataTable data={staffAssignments} keyExtractor={s => s.id} columns={[
                         { header: 'Nhân viên', accessor: s => <><strong>{s.fullName || s.userName || 'Chưa cập nhật'}</strong><span className={styles.secondary}>ID: {s.userId}</span></> },
-                        { header: 'Email', accessor: s => s.email || '-' }, { header: 'Vai trò', accessor: s => <Tag>{s.role}</Tag> },
+                        { header: 'Email', accessor: s => s.email || '-' }, { header: 'Vai trò', accessor: s => <Tag>{getStaffAssignmentRoleLabel(s.role)}</Tag> },
                         { header: 'Khoa', accessor: s => s.departmentName || 'Toàn cơ sở' },
                         { header: 'Cơ sở', accessor: s => <Tag color={s.isPrimary ? 'success' : 'default'}>{s.isPrimary ? 'Cơ sở chính' : 'Cơ sở phụ'}</Tag> },
                         { header: 'Trạng thái', accessor: s => <StatusBadge status={s.isActive ? 'Approved' : 'Rejected'} label={s.isActive ? 'Hoạt động' : 'Tạm dừng'} /> },

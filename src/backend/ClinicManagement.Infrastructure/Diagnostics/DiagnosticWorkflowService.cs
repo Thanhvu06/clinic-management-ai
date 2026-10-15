@@ -986,8 +986,10 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         }
 
         var totalItems = await query.CountAsync();
-        var orderIds = await query
-            .OrderByDescending(o => o.OrderedAtUtc)
+        var orderedQuery = status is DiagnosticOrderStatus.Ordered or DiagnosticOrderStatus.InProgress
+            ? query.OrderBy(o => o.OrderedAtUtc).ThenBy(o => o.Id)
+            : query.OrderByDescending(o => o.OrderedAtUtc);
+        var orderIds = await orderedQuery
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(o => o.Id)
@@ -1034,6 +1036,17 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         var endUtc = _dateTimeProvider.ConvertVietnamToUtc(today.AddDays(1).ToDateTime(TimeOnly.MinValue));
         var orderedCount = await scopedOrders.CountAsync(o => o.Status == DiagnosticOrderStatus.Ordered);
         var inProgressCount = await scopedOrders.CountAsync(o => o.Status == DiagnosticOrderStatus.InProgress);
+        var pendingVerificationCount = await scopedOrders.CountAsync(o => o.Status == DiagnosticOrderStatus.InProgress &&
+            o.VerificationStatus == DiagnosticVerificationStatus.Pending);
+        var returnedCount = await scopedOrders.CountAsync(o => o.Status == DiagnosticOrderStatus.InProgress &&
+            o.VerificationStatus == DiagnosticVerificationStatus.Returned);
+        var now = _dateTimeProvider.UtcNow;
+        // Preserve an empty overdue range when a clock returns its default value.
+        if (now < DateTime.MinValue.AddMinutes(30)) now = DateTime.MinValue.AddMinutes(30);
+        var overdueBefore = now.AddMinutes(-30);
+        var overdueCount = await scopedOrders.CountAsync(o =>
+            (o.Status == DiagnosticOrderStatus.Ordered || o.Status == DiagnosticOrderStatus.InProgress) &&
+            o.OrderedAtUtc < overdueBefore);
 
         var completedTodayCount = await scopedOrders
             .CountAsync(o => o.Status == DiagnosticOrderStatus.Completed &&
@@ -1044,7 +1057,10 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         {
             OrderedCount = orderedCount,
             InProgressCount = inProgressCount,
-            CompletedTodayCount = completedTodayCount
+            CompletedTodayCount = completedTodayCount,
+            PendingVerificationCount = pendingVerificationCount,
+            ReturnedCount = returnedCount,
+            OverdueCount = overdueCount
         };
     }
 
@@ -1527,6 +1543,36 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         var ids = await query.OrderBy(order => order.SubmittedForVerificationAtUtc).ThenBy(order => order.Id)
             .Skip((page - 1) * pageSize).Take(pageSize).Select(order => order.Id).ToListAsync();
         return new PagedResult<DiagnosticOrderDto>(await GetOrderDtosByIdsAsync(ids), count, page, pageSize);
+    }
+
+    public async Task<VerificationStatsDto> GetVerificationStatsAsync()
+    {
+        var role = GetVerificationRole();
+        var userId = GetUserId();
+        var facilityIds = await GetVerificationFacilityIdsAsync(role);
+        var scopedOrders = WhereTechnicianFacilityScope(_dbContext.DiagnosticOrders.AsNoTracking(), facilityIds);
+        if (role == RoleNames.Doctor)
+            scopedOrders = scopedOrders.Where(order => order.OrderingDoctor.UserId != userId);
+
+        var pending = scopedOrders.Where(order => order.Status == DiagnosticOrderStatus.InProgress &&
+            order.VerificationStatus == DiagnosticVerificationStatus.Pending);
+        var now = _dateTimeProvider.UtcNow;
+        var overdueBefore = now.AddMinutes(-30);
+        var today = _dateTimeProvider.VietnamToday;
+        var startUtc = _dateTimeProvider.ConvertVietnamToUtc(today.ToDateTime(TimeOnly.MinValue));
+        var endUtc = _dateTimeProvider.ConvertVietnamToUtc(today.AddDays(1).ToDateTime(TimeOnly.MinValue));
+        var oldest = await pending.MinAsync(order => order.SubmittedForVerificationAtUtc);
+
+        return new VerificationStatsDto
+        {
+            PendingCount = await pending.CountAsync(),
+            CriticalPendingCount = await pending.CountAsync(order => order.Items.Any(item =>
+                item.Status != DiagnosticItemStatus.Cancelled && item.Result != null && item.Result.HasCriticalValue)),
+            OverduePendingCount = await pending.CountAsync(order => order.SubmittedForVerificationAtUtc < overdueBefore),
+            OldestPendingMinutes = oldest.HasValue ? Math.Max(0, (int)(now - oldest.Value).TotalMinutes) : 0,
+            ReturnedTodayCount = await scopedOrders.CountAsync(order => order.ReturnedAtUtc >= startUtc && order.ReturnedAtUtc < endUtc),
+            VerifiedTodayCount = await scopedOrders.CountAsync(order => order.VerifiedAtUtc >= startUtc && order.VerifiedAtUtc < endUtc)
+        };
     }
 
     public async Task<DiagnosticOrderDto> GetOrderForVerificationAsync(long orderId)
