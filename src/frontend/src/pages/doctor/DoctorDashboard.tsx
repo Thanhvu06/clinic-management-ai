@@ -253,11 +253,11 @@ export const DoctorDashboard: React.FC = () => {
                 actions={
                     <Flex gap="small">
                         <Button
-                            icon={<RefreshCw size={15} className={loading ? 'animate-spin' : ''} />}
+                            icon={<RefreshCw size={15} />}
                             onClick={loadDashboard}
                             disabled={loading}
                         >
-                            Làm mới
+                            {loading ? 'Đang tải...' : 'Làm mới'}
                         </Button>
                         <Link to="/doctor/schedule">
                             <Button type="primary" icon={<Calendar size={15} />}>

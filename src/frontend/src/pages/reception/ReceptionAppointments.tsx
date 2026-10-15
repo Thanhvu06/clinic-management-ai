@@ -2,7 +2,7 @@ import { Button, Input, Select, Modal } from 'antd';
 import { PageHeader, DataTable, StatusBadge, LoadingState, EmptyState, InlineError } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import styles from './ReceptionAppointments.module.css';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axiosClient from '../../api/axiosClient';
 import { patientVisitApi } from '../../api/patientVisitApi';
 import { organizationApi, type DepartmentDto } from '../../api/organizationApi';
@@ -58,7 +58,7 @@ export const ReceptionAppointments: React.FC = () => {
     const [currentTicket, setCurrentTicket] = useState<CheckInTicketDto | null>(null);
     const [checkingInId, setCheckingInId] = useState<number | null>(null);
 
-    const fetchAppointments = async () => {
+    const fetchAppointments = useCallback(async () => {
         setLoading(true);
         try {
             const params = new URLSearchParams({
@@ -73,12 +73,12 @@ export const ReceptionAppointments: React.FC = () => {
                 setAppointments(res.data.items);
                 setTotalItems(res.data.totalItems);
             }
-        } catch (error) {
+        } catch {
             // Error handling
         } finally {
             setLoading(false);
         }
-    };
+    }, [page, statusFilter, search]);
 
     useEffect(() => {
         fetchAppointments();
@@ -92,7 +92,7 @@ export const ReceptionAppointments: React.FC = () => {
         const refresh = () => { void fetchAppointments(); };
         window.addEventListener('cliniccare:copilot-action-completed', refresh);
         return () => window.removeEventListener('cliniccare:copilot-action-completed', refresh);
-    }, [page, statusFilter, search]);
+    }, [fetchAppointments]);
 
     useEffect(() => () => {
         departmentRequestRef.current.controller?.abort();

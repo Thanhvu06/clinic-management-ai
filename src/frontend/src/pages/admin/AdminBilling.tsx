@@ -90,6 +90,7 @@ export const AdminBilling: React.FC = () => {
         else if (activeTab === 'fees') void fetchSpecialtyFees();
         else if (activeTab === 'diagnostics') void fetchDiagnosticServices();
         return () => { requests.forEach(request => { ++request.current; }); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ tải khi người dùng bấm Xem báo cáo
     }, [activeTab]);
     const handleSaveFee = async (event: React.FormEvent) => {
         event.preventDefault(); if (!selectedSpecialty || feePending.current) return;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse, MedicineDto, MedicineCategoryDto } from '../../types';
 import { medicineApi, medicineImageUrl } from '../../api/medicineApi';
@@ -38,11 +38,11 @@ export const AdminMedicines: React.FC = () => {
     const [selectedImage, setSelectedImage] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [savedMedicineId, setSavedMedicineId] = useState<number | null>(null);
-    const fetchCategories = async () => {
+    const fetchCategories = useCallback(async () => {
         try { const res = await medicineApi.getCategories(); if (res.success) setCategories(res.data ?? []); }
         catch (error) { showAlert((error as { message?: string }).message || 'Không thể tải nhóm thuốc.', 'Lỗi', 'error'); }
-    };
-    useEffect(() => { fetchCategories(); }, []);
+    }, [showAlert]);
+    useEffect(() => { fetchCategories(); }, [fetchCategories]);
     useEffect(() => { setSelectedImage(null); setSavedMedicineId(null); }, [modal.isOpen, modal.data.id]);
     useEffect(() => {
         if (!selectedImage) { setImagePreview(null); return; }

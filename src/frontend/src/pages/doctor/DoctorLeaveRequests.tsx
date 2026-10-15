@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Card, DatePicker, Form, Input, Modal, Select } from 'antd';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
@@ -38,7 +38,7 @@ export const DoctorLeaveRequests: React.FC = () => {
     const [formLoading, setFormLoading] = useState(false);
     const [form] = Form.useForm();
 
-    const fetchRequests = async () => {
+    const fetchRequests = useCallback(async () => {
         setLoading(true);
         try {
             const params = new URLSearchParams({
@@ -52,16 +52,16 @@ export const DoctorLeaveRequests: React.FC = () => {
                 setRequests(res.data.items);
                 setTotalItems(res.data.totalItems);
             }
-        } catch (error) {
+        } catch {
             // Error handling
         } finally {
             setLoading(false);
         }
-    };
+    }, [page, statusFilter]);
 
     useEffect(() => {
         fetchRequests();
-    }, [page, statusFilter]);
+    }, [fetchRequests]);
 
     const handleCreate = async (values: { startDate: any; endDate: any; reason: string }) => {
         const startDate = values.startDate.toISOString();

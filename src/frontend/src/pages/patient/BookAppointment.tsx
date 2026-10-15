@@ -118,6 +118,7 @@ export const BookAppointment: React.FC = () => {
     const [slotsReloadKey, setSlotsReloadKey] = useState(0);
 
     const [submitting, setSubmitting] = useState(false);
+    const [fallbackFormId] = useState(() => `form_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
     const isSubmittingRef = useRef(false);
     const isMountedRef = useRef(true);
     const activeSubmitIdRef = useRef(0);
@@ -646,7 +647,7 @@ export const BookAppointment: React.FC = () => {
             if (!idempotencyKey) {
                 idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID
                     ? crypto.randomUUID()
-                    : `form_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                    : `${fallbackFormId}_${submitId}`;
             }
 
             const attemptRecord: PendingBookingAttemptRecord = {

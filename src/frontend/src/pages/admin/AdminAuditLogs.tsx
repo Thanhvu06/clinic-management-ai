@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { RefreshCw, Clock, User } from 'lucide-react';
@@ -28,7 +28,7 @@ export const AdminAuditLogs: React.FC = () => {
     const [actionFilter, setActionFilter] = useState('');
     const [entityFilter, setEntityFilter] = useState('');
 
-    const fetchLogs = async () => {
+    const fetchLogs = useCallback(async () => {
         setLoading(true);
         setLoadError('');
         try {
@@ -50,11 +50,11 @@ export const AdminAuditLogs: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [page, actionFilter, entityFilter]);
 
     useEffect(() => {
         fetchLogs();
-    }, [page, actionFilter, entityFilter]);
+    }, [fetchLogs]);
 
     const formatDateTime = (dateString: string) => {
         try {
