@@ -41,8 +41,11 @@ describe('Diagnostic dashboard statistics', () => {
         expect(within(card('Chờ trưởng khoa duyệt')).getByText('7')).toBeInTheDocument();
         expect(within(card('Bị trả lại cần sửa')).getByText('8')).toBeInTheDocument();
         expect(within(card('Chờ quá 30 phút')).getByText('9')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Lọc: Bị trả lại cần sửa' }));
-        await waitFor(() => expect(mocks.orders).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'InProgress', page: 1 })));
+        expect(screen.queryByRole('button', { name: /Bị trả lại cần sửa/ })).not.toBeInTheDocument();
+        const ordersRequests = mocks.orders.mock.calls.length;
+        fireEvent.click(card('Bị trả lại cần sửa'));
+        expect(mocks.orders).toHaveBeenCalledTimes(ordersRequests);
+        expect(screen.getByRole('button', { name: 'Lọc: Đang thực hiện' })).toHaveAttribute('aria-pressed', 'false');
     });
     it('disables refresh while loading and supports legacy technician stats', async () => {
         let resolve!: (value: unknown) => void;
@@ -58,7 +61,7 @@ describe('Diagnostic dashboard statistics', () => {
     it('uses scope wide supervisor stats rather than the current queue page and refreshes both APIs', async () => {
         mount(true);
         await screen.findByText('DX-PENDING');
-        for (const [title, value] of [['Chờ duyệt', '41'], ['Có giá trị nguy hiểm', '12'], ['Chờ lâu nhất (phút)', '124'], ['Bị trả lại hôm nay', '15'], ['Đã duyệt hôm nay', '16'], ['Chờ quá 30 phút', '13']]) {
+        for (const [title, value] of [['Chờ duyệt', '41'], ['Có giá trị nguy hiểm', '12'], ['Chờ lâu nhất (phút)', '124'], ['Bị trả lại hôm nay', '15'], ['Đã duyệt hôm nay', '16'], ['Quá 30 phút chưa duyệt', '13']]) {
             expect(within(card(title)).getByText(value)).toBeInTheDocument();
         }
         expect(screen.queryByText('Trong trang hiện tại')).not.toBeInTheDocument();

@@ -85,7 +85,7 @@ describe('Admin Facilities batch 3', () => {
         showFacilities();
         fireEvent.click(await screen.findByRole('tab', { name: /Phân công nhân sự/ }));
         const table = await screen.findByRole('table');
-        for (const value of [staff.fullName, staff.email, staff.role, staff.departmentName!]) expect(within(table).getByText(value)).toBeInTheDocument();
+        for (const value of [staff.fullName, staff.email, 'Bác sĩ', staff.departmentName!]) expect(within(table).getByText(value)).toBeInTheDocument();
         expect(within(table).getByText('ID: staff-1')).toBeInTheDocument();
     });
     it('selects staff, excludes Patient-only users, and submits no assignment notes', async () => {

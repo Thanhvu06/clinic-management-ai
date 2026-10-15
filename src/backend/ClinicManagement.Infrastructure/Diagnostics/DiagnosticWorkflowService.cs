@@ -1041,9 +1041,12 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         var returnedCount = await scopedOrders.CountAsync(o => o.Status == DiagnosticOrderStatus.InProgress &&
             o.VerificationStatus == DiagnosticVerificationStatus.Returned);
         var now = _dateTimeProvider.UtcNow;
+        // Preserve an empty overdue range when a clock returns its default value.
+        if (now < DateTime.MinValue.AddMinutes(30)) now = DateTime.MinValue.AddMinutes(30);
+        var overdueBefore = now.AddMinutes(-30);
         var overdueCount = await scopedOrders.CountAsync(o =>
             (o.Status == DiagnosticOrderStatus.Ordered || o.Status == DiagnosticOrderStatus.InProgress) &&
-            o.OrderedAtUtc.AddMinutes(30) < now);
+            o.OrderedAtUtc < overdueBefore);
 
         var completedTodayCount = await scopedOrders
             .CountAsync(o => o.Status == DiagnosticOrderStatus.Completed &&

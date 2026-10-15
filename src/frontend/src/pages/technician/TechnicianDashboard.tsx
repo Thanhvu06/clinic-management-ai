@@ -98,7 +98,6 @@ export const TechnicianDashboard: React.FC = () => {
         { status: 'Ordered' as const, title: 'Chờ thực hiện', value: stats?.orderedCount ?? 0, icon: Clock, color: 'warning' as const },
         { status: 'InProgress' as const, title: 'Đang thực hiện', value: stats?.inProgressCount ?? 0, icon: PlayCircle, color: 'info' as const },
         { status: 'Completed' as const, title: 'Hoàn tất hôm nay', value: stats?.completedTodayCount ?? 0, icon: CheckCircle, color: 'success' as const },
-        { status: 'InProgress' as const, title: 'Bị trả lại cần sửa', value: stats?.returnedCount ?? 0, icon: FileText, color: 'warning' as const },
     ];
     // The API has no category parameter: this filter applies only to the current page.
     const visibleOrders = categoryFilter ? orders.filter(order => order.items.some(item => item.category === categoryFilter)) : orders;
@@ -117,11 +116,12 @@ export const TechnicianDashboard: React.FC = () => {
                 {statFilters.map(stat => {
                     const Icon = stat.icon;
                     const active = statusFilter === stat.status && (stat.status !== 'Completed' || dateFilter === toLocalDateString(new Date()));
-                    return <div key={stat.title} role="button" tabIndex={0} aria-label={`Lọc: ${stat.title}`} aria-pressed={active} className={`${styles.statFilter} ${active ? styles.statFilterActive : ''}`} onClick={event => { if (event.target === event.currentTarget) selectStat(stat.status); }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectStat(stat.status); } }}>
+                    return <div key={stat.status} role="button" tabIndex={0} aria-label={`Lọc: ${stat.title}`} aria-pressed={active} className={`${styles.statFilter} ${active ? styles.statFilterActive : ''}`} onClick={event => { if (event.target === event.currentTarget) selectStat(stat.status); }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectStat(stat.status); } }}>
                         <StatCard title={stat.title} value={stat.value} icon={<Icon size={24} />} color={stat.color} onClick={() => selectStat(stat.status)} />
                     </div>;
                 })}
                 <StatCard title="Chờ trưởng khoa duyệt" value={stats?.pendingVerificationCount ?? 0} icon={<Clock size={24} />} color="info" />
+                <StatCard title="Bị trả lại cần sửa" value={stats?.returnedCount ?? 0} icon={<FileText size={24} />} color="warning" />
                 <StatCard title="Chờ quá 30 phút" value={stats?.overdueCount ?? 0} icon={<Clock size={24} />} color="warning" />
             </div>
             {lastUpdated && <p className={styles.updatedAt}>Cập nhật lúc {lastUpdated.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>}

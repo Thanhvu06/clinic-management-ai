@@ -66,7 +66,7 @@ export const VerificationQueue = ({ dashboard = false }: { dashboard?: boolean }
                 <StatCard title="Chờ lâu nhất (phút)" value={statValue('oldestPendingMinutes')} subtitle={statsSubtitle} icon={<Clock size={24} />} color="warning" />
                 <StatCard title="Bị trả lại hôm nay" value={statValue('returnedTodayCount')} subtitle={statsSubtitle} icon={<Undo2 size={24} />} color="info" />
                 <StatCard title="Đã duyệt hôm nay" value={statValue('verifiedTodayCount')} subtitle={statsSubtitle} icon={<ClipboardCheck size={24} />} color="success" />
-                <StatCard title="Chờ quá 30 phút" value={statValue('overduePendingCount')} subtitle={statsSubtitle} icon={<Clock size={24} />} color="warning" />
+                <StatCard title="Quá 30 phút chưa duyệt" value={statValue('overduePendingCount')} subtitle={statsSubtitle} icon={<Clock size={24} />} color="warning" />
             </div>}
             {items.length === 0 ? <EmptyState title="Không có phiếu chờ duyệt" /> : <div className={styles.table}>
                 <DataTable ariaLabel="Phiếu chờ duyệt" data={items} keyExtractor={order => order.id} columns={[
