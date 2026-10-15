@@ -85,9 +85,9 @@ public class CrossActorAppointmentVisibilityTests : IntegrationTestBase
     {
         var targetDate = GetFutureWorkingDate(40);
         
-        // Appointment within next 7 days (day +2)
-        var dateWithin7 = targetDate.AddDays(2);
-        if (dateWithin7.DayOfWeek == DayOfWeek.Sunday) dateWithin7 = dateWithin7.AddDays(1);
+        // Appointment within next 7 days (next working day after targetDate, never Sunday,
+        // and distinct from the other working-day offsets used in this class)
+        var dateWithin7 = WorkingDateAfter(targetDate, 1);
         var slotWithin = await CreateAvailableSlotAsync(DoctorEntityId, dateWithin7, new TimeOnly(14, 0, 0), new TimeOnly(14, 30, 0));
 
         await AuthenticateAsync("pat1@test.com");

@@ -414,3 +414,6 @@ App_Data/
 *.db
 *.db-shm
 *.db-wal
+
+# Claude Code session worktrees (local checkouts, never commit)
+.claude/worktrees/
