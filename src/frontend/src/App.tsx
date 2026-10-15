@@ -59,6 +59,7 @@ import { SpecimenLabelPrint } from './pages/technician/SpecimenLabelPrint';
 import { TechnicianVerificationQueue } from './pages/technician/TechnicianVerificationQueue';
 import { DiagnosticResultPrint } from './pages/common/DiagnosticResultPrint';
 import { LabSupervisorDashboard } from './pages/lab/LabSupervisorDashboard';
+import { LabTurnaroundReport } from './pages/lab/LabTurnaroundReport';
 import { DiagnosticVerificationReview, VerificationResultPrint } from './pages/common/DiagnosticVerificationReview';
 import { DoctorDiagnosticVerification } from './pages/doctor/DoctorDiagnosticVerification';
 import { PatientDiagnosticResults } from './pages/patient/PatientDiagnosticResults';
@@ -171,6 +172,7 @@ function App() {
                                     {/* Diagnostic Technician Routes */}
                                     <Route element={<RoleRoute roles={['LabSupervisor']} />}>
                                         <Route path="/lab" element={<LabSupervisorDashboard />} />
+                                        <Route path="/lab/tat" element={<LabTurnaroundReport />} />
                                         <Route path="/lab/orders/:id" element={<DiagnosticVerificationReview />} />
                                     </Route>
                                     <Route element={<RoleRoute roles={['LabSupervisor', 'DiagnosticTechnician', 'Doctor']} />}>

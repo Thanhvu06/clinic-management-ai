@@ -176,3 +176,52 @@ export interface VerificationStatsDto {
     returnedTodayCount: number;
     verifiedTodayCount: number;
 }
+
+export type DiagnosticTurnaroundSegmentKey = 'OrderToReceive' | 'ReceiveToResult' | 'ResultToVerify' | 'Total';
+
+export interface DiagnosticTurnaroundSegmentDto {
+    key: DiagnosticTurnaroundSegmentKey;
+    count: number;
+    medianMinutes: number | null;
+    p90Minutes: number | null;
+}
+
+export interface DiagnosticTurnaroundServiceDto {
+    serviceCode: string;
+    serviceName: string;
+    category: DiagnosticCategory;
+    orderCount: number;
+    medianTotalMinutes: number | null;
+    p90TotalMinutes: number | null;
+    targetMinutes: number;
+    withinTargetPercent: number | null;
+}
+
+export interface DiagnosticTurnaroundOrderDto {
+    orderId: number;
+    orderCode: string;
+    patientName: string;
+    serviceNames: string[];
+    orderedAtUtc: string;
+    completedAtUtc: string;
+    totalMinutes: number;
+    targetMinutes: number;
+}
+
+export interface DiagnosticTurnaroundReportDto {
+    from: string;
+    to: string;
+    category: DiagnosticCategory | null;
+    orderCount: number;
+    segments: DiagnosticTurnaroundSegmentDto[];
+    withinTargetCount: number;
+    withinTargetPercent: number | null;
+    byService: DiagnosticTurnaroundServiceDto[];
+    slowestOrders: DiagnosticTurnaroundOrderDto[];
+}
+
+export interface DiagnosticTurnaroundReportParams {
+    from: string;
+    to: string;
+    category?: DiagnosticCategory;
+}
