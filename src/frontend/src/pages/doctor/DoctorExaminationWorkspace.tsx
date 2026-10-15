@@ -1,7 +1,7 @@
 import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Button, Card, Col, Form, Input, Modal, Row } from 'antd';
+import { Button, Card, Col, Form, Input, Modal, Row, Tag } from 'antd';
 import {
     Stethoscope, HeartPulse, Pill, History, Save, CheckCircle,
     AlertCircle, ArrowLeft, Trash2, Search, Clock, Calendar,
@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
 import { diagnosticApi } from '../../api/diagnosticApi';
-import { diagnosticResultFlagLabels, diagnosticFlagTone, isCriticalDiagnosticFlag } from '../../utils/diagnosticLabels';
+import { diagnosticResultFlagLabels, diagnosticFlagTone, formatDelta, isCriticalDiagnosticFlag } from '../../utils/diagnosticLabels';
 import { specimenStatusLabels, specimenRejectionLabels } from '../../utils/diagnosticLabels';
 import type {
     PatientClinicalContextDto,
@@ -1669,6 +1669,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                                     { header: 'Kết quả + đơn vị', accessor: value => <span className={tabStyles[diagnosticFlagTone(value.flag)]}>{value.value} {value.unit}</span> },
                                                                     { header: 'Tham chiếu', accessor: 'referenceRangeText' },
                                                                     { header: 'Đánh giá', accessor: value => <span className={tabStyles[diagnosticFlagTone(value.flag)]}>{diagnosticResultFlagLabels[value.flag]}</span> },
+                                                                    { header: 'Lần trước', accessor: value => <>{formatDelta(value)}{value.isDeltaFailure && <> <Tag color="warning">Lệch delta</Tag></>}</> },
                                                                 ]} /></div>
                                                             ) : item.result ? (
                                                                 <div className={tabStyles.diagnosticResultText}>

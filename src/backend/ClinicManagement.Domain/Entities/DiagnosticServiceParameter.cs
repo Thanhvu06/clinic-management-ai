@@ -13,6 +13,9 @@ public class DiagnosticServiceParameter
     public decimal? RefHighFemale { get; set; }
     public decimal? CriticalLow { get; set; }
     public decimal? CriticalHigh { get; set; }
+    public decimal? DeltaAbsoluteLimit { get; set; }
+    public decimal? DeltaPercentLimit { get; set; }
+    public int? DeltaWindowDays { get; set; }
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
     public DiagnosticService DiagnosticService { get; set; } = null!;

@@ -32,6 +32,12 @@ export interface DiagnosticResultValueDto {
     referenceRangeText: string;
     flag: DiagnosticResultFlag;
     sortOrder: number;
+    previousValue?: number | null;
+    previousResultedAtUtc?: string | null;
+    previousOrderCode?: string | null;
+    deltaChange?: number | null;
+    deltaPercent?: number | null;
+    isDeltaFailure?: boolean;
 }
 
 export interface DiagnosticServiceDto {
@@ -127,6 +133,7 @@ export interface DiagnosticOrderDto {
     returnReason?: string | null;
     returnCount?: number;
     canCurrentUserVerify?: boolean;
+    hasDeltaFailure?: boolean;
     rowVersion?: string | null;
     items: DiagnosticOrderItemDto[];
 }

@@ -19,6 +19,11 @@ public class DiagnosticResultValueConfiguration : IEntityTypeConfiguration<Diagn
         builder.Property(v => v.RefHigh).HasPrecision(18, 4);
         builder.Property(v => v.CriticalLow).HasPrecision(18, 4);
         builder.Property(v => v.CriticalHigh).HasPrecision(18, 4);
+        builder.Property(v => v.PreviousNumericValue).HasPrecision(18, 4);
+        builder.Property(v => v.PreviousOrderCode).HasMaxLength(50);
+        builder.Property(v => v.DeltaChange).HasPrecision(18, 4);
+        builder.Property(v => v.DeltaPercent).HasPrecision(9, 2);
+        builder.Property(v => v.IsDeltaFailure).HasDefaultValue(false);
         builder.HasOne(v => v.DiagnosticResult).WithMany(r => r.Values)
             .HasForeignKey(v => v.DiagnosticResultId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(v => v.DiagnosticServiceParameter).WithMany()
