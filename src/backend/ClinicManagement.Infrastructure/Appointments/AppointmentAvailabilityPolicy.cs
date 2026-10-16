@@ -152,17 +152,21 @@ public class AppointmentAvailabilityPolicy : IAppointmentAvailabilityPolicy
             return SlotAvailabilityResult.Failure("DOCTOR_NOT_SCHEDULED", "Slot không nằm trong lịch làm việc hoạt động của bác sĩ.");
         }
 
-        // 7. Approved leave check
+        // 7. Approved or pending leave check
         var inLeave = await _dbContext.DoctorLeaveRequests
             .AsNoTracking()
-            .AnyAsync(l => l.DoctorId == targetDoctorId
-                        && l.Status == DoctorLeaveRequestStatus.Approved
+            .Where(l => l.DoctorId == targetDoctorId
+                        && (l.Status == DoctorLeaveRequestStatus.Approved || l.Status == DoctorLeaveRequestStatus.Pending)
                         && slotStart < l.EndDateTime
-                        && slotEnd > l.StartDateTime, cancellationToken);
+                        && slotEnd > l.StartDateTime)
+            .OrderByDescending(l => l.Status == DoctorLeaveRequestStatus.Approved)
+            .FirstOrDefaultAsync(cancellationToken);
 
-        if (inLeave)
+        if (inLeave != null)
         {
-            return SlotAvailabilityResult.Failure("DOCTOR_ON_LEAVE", "Bác sĩ đang trong lịch nghỉ đã được duyệt.");
+            return SlotAvailabilityResult.Failure("DOCTOR_ON_LEAVE", inLeave.Status == DoctorLeaveRequestStatus.Pending
+                ? "Bác sĩ có lịch nghỉ đang chờ duyệt trong khung giờ này."
+                : "Bác sĩ đang trong lịch nghỉ đã được duyệt.");
         }
 
         // 8. Patient overlapping appointment (if patient specified)
@@ -371,7 +375,7 @@ public class AppointmentAvailabilityPolicy : IAppointmentAvailabilityPolicy
         var leaves = await _dbContext.DoctorLeaveRequests
             .AsNoTracking()
             .Where(l => targetDoctorIds.Contains(l.DoctorId)
-                     && l.Status == DoctorLeaveRequestStatus.Approved
+                     && (l.Status == DoctorLeaveRequestStatus.Approved || l.Status == DoctorLeaveRequestStatus.Pending)
                      && l.StartDateTime <= toDateTime
                      && l.EndDateTime >= fromDateTime)
             .ToListAsync(cancellationToken);

@@ -184,12 +184,16 @@ public class ChangeRequestService : IChangeRequestService
                     throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Slot không nằm trong lịch làm việc hoạt động của bác sĩ.");
 
                 var onLeave = await _dbContext.DoctorLeaveRequests
-                    .AnyAsync(l => l.DoctorId == targetSlot.DoctorId
-                                && l.Status == DoctorLeaveRequestStatus.Approved
+                    .Where(l => l.DoctorId == targetSlot.DoctorId
+                                && (l.Status == DoctorLeaveRequestStatus.Approved || l.Status == DoctorLeaveRequestStatus.Pending)
                                 && l.StartDateTime < slotEnd
-                                && l.EndDateTime > slotStart);
-                if (onLeave)
-                    throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ có lịch nghỉ trong khung giờ này.");
+                                && l.EndDateTime > slotStart)
+                    .OrderByDescending(l => l.Status == DoctorLeaveRequestStatus.Approved)
+                    .FirstOrDefaultAsync();
+                if (onLeave != null)
+                    throw new BusinessException("DOCTOR_NOT_AVAILABLE", onLeave.Status == DoctorLeaveRequestStatus.Pending
+                        ? "Bác sĩ có lịch nghỉ đang chờ duyệt trong khung giờ này."
+                        : "Bác sĩ có lịch nghỉ trong khung giờ này.");
 
                 if (targetSlot.IsBooked)
                     throw new ConflictException("TARGET_SLOT_ALREADY_BOOKED", "Slot yêu cầu đã được đặt hoặc không khả dụng.");
@@ -702,12 +706,16 @@ public class ChangeRequestService : IChangeRequestService
                 throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Slot không nằm trong lịch làm việc hoạt động của bác sĩ.");
 
             var onLeave = await _dbContext.DoctorLeaveRequests
-                .AnyAsync(l => l.DoctorId == targetSlot.DoctorId
-                            && l.Status == DoctorLeaveRequestStatus.Approved
+                .Where(l => l.DoctorId == targetSlot.DoctorId
+                            && (l.Status == DoctorLeaveRequestStatus.Approved || l.Status == DoctorLeaveRequestStatus.Pending)
                             && l.StartDateTime < slotEnd
-                            && l.EndDateTime > slotStart);
-            if (onLeave)
-                throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ có lịch nghỉ trong khung giờ này.");
+                            && l.EndDateTime > slotStart)
+                .OrderByDescending(l => l.Status == DoctorLeaveRequestStatus.Approved)
+                .FirstOrDefaultAsync();
+            if (onLeave != null)
+                throw new BusinessException("DOCTOR_NOT_AVAILABLE", onLeave.Status == DoctorLeaveRequestStatus.Pending
+                    ? "Bác sĩ có lịch nghỉ đang chờ duyệt trong khung giờ này."
+                    : "Bác sĩ có lịch nghỉ trong khung giờ này.");
 
             var hasPatientConflict = await _dbContext.Appointments
                 .AnyAsync(a => a.PatientId == appointment.PatientId

@@ -183,14 +183,18 @@ public class RevisitService : IRevisitService
             if (!hasWorkSchedule)
                 throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Khung giờ không nằm trong lịch làm việc đang hoạt động của bác sĩ.");
 
-            var isOnApprovedLeave = await _dbContext.DoctorLeaveRequests
-                .AnyAsync(leave =>
+            var overlappingLeave = await _dbContext.DoctorLeaveRequests
+                .Where(leave =>
                     leave.DoctorId == doctor.Id &&
-                    leave.Status == DoctorLeaveRequestStatus.Approved &&
+                    (leave.Status == DoctorLeaveRequestStatus.Approved || leave.Status == DoctorLeaveRequestStatus.Pending) &&
                     slotStart < leave.EndDateTime &&
-                    slotEnd > leave.StartDateTime);
-            if (isOnApprovedLeave)
-                throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Bác sĩ đang trong lịch nghỉ đã được duyệt.");
+                    slotEnd > leave.StartDateTime)
+                .OrderByDescending(leave => leave.Status == DoctorLeaveRequestStatus.Approved)
+                .FirstOrDefaultAsync();
+            if (overlappingLeave != null)
+                throw new BusinessException("DOCTOR_NOT_AVAILABLE", overlappingLeave.Status == DoctorLeaveRequestStatus.Pending
+                    ? "Bác sĩ có lịch nghỉ đang chờ duyệt trong khung giờ này."
+                    : "Bác sĩ đang trong lịch nghỉ đã được duyệt.");
 
             var affectedRows = await _dbContext.AppointmentSlots
                 .Where(slot => slot.Id == targetSlot.Id && !slot.IsBooked)
