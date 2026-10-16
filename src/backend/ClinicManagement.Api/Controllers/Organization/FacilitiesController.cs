@@ -42,7 +42,7 @@ public class FacilitiesController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<IReadOnlyList<FacilityDto>>>> GetFacilities([FromQuery] bool includeInactive = false, CancellationToken cancellationToken = default)
     {
-        var facilities = await _organizationService.GetFacilitiesAsync(includeInactive, cancellationToken);
+        var facilities = await _organizationService.GetFacilitiesAsync(includeInactive && User.IsInRole(RoleNames.Admin), cancellationToken);
         return Ok(ApiResponse<IReadOnlyList<FacilityDto>>.Ok(facilities));
     }
 

@@ -125,6 +125,7 @@ public class SpecialtyService : ISpecialtyService
                                  d.ExperienceYears
                              }).AsNoTracking().ToListAsync();
 
+        days = Math.Clamp(days, 1, 31);
         var toDate = fromDate.AddDays(days - 1);
         var doctorIds = doctors.Select(d => d.Id).ToList();
 

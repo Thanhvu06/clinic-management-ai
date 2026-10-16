@@ -69,3 +69,11 @@
 .button1.button1 {
     min-height: 40px;
 }
+
+.statsError {
+    display: flex;
+    align-items: center;
+    gap: var(--cc-space-sm);
+    color: var(--cc-color-text-secondary);
+    font-size: 0.875rem;
+}

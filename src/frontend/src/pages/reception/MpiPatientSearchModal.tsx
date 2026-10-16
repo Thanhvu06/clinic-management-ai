@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, AlertTriangle, UserCheck, ShieldAlert, Phone, CreditCard } from 'lucide-react';
 import { Button, Input, List, Modal, Select } from 'antd';
-import { EmptyState, LoadingState } from '../../components/common';
+import { EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './MpiPatientSearchModal.module.css';
 import { mpiApi, type MpiPatientDto, type GenderType } from '../../api/mpiApi';
 
@@ -31,8 +31,16 @@ export const MpiPatientSearchModal: React.FC<MpiPatientSearchModalProps> = ({
     const [totalItems, setTotalItems] = useState(0);
     const [page, setPage] = useState(1);
     const [searched, setSearched] = useState(false);
+    const [searchedTerm, setSearchedTerm] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const lastSearch = useRef<Parameters<typeof mpiApi.searchPatients>[0] | null>(null);
+    const requestId = useRef(0);
 
     useEffect(() => {
+        ++requestId.current;
+        setLoading(false);
+        setError(null);
+        lastSearch.current = null;
         if (isOpen) {
             setSearchTerm('');
             setPatients([]);
@@ -43,43 +51,39 @@ export const MpiPatientSearchModal: React.FC<MpiPatientSearchModalProps> = ({
 
     if (!isOpen) return null;
 
-    const handleSearch = async (e?: React.FormEvent) => {
-        if (e) e.preventDefault();
-        if (!searchTerm.trim()) {
-            return;
-        }
-
+    const performSearch = async (params: Parameters<typeof mpiApi.searchPatients>[0]) => {
+        const currentRequest = ++requestId.current;
+        lastSearch.current = params;
         setLoading(true);
+        setError(null);
         setSearched(true);
+        setSearchedTerm(params?.searchTerm ?? params?.medicalRecordNumber ?? params?.phoneNumber ?? params?.nationalId ?? params?.bhytNumber ?? '');
         try {
-            const params: any = { page, pageSize: 10 };
-            if (searchType === 'all') {
-                params.searchTerm = searchTerm.trim();
-            } else if (searchType === 'mrn') {
-                params.medicalRecordNumber = searchTerm.trim();
-            } else if (searchType === 'phone') {
-                params.phoneNumber = searchTerm.trim();
-            } else if (searchType === 'nationalId') {
-                params.nationalId = searchTerm.trim();
-            } else if (searchType === 'bhyt') {
-                params.bhytNumber = searchTerm.trim();
-            }
-
             const res = await mpiApi.searchPatients(params);
-            if (res.success && res.data) {
-                setPatients(res.data.items);
-                setTotalItems(res.data.totalItems);
-            } else {
-                setPatients([]);
-                setTotalItems(0);
-            }
+            if (currentRequest !== requestId.current) return;
+            if (!res.success || !res.data) throw new Error('MPI lookup failed');
+            setPatients(res.data.items);
+            setTotalItems(res.data.totalItems);
         } catch (err) {
+            if (currentRequest !== requestId.current) return;
             console.error('Lỗi khi tra cứu bệnh nhân MPI:', err);
-            setPatients([]);
-            setTotalItems(0);
+            setError('Không thể tra cứu hồ sơ. Vui lòng thử lại trước khi tạo hồ sơ mới.');
         } finally {
-            setLoading(false);
+            if (currentRequest === requestId.current) setLoading(false);
         }
+    };
+
+    const handleSearch = (e?: React.FormEvent) => {
+        e?.preventDefault();
+        const term = searchTerm.trim();
+        if (!term) return;
+        const params: Parameters<typeof mpiApi.searchPatients>[0] = { page, pageSize: 10 };
+        if (searchType === 'all') params.searchTerm = term;
+        else if (searchType === 'mrn') params.medicalRecordNumber = term;
+        else if (searchType === 'phone') params.phoneNumber = term;
+        else if (searchType === 'nationalId') params.nationalId = term;
+        else params.bhytNumber = term;
+        void performSearch(params);
     };
 
     return (
@@ -107,10 +111,10 @@ export const MpiPatientSearchModal: React.FC<MpiPatientSearchModalProps> = ({
                 <Button htmlType="submit" type="primary" disabled={loading || !searchTerm.trim()}><Search size={18} />{loading ? 'Đang tìm...' : 'Tra cứu'}</Button>
             </form>
             <div className={styles.patientSearchResults}>
-                {loading ? <LoadingState message="Đang đối soát dữ liệu bệnh nhân toàn viện..." height="280px" /> : !searched ? (
+                {loading ? <LoadingState message="Đang đối soát dữ liệu bệnh nhân toàn viện..." height="280px" /> : error ? <InlineError message={error} onRetry={() => { if (lastSearch.current) void performSearch(lastSearch.current); }} /> : !searched ? (
                     <EmptyState icon={<Search size={44} strokeWidth={1.5} className={styles.emptySearchIcon} />} title="Chưa thực hiện tra cứu" description="Nhập mã bệnh án, CCCD hoặc thông tin bệnh nhân để kiểm tra danh mục MPI" />
                 ) : patients.length === 0 ? (
-                    <EmptyState icon={<AlertTriangle size={44} strokeWidth={1.5} className={styles.noResultsIcon} />} title="Không tìm thấy bệnh nhân nào" description={`Không có hồ sơ nào trùng khớp với từ khóa "${searchTerm}". Bạn có thể thực hiện tiếp nhận bệnh nhân mới.`} />
+                    <EmptyState icon={<AlertTriangle size={44} strokeWidth={1.5} className={styles.noResultsIcon} />} title="Không tìm thấy bệnh nhân nào" description={`Không có hồ sơ nào trùng khớp với từ khóa "${searchedTerm}". Bạn có thể thực hiện tiếp nhận bệnh nhân mới.`} />
                 ) : <>
                     <div className={styles.resultCount}>Tìm thấy <strong>{totalItems}</strong> hồ sơ trùng khớp:</div>
                     <List dataSource={patients} split={false} renderItem={p => (

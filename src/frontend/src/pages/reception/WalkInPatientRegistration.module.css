@@ -59,3 +59,20 @@
     .patientModeButtons :global(.ant-btn), .nextStepFooter :global(.ant-btn), .stepFooter :global(.ant-btn), .patientLookupForm :global(.ant-btn) { width: 100%; white-space: normal; height: auto; min-height: var(--cc-control-height); padding-top: var(--cc-space-xs); padding-bottom: var(--cc-space-xs); }
     .selectedPatientIdentity { align-items: flex-start; }
 }
+
+.loadError {
+    margin-top: var(--cc-space-sm);
+    font-size: 0.875rem;
+}
+
+.loadError :global(.ant-alert) {
+    padding: var(--cc-space-sm);
+}
+
+.loadHint {
+    color: var(--cc-color-text-secondary);
+}
+
+.nativeSelect[aria-invalid="true"] {
+    border-color: var(--cc-color-danger);
+}
