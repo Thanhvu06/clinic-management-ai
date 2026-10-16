@@ -1,3 +1,4 @@
+import { MedicineLink } from './MedicineLink';
 import { useState } from 'react';
 import { Card, Tag } from 'antd';
 import { Pill } from 'lucide-react';
@@ -13,9 +14,10 @@ interface MedicineCardProps {
         availability?: PublicMedicineDto['availability'];
     };
     publicView?: boolean;
+    to?: string;
 }
 
-export function MedicineCard({ medicine, publicView = false }: MedicineCardProps) {
+export function MedicineCard({ medicine, publicView = false, to }: MedicineCardProps) {
     const [failedImage, setFailedImage] = useState<string | null>(null);
     const image = medicine.imageUrl ? medicineImageUrl(medicine.imageUrl) : null;
     const stock = medicine.stockQuantity ?? 0;
@@ -24,7 +26,7 @@ export function MedicineCard({ medicine, publicView = false }: MedicineCardProps
     const stockLabel = availability === 'out_of_stock' ? 'Hết hàng' : availability === 'low' ? 'Sắp hết' : 'Còn hàng';
     const stockColor = availability === 'out_of_stock' ? 'error' : availability === 'low' ? 'warning' : 'success';
 
-    return (
+    const card = (
         <Card className={styles.card}>
             <div className={styles.imageArea}>
                 {image && failedImage !== image ? (
@@ -50,4 +52,5 @@ export function MedicineCard({ medicine, publicView = false }: MedicineCardProps
             </div>
         </Card>
     );
+    return to ? <MedicineLink className={styles.link} to={to} aria-label={`Xem chi tiết ${medicine.name}`}>{card}</MedicineLink> : card;
 }

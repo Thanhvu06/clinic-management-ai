@@ -168,6 +168,12 @@ public class MedicineService : IMedicineService
         if (dto.SuppliedFields.Contains(nameof(dto.IsPrescriptionRequired))) medicine.IsPrescriptionRequired = dto.IsPrescriptionRequired;
         if (dto.SuppliedFields.Contains(nameof(dto.Description))) medicine.Description = dto.Description;
         if (dto.SuppliedFields.Contains(nameof(dto.StorageInstructions))) medicine.StorageInstructions = dto.StorageInstructions;
+        if (dto.SuppliedFields.Contains(nameof(dto.Indications))) medicine.Indications = dto.Indications;
+        if (dto.SuppliedFields.Contains(nameof(dto.DosageAndAdministration))) medicine.DosageAndAdministration = dto.DosageAndAdministration;
+        if (dto.SuppliedFields.Contains(nameof(dto.Contraindications))) medicine.Contraindications = dto.Contraindications;
+        if (dto.SuppliedFields.Contains(nameof(dto.SideEffects))) medicine.SideEffects = dto.SideEffects;
+        if (dto.SuppliedFields.Contains(nameof(dto.Precautions))) medicine.Precautions = dto.Precautions;
+        if (dto.SuppliedFields.Contains(nameof(dto.OverdoseManagement))) medicine.OverdoseManagement = dto.OverdoseManagement;
         // Image paths are storage-owned: changing them requires the image endpoints.
         if (dto.SuppliedFields.Contains(nameof(dto.ImagePath)) && dto.ImagePath != medicine.ImagePath)
             throw new BusinessException("IMAGE_UPLOAD_REQUIRED", "Vui lòng dùng chức năng tải lên hoặc xóa ảnh thuốc.");

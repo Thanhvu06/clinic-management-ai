@@ -7,6 +7,7 @@ namespace ClinicManagement.Application.Medicines.DTOs;
 public class MedicineCatalogInput
 {
     private string? _activeIngredient, _strength, _dosageForm, _manufacturer, _description, _storageInstructions, _imagePath;
+    private string? _indications, _dosageAndAdministration, _contraindications, _sideEffects, _precautions, _overdoseManagement;
     private long? _categoryId;
     private bool _isPrescriptionRequired = true;
     [JsonIgnore] public HashSet<string> SuppliedFields { get; } = new();
@@ -14,6 +15,12 @@ public class MedicineCatalogInput
     [StringLength(100)] public string? Strength { get => _strength; set { _strength = value; SuppliedFields.Add(nameof(Strength)); } }
     [StringLength(100)] public string? DosageForm { get => _dosageForm; set { _dosageForm = value; SuppliedFields.Add(nameof(DosageForm)); } }
     [StringLength(200)] public string? Manufacturer { get => _manufacturer; set { _manufacturer = value; SuppliedFields.Add(nameof(Manufacturer)); } }
+    [StringLength(2000)] public string? Indications { get => _indications; set { _indications = value; SuppliedFields.Add(nameof(Indications)); } }
+    [StringLength(2000)] public string? DosageAndAdministration { get => _dosageAndAdministration; set { _dosageAndAdministration = value; SuppliedFields.Add(nameof(DosageAndAdministration)); } }
+    [StringLength(2000)] public string? Contraindications { get => _contraindications; set { _contraindications = value; SuppliedFields.Add(nameof(Contraindications)); } }
+    [StringLength(2000)] public string? SideEffects { get => _sideEffects; set { _sideEffects = value; SuppliedFields.Add(nameof(SideEffects)); } }
+    [StringLength(2000)] public string? Precautions { get => _precautions; set { _precautions = value; SuppliedFields.Add(nameof(Precautions)); } }
+    [StringLength(1000)] public string? OverdoseManagement { get => _overdoseManagement; set { _overdoseManagement = value; SuppliedFields.Add(nameof(OverdoseManagement)); } }
     public long? CategoryId { get => _categoryId; set { _categoryId = value; SuppliedFields.Add(nameof(CategoryId)); } }
     public bool IsPrescriptionRequired { get => _isPrescriptionRequired; set { _isPrescriptionRequired = value; SuppliedFields.Add(nameof(IsPrescriptionRequired)); } }
     [StringLength(1000)] public string? Description { get => _description; set { _description = value; SuppliedFields.Add(nameof(Description)); } }
@@ -54,7 +61,17 @@ public class PublicMedicineDto
     public string? ImageUrl { get; set; }
     public string? Description { get; set; }
     public string? StorageInstructions { get; set; }
+    public string? Indications { get; set; }
+    public string? DosageAndAdministration { get; set; }
+    public string? Contraindications { get; set; }
+    public string? SideEffects { get; set; }
+    public string? Precautions { get; set; }
+    public string? OverdoseManagement { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<PublicMedicineInteractionDto>? Interactions { get; set; }
     public string Availability { get; set; } = string.Empty;
 }
+
+public record PublicMedicineInteractionDto(string OtherIngredient, string Severity, string Description, string Recommendation);
 
 public record PublicMedicineCategoryDto(long Id, string Name, string? Description, int SortOrder);

@@ -62,8 +62,9 @@ public class MedicineCatalogLegacySeedTests
                 var assembly = db.GetService<IMigrationsAssembly>();
                 var entry = Assert.Single(assembly.Migrations, m => m.Key.EndsWith("_AddMedicineCatalogData"));
                 var migration = assembly.CreateMigration(entry.Value, db.Database.ProviderName!);
-                var commands = db.GetService<IMigrationsSqlGenerator>().Generate(migration.UpOperations, db.GetService<IDesignTimeModel>().Model);
+                var commands = db.GetService<IMigrationsSqlGenerator>().Generate(migration.UpOperations, SqliteLegacyMigrationHelper.CatalogModelBeforeLaterColumns(db, entry.Key));
                 foreach (var command in commands) await db.Database.ExecuteSqlRawAsync(command.CommandText);
+                await SqliteLegacyMigrationHelper.ApplyLaterMedicineColumnsAsync(db, entry.Key);
             }
 
             var legacy = await db.Medicines.AsNoTracking().OrderBy(m => m.Code).ToListAsync();

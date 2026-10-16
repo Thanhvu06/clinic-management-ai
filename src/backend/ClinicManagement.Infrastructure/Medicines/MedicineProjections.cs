@@ -14,6 +14,12 @@ internal static class MedicineProjections
         Strength = m.Strength, DosageForm = m.DosageForm, Manufacturer = m.Manufacturer,
         CategoryId = m.CategoryId, CategoryName = m.Category == null ? null : m.Category.Name,
         IsPrescriptionRequired = m.IsPrescriptionRequired, Description = m.Description,
+        Indications = m.Indications,
+        DosageAndAdministration = m.DosageAndAdministration,
+        Contraindications = m.Contraindications,
+        SideEffects = m.SideEffects,
+        Precautions = m.Precautions,
+        OverdoseManagement = m.OverdoseManagement,
         StorageInstructions = m.StorageInstructions, ImagePath = m.ImagePath,
         ImageUrl = m.ImagePath == null ? null : "/media/medicines/" + m.ImagePath
     };
@@ -24,6 +30,12 @@ internal static class MedicineProjections
         ActiveIngredient = m.ActiveIngredient, Strength = m.Strength, DosageForm = m.DosageForm,
         CategoryName = m.Category == null ? null : m.Category.Name,
         IsPrescriptionRequired = m.IsPrescriptionRequired, Description = m.Description,
+        Indications = m.Indications,
+        DosageAndAdministration = m.DosageAndAdministration,
+        Contraindications = m.Contraindications,
+        SideEffects = m.SideEffects,
+        Precautions = m.Precautions,
+        OverdoseManagement = m.OverdoseManagement,
         StorageInstructions = m.StorageInstructions,
         ImageUrl = m.ImagePath == null ? null : "/media/medicines/" + m.ImagePath,
         Availability = m.StockQuantity <= 0 ? "out_of_stock" : m.StockQuantity <= m.ReorderLevel ? "low" : "in_stock"

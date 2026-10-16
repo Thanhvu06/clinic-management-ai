@@ -7,6 +7,7 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { AdminDashboard, ForbiddenPage, NotFoundPage } from './pages/Dashboards';
 import { PublicLanding } from './pages/public/PublicLanding';
+import { MedicineDetail } from './pages/public/MedicineDetail';
 import { MedicinePrices } from './pages/public/MedicinePrices';
 import { SpecialtiesList } from './pages/public/SpecialtiesList';
 import { SpecialtyDetail } from './pages/public/SpecialtyDetail';
@@ -80,6 +81,7 @@ function App() {
                             <Route element={<PublicLayout />}>
                                 <Route path="/" element={<PublicLanding />} />
                                 <Route path="/medicines" element={<MedicinePrices />} />
+                                <Route path="/medicines/:id" element={<MedicineDetail />} />
                                 <Route path="/specialties" element={<SpecialtiesList />} />
                                 <Route path="/specialties/:id" element={<SpecialtyDetail />} />
                                 <Route path="/doctors" element={<DoctorsList />} />

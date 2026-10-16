@@ -53,7 +53,13 @@ export const AdminMedicines: React.FC = () => {
         activeIngredient: modal.data.activeIngredient || null, strength: modal.data.strength || null,
         dosageForm: modal.data.dosageForm || null, manufacturer: modal.data.manufacturer || null,
         categoryId: modal.data.categoryId ?? null, isPrescriptionRequired: modal.data.isPrescriptionRequired ?? true,
-        description: modal.data.description || null, storageInstructions: modal.data.storageInstructions || null
+        description: modal.data.description || null, storageInstructions: modal.data.storageInstructions || null,
+        indications: modal.data.indications || null,
+        dosageAndAdministration: modal.data.dosageAndAdministration || null,
+        contraindications: modal.data.contraindications || null,
+        sideEffects: modal.data.sideEffects || null,
+        precautions: modal.data.precautions || null,
+        overdoseManagement: modal.data.overdoseManagement || null,
     });
     const finishSave = async (id: number, message: string) => {
         // Retain the saved id when image upload fails so retry cannot create a duplicate.
@@ -197,7 +203,7 @@ export const AdminMedicines: React.FC = () => {
                         { header: 'Trạng thái', accessor: medicine => <StatusBadge status={medicine.isActive ? 'Approved' : 'Rejected'} label={medicine.isActive ? 'Đang dùng' : 'Tạm ngưng'} /> },
                         { header: 'Thao tác', align: 'right', accessor: medicine => <div className={styles.medicineRowActions}>
                             <Button size="small" icon={<Edit size={14} />} title="Chỉnh sửa" onClick={() => openModal({ ...medicine }, true)}>Sửa</Button>
-                            <Button size="small" title={medicine.isActive ? 'Ngưng sử dụng' : 'Mở lại'} loading={togglingId === medicine.id} disabled={togglingId !== null} onClick={() => handleToggleStatus(medicine.id)}>{medicine.isActive ? 'Khóa' : 'Mở'}</Button>
+                            <Button size="small" title={medicine.isActive ? 'Ngưng sử dụng' : 'Mở lại'} disabled={togglingId !== null} onClick={() => handleToggleStatus(medicine.id)}>{togglingId === medicine.id ? 'Đang cập nhật...' : medicine.isActive ? 'Khóa' : 'Mở'}</Button>
                         </div> }
                     ]} />
                     <Pagination page={page} totalPages={Math.ceil(totalItems / 10)} totalRecords={totalItems} onPageChange={setPage} />
@@ -223,6 +229,16 @@ export const AdminMedicines: React.FC = () => {
                     ] as const).map(([field, label, maxLength]) => <Form.Item key={field} label={label} htmlFor={`medicine-${field}`}>
                         <Input id={`medicine-${field}`} maxLength={maxLength} value={modal.data[field] ?? ''} onChange={e => setModal({ ...modal, data: { ...modal.data, [field]: e.target.value } })} />
                     </Form.Item>)}
+                    {([
+                        ['indications', 'Chỉ định', 2000],
+                        ['dosageAndAdministration', 'Liều dùng và cách dùng', 2000],
+                        ['contraindications', 'Chống chỉ định', 2000],
+                        ['sideEffects', 'Tác dụng không mong muốn', 2000],
+                        ['precautions', 'Thận trọng', 2000],
+                        ['overdoseManagement', 'Quá liều và xử trí', 1000]
+                    ] as const).map(([field, label, maxLength]) => <Form.Item key={field} label={label} htmlFor={`medicine-${field}`}>
+                        <Input.TextArea id={`medicine-${field}`} rows={3} maxLength={maxLength} showCount value={modal.data[field] ?? ''} onChange={e => setModal({ ...modal, data: { ...modal.data, [field]: e.target.value } })} />
+                    </Form.Item>)}
                     <Form.Item label="Nhóm thuốc" htmlFor="medicineCategory">
                         <select id="medicineCategory" className={styles.medicineCategorySelect} disabled={modalBusy} value={modal.data.categoryId ?? ''} onChange={e => setModal({ ...modal, data: { ...modal.data, categoryId: e.target.value ? Number(e.target.value) : null } })}>
                             <option value="">Không có nhóm</option>{categories.filter(c => c.isActive).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -231,7 +247,7 @@ export const AdminMedicines: React.FC = () => {
                     <Form.Item><Checkbox checked={modal.data.isPrescriptionRequired ?? true} onChange={e => setModal({ ...modal, data: { ...modal.data, isPrescriptionRequired: e.target.checked } })}>Thuốc kê đơn</Checkbox></Form.Item>
                     <Form.Item label="Ảnh thuốc" htmlFor="medicineImage"><input id="medicineImage" className={styles.medicineImageInput} type="file" accept="image/jpeg,image/png,image/webp" disabled={modalBusy} onChange={e => setSelectedImage(e.target.files?.[0] ?? null)} /></Form.Item>
                     {(imagePreview || modal.data.imageUrl) && <img className={styles.medicineImagePreview} src={imagePreview ?? medicineImageUrl(modal.data.imageUrl!)} alt="Xem trước ảnh thuốc" />}
-                    {modal.data.imageUrl && <Button className={styles.medicineImageDelete} disabled={modalBusy} loading={imageDeleting} onClick={deleteImage}>Xóa ảnh</Button>}
+                    {modal.data.imageUrl && <Button className={styles.medicineImageDelete} disabled={modalBusy} onClick={deleteImage}>{imageDeleting ? 'Đang xóa ảnh...' : 'Xóa ảnh'}</Button>}
                     <Form.Item><Checkbox checked={modal.data.isActive ?? true} onChange={e => setModal({ ...modal, data: { ...modal.data, isActive: e.target.checked } })}>Kích hoạt cho phép kê đơn & cấp phát thuốc này</Checkbox></Form.Item>
                     <div className={styles.medicineFormActions}><Button disabled={modalBusy} onClick={closeModal}>Hủy</Button><Button type="primary" htmlType="submit" disabled={formLoading || imageDeleting}>{formLoading ? 'Đang lưu...' : (modal.isEdit ? 'Lưu thay đổi' : 'Thêm thuốc')}</Button></div>
                 </Form>

@@ -68,8 +68,9 @@ public class MedicineCatalogPersistenceTests
             """);
         if (legacyData)
             await db.Database.ExecuteSqlRawAsync("INSERT INTO Medicines (Code,Name,Unit,StockQuantity,ReorderLevel,UnitPrice,CreatedAt) VALUES ('OLD','Old medicine','Viên',17,5,'2345','2026-10-01');");
-        var commands = db.GetService<IMigrationsSqlGenerator>().Generate(migration.UpOperations, db.GetService<IDesignTimeModel>().Model);
+        var commands = db.GetService<IMigrationsSqlGenerator>().Generate(migration.UpOperations, SqliteLegacyMigrationHelper.CatalogModelBeforeLaterColumns(db, entry.Key));
         foreach (var command in commands) await db.Database.ExecuteSqlRawAsync(command.CommandText);
+        await SqliteLegacyMigrationHelper.ApplyLaterMedicineColumnsAsync(db, entry.Key);
         if (legacyData)
         {
             var old = await db.Medicines.SingleAsync();

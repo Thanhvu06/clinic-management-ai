@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Col, Input, Pagination, Row, Select } from 'antd';
+import { Input, Pagination, Select } from 'antd';
 import { medicineApi } from '../../api/medicineApi';
 import type { MedicinePage, PublicMedicineCategoryDto, PublicMedicineDto } from '../../types';
 import { MedicineCard } from '../../components/medicines/MedicineCard';
 import { EmptyState, InlineError, LoadingState } from '../../components/common';
-import { spacing } from '../../theme/tokens';
 import styles from './MedicinePrices.module.css';
 
 export function MedicinePrices() {
@@ -76,11 +75,11 @@ export function MedicinePrices() {
                 <EmptyState title="Chưa tìm thấy thuốc phù hợp" description="Bạn thử đổi từ khóa hoặc bộ lọc nhé." />
             ) : (
                 <>
-                    <Row gutter={[spacing.md, spacing.md]}>
+                    <div className={styles.medicineGrid}>
                         {result.data.items.map(medicine => (
-                            <Col key={medicine.id} xs={24} sm={12} lg={6}><MedicineCard medicine={medicine} publicView /></Col>
+                            <MedicineCard key={medicine.id} medicine={medicine} publicView to={`/medicines/${medicine.id}`} />
                         ))}
-                    </Row>
+                    </div>
                     <div className={styles.pagination}>
                         <Pagination current={page} pageSize={12} total={result.data.totalItems}
                             showSizeChanger={false} onChange={setPage} />

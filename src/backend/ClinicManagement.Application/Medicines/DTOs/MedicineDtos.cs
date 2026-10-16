@@ -24,6 +24,12 @@ public class MedicineDto
     public bool IsPrescriptionRequired { get; set; }
     public string? Description { get; set; }
     public string? StorageInstructions { get; set; }
+    public string? Indications { get; set; }
+    public string? DosageAndAdministration { get; set; }
+    public string? Contraindications { get; set; }
+    public string? SideEffects { get; set; }
+    public string? Precautions { get; set; }
+    public string? OverdoseManagement { get; set; }
     public string? ImagePath { get; set; }
     public string? ImageUrl { get; set; }
 }
