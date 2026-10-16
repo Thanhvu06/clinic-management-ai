@@ -317,6 +317,79 @@ public class PrescriptionSafetyTests(CustomWebApplicationFactory factory) : ICla
         Assert.Equal("PRESCRIPTION_SAFETY_OVERRIDE_REQUIRED", (await JsonAsync(response)).GetProperty("errorCode").GetString());
     }
 
+    [Theory]
+    [InlineData(false, "Penicillin G")]
+    [InlineData(true, "Penicillin G")]
+    [InlineData(false, "kháng sinh nhóm penicillin")]
+    [InlineData(true, "kháng sinh nhóm penicillin")]
+    public async Task FreeTextPenicillinAllergiesProduceDangerAndCrossAllergyWarning(bool isVisit, string allergen)
+    {
+        var f = await SeedAsync(isVisit, "Amoxicillin", "Cefixime");
+        await AllergyAsync(f, allergen);
+        var safety = await CheckAsync(f);
+        var direct = Assert.Single(safety.Warnings, w => w.Type == "Allergy");
+        Assert.Equal("Danger", direct.Level);
+        Assert.Equal(new[] { f.MedicineIds[0] }, direct.MedicineIds);
+        var cross = Assert.Single(safety.Warnings, w => w.Type == "CrossAllergy");
+        Assert.Equal("Warning", cross.Level);
+        Assert.Equal(new[] { f.MedicineIds[1] }, cross.MedicineIds);
+        Assert.DoesNotContain(safety.Warnings, w => w.Level == "Danger" && w.MedicineIds.Contains(f.MedicineIds[1]));
+    }
+
+    [Theory]
+    [InlineData("dị ứng ibuprofen", "Ibuprofen", AllergenType.Drug, true)]
+    [InlineData("Nhóm NSAID", "Ibuprofen", AllergenType.Drug, true)]
+    [InlineData("dị ứng Thuốc chống viêm không steroid", "Ibuprofen", AllergenType.Drug, true)]
+    [InlineData("di ung thuoc chong viem khong steroid", "Ibuprofen", AllergenType.Drug, true)]
+    [InlineData("sulfa", "Amoxicillin", AllergenType.Drug, false)]
+    [InlineData("ibu", "Ibuprofen", AllergenType.Drug, false)]
+    [InlineData("dị ứng ibu", "Ibuprofen", AllergenType.Drug, false)]
+    [InlineData("thực phẩm chứa penicillin", "Amoxicillin", AllergenType.Food, false)]
+    [InlineData("thực phẩm chứa penicillin", "Cefixime", AllergenType.Food, false)]
+    [InlineData("dị ứng ibuprofenx", "Ibuprofen", AllergenType.Drug, false)]
+    [InlineData("nhóm xpenicillin", "Amoxicillin", AllergenType.Drug, false)]
+    [InlineData("nhóm penicillins", "Cefixime", AllergenType.Drug, false)]
+    [InlineData("dị ứng calci carbonat", "Calci carbonat", AllergenType.Drug, true)]
+    [InlineData("dị ứng calci carbonatx", "Calci carbonat", AllergenType.Drug, false)]
+    [InlineData("dị ứng urea", "Urea", AllergenType.Drug, true)]
+    public async Task FreeTextAllergiesMatchWholeIngredientsAndClassesOnlyForDrugAllergies(string allergen, string ingredient, AllergenType type, bool danger)
+    {
+        var f = await SeedAsync(false, ingredient);
+        await AllergyAsync(f, allergen, type);
+        var safety = await CheckAsync(f);
+        Assert.Single(safety.Allergies);
+        if (danger)
+        {
+            var warning = Assert.Single(safety.Warnings);
+            Assert.Equal("Allergy", warning.Type);
+            Assert.Equal("Danger", warning.Level);
+            Assert.Equal(f.MedicineIds, warning.MedicineIds);
+        }
+        else Assert.Empty(safety.Warnings);
+    }
+
+    [Theory]
+    [InlineData("dị ứng ibu", "ibu", "short-key", "Short class")]
+    [InlineData("nhóm abc", "short ingredient", "abc", "Short class")]
+    [InlineData("nhóm abc", "short ingredient", "short-key", "Abc")]
+    public async Task FreeTextAllergiesIgnoreIngredientAndClassKeysShorterThanFourCharacters(string allergen, string ingredient, string classKey, string className)
+    {
+        var relatedKey = "related-" + Guid.NewGuid().ToString("N");
+        var relatedIngredient = "related " + Guid.NewGuid().ToString("N");
+        var f = await SeedAsync(false, ingredient, relatedIngredient);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.DrugClassMembers.AddRange(
+                new DrugClassMember { ClassKey = classKey, ClassName = className, IngredientKey = ingredient },
+                new DrugClassMember { ClassKey = relatedKey, ClassName = "Short related class", IngredientKey = relatedIngredient });
+            db.DrugAllergyCrossReactions.Add(new DrugAllergyCrossReaction { AllergenClassKey = classKey, RelatedClassKey = relatedKey, Note = "Short key regression" });
+            await db.SaveChangesAsync();
+        }
+        await AllergyAsync(f, allergen);
+        Assert.Empty((await CheckAsync(f)).Warnings);
+    }
+
     private sealed class QueryCounter : DbCommandInterceptor
     {
         public int Count { get; private set; }

@@ -52,10 +52,11 @@ public class PrescriptionSafetyService(AppDbContext db) : IPrescriptionSafetySer
             foreach (var allergy in drugAllergies.Where(a => a.Key.Length > 0))
             {
                 var recorded = string.Join("; ", allergy.Select(a => $"{a.AllergenName} — mức độ {SeverityLabel(a.Severity)}, phản ứng: {a.ReactionDescription ?? "chưa ghi nhận"}").Distinct());
-                if (medicine.Ingredients.Any(i => IngredientNormalizer.MatchesKey(i, allergy.Key)) ||
-                    classes.Any(c => allergy.Key == c.ClassKey || allergy.Key == IngredientNormalizer.NormalizeKey(c.ClassName)))
+                if (medicine.Ingredients.Any(i => IngredientNormalizer.MatchesKey(i, allergy.Key) ||
+                        (i.Length >= 4 && IngredientNormalizer.ContainsKeyAsWord(allergy.Key, i))) ||
+                    classes.Any(c => MatchesAllergyClass(allergy.Key, c.ClassKey, c.ClassName)))
                     Add("Danger", "Allergy", new[] { medicine.Id }, "Dị ứng thuốc đã ghi nhận", $"{medicine.Name}: {recorded}.", allergy.Key);
-                var allergicClassKeys = members.Where(c => allergy.Key == c.ClassKey || allergy.Key == IngredientNormalizer.NormalizeKey(c.ClassName))
+                var allergicClassKeys = members.Where(c => MatchesAllergyClass(allergy.Key, c.ClassKey, c.ClassName))
                     .Select(c => c.ClassKey).Distinct().ToHashSet(StringComparer.Ordinal);
                 foreach (var cross in crossReactions.Where(c => allergicClassKeys.Contains(c.AllergenClassKey) && classes.Any(m => m.ClassKey == c.RelatedClassKey)))
                     Add("Warning", "CrossAllergy", new[] { medicine.Id }, "Nguy cơ dị ứng chéo", $"{medicine.Name}: {cross.Note} Dị ứng đã ghi nhận: {recorded}.", $"{cross.AllergenClassKey}|{cross.RelatedClassKey}");
@@ -83,6 +84,14 @@ public class PrescriptionSafetyService(AppDbContext db) : IPrescriptionSafetySer
         result.Warnings = result.Warnings.OrderBy(w => w.Level == "Danger" ? 0 : w.Level == "Warning" ? 1 : 2)
             .ThenBy(w => w.MedicineIds[0]).ThenBy(w => w.Type, StringComparer.Ordinal).ThenBy(w => w.Detail, StringComparer.Ordinal).ToList();
         return result;
+    }
+
+    private static bool MatchesAllergyClass(string allergenKey, string classKey, string className)
+    {
+        var classNameKey = IngredientNormalizer.NormalizeKey(className);
+        return allergenKey == classKey || allergenKey == classNameKey ||
+            (classKey.Length >= 4 && IngredientNormalizer.ContainsKeyAsWord(allergenKey, classKey)) ||
+            (classNameKey.Length >= 4 && IngredientNormalizer.ContainsKeyAsWord(allergenKey, classNameKey));
     }
 
     private static bool Has(Medicine medicine, string key) => medicine.Ingredients.Any(i => IngredientNormalizer.MatchesKey(i, key));
