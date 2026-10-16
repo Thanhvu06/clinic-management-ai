@@ -71,7 +71,7 @@ export const PackageRegistration: React.FC = () => {
         if (!preferredDate) errors.preferredDate = 'Vui lòng chọn ngày khám mong muốn.';
         else if (preferredDate < tomorrowStr) errors.preferredDate = 'Ngày khám mong muốn phải từ ngày mai trở đi.';
         if (!contactPhone.trim()) errors.contactPhone = 'Vui lòng nhập số điện thoại liên hệ.';
-        else if (!/^[0-9]{10,11}$/.test(contactPhone.replace(/\s+/g, ''))) errors.contactPhone = 'Số điện thoại không hợp lệ (cần 10-11 chữ số).';
+        else if (!/^0[35789][0-9]{8}$/.test(contactPhone.replace(/\s+/g, ''))) errors.contactPhone = 'Số điện thoại không hợp lệ (10 chữ số, bắt đầu bằng 03/05/07/08/09).';
         setFieldErrors(errors);
         return Object.keys(errors).length === 0;
     };

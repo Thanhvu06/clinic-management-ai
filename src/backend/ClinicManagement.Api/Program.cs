@@ -1,3 +1,5 @@
+using ClinicManagement.Application.Common.Models;
+using Microsoft.AspNetCore.Mvc;
 using ClinicManagement.Api.Middlewares;
 using ClinicManagement.Api;
 using ClinicManagement.Application.Authentication.Interfaces;
@@ -284,7 +286,24 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddScoped<ClinicManagement.Infrastructure.Medicines.MedicineCatalogService>();
 builder.Services.AddSingleton<MedicineImageStorage>();
 builder.Services.AddSingleton<ClinicManagement.Application.Diagnostics.Interfaces.IDiagnosticAttachmentStorage, DiagnosticAttachmentStorage>();
-builder.Services.AddControllers();
+builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var errors = context.ModelState
+            .Where(entry => entry.Value?.Errors.Count > 0)
+            .ToDictionary(entry => entry.Key, entry => entry.Value!.Errors
+                .Select(error => string.IsNullOrWhiteSpace(error.ErrorMessage) ? "Giá trị không hợp lệ." : error.ErrorMessage)
+                .ToArray());
+        return new BadRequestObjectResult(new ApiErrorResponse
+        {
+            Success = false,
+            ErrorCode = "VALIDATION_ERROR",
+            Message = errors.Values.SelectMany(messages => messages).FirstOrDefault() ?? "Dữ liệu không hợp lệ.",
+            Errors = errors
+        });
+    };
+});
 builder.Services.AddOpenApi();
 builder.Services.AddCors();
 

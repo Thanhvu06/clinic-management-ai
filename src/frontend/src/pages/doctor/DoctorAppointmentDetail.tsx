@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Button, Card, Flex } from 'antd';
 import {
@@ -7,46 +7,84 @@ import {
 } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
 import type { PatientClinicalContextDto } from '../../types';
-import { useDialog } from '../../contexts/DialogContext';
-import { LoadingState, StatusBadge, DataTable } from '../../components/common';
+import { LoadingState, StatusBadge, DataTable, InlineError, EmptyState } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import styles from './DoctorAppointmentDetail.module.css';
 import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
+import { formatDateOnly } from '../../utils/formatters';
+
+interface AppointmentHistory {
+    id: number;
+    action: string;
+    oldStatus?: string | null;
+    newStatus?: string | null;
+    note?: string | null;
+    createdAt: string;
+}
+
+const actionLabels: Readonly<Record<string, string>> = {
+    Created: 'Tạo mới', StatusChanged: 'Cập nhật trạng thái', Cancelled: 'Hủy lịch',
+    Rescheduled: 'Đổi lịch', Confirmed: 'Xác nhận', Completed: 'Hoàn thành',
+    NoShow: 'Đánh dấu vắng', RescheduleRequested: 'Yêu cầu đổi lịch', CancelRequested: 'Yêu cầu hủy'
+};
+
+const statusClass = (status: string) => {
+    if (status === 'Cancelled' || status === 'NoShow') return styles.statusDanger;
+    if (status.startsWith('Pending')) return styles.statusWarning;
+    if (status === 'Completed') return styles.statusSuccess;
+    return styles.statusActive;
+};
 
 export const DoctorAppointmentDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const appointmentId = Number(id);
     const navigate = useNavigate();
-    const { showAlert } = useDialog();
 
     const [context, setContext] = useState<PatientClinicalContextDto | null>(null);
-    const [histories, setHistories] = useState<any[]>([]);
+    const [histories, setHistories] = useState<AppointmentHistory[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [notFound, setNotFound] = useState(false);
+    const requestId = useRef(0);
 
     const loadData = useCallback(async () => {
         if (!appointmentId) return;
+        const currentRequest = ++requestId.current;
         setLoading(true);
+        setLoadError(null);
+        setNotFound(false);
         try {
             const [ctxRes, histRes] = await Promise.all([
                 doctorApi.getPatientClinicalContext(appointmentId),
                 doctorApi.getAppointmentHistory(appointmentId)
             ]);
 
-            if (ctxRes.success && ctxRes.data) {
-                setContext(ctxRes.data);
+            if (currentRequest !== requestId.current) return;
+            if (!ctxRes.success || !histRes.success) {
+                setContext(null);
+                setNotFound(true);
+                return;
             }
-            if (histRes.success && histRes.data) {
-                setHistories(histRes.data);
+            if (!ctxRes.data || !histRes.data) throw new Error('Không thể tải chi tiết hồ sơ bệnh án.');
+            setContext(ctxRes.data);
+            setHistories(histRes.data);
+        } catch (err: unknown) {
+            if (currentRequest !== requestId.current) return;
+            const error = err as { message?: string; status?: number; response?: { status?: number } };
+            if ((error.status ?? error.response?.status) === 404) {
+                setContext(null);
+                setNotFound(true);
+            } else {
+                setLoadError(error.message || 'Không thể tải chi tiết hồ sơ bệnh án.');
             }
-        } catch (err: any) {
-            showAlert(err.response?.data?.message || 'Không thể tải chi tiết hồ sơ bệnh án.', 'Lỗi', 'error');
         } finally {
-            setLoading(false);
+            if (currentRequest === requestId.current) setLoading(false);
         }
-    }, [appointmentId, showAlert]);
+    }, [appointmentId]);
 
     useEffect(() => {
-        loadData();
+        void loadData();
+        return () => { ++requestId.current; };
     }, [loadData]);
 
     const handlePrint = () => {
@@ -57,7 +95,11 @@ export const DoctorAppointmentDetail: React.FC = () => {
         return <LoadingState message="Đang tải chi tiết hồ sơ..." height="240px" />;
     }
 
-    if (!context) {
+    if (loadError) {
+        return <InlineError message={loadError} onRetry={loadData} />;
+    }
+
+    if (notFound) {
         return (
             <Card className={styles.notFoundCard}>
                 <AlertCircle size={40} className={styles.icon1} />
@@ -69,6 +111,8 @@ export const DoctorAppointmentDetail: React.FC = () => {
             </Card>
         );
     }
+
+    if (!context) return null;
 
     const { currentAppointment: apt, encounter, vitalSigns, prescription } = context;
     const prescriptionItems = prescription?.items ?? [];
@@ -110,7 +154,7 @@ export const DoctorAppointmentDetail: React.FC = () => {
                 </Flex>
             </Flex>
 
-            <Card className={styles.spotlightCard}>
+            <Card className={`${styles.spotlightCard} ${statusClass(apt.status)}`}>
                 <Flex justify="space-between" align="flex-start" wrap gap="small">
                     <div>
                         <Flex align="center" gap={10}>
@@ -119,10 +163,13 @@ export const DoctorAppointmentDetail: React.FC = () => {
                             <StatusBadge status={apt.status} label={getAppointmentStatusLabel(apt.status)} />
                         </Flex>
                         <div className={styles.metaRow}>
-                            <span>{context.patientGender === 'Male' ? 'Nam' : context.patientGender === 'Female' ? 'Nữ' : 'Khác'} {context.patientDob ? `• ${context.patientDob}` : ''}</span>
+                            <span>{context.patientGender === 'Male' ? 'Nam' : context.patientGender === 'Female' ? 'Nữ' : 'Khác'} {context.patientDob ? `• ${formatDateOnly(context.patientDob)}` : ''}</span>
                             <span>SĐT: {context.patientPhone}</span>
-                            <span>Ngày khám: {apt.appointmentDate} ({apt.startTime.substring(0, 5)} - {apt.endTime.substring(0, 5)})</span>
+                            {apt.specialtyName && <span>Chuyên khoa: {apt.specialtyName}</span>}
+                            {context.address && <span>Địa chỉ: {context.address}</span>}
+                            <span>Ngày khám: {formatDateOnly(apt.appointmentDate)} ({apt.startTime.substring(0, 5)} - {apt.endTime.substring(0, 5)})</span>
                         </div>
+                        {apt.reason && <p className={styles.appointmentReason}><strong>Lý do khám:</strong> {apt.reason}</p>}
                     </div>
                 </Flex>
             </Card>
@@ -260,20 +307,44 @@ export const DoctorAppointmentDetail: React.FC = () => {
                 </Card>
             )}
 
+            <Card className={styles.sectionCard}>
+                <div className={styles.sectionTitleRow}>
+                    <History size={20} className={styles.sectionIcon} />
+                    <h2 className={styles.sectionTitle}>Lần khám trước ({context.totalPastVisits})</h2>
+                </div>
+                {context.pastVisits.length === 0 ? <EmptyState title="Chưa có lần khám trước." /> : (
+                    <div className={styles.pastVisits}>
+                        {context.pastVisits.map(visit => (
+                            <article key={visit.appointmentId} className={styles.pastVisit}>
+                                <Link to={`/doctor/appointments/${visit.appointmentId}`} className={styles.visitLink}>
+                                    {formatDateOnly(visit.date)} · {visit.appointmentCode}
+                                </Link>
+                                <div className={styles.metaRow}>
+                                    <span>Bác sĩ: {visit.doctorName}</span><span>Chuyên khoa: {visit.specialtyName}</span>
+                                </div>
+                                <p><strong>Chẩn đoán:</strong> {visit.diagnosis || 'Chưa ghi nhận'}</p>
+                                <p><strong>Thuốc:</strong> {visit.prescriptionItemNames.length > 0 ? visit.prescriptionItemNames.join(', ') : 'Chưa ghi nhận'}</p>
+                            </article>
+                        ))}
+                    </div>
+                )}
+            </Card>
+
             {histories.length > 0 && (
-                <Card>
-                    <Flex align="center" gap={8} className={styles.spacing2}>
-                        <History size={18} className={styles.icon5} />
-                        <h3 className={styles.heading1}>
+                <Card className={styles.sectionCard}>
+                    <Flex align="center" gap={8} className={styles.sectionTitleRow}>
+                        <History size={20} className={styles.icon5} />
+                        <h2 className={styles.sectionTitle}>
                             Nhật ký điều phối & Thao tác
-                        </h3>
+                        </h2>
                     </Flex>
 
                     <div className={styles.historyList}>
                         {histories.map(h => (
                             <div key={h.id} className={styles.historyRow}>
                                 <div>
-                                    <span className={styles.historyAction}>{h.action}</span>
+                                    <span className={styles.historyAction}>{Object.hasOwn(actionLabels, h.action) ? actionLabels[h.action] : h.action}</span>
+                                    {(h.oldStatus || h.newStatus) && <div className={styles.historyTransition}>Từ {h.oldStatus ? getAppointmentStatusLabel(h.oldStatus) : '—'} → {h.newStatus ? getAppointmentStatusLabel(h.newStatus) : '—'}</div>}
                                     {h.note && <span className={styles.historyNote}>— {h.note}</span>}
                                 </div>
                                 <div className={styles.historyDate}>

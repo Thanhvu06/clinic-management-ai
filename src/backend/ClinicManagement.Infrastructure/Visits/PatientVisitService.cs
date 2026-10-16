@@ -43,6 +43,17 @@ public class PatientVisitService : IPatientVisitService
 
     private Guid GetUserId() => _currentUserService.UserId ?? Guid.Empty;
 
+    private async Task EnsureDoctorNotOnApprovedLeaveAsync(long doctorId, CancellationToken cancellationToken)
+    {
+        var vietnamNow = _dateTimeProvider.VietnamNow;
+        var onLeave = await _dbContext.DoctorLeaveRequests.AsNoTracking()
+            .AnyAsync(leave => leave.DoctorId == doctorId
+                && leave.Status == DoctorLeaveRequestStatus.Approved
+                && leave.StartDateTime <= vietnamNow && leave.EndDateTime > vietnamNow, cancellationToken);
+        if (onLeave)
+            throw new BusinessException("DOCTOR_ON_LEAVE", "Bác sĩ đang trong lịch nghỉ đã được duyệt, vui lòng chọn bác sĩ khác.");
+    }
+
     private static string ComputePayloadHash(ReceptionIntakeRequest request)
     {
         var normalized = new
@@ -180,6 +191,7 @@ public class PatientVisitService : IPatientVisitService
             if (doctor == null)
                 throw new NotFoundException("Bác sĩ được chỉ định không tồn tại hoặc không hoạt động.");
             await ValidateDoctorFacilityAssignmentAsync(doctor, request.FacilityId, cancellationToken);
+            await EnsureDoctorNotOnApprovedLeaveAsync(doctor.Id, cancellationToken);
         }
 
         // Verify Room
@@ -566,6 +578,8 @@ public class PatientVisitService : IPatientVisitService
         {
             throw new BusinessException("FACILITY_SCOPE_DENIED", "Bác sĩ được phân công không thuộc cơ sở của lịch hẹn.");
         }
+
+        await EnsureDoctorNotOnApprovedLeaveAsync(assignedDoctorId, cancellationToken);
 
         var queueNumber = await GetNextQueueNumberAsync(facilityId, department.Id, appointment.AppointmentDate, cancellationToken);
         var now = _dateTimeProvider.UtcNow;

@@ -12,7 +12,7 @@ public class CreatePackageRegistrationRequest
     public DateOnly PreferredDate { get; set; }
 
     [Required(ErrorMessage = "Vui lòng nhập số điện thoại liên hệ.")]
-    [RegularExpression(@"^(0|\+84)[3|5|7|8|9][0-9]{8}$", ErrorMessage = "Số điện thoại không hợp lệ (định dạng Việt Nam 10 chữ số).")]
+    [RegularExpression(@"^(0|\+84)[35789][0-9]{8}$", ErrorMessage = "Số điện thoại không hợp lệ (định dạng Việt Nam 10 chữ số).")]
     public string ContactPhone { get; set; } = string.Empty;
 
     [MaxLength(1000, ErrorMessage = "Ghi chú không được vượt quá 1000 ký tự.")]

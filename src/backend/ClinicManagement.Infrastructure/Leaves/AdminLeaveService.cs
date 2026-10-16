@@ -123,11 +123,14 @@ public class AdminLeaveService : IAdminLeaveService
                 var start = a.AppointmentDate.ToDateTime(a.StartTime);
                 var end = a.AppointmentDate.ToDateTime(a.EndTime);
                 return start < leave.EndDateTime && end > leave.StartDateTime;
-            }).Any();
+            }).OrderBy(a => a.AppointmentCode).ToList();
 
-            if (strictlyAffected)
+            if (strictlyAffected.Count > 0)
             {
-                throw new BusinessException("LEAVE_HAS_AFFECTED_APPOINTMENTS", "Lịch nghỉ trùng với các lịch hẹn chưa hoàn thành. Cần giải quyết lịch hẹn trước khi duyệt.");
+                var codes = string.Join(", ", strictlyAffected.Take(10).Select(a => a.AppointmentCode));
+                var remaining = strictlyAffected.Count > 10 ? $" và {strictlyAffected.Count - 10} lịch khác" : string.Empty;
+                throw new BusinessException("LEAVE_HAS_AFFECTED_APPOINTMENTS",
+                    $"Lịch nghỉ trùng với các lịch hẹn chưa hoàn thành: {codes}{remaining}. Cần giải quyết lịch hẹn trước khi duyệt.");
             }
 
             leave.Status = DoctorLeaveRequestStatus.Approved;
