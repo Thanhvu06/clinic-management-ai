@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button, Card, Input, Select } from 'antd';
@@ -265,7 +266,7 @@ export const ReceptionWorkspace: React.FC = () => {
                 showAlert('Lỗi tiếp nhận', res.message || 'Không thể tiếp nhận ca khám.', 'error');
             }
         } catch (err: any) {
-            showAlert('Lỗi tiếp nhận', err.response?.data?.message || 'Không thể tiếp nhận ca khám.', 'error');
+            showAlert('Lỗi tiếp nhận', getApiErrorMessage(err, 'Không thể tiếp nhận ca khám.'), 'error');
         } finally {
             setActionLoadingId(null);
         }

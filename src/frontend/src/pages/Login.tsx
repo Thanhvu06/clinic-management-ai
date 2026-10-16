@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../utils/apiError';
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
@@ -47,10 +48,8 @@ export const Login: React.FC = () => {
             let errorMsg = 'Đăng nhập thất bại. Vui lòng kiểm tra lại email/SĐT và mật khẩu.';
             if (err === 'Network Error' || err?.message === 'Network Error') {
                 errorMsg = 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';
-            } else if (err?.response?.data?.message) {
-                errorMsg = err.response.data.message;
-            } else if (err?.message) {
-                errorMsg = err.message;
+            } else {
+                errorMsg = getApiErrorMessage(err, errorMsg);
             }
             setErrorMessage(errorMsg);
         } finally {

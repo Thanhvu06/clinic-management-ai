@@ -1,4 +1,5 @@
-import { toLocalDateString } from '../../utils/formatters';
+import { getApiErrorMessage } from '../../utils/apiError';
+import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Card, DatePicker, Flex, Form, Input, Modal } from 'antd';
 import {
@@ -50,7 +51,7 @@ export const DoctorSchedule: React.FC = () => {
                 setScheduleDays(res.data);
             }
         } catch (err: any) {
-            setLoadError(err.response?.data?.message || err.message || 'Không thể tải lịch trực của bác sĩ.');
+            setLoadError(getApiErrorMessage(err, 'Không thể tải lịch trực của bác sĩ.'));
         } finally {
             setLoading(false);
         }
@@ -134,7 +135,7 @@ export const DoctorSchedule: React.FC = () => {
                 await loadSchedule();
             }
         } catch (err: any) {
-            showAlert(err.response?.data?.message || 'Không thể gửi đơn xin nghỉ phép.', 'Lỗi', 'error');
+            showAlert(getApiErrorMessage(err, 'Không thể gửi đơn xin nghỉ phép.'), 'Lỗi', 'error');
         } finally {
             setSubmittingLeave(false);
         }
@@ -188,7 +189,7 @@ export const DoctorSchedule: React.FC = () => {
                             <Flex justify="space-between" align="center" className={styles.dayHeader}>
                                 <div>
                                     <span className={styles.dayName}>{day.dayOfWeekName}</span>
-                                    <span className={styles.dayDate}>({day.date})</span>
+                                    <span className={styles.dayDate}>({formatDateOnly(day.date)})</span>
                                 </div>
                                 <span className={day.shifts.length > 0 ? styles.shiftCountActive : styles.shiftCountIdle}>
                                     {day.shifts.length > 0 ? `${day.shifts.length} ca trực` : 'Nghỉ trực'}
@@ -291,7 +292,7 @@ export const DoctorSchedule: React.FC = () => {
                                     <ul className={styles.spacing1}>
                                         {leavePreview.affectedAppointments.map(a => (
                                             <li key={a.id}>
-                                                {a.appointmentDate} ({a.startTime.substring(0, 5)} - {a.endTime.substring(0, 5)}): {a.patientName} ({a.patientPhone})
+                                                {formatDateOnly(a.appointmentDate)} ({a.startTime.substring(0, 5)} - {a.endTime.substring(0, 5)}): {a.patientName} ({a.patientPhone})
                                             </li>
                                         ))}
                                     </ul>

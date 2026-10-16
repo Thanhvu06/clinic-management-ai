@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../utils/apiError';
 import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useRef } from "react";
 import { Alert, Avatar, Button, Card, Descriptions, Empty, Form, Input, Result, Spin, Steps, Tag } from 'antd';
@@ -782,7 +783,7 @@ export const BookAppointment: React.FC = () => {
                 writePersistedBookingAttempt(uncertainRecord);
             }
 
-            let msg = apiErr?.response?.data?.message || apiErr?.message || "Có lỗi xảy ra khi đặt lịch.";
+            let msg = getApiErrorMessage(apiErr, "Có lỗi xảy ra khi đặt lịch.");
             if (errorCode === "SLOT_ALREADY_BOOKED") {
                 msg = "Khung giờ này vừa được đặt bởi người khác. Vui lòng chọn giờ khác.";
                 setPageSlotId("");

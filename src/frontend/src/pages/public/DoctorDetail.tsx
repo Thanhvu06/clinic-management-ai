@@ -1,3 +1,5 @@
+import { formatDateOnly } from '../../utils/formatters';
+import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { User, Calendar, Stethoscope, Award, CheckCircle2, Clock, CalendarDays } from 'lucide-react';
@@ -59,7 +61,7 @@ export const DoctorDetail: React.FC = () => {
                     }
                 }
             } catch (err: any) {
-                setError(err.response?.data?.message || 'Không thể tải thông tin bác sĩ.');
+                setError(getApiErrorMessage(err, 'Không thể tải thông tin bác sĩ.'));
             } finally {
                 setLoading(false);
             }
@@ -201,7 +203,7 @@ export const DoctorDetail: React.FC = () => {
                                     <div className={styles.surface2}>
                                         <div className={styles.flexLayout7}>
                                             <span className={styles.text5}>
-                                                Khung giờ ngày {selectedDayData.date} ({selectedDayData.dayOfWeek}):
+                                                Khung giờ ngày {formatDateOnly(selectedDayData.date)} ({selectedDayData.dayOfWeek}):
                                             </span>
                                             {selectedDayData.scheduleBlocks && selectedDayData.scheduleBlocks.length > 0 && (
                                                 <span className={styles.text6}>

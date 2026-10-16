@@ -1,4 +1,5 @@
-import { toLocalDateString } from '../../utils/formatters';
+import { getApiErrorMessage } from '../../utils/apiError';
+import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
 import { PrescriptionSafetyPanel } from '../../components/prescriptions/PrescriptionSafetyPanel';
 import { usePrescriptionSafety } from '../../hooks/usePrescriptionSafety';
@@ -295,7 +296,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             }
         } catch (err: any) {
             if (activeIdRef.current === targetId && isMountedRef.current) {
-                showAlert(err.response?.data?.message || 'Không thể tải hồ sơ khám lâm sàng của bệnh nhân.', 'Lỗi', 'error');
+                showAlert(getApiErrorMessage(err, 'Không thể tải hồ sơ khám lâm sàng của bệnh nhân.'), 'Lỗi', 'error');
             }
         } finally {
             if (activeIdRef.current === targetId && isMountedRef.current) {
@@ -430,7 +431,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 showAlert('Hồ sơ khám đã được chỉnh sửa bởi phiên khác. Đang tải lại dữ liệu mới nhất...', 'Xung đột dữ liệu', 'warning');
                 await loadContext();
             } else {
-                showAlert(err.response?.data?.message || 'Không thể lưu diễn tiến khám.', 'Lỗi', 'error');
+                showAlert(getApiErrorMessage(err, 'Không thể lưu diễn tiến khám.'), 'Lỗi', 'error');
             }
         } finally {
             setSavingEncounter(false);
@@ -471,7 +472,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 showAlert('Dấu hiệu sinh tồn đã bị thay đổi bởi phiên làm việc khác. Đang tải lại...', 'Xung đột dữ liệu', 'warning');
                 await loadContext();
             } else {
-                showAlert(err.response?.data?.message || 'Không thể lưu dấu hiệu sinh tồn.', 'Lỗi', 'error');
+                showAlert(getApiErrorMessage(err, 'Không thể lưu dấu hiệu sinh tồn.'), 'Lỗi', 'error');
             }
         } finally {
             setSavingVitals(false);
@@ -514,7 +515,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 await loadDiagnosticOrders();
             }
         } catch (err: any) {
-            showAlert(err.response?.data?.message || 'Không thể tạo phiếu chỉ định cận lâm sàng.', 'Lỗi', 'error');
+            showAlert(getApiErrorMessage(err, 'Không thể tạo phiếu chỉ định cận lâm sàng.'), 'Lỗi', 'error');
         } finally {
             setCreatingOrder(false);
         }
@@ -529,7 +530,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 await loadDiagnosticOrders();
             }
         } catch (err: any) {
-            showAlert(err.response?.data?.message || 'Không thể xác nhận kết quả.', 'Lỗi', 'error');
+            showAlert(getApiErrorMessage(err, 'Không thể xác nhận kết quả.'), 'Lỗi', 'error');
         } finally {
             setActionOrderId(null);
         }
@@ -544,7 +545,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 await loadDiagnosticOrders();
             }
         } catch (err: any) {
-            showAlert(err.response?.data?.message || 'Không thể hủy phiếu chỉ định.', 'Lỗi', 'error');
+            showAlert(getApiErrorMessage(err, 'Không thể hủy phiếu chỉ định.'), 'Lỗi', 'error');
         } finally {
             setActionOrderId(null);
         }
@@ -578,7 +579,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 showAlert('Đơn thuốc đã bị thay đổi bởi phiên khác. Đang làm mới...', 'Xung đột dữ liệu', 'warning');
                 await loadContext();
             } else {
-                showAlert(err.response?.data?.message || 'Không thể lưu đơn thuốc.', 'Lỗi', 'error');
+                showAlert(getApiErrorMessage(err, 'Không thể lưu đơn thuốc.'), 'Lỗi', 'error');
             }
         } finally {
             setSavingPrescription(false);
@@ -750,10 +751,10 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 showAlert('Hồ sơ bệnh án đã bị sửa đổi đồng thời bởi một phiên khác. Vui lòng tải lại và kiểm tra.', 'Xung đột dữ liệu', 'error');
                 await loadContext();
             } else if (err.response?.data?.errorCode === 'PENDING_DIAGNOSTIC_RESULTS' || err.response?.data?.errorCode === 'UNREVIEWED_DIAGNOSTIC_RESULTS') {
-                showAlert(err.response?.data?.message || 'Chưa thể kết thúc ca khám do chưa hoàn tất quy trình cận lâm sàng.', 'Chặn hoàn tất khám', 'warning');
+                showAlert(getApiErrorMessage(err, 'Chưa thể kết thúc ca khám do chưa hoàn tất quy trình cận lâm sàng.'), 'Chặn hoàn tất khám', 'warning');
                 setActiveTab('diagnostics');
             } else {
-                showAlert(err.response?.data?.message || 'Không thể hoàn tất ca khám.', 'Lỗi', 'error');
+                showAlert(getApiErrorMessage(err, 'Không thể hoàn tất ca khám.'), 'Lỗi', 'error');
             }
         } finally {
             setCompleting(false);
@@ -782,7 +783,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 setIsRevisitModalOpen(false);
             }
         } catch (err: any) {
-            showAlert(err.response?.data?.message || 'Không thể tạo đề xuất tái khám.', 'Lỗi', 'error');
+            showAlert(getApiErrorMessage(err, 'Không thể tạo đề xuất tái khám.'), 'Lỗi', 'error');
         } finally {
             setSavingRevisit(false);
         }
@@ -1955,7 +1956,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             <div className={tabStyles.historyVisitHeader}>
                                                 <div>
                                                     <span className={tabStyles.historyVisitDate}>
-                                                        Ngày: {visit.date}
+                                                        Ngày: {formatDateOnly(visit.date)}
                                                     </span>
                                                     <span className={tabStyles.historyDoctorName}>
                                                         Mã: #{visit.appointmentCode}

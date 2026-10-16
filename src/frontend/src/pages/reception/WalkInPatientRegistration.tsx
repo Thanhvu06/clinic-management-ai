@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, Card, Col, Input, Row, Select } from 'antd';
@@ -362,7 +363,7 @@ export const WalkInPatientRegistration: React.FC = () => {
             }
         } catch (err: any) {
             console.error('Lỗi khi tiếp nhận bệnh nhân:', err);
-            showAlert('Lỗi tiếp nhận', err.response?.data?.message || 'Không thể hoàn tất tiếp nhận lượt khám.', 'error');
+            showAlert('Lỗi tiếp nhận', getApiErrorMessage(err, 'Không thể hoàn tất tiếp nhận lượt khám.'), 'error');
         } finally {
             setSubmitting(false);
         }

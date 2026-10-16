@@ -1,3 +1,4 @@
+import { formatDateOnly } from '../utils/formatters';
 import React, { useState } from 'react';
 import { Search, Calendar, Clock, User, Stethoscope, AlertCircle, X, CheckCircle, Clock4, XCircle } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
@@ -186,7 +187,7 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
                                             <div className={styles.gridLayout1}>
                                                 <div className={styles.flexLayout10}>
                                                     <Calendar size={16} color="var(--cc-color-info)" />
-                                                    <span>Ngày khám: <strong>{item.appointmentDate}</strong></span>
+                                                    <span>Ngày khám: <strong>{formatDateOnly(item.appointmentDate)}</strong></span>
                                                 </div>
                                                 <div className={styles.flexLayout10}>
                                                     <Clock size={16} color="var(--cc-color-info)" />
