@@ -22,4 +22,12 @@ public static class IngredientNormalizer
 
     public static bool MatchesKey(string ingredient, string key) => key.Length > 0 &&
         (ingredient == key || ingredient.StartsWith(key + " ", StringComparison.Ordinal));
+
+    public static bool ContainsKeyAsWord(string? text, string? key)
+    {
+        var normalizedText = NormalizeKey(text);
+        var normalizedKey = NormalizeKey(key);
+        return normalizedKey.Length > 0 &&
+            (" " + normalizedText + " ").Contains(" " + normalizedKey + " ", StringComparison.Ordinal);
+    }
 }
