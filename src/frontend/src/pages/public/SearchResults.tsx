@@ -5,6 +5,7 @@ import axiosClient from '../../api/axiosClient';
 import { formatVndCurrency } from '../../utils/formatters';
 import { formatDoctorName } from '../../utils/doctorNameHelper';
 import styles from './PublicPages.module.css';
+import { InlineError } from '../../components/common';
 
 export const SearchResults: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -16,33 +17,42 @@ export const SearchResults: React.FC = () => {
     const [doctors, setDoctors] = useState<any[]>([]);
     const [packages, setPackages] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [reload, setReload] = useState(0);
 
     useEffect(() => {
         setInputValue(query);
     }, [query]);
 
     useEffect(() => {
+        let active = true;
         const fetchAllData = async () => {
             try {
                 setLoading(true);
+                setError(null);
                 const [specRes, docRes, pkgRes] = await Promise.all([
                     axiosClient.get<any, any>('/specialties'),
                     axiosClient.get<any, any>('/doctors'),
-                    axiosClient.get<any, any>('/health-packages').catch(() => ({ success: false, data: [] }))
+                    axiosClient.get<any, any>('/health-packages')
                 ]);
 
+                if (!active) return;
+                if ([specRes, docRes, pkgRes].some(res => !res.success || !res.data)) throw new Error('Search index load failed');
                 if (specRes.success) setSpecialties(specRes.data || []);
                 if (docRes.success) setDoctors(docRes.data || []);
                 if (pkgRes.success) setPackages(pkgRes.data || []);
             } catch (err) {
+                if (!active) return;
                 console.error("Failed to load search index data", err);
+                setError('Không thể tải dữ liệu tìm kiếm. Vui lòng thử lại.');
             } finally {
-                setLoading(false);
+                if (active) setLoading(false);
             }
         };
 
         fetchAllData();
-    }, []);
+        return () => { active = false; };
+    }, [reload]);
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -135,7 +145,7 @@ export const SearchResults: React.FC = () => {
                         <div key={i} className={styles.skeletonCard} />
                     ))}
                 </div>
-            ) : totalMatches === 0 ? (
+            ) : error ? <InlineError message={error} onRetry={() => setReload(value => value + 1)} /> : totalMatches === 0 ? (
                 <div className={styles.emptyState}>
                     <Search size={48} className={styles.icon1} />
                     <div className={styles.emptyStateTitle}>Không tìm thấy kết quả phù hợp</div>

@@ -40,6 +40,9 @@ export const ReceptionBilling: React.FC = () => {
 
     // Data states
     const [invoices, setInvoices] = useState<InvoiceDto[]>([]);
+    const [kpiError, setKpiError] = useState(false);
+    const [kpiLoading, setKpiLoading] = useState(false);
+    const [unbilledError, setUnbilledError] = useState<string | null>(null);
     const [kpi, setKpi] = useState<BillingKpiDto | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [totalItems, setTotalItems] = useState<number>(0);
@@ -169,13 +172,20 @@ export const ReceptionBilling: React.FC = () => {
     };
 
     const fetchKpi = async () => {
+        setKpiLoading(true);
         try {
             const res = await billingApi.reception.getTodayKpi();
+            if (!res.success || !res.data) throw new Error('KPI load failed');
+            setKpiError(false);
             if (res.success && res.data) {
                 setKpi(res.data);
             }
         } catch (err) {
             console.error('Lỗi khi tải KPI:', err);
+            setKpi(null);
+            setKpiError(true);
+        } finally {
+            setKpiLoading(false);
         }
     };
 
@@ -209,8 +219,10 @@ export const ReceptionBilling: React.FC = () => {
 
     const fetchUnbilledVisits = async (targetPage = unbilledPage) => {
         setUnbilledLoading(true);
+        setUnbilledError(null);
         try {
             const res = await billingApi.reception.getUnbilledVisits(undefined, targetPage, unbilledPageSize);
+            if (!res.success || !res.data) throw new Error('Unbilled visits load failed');
             if (res.success && res.data) {
                 if (Array.isArray(res.data)) {
                     setUnbilledVisits(res.data);
@@ -227,6 +239,7 @@ export const ReceptionBilling: React.FC = () => {
             }
         } catch (err) {
             console.error('Lỗi khi tải danh sách lượt khám chưa thu:', err);
+            setUnbilledError('Không thể tải hàng đợi ca khám. Vui lòng thử lại.');
         } finally {
             setUnbilledLoading(false);
         }
@@ -559,11 +572,12 @@ export const ReceptionBilling: React.FC = () => {
         <div className={styles.container}>
             <PageHeader title="Quản lý Hóa đơn & Thu ngân" subtitle="Thu tiền tại quầy và theo dõi hóa đơn của phòng khám" badge={<Receipt size={28} className={styles.primaryIcon} />} actions={<><Button onClick={handleRefresh} title="Làm mới dữ liệu" icon={<RefreshCw size={15} />}>Làm mới</Button><Button type="primary" onClick={handleOpenCreateModal} icon={<Plus size={16} />}>Lập hóa đơn mới</Button></>} />
             <div className={styles.kpiGrid}>
-                <StatCard title="Chờ thanh toán" value={kpi ? kpi.todayUnpaidInvoices : 0} icon={<Clock size={24} />} color="warning" />
-                <StatCard title="Đã thu hôm nay" value={kpi ? kpi.todayPaidInvoices : 0} icon={<CheckCircle size={24} />} color="success" />
-                <StatCard title="Đã hủy hôm nay" value={kpi ? kpi.todayCancelledInvoices : 0} icon={<XCircle size={24} />} color="danger" />
-                <StatCard title="Thực thu hôm nay" value={kpi ? formatCurrency(kpi.todayRevenue) : '0 ₫'} icon={<DollarSign size={24} />} color="info" />
+                <StatCard title="Chờ thanh toán" value={kpiError ? '—' : kpi ? kpi.todayUnpaidInvoices : 0} icon={<Clock size={24} />} color="warning" />
+                <StatCard title="Đã thu hôm nay" value={kpiError ? '—' : kpi ? kpi.todayPaidInvoices : 0} icon={<CheckCircle size={24} />} color="success" />
+                <StatCard title="Đã hủy hôm nay" value={kpiError ? '—' : kpi ? kpi.todayCancelledInvoices : 0} icon={<XCircle size={24} />} color="danger" />
+                <StatCard title="Thực thu hôm nay" value={kpiError ? '—' : kpi ? formatCurrency(kpi.todayRevenue) : '0 ₫'} icon={<DollarSign size={24} />} color="info" />
             </div>
+            {kpiError && <div className={styles.statsError}><span>Không tải được số liệu</span><Button size="small" disabled={kpiLoading} onClick={fetchKpi}>{kpiLoading ? 'Đang tải...' : 'Thử lại'}</Button></div>}
             <div className={styles.tabs}><Button type={billingTab === 'invoices' ? 'primary' : 'default'} onClick={() => setBillingTab('invoices')} icon={<Receipt size={16} />}>Danh sách Hóa đơn ({totalItems})</Button><Button type={billingTab === 'unbilled' ? 'primary' : 'default'} onClick={() => setBillingTab('unbilled')} icon={<Clock size={16} />}>Hàng đợi chờ lập hóa đơn ({unbilledTotalCount})</Button></div>
             {billingTab === 'invoices' ? <>
                 <form onSubmit={handleSearch} className={styles.filterForm}>
@@ -576,8 +590,8 @@ export const ReceptionBilling: React.FC = () => {
                 <div className={styles.tableCard}>{loading ? <LoadingState message="Đang tải danh sách hóa đơn..." /> : <div className={styles.tableScroll}><DataTable columns={invoiceColumns} data={invoices} keyExtractor={inv => inv.id} emptyText="Không tìm thấy hóa đơn nào phù hợp với bộ lọc." /></div>}
                     {totalItems > pageSize && <div className={styles.pagination}><span className={styles.pageInfo}>Hiển thị trang {page} / {totalPages} (Tổng {totalItems} hóa đơn)</span><div className={styles.paginationActions}><Button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Trang trước</Button><Button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
                 </div>
-            </> : <div className={styles.tableCard}><div className={styles.queueHeader}><div><h3 className={styles.queueTitle}>Hàng đợi ca khám có chi phí chờ lập hóa đơn ({unbilledTotalCount})</h3><div className={styles.secondaryText}>Bao gồm công khám, cận lâm sàng chỉ định và đơn thuốc đã xác nhận mua</div></div><Button onClick={() => fetchUnbilledVisits(unbilledPage)} disabled={unbilledLoading} icon={<RefreshCw size={14} className={unbilledLoading ? styles.spin : ''} />}>Làm mới hàng đợi</Button></div>
-                {unbilledLoading ? <LoadingState message="Đang tải hàng đợi ca khám..." /> : <><div className={styles.tableScroll}><DataTable columns={unbilledColumns} data={unbilledVisits} keyExtractor={v => v.visitId} emptyText="Hiện không có lượt khám nào chờ lập hóa đơn." /></div>{unbilledTotalPages > 1 && <div className={styles.pagination}><Button disabled={unbilledPage <= 1 || unbilledLoading} onClick={() => { const prev = unbilledPage - 1; setUnbilledPage(prev); fetchUnbilledVisits(prev); }}>Trang trước</Button><span className={styles.pageInfo}>Trang {unbilledPage} / {unbilledTotalPages} (Tổng {unbilledTotalCount} ca khám)</span><Button disabled={unbilledPage >= unbilledTotalPages || unbilledLoading} onClick={() => { const next = unbilledPage + 1; setUnbilledPage(next); fetchUnbilledVisits(next); }}>Trang sau</Button></div>}</>}
+            </> : <div className={styles.tableCard}><div className={styles.queueHeader}><div><h3 className={styles.queueTitle}>Hàng đợi ca khám có chi phí chờ lập hóa đơn ({unbilledTotalCount})</h3><div className={styles.secondaryText}>Bao gồm công khám, cận lâm sàng chỉ định và đơn thuốc đã xác nhận mua</div></div><Button onClick={() => fetchUnbilledVisits(unbilledPage)} disabled={unbilledLoading} icon={<RefreshCw size={14} className={unbilledLoading ? styles.spin : ''} />}>{unbilledLoading ? 'Đang tải...' : 'Làm mới hàng đợi'}</Button></div>
+                {unbilledLoading ? <LoadingState message="Đang tải hàng đợi ca khám..." /> : unbilledError ? <InlineError message={unbilledError} onRetry={() => fetchUnbilledVisits()} /> : <><div className={styles.tableScroll}><DataTable columns={unbilledColumns} data={unbilledVisits} keyExtractor={v => v.visitId} emptyText="Hiện không có lượt khám nào chờ lập hóa đơn." /></div>{unbilledTotalPages > 1 && <div className={styles.pagination}><Button disabled={unbilledPage <= 1 || unbilledLoading} onClick={() => { const prev = unbilledPage - 1; setUnbilledPage(prev); fetchUnbilledVisits(prev); }}>Trang trước</Button><span className={styles.pageInfo}>Trang {unbilledPage} / {unbilledTotalPages} (Tổng {unbilledTotalCount} ca khám)</span><Button disabled={unbilledPage >= unbilledTotalPages || unbilledLoading} onClick={() => { const next = unbilledPage + 1; setUnbilledPage(next); fetchUnbilledVisits(next); }}>Trang sau</Button></div>}</>}
             </div>}
             {createModalOpen && <Modal open width={520} className={styles.formModal} onCancel={() => setCreateModalOpen(false)} title="Lập hóa đơn mới" footer={<><Button onClick={() => setCreateModalOpen(false)}>Hủy bỏ</Button><Button type="primary" htmlType="submit" form="reception-create-invoice" disabled={creatingInvoice || invoiceSourcesLoading || !!invoiceSourcesError || !invoiceSourceOptions.some(option => option.value === referenceId)}>{creatingInvoice ? 'Đang lập hóa đơn...' : 'Tạo hóa đơn'}</Button></>}>
                 <form id="reception-create-invoice" onSubmit={handleCreateInvoice} className={styles.modalForm}>

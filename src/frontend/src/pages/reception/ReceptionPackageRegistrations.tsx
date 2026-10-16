@@ -34,6 +34,7 @@ interface PackageRegistrationItem {
 export const ReceptionPackageRegistrations: React.FC = () => {
     const [registrations, setRegistrations] = useState<PackageRegistrationItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [totalItems, setTotalItems] = useState(0);
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState('');
@@ -49,6 +50,7 @@ export const ReceptionPackageRegistrations: React.FC = () => {
 
     const fetchRegistrations = async () => {
         setLoading(true);
+        setLoadError(null);
         try {
             const params = new URLSearchParams({
                 page: page.toString(),
@@ -58,12 +60,14 @@ export const ReceptionPackageRegistrations: React.FC = () => {
             if (statusFilter) params.append('status', statusFilter);
 
             const res = await axiosClient.get<any, ApiResponse<any>>(`/reception/health-package-registrations?${params.toString()}`);
+            if (!res.success || !res.data) throw new Error('Package registrations load failed');
             if (res.success && res.data) {
                 setRegistrations(res.data.items || []);
                 setTotalItems(res.data.totalItems || 0);
             }
         } catch (error) {
             console.error("Lỗi tải danh sách đăng ký gói khám", error);
+            setLoadError('Không thể tải danh sách đăng ký gói khám. Vui lòng thử lại.');
         } finally {
             setLoading(false);
         }
@@ -124,10 +128,10 @@ export const ReceptionPackageRegistrations: React.FC = () => {
     ];
     return (
         <div className={styles.page}>
-            <PageHeader title="Quản lý Đăng ký Gói khám Sức khỏe" subtitle="Xác nhận và hỗ trợ bệnh nhân đã đăng ký các gói khám định kỳ trực tuyến." badge={<Package size={24} className={styles.primaryIcon} />} actions={<Button onClick={fetchRegistrations} title="Làm mới danh sách" icon={<RefreshCw size={18} />}>Làm mới</Button>} />
-            <div className={styles.filters}><form onSubmit={handleSearchSubmit} className={styles.searchForm}><Input className={styles.searchInput} prefix={<Search size={18} />} placeholder="Tìm theo mã đăng ký, tên bệnh nhân, SĐT..." value={search} onChange={e => setSearch(e.target.value)} /><Button htmlType="submit">Tìm kiếm</Button></form><Select className={styles.statusFilter} value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả trạng thái'},{value:'Pending',label:'Chờ xác nhận'},{value:'Confirmed',label:'Đã xác nhận'},{value:'Completed',label:'Đã hoàn tất'},{value:'Cancelled',label:'Đã hủy'}]} /></div>
-            {loading ? <LoadingState message="Đang tải danh sách đăng ký gói khám..." /> : registrations.length === 0 ? <EmptyState icon={<Package size={48} />} title="Không có dữ liệu đăng ký gói khám nào phù hợp." /> : <div className={styles.tableScroll}><DataTable columns={columns} data={registrations} keyExtractor={reg => reg.id} /></div>}
-            {totalItems > 10 && <div className={styles.pagination}><span className={styles.secondaryText}>Hiển thị {registrations.length} / {totalItems} bản ghi</span><div className={styles.paginationActions}><Button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Trang trước</Button><Button disabled={page * 10 >= totalItems} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
+            <PageHeader title="Quản lý Đăng ký Gói khám Sức khỏe" subtitle="Xác nhận và hỗ trợ bệnh nhân đã đăng ký các gói khám định kỳ trực tuyến." badge={<Package size={24} className={styles.primaryIcon} />} actions={<Button onClick={fetchRegistrations} disabled={loading} title="Làm mới danh sách" icon={<RefreshCw size={18} />}>{loading ? 'Đang tải...' : 'Làm mới'}</Button>} />
+            <div className={styles.filters}><form onSubmit={handleSearchSubmit} className={styles.searchForm}><Input className={styles.searchInput} prefix={<Search size={18} />} placeholder="Tìm theo mã đăng ký, tên bệnh nhân, SĐT..." value={search} onChange={e => setSearch(e.target.value)} /><Button htmlType="submit" disabled={loading}>{loading ? 'Đang tải...' : 'Tìm kiếm'}</Button></form><Select className={styles.statusFilter} value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả trạng thái'},{value:'Pending',label:'Chờ xác nhận'},{value:'Confirmed',label:'Đã xác nhận'},{value:'Completed',label:'Đã hoàn tất'},{value:'Cancelled',label:'Đã hủy'}]} /></div>
+            {loading ? <LoadingState message="Đang tải danh sách đăng ký gói khám..." /> : loadError ? <InlineError message={loadError} onRetry={fetchRegistrations} /> : registrations.length === 0 ? <EmptyState icon={<Package size={48} />} title="Không có dữ liệu đăng ký gói khám nào phù hợp." /> : <div className={styles.tableScroll}><DataTable columns={columns} data={registrations} keyExtractor={reg => reg.id} /></div>}
+            {!loadError && !loading && totalItems > 10 && <div className={styles.pagination}><span className={styles.secondaryText}>Hiển thị {registrations.length} / {totalItems} bản ghi</span><div className={styles.paginationActions}><Button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Trang trước</Button><Button disabled={page * 10 >= totalItems} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
             {selectedItem && actionType && <Modal open width={480} className={styles.actionModal} closable={false} mask={{closable:false}} keyboard={false} onCancel={() => { if (!actionLoading) { setSelectedItem(null); setActionType(null); } }} title={<span className={actionType === 'confirm' ? styles.confirmTitle : styles.cancelTitle}>{actionType === 'confirm' ? <CheckCircle size={24} /> : <AlertTriangle size={24} />}{actionType === 'confirm' ? 'Xác nhận đăng ký gói khám' : 'Hủy đăng ký gói khám'}</span>} footer={<><Button onClick={() => { setSelectedItem(null); setActionType(null); }} disabled={actionLoading}>Đóng</Button><Button type="primary" danger={actionType === 'cancel'} onClick={handleConfirmAction} disabled={actionLoading}>{actionLoading ? 'Đang xử lý...' : (actionType === 'confirm' ? 'Xác nhận đăng ký' : 'Xác nhận hủy')}</Button></>}>
                 <p className={styles.actionDescription}>{actionType === 'confirm' ? <>Xác nhận thông tin gói khám <strong>{selectedItem.packageName}</strong> cho người bệnh <strong>{selectedItem.patientName}</strong> vào ngày <strong>{selectedItem.preferredDate}</strong>?</> : <>Bạn có chắc muốn hủy đăng ký gói khám <strong>{selectedItem.registrationCode}</strong> của người bệnh <strong>{selectedItem.patientName}</strong>?</>}</p>
                 {actionError && <InlineError title="" message={actionError} />}

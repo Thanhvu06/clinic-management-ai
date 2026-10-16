@@ -203,6 +203,8 @@ public class AppointmentAvailabilityPolicy : IAppointmentAvailabilityPolicy
         {
             (fromDate, toDate) = (toDate, fromDate);
         }
+        if (toDate.DayNumber - fromDate.DayNumber > 31)
+            toDate = fromDate.AddDays(31);
 
         var vnToday = _dateTimeProvider.VietnamToday;
         var vnTime = _dateTimeProvider.VietnamTime;

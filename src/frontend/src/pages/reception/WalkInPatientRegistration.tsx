@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, Card, Col, Input, Row, Select } from 'antd';
-import { PageHeader, StatusBadge } from '../../components/common';
+import { PageHeader, StatusBadge, InlineError } from '../../components/common';
 import { spacing } from '../../theme/tokens';
 import styles from './WalkInPatientRegistration.module.css';
 import {
@@ -82,25 +82,52 @@ export const WalkInPatientRegistration: React.FC = () => {
     const [currentTicket, setCurrentTicket] = useState<CheckInTicketDto | null>(null);
     const [ticketModalOpen, setTicketModalOpen] = useState(false);
 
-    // 1. Initial Load: Facilities
+    const [facilitiesError, setFacilitiesError] = useState<string | null>(null);
+    const [facilitiesLoading, setFacilitiesLoading] = useState(false);
+    const [facilitiesReload, setFacilitiesReload] = useState(0);
+    const [doctorsError, setDoctorsError] = useState<string | null>(null);
+    const [doctorsLoading, setDoctorsLoading] = useState(false);
+    const [doctorsReload, setDoctorsReload] = useState(0);
+    const [prefillError, setPrefillError] = useState<string | null>(null);
+    const [prefillLoading, setPrefillLoading] = useState(false);
+    const [prefillReload, setPrefillReload] = useState(0);
+    const [departmentsError, setDepartmentsError] = useState<string | null>(null);
+    const [departmentsLoading, setDepartmentsLoading] = useState(false);
+    const [departmentsReload, setDepartmentsReload] = useState(0);
+    const [roomsError, setRoomsError] = useState<string | null>(null);
+    const [roomsLoading, setRoomsLoading] = useState(false);
+    const [roomsReload, setRoomsReload] = useState(0);
+
     useEffect(() => {
+        let active = true;
+        setFacilitiesLoading(true);
+        setFacilitiesError(null);
         organizationApi.getFacilities(false)
             .then(res => {
-                if (res.success && res.data && res.data.length > 0) {
-                    setFacilities(res.data);
-                    setFacilityId(res.data[0].id);
-                }
+                if (!active) return;
+                if (!res.success || !res.data) throw new Error('Facilities load failed');
+                setFacilities(res.data);
+                if (res.data.length > 0) setFacilityId(res.data[0].id);
             })
-            .catch(err => console.error('Lỗi tải cơ sở:', err));
-    }, []);
+            .catch(err => {
+                if (!active) return;
+                console.error('Lỗi tải cơ sở:', err);
+                setFacilitiesError('Không thể tải cơ sở khám chữa bệnh. Vui lòng thử lại.');
+            })
+            .finally(() => { if (active) setFacilitiesLoading(false); });
+        return () => { active = false; };
+    }, [facilitiesReload]);
 
     useEffect(() => {
         const controller = new AbortController();
         let active = true;
+        setDoctorsLoading(true);
+        setDoctorsError(null);
         axiosClient.get<any, ApiResponse<Doctor[]>>('/doctors', { params: { facilityId }, signal: controller.signal })
             .then(res => {
                 if (!active) return;
-                const available = res.success && res.data ? res.data : [];
+                if (!res.success || !res.data) throw new Error('Doctors load failed');
+                const available = res.data;
                 setDoctors(available);
                 setDoctorId(current => available.some(doctor => doctor.id === current) ? current : undefined);
             })
@@ -109,60 +136,87 @@ export const WalkInPatientRegistration: React.FC = () => {
                 setDoctors([]);
                 setDoctorId(undefined);
                 console.error('Lỗi tải bác sĩ:', err);
-            });
+                setDoctorsError('Không thể tải bác sĩ phụ trách. Vui lòng thử lại.');
+            })
+            .finally(() => { if (active) setDoctorsLoading(false); });
         return () => { active = false; controller.abort(); };
-    }, [facilityId]);
+    }, [facilityId, doctorsReload]);
 
-    // 2. Check query params for pre-selected patient id
     useEffect(() => {
-        const queryParams = new URLSearchParams(location.search);
-        const existingPatientId = queryParams.get('existingPatientId');
-        if (existingPatientId) {
-            const pid = Number(existingPatientId);
-            if (!isNaN(pid) && pid > 0) {
-                mpiApi.getPatientById(pid).then(res => {
-                    if (res.success && res.data) {
-                        setSelectedPatient(res.data);
-                        setPatientMode('lookup');
-                    }
-                }).catch(err => console.error('Lỗi nạp bệnh nhân:', err));
-            }
+        let active = true;
+        setPrefillError(null);
+        const pid = Number(new URLSearchParams(location.search).get('existingPatientId'));
+        if (!Number.isFinite(pid) || pid <= 0) {
+            setPrefillLoading(false);
+            return;
         }
-    }, [location.search]);
-
-    // 3. Cascading Department -> Rooms
-    useEffect(() => {
-        if (facilityId) {
-            organizationApi.getDepartments(facilityId)
-                .then(res => {
-                    if (res.success && res.data) {
-                        setDepartments(res.data);
-                        if (res.data.length > 0) {
-                            setDepartmentId(res.data[0].id);
-                        } else {
-                            setDepartmentId(undefined);
-                        }
-                    }
-                })
-                .catch(err => console.error('Lỗi tải khoa:', err));
-        }
-    }, [facilityId]);
+        setPrefillLoading(true);
+        mpiApi.getPatientById(pid)
+            .then(res => {
+                if (!active) return;
+                if (!res.success || !res.data) throw new Error('Patient prefill failed');
+                setSelectedPatient(res.data);
+                setPatientMode('lookup');
+            })
+            .catch(err => {
+                if (!active) return;
+                console.error('Lỗi nạp bệnh nhân:', err);
+                setPrefillError('Không thể nạp hồ sơ bệnh nhân đã chọn. Vui lòng thử lại.');
+            })
+            .finally(() => { if (active) setPrefillLoading(false); });
+        return () => { active = false; };
+    }, [location.search, prefillReload]);
 
     useEffect(() => {
-        if (facilityId && departmentId) {
-            organizationApi.getRooms({ facilityId, departmentId })
-                .then(res => {
-                    if (res.success && res.data) {
-                        setRooms(res.data);
-                        setRoomId(res.data.length > 0 ? res.data[0].id : undefined);
-                    }
-                })
-                .catch(err => console.error('Lỗi tải phòng:', err));
-        } else {
+        let active = true;
+        setDepartmentsError(null);
+        if (!facilityId) return;
+        setDepartmentsLoading(true);
+        organizationApi.getDepartments(facilityId)
+            .then(res => {
+                if (!active) return;
+                if (!res.success || !res.data) throw new Error('Departments load failed');
+                setDepartments(res.data);
+                setDepartmentId(res.data[0]?.id);
+            })
+            .catch(err => {
+                if (!active) return;
+                console.error('Lỗi tải khoa:', err);
+                setDepartments([]);
+                setDepartmentId(undefined);
+                setDepartmentsError('Không thể tải khoa phòng tiếp nhận. Vui lòng thử lại.');
+            })
+            .finally(() => { if (active) setDepartmentsLoading(false); });
+        return () => { active = false; };
+    }, [facilityId, departmentsReload]);
+
+    useEffect(() => {
+        let active = true;
+        setRoomsError(null);
+        if (!facilityId || !departmentId) {
             setRooms([]);
             setRoomId(undefined);
+            setRoomsLoading(false);
+            return;
         }
-    }, [facilityId, departmentId]);
+        setRoomsLoading(true);
+        organizationApi.getRooms({ facilityId, departmentId })
+            .then(res => {
+                if (!active) return;
+                if (!res.success || !res.data) throw new Error('Rooms load failed');
+                setRooms(res.data);
+                setRoomId(res.data[0]?.id);
+            })
+            .catch(err => {
+                if (!active) return;
+                console.error('Lỗi tải phòng:', err);
+                setRooms([]);
+                setRoomId(undefined);
+                setRoomsError('Không thể tải phòng khám. Vui lòng thử lại.');
+            })
+            .finally(() => { if (active) setRoomsLoading(false); });
+        return () => { active = false; };
+    }, [facilityId, departmentId, roomsReload]);
 
     // Handle MPI Search
     const handleSearchPatient = async (e?: React.FormEvent) => {
@@ -352,9 +406,11 @@ export const WalkInPatientRegistration: React.FC = () => {
                 </div>
                 {patientMode === 'lookup' && <div>
                     <form onSubmit={handleSearchPatient} className={styles.patientLookupForm}>
-                        <Input type="text" className={styles.patientLookupInput} placeholder="Nhập Mã bệnh nhân (MRN), Số CCCD, Số điện thoại hoặc Họ tên..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                        <Input type="text" status={prefillError ? 'error' : undefined} className={styles.patientLookupInput} placeholder="Nhập Mã bệnh nhân (MRN), Số CCCD, Số điện thoại hoặc Họ tên..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                         <Button htmlType="submit" type="primary" disabled={searching}>{searching ? <RefreshCw className="spin" size={16} /> : <Search size={16} />} Tìm hồ sơ</Button>
                     </form>
+                    {prefillLoading && <small className={styles.loadHint}>Đang tải hồ sơ bệnh nhân...</small>}
+                    {prefillError && <div className={styles.loadError}><InlineError message={prefillError} onRetry={() => setPrefillReload(value => value + 1)} /></div>}
                     {selectedPatient && <div className={styles.selectedPatient}>
                         <div className={styles.selectedPatientHeader}>
                             <div className={styles.selectedPatientIdentity}><CheckCircle2 size={24} className={styles.selectionIcon} /><div><h3 className={styles.selectedPatientName}>{selectedPatient.fullName}</h3><div className={styles.selectedPatientIdentifiers}>Mã bệnh nhân (MRN): <strong>{selectedPatient.medicalRecordNumber || 'Chưa gán'}</strong> • CCCD: {selectedPatient.nationalId || '---'}</div></div></div>
@@ -410,12 +466,12 @@ export const WalkInPatientRegistration: React.FC = () => {
             {step === 2 && <Card className={styles.stepCard}>
                 <h3 className={styles.stepTitle}>Thông tin phân luồng và phòng khám</h3>
                 <Row gutter={[spacing.md, spacing.md]} className={styles.visitFormRow}>
-                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Cơ sở khám chữa bệnh *</label><select className={styles.nativeSelect} value={facilityId} onChange={(e) => setFacilityId(Number(e.target.value))}>{facilities.map(f => <option key={f.id} value={f.id}>{f.name} ({f.code})</option>)}</select></div></Col>
-                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Khoa phòng tiếp nhận *</label><Select className={styles.formSelect} value={departmentId || ''} onChange={(value) => setDepartmentId(Number(value))} options={departments.map(d => ({value:d.id,label:`${d.name} (${d.code})`}))} /></div></Col>
+                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Cơ sở khám chữa bệnh *</label><select aria-label="Cơ sở khám chữa bệnh" disabled={facilitiesLoading} aria-invalid={!!facilitiesError} className={styles.nativeSelect} value={facilityId} onChange={(e) => setFacilityId(Number(e.target.value))}>{facilities.map(f => <option key={f.id} value={f.id}>{f.name} ({f.code})</option>)}</select>{facilitiesLoading && <small className={styles.loadHint}>Đang tải...</small>}{facilitiesError && <div className={styles.loadError}><InlineError message={facilitiesError} onRetry={() => setFacilitiesReload(value => value + 1)} /></div>}</div></Col>
+                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Khoa phòng tiếp nhận *</label><Select aria-label="Khoa phòng tiếp nhận" disabled={departmentsLoading} status={departmentsError ? 'error' : undefined} className={styles.formSelect} value={departmentId || ''} onChange={(value) => setDepartmentId(Number(value))} options={departments.map(d => ({value:d.id,label:`${d.name} (${d.code})`}))} />{departmentsLoading && <small className={styles.loadHint}>Đang tải...</small>}{departmentsError && <div className={styles.loadError}><InlineError message={departmentsError} onRetry={() => setDepartmentsReload(value => value + 1)} /></div>}</div></Col>
                 </Row>
                 <Row gutter={[spacing.md, spacing.md]} className={styles.visitFormRow}>
-                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Phòng bệnh / Buồng khám</label><Select className={styles.formSelect} value={roomId || ''} onChange={(value) => setRoomId(value ? Number(value) : undefined)} options={[{value:'',label:'-- Tự động xếp phòng trống --'},...rooms.map(r => ({value:r.id,label:`${r.roomNumber} - ${r.name}`}))]} /></div></Col>
-                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Bác sĩ phụ trách</label><select className={styles.nativeSelect} value={doctorId || ''} onChange={(e) => setDoctorId(e.target.value ? Number(e.target.value) : undefined)}><option value="">-- Tự động phân công theo ca trực --</option>{doctors.map(doc => <option key={doc.id} value={doc.id}>{doc.fullName} ({doc.specialtyName || 'Đa khoa'})</option>)}</select></div></Col>
+                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Phòng bệnh / Buồng khám</label><Select aria-label="Phòng bệnh / Buồng khám" disabled={roomsLoading} status={roomsError ? 'error' : undefined} className={styles.formSelect} value={roomId || ''} onChange={(value) => setRoomId(value ? Number(value) : undefined)} options={[{value:'',label:'-- Tự động xếp phòng trống --'},...rooms.map(r => ({value:r.id,label:`${r.roomNumber} - ${r.name}`}))]} />{roomsLoading && <small className={styles.loadHint}>Đang tải...</small>}{roomsError && <div className={styles.loadError}><InlineError message={roomsError} onRetry={() => setRoomsReload(value => value + 1)} /></div>}</div></Col>
+                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Bác sĩ phụ trách</label><select aria-label="Bác sĩ phụ trách" disabled={doctorsLoading} aria-invalid={!!doctorsError} className={styles.nativeSelect} value={doctorId || ''} onChange={(e) => setDoctorId(e.target.value ? Number(e.target.value) : undefined)}><option value="">-- Tự động phân công theo ca trực --</option>{doctors.map(doc => <option key={doc.id} value={doc.id}>{doc.fullName} ({doc.specialtyName || 'Đa khoa'})</option>)}</select>{doctorsLoading && <small className={styles.loadHint}>Đang tải...</small>}{doctorsError && <div className={styles.loadError}><InlineError message={doctorsError} onRetry={() => setDoctorsReload(value => value + 1)} /></div>}</div></Col>
                 </Row>
                 <Row gutter={[spacing.md, spacing.md]} className={styles.visitFormRow}>
                     <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Mức độ ưu tiên khám *</label><Select className={styles.formSelect} value={priority} onChange={(value) => setPriority(value as VisitPriority)} options={[{value:'Normal',label:'Khám thường (Theo thứ tự hàng đợi)'},{value:'Priority',label:'Ưu tiên (Trẻ < 6T, Người già ≥ 75T, Phụ nữ mang thai)'},{value:'Urgent',label:'Khẩn cấp'},{value:'Emergency',label:'Cấp cứu'}]} /></div></Col>

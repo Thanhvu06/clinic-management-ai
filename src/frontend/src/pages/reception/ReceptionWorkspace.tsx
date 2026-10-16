@@ -93,6 +93,8 @@ export const ReceptionWorkspace: React.FC = () => {
 
     // Stale request tracking
     const fetchIdRef = useRef(0);
+    const [statsError, setStatsError] = useState(false);
+    const [statsLoading, setStatsLoading] = useState(false);
     const statsFetchIdRef = useRef(0);
 
     // Update live clock
@@ -141,16 +143,23 @@ export const ReceptionWorkspace: React.FC = () => {
 
     const fetchStats = useCallback(async (facId?: number) => {
         const currentFetchId = ++statsFetchIdRef.current;
+        setStatsLoading(true);
         try {
             const query = facId ? `?facilityId=${facId}` : '';
             const res = await axiosClient.get<any, ApiResponse<any>>(`/reception/stats${query}`);
             if (currentFetchId !== statsFetchIdRef.current) return;
+            if (!res.success || !res.data) throw new Error('Reception stats load failed');
+            setStatsError(false);
             if (res.success && res.data) {
                 setStats(res.data);
             }
         } catch (err) {
             if (currentFetchId !== statsFetchIdRef.current) return;
             console.error('Lỗi tải thống kê tiếp nhận:', err);
+            setStats(null);
+            setStatsError(true);
+        } finally {
+            if (currentFetchId === statsFetchIdRef.current) setStatsLoading(false);
         }
     }, []);
 
@@ -327,11 +336,12 @@ export const ReceptionWorkspace: React.FC = () => {
             </Card>
             {!facilityLoading && !facilityError && facilities.length === 0 && <div className={styles.facilityNotice}><AlertTriangle size={20} className={styles.noticeIcon} /><div><strong>Tài khoản chưa được phân công cơ sở trực:</strong> Bạn chưa có phân công làm việc tại cơ sở y tế nào. Vui lòng liên hệ quản trị viên hệ thống để được gán cơ sở trước khi thực hiện tiếp nhận và quản lý hàng đợi.</div></div>}
             <div className={styles.metricGrid}>
-                <StatCard title="Lịch khám hôm nay" value={stats?.appointmentsToday ?? 0} subtitle="Lịch hẹn đã đặt trong ngày" icon={<Calendar size={24} />} color="info" />
-                <StatCard title="Chờ xác nhận" value={stats?.pendingAppointmentsToday ?? 0} subtitle="Cần lễ tân duyệt hoặc gọi xác nhận" icon={<Clock size={24} />} color="warning" />
-                <StatCard title="Chờ tiếp đón / Đang khám" value={stats?.confirmedAppointmentsToday ?? 0} subtitle="Sẵn sàng tiếp nhận vào hàng đợi" icon={<Users size={24} />} color="primary" />
-                <StatCard title="Đã khám xong hôm nay" value={stats?.completedAppointmentsToday ?? 0} subtitle="Đã hoàn thành lượt khám" icon={<CheckCircle2 size={24} />} color="success" />
+                <StatCard title="Lịch khám hôm nay" value={statsError ? '—' : stats?.appointmentsToday ?? 0} subtitle="Lịch hẹn đã đặt trong ngày" icon={<Calendar size={24} />} color="info" />
+                <StatCard title="Chờ xác nhận" value={statsError ? '—' : stats?.pendingAppointmentsToday ?? 0} subtitle="Cần lễ tân duyệt hoặc gọi xác nhận" icon={<Clock size={24} />} color="warning" />
+                <StatCard title="Chờ tiếp đón / Đang khám" value={statsError ? '—' : stats?.confirmedAppointmentsToday ?? 0} subtitle="Sẵn sàng tiếp nhận vào hàng đợi" icon={<Users size={24} />} color="primary" />
+                <StatCard title="Đã khám xong hôm nay" value={statsError ? '—' : stats?.completedAppointmentsToday ?? 0} subtitle="Đã hoàn thành lượt khám" icon={<CheckCircle2 size={24} />} color="success" />
             </div>
+            {statsError && <div className={styles.statsError}><span>Không tải được số liệu</span><Button size="small" disabled={statsLoading} onClick={() => fetchStats(selectedFacilityId)}>{statsLoading ? 'Đang tải...' : 'Thử lại'}</Button></div>}
             <Card className={styles.searchCard}>
                 <form onSubmit={handleSearchSubmit} className={styles.searchForm}>
                     <Input className={styles.searchInput} prefix={<Search size={18} />} placeholder="Tìm kiếm nhanh: Mã bệnh nhân (MRN), Số CCCD, Mã lịch hẹn, Tên người bệnh, Số điện thoại..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
