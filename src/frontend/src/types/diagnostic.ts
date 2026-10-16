@@ -66,6 +66,15 @@ export interface DiagnosticResultDto {
     rowVersion?: string | null;
 }
 
+export interface DiagnosticAttachmentDto {
+    id: number;
+    originalFileName: string;
+    contentType: string;
+    sizeBytes: number;
+    uploadedAtUtc: string;
+    uploadedByUserName: string;
+}
+
 export interface DiagnosticOrderItemDto {
     id: number;
     diagnosticOrderId: number;
@@ -78,6 +87,7 @@ export interface DiagnosticOrderItemDto {
     isPackageCovered?: boolean;
     status: DiagnosticItemStatus;
     result?: DiagnosticResultDto | null;
+    attachments?: DiagnosticAttachmentDto[];
     parameters?: DiagnosticServiceParameterDto[];
     specimenStatus?: SpecimenStatus | null;
     specimenType?: string | null;

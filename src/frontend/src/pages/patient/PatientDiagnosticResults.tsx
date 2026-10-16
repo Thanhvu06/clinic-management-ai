@@ -10,6 +10,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { LoadingState } from '../../components/common/LoadingState';
 import { InlineError } from '../../components/common/InlineError';
 import styles from './PatientDiagnosticResults.module.css';
+import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
 
 export const PatientDiagnosticResults: React.FC = () => {
     const [orders, setOrders] = useState<DiagnosticOrderDto[]>([]);
@@ -62,6 +63,7 @@ export const PatientDiagnosticResults: React.FC = () => {
                         </div>
                         <div className={styles.resultAuthor}>Thực hiện bởi: {item.result.resultedByUserName} • {new Date(item.result.resultedAtUtc).toLocaleString('vi-VN')}</div>
                     </div> : <div className={styles.pending}>Đang chờ kỹ thuật viên trả kết quả...</div>}
+                    {!!item.attachments?.length && <DiagnosticAttachmentList attachments={item.attachments} />}
                 </Card>)}
             </div> };
         })} />;

@@ -1,0 +1,12 @@
+.attachments { display: flex; flex-direction: column; gap: var(--cc-space-sm); padding: 0; margin: var(--cc-space-sm) 0; list-style: none; }
+.attachment { display: flex; align-items: center; gap: var(--cc-space-sm); padding: var(--cc-space-sm); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-sm); background: var(--cc-color-bg-container); }
+.preview { width: 80px; flex-shrink: 0; font-size: 12px; color: var(--cc-color-text-secondary); }
+.preview :global(.ant-image) { width: 100%; }
+.image { width: 100%; height: 64px; object-fit: cover; border-radius: var(--cc-radius-sm); }
+.details { display: flex; flex-direction: column; gap: var(--cc-space-xxs); min-width: 0; flex: 1; }
+.fileName { overflow-wrap: anywhere; white-space: normal; text-align: left; height: auto; padding: 0; color: var(--cc-color-text-dark); }
+.metadata { color: var(--cc-color-text-secondary); font-size: 12px; }
+.error { color: var(--cc-color-danger); font-size: 12px; }
+.compact .preview { width: 48px; }
+.compact .image { height: 40px; }
+@media (max-width: 480px) { .attachment { flex-wrap: wrap; } }

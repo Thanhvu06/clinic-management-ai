@@ -81,6 +81,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<DiagnosticOrder> DiagnosticOrders { get; set; } = null!;
     public DbSet<DiagnosticOrderItem> DiagnosticOrderItems { get; set; } = null!;
     public DbSet<DiagnosticResult> DiagnosticResults { get; set; } = null!;
+    public DbSet<DiagnosticResultAttachment> DiagnosticResultAttachments { get; set; } = null!;
     public DbSet<DiagnosticServiceParameter> DiagnosticServiceParameters { get; set; } = null!;
     public DbSet<DiagnosticResultValue> DiagnosticResultValues { get; set; } = null!;
 

@@ -282,6 +282,7 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.AddScoped<ClinicManagement.Infrastructure.Medicines.MedicineCatalogService>();
 builder.Services.AddSingleton<MedicineImageStorage>();
+builder.Services.AddSingleton<ClinicManagement.Application.Diagnostics.Interfaces.IDiagnosticAttachmentStorage, DiagnosticAttachmentStorage>();
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddCors();

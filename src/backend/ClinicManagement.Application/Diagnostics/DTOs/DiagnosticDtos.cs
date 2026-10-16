@@ -78,6 +78,16 @@ public class DiagnosticResultValueInput
     public decimal Value { get; set; }
 }
 
+public class DiagnosticAttachmentDto
+{
+    public long Id { get; set; }
+    public string OriginalFileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = string.Empty;
+    public long SizeBytes { get; set; }
+    public DateTime UploadedAtUtc { get; set; }
+    public string UploadedByUserName { get; set; } = string.Empty;
+}
+
 public class DiagnosticOrderItemDto
 {
     public long Id { get; set; }
@@ -93,6 +103,7 @@ public class DiagnosticOrderItemDto
     public string Status { get; set; } = string.Empty;
     public string? RowVersion { get; set; }
     public DiagnosticResultDto? Result { get; set; }
+    public List<DiagnosticAttachmentDto> Attachments { get; set; } = new();
     public List<DiagnosticServiceParameterDto> Parameters { get; set; } = new();
     public string SpecimenStatus { get; set; } = string.Empty;
     public string? SpecimenType { get; set; }

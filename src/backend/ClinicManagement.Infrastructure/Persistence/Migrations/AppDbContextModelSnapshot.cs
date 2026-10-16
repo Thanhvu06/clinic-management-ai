@@ -1340,6 +1340,51 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.ToTable("DiagnosticResults", (string)null);
                 });
 
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticResultAttachment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<long>("DiagnosticOrderItemId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StoredFileName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("UploadedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DiagnosticOrderItemId");
+
+                    b.HasIndex("StoredFileName")
+                        .IsUnique();
+
+                    b.ToTable("DiagnosticResultAttachments", (string)null);
+                });
+
             modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticResultValue", b =>
                 {
                     b.Property<long>("Id")
@@ -3569,6 +3614,17 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("DiagnosticOrderItem");
                 });
 
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticResultAttachment", b =>
+                {
+                    b.HasOne("ClinicManagement.Domain.Entities.DiagnosticOrderItem", "DiagnosticOrderItem")
+                        .WithMany("Attachments")
+                        .HasForeignKey("DiagnosticOrderItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DiagnosticOrderItem");
+                });
+
             modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticResultValue", b =>
                 {
                     b.HasOne("ClinicManagement.Domain.Entities.DiagnosticResult", "DiagnosticResult")
@@ -4090,6 +4146,8 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("ClinicManagement.Domain.Entities.DiagnosticOrderItem", b =>
                 {
+                    b.Navigation("Attachments");
+
                     b.Navigation("Result");
                 });
 

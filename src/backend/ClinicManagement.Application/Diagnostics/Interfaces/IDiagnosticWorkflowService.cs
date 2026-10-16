@@ -24,6 +24,9 @@ public interface IDiagnosticWorkflowService
     Task<DiagnosticOrderDto> CancelOrderAsync(long orderId, CancelDiagnosticOrderRequest? request);
 
     // Technician operations
+    Task<DiagnosticOrderDto> UploadAttachmentAsync(long orderId, long itemId, Stream input, long length, string originalFileName, System.Threading.CancellationToken cancellationToken = default);
+    Task<DiagnosticOrderDto> DeleteAttachmentAsync(long orderId, long itemId, long attachmentId, System.Threading.CancellationToken cancellationToken = default);
+    Task<StoredDiagnosticAttachment> GetAttachmentForCurrentUserAsync(long attachmentId);
     Task<PagedResult<DiagnosticOrderDto>> GetTechnicianOrdersAsync(DiagnosticOrderStatus? status, DateOnly? date, string? search, int page, int pageSize);
     Task<DiagnosticOrderDto> GetTechnicianOrderByIdAsync(long orderId);
     Task<TechnicianDiagnosticStatsDto> GetTechnicianStatsAsync();

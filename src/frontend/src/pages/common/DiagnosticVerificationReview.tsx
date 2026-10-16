@@ -9,6 +9,7 @@ import type { DiagnosticOrderDto } from '../../types';
 import { diagnosticNotificationTime, formatDelta, isCriticalDiagnosticFlag } from '../../utils/diagnosticLabels';
 import styles from './DiagnosticVerificationReview.module.css';
 import { DiagnosticResultPrint } from './DiagnosticResultPrint';
+import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
 
 export const VerificationResultPrint = () => {
     const { id } = useParams<{ id: string }>();
@@ -88,6 +89,7 @@ export const DiagnosticVerificationReview = () => {
                 { header: 'So với lần trước', accessor: value => <>{formatDelta(value)}{value.isDeltaFailure && <> <Tag color="warning">Lệch delta</Tag></>}</> },
             ]} /></div> : <p className={styles.resultText}>{item.result?.resultText || 'Chưa có kết quả.'}</p>}
             {item.result?.conclusion && <p>Kết luận: {item.result.conclusion}</p>}<p className={styles.muted}>Người nhập: {item.result?.resultedByUserName || '—'}</p>
+            {!!item.attachments?.length && <DiagnosticAttachmentList attachments={item.attachments} />}
         </section>)}
         {order.canCurrentUserVerify ? <section className={styles.panel}><label htmlFor="verification-note">{order.hasDeltaFailure ? 'Ghi chú duyệt (bắt buộc, ít nhất 5 ký tự)' : 'Ghi chú duyệt (không bắt buộc)'}</label><Input.TextArea id="verification-note" maxLength={500} value={note} disabled={saving} placeholder={order.hasDeltaFailure ? 'Bắt buộc: ghi chú đã kiểm tra lệch delta' : undefined} onChange={event => { setNote(event.target.value); setDeltaNoteError(''); }} />{deltaNoteError && <Alert type="error" showIcon title={deltaNoteError} />}<div className={styles.actions}><Button type="primary" disabled={saving || (!!order.hasDeltaFailure && note.trim().length < 5)} onClick={() => void submit('verify')}>{saving ? 'Đang xử lý...' : 'Duyệt kết quả'}</Button><Button danger disabled={saving} onClick={() => { setReason(''); setReturnOpen(true); }}>Trả lại</Button></div></section> : order.status !== 'Completed' && <Alert type="info" showIcon title={order.verificationStatus === 'Returned' ? 'Phiếu đã trả lại, cần người nhập chỉnh sửa và gửi duyệt lại.' : user?.role === 'Doctor' ? 'Bác sĩ chỉ định không được tự duyệt kết quả phiếu của mình.' : 'Bạn là người gửi hoặc nhập kết quả nên không thể tự duyệt.'} />}
         <Modal title="Trả lại kết quả" open={returnOpen} getContainer={false} onCancel={() => { if (!saving) setReturnOpen(false); }} footer={<div className={styles.actions}><Button disabled={saving} onClick={() => setReturnOpen(false)}>Hủy</Button><Button danger type="primary" disabled={saving || reason.trim().length < 5} onClick={() => void submit('return')}>{saving ? 'Đang trả lại...' : 'Xác nhận trả lại'}</Button></div>}>
