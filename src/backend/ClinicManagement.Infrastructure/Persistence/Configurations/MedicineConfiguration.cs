@@ -26,6 +26,12 @@ public class MedicineConfiguration : IEntityTypeConfiguration<Medicine>
         builder.Property(m => m.Manufacturer).HasMaxLength(200);
         builder.Property(m => m.Description).HasMaxLength(1000);
         builder.Property(m => m.StorageInstructions).HasMaxLength(500);
+        builder.Property(m => m.Indications).HasMaxLength(2000);
+        builder.Property(m => m.DosageAndAdministration).HasMaxLength(2000);
+        builder.Property(m => m.Contraindications).HasMaxLength(2000);
+        builder.Property(m => m.SideEffects).HasMaxLength(2000);
+        builder.Property(m => m.Precautions).HasMaxLength(2000);
+        builder.Property(m => m.OverdoseManagement).HasMaxLength(1000);
         builder.Property(m => m.ImagePath).HasMaxLength(300);
         builder.Property(m => m.IsPrescriptionRequired).HasDefaultValue(true).IsRequired();
         builder.HasOne(m => m.Category).WithMany(c => c.Medicines)

@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ActiveMedicineDto, ApiResponse } from '../../types';
-import { Button, Col, Input, InputNumber, Modal, Row, Segmented, Select } from 'antd';
+import { Button, Input, InputNumber, Modal, Segmented, Select } from 'antd';
 import { MedicineCard } from '../../components/medicines/MedicineCard';
 import { DataTable, EmptyState, InlineError, LoadingState, PageHeader, StatusBadge } from '../../components/common';
-import { spacing } from '../../theme/tokens';
 import styles from './PharmacyInventory.module.css';
 import { Plus, Clock, User, RefreshCw } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
@@ -149,7 +148,7 @@ export const PharmacyInventory: React.FC = () => {
                 <Segmented options={['Lưới', 'Bảng']} value={view} onChange={setView} aria-label="Chế độ xem kho thuốc" />
             </div>
             <section hidden={view !== 'Lưới'} aria-label="Lưới thuốc trong kho">
-                {medicinesLoading ? <LoadingState message="Đang tải danh sách thuốc..." /> : medicinesError ? <InlineError message={medicinesError} onRetry={fetchMedicines} /> : filteredMedicines.length === 0 ? <EmptyState title="Chưa có thuốc phù hợp" description="Bạn thử tìm với tên hoặc mã thuốc khác nhé." /> : <Row gutter={[spacing.md, spacing.md]}>{filteredMedicines.map(medicine => <Col key={medicine.id} xs={24} sm={12} lg={6}><MedicineCard medicine={medicine} /></Col>)}</Row>}
+                {medicinesLoading ? <LoadingState message="Đang tải danh sách thuốc..." /> : medicinesError ? <InlineError message={medicinesError} onRetry={fetchMedicines} /> : filteredMedicines.length === 0 ? <EmptyState title="Chưa có thuốc phù hợp" description="Bạn thử tìm với tên hoặc mã thuốc khác nhé." /> : <div className={styles.medicineGrid}>{filteredMedicines.map(medicine => <MedicineCard key={medicine.id} medicine={medicine} to={`/medicines/${medicine.id}`} />)}</div>}
             </section>
             <div hidden={view !== 'Bảng'}>
                 {loading ? <LoadingState message="Đang tải lịch sử giao dịch kho..." /> : filteredTransactions.length === 0 ? <EmptyState title="Chưa có giao dịch biến động tồn kho nào." /> : <div className={styles.tableScroll}><DataTable data={filteredTransactions} keyExtractor={t => t.id} columns={[
@@ -169,10 +168,10 @@ export const PharmacyInventory: React.FC = () => {
                     <div><label className={styles.fieldLabel}>Chọn mặt hàng thuốc (*)</label><Select className={styles.fullWidth} value={selectedMedId} onChange={value => setSelectedMedId(Number(value))} options={activeMedicines.map(m => ({value:m.id,label:`${m.name} (${m.code}) - Hiện tồn: ${m.stockQuantity} ${m.unit}`}))} />
                         <input className={styles.validationInput} aria-hidden="true" tabIndex={-1} value={selectedMedId || ''} required onChange={e => setSelectedMedId(Number(e.target.value))} />
                     </div>
-                    <Row gutter={[spacing.sm, spacing.sm]}>
-                        <Col xs={24} sm={12}><label className={styles.fieldLabel}>Loại tác vụ (*)</label><Select className={styles.fullWidth} value={transType} onChange={value => setTransType(Number(value))} options={[{value:2,label:'Nhập hàng thêm (Stock In)'},{value:4,label:'Kiểm kê điều chỉnh (Adjustment)'}]} /></Col>
-                        <Col xs={24} sm={12}><label className={styles.fieldLabel}>Số lượng nhập (*)</label><InputNumber type="number" min={1} className={styles.fullWidth} required value={qty} onChange={value => setQty(Number(value))} /></Col>
-                    </Row>
+                    <div className={styles.formPair}>
+                        <div><label className={styles.fieldLabel}>Loại tác vụ (*)</label><Select className={styles.fullWidth} value={transType} onChange={value => setTransType(Number(value))} options={[{value:2,label:'Nhập hàng thêm (Stock In)'},{value:4,label:'Kiểm kê điều chỉnh (Adjustment)'}]} /></div>
+                        <div><label className={styles.fieldLabel}>Số lượng nhập (*)</label><InputNumber type="number" min={1} className={styles.fullWidth} required value={qty} onChange={value => setQty(Number(value))} /></div>
+                    </div>
                     <div><label className={styles.fieldLabel}>Lý do / Nhà cung cấp / Mã phiếu nhập</label><Input.TextArea rows={3} value={reason} onChange={e => setReason(e.target.value)} placeholder="VD: Nhập 50 hộp từ Dược Hậu Giang theo hóa đơn HD-9821..." /></div>
                 </form>
             </Modal>

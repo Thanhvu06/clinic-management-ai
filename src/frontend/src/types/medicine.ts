@@ -7,6 +7,12 @@ export interface MedicineCatalogFields {
     isPrescriptionRequired: boolean;
     description?: string | null;
     storageInstructions?: string | null;
+    indications?: string | null;
+    dosageAndAdministration?: string | null;
+    contraindications?: string | null;
+    sideEffects?: string | null;
+    precautions?: string | null;
+    overdoseManagement?: string | null;
     imagePath?: string | null;
 }
 export interface MedicineDto extends MedicineCatalogFields {
@@ -60,6 +66,19 @@ export interface PublicMedicineDto {
     imageUrl?: string | null;
     description?: string | null;
     storageInstructions?: string | null;
+    indications?: string | null;
+    dosageAndAdministration?: string | null;
+    contraindications?: string | null;
+    sideEffects?: string | null;
+    precautions?: string | null;
+    overdoseManagement?: string | null;
+    interactions?: PublicMedicineInteractionDto[];
     availability: 'out_of_stock' | 'low' | 'in_stock';
+}
+export interface PublicMedicineInteractionDto {
+    otherIngredient: string;
+    severity: 'Contraindicated' | 'Major' | 'Moderate' | 'Minor';
+    description: string;
+    recommendation: string;
 }
 export interface MedicinePage<T> { items: T[]; page: number; pageSize: number; totalItems: number; totalPages: number }

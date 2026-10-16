@@ -1,3 +1,4 @@
+import { MedicineLink } from '../../components/medicines/MedicineLink';
 import React, { useCallback, useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Alert, Button, Card, Descriptions, Input, Tag } from 'antd';
@@ -63,7 +64,7 @@ export const PatientPrescriptions: React.FC = () => {
                     <h4>Danh sách thuốc chỉ định ({p.items.length})</h4>
                     <DataTable data={p.items} keyExtractor={item => `${item.medicineId}-${p.items.indexOf(item)}`} columns={[
                         { header: 'STT', width: 40, accessor: item => p.items.indexOf(item) + 1 },
-                        { header: 'Tên thuốc', accessor: item => <div><strong>{item.name}</strong>{item.instructions && <div className={styles.instructions}><Lightbulb size={14} />{item.instructions}</div>}</div> },
+                        { header: 'Tên thuốc', accessor: item => <div><MedicineLink to={`/medicines/${item.medicineId}`} state={{ prescribed: { dosage: item.dosage, frequency: item.frequency, durationDays: item.durationDays, instructions: item.instructions, quantity: item.quantity } }}><strong>{item.name}</strong></MedicineLink>{item.instructions && <div className={styles.instructions}><Lightbulb size={14} />{item.instructions}</div>}</div> },
                         { header: 'Liều dùng', accessor: 'dosage' }, { header: 'Tần suất', accessor: 'frequency' },
                         { header: 'Số ngày', accessor: item => item.durationDays ? `${item.durationDays} ngày` : '-' },
                         { header: 'Số lượng', align: 'right', accessor: item => `${item.quantity} ${item.unit}` },

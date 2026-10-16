@@ -2,6 +2,7 @@ using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.Medicines.DTOs;
 using ClinicManagement.Domain.Entities;
+using ClinicManagement.Application.Prescriptions;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -73,9 +74,26 @@ public class MedicineCatalogService(AppDbContext db)
         return new(items, count, page, pageSize);
     }
 
-    public async Task<PublicMedicineDto> GetPublicMedicineAsync(long id) =>
-        await PublicQuery().Where(m => m.Id == id).Select(MedicineProjections.Public).FirstOrDefaultAsync()
-        ?? throw new NotFoundException("Thuốc không tồn tại.");
+    public async Task<PublicMedicineDto> GetPublicMedicineAsync(long id)
+    {
+        var medicine = await PublicQuery().Where(m => m.Id == id).Select(MedicineProjections.Public).FirstOrDefaultAsync()
+            ?? throw new NotFoundException("Thuốc không tồn tại.");
+        var ingredients = IngredientNormalizer.SplitIngredients(medicine.ActiveIngredient);
+        medicine.Interactions = [];
+        if (ingredients.Count == 0) return medicine;
+
+        // One batched rule query, regardless of the number of ingredients.
+        var rules = await db.DrugInteractionRules.AsNoTracking().Where(r => r.IsActive).OrderBy(r => r.Id).ToListAsync();
+        bool Has(string key) => ingredients.Any(i => IngredientNormalizer.MatchesKey(i, key));
+        medicine.Interactions = rules.SelectMany(rule =>
+        {
+            var matches = new List<PublicMedicineInteractionDto>();
+            if (Has(rule.IngredientKeyA)) matches.Add(new(rule.IngredientKeyB, rule.Severity.ToString(), rule.Description, rule.Recommendation));
+            if (Has(rule.IngredientKeyB)) matches.Add(new(rule.IngredientKeyA, rule.Severity.ToString(), rule.Description, rule.Recommendation));
+            return matches;
+        }).Distinct().ToList();
+        return medicine;
+    }
 
     public Task<List<PublicMedicineCategoryDto>> GetPublicCategoriesAsync() => db.MedicineCategories.AsNoTracking()
         .Where(c => c.IsActive).OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
