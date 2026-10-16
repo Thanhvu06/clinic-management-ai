@@ -35,6 +35,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
     private readonly ILogger<DiagnosticWorkflowService> _logger;
     private readonly IHttpContextAccessor? _httpContextAccessor;
     private readonly DiagnosticTatOptions _tatOptions;
+    private readonly IDiagnosticAttachmentStorage? _attachmentStorage;
 
     public DiagnosticWorkflowService(
         AppDbContext dbContext,
@@ -43,13 +44,15 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         IDateTimeProvider dateTimeProvider,
         ILogger<DiagnosticWorkflowService> logger,
         IHttpContextAccessor? httpContextAccessor = null,
-        IOptions<DiagnosticTatOptions>? tatOptions = null)
+        IOptions<DiagnosticTatOptions>? tatOptions = null,
+        IDiagnosticAttachmentStorage? attachmentStorage = null)
     {
         _dbContext = dbContext;
         _doctorContextService = doctorContextService;
         _currentUserService = currentUserService;
         _dateTimeProvider = dateTimeProvider;
         _logger = logger;
+        _attachmentStorage = attachmentStorage;
         _httpContextAccessor = httpContextAccessor;
         _tatOptions = tatOptions?.Value ?? new DiagnosticTatOptions();
     }
@@ -803,7 +806,11 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
             order.VerificationStatus != nameof(DiagnosticVerificationStatus.Verified) &&
             order.Items.Any(item => item.Status != nameof(DiagnosticItemStatus.Cancelled) && item.SpecimenType != null))
         {
-            foreach (var item in order.Items) item.Result = null;
+            foreach (var item in order.Items)
+            {
+                item.Result = null;
+                item.Attachments = new();
+            }
         }
         return order;
     }
@@ -1132,6 +1139,107 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         }
 
         return (await GetOrderDtoByIdAsync(orderId))!;
+    }
+
+    private async Task<(DiagnosticOrder Order, DiagnosticOrderItem Item)> LoadAttachmentItemAsync(long orderId, long itemId)
+    {
+        if (_httpContextAccessor?.HttpContext?.User.IsInRole(RoleNames.DiagnosticTechnician) != true)
+            throw new NotFoundException("Phiếu chỉ định không tồn tại.");
+        var order = await _dbContext.DiagnosticOrders
+            .Include(o => o.Appointment).Include(o => o.PatientVisit)
+            .Include(o => o.Items).ThenInclude(i => i.DiagnosticService)
+            .FirstOrDefaultAsync(o => o.Id == orderId)
+            ?? throw new NotFoundException("Phiếu chỉ định không tồn tại.");
+        await LoadLinkedVisitAppointmentAsync(order);
+        await EnsureTechnicianFacilityScopeAsync(order);
+        EnsureResultsEditable(order);
+        if (order.Status != DiagnosticOrderStatus.InProgress)
+            throw new BusinessException("INVALID_STATE", "Chỉ đính kèm tệp khi phiếu đang thực hiện.");
+        var item = order.Items.SingleOrDefault(i => i.Id == itemId)
+            ?? throw new NotFoundException("Dịch vụ chỉ định không tồn tại trong phiếu này.");
+        if (item.Status == DiagnosticItemStatus.Cancelled)
+            throw new BusinessException("ITEM_CANCELLED", "Dịch vụ chỉ định này đã bị hủy.");
+        if (item.DiagnosticService.Category is not (DiagnosticCategory.Imaging or DiagnosticCategory.Ultrasound))
+            throw new BusinessException("ATTACHMENT_NOT_ALLOWED", "Chỉ dịch vụ chẩn đoán hình ảnh/siêu âm được đính kèm tệp.");
+        return (order, item);
+    }
+
+    public async Task<DiagnosticOrderDto> UploadAttachmentAsync(long orderId, long itemId, Stream input, long length, string originalFileName, CancellationToken cancellationToken = default)
+    {
+        var (order, item) = await LoadAttachmentItemAsync(orderId, itemId);
+        if (await _dbContext.DiagnosticResultAttachments.CountAsync(a => a.DiagnosticOrderItemId == itemId, cancellationToken) >= 10)
+            throw new BusinessException("ATTACHMENT_LIMIT", "Mỗi dịch vụ tối đa 10 tệp đính kèm.");
+        var storage = _attachmentStorage ?? throw new InvalidOperationException("Diagnostic attachment storage is not configured.");
+        var stored = await storage.SaveAsync(input, length, originalFileName, cancellationToken);
+        try
+        {
+            _dbContext.DiagnosticResultAttachments.Add(new DiagnosticResultAttachment
+            {
+                DiagnosticOrderItemId = item.Id, StoredFileName = stored.StoredFileName,
+                OriginalFileName = stored.OriginalFileName, ContentType = stored.ContentType, SizeBytes = stored.SizeBytes,
+                UploadedByUserId = GetUserId(), UploadedAtUtc = DateTime.UtcNow
+            });
+            // Touch the concurrency token so parallel uploads cannot exceed the item limit
+            // or commit after a concurrent transition to Pending/Completed.
+            _dbContext.Entry(order).Property(o => o.Note).IsModified = true;
+            AddVerificationAudit(order, "DiagnosticAttachmentUploaded", $"ItemId={itemId}; Tệp {stored.OriginalFileName}.");
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            storage.DeleteFile(stored.StoredFileName);
+            throw new ConflictException("Phiếu đã thay đổi. Vui lòng tải lại và thử lại.");
+        }
+        catch { storage.DeleteFile(stored.StoredFileName); throw; }
+        return (await GetOrderDtoByIdAsync(orderId))!;
+    }
+
+    public async Task<DiagnosticOrderDto> DeleteAttachmentAsync(long orderId, long itemId, long attachmentId, CancellationToken cancellationToken = default)
+    {
+        var storage = _attachmentStorage ?? throw new InvalidOperationException("Diagnostic attachment storage is not configured.");
+        var (order, _) = await LoadAttachmentItemAsync(orderId, itemId);
+        var attachment = await _dbContext.DiagnosticResultAttachments
+            .SingleOrDefaultAsync(a => a.Id == attachmentId && a.DiagnosticOrderItemId == itemId, cancellationToken)
+            ?? throw new NotFoundException("Tệp đính kèm không tồn tại.");
+        _dbContext.DiagnosticResultAttachments.Remove(attachment);
+        _dbContext.Entry(order).Property(o => o.Note).IsModified = true;
+        AddVerificationAudit(order, "DiagnosticAttachmentDeleted", $"ItemId={itemId}; AttachmentId={attachmentId}; Tệp {attachment.OriginalFileName}.");
+        try { await _dbContext.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException) { throw new ConflictException("Phiếu đã thay đổi. Vui lòng tải lại và thử lại."); }
+        storage.DeleteFile(attachment.StoredFileName);
+        return (await GetOrderDtoByIdAsync(orderId))!;
+    }
+
+    public async Task<StoredDiagnosticAttachment> GetAttachmentForCurrentUserAsync(long attachmentId)
+    {
+        var attachment = await _dbContext.DiagnosticResultAttachments.AsNoTracking()
+            .Where(a => a.Id == attachmentId)
+            .Select(a => new { a.StoredFileName, a.OriginalFileName, a.ContentType, a.SizeBytes, a.DiagnosticOrderItem.DiagnosticOrderId })
+            .SingleOrDefaultAsync();
+        if (attachment == null) throw new NotFoundException("Tệp đính kèm không tồn tại.");
+        try
+        {
+            var principal = _httpContextAccessor?.HttpContext?.User;
+            DiagnosticOrderDto order;
+            if (principal?.IsInRole(RoleNames.DiagnosticTechnician) == true)
+                order = await GetTechnicianOrderByIdAsync(attachment.DiagnosticOrderId);
+            else if (principal?.IsInRole(RoleNames.LabSupervisor) == true)
+                order = await GetOrderForVerificationAsync(attachment.DiagnosticOrderId);
+            else if (principal?.IsInRole(RoleNames.Doctor) == true)
+            {
+                try { order = await GetOrderByIdForDoctorAsync(attachment.DiagnosticOrderId); }
+                catch (Exception exception) when (exception is NotFoundException or ForbiddenException or BusinessException)
+                { order = await GetOrderForVerificationAsync(attachment.DiagnosticOrderId); }
+            }
+            else if (principal?.IsInRole(RoleNames.Patient) == true)
+                order = await GetPatientOrderByIdAsync(attachment.DiagnosticOrderId);
+            else throw new NotFoundException("Tệp đính kèm không tồn tại.");
+            if (!order.Items.Any(i => i.Attachments.Any(a => a.Id == attachmentId)))
+                throw new NotFoundException("Tệp đính kèm không tồn tại.");
+        }
+        catch (Exception exception) when (exception is NotFoundException or ForbiddenException or BusinessException or UnauthorizedException)
+        { throw new NotFoundException("Tệp đính kèm không tồn tại."); }
+        return new(attachment.StoredFileName, attachment.OriginalFileName, attachment.ContentType, attachment.SizeBytes);
     }
 
     public async Task<DiagnosticOrderDto> RecordItemResultAsync(long orderId, long itemId, RecordDiagnosticResultRequest request)
@@ -2090,7 +2198,11 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         order.HasDeltaFailure = false;
         foreach (var item in order.Items)
         {
-            if (!published) item.Result = null;
+            if (!published)
+            {
+                item.Result = null;
+                item.Attachments = new();
+            }
             foreach (var value in item.Result?.Values ?? new List<DiagnosticResultValueDto>())
             {
                 value.PreviousValue = null;
@@ -2132,6 +2244,7 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
         var items = await _dbContext.DiagnosticOrderItems.AsNoTrackingWithIdentityResolution().AsSingleQuery()
             .Include(i => i.DiagnosticService).ThenInclude(s => s.Parameters.Where(p => p.IsActive))
             .Include(i => i.Result).ThenInclude(r => r!.Values)
+            .Include(i => i.Attachments)
             .Where(i => orderIds.Contains(i.DiagnosticOrderId)).OrderBy(i => i.Id).ToListAsync();
         var itemsByOrder = items.ToLookup(i => i.DiagnosticOrderId);
         foreach (var order in orders)
@@ -2144,7 +2257,8 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 order.SubmittedForVerificationByUserId, order.VerifiedByUserId, order.ReturnedByUserId
             }.Concat(order.Items.Where(item => item.Result != null)
                 .Select(item => (Guid?)item.Result!.ResultedByUserId))
-                .Concat(order.Items.SelectMany(item => new[] { item.CollectedByUserId, item.ReceivedByUserId, item.RejectedByUserId })))
+                .Concat(order.Items.SelectMany(item => new[] { item.CollectedByUserId, item.ReceivedByUserId, item.RejectedByUserId }))
+                .Concat(order.Items.SelectMany(item => item.Attachments.Select(a => (Guid?)a.UploadedByUserId))))
             .Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
         var users = (await _dbContext.Users.AsNoTracking().Where(user => userIds.Contains(user.Id))
             .Select(user => new { user.Id, user.FullName, user.PhoneNumber }).ToListAsync())
@@ -2223,7 +2337,13 @@ public class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 ReceivedAtUtc = i.ReceivedAtUtc, ReceivedByUserName = UserName(i.ReceivedByUserId),
                 RejectedAtUtc = i.RejectedAtUtc, RejectedByUserName = UserName(i.RejectedByUserId),
                 RejectionReason = i.RejectionReason?.ToString(), RejectionNote = i.RejectionNote, RecollectCount = i.RecollectCount,
-                Result = resDto
+                Result = resDto,
+                Attachments = i.Attachments.OrderBy(a => a.Id).Select(a => new DiagnosticAttachmentDto
+                {
+                    Id = a.Id, OriginalFileName = a.OriginalFileName, ContentType = a.ContentType, SizeBytes = a.SizeBytes,
+                    UploadedAtUtc = DateTime.SpecifyKind(a.UploadedAtUtc, DateTimeKind.Utc),
+                    UploadedByUserName = UserName(a.UploadedByUserId) ?? "Kỹ thuật viên"
+                }).ToList()
             };
         }).ToList();
 

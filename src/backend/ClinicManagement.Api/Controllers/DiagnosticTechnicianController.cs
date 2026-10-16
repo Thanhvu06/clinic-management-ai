@@ -53,6 +53,20 @@ public class DiagnosticTechnicianController : ControllerBase
 
     private readonly IDiagnosticWorkflowService _workflowService;
 
+    [HttpPost("orders/{orderId}/items/{itemId}/attachments")]
+    [RequestSizeLimit(11 * 1024 * 1024)]
+    public async Task<IActionResult> UploadAttachment(long orderId, long itemId, [FromForm] IFormFile file, CancellationToken cancellationToken)
+    {
+        await using var input = file.OpenReadStream();
+        return Ok(ApiResponse<DiagnosticOrderDto>.Ok(await _workflowService.UploadAttachmentAsync(orderId, itemId, input, file.Length, file.FileName, cancellationToken)));
+    }
+
+    [HttpDelete("orders/{orderId}/items/{itemId}/attachments/{attachmentId}")]
+    public async Task<IActionResult> DeleteAttachment(long orderId, long itemId, long attachmentId, CancellationToken cancellationToken)
+    {
+        return Ok(ApiResponse<DiagnosticOrderDto>.Ok(await _workflowService.DeleteAttachmentAsync(orderId, itemId, attachmentId, cancellationToken)));
+    }
+
     public DiagnosticTechnicianController(IDiagnosticWorkflowService workflowService)
     {
         _workflowService = workflowService;

@@ -19,6 +19,17 @@ export interface PagedResult<T> {
 }
 
 export const diagnosticApi = {
+    uploadAttachment: async (orderId: number, itemId: number, file: File): Promise<ApiResponse<DiagnosticOrderDto>> => {
+        const form = new FormData();
+        form.append('file', file);
+        return axiosClient.post<FormData, ApiResponse<DiagnosticOrderDto>>(`/diagnostics/orders/${orderId}/items/${itemId}/attachments`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+    },
+    deleteAttachment: async (orderId: number, itemId: number, attachmentId: number): Promise<ApiResponse<DiagnosticOrderDto>> => {
+        return axiosClient.delete<unknown, ApiResponse<DiagnosticOrderDto>>(`/diagnostics/orders/${orderId}/items/${itemId}/attachments/${attachmentId}`);
+    },
+    getAttachmentBlob: async (attachmentId: number): Promise<Blob> => {
+        return axiosClient.get<unknown, Blob>(`/diagnostic-attachments/${attachmentId}/content`, { responseType: 'blob' });
+    },
     getVerificationStats: async (): Promise<ApiResponse<import('../types/diagnostic').VerificationStatsDto>> => {
         return axiosClient.get<any, ApiResponse<import('../types/diagnostic').VerificationStatsDto>>('/diagnostic-verification/stats');
     },

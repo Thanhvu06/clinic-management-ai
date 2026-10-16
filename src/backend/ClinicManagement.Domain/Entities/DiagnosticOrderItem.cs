@@ -30,4 +30,5 @@ public class DiagnosticOrderItem
     public DiagnosticService DiagnosticService { get; set; } = null!;
     public HealthPackageRegistration? PackageRegistration { get; set; }
     public DiagnosticResult? Result { get; set; }
+    public ICollection<DiagnosticResultAttachment> Attachments { get; set; } = new List<DiagnosticResultAttachment>();
 }

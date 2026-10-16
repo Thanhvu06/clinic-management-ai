@@ -1,4 +1,5 @@
 import { toLocalDateString } from '../../utils/formatters';
+import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Button, Card, Col, Form, Input, Modal, Row, Tag } from 'antd';
@@ -1678,6 +1679,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                             ) : (
                                                                 <span className={tabStyles.emptyValue}>Chưa có</span>
                                                             )}
+                                                            {!!item.attachments?.length && <DiagnosticAttachmentList attachments={item.attachments} compact />}
                                                         </>;
                                                     }
                                                 },

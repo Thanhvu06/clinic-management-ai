@@ -77,3 +77,5 @@
 .verificationActions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--cc-space-sm); margin-top: var(--cc-space-md); }
 .verificationNote { flex: 1 1 240px; }
 .resultPrintLink { color: var(--cc-color-primary); font-weight: 600; }
+.attachmentPanel { margin-bottom: var(--cc-space-md); padding: var(--cc-space-md); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-sm); }
+.attachmentPanel h3 { margin: 0 0 var(--cc-space-sm); font-size: 1rem; }

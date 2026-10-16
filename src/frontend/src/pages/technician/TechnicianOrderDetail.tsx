@@ -3,7 +3,8 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { 
     ArrowLeft, CheckCircle, PlayCircle, Save, Check, FlaskConical, Waves, Scan, Stethoscope
 } from 'lucide-react';
-import { Alert, Button, Card, Input, Modal, Select, Tag } from 'antd';
+import { Alert, Button, Card, Input, Modal, Select, Tag, Upload } from 'antd';
+import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
 import { DataTable, EmptyState, LoadingState, StatusBadge, InlineError } from '../../components/common';
 import { diagnosticCategoryLabels, diagnosticStatusLabels, diagnosticStatusTone, diagnosticResultFlagLabels, diagnosticFlagTone, previewDiagnosticFlag, isCriticalDiagnosticFlag, diagnosticNotificationTime, formatDelta } from '../../utils/diagnosticLabels';
 import styles from './TechnicianOrderDetail.module.css';
@@ -55,6 +56,42 @@ export const TechnicianOrderDetail: React.FC = () => {
     const [returnReason, setReturnReason] = useState('');
     const [verificationBusy, setVerificationBusy] = useState(false);
     const [verificationError, setVerificationError] = useState('');
+    const [attachmentBusy, setAttachmentBusy] = useState<{ itemId: number; action: 'upload' | 'delete' } | null>(null);
+    const attachmentLock = useRef(false);
+
+    const uploadAttachment = async (itemId: number, file: File) => {
+        if (attachmentLock.current) {
+            showToast('Một tệp khác đang được xử lý.', 'error');
+            throw new Error('Một tệp khác đang được xử lý.');
+        }
+        const version = requestVersion.current;
+        attachmentLock.current = true; setAttachmentBusy({ itemId, action: 'upload' });
+        try {
+            const response = await diagnosticApi.uploadAttachment(orderId, itemId, file);
+            if (!response.success || !response.data) throw new Error(response.message || 'Không thể tải tệp lên.');
+            if (isMounted.current && version === requestVersion.current) setOrder(response.data);
+        } catch (failure: unknown) {
+            if (isMounted.current && version === requestVersion.current) showToast((failure as { message?: string })?.message || 'Không thể tải tệp lên.', 'error');
+            throw failure;
+        } finally {
+            attachmentLock.current = false;
+            if (isMounted.current) setAttachmentBusy(null);
+        }
+    };
+
+    const deleteAttachment = async (itemId: number, attachmentId: number) => {
+        if (attachmentLock.current) throw new Error('Một tệp khác đang được xử lý.');
+        const version = requestVersion.current;
+        attachmentLock.current = true; setAttachmentBusy({ itemId, action: 'delete' });
+        try {
+            const response = await diagnosticApi.deleteAttachment(orderId, itemId, attachmentId);
+            if (!response.success || !response.data) throw new Error(response.message || 'Không thể xóa tệp.');
+            if (isMounted.current && version === requestVersion.current) setOrder(response.data);
+        } finally {
+            attachmentLock.current = false;
+            if (isMounted.current) setAttachmentBusy(null);
+        }
+    };
 
     useEffect(() => {
         const selectedOrderId = order?.id;
@@ -385,6 +422,26 @@ export const TechnicianOrderDetail: React.FC = () => {
                                     <StatusBadge status={diagnosticStatusTone[item.status]} label={diagnosticStatusLabels[item.status]} />
                                 </div>
                                 {item.preparationInstructions && <div className={styles.preparationNote}><strong>Chuẩn bị:</strong> {item.preparationInstructions}</div>}
+                                {(item.category === 'Imaging' || item.category === 'Ultrasound') && <section className={styles.attachmentPanel} aria-label={`Tệp đính kèm: ${item.serviceName}`}>
+                                    <h3>Tệp đính kèm</h3>
+                                    {order.status === 'InProgress' && !verificationPending && item.status !== 'Cancelled' && <Upload
+                                        accept=".jpg,.jpeg,.png,.webp,.pdf" showUploadList={false}
+                                        disabled={attachmentBusy !== null || (item.attachments?.length ?? 0) >= 10}
+                                        beforeUpload={file => {
+                                            if (file.size > 10 * 1024 * 1024) { showToast('Mỗi tệp không được vượt quá 10 MB.', 'error'); return Upload.LIST_IGNORE; }
+                                            if (!/\.(jpe?g|png|webp|pdf)$/i.test(file.name) || (file.type && !['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.type))) {
+                                                showToast('Chỉ chấp nhận JPG, PNG, WebP hoặc PDF.', 'error'); return Upload.LIST_IGNORE;
+                                            }
+                                            return true;
+                                        }}
+                                        customRequest={({ file, onSuccess, onError }) => {
+                                            void uploadAttachment(item.id, file as File).then(() => onSuccess?.({})).catch((failure: unknown) => onError?.(new Error((failure as { message?: string })?.message || 'Không thể tải tệp lên.')));
+                                        }}>
+                                        <Button disabled={attachmentBusy !== null || (item.attachments?.length ?? 0) >= 10}>{attachmentBusy?.itemId === item.id ? attachmentBusy.action === 'upload' ? 'Đang tải lên...' : 'Đang xử lý...' : 'Thêm tệp đính kèm'}</Button>
+                                    </Upload>}
+                                    <p className={styles.secondary}>JPG, PNG, WebP hoặc PDF • Tối đa 10 MB/tệp, 10 tệp/dịch vụ.</p>
+                                    <DiagnosticAttachmentList attachments={item.attachments} canDelete={order.status === 'InProgress' && !verificationPending && item.status !== 'Cancelled'} onDelete={attachmentId => deleteAttachment(item.id, attachmentId)} />
+                                </section>}
                                 {requiresSpecimen && <section className={styles.specimenPanel} aria-label={`Mẫu bệnh phẩm: ${item.serviceName}`}>
                                     <div className={styles.specimenHeading}><h3>Mẫu bệnh phẩm</h3><Tag className={item.specimenStatus === 'Rejected' ? styles.rejectedSpecimenTag : styles.specimenTag}>{specimenStatusLabels[item.specimenStatus!]}</Tag></div>
                                     <p>{item.specimenType || '—'} • {item.containerType || '—'}</p>
