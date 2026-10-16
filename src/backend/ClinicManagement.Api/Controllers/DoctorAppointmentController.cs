@@ -122,6 +122,12 @@ public class DoctorAppointmentController : ControllerBase
         return Ok(ApiResponse<VitalSignsDto>.Ok(result, "Đã lưu dấu hiệu sinh tồn."));
     }
 
+    [HttpPost("{id}/prescription/safety-check")]
+    public async Task<IActionResult> CheckPrescriptionSafety(long id, [FromBody] ClinicManagement.Application.Prescriptions.DTOs.CheckPrescriptionSafetyRequest request)
+    {
+        return Ok(ApiResponse<ClinicManagement.Application.Prescriptions.DTOs.PrescriptionSafetyResultDto>.Ok(await _doctorAppointmentService.CheckPrescriptionSafetyAsync(id, request.MedicineIds)));
+    }
+
     [HttpGet("{id}/prescription")]
     [HttpGet("{id}/prescription-draft")]
     public async Task<IActionResult> GetPrescriptionDraft(long id)

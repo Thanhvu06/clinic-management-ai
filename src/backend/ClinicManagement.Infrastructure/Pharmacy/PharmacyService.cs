@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.Json;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Common.Interfaces;
@@ -186,6 +187,9 @@ public class PharmacyService : IPharmacyService
             Notes = prescription.Notes,
             CreatedAt = prescription.CreatedAt,
             DispensedAt = prescription.DispensedAt,
+            SafetyWarnings = string.IsNullOrWhiteSpace(prescription.SafetyWarningsSnapshot) ? new() :
+                JsonSerializer.Deserialize<List<PrescriptionSafetyWarningDto>>(prescription.SafetyWarningsSnapshot, new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? new(),
+            SafetyOverrideReason = prescription.SafetyOverrideReason,
             Items = prescription.Items.Select(i => new PrescriptionDetailItemDto
             {
                 MedicineId = i.MedicineId,

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ClinicManagement.Application.Appointments.DTOs;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.Json;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Doctors.Interfaces;
 using ClinicManagement.Application.Appointments.DTOs.Doctor;
@@ -15,6 +16,8 @@ using ClinicManagement.Application.Diagnostics.DTOs;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Application.Prescriptions.DTOs;
+using ClinicManagement.Application.Prescriptions.Interfaces;
+using ClinicManagement.Infrastructure.Prescriptions;
 using ClinicManagement.Application.Visits.DTOs;
 using ClinicManagement.Application.Visits.Interfaces;
 using ClinicManagement.Infrastructure.Common;
@@ -31,19 +34,22 @@ public class DoctorAppointmentService : IDoctorAppointmentService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ICurrentUserService _currentUserService;
     private readonly IPatientVisitService _patientVisitService;
+    private readonly IPrescriptionSafetyService _prescriptionSafety;
 
     public DoctorAppointmentService(
         AppDbContext dbContext, 
         IDoctorContextService doctorContextService,
         IDateTimeProvider dateTimeProvider,
         ICurrentUserService currentUserService,
-        IPatientVisitService patientVisitService)
+        IPatientVisitService patientVisitService,
+        IPrescriptionSafetyService? prescriptionSafety = null)
     {
         _dbContext = dbContext;
         _doctorContextService = doctorContextService;
         _dateTimeProvider = dateTimeProvider;
         _currentUserService = currentUserService;
         _patientVisitService = patientVisitService;
+        _prescriptionSafety = prescriptionSafety ?? new PrescriptionSafetyService(dbContext);
     }
 
     private Task<Doctor> GetCurrentDoctorAsync()
@@ -764,7 +770,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         PrescriptionDraftDto? presDto = null;
         if (appointment.Prescription != null)
         {
-            presDto = MapPrescriptionToDto(appointment.Prescription, doctorUser?.FullName ?? "Bác sĩ", patientUser?.FullName ?? appointment.Patient.FullName ?? "Bệnh nhân");
+            presDto = await MapPrescriptionToDtoAsync(appointment.Prescription, doctorUser?.FullName ?? "Bác sĩ", patientUser?.FullName ?? appointment.Patient.FullName ?? "Bệnh nhân");
         }
 
         return new PatientClinicalContextDto
@@ -866,6 +872,27 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         });
 
         await _dbContext.SaveChangesAsync();
+    }
+
+    private async Task ApplyPrescriptionSafetyAsync(Prescription prescription, IEnumerable<long> medicineIds, string? overrideReason)
+    {
+        var safety = await _prescriptionSafety.CheckAsync(prescription.PatientId, medicineIds);
+        var danger = safety.Warnings.Any(w => w.Level == "Danger");
+        var reason = overrideReason?.Trim();
+        if (danger && (reason?.Length ?? 0) < 10)
+            throw new BusinessException("PRESCRIPTION_SAFETY_OVERRIDE_REQUIRED", "Đơn thuốc có cảnh báo nguy hiểm. Vui lòng nhập lý do vẫn kê (ít nhất 10 ký tự).");
+        if (danger && reason!.Length > 500)
+            throw new BusinessException("VALIDATION_ERROR", "Lý do vẫn kê không được vượt quá 500 ký tự.");
+        prescription.SafetyWarningsSnapshot = safety.Warnings.Count > 0 ? JsonSerializer.Serialize(safety.Warnings, new JsonSerializerOptions(JsonSerializerDefaults.Web)) : null;
+        prescription.SafetyOverrideReason = danger ? reason : null;
+        prescription.SafetyAcknowledgedByUserId = danger ? GetUserId() : null;
+        prescription.SafetyAcknowledgedAtUtc = danger ? DateTime.UtcNow : null;
+        if (danger)
+            _dbContext.SystemAuditLogs.Add(new SystemAuditLog
+            {
+                UserId = GetUserId(), Action = "PrescriptionSafetyOverridden", EntityName = "Prescription", EntityId = prescription.Id.ToString(),
+                Description = $"Bác sĩ xác nhận phát đơn #{prescription.Id} có cảnh báo nguy hiểm. Lý do: {reason}", CreatedAt = DateTime.UtcNow
+            });
     }
 
     public async Task CompleteAppointmentAsync(long appointmentId, CompleteConsultationRequest request)
@@ -1018,11 +1045,13 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                         Instructions = item.Instructions
                     });
                 }
+                await ApplyPrescriptionSafetyAsync(prescription, request.PrescriptionItems.Select(i => i.MedicineId), request.PrescriptionSafetyOverrideReason);
             }
             else if (appointment.Prescription != null && appointment.Prescription.Status == PrescriptionStatus.Draft)
             {
                 if (appointment.Prescription.Items.Count > 0)
                 {
+                    await ApplyPrescriptionSafetyAsync(appointment.Prescription, appointment.Prescription.Items.Select(i => i.MedicineId), request.PrescriptionSafetyOverrideReason);
                     appointment.Prescription.Status = PrescriptionStatus.Issued;
                 }
             }
@@ -1398,6 +1427,23 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         return MapVitalsToDto(vitals, recorder?.FullName ?? "Nhân viên y tế");
     }
 
+    public async Task<PrescriptionSafetyResultDto> CheckPrescriptionSafetyAsync(long appointmentId, IEnumerable<long> medicineIds)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+        var patientId = await _dbContext.Appointments.AsNoTracking().Where(a => a.Id == appointmentId && a.DoctorId == doctor.Id)
+            .Select(a => (long?)a.PatientId).SingleOrDefaultAsync()
+            ?? throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
+        return await _prescriptionSafety.CheckAsync(patientId, medicineIds);
+    }
+
+    public async Task<PrescriptionSafetyResultDto> CheckVisitPrescriptionSafetyAsync(long visitId, IEnumerable<long> medicineIds)
+    {
+        var doctor = await GetCurrentDoctorAsync();
+        var visit = await _dbContext.PatientVisits.Include(v => v.Appointment).SingleOrDefaultAsync(v => v.Id == visitId);
+        visit = await ValidateVisitDoctorAccessAsync(visit, doctor);
+        return await _prescriptionSafety.CheckAsync(visit.PatientId, medicineIds);
+    }
+
     public async Task<PrescriptionDraftDto?> GetPrescriptionDraftAsync(long appointmentId)
     {
         var doctor = await GetCurrentDoctorAsync();
@@ -1415,7 +1461,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             ? await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == prescription.Patient.UserId.Value)
             : null;
 
-        return MapPrescriptionToDto(prescription, doctorUser?.FullName ?? "Bác sĩ", patientUser?.FullName ?? prescription.Patient?.FullName ?? "Bệnh nhân");
+        return await MapPrescriptionToDtoAsync(prescription, doctorUser?.FullName ?? "Bác sĩ", patientUser?.FullName ?? prescription.Patient?.FullName ?? "Bệnh nhân");
     }
 
     private async Task ValidatePrescriptionNotBilledOrLockedAsync(Prescription prescription)
@@ -1592,7 +1638,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         RowVersion = vs.RowVersion != null ? Convert.ToBase64String(vs.RowVersion) : null
     };
 
-    private static PrescriptionDraftDto MapPrescriptionToDto(Prescription p, string doctorName, string patientName) => new()
+    private async Task<PrescriptionDraftDto> MapPrescriptionToDtoAsync(Prescription p, string doctorName, string patientName) => new()
     {
         Id = p.Id,
         AppointmentId = p.AppointmentId,
@@ -1606,6 +1652,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         Notes = p.Notes,
         CreatedAt = p.CreatedAt,
         RowVersion = p.RowVersion != null ? Convert.ToBase64String(p.RowVersion) : null,
+        SafetyWarnings = (await _prescriptionSafety.CheckAsync(p.PatientId, p.Items.Select(i => i.MedicineId))).Warnings,
         Items = p.Items.Select(i => new PrescriptionDraftItemDto
         {
             MedicineId = i.MedicineId,
@@ -1909,7 +1956,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
         if (currentPrescription != null)
         {
-            presDto = MapPrescriptionToDto(currentPrescription, doctorUser?.FullName ?? "Bác sĩ", patientName);
+            presDto = await MapPrescriptionToDtoAsync(currentPrescription, doctorUser?.FullName ?? "Bác sĩ", patientName);
         }
 
         var diagnosticOrders = await _dbContext.DiagnosticOrders
@@ -2214,6 +2261,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                         Instructions = item.Instructions
                     });
                 }
+                await ApplyPrescriptionSafetyAsync(prescription, request.PrescriptionItems.Select(i => i.MedicineId), request.PrescriptionSafetyOverrideReason);
             }
             else
             {
@@ -2223,6 +2271,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
                 if (existingPres != null && existingPres.Status == PrescriptionStatus.Draft && existingPres.Items.Count > 0)
                 {
+                    await ApplyPrescriptionSafetyAsync(existingPres, existingPres.Items.Select(i => i.MedicineId), request.PrescriptionSafetyOverrideReason);
                     existingPres.Status = PrescriptionStatus.Issued;
                     existingPres.PatientVisitId = visit.Id;
                 }
@@ -2505,7 +2554,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             ? await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == prescription.Patient.UserId.Value)
             : null;
 
-        return MapPrescriptionToDto(prescription, doctorUser?.FullName ?? "Bác sĩ", patientUser?.FullName ?? prescription.Patient?.FullName ?? "Bệnh nhân");
+        return await MapPrescriptionToDtoAsync(prescription, doctorUser?.FullName ?? "Bác sĩ", patientUser?.FullName ?? prescription.Patient?.FullName ?? "Bệnh nhân");
     }
 
     public async Task<PrescriptionDraftDto> SaveVisitPrescriptionDraftAsync(long visitId, SavePrescriptionDraftRequest request)

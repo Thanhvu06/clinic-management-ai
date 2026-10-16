@@ -125,6 +125,7 @@ export interface PrescriptionDraftItemDto {
 }
 
 export interface PrescriptionDraftDto {
+    safetyWarnings?: import('./prescriptionSafety').PrescriptionSafetyWarningDto[];
     id: number;
     appointmentId: number;
     doctorId: number;
@@ -219,6 +220,7 @@ export interface SavePrescriptionDraftRequest {
 }
 
 export interface CompleteConsultationRequest {
+    prescriptionSafetyOverrideReason?: string;
     chiefComplaint?: string;
     clinicalFindings?: string;
     diagnosis?: string;

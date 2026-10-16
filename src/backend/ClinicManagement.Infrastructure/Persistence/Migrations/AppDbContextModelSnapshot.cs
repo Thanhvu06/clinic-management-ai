@@ -1734,6 +1734,255 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DrugAllergyCrossReaction", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AllergenClassKey")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("RelatedClassKey")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DrugAllergyCrossReactions", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1L,
+                            AllergenClassKey = "penicillin",
+                            Note = "Có thể dị ứng chéo nhóm beta-lactam.",
+                            RelatedClassKey = "cephalosporin"
+                        });
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DrugClassMember", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ClassKey")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ClassName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("IngredientKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClassKey", "IngredientKey")
+                        .IsUnique();
+
+                    b.ToTable("DrugClassMembers", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1L,
+                            ClassKey = "penicillin",
+                            ClassName = "Kháng sinh penicillin",
+                            IngredientKey = "amoxicillin"
+                        },
+                        new
+                        {
+                            Id = 2L,
+                            ClassKey = "cephalosporin",
+                            ClassName = "Kháng sinh cephalosporin",
+                            IngredientKey = "cefixime"
+                        },
+                        new
+                        {
+                            Id = 3L,
+                            ClassKey = "nsaid",
+                            ClassName = "Thuốc chống viêm không steroid",
+                            IngredientKey = "ibuprofen"
+                        },
+                        new
+                        {
+                            Id = 4L,
+                            ClassKey = "fluoroquinolone",
+                            ClassName = "Kháng sinh fluoroquinolon",
+                            IngredientKey = "ciprofloxacin"
+                        },
+                        new
+                        {
+                            Id = 5L,
+                            ClassKey = "macrolide",
+                            ClassName = "Kháng sinh macrolid",
+                            IngredientKey = "azithromycin"
+                        },
+                        new
+                        {
+                            Id = 6L,
+                            ClassKey = "corticosteroid",
+                            ClassName = "Corticosteroid",
+                            IngredientKey = "prednisolone"
+                        });
+                });
+
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.DrugInteractionRule", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("IngredientKeyA")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("IngredientKeyB")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Recommendation")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("Severity")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IngredientKeyA", "IngredientKeyB")
+                        .IsUnique();
+
+                    b.ToTable("DrugInteractionRules", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DrugInteractionRules_OrderedPair", "[IngredientKeyA] < [IngredientKeyB]");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1L,
+                            Description = "Có nguy cơ kéo dài khoảng QT.",
+                            IngredientKeyA = "ciprofloxacin",
+                            IngredientKeyB = "domperidone",
+                            IsActive = true,
+                            Recommendation = "Tránh phối hợp; cần bác sĩ/dược sĩ đánh giá.",
+                            Severity = 3
+                        },
+                        new
+                        {
+                            Id = 2L,
+                            Description = "Có nguy cơ kéo dài khoảng QT.",
+                            IngredientKeyA = "azithromycin",
+                            IngredientKeyB = "domperidone",
+                            IsActive = true,
+                            Recommendation = "Tránh phối hợp; cần bác sĩ/dược sĩ đánh giá.",
+                            Severity = 3
+                        },
+                        new
+                        {
+                            Id = 3L,
+                            Description = "Calci có thể làm giảm hấp thu ciprofloxacin.",
+                            IngredientKeyA = "calci",
+                            IngredientKeyB = "ciprofloxacin",
+                            IsActive = true,
+                            Recommendation = "Uống cách nhau ít nhất 2 giờ.",
+                            Severity = 2
+                        },
+                        new
+                        {
+                            Id = 4L,
+                            Description = "Nhôm phosphat có thể làm giảm hấp thu ciprofloxacin.",
+                            IngredientKeyA = "ciprofloxacin",
+                            IngredientKeyB = "nhom phosphat",
+                            IsActive = true,
+                            Recommendation = "Uống cách nhau ít nhất 2 giờ.",
+                            Severity = 2
+                        },
+                        new
+                        {
+                            Id = 5L,
+                            Description = "Tăng nguy cơ xuất huyết tiêu hóa.",
+                            IngredientKeyA = "ibuprofen",
+                            IngredientKeyB = "prednisolone",
+                            IsActive = true,
+                            Recommendation = "Đánh giá nguy cơ tiêu hóa trước khi phối hợp.",
+                            Severity = 2
+                        },
+                        new
+                        {
+                            Id = 6L,
+                            Description = "Có thể giảm tác dụng hạ áp và ảnh hưởng chức năng thận.",
+                            IngredientKeyA = "ibuprofen",
+                            IngredientKeyB = "losartan",
+                            IsActive = true,
+                            Recommendation = "Theo dõi huyết áp và chức năng thận.",
+                            Severity = 2
+                        },
+                        new
+                        {
+                            Id = 7L,
+                            Description = "Có thể gây rối loạn đường huyết.",
+                            IngredientKeyA = "ciprofloxacin",
+                            IngredientKeyB = "gliclazide",
+                            IsActive = true,
+                            Recommendation = "Theo dõi đường huyết khi phối hợp.",
+                            Severity = 2
+                        },
+                        new
+                        {
+                            Id = 8L,
+                            Description = "Prednisolone có thể làm tăng đường huyết.",
+                            IngredientKeyA = "metformin",
+                            IngredientKeyB = "prednisolone",
+                            IsActive = true,
+                            Recommendation = "Theo dõi đường huyết và đánh giá điều trị.",
+                            Severity = 2
+                        },
+                        new
+                        {
+                            Id = 9L,
+                            Description = "Có thể tăng nguy cơ tác dụng phụ trên cơ.",
+                            IngredientKeyA = "atorvastatin",
+                            IngredientKeyB = "azithromycin",
+                            IsActive = true,
+                            Recommendation = "Theo dõi đau cơ, báo bác sĩ khi có bất thường.",
+                            Severity = 1
+                        });
+                });
+
             modelBuilder.Entity("ClinicManagement.Domain.Entities.EmergencyContact", b =>
                 {
                     b.Property<long>("Id")
@@ -2767,6 +3016,19 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("SafetyAcknowledgedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("SafetyAcknowledgedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SafetyOverrideReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("SafetyWarningsSnapshot")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");

@@ -20,6 +20,12 @@ public class DoctorVisitsController : ControllerBase
         _doctorAppointmentService = doctorAppointmentService;
     }
 
+    [HttpPost("{id}/prescription/safety-check")]
+    public async Task<IActionResult> CheckPrescriptionSafety(long id, [FromBody] ClinicManagement.Application.Prescriptions.DTOs.CheckPrescriptionSafetyRequest request)
+    {
+        return Ok(ApiResponse<ClinicManagement.Application.Prescriptions.DTOs.PrescriptionSafetyResultDto>.Ok(await _doctorAppointmentService.CheckVisitPrescriptionSafetyAsync(id, request.MedicineIds)));
+    }
+
     [HttpGet("{id}/patient-context")]
     [HttpGet("{id}/clinical-context")]
     public async Task<IActionResult> GetPatientClinicalContext(long id)

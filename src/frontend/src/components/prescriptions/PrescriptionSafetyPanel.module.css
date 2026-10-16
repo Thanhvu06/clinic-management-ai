@@ -1,0 +1,7 @@
+.panel { padding: var(--cc-space-md); margin-bottom: var(--cc-space-md); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); background: var(--cc-color-bg-container); }
+.title { margin: 0 0 var(--cc-space-sm); color: var(--cc-color-text-dark); font-size: 1rem; }
+.allergies { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); margin-bottom: var(--cc-space-sm); }
+.warnings { display: flex; flex-direction: column; gap: var(--cc-space-sm); }
+.empty { color: var(--cc-color-text-secondary); margin: var(--cc-space-sm) 0; }
+.note { color: var(--cc-color-text-muted); font-size: 12px; margin: var(--cc-space-sm) 0 0; }
+.reason { margin: var(--cc-space-sm) 0 0; color: var(--cc-color-text-dark); white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -13,6 +13,10 @@ public class Prescription
     
     public PrescriptionStatus Status { get; set; } = PrescriptionStatus.Draft;
     public string? Notes { get; set; }
+    public string? SafetyOverrideReason { get; set; }
+    public string? SafetyWarningsSnapshot { get; set; }
+    public Guid? SafetyAcknowledgedByUserId { get; set; }
+    public DateTime? SafetyAcknowledgedAtUtc { get; set; }
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? DispensedAt { get; set; }
