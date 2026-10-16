@@ -159,6 +159,7 @@ public class PrescriptionDraftDto
     public DateTime CreatedAt { get; set; }
     public string? RowVersion { get; set; }
     public List<PrescriptionDraftItemDto> Items { get; set; } = new();
+    public List<ClinicManagement.Application.Prescriptions.DTOs.PrescriptionSafetyWarningDto> SafetyWarnings { get; set; } = new();
 }
 
 public class PrescriptionDraftItemDto
@@ -215,6 +216,8 @@ public class CompleteConsultationRequest
     public string? EncounterRowVersion { get; set; }
 
     public bool IssuePrescription { get; set; }
+    [MaxLength(500)]
+    public string? PrescriptionSafetyOverrideReason { get; set; }
     public string? PrescriptionNotes { get; set; }
     public string? PrescriptionRowVersion { get; set; }
     public List<SavePrescriptionItemRequest>? PrescriptionItems { get; set; }

@@ -52,6 +52,8 @@ public class PrescriptionDetailDto
     public DateTime CreatedAt { get; set; }
     public DateTime? DispensedAt { get; set; }
     public List<PrescriptionDetailItemDto> Items { get; set; } = new();
+    public List<PrescriptionSafetyWarningDto> SafetyWarnings { get; set; } = new();
+    public string? SafetyOverrideReason { get; set; }
 }
 
 public class PrescriptionDetailItemDto

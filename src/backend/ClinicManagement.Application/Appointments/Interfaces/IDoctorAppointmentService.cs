@@ -36,6 +36,8 @@ public interface IDoctorAppointmentService
     Task<VitalSignsDto> SaveVitalSignsAsync(long appointmentId, SaveVitalSignsRequest request);
 
     // Prescription draft & issuance
+    Task<ClinicManagement.Application.Prescriptions.DTOs.PrescriptionSafetyResultDto> CheckPrescriptionSafetyAsync(long appointmentId, IEnumerable<long> medicineIds);
+    Task<ClinicManagement.Application.Prescriptions.DTOs.PrescriptionSafetyResultDto> CheckVisitPrescriptionSafetyAsync(long visitId, IEnumerable<long> medicineIds);
     Task<PrescriptionDraftDto?> GetPrescriptionDraftAsync(long appointmentId);
     Task<PrescriptionDraftDto> SavePrescriptionDraftAsync(long appointmentId, SavePrescriptionDraftRequest request);
 

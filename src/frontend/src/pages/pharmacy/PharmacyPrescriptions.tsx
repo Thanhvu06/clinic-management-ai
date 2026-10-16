@@ -6,6 +6,8 @@ import { Button, Card, Input, Modal, Select } from 'antd';
 import { PageHeader, DataTable, StatusBadge, EmptyState, LoadingState } from '../../components/common';
 import styles from './PharmacyPrescriptions.module.css';
 import { useDialog } from '../../contexts/DialogContext';
+import { PrescriptionSafetyPanel } from '../../components/prescriptions/PrescriptionSafetyPanel';
+import type { PrescriptionSafetyWarningDto } from '../../types/prescriptionSafety';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 
 interface PrescriptionListItem {
@@ -24,6 +26,8 @@ interface PrescriptionListItem {
 }
 
 interface PrescriptionDetail {
+    safetyWarnings?: PrescriptionSafetyWarningDto[];
+    safetyOverrideReason?: string | null;
     id: number;
     appointmentId: number;
     appointmentCode: string;
@@ -240,6 +244,7 @@ export const PharmacyPrescriptions: React.FC = () => {
                         <div><span className={styles.secondary}>Trạng thái cấp phát:</span><div><StatusBadge status={selectedPrescription.status === 'Dispensed' ? 'completed' : 'pending'} label={selectedPrescription.status === 'Dispensed' ? `Đã cấp lúc ${formatDateTime(selectedPrescription.dispensedAt)}` : 'Chờ kiểm tra & cấp phát'} /></div></div>
                     </div>
                     {selectedPrescription.notes && <div className={styles.doctorNotes}><strong>Ghi chú từ Bác sĩ:</strong> {selectedPrescription.notes}</div>}
+                    {!!selectedPrescription.safetyWarnings?.length && <PrescriptionSafetyPanel result={{ allergies: [], warnings: selectedPrescription.safetyWarnings }} overrideReason={selectedPrescription.safetyOverrideReason} />}
                     {hasInsufficientStock && selectedPrescription.status === 'Issued' && <div className={styles.stockWarning}><AlertCircle size={20} /><span><strong>Cảnh báo tồn kho:</strong> Có thuốc trong đơn không đủ số lượng tồn kho để cấp phát. Vui lòng nhập thêm hàng hoặc trao đổi lại với bác sĩ!</span></div>}
                     {hasInactiveMedicine && selectedPrescription.status === 'Issued' && <div className={styles.inactiveWarning}><AlertCircle size={20} /><span><strong>Cảnh báo danh mục:</strong> Có thuốc trong đơn đã ngừng cung cấp hoặc ngừng hoạt động. Không thể cấp phát đơn này!</span></div>}
                     <h4 className={styles.itemsHeading}>Danh mục thuốc chỉ định</h4>

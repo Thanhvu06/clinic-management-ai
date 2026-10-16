@@ -27,6 +27,9 @@ export interface ActiveMedicine {
 }
 
 export const doctorApi = {
+    checkPrescriptionSafety: async (id: number, medicineIds: number[], isVisit = false): Promise<ApiResponse<import('../types/prescriptionSafety').PrescriptionSafetyResultDto>> => {
+        return axiosClient.post<unknown, ApiResponse<import('../types/prescriptionSafety').PrescriptionSafetyResultDto>>(`/doctor/${isVisit ? 'visits' : 'appointments'}/${id}/prescription/safety-check`, { medicineIds });
+    },
     getDashboard: async (): Promise<ApiResponse<DoctorDashboardDto>> => {
         return axiosClient.get<any, ApiResponse<DoctorDashboardDto>>('/doctor/dashboard');
     },

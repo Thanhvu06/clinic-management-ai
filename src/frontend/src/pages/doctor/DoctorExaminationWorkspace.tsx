@@ -1,8 +1,10 @@
 import { toLocalDateString } from '../../utils/formatters';
 import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
+import { PrescriptionSafetyPanel } from '../../components/prescriptions/PrescriptionSafetyPanel';
+import { usePrescriptionSafety } from '../../hooks/usePrescriptionSafety';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Button, Card, Col, Form, Input, Modal, Row, Tag } from 'antd';
+import { Alert, Button, Card, Col, Form, Input, Modal, Row, Tag } from 'antd';
 import {
     Stethoscope, HeartPulse, Pill, History, Save, CheckCircle,
     AlertCircle, ArrowLeft, Trash2, Search, Clock, Calendar,
@@ -121,6 +123,17 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     }>>([]);
     const [prescriptionRowVersion, setPrescriptionRowVersion] = useState<string | null>(null);
     const [savingPrescription, setSavingPrescription] = useState(false);
+    const safety = usePrescriptionSafety(currentId, isVisit, prescriptionItems.map(item => item.medicineId), !loading && !!context);
+    const dangerMedicineIds = new Set(safety.result?.warnings.filter(warning => warning.level === 'Danger').flatMap(warning => warning.medicineIds) || []);
+    const [safetyModalOpen, setSafetyModalOpen] = useState(false);
+    const [safetyOverrideReason, setSafetyOverrideReason] = useState('');
+    const [safetyOverrideError, setSafetyOverrideError] = useState('');
+
+    useEffect(() => {
+        let active = true;
+        void Promise.resolve().then(() => { if (active) { setSafetyModalOpen(false); setSafetyOverrideReason(''); setSafetyOverrideError(''); } });
+        return () => { active = false; };
+    }, [currentId, isVisit]);
 
     // Revisit Modal
     const [isRevisitModalOpen, setIsRevisitModalOpen] = useState(false);
@@ -647,7 +660,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
         setIsCompleteModalOpen(true);
     };
 
-    const handleCompleteConsultation = async () => {
+    const handleCompleteConsultation = async (overrideReason?: string) => {
         if (!diagnosis.trim()) {
             showAlert('Vui lòng nhập chẩn đoán bệnh trước khi hoàn tất khám.', 'Thiếu thông tin', 'warning');
             setActiveTab('encounter');
@@ -682,6 +695,12 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             return;
         }
 
+        if (issuePrescriptionCheck && prescriptionItems.length > 0 && dangerMedicineIds.size > 0 && (overrideReason?.trim().length ?? 0) < 10) {
+            setIsCompleteModalOpen(false);
+            setSafetyOverrideReason(''); setSafetyOverrideError(''); setSafetyModalOpen(true);
+            return;
+        }
+
         setCompleting(true);
         try {
             const req: CompleteConsultationRequest = {
@@ -696,6 +715,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 issuePrescription: issuePrescriptionCheck && prescriptionItems.length > 0,
                 prescriptionNotes,
                 prescriptionRowVersion,
+                ...(overrideReason ? { prescriptionSafetyOverrideReason: overrideReason.trim() } : {}),
                 prescriptionItems: issuePrescriptionCheck && prescriptionItems.length > 0 ? prescriptionItems.map(i => ({
                     medicineId: i.medicineId,
                     quantity: i.quantity,
@@ -712,6 +732,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             if (res.success) {
                 showToast('Đã hoàn tất ca khám lâm sàng và cấp hồ sơ bệnh án thành công!', 'success');
                 setIsCompleteModalOpen(false);
+                setSafetyModalOpen(false);
                 if (isVisit) {
                     navigate('/doctor/queue');
                 } else {
@@ -719,6 +740,12 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                 }
             }
         } catch (err: any) {
+            if ((err.errorCode || err.response?.data?.errorCode) === 'PRESCRIPTION_SAFETY_OVERRIDE_REQUIRED') {
+                setIsCompleteModalOpen(false);
+                setSafetyOverrideError(err.message || err.response?.data?.message || 'Vui lòng nhập lý do vẫn kê ít nhất 10 ký tự.');
+                setSafetyModalOpen(true);
+                return;
+            }
             if (err.response?.status === 409) {
                 showAlert('Hồ sơ bệnh án đã bị sửa đổi đồng thời bởi một phiên khác. Vui lòng tải lại và kiểm tra.', 'Xung đột dữ liệu', 'error');
                 await loadContext();
@@ -1791,6 +1818,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </div>
 
                             {/* Prescription Items Table */}
+                            <PrescriptionSafetyPanel result={safety.result} loading={safety.loading} error={safety.error} onRetry={safety.retry} />
                             {prescriptionItems.length === 0 ? (
                                 <EmptyState icon={<Pill size={36} className={tabStyles.emptyStateIcon} />} title="Chưa có thuốc nào trong đơn." description="Sử dụng ô tìm kiếm phía trên để thêm thuốc vào đơn." />
                             ) : (
@@ -1801,6 +1829,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             header: "Tên thuốc", accessor: (item) => {
                                                 return <>
                                                     <div className={tabStyles.itemTitle}>{item.medicineName}</div>
+                                                    {dangerMedicineIds.has(item.medicineId) && <Tag color="error">Nguy hiểm</Tag>}
                                                     <div className={tabStyles.secondaryCaption}>
                                                         {item.medicineCode} • {item.unit}
                                                     </div>
@@ -2108,7 +2137,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </Button>
                             <Button type="primary"
                                 htmlType="button"
-                                onClick={handleCompleteConsultation}
+                                onClick={() => void handleCompleteConsultation()}
                                 disabled={completing || !diagnosis.trim() || !summary.trim() || Boolean(pendingDiagnosticOrder) || Boolean(unreviewedDiagnosticOrder)}
                                 className={tabStyles.iconActionButton}
                             >
@@ -2151,6 +2180,13 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
                 </Modal>
             )}
+            <Modal open={safetyModalOpen} title="Xác nhận kê đơn có cảnh báo nguy hiểm" onCancel={() => { if (!completing) setSafetyModalOpen(false); }}
+                footer={<div className={tabStyles.modalFooterActions}><Button disabled={completing} onClick={() => setSafetyModalOpen(false)}>Quay lại chỉnh sửa</Button><Button type="primary" danger disabled={completing || safetyOverrideReason.trim().length < 10} onClick={() => void handleCompleteConsultation(safetyOverrideReason.trim())}>{completing ? 'Đang hoàn tất...' : 'Vẫn kê và hoàn tất'}</Button></div>}>
+                {safetyOverrideError && <Alert type="error" showIcon title={safetyOverrideError} />}
+                <p>Đơn thuốc có cảnh báo nguy hiểm. Vui lòng ghi rõ lý do vẫn kê (ít nhất 10 ký tự).</p>
+                <label htmlFor="prescription-safety-override">Lý do vẫn kê</label>
+                <Input.TextArea id="prescription-safety-override" maxLength={500} value={safetyOverrideReason} disabled={completing} onChange={event => setSafetyOverrideReason(event.target.value)} />
+            </Modal>
         </div>
     );
 };
