@@ -57,6 +57,15 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         return _doctorContextService.GetCurrentActiveDoctorAsync();
     }
 
+    private async Task<string?> NormalizeDiagnosisCodeAsync(string? diagnosisCode)
+    {
+        var code = diagnosisCode?.Trim().ToUpperInvariant();
+        if (string.IsNullOrEmpty(code)) return null;
+        if (!await _dbContext.Icd10Codes.AnyAsync(item => item.Code == code && item.IsActive))
+            throw new BusinessException("INVALID_ICD10", "Mã ICD-10 không có trong danh mục.");
+        return code;
+    }
+
     private Guid GetUserId()
     {
         var currentUserId = _currentUserService.UserId;
@@ -898,6 +907,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
     public async Task CompleteAppointmentAsync(long appointmentId, CompleteConsultationRequest request)
     {
         var doctor = await GetCurrentDoctorAsync();
+        request.DiagnosisCode = await NormalizeDiagnosisCodeAsync(request.DiagnosisCode);
         var userId = GetUserId();
 
         var appointment = await _dbContext.Appointments
@@ -1270,6 +1280,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
     public async Task<ClinicalEncounterDto> SaveEncounterAsync(long appointmentId, SaveEncounterRequest request)
     {
         var doctor = await GetCurrentDoctorAsync();
+        request.DiagnosisCode = await NormalizeDiagnosisCodeAsync(request.DiagnosisCode);
 
         var appointment = await _dbContext.Appointments
             .Include(a => a.VisitSummary)
@@ -2104,6 +2115,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
     public async Task CompleteVisitConsultationAsync(long visitId, CompleteConsultationRequest request)
     {
         var doctor = await GetCurrentDoctorAsync();
+        request.DiagnosisCode = await NormalizeDiagnosisCodeAsync(request.DiagnosisCode);
         var userId = GetUserId();
 
         var visit = await _dbContext.PatientVisits
@@ -2344,6 +2356,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
     public async Task<ClinicalEncounterDto> SaveVisitEncounterAsync(long visitId, SaveEncounterRequest request)
     {
         var doctor = await GetCurrentDoctorAsync();
+        request.DiagnosisCode = await NormalizeDiagnosisCodeAsync(request.DiagnosisCode);
 
         var visit = await _dbContext.PatientVisits
             .Include(v => v.VisitSummary)

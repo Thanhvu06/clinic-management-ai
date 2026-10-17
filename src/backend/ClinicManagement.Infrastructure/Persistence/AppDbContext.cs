@@ -15,6 +15,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     }
 
     public DbSet<Specialty> Specialties { get; set; } = null!;
+    public DbSet<Icd10Code> Icd10Codes { get; set; } = null!;
     public DbSet<Doctor> Doctors { get; set; } = null!;
     public DbSet<DoctorSpecialty> DoctorSpecialties { get; set; } = null!;
     public DbSet<Patient> Patients { get; set; } = null!;

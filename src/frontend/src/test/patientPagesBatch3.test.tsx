@@ -128,7 +128,7 @@ describe('BookAppointment batch 3', () => {
         await screen.findByText('Đặt lịch khám thành công!');
         for (const label of ['Mã lịch hẹn:', 'Chuyên khoa:', 'Bác sĩ khám:', 'Thời gian hẹn:', 'Lý do khám:']) expect(screen.getByText(label)).toBeInTheDocument();
         expect(screen.getAllByText('#APT-B3')).toHaveLength(2);
-        expect(screen.getByText('08:00 - 08:30 (2030-01-02)')).toBeInTheDocument();
+        expect(screen.getByText('08:00 - 08:30 (02/01/2030)')).toBeInTheDocument();
         expect(screen.getByText('"Khám sức khỏe định kỳ"')).toBeInTheDocument();
         expect(screen.getByRole('alert')).toHaveTextContent('trước giờ hẹn 10-15 phút');
         fireEvent.click(screen.getByRole('button', { name: 'Đặt thêm lịch hẹn khác' }));

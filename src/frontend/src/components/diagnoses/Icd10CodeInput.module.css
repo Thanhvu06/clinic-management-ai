@@ -1,0 +1,12 @@
+.field {
+    min-width: 0;
+}
+
+.error {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--cc-space-xs);
+    margin-top: var(--cc-space-xs);
+    color: var(--cc-color-danger);
+}

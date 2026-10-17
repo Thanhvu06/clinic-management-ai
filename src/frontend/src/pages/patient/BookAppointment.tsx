@@ -1,5 +1,5 @@
 import { getApiErrorMessage } from '../../utils/apiError';
-import { toLocalDateString } from '../../utils/formatters';
+import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import React, { useState, useEffect, useRef } from "react";
 import { Alert, Avatar, Button, Card, Descriptions, Empty, Form, Input, Result, Spin, Steps, Tag } from 'antd';
 import '../../theme/browserCompat';
@@ -849,7 +849,7 @@ export const BookAppointment: React.FC = () => {
                         { key: 'code', label: 'Mã lịch hẹn:', children: <strong>#{successBooking.appointmentCode}</strong> },
                         { key: 'specialty', label: 'Chuyên khoa:', children: successBooking.specialtyName },
                         { key: 'doctor', label: 'Bác sĩ khám:', children: successBooking.doctorName },
-                        { key: 'time', label: 'Thời gian hẹn:', children: <strong>{successBooking.startTime} - {successBooking.endTime} ({successBooking.slotDate})</strong> },
+                        { key: 'time', label: 'Thời gian hẹn:', children: <strong>{successBooking.startTime} - {successBooking.endTime} ({formatDateOnly(successBooking.slotDate)})</strong> },
                         { key: 'reason', label: 'Lý do khám:', children: successBooking.reason ? `"${successBooking.reason}"` : 'Không có' }
                     ]} />
                     <Alert className={styles.notice} type="info" showIcon title={<><strong>Lưu ý:</strong> Vui lòng có mặt tại quầy lễ tân trước giờ hẹn 10-15 phút và cung cấp mã lịch hẹn <strong>#{successBooking.appointmentCode}</strong> để được tiếp đón ưu tiên.</>} />

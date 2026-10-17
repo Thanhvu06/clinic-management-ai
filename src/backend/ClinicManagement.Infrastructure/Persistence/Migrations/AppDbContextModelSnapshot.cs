@@ -2213,6 +2213,1533 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.ToTable("HealthPackageRegistrations");
                 });
 
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.Icd10Code", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("ChapterCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NameVi")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("SearchKey")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.HasKey("Code");
+
+                    b.ToTable("Icd10Codes", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Code = "A04.9",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Nhiễm trùng đường ruột do vi khuẩn, không xác định",
+                            SearchKey = "a04.9 nhiem trung duong ruot do vi khuan, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "A05.9",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Ngộ độc thực phẩm do vi khuẩn, không xác định",
+                            SearchKey = "a05.9 ngo doc thuc pham do vi khuan, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "A06.9",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh do a-míp, không xác định",
+                            SearchKey = "a06.9 benh do a-mip, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "A08.0",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Viêm ruột do virus rota",
+                            SearchKey = "a08.0 viem ruot do virus rota"
+                        },
+                        new
+                        {
+                            Code = "A08.4",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Nhiễm trùng đường ruột do virus, không xác định",
+                            SearchKey = "a08.4 nhiem trung duong ruot do virus, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "A09.9",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Viêm dạ dày - ruột và/hoặc đại tràng không xác định căn nguyên",
+                            SearchKey = "a09.9 viem da day - ruot va/hoac dai trang khong xac dinh can nguyen"
+                        },
+                        new
+                        {
+                            Code = "A15.0",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh lao phổi, được khẳng định bằng soi đờm có nuôi cấy hoặc không nuôi cấy đờm",
+                            SearchKey = "a15.0 benh lao phoi, duoc khang dinh bang soi dom co nuoi cay hoac khong nuoi cay dom"
+                        },
+                        new
+                        {
+                            Code = "A49.9",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Nhiễm khuẩn, không xác định",
+                            SearchKey = "a49.9 nhiem khuan, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "B00.9",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh do nhiễm virus herpes [herpes simplex], không xác định",
+                            SearchKey = "b00.9 benh do nhiem virus herpes [herpes simplex], khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "B01.9",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh thủy đậu không biến chứng",
+                            SearchKey = "b01.9 benh thuy dau khong bien chung"
+                        },
+                        new
+                        {
+                            Code = "B02.9",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh zona không biến chứng",
+                            SearchKey = "b02.9 benh zona khong bien chung"
+                        },
+                        new
+                        {
+                            Code = "B07",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh mụn cóc do virus",
+                            SearchKey = "b07 benh mun coc do virus"
+                        },
+                        new
+                        {
+                            Code = "B08.4",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Viêm họng có mụn nước do virus đường ruột có phát ban",
+                            SearchKey = "b08.4 viem hong co mun nuoc do virus duong ruot co phat ban"
+                        },
+                        new
+                        {
+                            Code = "B15.9",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh viêm gan A không kèm hôn mê gan",
+                            SearchKey = "b15.9 benh viem gan a khong kem hon me gan"
+                        },
+                        new
+                        {
+                            Code = "B18.1",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh viêm gan virus B mạn tính không có viêm gan D [tác nhân delta]",
+                            SearchKey = "b18.1 benh viem gan virus b man tinh khong co viem gan d [tac nhan delta]"
+                        },
+                        new
+                        {
+                            Code = "B35.1",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh nấm móng",
+                            SearchKey = "b35.1 benh nam mong"
+                        },
+                        new
+                        {
+                            Code = "B35.3",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh nấm da chân",
+                            SearchKey = "b35.3 benh nam da chan"
+                        },
+                        new
+                        {
+                            Code = "B36.0",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh lang ben",
+                            SearchKey = "b36.0 benh lang ben"
+                        },
+                        new
+                        {
+                            Code = "B37.0",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh viêm miệng do nhiễm nấm candida",
+                            SearchKey = "b37.0 benh viem mieng do nhiem nam candida"
+                        },
+                        new
+                        {
+                            Code = "B76.9",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh nhiễm giun móc, không xác định",
+                            SearchKey = "b76.9 benh nhiem giun moc, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "B80",
+                            ChapterCode = "A00-B99",
+                            IsActive = true,
+                            NameVi = "Bệnh nhiễm giun kim enterobias",
+                            SearchKey = "b80 benh nhiem giun kim enterobias"
+                        },
+                        new
+                        {
+                            Code = "E03.9",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Suy tuyến giáp, không xác định",
+                            SearchKey = "e03.9 suy tuyen giap, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "E04.9",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Bướu giáp không độc, không xác định",
+                            SearchKey = "e04.9 buou giap khong doc, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "E05.9",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Nhiễm độc tuyến giáp [cường giáp], không xác định",
+                            SearchKey = "e05.9 nhiem doc tuyen giap [cuong giap], khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "E10.9",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Bệnh đái tháo đường típ 1, không kèm biến chứng",
+                            SearchKey = "e10.9 benh dai thao duong tip 1, khong kem bien chung"
+                        },
+                        new
+                        {
+                            Code = "E11.9",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Bệnh đái tháo đường típ 2, không kèm biến chứng",
+                            SearchKey = "e11.9 benh dai thao duong tip 2, khong kem bien chung"
+                        },
+                        new
+                        {
+                            Code = "E14.9",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Đái tháo đường không xác định, không kèm biến chứng",
+                            SearchKey = "e14.9 dai thao duong khong xac dinh, khong kem bien chung"
+                        },
+                        new
+                        {
+                            Code = "E55.9",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Thiếu vitamin D, không xác định",
+                            SearchKey = "e55.9 thieu vitamin d, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "E66.9",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Bệnh béo phì, không xác định",
+                            SearchKey = "e66.9 benh beo phi, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "E78.0",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Tăng cholesterol máu đơn thuần",
+                            SearchKey = "e78.0 tang cholesterol mau don thuan"
+                        },
+                        new
+                        {
+                            Code = "E78.1",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Tăng triglycerid máu đơn thuần",
+                            SearchKey = "e78.1 tang triglycerid mau don thuan"
+                        },
+                        new
+                        {
+                            Code = "E78.2",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Tăng lipid máu hỗn hợp",
+                            SearchKey = "e78.2 tang lipid mau hon hop"
+                        },
+                        new
+                        {
+                            Code = "E78.5",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Tăng lipid máu, không xác định",
+                            SearchKey = "e78.5 tang lipid mau, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "E79.0",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Tăng acid uric máu không có biểu hiện của viêm khớp và/hoặc bệnh tạo sỏi",
+                            SearchKey = "e79.0 tang acid uric mau khong co bieu hien cua viem khop va/hoac benh tao soi"
+                        },
+                        new
+                        {
+                            Code = "E86",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Giảm thể tích",
+                            SearchKey = "e86 giam the tich"
+                        },
+                        new
+                        {
+                            Code = "E87.1",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Giảm áp suất thẩm thấu và/hoặc giảm natri máu",
+                            SearchKey = "e87.1 giam ap suat tham thau va/hoac giam natri mau"
+                        },
+                        new
+                        {
+                            Code = "E87.6",
+                            ChapterCode = "E00-E90",
+                            IsActive = true,
+                            NameVi = "Hạ kali máu",
+                            SearchKey = "e87.6 ha kali mau"
+                        },
+                        new
+                        {
+                            Code = "F10.1",
+                            ChapterCode = "F00-F99",
+                            IsActive = true,
+                            NameVi = "Rối loạn tâm thần và/hoặc hành vi do sử dụng rượu, sử dụng gây hại",
+                            SearchKey = "f10.1 roi loan tam than va/hoac hanh vi do su dung ruou, su dung gay hai"
+                        },
+                        new
+                        {
+                            Code = "F17.2",
+                            ChapterCode = "F00-F99",
+                            IsActive = true,
+                            NameVi = "Rối loạn tâm thần và/hoặc hành vi do sử dụng thuốc lá, hội chứng nghiện",
+                            SearchKey = "f17.2 roi loan tam than va/hoac hanh vi do su dung thuoc la, hoi chung nghien"
+                        },
+                        new
+                        {
+                            Code = "F32.9",
+                            ChapterCode = "F00-F99",
+                            IsActive = true,
+                            NameVi = "Giai đoạn trầm cảm, không xác định",
+                            SearchKey = "f32.9 giai doan tram cam, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "F41.0",
+                            ChapterCode = "F00-F99",
+                            IsActive = true,
+                            NameVi = "Rối loạn hoảng sợ [lo âu kịch phát từng giai đoạn]",
+                            SearchKey = "f41.0 roi loan hoang so [lo au kich phat tung giai doan]"
+                        },
+                        new
+                        {
+                            Code = "F41.1",
+                            ChapterCode = "F00-F99",
+                            IsActive = true,
+                            NameVi = "Rối loạn lo âu tổng quát",
+                            SearchKey = "f41.1 roi loan lo au tong quat"
+                        },
+                        new
+                        {
+                            Code = "F41.9",
+                            ChapterCode = "F00-F99",
+                            IsActive = true,
+                            NameVi = "Rối loạn lo âu, không xác định",
+                            SearchKey = "f41.9 roi loan lo au, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "F43.2",
+                            ChapterCode = "F00-F99",
+                            IsActive = true,
+                            NameVi = "Rối loạn điều chỉnh [thích ứng]",
+                            SearchKey = "f43.2 roi loan dieu chinh [thich ung]"
+                        },
+                        new
+                        {
+                            Code = "F51.0",
+                            ChapterCode = "F00-F99",
+                            IsActive = true,
+                            NameVi = "Mất ngủ không thực tổn",
+                            SearchKey = "f51.0 mat ngu khong thuc ton"
+                        },
+                        new
+                        {
+                            Code = "G43.0",
+                            ChapterCode = "G00-G99",
+                            IsActive = true,
+                            NameVi = "Bệnh đau nửa đầu [migraine] không có tiền triệu [aura] [migraine thường]",
+                            SearchKey = "g43.0 benh dau nua dau [migraine] khong co tien trieu [aura] [migraine thuong]"
+                        },
+                        new
+                        {
+                            Code = "G43.1",
+                            ChapterCode = "G00-G99",
+                            IsActive = true,
+                            NameVi = "Bệnh đau nửa đầu [Migraine] có tiền triệu [aura] [Migraine cổ điển]",
+                            SearchKey = "g43.1 benh dau nua dau [migraine] co tien trieu [aura] [migraine co dien]"
+                        },
+                        new
+                        {
+                            Code = "G43.9",
+                            ChapterCode = "G00-G99",
+                            IsActive = true,
+                            NameVi = "Bệnh đau nửa đầu [migraine], không xác định",
+                            SearchKey = "g43.9 benh dau nua dau [migraine], khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "G44.2",
+                            ChapterCode = "G00-G99",
+                            IsActive = true,
+                            NameVi = "Đau đầu do căng thẳng",
+                            SearchKey = "g44.2 dau dau do cang thang"
+                        },
+                        new
+                        {
+                            Code = "G47.0",
+                            ChapterCode = "G00-G99",
+                            IsActive = true,
+                            NameVi = "Rối loạn vào giấc và/hoặc rối loạn duy trì giấc ngủ [chứng mất ngủ]",
+                            SearchKey = "g47.0 roi loan vao giac va/hoac roi loan duy tri giac ngu [chung mat ngu]"
+                        },
+                        new
+                        {
+                            Code = "G47.9",
+                            ChapterCode = "G00-G99",
+                            IsActive = true,
+                            NameVi = "Rối loạn giấc ngủ, không xác định",
+                            SearchKey = "g47.9 roi loan giac ngu, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "G50.0",
+                            ChapterCode = "G00-G99",
+                            IsActive = true,
+                            NameVi = "Đau dây thần kinh sinh ba [tam thoa] [V]",
+                            SearchKey = "g50.0 dau day than kinh sinh ba [tam thoa] [v]"
+                        },
+                        new
+                        {
+                            Code = "G51.0",
+                            ChapterCode = "G00-G99",
+                            IsActive = true,
+                            NameVi = "Liệt Bell",
+                            SearchKey = "g51.0 liet bell"
+                        },
+                        new
+                        {
+                            Code = "G54.2",
+                            ChapterCode = "G00-G99",
+                            IsActive = true,
+                            NameVi = "Rối loạn rễ thần kinh cổ, không phân loại mục khác",
+                            SearchKey = "g54.2 roi loan re than kinh co, khong phan loai muc khac"
+                        },
+                        new
+                        {
+                            Code = "G56.0",
+                            ChapterCode = "G00-G99",
+                            IsActive = true,
+                            NameVi = "Hội chứng ống cổ tay",
+                            SearchKey = "g56.0 hoi chung ong co tay"
+                        },
+                        new
+                        {
+                            Code = "H00.0",
+                            ChapterCode = "H00-H59",
+                            IsActive = true,
+                            NameVi = "Lẹo và/hoặc viêm sâu khác của mi mắt",
+                            SearchKey = "h00.0 leo va/hoac viem sau khac cua mi mat"
+                        },
+                        new
+                        {
+                            Code = "H01.0",
+                            ChapterCode = "H00-H59",
+                            IsActive = true,
+                            NameVi = "Viêm bờ mi",
+                            SearchKey = "h01.0 viem bo mi"
+                        },
+                        new
+                        {
+                            Code = "H04.1",
+                            ChapterCode = "H00-H59",
+                            IsActive = true,
+                            NameVi = "Rối loạn khác của tuyến lệ",
+                            SearchKey = "h04.1 roi loan khac cua tuyen le"
+                        },
+                        new
+                        {
+                            Code = "H10.0",
+                            ChapterCode = "H00-H59",
+                            IsActive = true,
+                            NameVi = "Viêm kết mạc nhầy mủ",
+                            SearchKey = "h10.0 viem ket mac nhay mu"
+                        },
+                        new
+                        {
+                            Code = "H10.1",
+                            ChapterCode = "H00-H59",
+                            IsActive = true,
+                            NameVi = "Viêm kết mạc dị ứng cấp tính",
+                            SearchKey = "h10.1 viem ket mac di ung cap tinh"
+                        },
+                        new
+                        {
+                            Code = "H10.9",
+                            ChapterCode = "H00-H59",
+                            IsActive = true,
+                            NameVi = "Viêm kết mạc, không xác định",
+                            SearchKey = "h10.9 viem ket mac, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "H11.0",
+                            ChapterCode = "H00-H59",
+                            IsActive = true,
+                            NameVi = "Mộng thịt",
+                            SearchKey = "h11.0 mong thit"
+                        },
+                        new
+                        {
+                            Code = "H16.9",
+                            ChapterCode = "H00-H59",
+                            IsActive = true,
+                            NameVi = "Viêm giác mạc, không xác định",
+                            SearchKey = "h16.9 viem giac mac, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "H25.9",
+                            ChapterCode = "H00-H59",
+                            IsActive = true,
+                            NameVi = "Đục thể thủy tinh tuổi già, không xác định",
+                            SearchKey = "h25.9 duc the thuy tinh tuoi gia, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "H40.9",
+                            ChapterCode = "H00-H59",
+                            IsActive = true,
+                            NameVi = "Glôcôm, không xác định",
+                            SearchKey = "h40.9 glocom, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "H52.1",
+                            ChapterCode = "H00-H59",
+                            IsActive = true,
+                            NameVi = "Cận thị",
+                            SearchKey = "h52.1 can thi"
+                        },
+                        new
+                        {
+                            Code = "H52.2",
+                            ChapterCode = "H00-H59",
+                            IsActive = true,
+                            NameVi = "Loạn thị",
+                            SearchKey = "h52.2 loan thi"
+                        },
+                        new
+                        {
+                            Code = "H60.9",
+                            ChapterCode = "H60-H95",
+                            IsActive = true,
+                            NameVi = "Viêm tai ngoài, không xác định",
+                            SearchKey = "h60.9 viem tai ngoai, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "H61.2",
+                            ChapterCode = "H60-H95",
+                            IsActive = true,
+                            NameVi = "Nút ráy tai",
+                            SearchKey = "h61.2 nut ray tai"
+                        },
+                        new
+                        {
+                            Code = "H65.9",
+                            ChapterCode = "H60-H95",
+                            IsActive = true,
+                            NameVi = "Viêm tai giữa không có mủ, không xác định",
+                            SearchKey = "h65.9 viem tai giua khong co mu, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "H66.9",
+                            ChapterCode = "H60-H95",
+                            IsActive = true,
+                            NameVi = "Viêm tai giữa, không xác định",
+                            SearchKey = "h66.9 viem tai giua, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "H81.1",
+                            ChapterCode = "H60-H95",
+                            IsActive = true,
+                            NameVi = "Chóng mặt kịch phát lành tính",
+                            SearchKey = "h81.1 chong mat kich phat lanh tinh"
+                        },
+                        new
+                        {
+                            Code = "H93.1",
+                            ChapterCode = "H60-H95",
+                            IsActive = true,
+                            NameVi = "Ù tai",
+                            SearchKey = "h93.1 u tai"
+                        },
+                        new
+                        {
+                            Code = "I10",
+                            ChapterCode = "I00-I99",
+                            IsActive = true,
+                            NameVi = "Bệnh tăng huyết áp vô căn (nguyên phát)",
+                            SearchKey = "i10 benh tang huyet ap vo can (nguyen phat)"
+                        },
+                        new
+                        {
+                            Code = "I11.9",
+                            ChapterCode = "I00-I99",
+                            IsActive = true,
+                            NameVi = "Bệnh tim do tăng huyết áp không kèm suy tim (xung huyết)",
+                            SearchKey = "i11.9 benh tim do tang huyet ap khong kem suy tim (xung huyet)"
+                        },
+                        new
+                        {
+                            Code = "I20.9",
+                            ChapterCode = "I00-I99",
+                            IsActive = true,
+                            NameVi = "Cơn đau thắt ngực, không xác định",
+                            SearchKey = "i20.9 con dau that nguc, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "I25.9",
+                            ChapterCode = "I00-I99",
+                            IsActive = true,
+                            NameVi = "Bệnh tim thiếu máu cục bộ mạn tính, không xác định",
+                            SearchKey = "i25.9 benh tim thieu mau cuc bo man tinh, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "I48.9",
+                            ChapterCode = "I00-I99",
+                            IsActive = true,
+                            NameVi = "Rung nhĩ và/hoặc cuồng nhĩ, không xác định",
+                            SearchKey = "i48.9 rung nhi va/hoac cuong nhi, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "I49.9",
+                            ChapterCode = "I00-I99",
+                            IsActive = true,
+                            NameVi = "Rối loạn nhịp tim, không xác định",
+                            SearchKey = "i49.9 roi loan nhip tim, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "I50.9",
+                            ChapterCode = "I00-I99",
+                            IsActive = true,
+                            NameVi = "Suy tim, không xác định",
+                            SearchKey = "i50.9 suy tim, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "I67.9",
+                            ChapterCode = "I00-I99",
+                            IsActive = true,
+                            NameVi = "Bệnh mạch máu não, không xác định",
+                            SearchKey = "i67.9 benh mach mau nao, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "I73.9",
+                            ChapterCode = "I00-I99",
+                            IsActive = true,
+                            NameVi = "Bệnh mạch máu ngoại vi, không xác định",
+                            SearchKey = "i73.9 benh mach mau ngoai vi, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "I83.9",
+                            ChapterCode = "I00-I99",
+                            IsActive = true,
+                            NameVi = "Giãn tĩnh mạch chi dưới không loét hoặc viêm",
+                            SearchKey = "i83.9 gian tinh mach chi duoi khong loet hoac viem"
+                        },
+                        new
+                        {
+                            Code = "I87.2",
+                            ChapterCode = "I00-I99",
+                            IsActive = true,
+                            NameVi = "Suy tĩnh mạch (mạn tính) (ngoại vi)",
+                            SearchKey = "i87.2 suy tinh mach (man tinh) (ngoai vi)"
+                        },
+                        new
+                        {
+                            Code = "I95.1",
+                            ChapterCode = "I00-I99",
+                            IsActive = true,
+                            NameVi = "Hạ huyết áp tư thế đứng",
+                            SearchKey = "i95.1 ha huyet ap tu the dung"
+                        },
+                        new
+                        {
+                            Code = "I95.9",
+                            ChapterCode = "I00-I99",
+                            IsActive = true,
+                            NameVi = "Hạ huyết áp, không xác định",
+                            SearchKey = "i95.9 ha huyet ap, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "J00",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm mũi họng cấp tính [cảm thường]",
+                            SearchKey = "j00 viem mui hong cap tinh [cam thuong]"
+                        },
+                        new
+                        {
+                            Code = "J01.0",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm xoang hàm cấp tính",
+                            SearchKey = "j01.0 viem xoang ham cap tinh"
+                        },
+                        new
+                        {
+                            Code = "J01.9",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm xoang cấp tính, không xác định",
+                            SearchKey = "j01.9 viem xoang cap tinh, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "J02.0",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm họng do liên cầu khuẩn [Streptococcus]",
+                            SearchKey = "j02.0 viem hong do lien cau khuan [streptococcus]"
+                        },
+                        new
+                        {
+                            Code = "J02.9",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm họng cấp, không đặc hiệu",
+                            SearchKey = "j02.9 viem hong cap, khong dac hieu"
+                        },
+                        new
+                        {
+                            Code = "J03.0",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm amydan do liên cầu khuẩn [Streptococcus]",
+                            SearchKey = "j03.0 viem amydan do lien cau khuan [streptococcus]"
+                        },
+                        new
+                        {
+                            Code = "J03.9",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm amydan cấp tính, không xác định",
+                            SearchKey = "j03.9 viem amydan cap tinh, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "J04.0",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm thanh quản cấp tính",
+                            SearchKey = "j04.0 viem thanh quan cap tinh"
+                        },
+                        new
+                        {
+                            Code = "J04.1",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm khí quản cấp tính",
+                            SearchKey = "j04.1 viem khi quan cap tinh"
+                        },
+                        new
+                        {
+                            Code = "J06.0",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm họng - thanh quản cấp tính",
+                            SearchKey = "j06.0 viem hong - thanh quan cap tinh"
+                        },
+                        new
+                        {
+                            Code = "J06.9",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Nhiễm trùng đường hô hấp trên cấp tính, không xác định",
+                            SearchKey = "j06.9 nhiem trung duong ho hap tren cap tinh, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "J10.1",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Cúm với biểu hiện hô hấp khác, đã xác định được virus cúm mùa",
+                            SearchKey = "j10.1 cum voi bieu hien ho hap khac, da xac dinh duoc virus cum mua"
+                        },
+                        new
+                        {
+                            Code = "J11.1",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Cúm có biểu hiện hô hấp khác, không xác định được virus",
+                            SearchKey = "j11.1 cum co bieu hien ho hap khac, khong xac dinh duoc virus"
+                        },
+                        new
+                        {
+                            Code = "J18.9",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm phổi, không xác định",
+                            SearchKey = "j18.9 viem phoi, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "J20.9",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm phế quản cấp tính, không xác định",
+                            SearchKey = "j20.9 viem phe quan cap tinh, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "J21.9",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm tiểu phế quản cấp tính, không xác định",
+                            SearchKey = "j21.9 viem tieu phe quan cap tinh, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "J22",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Nhiễm trùng hô hấp dưới cấp tính không xác định",
+                            SearchKey = "j22 nhiem trung ho hap duoi cap tinh khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "J30.1",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm mũi dị ứng do phấn hoa",
+                            SearchKey = "j30.1 viem mui di ung do phan hoa"
+                        },
+                        new
+                        {
+                            Code = "J30.4",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm mũi dị ứng, không xác định",
+                            SearchKey = "j30.4 viem mui di ung, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "J31.0",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm mũi mạn tính",
+                            SearchKey = "j31.0 viem mui man tinh"
+                        },
+                        new
+                        {
+                            Code = "J31.2",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm họng mạn tính",
+                            SearchKey = "j31.2 viem hong man tinh"
+                        },
+                        new
+                        {
+                            Code = "J32.9",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm xoang mạn tính, không xác định",
+                            SearchKey = "j32.9 viem xoang man tinh, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "J35.0",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Viêm amydan mạn tính",
+                            SearchKey = "j35.0 viem amydan man tinh"
+                        },
+                        new
+                        {
+                            Code = "J44.9",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Bệnh phổi tắc nghẽn mạn tính, không xác định",
+                            SearchKey = "j44.9 benh phoi tac nghen man tinh, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "J45.9",
+                            ChapterCode = "J00-J99",
+                            IsActive = true,
+                            NameVi = "Hen phế quản [hen suyễn] [hen], không xác định",
+                            SearchKey = "j45.9 hen phe quan [hen suyen] [hen], khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "K02.9",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Sâu răng, không xác định",
+                            SearchKey = "k02.9 sau rang, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "K04.0",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Viêm tủy răng",
+                            SearchKey = "k04.0 viem tuy rang"
+                        },
+                        new
+                        {
+                            Code = "K05.1",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Viêm lợi [nướu] mạn tính",
+                            SearchKey = "k05.1 viem loi [nuou] man tinh"
+                        },
+                        new
+                        {
+                            Code = "K12.0",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Loét miệng tái phát",
+                            SearchKey = "k12.0 loet mieng tai phat"
+                        },
+                        new
+                        {
+                            Code = "K21.0",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Bệnh trào ngược dạ dày - thực quản kèm viêm thực quản",
+                            SearchKey = "k21.0 benh trao nguoc da day - thuc quan kem viem thuc quan"
+                        },
+                        new
+                        {
+                            Code = "K21.9",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Bệnh trào ngược dạ dày - thực quản không kèm viêm thực quản",
+                            SearchKey = "k21.9 benh trao nguoc da day - thuc quan khong kem viem thuc quan"
+                        },
+                        new
+                        {
+                            Code = "K25.9",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Loét dạ dày, không xác định mạn tính hoặc cấp tính, không xuất huyết hoặc thủng",
+                            SearchKey = "k25.9 loet da day, khong xac dinh man tinh hoac cap tinh, khong xuat huyet hoac thung"
+                        },
+                        new
+                        {
+                            Code = "K26.9",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Loét tá tràng, không xác định mạn tính hoặc cấp tính, không xuất huyết hoặc thủng",
+                            SearchKey = "k26.9 loet ta trang, khong xac dinh man tinh hoac cap tinh, khong xuat huyet hoac thung"
+                        },
+                        new
+                        {
+                            Code = "K29.0",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Viêm dạ dày xuất huyết cấp tính",
+                            SearchKey = "k29.0 viem da day xuat huyet cap tinh"
+                        },
+                        new
+                        {
+                            Code = "K29.1",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Viêm dạ dày cấp tính khác",
+                            SearchKey = "k29.1 viem da day cap tinh khac"
+                        },
+                        new
+                        {
+                            Code = "K29.7",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Viêm dạ dày, không xác định",
+                            SearchKey = "k29.7 viem da day, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "K30",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Rối loạn tiêu hóa chức năng [không do loét]",
+                            SearchKey = "k30 roi loan tieu hoa chuc nang [khong do loet]"
+                        },
+                        new
+                        {
+                            Code = "K52.9",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Viêm dạ dày - ruột và/hoặc viêm đại tràng không do nhiễm trùng, không xác định",
+                            SearchKey = "k52.9 viem da day - ruot va/hoac viem dai trang khong do nhiem trung, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "K59.0",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Táo bón",
+                            SearchKey = "k59.0 tao bon"
+                        },
+                        new
+                        {
+                            Code = "K59.1",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Tiêu chảy chức năng",
+                            SearchKey = "k59.1 tieu chay chuc nang"
+                        },
+                        new
+                        {
+                            Code = "K60.0",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Nứt kẽ hậu môn cấp tính",
+                            SearchKey = "k60.0 nut ke hau mon cap tinh"
+                        },
+                        new
+                        {
+                            Code = "K64.9",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Bệnh trĩ, không xác định",
+                            SearchKey = "k64.9 benh tri, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "K76.0",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Gan (biến đổi của gan) nhiễm mỡ, không phân loại mục khác",
+                            SearchKey = "k76.0 gan (bien doi cua gan) nhiem mo, khong phan loai muc khac"
+                        },
+                        new
+                        {
+                            Code = "K80.2",
+                            ChapterCode = "K00-K93",
+                            IsActive = true,
+                            NameVi = "Sỏi túi mật không kèm viêm túi mật",
+                            SearchKey = "k80.2 soi tui mat khong kem viem tui mat"
+                        },
+                        new
+                        {
+                            Code = "L02.9",
+                            ChapterCode = "L00-L99",
+                            IsActive = true,
+                            NameVi = "Áp xe da, nhọt và/hoặc cụm nhọt, không xác định",
+                            SearchKey = "l02.9 ap xe da, nhot va/hoac cum nhot, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "L03.9",
+                            ChapterCode = "L00-L99",
+                            IsActive = true,
+                            NameVi = "Viêm mô bào, không xác định",
+                            SearchKey = "l03.9 viem mo bao, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "L20.9",
+                            ChapterCode = "L00-L99",
+                            IsActive = true,
+                            NameVi = "Viêm da cơ địa, không xác định",
+                            SearchKey = "l20.9 viem da co dia, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "L21.9",
+                            ChapterCode = "L00-L99",
+                            IsActive = true,
+                            NameVi = "Viêm da dầu, không xác định",
+                            SearchKey = "l21.9 viem da dau, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "L23.9",
+                            ChapterCode = "L00-L99",
+                            IsActive = true,
+                            NameVi = "Viêm da tiếp xúc dị ứng, nguyên nhân không xác định",
+                            SearchKey = "l23.9 viem da tiep xuc di ung, nguyen nhan khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "L24.9",
+                            ChapterCode = "L00-L99",
+                            IsActive = true,
+                            NameVi = "Viêm da tiếp xúc kích ứng, nguyên nhân không xác định",
+                            SearchKey = "l24.9 viem da tiep xuc kich ung, nguyen nhan khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "L25.9",
+                            ChapterCode = "L00-L99",
+                            IsActive = true,
+                            NameVi = "Viêm da tiếp xúc, không xác định",
+                            SearchKey = "l25.9 viem da tiep xuc, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "L30.9",
+                            ChapterCode = "L00-L99",
+                            IsActive = true,
+                            NameVi = "Viêm da, không xác định",
+                            SearchKey = "l30.9 viem da, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "L50.9",
+                            ChapterCode = "L00-L99",
+                            IsActive = true,
+                            NameVi = "Bệnh mày đay, không xác định",
+                            SearchKey = "l50.9 benh may day, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "L60.0",
+                            ChapterCode = "L00-L99",
+                            IsActive = true,
+                            NameVi = "Móng chọc thịt",
+                            SearchKey = "l60.0 mong choc thit"
+                        },
+                        new
+                        {
+                            Code = "L70.0",
+                            ChapterCode = "L00-L99",
+                            IsActive = true,
+                            NameVi = "Trứng cá thể thông thường",
+                            SearchKey = "l70.0 trung ca the thong thuong"
+                        },
+                        new
+                        {
+                            Code = "L70.9",
+                            ChapterCode = "L00-L99",
+                            IsActive = true,
+                            NameVi = "Trứng cá, không xác định",
+                            SearchKey = "l70.9 trung ca, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "M10.9",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Bệnh gút, không xác định",
+                            SearchKey = "m10.9 benh gut, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "M13.9",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Viêm khớp, không xác định",
+                            SearchKey = "m13.9 viem khop, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "M15.9",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Thoái hóa đa khớp, không xác định",
+                            SearchKey = "m15.9 thoai hoa da khop, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "M17.9",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Thoái hóa khớp gối, không xác định",
+                            SearchKey = "m17.9 thoai hoa khop goi, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "M19.9",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Thoái hóa khớp, không xác định",
+                            SearchKey = "m19.9 thoai hoa khop, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "M25.5",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Đau khớp",
+                            SearchKey = "m25.5 dau khop"
+                        },
+                        new
+                        {
+                            Code = "M47.9",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Thoái hóa đốt sống, không xác định",
+                            SearchKey = "m47.9 thoai hoa dot song, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "M50.9",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Rối loạn đĩa đệm đốt sống cổ, không xác định",
+                            SearchKey = "m50.9 roi loan dia dem dot song co, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "M51.9",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Rối loạn đĩa đệm cột sống, không xác định",
+                            SearchKey = "m51.9 roi loan dia dem cot song, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "M54.2",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Đau vai gáy",
+                            SearchKey = "m54.2 dau vai gay"
+                        },
+                        new
+                        {
+                            Code = "M54.5",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Đau thắt lưng",
+                            SearchKey = "m54.5 dau that lung"
+                        },
+                        new
+                        {
+                            Code = "M54.9",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Đau lưng, không xác định",
+                            SearchKey = "m54.9 dau lung, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "M65.9",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Viêm màng hoạt dịch và/hoặc viêm bao gân, không xác định",
+                            SearchKey = "m65.9 viem mang hoat dich va/hoac viem bao gan, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "M75.1",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Hội chứng chóp xoay",
+                            SearchKey = "m75.1 hoi chung chop xoay"
+                        },
+                        new
+                        {
+                            Code = "M79.1",
+                            ChapterCode = "M00-M99",
+                            IsActive = true,
+                            NameVi = "Đau cơ",
+                            SearchKey = "m79.1 dau co"
+                        },
+                        new
+                        {
+                            Code = "N20.0",
+                            ChapterCode = "N00-N99",
+                            IsActive = true,
+                            NameVi = "Sỏi thận",
+                            SearchKey = "n20.0 soi than"
+                        },
+                        new
+                        {
+                            Code = "N21.0",
+                            ChapterCode = "N00-N99",
+                            IsActive = true,
+                            NameVi = "Sỏi bàng quang",
+                            SearchKey = "n21.0 soi bang quang"
+                        },
+                        new
+                        {
+                            Code = "N23",
+                            ChapterCode = "N00-N99",
+                            IsActive = true,
+                            NameVi = "Cơn đau quặn thận không xác định",
+                            SearchKey = "n23 con dau quan than khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "N30.0",
+                            ChapterCode = "N00-N99",
+                            IsActive = true,
+                            NameVi = "Viêm bàng quang cấp tính",
+                            SearchKey = "n30.0 viem bang quang cap tinh"
+                        },
+                        new
+                        {
+                            Code = "N30.9",
+                            ChapterCode = "N00-N99",
+                            IsActive = true,
+                            NameVi = "Viêm bàng quang, không xác định",
+                            SearchKey = "n30.9 viem bang quang, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "N39.0",
+                            ChapterCode = "N00-N99",
+                            IsActive = true,
+                            NameVi = "Nhiễm trùng đường tiết niệu, vị trí không xác định",
+                            SearchKey = "n39.0 nhiem trung duong tiet nieu, vi tri khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "N40",
+                            ChapterCode = "N00-N99",
+                            IsActive = true,
+                            NameVi = "Phì đại [tăng sản] tuyến tiền liệt",
+                            SearchKey = "n40 phi dai [tang san] tuyen tien liet"
+                        },
+                        new
+                        {
+                            Code = "N41.9",
+                            ChapterCode = "N00-N99",
+                            IsActive = true,
+                            NameVi = "Bệnh viêm tuyến tiền liệt, không xác định",
+                            SearchKey = "n41.9 benh viem tuyen tien liet, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "N76.0",
+                            ChapterCode = "N00-N99",
+                            IsActive = true,
+                            NameVi = "Viêm âm đạo cấp tính",
+                            SearchKey = "n76.0 viem am dao cap tinh"
+                        },
+                        new
+                        {
+                            Code = "N92.6",
+                            ChapterCode = "N00-N99",
+                            IsActive = true,
+                            NameVi = "Kinh nguyệt thất thường, không xác định",
+                            SearchKey = "n92.6 kinh nguyet that thuong, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "R00.0",
+                            ChapterCode = "R00-R99",
+                            IsActive = true,
+                            NameVi = "Nhịp tim nhanh, không xác định",
+                            SearchKey = "r00.0 nhip tim nhanh, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "R05",
+                            ChapterCode = "R00-R99",
+                            IsActive = true,
+                            NameVi = "Ho",
+                            SearchKey = "r05 ho"
+                        },
+                        new
+                        {
+                            Code = "R06.0",
+                            ChapterCode = "R00-R99",
+                            IsActive = true,
+                            NameVi = "Khó thở",
+                            SearchKey = "r06.0 kho tho"
+                        },
+                        new
+                        {
+                            Code = "R07.4",
+                            ChapterCode = "R00-R99",
+                            IsActive = true,
+                            NameVi = "Đau ngực, không xác định",
+                            SearchKey = "r07.4 dau nguc, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "R10.1",
+                            ChapterCode = "R00-R99",
+                            IsActive = true,
+                            NameVi = "Đau khu trú bụng trên",
+                            SearchKey = "r10.1 dau khu tru bung tren"
+                        },
+                        new
+                        {
+                            Code = "R10.4",
+                            ChapterCode = "R00-R99",
+                            IsActive = true,
+                            NameVi = "Đau bụng khác và/hoặc không xác định",
+                            SearchKey = "r10.4 dau bung khac va/hoac khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "R11",
+                            ChapterCode = "R00-R99",
+                            IsActive = true,
+                            NameVi = "Buồn nôn và/hoặc nôn",
+                            SearchKey = "r11 buon non va/hoac non"
+                        },
+                        new
+                        {
+                            Code = "R42",
+                            ChapterCode = "R00-R99",
+                            IsActive = true,
+                            NameVi = "Hoa mắt và/hoặc chóng mặt",
+                            SearchKey = "r42 hoa mat va/hoac chong mat"
+                        },
+                        new
+                        {
+                            Code = "R50.9",
+                            ChapterCode = "R00-R99",
+                            IsActive = true,
+                            NameVi = "Sốt, không xác định",
+                            SearchKey = "r50.9 sot, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "R51",
+                            ChapterCode = "R00-R99",
+                            IsActive = true,
+                            NameVi = "Đau đầu",
+                            SearchKey = "r51 dau dau"
+                        },
+                        new
+                        {
+                            Code = "R53",
+                            ChapterCode = "R00-R99",
+                            IsActive = true,
+                            NameVi = "Khó chịu và/hoặc mệt mỏi",
+                            SearchKey = "r53 kho chiu va/hoac met moi"
+                        },
+                        new
+                        {
+                            Code = "R73.9",
+                            ChapterCode = "R00-R99",
+                            IsActive = true,
+                            NameVi = "Tăng đường huyết, không xác định",
+                            SearchKey = "r73.9 tang duong huyet, khong xac dinh"
+                        },
+                        new
+                        {
+                            Code = "Z00.0",
+                            ChapterCode = "Z00-Z99",
+                            IsActive = true,
+                            NameVi = "Khám sức khỏe tổng quát",
+                            SearchKey = "z00.0 kham suc khoe tong quat"
+                        },
+                        new
+                        {
+                            Code = "Z00.1",
+                            ChapterCode = "Z00-Z99",
+                            IsActive = true,
+                            NameVi = "Khám sức khỏe thường quy cho trẻ em",
+                            SearchKey = "z00.1 kham suc khoe thuong quy cho tre em"
+                        },
+                        new
+                        {
+                            Code = "Z01.0",
+                            ChapterCode = "Z00-Z99",
+                            IsActive = true,
+                            NameVi = "Khám mắt và/hoặc kiểm tra thị lực",
+                            SearchKey = "z01.0 kham mat va/hoac kiem tra thi luc"
+                        },
+                        new
+                        {
+                            Code = "Z01.1",
+                            ChapterCode = "Z00-Z99",
+                            IsActive = true,
+                            NameVi = "Khám tai và/hoặc kiểm tra thính lực",
+                            SearchKey = "z01.1 kham tai va/hoac kiem tra thinh luc"
+                        },
+                        new
+                        {
+                            Code = "Z09.9",
+                            ChapterCode = "Z00-Z99",
+                            IsActive = true,
+                            NameVi = "Tái khám sau điều trị không xác định đối với bệnh lý khác",
+                            SearchKey = "z09.9 tai kham sau dieu tri khong xac dinh doi voi benh ly khac"
+                        },
+                        new
+                        {
+                            Code = "Z25.1",
+                            ChapterCode = "Z00-Z99",
+                            IsActive = true,
+                            NameVi = "Nhu cầu tiêm chủng phòng bệnh cúm",
+                            SearchKey = "z25.1 nhu cau tiem chung phong benh cum"
+                        },
+                        new
+                        {
+                            Code = "Z30.0",
+                            ChapterCode = "Z00-Z99",
+                            IsActive = true,
+                            NameVi = "Tư vấn chung và/hoặc tư vấn về các biện pháp tránh thai",
+                            SearchKey = "z30.0 tu van chung va/hoac tu van ve cac bien phap tranh thai"
+                        },
+                        new
+                        {
+                            Code = "Z71.3",
+                            ChapterCode = "Z00-Z99",
+                            IsActive = true,
+                            NameVi = "Tư vấn và/hoặc theo dõi chế độ ăn uống",
+                            SearchKey = "z71.3 tu van va/hoac theo doi che do an uong"
+                        });
+                });
+
             modelBuilder.Entity("ClinicManagement.Domain.Entities.IdempotencyRecord", b =>
                 {
                     b.Property<long>("Id")
