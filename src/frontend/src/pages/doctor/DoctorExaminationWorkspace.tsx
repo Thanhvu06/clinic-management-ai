@@ -2,6 +2,7 @@ import { getApiErrorMessage } from '../../utils/apiError';
 import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
 import { PrescriptionSafetyPanel } from '../../components/prescriptions/PrescriptionSafetyPanel';
+import { Icd10CodeInput } from '../../components/diagnoses/Icd10CodeInput';
 import { usePrescriptionSafety } from '../../hooks/usePrescriptionSafety';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
@@ -1048,14 +1049,16 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                 </Col>
                                 <Col xs={24} md={6} className={tabStyles.responsiveColumn}>
                                     <Form.Item className={tabStyles.formField}>
-                                        <label className={tabStyles.fieldLabel}>
+                                        <label className={tabStyles.fieldLabel} htmlFor="diagnosis-code">
                                             Mã ICD-10
                                         </label>
-                                        <Input
-                                            type="text"
+                                        <Icd10CodeInput
                                             value={diagnosisCode}
-                                            onChange={(e) => setDiagnosisCode(e.target.value)}
-                                            placeholder="J02.9"
+                                            onChange={setDiagnosisCode}
+                                            onSelect={code => {
+                                                setDiagnosisCode(code.code);
+                                                setDiagnosis(current => current.trim() ? current : code.nameVi);
+                                            }}
                                             className={[tabStyles.formControl, tabStyles.diagnosisCodeInput].join(' ')}
                                         />
                                     </Form.Item>
