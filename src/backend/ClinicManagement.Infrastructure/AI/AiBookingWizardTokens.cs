@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.WebUtilities;
 namespace ClinicManagement.Infrastructure.AI;
 
 public enum BookingWizardStage : byte { Specialty, Doctor, Day, Slot, Facility, Reason, Review }
-public enum BookingWizardOperation : byte { Pick, Back, Reason, Preset }
+public enum BookingWizardOperation : byte { Pick, Back, Reason, Preset, Text }
 public sealed record BookingWizardSelection(
     Guid DraftId, BookingWizardStage Stage = BookingWizardStage.Specialty,
     long SpecialtyId = 0, long DoctorId = 0, int Day = 0, long SlotId = 0, byte Preset = 0, bool AnyDoctor = false, long? FacilityId = null);
@@ -69,6 +69,7 @@ public sealed class AiBookingWizardTokens
                 ("pick", BookingWizardOperation.Preset) when stage == BookingWizardStage.Reason && selection.Preset is >= 1 and <= 3 => selection,
                 ("back", BookingWizardOperation.Back) => selection,
                 ("reason", BookingWizardOperation.Reason) when stage == BookingWizardStage.Reason => selection,
+                ("text", BookingWizardOperation.Text) when stage <= BookingWizardStage.Facility && selection.Preset == 0 => selection,
                 _ => null
             };
         }
