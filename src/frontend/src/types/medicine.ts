@@ -30,6 +30,7 @@ export interface MedicineDto extends MedicineCatalogFields {
     imageUrl?: string | null;
 }
 export interface ActiveMedicineDto {
+    usableStock?: number;
     id: number;
     code: string;
     name: string;

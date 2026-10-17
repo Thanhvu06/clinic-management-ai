@@ -5,10 +5,11 @@ import type { ApiResponse } from '../../types';
 import { CalendarCheck, Plus, XCircle, Clock, RefreshCw } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
 import {
-    PageHeader, DataTable, StatusBadge, LoadingState, EmptyState, Pagination
+    PageHeader, DataTable, StatusBadge, LoadingState, EmptyState, Pagination, InlineError
 } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import styles from './DoctorLeaveRequests.module.css';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 interface LeaveRequest {
     id: number;
@@ -30,6 +31,7 @@ export const DoctorLeaveRequests: React.FC = () => {
     const { showAlert, showConfirm } = useDialog();
     const [requests, setRequests] = useState<LeaveRequest[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [totalItems, setTotalItems] = useState(0);
     const [page, setPage] = useState(1);
     const [statusFilter, setStatusFilter] = useState('');
@@ -40,6 +42,7 @@ export const DoctorLeaveRequests: React.FC = () => {
 
     const fetchRequests = useCallback(async () => {
         setLoading(true);
+        setLoadError('');
         try {
             const params = new URLSearchParams({
                 page: page.toString(),
@@ -51,9 +54,9 @@ export const DoctorLeaveRequests: React.FC = () => {
             if (res.success && res.data) {
                 setRequests(res.data.items);
                 setTotalItems(res.data.totalItems);
-            }
-        } catch {
-            // Error handling
+            } else setLoadError(getApiErrorMessage(res, 'Không tải được yêu cầu nghỉ.'));
+        } catch (error) {
+            setLoadError(getApiErrorMessage(error, 'Không tải được yêu cầu nghỉ.'));
         } finally {
             setLoading(false);
         }
@@ -182,6 +185,8 @@ export const DoctorLeaveRequests: React.FC = () => {
 
             {loading ? (
                 <LoadingState message="Đang tải dữ liệu..." />
+            ) : loadError ? (
+                <InlineError message={loadError} onRetry={fetchRequests} />
             ) : requests.length === 0 ? (
                 <EmptyState icon={<CalendarCheck size={44} />} title="Chưa có yêu cầu nghỉ nào." />
             ) : (

@@ -5,11 +5,16 @@ using ClinicManagement.Domain.Entities;
 using ClinicManagement.Application.Prescriptions;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using ClinicManagement.Application.Common.Interfaces;
+using ClinicManagement.Infrastructure.Pharmacy;
+using ClinicManagement.Infrastructure.Services;
 
 namespace ClinicManagement.Infrastructure.Medicines;
 
-public class MedicineCatalogService(AppDbContext db)
+public class MedicineCatalogService(AppDbContext db, IDateTimeProvider? dateTimeProvider = null)
 {
+    private readonly IDateTimeProvider _dateTimeProvider = dateTimeProvider ?? new DateTimeProvider();
+
     public Task<List<MedicineCategoryDto>> GetCategoriesAsync() => db.MedicineCategories.AsNoTracking()
         .OrderBy(c => c.SortOrder).ThenBy(c => c.Name).Select(c => new MedicineCategoryDto {
             Id = c.Id, Name = c.Name, Description = c.Description, SortOrder = c.SortOrder,
@@ -70,13 +75,13 @@ public class MedicineCatalogService(AppDbContext db)
         var count = await query.CountAsync();
         var offset = Math.Min((long)(page - 1) * pageSize, int.MaxValue);
         var items = await query.OrderBy(m => m.Name).ThenBy(m => m.Id).Skip((int)offset).Take(pageSize)
-            .Select(MedicineProjections.Public).ToListAsync();
+            .WithUsableStock(db, _dateTimeProvider.VietnamToday).Select(MedicineProjections.Public).ToListAsync();
         return new(items, count, page, pageSize);
     }
 
     public async Task<PublicMedicineDto> GetPublicMedicineAsync(long id)
     {
-        var medicine = await PublicQuery().Where(m => m.Id == id).Select(MedicineProjections.Public).FirstOrDefaultAsync()
+        var medicine = await PublicQuery().Where(m => m.Id == id).WithUsableStock(db, _dateTimeProvider.VietnamToday).Select(MedicineProjections.Public).FirstOrDefaultAsync()
             ?? throw new NotFoundException("Thuốc không tồn tại.");
         var ingredients = IngredientNormalizer.SplitIngredients(medicine.ActiveIngredient);
         medicine.Interactions = [];

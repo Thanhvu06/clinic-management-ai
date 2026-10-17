@@ -36,6 +36,7 @@ public class MedicineDto
 
 public class ActiveMedicineDto
 {
+    public int UsableStock { get; set; }
     public string? ImageUrl { get; set; }
     public int ReorderLevel { get; set; }
     public bool IsPrescriptionRequired { get; set; }

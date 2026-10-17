@@ -55,7 +55,8 @@ public class PharmacyService : IPharmacyService
         var tomorrow = _dateTimeProvider.ConvertVietnamToUtc(vietnamDate.AddDays(1).ToDateTime(TimeOnly.MinValue));
         var pendingCount = await _dbContext.Prescriptions.CountAsync(p => p.Status == PrescriptionStatus.Issued);
         var dispensedTodayCount = await _dbContext.Prescriptions.CountAsync(p => p.Status == PrescriptionStatus.Dispensed && p.DispensedAt >= today && p.DispensedAt < tomorrow);
-        var lowStockCount = await _dbContext.Medicines.CountAsync(m => m.IsActive && m.StockQuantity <= m.ReorderLevel);
+        var lowStockCount = await _dbContext.Medicines.WithUsableStock(_dbContext, vietnamDate)
+            .CountAsync(stock => stock.Medicine.IsActive && stock.Quantity <= stock.Medicine.ReorderLevel);
         var totalActiveMedicines = await _dbContext.Medicines.CountAsync(m => m.IsActive);
 
         return new PharmacyDashboardDto
@@ -174,11 +175,9 @@ public class PharmacyService : IPharmacyService
             : null;
 
         var medicineIds = prescription.Items.Select(item => item.MedicineId).ToList();
-        var expiredQuantities = await _dbContext.MedicineBatches.AsNoTracking()
-            .Where(batch => medicineIds.Contains(batch.MedicineId) && batch.ExpiryDate < _dateTimeProvider.VietnamToday)
-            .GroupBy(batch => batch.MedicineId)
-            .Select(group => new { MedicineId = group.Key, Quantity = group.Sum(batch => batch.QuantityRemaining) })
-            .ToDictionaryAsync(item => item.MedicineId, item => item.Quantity);
+        var usableStocks = await _dbContext.Medicines.AsNoTracking().Where(medicine => medicineIds.Contains(medicine.Id))
+            .WithUsableStock(_dbContext, _dateTimeProvider.VietnamToday)
+            .ToDictionaryAsync(stock => stock.Medicine.Id, stock => stock.Quantity);
         var batchAllocations = await _dbContext.MedicineStockTransactions.AsNoTracking()
             .Where(transaction => transaction.PrescriptionId == prescription.Id && transaction.MedicineBatchId != null &&
                 (transaction.Type == MedicineStockTransactionType.Reservation || transaction.Type == MedicineStockTransactionType.ReservationCancelled ||
@@ -214,7 +213,7 @@ public class PharmacyService : IPharmacyService
                 MedicineName = i.Medicine?.Name ?? "Thuốc",
                 Unit = i.Medicine?.Unit ?? "Hộp",
                 Quantity = i.Quantity,
-                AvailableStock = (i.Medicine?.StockQuantity ?? 0) - expiredQuantities.GetValueOrDefault(i.MedicineId),
+                AvailableStock = usableStocks.GetValueOrDefault(i.MedicineId),
                 BatchAllocations = batchAllocations.Where(allocation => allocation.MedicineId == i.MedicineId)
                     .Select(allocation => new PrescriptionBatchAllocationDto(allocation.BatchNumber, allocation.ExpiryDate, allocation.Quantity)).ToList(),
                 IsActive = i.Medicine?.IsActive ?? true,

@@ -1,7 +1,8 @@
 import { getApiErrorMessage } from '../../utils/apiError';
 import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Card, DatePicker, Flex, Form, Input, Modal } from 'antd';
+import { Alert, Button, Card, DatePicker, Flex, Form, Input, Modal } from 'antd';
+import type { Dayjs } from 'dayjs';
 import {
     ChevronLeft, ChevronRight, Clock,
     CalendarPlus, AlertTriangle, RefreshCw, ShieldAlert
@@ -11,6 +12,14 @@ import type { DoctorScheduleDayDto, LeavePreviewDto } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { PageHeader, InlineError, EmptyState, LoadingState } from '../../components/common';
 import styles from './DoctorSchedule.module.css';
+
+const vietnamToday = () => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(new Date());
+    const part = (type: string) => parts.find(value => value.type === type)?.value;
+    return `${part('year')}-${part('month')}-${part('day')}`;
+};
 
 export const DoctorSchedule: React.FC = () => {
     const { showAlert, showToast } = useDialog();
@@ -35,6 +44,8 @@ export const DoctorSchedule: React.FC = () => {
     const [leaveEndDate, setLeaveEndDate] = useState('');
     const [leavePreview, setLeavePreview] = useState<LeavePreviewDto | null>(null);
     const [previewLoading, setPreviewLoading] = useState(false);
+    const [previewError, setPreviewError] = useState('');
+    const [previewRetry, setPreviewRetry] = useState(0);
     const [submittingLeave, setSubmittingLeave] = useState(false);
 
     const startDateStr = toLocalDateString(currentMonday);
@@ -77,35 +88,31 @@ export const DoctorSchedule: React.FC = () => {
         setCurrentMonday(getMonday(new Date()));
     };
 
-    // When leave dates change, check preview
+    // Ignore an older response when the selected dates change or the modal closes.
     useEffect(() => {
-        if (!leaveStartDate || !leaveEndDate) {
-            setLeavePreview(null);
+        setLeavePreview(null);
+        setPreviewError('');
+        if (!leaveStartDate || !leaveEndDate || leaveStartDate > leaveEndDate) {
+            setPreviewLoading(false);
             return;
         }
-
-        if (leaveStartDate > leaveEndDate) {
-            setLeavePreview(null);
-            return;
-        }
-
+        let active = true;
+        setPreviewLoading(true);
         const fetchPreview = async () => {
-            setPreviewLoading(true);
             try {
                 const res = await doctorApi.previewLeave(leaveStartDate, leaveEndDate);
-                if (res.success && res.data) {
-                    setLeavePreview(res.data);
-                }
-            } catch {
-                setLeavePreview(null);
+                if (!active) return;
+                if (res.success && res.data) setLeavePreview(res.data);
+                else setPreviewError(getApiErrorMessage(res, 'Vui lòng thử lại.'));
+            } catch (error) {
+                if (active) setPreviewError(getApiErrorMessage(error, 'Vui lòng thử lại.'));
             } finally {
-                setPreviewLoading(false);
+                if (active) setPreviewLoading(false);
             }
         };
-
         const timer = setTimeout(fetchPreview, 400);
-        return () => clearTimeout(timer);
-    }, [leaveStartDate, leaveEndDate]);
+        return () => { active = false; clearTimeout(timer); };
+    }, [leaveStartDate, leaveEndDate, previewRetry]);
 
     const handleLeaveValuesChange = (_changed: any, all: any) => {
         setLeaveStartDate(all.startDate ? all.startDate.format('YYYY-MM-DD') : '');
@@ -118,6 +125,7 @@ export const DoctorSchedule: React.FC = () => {
         setLeaveStartDate('');
         setLeaveEndDate('');
         setLeavePreview(null);
+        setPreviewError('');
     };
 
     const handleSubmitLeave = async (values: { startDate: any; endDate: any; reason: string }) => {
@@ -258,11 +266,16 @@ export const DoctorSchedule: React.FC = () => {
             >
                 <Form form={leaveForm} layout="vertical" onFinish={handleSubmitLeave} onValuesChange={handleLeaveValuesChange}>
                     <Flex gap="small">
-                        <Form.Item name="startDate" label="Từ ngày" rules={[{ required: true, message: 'Vui lòng chọn từ ngày' }]} className={styles.icon3}>
-                            <DatePicker className={styles.control1} format="DD/MM/YYYY" />
+                        <Form.Item name="startDate" label="Từ ngày" rules={[{ required: true, message: 'Vui lòng chọn từ ngày' }, {
+                            validator: (_, value: Dayjs) => !value || value.format('YYYY-MM-DD') > vietnamToday() ? Promise.resolve() : Promise.reject(new Error('Vui lòng chọn từ ngày mai.'))
+                        }]} className={styles.icon3}>
+                            <DatePicker className={styles.control1} format="DD/MM/YYYY" disabledDate={date => date.format('YYYY-MM-DD') <= vietnamToday()} />
                         </Form.Item>
-                        <Form.Item name="endDate" label="Đến ngày" rules={[{ required: true, message: 'Vui lòng chọn đến ngày' }]} className={styles.icon3}>
-                            <DatePicker className={styles.control1} format="DD/MM/YYYY" />
+                        <Form.Item name="endDate" label="Đến ngày" dependencies={['startDate']} rules={[{ required: true, message: 'Vui lòng chọn đến ngày' }, {
+                            validator: (_, value: Dayjs) => !value || (value.format('YYYY-MM-DD') > vietnamToday() && (!leaveStartDate || value.format('YYYY-MM-DD') >= leaveStartDate))
+                                ? Promise.resolve() : Promise.reject(new Error('Ngày kết thúc phải từ ngày mai và không trước ngày bắt đầu.'))
+                        }]} className={styles.icon3}>
+                            <DatePicker className={styles.control1} format="DD/MM/YYYY" disabledDate={date => date.format('YYYY-MM-DD') <= vietnamToday() || Boolean(leaveStartDate && date.format('YYYY-MM-DD') < leaveStartDate)} />
                         </Form.Item>
                     </Flex>
 
@@ -277,7 +290,10 @@ export const DoctorSchedule: React.FC = () => {
                         </Flex>
                     )}
 
-                    {leavePreview && (
+                    {previewError && !previewLoading && <Alert type="error" title="Không kiểm tra được lịch hẹn bị ảnh hưởng"
+                        description={previewError} action={<Button disabled={previewLoading} onClick={() => setPreviewRetry(value => value + 1)}>Thử lại</Button>} />}
+
+                    {!previewError && !previewLoading && leavePreview && (
                         <div className={`${styles.previewBanner} ${leavePreview.affectedAppointmentCount > 0 ? styles.previewBannerWarn : styles.previewBannerOk}`}>
                             <Flex align="center" gap={8} className={[leavePreview.affectedAppointmentCount > 0 ? styles.previewHeadWarn : styles.previewHeadOk, styles.text2].join(' ')}>
                                 {leavePreview.affectedAppointmentCount > 0 ? <AlertTriangle size={18} /> : <ShieldAlert size={18} />}
