@@ -4068,6 +4068,66 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.ToTable("Medicines", (string)null);
                 });
 
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.MedicineBatch", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BatchNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DisposeReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("DisposedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("ExpiryDate")
+                        .HasColumnType("date");
+
+                    b.Property<long>("MedicineId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("QuantityReceived")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuantityRemaining")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<decimal?>("UnitCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MedicineId", "BatchNumber", "ExpiryDate")
+                        .IsUnique();
+
+                    b.ToTable("MedicineBatches", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MedicineBatch_QuantityReceived", "[QuantityReceived] >= 0");
+
+                            t.HasCheckConstraint("CK_MedicineBatch_QuantityRemaining", "[QuantityRemaining] >= 0");
+                        });
+                });
+
             modelBuilder.Entity("ClinicManagement.Domain.Entities.MedicineCategory", b =>
                 {
                     b.Property<long>("Id")
@@ -4124,6 +4184,9 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<long?>("MedicineBatchId")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("MedicineId")
                         .HasColumnType("bigint");
 
@@ -4140,6 +4203,8 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("MedicineBatchId");
 
                     b.HasIndex("MedicineId");
 
@@ -5601,8 +5666,24 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("Category");
                 });
 
+            modelBuilder.Entity("ClinicManagement.Domain.Entities.MedicineBatch", b =>
+                {
+                    b.HasOne("ClinicManagement.Domain.Entities.Medicine", "Medicine")
+                        .WithMany()
+                        .HasForeignKey("MedicineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Medicine");
+                });
+
             modelBuilder.Entity("ClinicManagement.Domain.Entities.MedicineStockTransaction", b =>
                 {
+                    b.HasOne("ClinicManagement.Domain.Entities.MedicineBatch", "MedicineBatch")
+                        .WithMany()
+                        .HasForeignKey("MedicineBatchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ClinicManagement.Domain.Entities.Medicine", "Medicine")
                         .WithMany("StockTransactions")
                         .HasForeignKey("MedicineId")
@@ -5614,6 +5695,8 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         .HasForeignKey("PrescriptionId");
 
                     b.Navigation("Medicine");
+
+                    b.Navigation("MedicineBatch");
 
                     b.Navigation("Prescription");
                 });

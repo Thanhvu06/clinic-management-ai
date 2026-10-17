@@ -7,5 +7,6 @@ public enum MedicineStockTransactionType
     Dispense = 3,
     Adjustment = 4,
     Reservation = 5,
-    ReservationCancelled = 6
+    ReservationCancelled = 6,
+    Disposal = 7
 }

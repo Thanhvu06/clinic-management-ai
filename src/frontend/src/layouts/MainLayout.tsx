@@ -59,6 +59,7 @@ const NAV_BY_ROLE: Record<string, NavEntry[]> = {
         { to: '/pharmacy/prescriptions', icon: CalendarCheck, label: 'Đơn thuốc chờ cấp' },
         { to: '/pharmacy/medicines', icon: Pill, label: 'Danh mục thuốc' },
         { to: '/pharmacy/inventory', icon: History, label: 'Lịch sử kho' },
+        { to: '/pharmacy/batches', icon: Package, label: 'Lô thuốc & hạn dùng' },
     ],
     DiagnosticTechnician: [
         { to: '/diagnostics', icon: FlaskConical, label: 'Hàng đợi chỉ định' },
@@ -143,6 +144,7 @@ export const MainLayout: React.FC = () => {
         if (pathname.startsWith('/pharmacy/prescriptions')) return 'Đơn thuốc chờ cấp';
         if (pathname.startsWith('/pharmacy/medicines')) return 'Kho dược phẩm';
         if (pathname.startsWith('/pharmacy/inventory')) return 'Biến động tồn kho';
+        if (pathname.startsWith('/pharmacy/batches')) return 'Lô thuốc & hạn dùng';
         if (pathname.startsWith('/pharmacy')) return 'Bàn làm việc Dược sĩ';
 
         if (pathname.startsWith('/diagnostics/verification')) return 'Chờ duyệt kết quả';

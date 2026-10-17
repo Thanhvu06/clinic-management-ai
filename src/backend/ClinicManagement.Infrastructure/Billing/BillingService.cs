@@ -16,6 +16,7 @@ using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Common;
 using ClinicManagement.Infrastructure.Persistence;
+using ClinicManagement.Infrastructure.Pharmacy;
 using ClinicManagement.Infrastructure.Visits;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -924,24 +925,14 @@ public class BillingService : IBillingService
         var reservations = await _dbContext.MedicineStockTransactions
             .Where(t => t.PrescriptionId.HasValue && prescriptionIds.Contains(t.PrescriptionId.Value) &&
                 (t.Type == MedicineStockTransactionType.Reservation || t.Type == MedicineStockTransactionType.ReservationCancelled))
-            .GroupBy(t => new { t.PrescriptionId, t.MedicineId })
-            .Select(group => new { group.Key.PrescriptionId, group.Key.MedicineId, Balance = group.Sum(t => t.QuantityChange) })
-            .Where(balance => balance.Balance < 0).ToListAsync(cancellationToken);
+            .Select(t => new { PrescriptionId = t.PrescriptionId!.Value, t.MedicineId }).Distinct().ToListAsync(cancellationToken);
         var medicineIds = reservations.Select(r => r.MedicineId).Distinct().ToList();
         var medicines = await _dbContext.Medicines.Where(m => medicineIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id, cancellationToken);
+        var allocator = new MedicineBatchAllocator(_dbContext, _dateTimeProvider);
         foreach (var reservation in reservations)
         {
-            var medicine = medicines[reservation.MedicineId];
-            var quantity = -reservation.Balance;
-            medicine.StockQuantity += quantity;
-            medicine.UpdatedAt = _dateTimeProvider.UtcNow;
-            _dbContext.MedicineStockTransactions.Add(new MedicineStockTransaction
-            {
-                MedicineId = medicine.Id, Type = MedicineStockTransactionType.ReservationCancelled,
-                QuantityChange = quantity, BalanceAfter = medicine.StockQuantity,
-                PrescriptionId = reservation.PrescriptionId, ActorUserId = actorUserId,
-                Reason = $"Trả thuốc giữ chỗ do hủy hóa đơn #{invoice.InvoiceCode}", CreatedAt = _dateTimeProvider.UtcNow
-            });
+            await allocator.Return(medicines[reservation.MedicineId], reservation.PrescriptionId,
+                $"Trả thuốc giữ chỗ do hủy hóa đơn #{invoice.InvoiceCode}", actorUserId, cancellationToken);
         }
         foreach (var prescription in releasable) prescription.Status = PrescriptionStatus.Issued;
     }

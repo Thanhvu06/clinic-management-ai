@@ -1,0 +1,9 @@
+.page { display: flex; flex-direction: column; gap: var(--cc-space-md); }
+.filters { display: flex; flex-wrap: wrap; gap: var(--cc-space-sm); }
+.statusFilter { min-width: 220px; }
+.search { flex: 1; min-width: 180px; }
+.control { width: 100%; }
+.actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--cc-space-sm); }
+.muted { color: var(--cc-color-text-secondary); font-size: 0.85rem; }
+.warning { margin-bottom: var(--cc-space-md); }
+@media (max-width: 480px) { .filters > * { width: 100%; min-width: 0; } }

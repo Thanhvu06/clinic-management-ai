@@ -1,4 +1,6 @@
 import { getApiErrorMessage } from '../../utils/apiError';
+import { formatDateOnly } from '../../utils/formatters';
+import type { BatchAllocation } from '../../types/pharmacyBatch';
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
@@ -45,6 +47,7 @@ interface PrescriptionDetail {
 }
 
 interface PrescriptionItemDetail {
+    batchAllocations?: BatchAllocation[];
     medicineId: number;
     medicineCode: string;
     medicineName: string;
@@ -250,7 +253,7 @@ export const PharmacyPrescriptions: React.FC = () => {
                     {hasInactiveMedicine && selectedPrescription.status === 'Issued' && <div className={styles.inactiveWarning}><AlertCircle size={20} /><span><strong>Cảnh báo danh mục:</strong> Có thuốc trong đơn đã ngừng cung cấp hoặc ngừng hoạt động. Không thể cấp phát đơn này!</span></div>}
                     <h4 className={styles.itemsHeading}>Danh mục thuốc chỉ định</h4>
                     <div className={styles.itemsScroll}><DataTable data={selectedPrescription.items.map((item,index) => ({...item,lineIndex:index}))} keyExtractor={item => item.lineIndex} columns={[
-                        {header:'Tên thuốc',accessor:item => <><strong>{item.medicineName}</strong><div className={styles.medicineMeta}><span>{item.medicineCode}</span>{item.isActive === false && <StatusBadge status="cancelled" label="Ngừng hoạt động" size="sm" />}</div></>},
+                        {header:'Tên thuốc',accessor:item => <><strong>{item.medicineName}</strong><div className={styles.medicineMeta}><span>{item.medicineCode}</span>{item.isActive === false && <StatusBadge status="cancelled" label="Ngừng hoạt động" size="sm" />}</div>{item.batchAllocations?.map((allocation, index) => <div key={`${allocation.batchNumber}-${allocation.expiryDate}-${index}`} className={styles.instructions}>Lô {allocation.batchNumber} · HSD {formatDateOnly(allocation.expiryDate).slice(3)} · {allocation.quantity} {item.unit}</div>)}</>},
                         {header:'Số lượng',accessor:item => <strong>{item.quantity} {item.unit}</strong>},
                         {header:'Tồn kho',accessor:item => <span className={item.availableStock < item.quantity ? styles.insufficientStock : styles.availableStock}>{item.availableStock} {item.unit}</span>},
                         {header:'Liều dùng',accessor:'dosage'},

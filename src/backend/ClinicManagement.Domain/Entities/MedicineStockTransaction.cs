@@ -7,6 +7,8 @@ public class MedicineStockTransaction
 {
     public long Id { get; set; }
     public long MedicineId { get; set; }
+    public long? MedicineBatchId { get; set; }
+    public MedicineBatch? MedicineBatch { get; set; }
     
     public MedicineStockTransactionType Type { get; set; }
     public int QuantityChange { get; set; }

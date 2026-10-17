@@ -46,6 +46,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<DrugInteractionRule> DrugInteractionRules { get; set; } = null!;
     public DbSet<PrescriptionItem> PrescriptionItems { get; set; } = null!;
     public DbSet<MedicineStockTransaction> MedicineStockTransactions { get; set; } = null!;
+    public DbSet<MedicineBatch> MedicineBatches { get; set; } = null!;
 
     // Health Packages
     public DbSet<HealthPackage> HealthPackages { get; set; } = null!;
