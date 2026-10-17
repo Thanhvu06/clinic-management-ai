@@ -160,22 +160,30 @@ public class DoctorLeaveService : IDoctorLeaveService
 
     public async Task<LeaveRequestDto> CreateLeaveRequestAsync(CreateLeaveRequestDto request)
     {
+        if (request.StartDateTime == default || request.EndDateTime == default)
+            throw new BusinessException("INVALID_TIME", "Vui lòng chọn thời gian bắt đầu và kết thúc nghỉ.");
+
+        var start = request.StartDateTime.Kind == DateTimeKind.Utc
+            ? _dateTimeProvider.ConvertUtcToVietnam(request.StartDateTime) : request.StartDateTime;
+        var end = request.EndDateTime.Kind == DateTimeKind.Utc
+            ? _dateTimeProvider.ConvertUtcToVietnam(request.EndDateTime) : request.EndDateTime;
+
         var doctor = await GetCurrentDoctorAsync();
 
         var reason = request.Reason?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(reason))
             throw new BusinessException("INVALID_REASON", "Lý do nghỉ không được để trống.");
 
-        if (request.StartDateTime >= request.EndDateTime)
+        if (start >= end)
             throw new BusinessException("INVALID_TIME", "Thời gian bắt đầu phải trước thời gian kết thúc.");
 
-        if (request.StartDateTime < _dateTimeProvider.VietnamNow)
+        if (start < _dateTimeProvider.VietnamNow)
             throw new BusinessException("INVALID_TIME", "Không thể tạo yêu cầu nghỉ trong quá khứ.");
 
         var overlap = await _dbContext.DoctorLeaveRequests.AnyAsync(l => 
             l.DoctorId == doctor.Id &&
             (l.Status == DoctorLeaveRequestStatus.Pending || l.Status == DoctorLeaveRequestStatus.Approved) &&
-            request.StartDateTime < l.EndDateTime && request.EndDateTime > l.StartDateTime);
+            start < l.EndDateTime && end > l.StartDateTime);
 
         if (overlap)
             throw new BusinessException("LEAVE_OVERLAP", "Thời gian nghỉ bị trùng lặp với một yêu cầu khác đang chờ duyệt hoặc đã duyệt.");
@@ -183,8 +191,8 @@ public class DoctorLeaveService : IDoctorLeaveService
         var leave = new DoctorLeaveRequest
         {
             DoctorId = doctor.Id,
-            StartDateTime = request.StartDateTime,
-            EndDateTime = request.EndDateTime,
+            StartDateTime = start,
+            EndDateTime = end,
             Reason = reason,
             Status = DoctorLeaveRequestStatus.Pending
         };

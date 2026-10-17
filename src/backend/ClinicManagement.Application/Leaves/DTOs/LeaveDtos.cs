@@ -16,7 +16,7 @@ public class LeaveRequestDto
     public string? AdminNote { get; set; }
 }
 
-public class CreateLeaveRequestDto
+public class CreateLeaveRequestDto : IValidatableObject
 {
     [Required]
     public DateTime StartDateTime { get; set; }
@@ -27,6 +27,16 @@ public class CreateLeaveRequestDto
     [Required]
     [MaxLength(500)]
     public string Reason { get; set; } = string.Empty;
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (StartDateTime == default || EndDateTime == default)
+        {
+            yield return new ValidationResult(
+                "Vui lòng chọn thời gian bắt đầu và kết thúc nghỉ.",
+                new[] { nameof(StartDateTime), nameof(EndDateTime) });
+        }
+    }
 }
 
 public class AdminProcessLeaveRequestDto

@@ -117,7 +117,11 @@ export const doctorApi = {
     },
 
     createLeaveRequest: async (payload: CreateLeaveRequestPayload): Promise<ApiResponse<any>> => {
-        return axiosClient.post<any, ApiResponse<any>>('/doctor/leave-requests', payload);
+        return axiosClient.post<any, ApiResponse<any>>('/doctor/leave-requests', {
+            startDateTime: `${payload.startDate}T00:00:00`,
+            endDateTime: `${payload.endDate}T23:59:59`,
+            reason: payload.reason
+        });
     },
 
     getActiveMedicines: async (): Promise<ApiResponse<ActiveMedicine[]>> => {
