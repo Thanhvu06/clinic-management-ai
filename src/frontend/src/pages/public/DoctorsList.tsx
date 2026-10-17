@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { User, Search, ChevronRight, Calendar } from 'lucide-react';
@@ -48,7 +49,7 @@ export const DoctorsList: React.FC = () => {
                     setSpecialties(specRes.data || []);
                 }
             } catch (err: any) {
-                setError(err.response?.data?.message || 'Có lỗi xảy ra khi tải dữ liệu.');
+                setError(getApiErrorMessage(err, 'Có lỗi xảy ra khi tải dữ liệu.'));
             } finally {
                 setLoading(false);
             }

@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../utils/apiError';
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
@@ -74,7 +75,7 @@ export const Register: React.FC = () => {
                 }
                 setFieldErrors(newFieldErrors);
             } else {
-                setGeneralError(err?.response?.data?.message || err?.message || 'Đăng ký thất bại. Vui lòng kiểm tra lại thông tin.');
+                setGeneralError(getApiErrorMessage(err, 'Đăng ký thất bại. Vui lòng kiểm tra lại thông tin.'));
             }
         } finally {
             setLoading(false);

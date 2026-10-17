@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button, Card, Col, Row, Flex, Typography } from 'antd';
@@ -32,7 +33,7 @@ export const DoctorDashboard: React.FC = () => {
                 setDashboardData(res.data);
             }
         } catch (err: any) {
-            setLoadError(err.response?.data?.message || err.message || 'Không thể tải dữ liệu bàn làm việc bác sĩ.');
+            setLoadError(getApiErrorMessage(err, 'Không thể tải dữ liệu bàn làm việc bác sĩ.'));
         } finally {
             setLoading(false);
         }
@@ -69,7 +70,7 @@ export const DoctorDashboard: React.FC = () => {
                 await loadDashboard();
             }
         } catch (err: any) {
-            showAlert(err.response?.data?.message || 'Không thể tiếp nhận bệnh nhân.', 'Lỗi', 'error');
+            showAlert(getApiErrorMessage(err, 'Không thể tiếp nhận bệnh nhân.'), 'Lỗi', 'error');
         } finally {
             setActionLoadingId(null);
         }
@@ -94,7 +95,7 @@ export const DoctorDashboard: React.FC = () => {
                 }
             }
         } catch (err: any) {
-            showAlert(err.response?.data?.message || 'Không thể bắt đầu phiên khám.', 'Lỗi', 'error');
+            showAlert(getApiErrorMessage(err, 'Không thể bắt đầu phiên khám.'), 'Lỗi', 'error');
         } finally {
             setActionLoadingId(null);
         }
@@ -113,7 +114,7 @@ export const DoctorDashboard: React.FC = () => {
                         await loadDashboard();
                     }
                 } catch (err: any) {
-                    showAlert(err.response?.data?.message || 'Không thể đánh dấu vắng mặt.', 'Lỗi', 'error');
+                    showAlert(getApiErrorMessage(err, 'Không thể đánh dấu vắng mặt.'), 'Lỗi', 'error');
                 } finally {
                     setActionLoadingId(null);
                 }

@@ -1,3 +1,4 @@
+import { getAppointmentHistoryActionLabel } from '../../utils/appointmentHistoryLabels';
 import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -336,7 +337,7 @@ export const DoctorAppointments: React.FC = () => {
                                             {history.map(h => (
                                                 <div key={h.id} className={styles.historyItem}>
                                                     <div className={styles.historyDot}></div>
-                                                    <div className={styles.historyAction}>{h.action}</div>
+                                                    <div className={styles.historyAction}>{getAppointmentHistoryActionLabel(h.action)}</div>
                                                     {h.note && <div className={styles.historyNote}>{h.note}</div>}
                                                 </div>
                                             ))}

@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Package, Check, Search, Users, CalendarCheck } from 'lucide-react';
@@ -34,7 +35,7 @@ export const HealthPackagesList: React.FC = () => {
                     setError('Không thể tải danh sách gói khám.');
                 }
             } catch (err: any) {
-                setError(err.response?.data?.message || 'Có lỗi xảy ra khi tải gói khám.');
+                setError(getApiErrorMessage(err, 'Có lỗi xảy ra khi tải gói khám.'));
             } finally {
                 setLoading(false);
             }

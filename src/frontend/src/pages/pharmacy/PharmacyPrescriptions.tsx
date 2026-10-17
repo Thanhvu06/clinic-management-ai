@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
@@ -173,7 +174,7 @@ export const PharmacyPrescriptions: React.FC = () => {
             } catch (error: any) {
                 const status = error?.response?.status;
                 const errorCode = error?.response?.data?.errorCode;
-                const errorMessage = error?.response?.data?.message || error?.message || 'Không thể cấp phát thuốc.';
+                const errorMessage = getApiErrorMessage(error, 'Không thể cấp phát thuốc.');
 
                 if (status === 409 || errorCode === 'PRESCRIPTION_ALREADY_DISPENSED' || errorCode === 'DISPENSE_CONFLICT') {
                     showAlert('Đơn thuốc này vừa được người khác xử lý hoặc dữ liệu đã thay đổi. Hệ thống sẽ tự động cập nhật lại danh sách.', 'Xung đột dữ liệu (409)', 'warning');

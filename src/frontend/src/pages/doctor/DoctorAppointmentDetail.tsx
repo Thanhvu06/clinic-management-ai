@@ -1,3 +1,4 @@
+import { getAppointmentHistoryActionLabel } from '../../utils/appointmentHistoryLabels';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Button, Card, Flex } from 'antd';
@@ -21,12 +22,6 @@ interface AppointmentHistory {
     note?: string | null;
     createdAt: string;
 }
-
-const actionLabels: Readonly<Record<string, string>> = {
-    Created: 'Tạo mới', StatusChanged: 'Cập nhật trạng thái', Cancelled: 'Hủy lịch',
-    Rescheduled: 'Đổi lịch', Confirmed: 'Xác nhận', Completed: 'Hoàn thành',
-    NoShow: 'Đánh dấu vắng', RescheduleRequested: 'Yêu cầu đổi lịch', CancelRequested: 'Yêu cầu hủy'
-};
 
 const statusClass = (status: string) => {
     if (status === 'Cancelled' || status === 'NoShow') return styles.statusDanger;
@@ -343,7 +338,7 @@ export const DoctorAppointmentDetail: React.FC = () => {
                         {histories.map(h => (
                             <div key={h.id} className={styles.historyRow}>
                                 <div>
-                                    <span className={styles.historyAction}>{Object.hasOwn(actionLabels, h.action) ? actionLabels[h.action] : h.action}</span>
+                                    <span className={styles.historyAction}>{getAppointmentHistoryActionLabel(h.action)}</span>
                                     {(h.oldStatus || h.newStatus) && <div className={styles.historyTransition}>Từ {h.oldStatus ? getAppointmentStatusLabel(h.oldStatus) : '—'} → {h.newStatus ? getAppointmentStatusLabel(h.newStatus) : '—'}</div>}
                                     {h.note && <span className={styles.historyNote}>— {h.note}</span>}
                                 </div>
