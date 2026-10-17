@@ -1,6 +1,6 @@
 import { getAppointmentHistoryActionLabel } from '../../utils/appointmentHistoryLabels';
 import { toLocalDateString } from '../../utils/formatters';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
@@ -10,6 +10,7 @@ import { useDialog } from '../../contexts/DialogContext';
 import { PageHeader, DataTable, StatusBadge, LoadingState, Pagination, InlineError } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import styles from './DoctorAppointments.module.css';
+import { getApiErrorMessage } from '../../utils/apiError';
 import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
 
 interface DoctorAppointment {
@@ -49,6 +50,9 @@ export const DoctorAppointments: React.FC = () => {
     const [history, setHistory] = useState<any[]>([]);
 
     const [currentPrescription, setCurrentPrescription] = useState<any>(null);
+    const [prescriptionLoading, setPrescriptionLoading] = useState(false);
+    const [prescriptionError, setPrescriptionError] = useState('');
+    const prescriptionRequest = useRef(0);
 
     // No Show Form
     const [noShowReason, setNoShowReason] = useState('');
@@ -104,20 +108,31 @@ export const DoctorAppointments: React.FC = () => {
         fetchAppointments();
     };
 
+    const loadPrescription = async (appointmentId: number) => {
+        const request = ++prescriptionRequest.current;
+        setPrescriptionLoading(true);
+        setPrescriptionError('');
+        setCurrentPrescription(null);
+        try {
+            const response = await axiosClient.get<any, ApiResponse<any>>(`/doctor/appointments/${appointmentId}/prescription`);
+            if (request !== prescriptionRequest.current) return;
+            if (response.success) setCurrentPrescription(response.data ?? null);
+            else setPrescriptionError(getApiErrorMessage(response, 'Không tải được đơn thuốc'));
+        } catch (error) {
+            if (request === prescriptionRequest.current)
+                setPrescriptionError(getApiErrorMessage(error, 'Không tải được đơn thuốc'));
+        } finally {
+            if (request === prescriptionRequest.current) setPrescriptionLoading(false);
+        }
+    };
+
     const openModal = async (apt: DoctorAppointment, view: 'detail' | 'revisit' | 'noshow') => {
         setModal({ isOpen: true, apt, view });
         setNoShowReason('');
         revisitForm.resetFields();
         setCurrentPrescription(null);
 
-        try {
-            const presRes = await axiosClient.get<any, ApiResponse<any>>(`/doctor/appointments/${apt.id}/prescription`);
-            if (presRes.success && presRes.data) {
-                setCurrentPrescription(presRes.data);
-            }
-        } catch {
-            setCurrentPrescription(null);
-        }
+        await loadPrescription(apt.id);
 
         if (view === 'detail') {
             try {
@@ -180,7 +195,10 @@ export const DoctorAppointments: React.FC = () => {
         catch { return dateString; }
     };
 
-    const closeModal = () => setModal({ isOpen: false, apt: null, view: 'detail' });
+    const closeModal = () => {
+        prescriptionRequest.current += 1;
+        setModal({ isOpen: false, apt: null, view: 'detail' });
+    };
 
     const columns: DataTableColumn<DoctorAppointment>[] = [
         {
@@ -319,6 +337,8 @@ export const DoctorAppointments: React.FC = () => {
                             </div>
                         </Flex>
 
+                        {prescriptionLoading ? <LoadingState message="Đang tải đơn thuốc..." />
+                            : prescriptionError ? <InlineError title="Không tải được đơn thuốc" message={prescriptionError} onRetry={() => void loadPrescription(modal.apt!.id)} /> : null}
                         {modal.view === 'detail' && (
                             <>
                                 <div className={styles.detailBlock}>

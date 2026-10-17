@@ -8,6 +8,7 @@ using ClinicManagement.Application.Common.Constants;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Infrastructure.Persistence;
+using ClinicManagement.Infrastructure.Pharmacy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -40,7 +41,8 @@ public class AdminController : ControllerBase
         var totalAppointmentsAll = await dbContext.Appointments.CountAsync();
         var totalPrescriptions = await dbContext.Prescriptions.CountAsync();
         var totalHealthPackages = await dbContext.HealthPackages.CountAsync();
-        var lowStockCount = await dbContext.Medicines.CountAsync(m => m.StockQuantity <= m.ReorderLevel);
+        var lowStockCount = await dbContext.Medicines.WithUsableStock(dbContext, today)
+            .CountAsync(stock => stock.Quantity <= stock.Medicine.ReorderLevel);
 
         var stats = new AdminStatsDto
         {

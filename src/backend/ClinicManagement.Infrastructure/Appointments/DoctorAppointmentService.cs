@@ -22,6 +22,7 @@ using ClinicManagement.Application.Visits.DTOs;
 using ClinicManagement.Application.Visits.Interfaces;
 using ClinicManagement.Infrastructure.Common;
 using ClinicManagement.Infrastructure.Persistence;
+using ClinicManagement.Infrastructure.Pharmacy;
 using ClinicManagement.Infrastructure.Visits;
 using Microsoft.EntityFrameworkCore;
 
@@ -1649,35 +1650,42 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         RowVersion = vs.RowVersion != null ? Convert.ToBase64String(vs.RowVersion) : null
     };
 
-    private async Task<PrescriptionDraftDto> MapPrescriptionToDtoAsync(Prescription p, string doctorName, string patientName) => new()
+    private async Task<PrescriptionDraftDto> MapPrescriptionToDtoAsync(Prescription p, string doctorName, string patientName)
     {
-        Id = p.Id,
-        AppointmentId = p.AppointmentId,
-        PatientVisitId = p.PatientVisitId,
-        VisitCode = p.PatientVisit?.VisitCode,
-        DoctorId = p.DoctorId,
-        DoctorName = doctorName,
-        PatientId = p.PatientId,
-        PatientName = patientName,
-        Status = p.Status.ToString(),
-        Notes = p.Notes,
-        CreatedAt = p.CreatedAt,
-        RowVersion = p.RowVersion != null ? Convert.ToBase64String(p.RowVersion) : null,
-        SafetyWarnings = (await _prescriptionSafety.CheckAsync(p.PatientId, p.Items.Select(i => i.MedicineId))).Warnings,
-        Items = p.Items.Select(i => new PrescriptionDraftItemDto
+        var medicineIds = p.Items.Select(item => item.MedicineId).ToList();
+        var usableStocks = await _dbContext.Medicines.AsNoTracking().Where(medicine => medicineIds.Contains(medicine.Id))
+            .WithUsableStock(_dbContext, _dateTimeProvider.VietnamToday)
+            .ToDictionaryAsync(stock => stock.Medicine.Id, stock => stock.Quantity);
+        return new()
         {
-            MedicineId = i.MedicineId,
-            MedicineCode = i.Medicine?.Code ?? string.Empty,
-            MedicineName = i.Medicine?.Name ?? "Thuốc",
-            Unit = i.Medicine?.Unit ?? "Hộp",
-            Quantity = i.Quantity,
-            AvailableStock = i.Medicine?.StockQuantity ?? 0,
-            Dosage = i.Dosage,
-            Frequency = i.Frequency,
-            DurationDays = i.DurationDays,
-            Instructions = i.Instructions
-        }).ToList()
-    };
+            Id = p.Id,
+            AppointmentId = p.AppointmentId,
+            PatientVisitId = p.PatientVisitId,
+            VisitCode = p.PatientVisit?.VisitCode,
+            DoctorId = p.DoctorId,
+            DoctorName = doctorName,
+            PatientId = p.PatientId,
+            PatientName = patientName,
+            Status = p.Status.ToString(),
+            Notes = p.Notes,
+            CreatedAt = p.CreatedAt,
+            RowVersion = p.RowVersion != null ? Convert.ToBase64String(p.RowVersion) : null,
+            SafetyWarnings = (await _prescriptionSafety.CheckAsync(p.PatientId, p.Items.Select(i => i.MedicineId))).Warnings,
+            Items = p.Items.Select(i => new PrescriptionDraftItemDto
+            {
+                MedicineId = i.MedicineId,
+                MedicineCode = i.Medicine?.Code ?? string.Empty,
+                MedicineName = i.Medicine?.Name ?? "Thuốc",
+                Unit = i.Medicine?.Unit ?? "Hộp",
+                Quantity = i.Quantity,
+                AvailableStock = usableStocks.GetValueOrDefault(i.MedicineId),
+                Dosage = i.Dosage,
+                Frequency = i.Frequency,
+                DurationDays = i.DurationDays,
+                Instructions = i.Instructions
+            }).ToList()
+        };
+    }
 
     private async Task<PatientVisit> ValidateVisitDoctorAccessAsync(PatientVisit? visit, Doctor doctor)
     {

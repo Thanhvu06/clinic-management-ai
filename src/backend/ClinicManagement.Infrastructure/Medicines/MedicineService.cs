@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Common.Models;
+using ClinicManagement.Application.Common.Interfaces;
+using ClinicManagement.Infrastructure.Pharmacy;
 using ClinicManagement.Application.Medicines.DTOs;
 using ClinicManagement.Application.Medicines.Interfaces;
 using ClinicManagement.Domain.Entities;
@@ -18,11 +20,13 @@ public class MedicineService : IMedicineService
 {
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public MedicineService(AppDbContext dbContext, ICurrentUserService currentUserService)
+    public MedicineService(AppDbContext dbContext, ICurrentUserService currentUserService, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<List<ActiveMedicineDto>> GetActiveMedicinesAsync()
@@ -31,18 +35,20 @@ public class MedicineService : IMedicineService
             .AsNoTracking()
             .Where(m => m.IsActive)
             .OrderBy(m => m.Name)
-            .Select(m => new ActiveMedicineDto
+            .WithUsableStock(_dbContext, _dateTimeProvider.VietnamToday)
+            .Select(stock => new ActiveMedicineDto
             {
-                Id = m.Id,
-                Code = m.Code,
-                Name = m.Name,
-                Unit = m.Unit,
-                StockQuantity = m.StockQuantity,
-                ImageUrl = m.ImagePath == null ? null : "/media/medicines/" + m.ImagePath,
-                ReorderLevel = m.ReorderLevel,
-                UnitPrice = m.UnitPrice,
-                IsPrescriptionRequired = m.IsPrescriptionRequired,
-                Strength = m.Strength
+                Id = stock.Medicine.Id,
+                Code = stock.Medicine.Code,
+                Name = stock.Medicine.Name,
+                Unit = stock.Medicine.Unit,
+                StockQuantity = stock.Medicine.StockQuantity,
+                UsableStock = stock.Quantity,
+                ImageUrl = stock.Medicine.ImagePath == null ? null : "/media/medicines/" + stock.Medicine.ImagePath,
+                ReorderLevel = stock.Medicine.ReorderLevel,
+                UnitPrice = stock.Medicine.UnitPrice,
+                IsPrescriptionRequired = stock.Medicine.IsPrescriptionRequired,
+                Strength = stock.Medicine.Strength
             })
             .ToListAsync();
     }

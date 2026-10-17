@@ -12,6 +12,7 @@ import { useDialog } from '../../contexts/DialogContext';
 import { CheckInTicketModal } from '../../components/CheckInTicketModal';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 import { toLocalDateString } from '../../utils/formatters';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 interface ReceptionAppointment {
     id: number;
@@ -36,6 +37,7 @@ export const ReceptionAppointments: React.FC = () => {
     const { setSelection } = useCopilotResource();
     const [appointments, setAppointments] = useState<ReceptionAppointment[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [totalItems, setTotalItems] = useState(0);
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState('');
@@ -60,6 +62,7 @@ export const ReceptionAppointments: React.FC = () => {
 
     const fetchAppointments = useCallback(async () => {
         setLoading(true);
+        setLoadError('');
         try {
             const params = new URLSearchParams({
                 page: page.toString(),
@@ -72,9 +75,9 @@ export const ReceptionAppointments: React.FC = () => {
             if (res.success && res.data) {
                 setAppointments(res.data.items);
                 setTotalItems(res.data.totalItems);
-            }
-        } catch {
-            // Error handling
+            } else setLoadError(getApiErrorMessage(res, 'Không tải được danh sách lịch hẹn.'));
+        } catch (error) {
+            setLoadError(getApiErrorMessage(error, 'Không tải được danh sách lịch hẹn.'));
         } finally {
             setLoading(false);
         }
@@ -336,7 +339,7 @@ export const ReceptionAppointments: React.FC = () => {
                 <Select className={styles.statusFilter} value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả trạng thái'},{value:'Pending',label:'Chờ xác nhận'},{value:'Confirmed',label:'Đã xác nhận'},{value:'Completed',label:'Đã hoàn thành'},{value:'Cancelled',label:'Đã hủy'}]} />
                 <Button htmlType="submit">Tìm kiếm</Button>
             </form>
-            {loading ? <LoadingState message="Đang tải dữ liệu..." /> : appointments.length === 0 ? <EmptyState title="Không tìm thấy lịch hẹn nào." /> : <div className={styles.tableScroll}><DataTable columns={columns} data={appointments} keyExtractor={apt => apt.id} /></div>}
+            {loading ? <LoadingState message="Đang tải dữ liệu..." /> : loadError ? <InlineError message={loadError} onRetry={fetchAppointments} /> : appointments.length === 0 ? <EmptyState title="Không tìm thấy lịch hẹn nào." /> : <div className={styles.tableScroll}><DataTable columns={columns} data={appointments} keyExtractor={apt => apt.id} /></div>}
             <div className={styles.secondaryText}>Tổng cộng: {totalItems} lịch hẹn</div>
             {modal.isOpen && modal.apt && <Modal open onCancel={closeDetail} width={600} className={styles.detailModal} mask={{closable:false}} keyboard={false} closable={{'aria-label':'Đóng chi tiết lịch hẹn'}} title={<>Chi tiết lịch hẹn <span className={styles.detailCode}>#{modal.apt.appointmentCode}</span></>} footer={<>
                 <Button onClick={closeDetail}>Đóng</Button>
