@@ -64,8 +64,8 @@ export const DoctorLeaveRequests: React.FC = () => {
     }, [fetchRequests]);
 
     const handleCreate = async (values: { startDate: any; endDate: any; reason: string }) => {
-        const startDate = values.startDate.toISOString();
-        const endDate = values.endDate.toISOString();
+        const startDate = values.startDate.format('YYYY-MM-DDTHH:mm:ss');
+        const endDate = values.endDate.format('YYYY-MM-DDTHH:mm:ss');
 
         if (new Date(startDate) >= new Date(endDate)) {
             showAlert('Thời gian bắt đầu phải trước thời gian kết thúc.', 'Lỗi', 'error');

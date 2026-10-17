@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using ClinicManagement.Application.Common.Constants;
+using ClinicManagement.Application.Common.Exceptions;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.Leaves.DTOs;
@@ -50,6 +51,14 @@ public class DoctorLeaveController : ControllerBase
     {
         var actualStart = startDate ?? start ?? _dateTimeProvider.VietnamToday.ToDateTime(TimeOnly.MinValue);
         var actualEnd = endDate ?? end ?? actualStart;
+        if (actualStart == default || actualEnd == default)
+            throw new BusinessException("INVALID_TIME", "Vui lòng chọn thời gian bắt đầu và kết thúc nghỉ.");
+
+        if (actualStart.Kind == DateTimeKind.Utc)
+            actualStart = _dateTimeProvider.ConvertUtcToVietnam(actualStart);
+        if (actualEnd.Kind == DateTimeKind.Utc)
+            actualEnd = _dateTimeProvider.ConvertUtcToVietnam(actualEnd);
+
         if (actualEnd.TimeOfDay == TimeSpan.Zero)
         {
             actualEnd = actualEnd.Date.AddDays(1).AddTicks(-1);
