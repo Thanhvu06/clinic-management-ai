@@ -338,6 +338,14 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             return;
         }
 
+        if (!pendingPayload && !prefixMessage && wizard?.textToken &&
+            ['specialty', 'doctor', 'day', 'slot', 'facility'].includes(wizard.step)) {
+            setInput('');
+            setMessages(previous => [...previous, { role: 'user', content: trimmed }]);
+            await handleWizardStep('text', wizard.textToken, undefined, false, undefined, trimmed);
+            return;
+        }
+
         if (!pendingPayload && !prefixMessage) {
             const intent = classifyPatientTypedIntent(trimmed);
             if (intent) {
@@ -674,7 +682,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     };
 
     // Suggestion buttons run a server-owned read through the role Copilot.
-    const handleWizardStep = async (step: AiBookingWizardRequest['step'], optionToken?: string, reason?: string, retrying = false, hint?: string): Promise<void> => {
+    const handleWizardStep = async (step: AiBookingWizardRequest['step'], optionToken?: string, reason?: string, retrying = false, hint?: string, text?: string): Promise<void> => {
         if (loading || submittingBooking || wizardBusyRef.current) return;
         wizardBusyRef.current = true;
         if (step === 'start' && !retrying) {
@@ -693,7 +701,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             const response = await axiosClient.post<AiBookingWizardRequest, ApiResponse<AiBookingWizardResponse>>('/ai/booking-wizard', {
                 sessionId: wizardSessionRef.current, step, optionToken, reason,
                 currentRoute: location.pathname, locale: 'vi-VN',
-                ...(step === 'start' && hint ? { hint } : {})
+                ...(step === 'start' && hint ? { hint } : {}),
+                ...(step === 'text' ? { text } : {})
             }, { signal: controller.signal, suppressForbiddenRedirect: true });
             if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
             const data = response.data;
@@ -718,7 +727,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }
         } catch (error: unknown) {
             if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
-            rememberFailure(error, () => handleWizardStep(step, optionToken, reason, true));
+            rememberFailure(error, () => handleWizardStep(step, optionToken, reason, true, undefined, text));
             setErrorMsg(aiChatFailureMessage(error));
         } finally {
             if (requestId === activeRequestIdRef.current) {

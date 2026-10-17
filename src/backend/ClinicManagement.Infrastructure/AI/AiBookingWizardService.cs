@@ -40,12 +40,30 @@ public sealed class AiBookingWizardService(
             var selection = tokens.Read(request.OptionToken, user.Value, request.SessionId, request.Step);
             if (selection is null)
                 response = Error("WIZARD_TOKEN_INVALID_OR_EXPIRED", "Lựa chọn không hợp lệ hoặc đã hết hạn. Vui lòng bắt đầu lại.");
+            else if (request.Step == "text")
+                response = await TextAsync(selection, request.Text, user.Value, request.SessionId, ct);
             else if (request.Step == "reason" || selection.Preset > 0)
                 response = await ReasonAsync(selection, request.Step == "reason" ? request.Reason : Reasons[selection.Preset - 1], user.Value, request.SessionId, ct);
             else response = await RenderAsync(selection, user.Value, request.SessionId, ct);
         }
 
-        await audit.LogActionAsync(new AiAuditLogEntry
+        if (request.Step == "text")
+        {
+            // The shared audit writer strips unknown fields. Keep this wizard-only schema
+            // local: its only input-derived metadata is a number, never text or tokens.
+            db.AiAuditLogs.Add(new ClinicManagement.Domain.Entities.AiAuditLog
+            {
+                UserId = user, SessionId = request.SessionId, ActionType = "BookingWizardStep",
+                Outcome = response.AssistantMode, ErrorCode = response.ErrorCode, TimestampUtc = clock.UtcNow,
+                MetadataJson = JsonSerializer.Serialize(new
+                {
+                    source = "booking-wizard", operation = "text", status = response.Step,
+                    textLength = request.Text?.Length ?? 0, providerWasCalled = false
+                })
+            });
+            await db.SaveChangesAsync(ct);
+        }
+        else await audit.LogActionAsync(new AiAuditLogEntry
         {
             UserId = user, SessionId = request.SessionId, ActionType = "BookingWizardStep",
             Outcome = response.AssistantMode, ErrorCode = response.ErrorCode,
@@ -212,7 +230,129 @@ public sealed class AiBookingWizardService(
                 break;
             default: return Error("WIZARD_TOKEN_INVALID_OR_EXPIRED", "Lựa chọn không hợp lệ. Vui lòng bắt đầu lại.");
         }
+        if (state.Stage <= BookingWizardStage.Facility)
+            response.TextToken = tokens.Issue(user, session, state with { Preset = 0 }, BookingWizardOperation.Text);
         return response;
+    }
+
+    private async Task<AiBookingWizardResponseDto> TextAsync(BookingWizardSelection state, string? input, Guid user, string session, CancellationToken ct)
+    {
+        // Resolve only against the currently rendered options, including their limits and availability checks.
+        var response = await RenderAsync(state, user, session, ct);
+        if (response.Step != state.Stage.ToString().ToLowerInvariant() || response.TextToken is null) return response;
+        var text = AiTextNormalizer.NormalizeForComparison(input);
+        var message = $"Mình chưa xác định được lựa chọn \"{AiTextNormalizer.Normalize(input)}\". Bạn chọn giúp một mục bên dưới nhé.";
+        AiBookingWizardOptionDto? option = null;
+        if (string.IsNullOrWhiteSpace(input) || input.Length > 200)
+            message = "Vui lòng nhập lựa chọn từ 1 đến 200 ký tự hoặc chọn một mục bên dưới nhé.";
+        else if (state.Stage == BookingWizardStage.Day && ParseDay(text, clock.VietnamToday) is { } day)
+        {
+            var label = day.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+            var remaining = string.Join(", ", response.Options.Select(item => item.Label));
+            if (remaining.Length == 0) remaining = "không có";
+            if (day < clock.VietnamToday)
+                message = $"Ngày {label} đã qua. Các ngày còn trống: {remaining}.";
+            else if (day > clock.VietnamToday.AddDays(13))
+                message = "Trợ lý chỉ xem được lịch trong 14 ngày tới. Bạn chọn một ngày bên dưới hoặc đặt lịch trên trang Đặt lịch khám nhé.";
+            else
+            {
+                option = response.Options.SingleOrDefault(item => item.Label == label);
+                message = $"Ngày {label}{(response.Summary?.DoctorName is { Length: > 0 } name ? $" bác sĩ {name}" : "")} không còn lịch trống. Các ngày còn trống: {remaining}.";
+            }
+        }
+        else if (state.Stage == BookingWizardStage.Slot && ParseTime(text) is { } time)
+        {
+            var label = time.ToString("HH:mm", CultureInfo.InvariantCulture);
+            var matches = response.Options.Where(item => item.Label.StartsWith(label + " ", StringComparison.Ordinal)).ToList();
+            if (matches.Count == 1) option = matches[0];
+            message = matches.Count > 1
+                ? $"Có nhiều khung giờ {label}. Bạn chọn giúp một mục bên dưới nhé."
+                : $"Không có khung giờ {label}. Các khung còn trống: {string.Join(", ", response.Options.Select(item => item.Label))}.";
+        }
+        else if (state.Stage is BookingWizardStage.Specialty or BookingWizardStage.Doctor or BookingWizardStage.Facility)
+        {
+            var matches = response.Options.Where(item =>
+            {
+                var label = NormalizeHint(item.Label);
+                var candidate = NormalizeHint(input);
+                if (state.Stage is BookingWizardStage.Specialty or BookingWizardStage.Doctor)
+                {
+                    label = HintPrefix.Replace(label, string.Empty);
+                    candidate = HintPrefix.Replace(candidate, string.Empty);
+                }
+                if (state.Stage == BookingWizardStage.Specialty)
+                    label = string.Join(' ', label.Split(' ').Where(word => word != "khoa"));
+                return label.Length > 0 && ($" {candidate} ").Contains($" {label} ", StringComparison.Ordinal);
+            }).ToList();
+            if (matches.Count == 1) option = matches[0];
+        }
+        if (option is not null && tokens.Read(option.Token, user, session, "pick") is { } selection)
+            return await RenderAsync(selection, user, session, ct);
+        response.Message = message;
+        response.AssistantMode = "Clarifying";
+        return response;
+    }
+
+    private static DateOnly? ParseDay(string text, DateOnly today)
+    {
+        var numeric = Regex.Match(text, @"(?<![\d/\-])(\d{1,2})([/\-])(\d{1,2})(?:\2(\d{4}))?(?![\d/\-])");
+        if (numeric.Success)
+        {
+            var day = int.Parse(numeric.Groups[1].Value, CultureInfo.InvariantCulture);
+            var month = int.Parse(numeric.Groups[3].Value, CultureInfo.InvariantCulture);
+            var hasYear = numeric.Groups[4].Success;
+            // A yearless dash date is deliberately not one of the accepted formats.
+            if (!hasYear && numeric.Groups[2].Value != "/") return null;
+            var year = hasYear ? int.Parse(numeric.Groups[4].Value, CultureInfo.InvariantCulture) : today.Year;
+            var date = CalendarDay(year, month, day);
+            if (!hasYear && date < today) date = CalendarDay(year + 1, month, day);
+            return date;
+        }
+        if (Regex.IsMatch(text, @"\bhom nay\b")) return today;
+        if (Regex.IsMatch(text, @"\b(ngay kia|mot)\b")) return today.AddDays(2);
+        if (Regex.IsMatch(text, @"\bmai\b")) return today.AddDays(1);
+        var weekday = Regex.Match(text, @"\b(?:thu\s+([2-7])|chu nhat)\b(?:\s+(tuan sau))?");
+        if (weekday.Success)
+        {
+            var target = weekday.Groups[1].Success ? int.Parse(weekday.Groups[1].Value, CultureInfo.InvariantCulture) - 1 : 0;
+            if (weekday.Groups[2].Success)
+            {
+                var monday = today.AddDays(-(((int)today.DayOfWeek + 6) % 7)).AddDays(7);
+                return monday.AddDays((target + 6) % 7);
+            }
+            var days = (target - (int)today.DayOfWeek + 7) % 7;
+            return today.AddDays(days == 0 ? 7 : days);
+        }
+        var dayOnly = Regex.Match(text, @"\bngay\s+(\d{1,2})\b(?![/\d-])");
+        if (!dayOnly.Success) return null;
+        var requested = int.Parse(dayOnly.Groups[1].Value, CultureInfo.InvariantCulture);
+        if (requested < today.Day)
+        {
+            var nextMonth = new DateOnly(today.Year, today.Month, 1).AddMonths(1);
+            return CalendarDay(nextMonth.Year, nextMonth.Month, requested);
+        }
+        return CalendarDay(today.Year, today.Month, requested);
+    }
+
+    private static DateOnly? CalendarDay(int year, int month, int day) =>
+        year is >= 1 and <= 9999 && month is >= 1 and <= 12 && day >= 1 && day <= DateTime.DaysInMonth(year, month)
+            ? new DateOnly(year, month, day) : null;
+
+    private static TimeOnly? ParseTime(string text)
+    {
+        var match = Regex.Match(text, @"(?<![\d:])(\d{1,2})\s*(?:(?:h|gio)\s*(?:(\d{1,2})|(?<half>ruoi))?|:\s*(\d{2}))(?!\d)");
+        if (!match.Success) return null;
+        var hour = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+        var minute = match.Groups["half"].Success ? 30 : match.Groups[2].Success
+            ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : match.Groups[3].Success
+                ? int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) : 0;
+        if (hour > 23 || minute > 59) return null;
+        var afternoon = Regex.IsMatch(text, @"\bchieu\b");
+        var morning = Regex.IsMatch(text, @"\bsang\b");
+        if ((morning && afternoon) || ((morning || afternoon) && hour is < 1 or > 12)) return null;
+        if (afternoon && hour < 12) hour += 12;
+        if (morning && hour == 12) hour = 0;
+        return new TimeOnly(hour, minute);
     }
 
     private async Task<AiBookingWizardResponseDto> ReasonAsync(BookingWizardSelection state, string? reason, Guid user, string session, CancellationToken ct)

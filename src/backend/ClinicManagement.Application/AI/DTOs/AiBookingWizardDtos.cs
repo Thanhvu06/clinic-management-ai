@@ -6,9 +6,10 @@ public sealed class AiBookingWizardRequestDto
 {
     [Required, MaxLength(128), RegularExpression("^[A-Za-z0-9_-]+$")]
     public string SessionId { get; set; } = string.Empty;
-    [Required, RegularExpression("^(start|pick|back|reason)$")]
+    [Required, RegularExpression("^(start|pick|back|reason|text)$")]
     public string Step { get; set; } = "start";
     [MaxLength(512)] public string? OptionToken { get; set; }
+    [MaxLength(200)] public string? Text { get; set; }
     // Length and safety errors are returned without reflecting the submitted text.
     [MaxLength(2000)] public string? Reason { get; set; }
     [MaxLength(256)] public string? CurrentRoute { get; set; }
@@ -40,6 +41,7 @@ public sealed class AiBookingWizardResponseDto
     public bool CanGoBack { get; set; }
     public string? BackToken { get; set; }
     public string? ReasonToken { get; set; }
+    public string? TextToken { get; set; }
     public AiBookingWizardSummaryDto? Summary { get; set; }
     public AiActionDto? ReviewAction { get; set; }
     public List<AiActionDto> Actions { get; set; } = new();

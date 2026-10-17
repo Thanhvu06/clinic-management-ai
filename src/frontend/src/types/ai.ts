@@ -419,7 +419,8 @@ export interface AiSuggestionItem {
 
 export interface AiBookingWizardRequest {
     sessionId: string;
-    step: "start" | "pick" | "back" | "reason";
+    step: "start" | "pick" | "back" | "reason" | "text";
+    text?: string;
     optionToken?: string;
     reason?: string;
     currentRoute?: string;
@@ -436,6 +437,7 @@ export interface AiBookingWizardResponse {
     canGoBack: boolean;
     backToken?: string;
     reasonToken?: string;
+    textToken?: string;
     summary?: { specialtyName?: string; doctorName?: string; facilityName?: string; requiresFacilitySelection?: boolean; slotDate?: string; startTime?: string; endTime?: string; reasonProvided: boolean };
     reviewAction?: ReviewBookingAction;
     actions: AiAction[];
