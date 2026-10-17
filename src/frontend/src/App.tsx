@@ -52,6 +52,7 @@ import { AdminFacilities } from './pages/admin/AdminFacilities';
 import { PharmacyDashboard } from './pages/pharmacy/PharmacyDashboard';
 import { PharmacyPrescriptions } from './pages/pharmacy/PharmacyPrescriptions';
 import { PharmacyInventory } from './pages/pharmacy/PharmacyInventory';
+import { PharmacyBatches } from './pages/pharmacy/PharmacyBatches';
 import { NotificationsPage } from './pages/common/NotificationsPage';
 import { DiagnosticOrderPrint } from './pages/doctor/DiagnosticOrderPrint';
 import { TechnicianDashboard } from './pages/technician/TechnicianDashboard';
@@ -164,6 +165,9 @@ function App() {
                                     </Route>
                                     
                                     {/* Pharmacist Routes */}
+                                    <Route element={<RoleRoute roles={['Pharmacist', 'Admin']} />}>
+                                        <Route path="/pharmacy/batches" element={<PharmacyBatches />} />
+                                    </Route>
                                     <Route element={<RoleRoute roles={['Pharmacist']} />}>
                                         <Route path="/pharmacy" element={<PharmacyDashboard />} />
                                         <Route path="/pharmacy/prescriptions" element={<PharmacyPrescriptions />} />

@@ -208,6 +208,7 @@ builder.Services.AddScoped<ClinicManagement.Application.Locations.Interfaces.ILo
 builder.Services.AddScoped<ClinicManagement.Application.Medicines.Interfaces.IMedicineService, ClinicManagement.Infrastructure.Medicines.MedicineService>();
 builder.Services.AddScoped<ClinicManagement.Application.Prescriptions.Interfaces.IPrescriptionSafetyService, ClinicManagement.Infrastructure.Prescriptions.PrescriptionSafetyService>();
 builder.Services.AddScoped<ClinicManagement.Application.Pharmacy.Interfaces.IPharmacyService, ClinicManagement.Infrastructure.Pharmacy.PharmacyService>();
+builder.Services.AddScoped<ClinicManagement.Infrastructure.Pharmacy.MedicineBatchService>();
 builder.Services.AddScoped<ClinicManagement.Application.Pharmacy.Interfaces.IPrescriptionPaymentEligibilityService, ClinicManagement.Infrastructure.Pharmacy.PrescriptionPaymentEligibilityService>();
 builder.Services.AddScoped<ClinicManagement.Application.Notifications.Interfaces.INotificationService, ClinicManagement.Infrastructure.Notifications.NotificationService>();
 builder.Services.AddScoped<ClinicManagement.Application.Billing.Interfaces.IBillingService, ClinicManagement.Infrastructure.Billing.BillingService>();

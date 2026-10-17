@@ -58,6 +58,7 @@ public class PrescriptionDetailDto
 
 public class PrescriptionDetailItemDto
 {
+    public List<PrescriptionBatchAllocationDto> BatchAllocations { get; set; } = new();
     public long MedicineId { get; set; }
     public string MedicineCode { get; set; } = string.Empty;
     public string MedicineName { get; set; } = string.Empty;
@@ -70,3 +71,5 @@ public class PrescriptionDetailItemDto
     public int? DurationDays { get; set; }
     public string? Instructions { get; set; }
 }
+
+public record PrescriptionBatchAllocationDto(string BatchNumber, DateOnly ExpiryDate, int Quantity);

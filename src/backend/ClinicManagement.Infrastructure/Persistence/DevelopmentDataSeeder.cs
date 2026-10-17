@@ -808,6 +808,8 @@ public static class DevelopmentDataSeeder
         await db.SaveChangesAsync();
         logger.LogInformation("Facility BV-TW-01, departments, rooms, and staff assignments seeded.");
 
+        await MedicineBatchDevelopmentSeed.SeedAsync(db, dateTimeProvider, pharmacist.Id,
+            config?.GetValue<bool>("DemoSeed:Enabled") == true);
         logger.LogInformation("Development Data Seeding completed.");
     }
 

@@ -28,6 +28,7 @@ public class PharmacyService : IPharmacyService
     private readonly IPrescriptionPaymentEligibilityService _paymentEligibility;
     private readonly IFacilityAuthorizationService _facilityAuthService;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly MedicineBatchAllocator _batchAllocator;
 
     public PharmacyService(
         AppDbContext dbContext,
@@ -41,6 +42,7 @@ public class PharmacyService : IPharmacyService
         _paymentEligibility = paymentEligibility;
         _facilityAuthService = facilityAuthService;
         _dateTimeProvider = dateTimeProvider;
+        _batchAllocator = new MedicineBatchAllocator(dbContext, dateTimeProvider);
     }
 
     public Task<PrescriptionPaymentEligibilityDto> EvaluatePrescriptionPaymentAsync(long prescriptionId, CancellationToken cancellationToken = default) =>
@@ -171,6 +173,21 @@ public class PharmacyService : IPharmacyService
             ? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == prescription.Doctor.UserId) 
             : null;
 
+        var medicineIds = prescription.Items.Select(item => item.MedicineId).ToList();
+        var expiredQuantities = await _dbContext.MedicineBatches.AsNoTracking()
+            .Where(batch => medicineIds.Contains(batch.MedicineId) && batch.ExpiryDate < _dateTimeProvider.VietnamToday)
+            .GroupBy(batch => batch.MedicineId)
+            .Select(group => new { MedicineId = group.Key, Quantity = group.Sum(batch => batch.QuantityRemaining) })
+            .ToDictionaryAsync(item => item.MedicineId, item => item.Quantity);
+        var batchAllocations = await _dbContext.MedicineStockTransactions.AsNoTracking()
+            .Where(transaction => transaction.PrescriptionId == prescription.Id && transaction.MedicineBatchId != null &&
+                (transaction.Type == MedicineStockTransactionType.Reservation || transaction.Type == MedicineStockTransactionType.ReservationCancelled ||
+                 transaction.Type == MedicineStockTransactionType.Dispense))
+            .GroupBy(transaction => new { transaction.MedicineId, transaction.MedicineBatchId, transaction.MedicineBatch!.BatchNumber, transaction.MedicineBatch.ExpiryDate })
+            .Select(group => new { group.Key.MedicineId, group.Key.MedicineBatchId, group.Key.BatchNumber, group.Key.ExpiryDate, Quantity = -group.Sum(transaction => transaction.QuantityChange) })
+            .Where(allocation => allocation.Quantity > 0)
+            .OrderBy(allocation => allocation.ExpiryDate).ThenBy(allocation => allocation.MedicineBatchId).ToListAsync();
+
         return new PrescriptionDetailDto
         {
             Id = prescription.Id,
@@ -197,7 +214,9 @@ public class PharmacyService : IPharmacyService
                 MedicineName = i.Medicine?.Name ?? "Thuốc",
                 Unit = i.Medicine?.Unit ?? "Hộp",
                 Quantity = i.Quantity,
-                AvailableStock = i.Medicine?.StockQuantity ?? 0,
+                AvailableStock = (i.Medicine?.StockQuantity ?? 0) - expiredQuantities.GetValueOrDefault(i.MedicineId),
+                BatchAllocations = batchAllocations.Where(allocation => allocation.MedicineId == i.MedicineId)
+                    .Select(allocation => new PrescriptionBatchAllocationDto(allocation.BatchNumber, allocation.ExpiryDate, allocation.Quantity)).ToList(),
                 IsActive = i.Medicine?.IsActive ?? true,
                 Dosage = i.Dosage,
                 Frequency = i.Frequency,
@@ -248,38 +267,14 @@ public class PharmacyService : IPharmacyService
 
                 if (item.Quantity <= 0)
                     throw new BusinessException("INVALID_QUANTITY", $"Số lượng thuốc '{med.Name}' trong đơn phải lớn hơn 0.");
-
-                if (med.StockQuantity < item.Quantity)
-                {
-                    throw new BusinessException(
-                        "INSUFFICIENT_MEDICINE_STOCK",
-                        $"Thuốc '{med.Name}' không đủ tồn kho để giữ hàng! Yêu cầu: {item.Quantity} {med.Unit}, Hiện còn: {med.StockQuantity} {med.Unit}."
-                    );
-                }
             }
 
-            // 2. Reserve stock
+            // 2. Reserve stock by FEFO, retaining legacy unbatched stock.
             foreach (var item in prescription.Items)
             {
                 var med = item.Medicine ?? await _dbContext.Medicines.FirstAsync(m => m.Id == item.MedicineId);
-                med.StockQuantity -= item.Quantity;
-                if (med.StockQuantity < 0)
-                {
-                    throw new BusinessException("INSUFFICIENT_MEDICINE_STOCK", $"Thuốc '{med.Name}' không đủ tồn kho để giữ hàng.");
-                }
-                med.UpdatedAt = DateTime.UtcNow;
-
-                _dbContext.MedicineStockTransactions.Add(new MedicineStockTransaction
-                {
-                    MedicineId = med.Id,
-                    Type = MedicineStockTransactionType.Reservation,
-                    QuantityChange = -item.Quantity,
-                    BalanceAfter = med.StockQuantity,
-                    PrescriptionId = prescription.Id,
-                    ActorUserId = actorUserId,
-                    Reason = $"Giữ chỗ thuốc chờ thanh toán cho đơn #{prescription.Id}",
-                    CreatedAt = DateTime.UtcNow
-                });
+                await _batchAllocator.Deduct(med, item.Quantity, MedicineStockTransactionType.Reservation,
+                    prescription.Id, $"Giữ chỗ thuốc chờ thanh toán cho đơn #{prescription.Id}", actorUserId);
             }
 
             // 3. Update prescription status
@@ -359,6 +354,8 @@ public class PharmacyService : IPharmacyService
                             (t.Type == MedicineStockTransactionType.Reservation || t.Type == MedicineStockTransactionType.ReservationCancelled))
                         .SumAsync(t => (int?)t.QuantityChange) < 0;
 
+                if (wasReserved) await _batchAllocator.EnsureReservationsUsableAsync(prescription.Id);
+
                 if (!wasReserved)
                 {
                     // 1. Validate stock availability and active status for all items
@@ -373,38 +370,14 @@ public class PharmacyService : IPharmacyService
 
                         if (item.Quantity <= 0)
                             throw new BusinessException("INVALID_QUANTITY", $"Số lượng thuốc '{med.Name}' trong đơn phải lớn hơn 0.");
-
-                        if (med.StockQuantity < item.Quantity)
-                        {
-                            throw new BusinessException(
-                                "INSUFFICIENT_MEDICINE_STOCK",
-                                $"Thuốc '{med.Name}' không đủ tồn kho để cấp phát! Yêu cầu: {item.Quantity} {med.Unit}, Hiện còn: {med.StockQuantity} {med.Unit}."
-                            );
-                        }
                     }
 
-                    // 2. Deduct stock and log transactions
+                    // 2. Deduct stock by FEFO and log each allocation.
                     foreach (var item in prescription.Items)
                     {
                         var med = item.Medicine ?? await _dbContext.Medicines.FirstAsync(m => m.Id == item.MedicineId);
-                        med.StockQuantity -= item.Quantity;
-                        if (med.StockQuantity < 0)
-                        {
-                            throw new BusinessException("INSUFFICIENT_MEDICINE_STOCK", $"Thuốc '{med.Name}' không đủ tồn kho để cấp phát.");
-                        }
-                        med.UpdatedAt = DateTime.UtcNow;
-
-                        _dbContext.MedicineStockTransactions.Add(new MedicineStockTransaction
-                        {
-                            MedicineId = med.Id,
-                            Type = MedicineStockTransactionType.Dispense,
-                            QuantityChange = -item.Quantity,
-                            BalanceAfter = med.StockQuantity,
-                            PrescriptionId = prescription.Id,
-                            ActorUserId = actorUserId,
-                            Reason = $"Cấp phát thuốc cho đơn #{prescription.Id}",
-                            CreatedAt = DateTime.UtcNow
-                        });
+                        await _batchAllocator.Deduct(med, item.Quantity, MedicineStockTransactionType.Dispense,
+                            prescription.Id, $"Cấp phát thuốc cho đơn #{prescription.Id}", actorUserId);
                     }
                 }
                 else
@@ -574,24 +547,35 @@ public class PharmacyService : IPharmacyService
 
             var qtyChange = request.Quantity;
 
-            med.StockQuantity += qtyChange;
-            if (med.StockQuantity < 0)
-                throw new BusinessException("NEGATIVE_STOCK", "Số lượng tồn kho không thể âm.");
-
-            med.UpdatedAt = DateTime.UtcNow;
-
-            _dbContext.MedicineStockTransactions.Add(new MedicineStockTransaction
+            if (qtyChange < 0)
             {
-                MedicineId = med.Id,
-                Type = request.Type,
-                QuantityChange = qtyChange,
-                BalanceAfter = med.StockQuantity,
-                ActorUserId = actorUserId,
-                Reason = string.IsNullOrWhiteSpace(request.Reason) 
-                    ? (request.Type == MedicineStockTransactionType.StockIn ? "Nhập thêm hàng vào kho" : "Điều chỉnh tồn kho")
-                    : request.Reason.Trim(),
-                CreatedAt = DateTime.UtcNow
-            });
+                if (qtyChange < -med.StockQuantity)
+                    throw new BusinessException("NEGATIVE_STOCK", "Số lượng tồn kho không thể âm.");
+                await _batchAllocator.Deduct(med, -qtyChange, request.Type, null,
+                    string.IsNullOrWhiteSpace(request.Reason) ? "Điều chỉnh tồn kho" : request.Reason.Trim(),
+                    actorUserId);
+            }
+            else
+            {
+                med.StockQuantity += qtyChange;
+                if (med.StockQuantity < 0)
+                    throw new BusinessException("NEGATIVE_STOCK", "Số lượng tồn kho không thể âm.");
+
+                med.UpdatedAt = DateTime.UtcNow;
+
+                _dbContext.MedicineStockTransactions.Add(new MedicineStockTransaction
+                {
+                    MedicineId = med.Id,
+                    Type = request.Type,
+                    QuantityChange = qtyChange,
+                    BalanceAfter = med.StockQuantity,
+                    ActorUserId = actorUserId,
+                    Reason = string.IsNullOrWhiteSpace(request.Reason)
+                        ? (request.Type == MedicineStockTransactionType.StockIn ? "Nhập thêm hàng vào kho" : "Điều chỉnh tồn kho")
+                        : request.Reason.Trim(),
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
 
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
