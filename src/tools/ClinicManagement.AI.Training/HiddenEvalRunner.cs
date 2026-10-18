@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using ClinicManagement.Application.AI.Planning;
+using ClinicManagement.Application.AI.Suggestions;
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Infrastructure.AI;
 using ClinicManagement.Infrastructure.AI.Planning;
@@ -54,6 +55,9 @@ public static class HiddenEvalRunner
             if (IsWithin(fullPath, root) || IsWithin(resolvedPath, root))
                 throw new HiddenEvalException("File đề phải nằm ngoài repo.");
             var project = Path.Combine(root, "src", "tools", "ClinicManagement.AI.Training");
+            var reportPath = Path.Combine(root, "docs", "ai", "HIDDEN_EVAL.md");
+            var previousReport = File.ReadAllText(reportPath);
+            EnsureSecondRunAbsent(previousReport);
             var data = Path.Combine(project, "data");
             var manifestPath = Path.Combine(data, "hidden_eval_manifest.json");
             using var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -84,8 +88,7 @@ public static class HiddenEvalRunner
             var scored = Score(selection.Included, model, router, pipeline);
             var report = BuildReport(rows.Count, selection, scored, catalog.Keys, model.Threshold,
                 routerSettings.OverrideEnabled, routerSettings.OverrideThreshold);
-            var reportPath = Path.Combine(root, "docs", "ai", "HIDDEN_EVAL.md");
-            File.WriteAllText(reportPath, report, new UTF8Encoding(false));
+            File.WriteAllText(reportPath, AppendSecondRun(previousReport, report), new UTF8Encoding(false));
             output.Write(report);
             return 0;
         }
@@ -273,12 +276,12 @@ public static class HiddenEvalRunner
             if (prediction is null) throw new HiddenEvalException($"STT {row.Stt}: model không trả dự đoán; dừng.");
             router.Reset();
             var analysis = pipeline.Analyze(row.Text);
-            router.Plan(new AiCopilotPlanningContext { Role = row.Role, NormalizedMessage = analysis.NormalizedText, Analysis = analysis });
+            var decision = router.Plan(new AiCopilotPlanningContext { Role = row.Role, NormalizedMessage = analysis.NormalizedText, Analysis = analysis });
             var route = router.LastRoute ?? throw new HiddenEvalException($"STT {row.Stt}: thiếu HybridIntentRoute; dừng.");
             if (route.Source is not ("rule" or "model" or "fallback" or "override"))
                 throw new HiddenEvalException($"STT {row.Stt}: Source không hợp lệ; dừng.");
             result.Add(new(row.Stt, row.Role, row.Label, SafeLabel(prediction.Label), prediction.Confidence >= model.Threshold,
-                SafeLabel(route.Label), route.Source));
+                SafeLabel(route.Label), route.Source, AsksForClarification(decision), FinalDecisionLabel(decision, row.Role)));
         }
         return result;
     }
@@ -286,11 +289,50 @@ public static class HiddenEvalRunner
     private static string SafeLabel(string label) => Regex.IsMatch(label, @"\A[A-Za-z][A-Za-z0-9_]*\z")
         ? label : throw new HiddenEvalException("Dự đoán không phải mã nhãn; dừng.");
 
+    internal static bool AsksForClarification(AiPlannerDecision decision) => decision.Clarification is not null ||
+        MissingContext(decision.ErrorCode) || MissingContext(decision.SubIntent);
+
+    private static bool MissingContext(string? code) => code is AiPlannerErrorCodes.ResourceContextRequired or
+        "MissingAssignedCase" or "MissingPrescriptionForPayment" or "MissingAppointmentCode";
+
+    internal static string FinalDecisionLabel(AiPlannerDecision decision, AiActorRole role)
+    {
+        if (decision.RequiresProvider) return "ProviderRequired";
+        if (decision.ToolCalls.Count == 1)
+        {
+            var tool = decision.ToolCalls[0].Name;
+            if (tool == "clinic.search_knowledge") return "ClinicKnowledge";
+            if (tool == "reception.lookup_appointment") return "LookupAppointment";
+            foreach (var (label, code) in HybridIntentRouter.SuggestionCodes)
+                if (AiSuggestionCatalog.Find(code, role)?.ToolName == tool) return label;
+            return "UnmappedDecision";
+        }
+        if (decision.ToolCalls.Count > 1) return "UnmappedDecision";
+        return decision.SubIntent switch
+        {
+            "Greeting" => "Greeting", "RoleHelp" => "Help", "BookingWizard" => "StartBooking",
+            _ => SafeLabel(decision.Intent)
+        };
+    }
+
+    private const string SecondRunHeading = "## Lần chấm 2 (sau sửa router)";
+    private static void EnsureSecondRunAbsent(string previous)
+    {
+        if (previous.Contains(SecondRunHeading, StringComparison.Ordinal))
+            throw new HiddenEvalException("Đã có lần chấm 2; dừng để tránh chấm lại.");
+    }
+
+    internal static string AppendSecondRun(string previous, string report)
+    {
+        EnsureSecondRunAbsent(previous);
+        return previous.TrimEnd() + Environment.NewLine + Environment.NewLine + report;
+    }
+
     internal static string BuildReport(int rowCount, Selection selection, IReadOnlyList<ScoredRow> scored,
         IEnumerable<string> catalog, double threshold, bool overrideEnabled, double? overrideThreshold)
     {
         var report = new StringBuilder();
-        report.AppendLine("# Hidden human-written evaluation");
+        report.AppendLine(SecondRunHeading);
         report.AppendLine();
         report.AppendLine(Provenance);
         report.AppendLine();
@@ -302,17 +344,19 @@ public static class HiddenEvalRunner
         report.AppendLine();
         report.AppendLine($"T1: RoleIntentModel v2 thật, lọc nhãn theo vai trò, ngưỡng metadata = {Number(threshold)}; accepted khi confidence >= ngưỡng.");
         report.AppendLine($"T2: HybridIntentRouter.Plan, AiConversationPipeline mặc định (Shadow), role của từng dòng; resource rỗng, không memory. OverrideEnabled = {overrideEnabled}; OverrideThreshold = {(overrideThreshold.HasValue ? Number(overrideThreshold.Value) : "N/A")} từ appsettings.json.");
-        report.AppendLine("Nhãn T2 lấy nguyên từ LastRoute.Label, kể cả fallback; đây là accuracy nhãn định tuyến, không phải thành công của tool hay câu trả lời. Không gọi provider hoặc thực thi tool.");
+        report.AppendLine("T2 dùng quyết định Plan trả về: tool thực tế được map về nhãn theo vai trò; Greeting/RoleHelp/BookingWizard dùng nhãn của handler. RequiresProvider được ghi ProviderRequired, tool không map được ghi UnmappedDecision. LastRoute.Label chỉ là telemetry, không dùng thay cho quyết định cuối.");
+        report.AppendLine("Source=fallback luôn sai ở cả strict và lenient, kể cả telemetry label trùng gold. Hỏi lại khi có Clarification hoặc ErrorCode/SubIntent thuộc RESOURCE_CONTEXT_REQUIRED, MissingAssignedCase, MissingPrescriptionForPayment, MissingAppointmentCode.");
+        report.AppendLine("T2 strict: chỉ đúng khi không fallback, không hỏi lại, và nhãn quyết định cuối trùng gold. T2 lenient: đúng theo strict hoặc hỏi lại (vẫn loại fallback). Lenient là mức chấp nhận được theo quy ước, không chứng minh hiểu đúng intent. Không gọi provider hoặc thực thi tool.");
         report.AppendLine("Macro-F1 bình quân các nhãn xuất hiện trong gold hoặc dự đoán của tầng/phạm vi tương ứng; chia cho 0 cho P/R/F1 được tính là 0.");
         report.AppendLine();
-        report.AppendLine("## Tổng và theo vai trò");
+        report.AppendLine("### Tổng và theo vai trò");
         report.AppendLine();
-        report.AppendLine("| Phạm vi | N | T1 đúng | T1 accuracy | T1 macro-F1 | Coverage | Accepted accuracy | Không chắc | T1 Wilson 95% | T2 đúng | T2 accuracy | T2 macro-F1 | T2 Wilson 95% |");
-        report.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---|");
+        report.AppendLine("| Phạm vi | N | T1 đúng | T1 accuracy | T1 macro-F1 | Coverage | Accepted accuracy | Không chắc | T1 Wilson 95% | Hỏi lại | T2 strict đúng | T2 strict accuracy | T2 strict macro-F1 | T2 strict Wilson 95% | T2 lenient đúng | T2 lenient accuracy | T2 lenient Wilson 95% |");
+        report.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---|---:|---:|---|");
         Summary("Tổng", scored);
         foreach (var role in Roles.Values) Summary(role.ToString(), scored.Where(x => x.Role == role).ToArray());
         report.AppendLine();
-        report.AppendLine("## Source T2");
+        report.AppendLine("### Source T2");
         report.AppendLine();
         report.AppendLine("Source override được giữ riêng theo production (thuộc nhánh dùng model).");
         report.AppendLine();
@@ -321,11 +365,11 @@ public static class HiddenEvalRunner
         Sources("Tổng", scored);
         foreach (var role in Roles.Values) Sources(role.ToString(), scored.Where(x => x.Role == role).ToArray());
         report.AppendLine();
-        report.AppendLine("## P/R/F1 theo nhãn");
+        report.AppendLine("### P/R/F1 theo nhãn (T2 strict)");
         report.AppendLine();
         report.AppendLine("| Nhãn | Support | T1 P | T1 R | T1 F1 | T2 P | T2 R | T2 F1 |");
         report.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|");
-        foreach (var label in catalog.Concat(scored.Select(x => x.T1)).Concat(scored.Select(x => x.T2)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        foreach (var label in catalog.Concat(scored.Select(x => x.T1)).Concat(scored.Select(x => x.StrictPrediction)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
         {
             var t1 = PerLabel(scored, label, false);
             var t2 = PerLabel(scored, label, true);
@@ -334,7 +378,7 @@ public static class HiddenEvalRunner
         foreach (var router in new[] { false, true })
         {
             report.AppendLine();
-            report.AppendLine($"## Top 10 cặp nhầm {(router ? "T2" : "T1")}");
+            report.AppendLine($"### Top 10 cặp nhầm {(router ? "T2 strict" : "T1")}");
             report.AppendLine();
             report.AppendLine("| Nhãn đúng | Nhãn dự đoán | Số lượng |");
             report.AppendLine("|---|---|---:|");
@@ -344,17 +388,17 @@ public static class HiddenEvalRunner
                 report.AppendLine($"| {pair.Key.Gold} | {pair.Key.Prediction} | {pair.Count()} |");
         }
         report.AppendLine();
-        report.AppendLine("## Các STT dự đoán sai");
+        report.AppendLine("### Các STT dự đoán sai (T1 hoặc T2 strict)");
         report.AppendLine();
-        report.AppendLine("| STT | Vai trò | Nhãn đúng | T1 dự đoán | T2 dự đoán |");
-        report.AppendLine("|---:|---|---|---|---|");
-        foreach (var row in scored.Where(x => x.Gold != x.T1 || x.Gold != x.T2).OrderBy(x => x.Stt))
-            report.AppendLine($"| {row.Stt} | {row.Role} | {row.Gold} | {row.T1} | {row.T2} |");
+        report.AppendLine("| STT | Vai trò | Nhãn đúng | T1 dự đoán | T2 strict dự đoán | Hỏi lại | T2 lenient đúng |");
+        report.AppendLine("|---:|---|---|---|---|---:|---:|");
+        foreach (var row in scored.Where(x => x.Gold != x.T1 || !x.StrictCorrect).OrderBy(x => x.Stt))
+            report.AppendLine($"| {row.Stt} | {row.Role} | {row.Gold} | {row.T1} | {row.StrictPrediction} | {(row.AsksAgain ? 1 : 0)} | {(row.LenientCorrect ? 1 : 0)} |");
         report.AppendLine();
-        report.AppendLine("## Giới hạn");
+        report.AppendLine("### Giới hạn");
         report.AppendLine();
         report.AppendLine("Bộ đề do 1 người viết, khoảng 4–6 câu/nhãn nên khoảng tin cậy rộng; không đại diện đầy đủ người dùng hay phân bố production. Wilson 95% là khoảng cho accuracy nhị thức, giả định các câu độc lập; câu cùng người viết có thể tương quan.");
-        report.AppendLine("Context tối thiểu không có ca bệnh/đơn thuốc được xác minh; router có thể yêu cầu làm rõ. Source fallback vẫn có thể ghi nhãn model dù quyết định thực tế giữ fallback. Kết quả không được dùng để chỉnh model, ngưỡng, rule hoặc dataset trong PR này.");
+        report.AppendLine("Context tối thiểu không có ca bệnh/đơn thuốc được xác minh; router có thể yêu cầu làm rõ. Strict và lenient lần này khác định nghĩa T2 của lần 1 nên không so trực tiếp thành mức cải thiện router. Không chỉnh gì thêm sau khi xem kết quả của lần chấm này.");
         report.AppendLine();
         report.AppendLine("Kiểm thử runner (XLSX tự tạo, không đọc đề thật): `dotnet test src/tools/ClinicManagement.AI.Training/HiddenEvalRunnerTests.proj --configuration Release`. MSBuild gọi self-test theo pattern Phase4 của tool, không thêm NuGet package.");
         return report.ToString();
@@ -363,9 +407,10 @@ public static class HiddenEvalRunner
         {
             var n = rows.Count;
             var t1Correct = rows.Count(x => x.T1 == x.Gold);
-            var t2Correct = rows.Count(x => x.T2 == x.Gold);
+            var t2Correct = rows.Count(x => x.StrictCorrect);
+            var lenientCorrect = rows.Count(x => x.LenientCorrect);
             var accepted = rows.Where(x => x.Accepted).ToArray();
-            report.AppendLine($"| {name} | {n} | {t1Correct} | {Rate(t1Correct, n)} | {Percent(MacroF1(rows, false))} | {Rate(accepted.Length, n)} | {Rate(accepted.Count(x => x.T1 == x.Gold), accepted.Length)} | {Rate(n - accepted.Length, n)} | {Interval(t1Correct, n)} | {t2Correct} | {Rate(t2Correct, n)} | {Percent(MacroF1(rows, true))} | {Interval(t2Correct, n)} |");
+            report.AppendLine($"| {name} | {n} | {t1Correct} | {Rate(t1Correct, n)} | {Percent(MacroF1(rows, false))} | {Rate(accepted.Length, n)} | {Rate(accepted.Count(x => x.T1 == x.Gold), accepted.Length)} | {Rate(n - accepted.Length, n)} | {Interval(t1Correct, n)} | {rows.Count(x => x.AsksAgain)} | {t2Correct} | {Rate(t2Correct, n)} | {Percent(MacroF1(rows, true))} | {Interval(t2Correct, n)} | {lenientCorrect} | {Rate(lenientCorrect, n)} | {Interval(lenientCorrect, n)} |");
         }
         void Sources(string name, IReadOnlyList<ScoredRow> rows)
         {
@@ -388,7 +433,7 @@ public static class HiddenEvalRunner
         rows.Select(x => x.Gold).Concat(rows.Select(x => Predicted(x, router))).Distinct(StringComparer.Ordinal)
             .Average(label => PerLabel(rows, label, router).F1);
 
-    private static string Predicted(ScoredRow row, bool router) => router ? row.T2 : row.T1;
+    private static string Predicted(ScoredRow row, bool router) => router ? row.StrictPrediction : row.T1;
 
     internal static (double Low, double High) Wilson(int correct, int n)
     {
@@ -425,7 +470,13 @@ public static class HiddenEvalRunner
     }
 
     internal sealed record Selection(List<HiddenRow> Included, List<int> DataDuplicates, List<int> InternalDuplicates);
-    internal sealed record ScoredRow(int Stt, AiActorRole Role, string Gold, string T1, bool Accepted, string T2, string Source);
+    internal sealed record ScoredRow(int Stt, AiActorRole Role, string Gold, string T1, bool Accepted, string T2, string Source,
+        bool AsksAgain = false, string? DecisionLabel = null)
+    {
+        public string StrictPrediction => Source == "fallback" ? "Fallback" : AsksAgain ? "Clarification" : DecisionLabel ?? T2;
+        public bool StrictCorrect => Source != "fallback" && !AsksAgain && StrictPrediction == Gold;
+        public bool LenientCorrect => Source != "fallback" && (AsksAgain || StrictCorrect);
+    }
     internal sealed record Manifest(string Sha256, int RowCount, Dictionary<string, int> CountsByRole, Dictionary<string, int> CountsByLabel, string LockedDate, string Provenance);
     internal sealed class HiddenEvalException(string message) : Exception(message);
 }

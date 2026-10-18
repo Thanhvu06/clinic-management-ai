@@ -6,6 +6,8 @@ using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Infrastructure.AI;
 using ClinicManagement.Infrastructure.AI.Planning;
+using ClinicManagement.Application.AI;
+using ClinicManagement.Application.AI.Planning;
 using Microsoft.Extensions.Logging.Abstractions;
 using static ClinicManagement.AI.Training.HiddenEvalRunner;
 
@@ -28,7 +30,9 @@ public static class HiddenEvalRunnerTests
         Action[] tests = [ReadsSharedStringsAndAllRoles, ReadsInlineStringsAndReorderedColumns, SkipsBlankAndExampleRows, ReadsNotesWithBlankHeader,
             RejectsInvalidLabelsAndRoles, RejectsDuplicateIdsAndMissingText, RejectsMissingSheetAndColumns,
             NormalizesVietnamese, ExcludesAllDataAndInternalDuplicates, LocksAndUpdatesManifest,
-            ReportContainsNoQuestionText, MetricsAndWilsonAreCorrect, ScoresBothLayersAtThreshold, ErrorsContainNoCellOrArgumentText];
+            ReportContainsNoQuestionText, MetricsAndWilsonAreCorrect, ScoresBothLayersAtThreshold, ErrorsContainNoCellOrArgumentText,
+            FallbackTelemetryNeverScoresCorrect, ClarificationSeparatesStrictAndLenient,
+            FinalDecisionUsesHandlerInsteadOfTelemetry, AppendingReportPreservesFirstRun];
         for (var i = 0; i < tests.Length; i++)
         {
             try { tests[i](); }
@@ -48,6 +52,56 @@ public static class HiddenEvalRunnerTests
             Check(rows[i].Stt == i + 1 && rows[i].Role == RoleValues[i]);
             Check(rows[i].Text == Secret + i && rows[i].Label == "Greeting");
         }
+    }
+
+    private static void FallbackTelemetryNeverScoresCorrect()
+    {
+        var fallback = new ScoredRow(1, AiActorRole.Patient, "MyBills", "MyBills", true, "MyBills", "fallback", true, "MyBills");
+        Check(fallback.StrictPrediction == "Fallback" && !fallback.StrictCorrect && !fallback.LenientCorrect);
+        Near(PerLabel([fallback], "MyBills", true).F1, 0);
+    }
+
+    private static void ClarificationSeparatesStrictAndLenient()
+    {
+        foreach (var decision in new[]
+        {
+            new AiPlannerDecision { Clarification = Secret },
+            new AiPlannerDecision { ErrorCode = AiPlannerErrorCodes.ResourceContextRequired },
+            new AiPlannerDecision { ErrorCode = "MissingAssignedCase" },
+            new AiPlannerDecision { SubIntent = "MissingPrescriptionForPayment" },
+            new AiPlannerDecision { SubIntent = "MissingAppointmentCode" }
+        })
+        {
+            Check(AsksForClarification(decision));
+            var row = new ScoredRow(1, AiActorRole.Doctor, "PatientSummary", "PatientSummary", true,
+                "PatientSummary", "model", AsksForClarification(decision), "PatientSummary");
+            Check(!row.StrictCorrect && row.LenientCorrect && row.StrictPrediction == "Clarification");
+            var selected = new Selection([new(1, AiActorRole.Doctor, "PatientSummary", Secret)], [], []);
+            var report = BuildReport(1, selected, [row], ["PatientSummary"], .75, true, .8);
+            Check(!report.Contains(Secret, StringComparison.Ordinal));
+            Check(report.Contains("T2 strict", StringComparison.Ordinal) && report.Contains("T2 lenient", StringComparison.Ordinal));
+        }
+        Check(!AsksForClarification(new AiPlannerDecision { ErrorCode = "FORBIDDEN" }));
+    }
+
+    private static void FinalDecisionUsesHandlerInsteadOfTelemetry()
+    {
+        var planner = new AiDeterministicPlanner();
+        var decision = planner.Plan(new AiCopilotPlanningContext { Role = AiActorRole.Patient, NormalizedMessage = "synthetic hoa don" });
+        var label = FinalDecisionLabel(decision, AiActorRole.Patient);
+        Check(label == "MyBills");
+        var row = new ScoredRow(1, AiActorRole.Patient, "MyBills", "MyBills", true, "MyVisits", "rule", false, label);
+        Check(row.StrictCorrect && row.LenientCorrect);
+        Check(FinalDecisionLabel(new AiPlannerDecision { RequiresProvider = true, Intent = "MyBills" }, AiActorRole.Patient) == "ProviderRequired");
+    }
+
+    private static void AppendingReportPreservesFirstRun()
+    {
+        const string first = "# Evaluation\n\n## Lần chấm 1\n\nFirst metrics\n\n## Router v2 — tập phát triển\n\nDevelopment metrics";
+        const string second = "## Lần chấm 2 (sau sửa router)\n\nSecond metrics";
+        var document = AppendSecondRun(first, second);
+        Check(document.StartsWith(first, StringComparison.Ordinal) && document.EndsWith(second, StringComparison.Ordinal));
+        Fails(() => AppendSecondRun(document, second));
     }
 
     private static void ReadsInlineStringsAndReorderedColumns()
