@@ -1,8 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Application.Mpi.Interfaces;
 using ClinicManagement.Infrastructure.Persistence;
+using ClinicManagement.Infrastructure.Services;
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -12,15 +14,21 @@ namespace ClinicManagement.Infrastructure.Mpi;
 public class MrnGenerator : IMrnGenerator
 {
     private readonly AppDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public MrnGenerator(AppDbContext dbContext)
+    public MrnGenerator(AppDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
+    }
+
+    public MrnGenerator(AppDbContext dbContext) : this(dbContext, new DateTimeProvider())
+    {
     }
 
     public async Task<string> GenerateNextMrnAsync(CancellationToken cancellationToken = default)
     {
-        var currentYear = DateTime.UtcNow.Year;
+        var currentYear = _dateTimeProvider.VietnamToday.Year;
         const int maxAttempts = 3;
         await using var ownedTransaction = _dbContext.Database.CurrentTransaction == null
             ? await _dbContext.Database.BeginTransactionAsync(cancellationToken)
