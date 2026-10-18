@@ -1,130 +1,48 @@
-# Quy tắc nghiệp vụ (Business Rules)
+# Luật nghiệp vụ hiện có
 
-## 1. Tài khoản, Identity, phân quyền và IsActive
-- **BR-101**: Hệ thống có 4 vai trò (`IdentityRole<Guid>`): `Patient`, `Receptionist`, `Doctor`, `Admin`. Không lưu Role thành cột đơn mà dùng bảng `AspNetUserRoles`.
-- **BR-102**: Bệnh nhân được tự đăng ký tài khoản. Nhân viên (Lễ tân, Bác sĩ, Admin) do Admin tạo.
-- **BR-103**: Không được hard-delete các tài khoản đã phát sinh dữ liệu, chỉ sử dụng cờ `IsActive = false` để vô hiệu hóa.
-- **BR-104**: Kiến trúc tài khoản: Sử dụng ASP.NET Core Identity. Bảng vật lý là `AspNetUsers`. `ApplicationUser` (kế thừa `IdentityUser<Guid>`) nằm ở tầng Infrastructure. Application định nghĩa và sử dụng `IIdentityService`. Domain hoàn toàn không phụ thuộc ASP.NET Core Identity.
-- **BR-105**: Xác thực API sử dụng JWT.
-- **BR-106**: Truy vấn kết hợp: Khi cần kết xuất dữ liệu Bác sĩ/Bệnh nhân với thông tin tài khoản, Infrastructure sẽ sử dụng LINQ join/projection và trả về DTO, không bắt buộc query hai lần.
+Chỉ ghi hành vi đang triển khai. Mỗi luật dẫn đến file nguồn; quy tắc hướng dẫn code mới xem [AGENTS.md](../../AGENTS.md).
 
-## 2. Bệnh nhân
-- **BR-201**: Quan hệ 1-1 logic giữa Tài khoản và Bệnh nhân thông qua cột `UserId` (kiểu Guid). `UserId` phải là Unique để đảm bảo 1 user chỉ có 1 hồ sơ. Entity `Patient` và `Doctor` trong Domain KHÔNG chứa navigation property trỏ tới `ApplicationUser`.
-- **BR-202**: Bệnh nhân chỉ được xem và cập nhật hồ sơ của chính mình.
-- **BR-203**: Email và Số điện thoại phải là duy nhất. Do ASP.NET Core Identity không mặc định đảm bảo `PhoneNumber` unique nên phải cấu hình kiểm tra hoặc đặt ràng buộc riêng khi triển khai.
-- **BR-204**: Hồ sơ bệnh nhân có thể chưa đầy đủ ngay sau khi đăng ký (các trường `Gender`, `DateOfBirth`, `Address` cho phép null).
-- **BR-205**: Điều kiện đặt lịch: Trước khi tạo lịch hẹn (`Appointment`), `Gender` và `DateOfBirth` bắt buộc phải có giá trị (không null). `Address` không bắt buộc. Việc bổ sung thông tin này được thực hiện tại bước xác nhận đặt lịch (không bắt buộc chuyển hướng sang trang Profile). Frontend có trách nhiệm kiểm tra để hỗ trợ UX, nhưng Backend bắt buộc phải validate lại.
+## Đặt lịch và nghỉ phép
 
-## 3. Quan hệ nhiều–nhiều DoctorSpecialties và quy tắc chỉ một IsPrimary
-- **BR-301**: Một bác sĩ có thể thuộc nhiều chuyên khoa thông qua bảng trung gian `DoctorSpecialties`.
-- **BR-302**: Trong danh sách các chuyên khoa của một bác sĩ, chỉ được phép có duy nhất một chuyên khoa được đánh dấu là chuyên khoa chính (`IsPrimary = true`).
+- Slot phải tồn tại, chưa bị giữ bởi lịch còn giữ chỗ; bác sĩ/tài khoản/chuyên khoa phải hoạt động và khớp nhau. Slot đúng 30 phút, nằm trong lịch làm việc hoạt động, không Chủ nhật, không quá khứ theo giờ Việt Nam; không trùng giờ bệnh nhân. Nguồn: [AppointmentAvailabilityPolicy.cs](../../src/backend/ClinicManagement.Infrastructure/Appointments/AppointmentAvailabilityPolicy.cs).
+- Nghỉ phép ở trạng thái Pending hoặc Approved đều chặn slot giao thời gian (`slotStart < EndDateTime` và `slotEnd > StartDateTime`), trả `DOCTOR_ON_LEAVE`. Nguồn: [AppointmentAvailabilityPolicy.cs](../../src/backend/ClinicManagement.Infrastructure/Appointments/AppointmentAvailabilityPolicy.cs).
+- Giới hạn truy vấn lịch trống: policy chuẩn hóa ngày đảo và cắt `toDate` ở `fromDate + 31 ngày` khi chênh lệch lớn hơn 31. Hai đầu được tính, nên có thể gồm 32 ngày lịch; đây không phải chốt cấm tạo lịch sau hôm nay 31 ngày. API `availability` ở DoctorService cắt chênh lệch 30 ngày, tương ứng 31 ngày lịch. Không có chốt “chỉ đặt trước tối đa 31 ngày” trong đánh giá từng slot. Nguồn: [AppointmentAvailabilityPolicy.cs](../../src/backend/ClinicManagement.Infrastructure/Appointments/AppointmentAvailabilityPolicy.cs), [DoctorService.cs](../../src/backend/ClinicManagement.Infrastructure/Doctors/DoctorService.cs).
+- Đổi/hủy đi qua yêu cầu của bệnh nhân; lễ tân duyệt/từ chối. Khi duyệt đổi phải kiểm tra slot đích và cập nhật slot cũ/mới trong giao dịch; rút yêu cầu chỉ khi còn chờ. Nguồn: [ChangeRequestService.cs](../../src/backend/ClinicManagement.Infrastructure/Appointments/ChangeRequestService.cs).
+- Đề xuất tái khám chỉ tạo cho lịch hẹn Completed, ngày đề xuất sau hôm nay và không là Chủ nhật; không tạo thêm khi còn đề xuất chờ phản hồi. Đề xuất gắn lịch hẹn, bệnh nhân và bác sĩ; chỉ bệnh nhân sở hữu được phản hồi. Chấp nhận phải chọn slot hợp lệ rồi tạo lịch mới. Nguồn: [RevisitService.cs](../../src/backend/ClinicManagement.Infrastructure/Appointments/RevisitService.cs), [DoctorAppointmentService.cs](../../src/backend/ClinicManagement.Infrastructure/Appointments/DoctorAppointmentService.cs).
 
-## 4. Specialties, SpecialtyCode, IsActive, AiEnabled và whitelist AI
-- **BR-401**: Cột `SpecialtyCode` phải là duy nhất (Unique) trên toàn hệ thống.
-- **BR-402**: Không hard-delete chuyên khoa. Dùng `IsActive = false` để ẩn khỏi danh sách đặt lịch nhưng vẫn bảo toàn lịch sử dữ liệu.
-- **BR-403**: Whitelist AI: Hệ thống AI chỉ được phép gợi ý các chuyên khoa thỏa mãn đồng thời 3 điều kiện: 
-  - Đang hoạt động (`IsActive = true`).
-  - Được cho phép AI gợi ý (`AiEnabled = true`).
-  - Có ít nhất 1 bác sĩ đang hoạt động thuộc chuyên khoa đó.
+## Tiếp nhận, MPI và thời gian
 
-## 5. Lịch làm việc, lịch nghỉ và slot cố định 30 phút
-- **BR-501**: Mỗi slot khám bệnh (`AppointmentSlots`) có độ dài cố định chính xác 30 phút.
-- **BR-502**: Không sinh slot vượt ra ngoài khoảng thời gian làm việc của bác sĩ hoặc rơi vào thời gian nghỉ đã được Admin duyệt.
-- **BR-503**: Nếu lịch làm việc bị tắt (`IsActive = false`), hệ thống không được sinh thêm slot mới từ lịch đó.
+- Tiếp nhận có khóa idempotency; cùng khóa còn hiệu lực và cùng payload dùng lại kết quả, khác payload bị `IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD`. Kiểm tra cơ sở/khoa/phòng, phân công bác sĩ và cấp số theo lượt khám. Nguồn: [PatientVisitService.cs](../../src/backend/ClinicManagement.Infrastructure/Visits/PatientVisitService.cs).
+- MRN có dạng `BN-năm-6 số`, ví dụ `BN-2026-000001`; định dạng `D6` là độ rộng tối thiểu. Hiện MrnGenerator lấy năm bằng `DateTime.UtcNow.Year`, tăng MrnSequences, khởi tạo từ MRN lớn nhất đang có và thử lại tối đa 30 lần khi xung đột EF. Đây là hiện trạng, không khẳng định đã dùng năm Việt Nam. Nguồn: [MrnGenerator.cs](../../src/backend/ClinicManagement.Infrastructure/Mpi/MrnGenerator.cs), [MrnSequenceConfiguration.cs](../../src/backend/ClinicManagement.Infrastructure/Persistence/Configurations/MrnSequenceConfiguration.cs), [PatientConfiguration.cs](../../src/backend/ClinicManagement.Infrastructure/Persistence/Configurations/PatientConfiguration.cs).
+- Hồ sơ vãng lai, dị ứng và người liên hệ khẩn cấp do MPI quản lý; phân quyền đọc/cập nhật được kiểm tra trong controller và service. Nguồn: [MpiPatientService.cs](../../src/backend/ClinicManagement.Infrastructure/Mpi/MpiPatientService.cs), [MpiPatientsController.cs](../../src/backend/ClinicManagement.Api/Controllers/Mpi/MpiPatientsController.cs).
+- Các luồng lịch khám dùng IDateTimeProvider để lấy VietnamToday/VietnamTime và dấu thời gian UTC. Quy tắc phát triển mới phải dùng provider cho giờ nghiệp vụ; không suy rằng mọi chỗ hiện tại đã tuân thủ. Nguồn: [AppointmentAvailabilityPolicy.cs](../../src/backend/ClinicManagement.Infrastructure/Appointments/AppointmentAvailabilityPolicy.cs), [IDateTimeProvider.cs](../../src/backend/ClinicManagement.Application/Common/Interfaces/IDateTimeProvider.cs).
 
-## 6. Kiểm tra chồng lấn
-- **BR-601**: Thuật toán phát hiện trùng lặp/chồng lấn thời gian (overlapping) sử dụng nguyên tắc: 
-  `NewStart < ExistingEnd AND NewEnd > ExistingStart`
+## Khám bệnh, ICD-10 và kê đơn
 
-## 7. Đặt lịch bằng transaction/atomic update và lỗi 409 SLOT_ALREADY_BOOKED
-- **BR-701**: Toàn bộ quy trình Đặt lịch (Booking) bắt buộc phải sử dụng Transaction của Database. Transaction do Application use case điều phối; Infrastructure triển khai thao tác database. Controller không trực tiếp quản lý transaction.
-- **BR-702**: Atomic update: Thao tác tạo `Appointment`, tạo `AppointmentHistory` và cập nhật cờ `IsBooked` của `AppointmentSlot` phải cùng nằm trong một transaction.
-- **BR-703**: Nếu hệ thống phát hiện slot đã bị giữ (`IsBooked = true`), giao dịch lập tức bị hủy và API phải trả về lỗi `409 Conflict` với mã lỗi `SLOT_ALREADY_BOOKED`.
-- **BR-704**: Trạng thái giữ slot: Các trạng thái Appointment đang giữ slot bao gồm: `Pending`, `Confirmed`, `PendingReschedule`, `PendingCancellation`. Các trạng thái không giữ slot bao gồm: `Cancelled`, `Completed`, `NoShow`.
+- Mã ICD-10 khi có nhập phải tồn tại và đang hoạt động trong Icd10Codes; không hợp lệ bị `INVALID_ICD10`. API tìm danh mục có quyền Doctor/Receptionist/Admin. Nguồn: [DoctorAppointmentService.cs](../../src/backend/ClinicManagement.Infrastructure/Appointments/DoctorAppointmentService.cs), [Icd10Controller.cs](../../src/backend/ClinicManagement.Api/Controllers/Icd10Controller.cs).
+- An toàn kê đơn dựa trên hoạt chất, dị ứng đã ghi nhận, nhóm thuốc/dị ứng chéo và quy tắc tương tác. Dị ứng trực tiếp và tương tác Major/Contraindicated sinh Danger; cảnh báo được sắp Danger → Warning → Info. Nguồn: [PrescriptionSafetyService.cs](../../src/backend/ClinicManagement.Infrastructure/Prescriptions/PrescriptionSafetyService.cs).
+- Khi áp dụng kiểm tra an toàn để phát hành đơn, có Danger thì lý do sau Trim phải dài ít nhất 10 ký tự; thiếu bị `PRESCRIPTION_SAFETY_OVERRIDE_REQUIRED`; lý do tối đa 500 ký tự. Lưu kết quả kiểm tra và lý do vào đơn; kiểm tra này không đồng nghĩa chặn lưu mọi bản nháp. Nguồn: [DoctorAppointmentService.cs](../../src/backend/ClinicManagement.Infrastructure/Appointments/DoctorAppointmentService.cs).
+- Không hoàn tất khám khi còn chỉ định Ordered/InProgress (`PENDING_DIAGNOSTIC_RESULTS`) hoặc phiếu Completed chưa được bác sĩ xác nhận xem (`UNREVIEWED_DIAGNOSTIC_RESULTS`). Cả luồng lịch hẹn và lượt khám đều có chốt này. Nguồn: [DoctorAppointmentService.cs](../../src/backend/ClinicManagement.Infrastructure/Appointments/DoctorAppointmentService.cs).
+- Sinh hiệu kiểm tra miền giá trị; BMI tính từ cân nặng và chiều cao khi đủ dữ liệu. Bối cảnh lâm sàng trả lịch sử và chênh lệch số đo để đối chiếu. Nguồn: [DoctorAppointmentService.cs](../../src/backend/ClinicManagement.Infrastructure/Appointments/DoctorAppointmentService.cs).
 
-## 8. Toàn bộ trạng thái Appointment
-- **BR-801**: Lịch hẹn (`Appointments`) chỉ được nằm trong các trạng thái sau:
-  - `Pending`
-  - `Confirmed`
-  - `PendingReschedule`
-  - `PendingCancellation`
-  - `Cancelled`
-  - `Completed`
-  - `NoShow`
+## Cận lâm sàng/LIS
 
-## 9. Chuyển trạng thái hợp lệ theo appointment-state.puml
-- **BR-901**: Chỉ cho phép các luồng chuyển trạng thái sau:
-  - Từ `Pending` $\rightarrow$ `Confirmed` / `PendingReschedule` / `PendingCancellation` / `Cancelled`
-  - Từ `Confirmed` $\rightarrow$ `PendingReschedule` / `PendingCancellation` / `Completed` / `NoShow` / `Cancelled`
-  - Từ `PendingReschedule` $\rightarrow$ `Confirmed` (thành công/rút lui/từ chối) / `Cancelled` (nếu hủy thành công)
-  - Từ `PendingCancellation` $\rightarrow$ `Cancelled` (chấp nhận) / `Confirmed` (từ chối/rút lui)
+- Nhập kết quả chỉ khi phiếu InProgress. Hoàn tất yêu cầu mọi dịch vụ chưa hủy có kết quả và trạng thái Completed. Phiếu có ít nhất một dịch vụ chưa hủy với SpecimenType khác null cần gửi duyệt; các phiếu không cần duyệt được hoàn tất trực tiếp. Nguồn: [DiagnosticWorkflowService.cs](../../src/backend/ClinicManagement.Infrastructure/Diagnostics/DiagnosticWorkflowService.cs).
+- Duyệt chỉ áp dụng phiếu InProgress đang Pending verification, có người gửi duyệt, đúng phạm vi cơ sở và role. Người nhập/người gửi không tự duyệt; bác sĩ chỉ định không tự duyệt phiếu của mình. Khi bị trả, sửa rồi gửi duyệt lại. Nguồn: [DiagnosticWorkflowService.cs](../../src/backend/ClinicManagement.Infrastructure/Diagnostics/DiagnosticWorkflowService.cs).
+- Delta check so với kết quả trước theo mã tham số/đơn vị và cửa sổ cấu hình (mặc định 30 ngày); đánh dấu khi vượt giới hạn tuyệt đối hoặc phần trăm. Duyệt có delta failure cần ghi chú Trim ít nhất 5 ký tự; lý do trả kết quả cũng ít nhất 5 ký tự. Nguồn: [DiagnosticWorkflowService.cs](../../src/backend/ClinicManagement.Infrastructure/Diagnostics/DiagnosticWorkflowService.cs).
+- Bệnh nhân chỉ thấy phiếu Completed có ReviewedAtUtc (bác sĩ đã xác nhận xem). Hoàn tất kỹ thuật/duyệt xét nghiệm riêng chưa đủ để công bố. Tải tệp đính kèm cũng kiểm tra quyền đối với phiếu và tệp. Nguồn: [DiagnosticResultPublicationPolicy.cs](../../src/backend/ClinicManagement.Domain/Policies/DiagnosticResultPublicationPolicy.cs), [DiagnosticWorkflowService.cs](../../src/backend/ClinicManagement.Infrastructure/Diagnostics/DiagnosticWorkflowService.cs).
+- TAT chỉ cho LabSupervisor theo cơ sở được phân công; khoảng ngày tính cả hai đầu tối đa 31 ngày. Báo cáo trả các phân đoạn thời gian, median và P90; P90 lấy nearest-rank. Nguồn: [DiagnosticWorkflowService.cs](../../src/backend/ClinicManagement.Infrastructure/Diagnostics/DiagnosticWorkflowService.cs), [LabReportsController.cs](../../src/backend/ClinicManagement.Api/Controllers/LabReportsController.cs).
 
-## 10. AppointmentChangeRequests
-- **BR-1001**: Yêu cầu thay đổi (`RequestType`) bao gồm: `Reschedule` (Đổi lịch) và `Cancellation` (Hủy lịch).
-- **BR-1002**: Trạng thái yêu cầu (`Status`) bao gồm: `Pending`, `Approved`, `Rejected`, `Withdrawn`.
-- **BR-1003**: Tại bất kỳ thời điểm nào, một lịch hẹn chỉ được có TỐI ĐA MỘT yêu cầu đang ở trạng thái `Pending`.
-- **BR-1004**: Trong lúc yêu cầu đang `Pending`, slot cũ (hiện tại) của lịch hẹn vẫn phải được giữ chặt, chưa bị giải phóng.
+## Thuốc, FEFO, giữ chỗ và thanh toán
 
-## 11. Quy trình đổi lịch
-- **BR-1101**: Quá trình duyệt cấp phép đổi lịch phải nằm trong 1 Transaction nguyên tử với luồng:
-  1. Giữ slot cũ.
-  2. Kiểm tra và khóa slot mới.
-  3. Cập nhật thông tin `Appointment`.
-  4. Giải phóng slot cũ.
-  5. Chuyển lịch thành `Confirmed`.
-  6. Đánh dấu Request là `Approved`.
-  7. Ghi history.
-  8. Commit Transaction.
+- MedicineBatchAllocator lấy lô theo ExpiryDate rồi Id (FEFO); cấp phát/giữ chỗ loại lô có ExpiryDate trước VietnamToday, còn hạn hôm nay vẫn dùng được. Thuốc chưa phân lô dùng sau các lô còn hạn. Điều chỉnh giảm kho là ngoại lệ: dùng tồn chưa phân lô trước và có thể trừ lô hết hạn. Nguồn: [MedicineBatchAllocator.cs](../../src/backend/ClinicManagement.Infrastructure/Pharmacy/MedicineBatchAllocator.cs).
+- UsableStock bằng StockQuantity trừ QuantityRemaining của lô hết hạn chưa hủy; dùng trong truy vấn để lọc/đếm tồn dùng được. Không coi tổng StockQuantity là toàn bộ tồn còn hạn. Nguồn: [UsableStock.cs](../../src/backend/ClinicManagement.Infrastructure/Pharmacy/UsableStock.cs).
+- Xác nhận mua giữ thuốc và ghi giao dịch Reservation; hủy giữ chỗ hoàn lại đúng lô theo tổng giao dịch giữ/hoàn. Trước cấp phát, kiểm tra lô đã giữ vẫn còn hạn; chống trừ/cấp trùng qua trạng thái, giao dịch và kiểm soát đồng thời. Nguồn: [PharmacyService.cs](../../src/backend/ClinicManagement.Infrastructure/Pharmacy/PharmacyService.cs), [MedicineBatchAllocator.cs](../../src/backend/ClinicManagement.Infrastructure/Pharmacy/MedicineBatchAllocator.cs).
+- Cấp phát kiểm tra đủ số lượng thanh toán theo từng thuốc trên các dòng hóa đơn Paid, không bị hủy, đúng bệnh nhân và lịch hẹn/lượt khám. Chưa thanh toán đủ bị `PRESCRIPTION_NOT_PAID`. Nguồn: [PharmacyService.cs](../../src/backend/ClinicManagement.Infrastructure/Pharmacy/PharmacyService.cs), [PrescriptionPaymentEligibilityService.cs](../../src/backend/ClinicManagement.Infrastructure/Pharmacy/PrescriptionPaymentEligibilityService.cs).
+- Lập hóa đơn lượt khám chặn hóa đơn Pending trước đó bằng `PENDING_INVOICE_EXISTS`; các tham chiếu dòng hóa đơn và chỉ mục có bộ lọc giúp chống thu trùng. Hóa đơn/thu tiền ghi chi tiết nguồn và giá tại thời điểm lập. Nguồn: [BillingService.cs](../../src/backend/ClinicManagement.Infrastructure/Billing/BillingService.cs), [InvoiceConfiguration.cs](../../src/backend/ClinicManagement.Infrastructure/Persistence/Configurations/InvoiceConfiguration.cs), [InvoiceItemConfiguration.cs](../../src/backend/ClinicManagement.Infrastructure/Persistence/Configurations/InvoiceItemConfiguration.cs).
+- Gói khám có danh mục và đăng ký riêng; bệnh nhân chỉ thao tác đăng ký của mình, lễ tân xác nhận/hủy theo điều kiện trạng thái. Nguồn: [HealthPackageRegistrationService.cs](../../src/backend/ClinicManagement.Infrastructure/HealthPackages/HealthPackageRegistrationService.cs).
 
-## 12. Hoàn thành khám, NoShow và VisitSummary
-- **BR-1201**: Bác sĩ tạo `VisitSummaries` (tóm tắt kết quả) khi hoàn thành buổi khám, lịch hẹn tự động chuyển thành `Completed`. Không sử dụng từ "chẩn đoán bệnh".
-- **BR-1202**: Bác sĩ có quyền đánh dấu `NoShow` nếu đã quá thời gian bắt đầu mà bệnh nhân không có mặt.
+## Thông báo và phạm vi cơ sở
 
-## 13. Đề xuất tái khám
-- **BR-1301**: Bác sĩ có thể tạo đề xuất tái khám (`RevisitRequests`). Mỗi lịch khám gốc (`Appointment`) đã hoàn thành (`Completed`) chỉ được phép tạo TỐI ĐA MỘT đề xuất tái khám.
-- **BR-1302**: Khi bệnh nhân đồng ý đề xuất và chọn slot, một lịch hẹn mới được tạo liên kết với đề xuất tái khám thông qua cột `NewAppointmentId`. Mỗi đề xuất tái khám chỉ sinh ra tối đa một lịch hẹn mới, được bảo vệ bằng filtered unique index.
-- **BR-1303**: Lịch hẹn mới luôn mang trạng thái `Pending` và bắt buộc phải qua bước Lễ tân xác nhận. Nó tuân thủ toàn bộ quy trình xác nhận, đổi, hủy như một lịch hẹn bình thường.
-
-## 14. DoctorLeaveRequests và PendingAppointmentResolution
-- **BR-1401**: Bác sĩ gửi yêu cầu nghỉ với trạng thái mặc định là `Pending`.
-- **BR-1402**: Nếu hệ thống phát hiện có lịch hẹn trùng với khoảng thời gian xin nghỉ, yêu cầu nghỉ phải bị chuyển thành `PendingAppointmentResolution` để chờ Lễ tân giải quyết các lịch hẹn đó trước khi Admin có thể duyệt.
-
-## 15. Thuật toán xếp hạng bác sĩ
-- **BR-1501**: Sử dụng công thức sau tại Backend để tính điểm và xếp hạng bác sĩ:
-  - `ExperienceScore = min(ExperienceYears, 20) / 20`
-  - `TotalScore = 0.4 * ExperienceScore + 0.6 * AvailabilityScore`
-
-## 16. AI
-- **BR-1601**: AI chỉ gợi ý tối đa Top 3 chuyên khoa dựa trên các chuyên khoa nằm trong whitelist.
-- **BR-1602**: Tuyệt đối không gửi thông tin định danh bệnh nhân (PII như Tên, SDT, Email) sang API của hệ thống AI.
-- **BR-1603**: AI không được chẩn đoán và không được kê đơn.
-- **BR-1604**: Nếu API của AI gặp lỗi, hệ thống phải tự động fallback, cho phép bệnh nhân chọn khoa thủ công, tuyệt đối không làm gián đoạn việc đặt lịch.
-
-## 17. AppointmentHistory và SystemAuditLogs
-- **BR-1701**: Bảng `AppointmentHistory` ghi vết mọi thay đổi của lịch hẹn. Cột `Action` CHỈ BAO GỒM chính xác các giá trị:
-  - `Created`
-  - `Confirmed`
-  - `RescheduleRequested`
-  - `Rescheduled`
-  - `CancelRequested`
-  - `Cancelled`
-  - `Completed`
-  - `NoShow`
-  - `RevisitCreated`
-- **BR-1702**: Các thao tác nhạy cảm từ Admin/Hệ thống (tạo user, cập nhật bác sĩ/khoa, duyệt lịch nghỉ,...) phải ghi lại vào `SystemAuditLogs`.
-
-## 18. Bảo mật, backend validation, secret và rate limit
-- **BR-1801**: Mọi API yêu cầu phân quyền phải thực hiện validate JWT và kiểm tra chặt chẽ `Role`. Validate Role và quyền sở hữu (ví dụ BN chỉ xem lịch của BN, Bác sĩ chỉ xem lịch của mình).
-- **BR-1802**: Mọi dữ liệu đẩy lên từ client phải được Backend validation.
-- **BR-1803**: Không lưu trữ mật khẩu thuần túy mà không băm. Không lộ API keys, Secrets trong source code hay logs.
-- **BR-1804**: Các API kết nối ra bên ngoài như gọi AI bắt buộc phải gắn Rate Limit.
-
----
-
-# Các quyết định CHƯA CHỐT
-
-- Filtered unique index cho một change request Pending.
-- Cách đảm bảo mỗi bác sĩ chỉ có một IsPrimary.
-- Danh sách tên và SpecialtyCode chính xác của 7 khoa.
-- Grace period trước khi đánh dấu NoShow.
-- Thời hạn tối thiểu/tối đa khi đổi hoặc hủy lịch.
+- Thông báo lọc theo người dùng hiện tại; đọc một/tất cả không được thay dữ liệu người khác. DedupeKey giúp chống thông báo trùng. Nguồn: [NotificationService.cs](../../src/backend/ClinicManagement.Infrastructure/Notifications/NotificationService.cs), [NotificationConfiguration.cs](../../src/backend/ClinicManagement.Infrastructure/Persistence/Configurations/NotificationConfiguration.cs).
+- Tài nguyên cơ sở cần kiểm tra phân công, role và hoạt động; không suy quyền trên mọi cơ sở chỉ từ việc đăng nhập. Nguồn: [FacilityAuthorizationService.cs](../../src/backend/ClinicManagement.Infrastructure/Common/FacilityAuthorizationService.cs).
