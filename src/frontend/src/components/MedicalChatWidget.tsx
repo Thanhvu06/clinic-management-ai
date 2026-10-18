@@ -1,6 +1,6 @@
 import { BookingSuccessCard } from "./BookingSuccessCard";
 import { providerStateTone } from "./copilot/copilotConfig";
-import { DEFAULT_AI_MESSAGE } from "../contexts/ChatContext";
+import { ChatProvider, useOptionalChatContext, DEFAULT_AI_MESSAGE } from "../contexts/ChatContext";
 import { BookingSummaryCard } from "./BookingSummaryCard";
 import { BookingWizard } from "./BookingWizard";
 import { BookingActionChoices } from "./BookingActionChoices";
@@ -91,7 +91,7 @@ const GroundedToolData: React.FC<{ result: AiToolExecutionResult }> = ({ result 
 };
 
 const PatientMedicalChatWidget: React.FC = () => {
-    const [isOpen, setIsOpen] = useState(false);
+    const { isChatOpen: isOpen, openChat, closeChat } = useOptionalChatContext()!;
     const [executingActionId, setExecutingActionId] = useState<string | null>(null);
     const launcherRef = useRef<HTMLButtonElement>(null);
     const chatWindowRef = useRef<HTMLDivElement>(null);
@@ -123,7 +123,7 @@ const PatientMedicalChatWidget: React.FC = () => {
         confirmToolAction,
         cancelToolAction,
         formatVietnameseDate
-    } = useAiBookingFlow(() => setIsOpen(false));
+    } = useAiBookingFlow(() => closeChat());
     const suggestionMenu = useSuggestionMenu({
         enabled: isOpen,
         role: user?.role,
@@ -169,7 +169,7 @@ const PatientMedicalChatWidget: React.FC = () => {
 
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === "Escape") {
-                setIsOpen(false);
+                closeChat();
                 setTimeout(() => {
                     launcherRef.current?.focus();
                 }, 50);
@@ -204,7 +204,7 @@ const PatientMedicalChatWidget: React.FC = () => {
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [isOpen]);
+    }, [isOpen, closeChat]);
 
     const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.nativeEvent.isComposing) return;
@@ -396,7 +396,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                 <button
                     ref={launcherRef}
                     className={styles.launcher}
-                    onClick={() => setIsOpen(true)}
+                    onClick={() => openChat()}
                     aria-label="Mở Trợ lý ClinicCare AI"
                     type="button"
                 >
@@ -432,7 +432,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                                 type="button"
                                 className={styles.iconBtn}
                                 onClick={() => {
-                                    setIsOpen(false);
+                                    closeChat();
                                     setTimeout(() => launcherRef.current?.focus(), 50);
                                 }}
                                 title="Thu nhỏ"
@@ -444,7 +444,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                                 type="button"
                                 className={styles.iconBtn}
                                 onClick={() => {
-                                    setIsOpen(false);
+                                    closeChat();
                                     setTimeout(() => launcherRef.current?.focus(), 50);
                                 }}
                                 title="Đóng"
@@ -530,7 +530,7 @@ const PatientMedicalChatWidget: React.FC = () => {
 };
 
 const GuestMedicalChatNoticeWidget: React.FC = () => {
-    const [isOpen, setIsOpen] = useState(false);
+    const { isChatOpen: isOpen, openChat, closeChat } = useOptionalChatContext()!;
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -540,7 +540,7 @@ const GuestMedicalChatNoticeWidget: React.FC = () => {
                 <button
                     type="button"
                     className={styles.launcher}
-                    onClick={() => setIsOpen(true)}
+                    onClick={() => openChat()}
                     aria-label="Mở Trợ lý ClinicCare AI"
                 >
                     <MessageCircle size={28} />
@@ -558,7 +558,7 @@ const GuestMedicalChatNoticeWidget: React.FC = () => {
                             <button
                                 type="button"
                                 className={styles.iconBtn}
-                                onClick={() => setIsOpen(false)}
+                                onClick={() => closeChat()}
                                 aria-label="Đóng cửa sổ chat"
                             >
                                 <X size={20} />
@@ -601,7 +601,7 @@ const GuestMedicalChatNoticeWidget: React.FC = () => {
 };
 
 const StaffMedicalChatNoticeWidget: React.FC<{ user: { fullName?: string; role: string } }> = ({ user }) => {
-    const [isOpen, setIsOpen] = useState(false);
+    const { isChatOpen: isOpen, openChat, closeChat } = useOptionalChatContext()!;
     const navigate = useNavigate();
 
     const widgetContent = (
@@ -610,7 +610,7 @@ const StaffMedicalChatNoticeWidget: React.FC<{ user: { fullName?: string; role: 
                 <button
                     type="button"
                     className={styles.launcher}
-                    onClick={() => setIsOpen(true)}
+                    onClick={() => openChat()}
                     aria-label="Mở thông tin Trợ lý ClinicCare AI"
                 >
                     <MessageCircle size={28} />
@@ -628,7 +628,7 @@ const StaffMedicalChatNoticeWidget: React.FC<{ user: { fullName?: string; role: 
                             <button
                                 type="button"
                                 className={styles.iconBtn}
-                                onClick={() => setIsOpen(false)}
+                                onClick={() => closeChat()}
                                 aria-label="Đóng cửa sổ"
                             >
                                 <X size={20} />
@@ -657,7 +657,7 @@ const StaffMedicalChatNoticeWidget: React.FC<{ user: { fullName?: string; role: 
                         <button
                             type="button"
                             className={styles.noticeBtnSecondary}
-                            onClick={() => setIsOpen(false)}
+                            onClick={() => closeChat()}
                         >
                             Đóng thông báo
                         </button>
@@ -670,7 +670,7 @@ const StaffMedicalChatNoticeWidget: React.FC<{ user: { fullName?: string; role: 
     return createPortal(widgetContent, document.body);
 };
 
-export const MedicalChatWidget: React.FC = () => {
+const MedicalChatWidgetContent: React.FC = () => {
     const { user, isAuthenticated } = useAuth();
     const location = useLocation();
 
@@ -692,4 +692,9 @@ export const MedicalChatWidget: React.FC = () => {
     }
 
     return <GuestMedicalChatNoticeWidget />;
+};
+
+export const MedicalChatWidget: React.FC = () => {
+    const chatContext = useOptionalChatContext();
+    return chatContext ? <MedicalChatWidgetContent /> : <ChatProvider><MedicalChatWidgetContent /></ChatProvider>;
 };

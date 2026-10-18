@@ -4,7 +4,6 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UnifiedCopilotPanel } from '../components/copilot/UnifiedCopilotPanel';
 import { MedicalChatWidget } from '../components/MedicalChatWidget';
-import { PatientAiConsultation } from '../pages/patient/PatientAiConsultation';
 import { SuggestionChips } from '../components/copilot/SuggestionChips';
 import { sanitizeSuggestions } from '../components/copilot/useSuggestionMenu';
 import { ChatProvider } from '../contexts/ChatContext';
@@ -65,14 +64,14 @@ const deferred = <T,>() => {
 const menuGroup = (name: string) => screen.findByRole('group', { name });
 
 describe('Role suggestion buttons', () => {
-    it.each([[false, 'TÔI CÓ QUYỀN HẠN GÌ?', 'Help'], [true, 'TÔI CÓ QUYỀN HẠN GÌ?', 'Help'], [false, 'Lịch hẹn của mình', 'ViewAppointments'], [true, 'Lịch hẹn của mình', 'ViewAppointments'],
+    it.each([[true, 'TÔI CÓ QUYỀN HẠN GÌ?', 'Help'], [true, 'Lịch hẹn của mình', 'ViewAppointments'],
         [true, 'lịch hẹn của tôi', 'ViewAppointments'], [true, 'lượt khám của tôi', 'VisitLookup'],
         [true, 'đơn thuốc của tôi', 'PrescriptionLookup'], [true, 'kết quả xét nghiệm của tôi', 'DiagnosticLookup'], [true, 'hóa đơn của tôi', 'BillingLookup']
     ] as const)('routes patient help/read aliases through the existing read-only endpoint (widget=%s, text=%s)', async (widget, text, intent) => {
         mockUser = { userId: 'synthetic-patient', fullName: 'Synthetic', role: 'Patient' };
         menuMock.mockResolvedValue({ role: 'Patient', suggestions: PATIENT_MENU });
         sendMock.mockResolvedValueOnce(copilotResponse({ role: 'Patient', intent, message: 'Bạn chọn một gợi ý bên dưới nhé.', suggestions: PATIENT_MENU, cards: [] }));
-        render(<MemoryRouter><ChatProvider>{widget ? <MedicalChatWidget /> : <PatientAiConsultation />}</ChatProvider></MemoryRouter>);
+        render(<MemoryRouter><ChatProvider><MedicalChatWidget /></ChatProvider></MemoryRouter>);
         if (widget) fireEvent.click(screen.getByRole('button', { name: 'Mở Trợ lý ClinicCare AI' }));
         await menuGroup('Tra cứu nhanh dữ liệu của bạn');
         fireEvent.change(screen.getByRole('textbox'), { target: { value: text } });
@@ -155,18 +154,6 @@ describe('Role suggestion buttons', () => {
         expect(screen.getByRole('group', { name: 'Gợi ý dự phòng' })).toBeInTheDocument();
         expect(screen.queryByText('Tóm tắt bệnh nhân hiện tại')).not.toBeInTheDocument();
         expect(screen.queryByText('Xem chỉ định cận lâm sàng')).not.toBeInTheDocument();
-    });
-
-    it('patient consultation also uses one server strip and renders suggestion read cards', async () => {
-        mockUser = { userId: 'patient-1', fullName: 'Synthetic', role: 'Patient' };
-        menuMock.mockResolvedValue({ role: 'Patient', suggestions: PATIENT_MENU });
-        sendMock.mockResolvedValueOnce(copilotResponse({ role: 'Patient', message: 'Dữ liệu của bạn', suggestions: PATIENT_MENU, cards: [{ type: 'patient_bills', title: 'Hóa đơn kiểm thử', data: [], sources: [] }] }));
-        render(<MemoryRouter><ChatProvider><PatientAiConsultation /></ChatProvider></MemoryRouter>);
-        const menu = await menuGroup('Tra cứu nhanh dữ liệu của bạn');
-        expect(screen.queryByText('Tôi nên khám chuyên khoa nào?')).not.toBeInTheDocument();
-        fireEvent.click(within(menu).getByRole('button', { name: 'Gợi ý: Hóa đơn của tôi' }));
-        expect(await screen.findByText('Hóa đơn kiểm thử')).toBeInTheDocument();
-        expect(screen.getAllByRole('group')).toHaveLength(1);
     });
 
     it('sanitizes server chips: valid codes only, no duplicates, at most six', () => {

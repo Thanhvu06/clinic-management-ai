@@ -1,3 +1,4 @@
+import { ChatConsultationLink } from '../../components/chat/ChatConsultationLink';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Tag } from 'antd';
@@ -208,7 +209,7 @@ export const SpecialtyDetail: React.FC = () => {
                 <h3 className={styles.sidebarTitle}>Đăng ký Thăm khám</h3>
                 <p className={styles.sidebarDescription}>Chọn bác sĩ chuyên khoa hoặc đặt hẹn để được tiếp đón theo khung giờ mong muốn, không chờ đợi.</p>
                 <Link to={`/patient/book?specialtyId=${specialty.id}`} className={styles.bookingLink}><Calendar size={18} /> Đặt lịch khám ngay</Link>
-                {specialty.aiEnabled && <Link to="/patient/ai-consultation" className={styles.aiLink}><Bot size={18} /> Định tuyến triệu chứng AI</Link>}
+                {specialty.aiEnabled && <ChatConsultationLink to="/patient/ai-consultation" className={styles.aiLink}><Bot size={18} /> Định tuyến triệu chứng AI</ChatConsultationLink>}
             </aside>
         </div>
     </div>;

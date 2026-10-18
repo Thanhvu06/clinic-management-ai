@@ -3,9 +3,7 @@ import { ConfigProvider } from 'antd';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BookAppointment } from '../pages/patient/BookAppointment';
-import { PatientAiConsultation } from '../pages/patient/PatientAiConsultation';
 import { ChatProvider } from '../contexts/ChatContext';
-import type { ChatMessage } from '../types/ai';
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), showAlert: vi.fn(), send: vi.fn(), clear: vi.fn(), flow: {} as Record<string, unknown>, menu: [] }));
 vi.mock('../api/axiosClient', () => ({ default: { get: mocks.get, post: mocks.post } }));
@@ -212,26 +210,5 @@ describe('BookAppointment batch 3', () => {
         const summary = container.querySelector('aside .ant-card') as HTMLElement;
         expect(within(summary).getByText('Tóm tắt lịch khám')).toBeInTheDocument(); expect(within(summary).getAllByText('Chưa chọn')).toHaveLength(3);
         expect(screen.getByRole('link', { name: 'Tư vấn cùng AI →' })).toHaveAttribute('href', '/patient/ai-consultation');
-    });
-});
-
-describe('PatientAiConsultation batch 3', () => {
-    it('C1 specialty actions and disclaimer use module classes and preserve chat selectors/handlers', () => {
-        mocks.flow.messages = [{ role: 'model', content: 'Gợi ý chuyên khoa', suggestions: [{ specialtyId: 1, specialtyCode: 'SP01', specialtyName: 'Nội khoa', rank: 1, reason: 'Tham khảo' }] }] satisfies ChatMessage[];
-        const { container } = mount(<PatientAiConsultation />, '/patient/ai-consultation');
-        const action = screen.getByRole('button', { name: /Xem lịch khám/ }); expect(action.parentElement?.className).toMatch(/suggestionActions/); expect(action).not.toHaveAttribute('style');
-        fireEvent.click(action); expect(mocks.send).toHaveBeenCalledWith('Tìm lịch khám khoa Nội khoa', { specialtyId: 1 });
-        for (const selector of ['[data-chat-panel]', '[data-chat-messages]', '[data-chat-composer]', '[data-chat-bubble]']) expect(container.querySelector(selector)).not.toBeNull();
-        expect(container.querySelector('[class*="disclaimerIcon"]')).not.toBeNull(); expect(container.querySelector('[data-chat-panel] [style]')).toBeNull();
-        expect(screen.getByRole('textbox', { name: 'Nội dung tin nhắn tư vấn AI' })).toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Gửi tin nhắn' })).toBeInTheDocument();
-    });
-    it('C2 loading is an accessible small Spin in the model bubble, with no injected pulse style', () => {
-        mocks.flow.loading = true; const { container } = mount(<PatientAiConsultation />, '/patient/ai-consultation');
-        const spinner = screen.getByLabelText('Trợ lý đang trả lời'); expect(spinner).toHaveClass('ant-spin-sm'); expect(spinner.closest('[class*="bubbleModel"]')).not.toBeNull();
-        expect(container.querySelector('style')).toBeNull(); expect(screen.getByRole('button', { name: 'Gửi tin nhắn' })).toBeDisabled();
-    });
-    it('C3 keeps the error text in danger Typography with alert semantics', () => {
-        mocks.flow.errorMsg = 'Không thể kết nối. Vui lòng thử lại.'; mount(<PatientAiConsultation />, '/patient/ai-consultation');
-        const error = screen.getByRole('alert'); expect(error).toHaveTextContent('Không thể kết nối. Vui lòng thử lại.'); expect(error).toHaveClass('ant-typography-danger'); expect(error.className).toMatch(/errorMessage/);
     });
 });

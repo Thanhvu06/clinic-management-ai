@@ -1,3 +1,5 @@
+import { useChatContext } from '../../contexts/ChatContext';
+import { ChatConsultationLink } from '../../components/chat/ChatConsultationLink';
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Avatar, Button, Collapse, Flex } from 'antd';
@@ -27,6 +29,7 @@ const doctorInitials = (fullName: string = '') => {
 };
 
 export const PublicLanding: React.FC = () => {
+    const { openChat } = useChatContext();
     const navigate = useNavigate();
     const [specialties, setSpecialties] = useState<any[]>([]);
     const [doctors, setDoctors] = useState<any[]>([]);
@@ -115,9 +118,9 @@ export const PublicLanding: React.FC = () => {
                                 <Link to="/patient/book" className={styles.btnPrimary} title="Đặt lịch khám">
                                     <Calendar size={18} /> Đặt lịch khám
                                 </Link>
-                                <Link to="/patient/ai-consultation" className={styles.btnSecondary}>
+                                <ChatConsultationLink to="/patient/ai-consultation" className={styles.btnSecondary}>
                                     <Bot size={18} /> Trò chuyện với Trợ lý AI
-                                </Link>
+                                </ChatConsultationLink>
                             </Flex>
                             <Flex wrap className={styles.heroTools}>
                                 <Link to="/specialties" className={styles.heroToolLink} title="Xem danh mục chuyên khoa">
@@ -418,7 +421,7 @@ export const PublicLanding: React.FC = () => {
                             <p>Trợ lý AI của ClinicCare giúp bạn phân tích sơ bộ các biểu hiện bất thường để gợi ý chuyên khoa phù hợp và tiết kiệm thời gian nhất.</p>
                             <div className={styles.symptomChips}>
                                 {['Đau tức ngực, hồi hộp', 'Đau đầu, chóng mặt kéo dài', 'Ho sốt, đau rát họng', 'Đau nhức khớp gối, thắt lưng'].map(symptom => (
-                                    <Button key={symptom} shape="round" className={styles.chip} onClick={() => navigate('/patient/ai-consultation')}>{symptom}</Button>
+                                    <Button key={symptom} shape="round" className={styles.chip} onClick={openChat}>{symptom}</Button>
                                 ))}
                             </div>
                             <div className={styles.aiWarning}>
@@ -426,9 +429,9 @@ export const PublicLanding: React.FC = () => {
                                 <span>Lưu ý an toàn: Trợ lý AI chỉ mang tính định tuyến tham khảo, không chẩn đoán hay kê đơn thuốc.</span>
                             </div>
                             <Flex wrap className={styles.aiActions}>
-                                <Link to="/patient/ai-consultation" className={styles.btnAi}>
+                                <ChatConsultationLink to="/patient/ai-consultation" className={styles.btnAi}>
                                     <Bot size={20} /> Trò chuyện với Trợ lý AI
-                                </Link>
+                                </ChatConsultationLink>
                                 <Link to="/patient/book" className={styles.aiBooking}>Đặt lịch khám ngay</Link>
                             </Flex>
                         </div>
@@ -593,7 +596,7 @@ export const PublicLanding: React.FC = () => {
                     <p>Chọn bác sĩ và giờ khám trực tuyến, nhận mã lịch hẹn ngay.</p>
                     <Flex className={styles.finalActions}>
                         <Link to="/patient/book" className={`${styles.btnPrimary} ${styles.actionLink}`}>Đặt lịch khám</Link>
-                        <Link to="/patient/ai-consultation" className={`${styles.btnSecondary} ${styles.actionLink}`}>Trò chuyện với Trợ lý AI</Link>
+                        <ChatConsultationLink to="/patient/ai-consultation" className={`${styles.btnSecondary} ${styles.actionLink}`}>Trò chuyện với Trợ lý AI</ChatConsultationLink>
                     </Flex>
                 </div>
             </section>

@@ -28,7 +28,7 @@ const appBase = `http://127.0.0.1:${frontendPort}`;
 const password = 'Canary@12345';
 
 const actorCases = [
-    { name: 'patient', email: 'canary.patient@synthetic.invalid', route: '/patient/ai-consultation', message: 'Tôi muốn xem lịch hẹn đã đặt của tôi.', tool: 'patient.get_my_appointments', patient: true },
+    { name: 'patient', email: 'canary.patient@synthetic.invalid', route: '/', message: 'Tôi muốn xem lịch hẹn đã đặt của tôi.', tool: 'patient.get_my_appointments', patient: true },
     { name: 'receptionist', email: 'canary.reception@synthetic.invalid', route: '/reception/appointments', message: 'Hôm nay quầy tiếp đón có những lượt hẹn nào?', tool: 'reception.get_today_appointments' },
     { name: 'doctor', email: 'canary.doctor@synthetic.invalid', route: '/doctor/appointments', message: 'Hôm nay tôi có những lượt đang chờ được phân công nào?', tool: 'doctor.get_my_queue' },
     { name: 'technician', email: 'canary.technician@synthetic.invalid', route: '/diagnostics', message: 'Các yêu cầu xét nghiệm đang nằm trong hàng đợi của tôi là gì?', tool: 'technician.get_worklist' },
@@ -163,7 +163,11 @@ async function login(page, actor) {
 }
 
 async function sendPatient(page, actor) {
-    const input = page.getByRole('textbox', { name: 'Nội dung tin nhắn tư vấn AI' });
+    await page.goto(`${appBase}/patient/ai-consultation`, { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(url => url.pathname === '/');
+    const chat = page.getByRole('dialog', { name: /ClinicCare AI/i });
+    await chat.waitFor({ state: 'visible' });
+    const input = chat.getByRole('textbox', { name: 'Nội dung tin nhắn gửi tới ClinicCare AI' });
     await input.fill(actor.message);
     await page.getByRole('button', { name: 'Gửi tin nhắn' }).click();
     const appointmentEvidence = page.getByText('CANARY-APT-001').last();
