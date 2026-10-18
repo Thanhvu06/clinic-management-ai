@@ -1,3 +1,4 @@
+import { useChatContext } from '../contexts/ChatContext';
 import React, { useState, useEffect, useRef } from 'react';
 import { Flex } from 'antd';
 import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
@@ -14,6 +15,7 @@ import { NotificationBell } from '../components/common/NotificationBell';
 
 export const PublicLayout: React.FC = () => {
     const { isAuthenticated, user, logout } = useAuth();
+    const { openChat } = useChatContext();
     const navigate = useNavigate();
     const location = useLocation();
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -31,9 +33,11 @@ export const PublicLayout: React.FC = () => {
     const isStaff = Boolean(user && user.role !== 'Patient');
 
     const handleAiConsultationClick = (e: React.MouseEvent) => {
+        e.preventDefault();
         if (isStaff) {
-            e.preventDefault();
             setIsStaffAiModalOpen(true);
+        } else {
+            openChat();
         }
     };
 

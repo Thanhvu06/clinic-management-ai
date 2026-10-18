@@ -1,3 +1,4 @@
+import { ChatConsultationLink } from '../../components/chat/ChatConsultationLink';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Search, Stethoscope, User, Package, ChevronRight, Calendar, CalendarCheck } from 'lucide-react';
@@ -150,12 +151,12 @@ export const SearchResults: React.FC = () => {
                     <Search size={48} className={styles.icon1} />
                     <div className={styles.emptyStateTitle}>Không tìm thấy kết quả phù hợp</div>
                     <p>Hãy thử tìm với các từ khóa ngắn hơn, tên chuyên khoa (Nội khoa, Tim mạch...) hoặc liên hệ trợ lý AI.</p>
-                    <Link 
+                    <ChatConsultationLink
                         to="/patient/ai-consultation"
                         className={["btn btn-secondary", styles.flexLayout20].join(' ')}
                     >
                         Nhờ Trợ lý AI định tuyến triệu chứng
-                    </Link>
+                    </ChatConsultationLink>
                 </div>
             ) : (
                 <div className={styles.stackLayout2}>

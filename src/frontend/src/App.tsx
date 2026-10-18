@@ -25,7 +25,7 @@ import { PatientProfile } from './pages/patient/PatientProfile';
 import { PatientRevisit } from './pages/patient/PatientRevisit';
 import { PatientPrescriptions } from './pages/patient/PatientPrescriptions';
 import { PatientInvoices } from './pages/patient/PatientInvoices';
-import { PatientAiConsultation } from './pages/patient/PatientAiConsultation';
+import { ChatConsultationRedirect, ChatRouteHistory } from './components/chat/ChatConsultationRedirect';
 import { ReceptionAppointments } from './pages/reception/ReceptionAppointments';
 import { ReceptionPackageRegistrations } from './pages/reception/ReceptionPackageRegistrations';
 import { ReceptionChangeRequests } from './pages/reception/ReceptionChangeRequests';
@@ -76,6 +76,7 @@ function App() {
             <AuthProvider>
                 <ChatProvider>
                     <Router>
+                        <ChatRouteHistory>
                         <MedicalChatWidget />
                         <Routes>
                             {/* Public Website Layout (No Sidebar) */}
@@ -91,6 +92,7 @@ function App() {
                                 <Route path="/health-packages/:id" element={<HealthPackageDetail />} />
                                 <Route path="/locations" element={<LocationsList />} />
                                 <Route path="/search" element={<SearchResults />} />
+                                <Route path="/patient/ai-consultation" element={<ChatConsultationRedirect />} />
                                 
                                 <Route element={<PublicRoute />}>
                                     <Route path="/login" element={<Login />} />
@@ -113,7 +115,6 @@ function App() {
                                         <Route path="/patient/prescriptions" element={<PatientPrescriptions />} />
                                         <Route path="/patient/diagnostic-results" element={<PatientDiagnosticResults />} />
                                         <Route path="/patient/invoices" element={<PatientInvoices />} />
-                                        <Route path="/patient/ai-consultation" element={<PatientAiConsultation />} />
                                         <Route path="/patient/notifications" element={<NotificationsPage />} />
                                     </Route>
                                 </Route>
@@ -199,6 +200,7 @@ function App() {
                             {/* 404 Not Found */}
                             <Route path="*" element={<NotFoundPage />} />
                         </Routes>
+                        </ChatRouteHistory>
                     </Router>
                 </ChatProvider>
             </AuthProvider>

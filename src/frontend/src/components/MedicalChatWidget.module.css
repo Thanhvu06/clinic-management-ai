@@ -1,9 +1,8 @@
 @import './copilot/chatTokens.css';
 .widgetContainer { position: fixed; bottom: 24px; right: 24px; z-index: 9999; font-size: 14px; }
 .launcher { width: 60px; height: 60px; border-radius: 999px; background: var(--chat-accent); color: white; border: 0; box-shadow: 0 4px 16px #134e4a30; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.chatWindow, .consultationPanel { display: flex; flex-direction: column; min-height: 0; height: min(640px, 80dvh); background: #f8fbfb; border: 1px solid var(--chat-border); border-radius: var(--chat-radius); overflow: hidden; color: var(--chat-ink); font-size: 14px; }
+.chatWindow { display: flex; flex-direction: column; min-height: 0; height: min(640px, 80dvh); background: #f8fbfb; border: 1px solid var(--chat-border); border-radius: var(--chat-radius); overflow: hidden; color: var(--chat-ink); font-size: 14px; }
 .chatWindow { position: fixed; bottom: 24px; right: 24px; width: 460px; max-width: calc(100vw - 48px); box-shadow: 0 12px 36px #134e4a30; }
-.consultationPage { max-width: 1000px; margin: 0 auto; }
 .header { min-height: 64px; background: var(--chat-ink); color: white; padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
 .headerTitle, .headerActions { display: flex; align-items: center; gap: 8px; }
 .headerTitle { font-weight: 600; font-size: 15px; min-width: 0; }
@@ -97,7 +96,6 @@
 .iconBtn:focus-visible, .actionBtn:focus-visible, .quickPromptChip:focus-visible, .textLink:focus-visible, .sendBtn:focus-visible, .textarea:focus-visible { outline: 2px solid var(--chat-accent); outline-offset: 2px; }
 @media (max-width: 600px) {
     .chatWindow { inset: 0; width: 100vw; max-width: 100vw; height: 100dvh; border: 0; border-radius: 0; }
-    .consultationPanel { height: calc(100dvh - 100px); border-radius: 0; }
     .header { padding: 8px 12px; }
     .headerTitle { gap: 4px; }
     .messageArea { padding: 12px; }

@@ -204,7 +204,7 @@
 
 **Vùng cấm, cần mở khóa.**
 
-- [PatientAiConsultation.tsx](../src/frontend/src/pages/patient/PatientAiConsultation.tsx)
+- [ChatConsultationRedirect.tsx](../src/frontend/src/components/chat/ChatConsultationRedirect.tsx) — URL tư vấn cũ mở bong bóng chat rồi chuyển về trang trước hoặc trang chủ.
 - [MedicalChatWidget.tsx](../src/frontend/src/components/MedicalChatWidget.tsx)
 - [ChatContext.tsx](../src/frontend/src/contexts/ChatContext.tsx)
 - [useAiBookingFlow.ts](../src/frontend/src/hooks/useAiBookingFlow.ts)

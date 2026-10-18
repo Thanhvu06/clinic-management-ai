@@ -1,9 +1,10 @@
+import { ChatConsultationLink } from '../../components/chat/ChatConsultationLink';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import React, { useState, useEffect, useRef } from "react";
 import { Alert, Avatar, Button, Card, Descriptions, Empty, Form, Input, Result, Spin, Steps, Tag } from 'antd';
 import '../../theme/browserCompat';
-import { useLocation, Link, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import axiosClient from "../../api/axiosClient";
 import styles from "./BookAppointment.module.css";
 import type { ApiResponse } from "../../types";
@@ -914,7 +915,7 @@ export const BookAppointment: React.FC = () => {
                             </Card>)}
                         </div>}
                         <div className={styles.stepFooter}>
-                            <span className={styles.consultationHint}>Chưa biết nên chọn khoa nào? <Link to="/patient/ai-consultation" className={styles.consultationLink}>Tư vấn cùng AI &rarr;</Link></span>
+                            <span className={styles.consultationHint}>Chưa biết nên chọn khoa nào? <ChatConsultationLink to="/patient/ai-consultation" className={styles.consultationLink}>Tư vấn cùng AI &rarr;</ChatConsultationLink></span>
                             <Button type="primary" size="large" onClick={() => setStep(2)} disabled={!specialtyId}>Tiếp tục: Chọn bác sĩ <ArrowRight size={18} /></Button>
                         </div>
                     </div>}

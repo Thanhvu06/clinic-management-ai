@@ -1,3 +1,6 @@
+import { AuthProvider } from '../auth/AuthContext';
+import { ChatProvider } from '../contexts/ChatContext';
+import { MedicalChatWidget } from '../components/MedicalChatWidget';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ConfigProvider } from 'antd';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -31,7 +34,7 @@ const answers = [
 ];
 const RouteProbe = () => <output aria-label="Đường dẫn hiện tại">{useLocation().pathname}</output>;
 const mount = async () => {
-    const result = render(<ConfigProvider theme={{ token: { motion: false } }}><MemoryRouter><PublicLanding /><RouteProbe /></MemoryRouter></ConfigProvider>);
+    const result = render(<ConfigProvider theme={{ token: { motion: false } }}><AuthProvider><ChatProvider><MemoryRouter><PublicLanding /><RouteProbe /><MedicalChatWidget /></MemoryRouter></ChatProvider></AuthProvider></ConfigProvider>);
     await screen.findByRole('heading', { name: 'BS. Nguyễn Văn An' });
     return result;
 };
@@ -83,7 +86,7 @@ describe('Public landing refresh L1–L7', () => {
     it.each(['Đau tức ngực, hồi hộp', 'Đau đầu, chóng mặt kéo dài', 'Ho sốt, đau rát họng', 'Đau nhức khớp gối, thắt lưng'])('L3 routes the symptom button %s to AI consultation', async symptom => {
         await mount();
         fireEvent.click(screen.getByRole('button', { name: symptom }));
-        expect(screen.getByLabelText('Đường dẫn hiện tại')).toHaveTextContent('/patient/ai-consultation');
+        expect(screen.getByRole('dialog', { name: 'Trợ lý ClinicCare AI' })).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Đặt lịch khám ngay' })).toHaveAttribute('href', '/patient/book');
     });
 

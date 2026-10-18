@@ -7,6 +7,9 @@ export type { ChatMessage } from "../types/ai";
 export type AssistantStatus = "Unchecked" | "Online" | "Degraded" | "Offline";
 
 interface ChatContextType {
+    isChatOpen: boolean;
+    openChat: () => void;
+    closeChat: () => void;
     pendingSpecialtyId: number | null;
     setPendingSpecialtyId: (id: number | null) => void;
     activeDraft: AiBookingDraft | null;
@@ -20,7 +23,10 @@ interface ChatContextType {
     setAiAssistantStatus: (status: AssistantStatus) => void;
 }
 
-const ChatContext = createContext<ChatContextType>({
+const defaultChatContext: ChatContextType = {
+    isChatOpen: false,
+    openChat: () => {},
+    closeChat: () => {},
     pendingSpecialtyId: null,
     setPendingSpecialtyId: () => {},
     activeDraft: null,
@@ -32,7 +38,9 @@ const ChatContext = createContext<ChatContextType>({
     clearChat: () => {},
     aiAssistantStatus: "Unchecked",
     setAiAssistantStatus: () => {}
-});
+};
+
+const ChatContext = createContext<ChatContextType | null>(null);
 
 export function validateActionSchema(action: unknown): action is AiAction {
     if (!action || typeof action !== "object") return false;
@@ -353,7 +361,10 @@ export function removePersistedBookingAttempt(accountKey: string | null | undefi
 const AccountBoundChatProvider: React.FC<{
     accountKey: string | null;
     children: React.ReactNode;
-}> = ({ accountKey, children }) => {
+    isChatOpen: boolean;
+    openChat: () => void;
+    closeChat: () => void;
+}> = ({ accountKey, children, isChatOpen, openChat, closeChat }) => {
     const [pendingSpecialtyId, setPendingSpecialtyIdState] = useState<number | null>(null);
     const [activeDraft, setActiveDraftState] = useState<AiBookingDraft | null>(() => loadStoredDraft(accountKey));
     const [messages, setMessagesState] = useState<ChatMessage[]>(() => loadStoredMessages(accountKey));
@@ -443,6 +454,9 @@ const AccountBoundChatProvider: React.FC<{
 
     return (
         <ChatContext.Provider value={{
+            isChatOpen,
+            openChat,
+            closeChat,
             pendingSpecialtyId,
             setPendingSpecialtyId,
             activeDraft,
@@ -461,6 +475,9 @@ const AccountBoundChatProvider: React.FC<{
 };
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const openChat = useCallback(() => setIsChatOpen(true), []);
+    const closeChat = useCallback(() => setIsChatOpen(false), []);
     const { user, identityVersion } = useAuth();
     const accountKey = user
         ? (user.userId || (user.id !== undefined ? String(user.id) : null))
@@ -468,10 +485,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const providerKey = user ? `${accountKey ?? "unknown"}:${user.role}:${identityVersion}` : "anonymous";
 
     return (
-        <AccountBoundChatProvider key={providerKey} accountKey={accountKey}>
+        <AccountBoundChatProvider key={providerKey} accountKey={accountKey} isChatOpen={isChatOpen} openChat={openChat} closeChat={closeChat}>
             {children}
         </AccountBoundChatProvider>
     );
 };
 
-export const useChatContext = () => useContext(ChatContext);
+export const useOptionalChatContext = () => useContext(ChatContext);
+export const useChatContext = () => useOptionalChatContext() ?? defaultChatContext;
