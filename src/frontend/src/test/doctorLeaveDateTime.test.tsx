@@ -38,5 +38,8 @@ describe('Doctor leave transport dates', () => {
         await waitFor(() => expect(axiosClient.post).toHaveBeenCalledExactlyOnceWith('/doctor/leave-requests', {
             startDateTime: '2099-11-20T08:15:00', endDateTime: '2099-11-21T17:45:00', reason: 'Việc gia đình'
         }));
+        await screen.findByText('Tạo yêu cầu nghỉ thành công.');
+        await waitFor(() => expect(axiosClient.get).toHaveBeenCalledTimes(2));
+        await waitFor(() => expect(screen.queryByLabelText('Lý do nghỉ')).toBeNull());
     });
 });
