@@ -19,6 +19,9 @@ Chỉ sửa khi prompt mở khóa rõ ràng. Đường dẫn dưới đây tính
 - Không sửa, xóa hoặc skip test cũ trừ khi được cho phép đích danh.
 - Test cũ fail thì sửa code cho tương thích; không sửa được thì dừng và báo cáo.
 - Việc mới phải có test mới.
+- File đề ẩn `cliniccare-hidden-eval.xlsx` nằm ngoài repo.
+- Agent chỉ được đọc file đề ẩn khi prompt yêu cầu chạy `--hidden-eval`.
+- Không bao giờ in nội dung câu hỏi hoặc chỉnh model dựa trên câu sai của bộ đề ẩn.
 
 ## UI
 

@@ -12,6 +12,8 @@ public class Program
 {
     public static int Main(string[] args)
     {
+        if (args.FirstOrDefault() == "--hidden-eval") return HiddenEvalRunner.Run(args[1..]);
+
         Console.WriteLine("=========================================================");
         Console.WriteLine("ClinicCare AI: Specialty Classification Training Tool");
         Console.WriteLine("=========================================================");
@@ -193,6 +195,8 @@ public class Program
     private static void PrintUsage()
     {
         Console.WriteLine("Usage:");
+        Console.WriteLine("  ClinicManagement.AI.Training --hidden-eval --file <external.xlsx> [--update-manifest]");
+        Console.WriteLine("  ClinicManagement.AI.Training --hidden-eval --self-test");
         Console.WriteLine("  ClinicManagement.AI.Training --validate [datasetPath]");
         Console.WriteLine("  ClinicManagement.AI.Training --train [--data datasetPath] [--out outputDir] [--allow-demo-data] [--manifest manifestPath]");
         Console.WriteLine("  ClinicManagement.AI.Training --train-intent [--data datasetPath] [--out outputDir]");

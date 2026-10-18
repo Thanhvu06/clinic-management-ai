@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+    <TrainingProject>$(MSBuildThisFileDirectory)ClinicManagement.AI.Training.csproj</TrainingProject>
+  </PropertyGroup>
+  <Target Name="Restore">
+    <MSBuild Projects="$(TrainingProject)" Targets="Restore" Properties="Configuration=$(Configuration)" />
+  </Target>
+  <Target Name="VSTest">
+    <Exec Command="dotnet run --project &quot;$(TrainingProject)&quot; --configuration &quot;$(Configuration)&quot; --no-restore -- --hidden-eval --self-test" />
+  </Target>
+</Project>
