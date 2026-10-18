@@ -417,3 +417,4 @@ App_Data/
 
 # Claude Code session worktrees (local checkouts, never commit)
 .claude/worktrees/
+.verify-ui/

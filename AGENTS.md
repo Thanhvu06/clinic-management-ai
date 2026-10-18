@@ -42,6 +42,9 @@ Chỉ sửa khi prompt mở khóa rõ ràng. Đường dẫn dưới đây tính
 
 ## Git và CI
 
+- PR sửa `src/frontend/src` phải chạy `npm run verify-ui -- --only <tiền tố các trang đã sửa>` trước khi push (lặp `--only` nếu có nhiều tiền tố).
+- Lỗi NEW phải sửa; không thêm vào `scripts/verify/known-issues.json` trừ khi prompt cho phép.
+- Báo cáo cuối phải ghi kết quả verify-ui.
 - Đúng 1 commit, không `Co-Authored-By`, push không force. Không commit file nháp.
 - Tự chạy `gh pr create` → `gh pr checks --watch` → `gh pr merge --merge --delete-branch`.
 - Trước khi merge: fetch; nếu main đổi thì merge `origin/main`, push và chờ CI xanh lại.

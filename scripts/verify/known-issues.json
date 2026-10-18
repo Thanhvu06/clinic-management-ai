@@ -1,0 +1,44 @@
+[
+  {
+    "route": "/patient/invoices",
+    "viewport": "mobile",
+    "code": "V5",
+    "match": "document.documentElement.scrollWidth=428 > clientWidth=390 + 1"
+  },
+  {
+    "route": "/admin/packages",
+    "viewport": "desktop",
+    "code": "V1",
+    "match": "TypeError: Cannot read properties of undefined (reading 'length')"
+  },
+  {
+    "route": "/admin/packages",
+    "viewport": "desktop",
+    "code": "V3",
+    "match": "Main content has 0 characters (minimum 20); main found: false"
+  },
+  {
+    "route": "/admin/packages",
+    "viewport": "mobile",
+    "code": "V1",
+    "match": "TypeError: Cannot read properties of undefined (reading 'length')"
+  },
+  {
+    "route": "/admin/packages",
+    "viewport": "mobile",
+    "code": "V3",
+    "match": "Main content has 0 characters (minimum 20); main found: false"
+  },
+  {
+    "route": "/pharmacy/batches",
+    "viewport": "desktop",
+    "code": "V1",
+    "match": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  },
+  {
+    "route": "/pharmacy/batches",
+    "viewport": "mobile",
+    "code": "V1",
+    "match": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  }
+]
