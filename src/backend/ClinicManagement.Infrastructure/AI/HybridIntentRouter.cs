@@ -32,9 +32,11 @@ public sealed class HybridIntentRouter(AiDeterministicPlanner rules, IRoleIntent
     public AiPlannerDecision Plan(AiCopilotPlanningContext context)
     {
         var original = rules.Plan(context);
+        var clearIntent = context.Analysis.Intent.IsClear &&
+            (!IsBookingStep(context.Analysis.Intent.Intent) || HasOpenBooking(context.Memory));
         // Safety and deterministic clarification/resource/permission decisions always win.
         if (!original.RequiresProvider || context.Analysis.Safety.IsEmergency || context.Analysis.Safety.IsPromptInjection ||
-            context.Analysis.Intent.IsClear && context.Analysis.Intent.Intent != AiChatIntentTypes.UnclearOrOutOfScope ||
+            clearIntent && context.Analysis.Intent.Intent != AiChatIntentTypes.UnclearOrOutOfScope ||
             context.Analysis.Intent.Method.EndsWith("Guard", StringComparison.Ordinal))
         {
             var ruleLabel = RuleLabel(original, context.Analysis.Intent.Intent);
@@ -101,6 +103,14 @@ public sealed class HybridIntentRouter(AiDeterministicPlanner rules, IRoleIntent
         AiChatIntentTypes.SelectSlot or AiChatIntentTypes.ProvideReason or AiChatIntentTypes.ReviewDraft or AiChatIntentTypes.ConfirmBooking or
         AiChatIntentTypes.ModifyDraft or AiChatIntentTypes.CancelDraft or AiChatIntentTypes.FindEarliestAvailableSlot or
         AiChatIntentTypes.SpecialtyRecommendation or AiChatIntentTypes.FindDoctorForSymptom or AiChatIntentTypes.DoctorSearch;
+
+    private static bool IsBookingStep(string intent) => intent is AiChatIntentTypes.SelectDoctor or AiChatIntentTypes.SelectSlot or
+        AiChatIntentTypes.ProvideReason or AiChatIntentTypes.ReviewDraft or AiChatIntentTypes.ConfirmBooking or
+        AiChatIntentTypes.ModifyDraft or AiChatIntentTypes.CancelDraft;
+
+    private static bool HasOpenBooking(AiConversationMemoryState? memory) => memory is not null &&
+        (IsLegacyBooking(memory.LastIntent ?? "") || IsLegacyBooking(memory.LastSubIntent ?? "") ||
+         memory.LastSubIntent == "BookingWizard" || !string.IsNullOrWhiteSpace(memory.PendingClarification) || memory.MissingFields.Count > 0);
 
     private AiPlannerDecision? PlanLabel(string label, AiCopilotPlanningContext context)
     {
