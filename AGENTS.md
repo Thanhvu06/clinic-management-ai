@@ -47,3 +47,9 @@ Chỉ sửa khi prompt mở khóa rõ ràng. Đường dẫn dưới đây tính
 - Trước khi merge: fetch; nếu main đổi thì merge `origin/main`, push và chờ CI xanh lại.
 - Chỉ rerun CI 1 lần khi lỗi thuộc danh sách chập chờn: `checkinDateAndDepartment.test.tsx:55` timeout; cascade `receptionAppointmentsCopilot`; `adminPagesBatch3` “30-day range” timeout; E2E “Unexpected end of JSON input”/timeout. Lỗi khác phải xử lý hoặc dừng báo cáo.
 - Báo cáo cuối 1 lần, theo thứ tự: branch/commit/PR/merge SHA → thay đổi theo mục → test mới → build/test/lint → CI → rủi ro.
+
+## PR Guard
+- CI tự kiểm tra G1–G7 trên diff của PR.
+- `allow-protected` mở G1; `allow-test-changes` mở G2; `allow-large-file` mở G7; G3 không mở được.
+- **Agent không bao giờ tự gắn label, trừ khi prompt ghi đích danh tên label cần gắn.**
+- Guard đỏ thì sửa code, không lách.
