@@ -37,7 +37,7 @@ clinic-management-ai/
 ├── .nvmrc                         # Node.js 24 LTS specification
 ├── .env.example                   # Biến môi trường mẫu
 ├── docs/                          # Tài liệu kỹ thuật, ERD, API, Business rules
-│   ├── IMPLEMENTATION_PLAN.md
+│   ├── feature-map.md
 │   ├── data_dictionary.md
 │   └── diagrams/
 └── src/
@@ -60,7 +60,7 @@ clinic-management-ai/
 
 ---
 
-## Phân quyền hệ thống (6 Roles)
+## Phân quyền hệ thống (7 Roles)
 
 1. **Bệnh nhân (Patient):**
    - Đăng ký, đăng nhập, quên mật khẩu (demo-safe).
@@ -86,7 +86,7 @@ clinic-management-ai/
    - Kê đơn thuốc điện tử tương tác kho dược thời gian thực, lưu bản nháp hoặc phát hành đơn nguyên tử khi hoàn tất ca khám.
    - Kiểm soát đồng thời lạc quan (Optimistic Concurrency Control với RowVersion token) ngăn chặn xung đột dữ liệu.
    - Quản lý lịch trực tuần và đăng ký nghỉ phép có tính năng xem trước (preview) số lượng lịch hẹn bệnh nhân bị ảnh hưởng.
-   - Xem chi tiết tại: [`docs/DOCTOR_CLINICAL_WORKSPACE.md`](docs/DOCTOR_CLINICAL_WORKSPACE.md).
+   - Xem chi tiết tại: [đặc tả API](docs/api/api-specification.md).
 
 4. **Dược sĩ (Pharmacist - Module Pharmacy):**
    - Dashboard tổng quan kho dược: đơn chờ cấp phát, đơn đã cấp trong ngày, cảnh báo thuốc sắp hết hàng.
@@ -107,7 +107,10 @@ clinic-management-ai/
    - Nhật ký kiểm toán hệ thống (Audit Log).
 
 6. **Kỹ thuật viên cận lâm sàng (DiagnosticTechnician):**
-   - Xử lý chỉ định, ghi nhận và hoàn tất kết quả cận lâm sàng tại khoa/cơ sở được phân công.
+   - Xử lý chỉ định, ghi nhận và gửi duyệt kết quả cận lâm sàng tại khoa/cơ sở được phân công; không tự duyệt kết quả đã nhập.
+
+7. **Trưởng khoa xét nghiệm (LabSupervisor):**
+   - Duyệt/trả kết quả và xem báo cáo TAT tại cơ sở được phân công.
 
 ---
 
@@ -190,3 +193,12 @@ npm test
    - Luồng trả mã token reset trực tiếp trong response API (`POST /api/v1/auth/forgot-password`) chỉ dành riêng cho môi trường Development/demo/Testing nhằm phục vụ phát triển và kiểm thử giao diện.
    - Khi chạy ở môi trường Production, hệ thống tự động ẩn reset token (`resetToken: null`) và trả về thông báo chung để chống rò rỉ token và ngăn ngừa rủi ro dò quét tài khoản (account enumeration).
    - Hệ thống hiện tại **chưa gửi email thật** (chưa tích hợp SMTP/email provider). Khi triển khai môi trường Production thực tế, bắt buộc phải tích hợp email provider riêng (ví dụ SMTP, SendGrid, AWS SES) để gửi liên kết đặt lại mật khẩu an toàn.
+
+## Tài liệu phát triển
+
+- [Quy tắc dành cho agent](AGENTS.md)
+- [Bản đồ tính năng và file nguồn](docs/feature-map.md)
+- [Đặc tả API](docs/api/api-specification.md)
+- [Bảng cơ sở dữ liệu](docs/database/database-tables.md) và [từ điển dữ liệu](docs/data_dictionary.md)
+- [Luật nghiệp vụ](docs/specifications/business-rules.md)
+- [Kịch bản demo](docs/DEMO_SCRIPT.md) và [hướng dẫn UI](docs/UI_GUIDELINES.md)

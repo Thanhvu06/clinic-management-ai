@@ -290,11 +290,10 @@ public class HospitalCorePhase1FoundationsTests : IntegrationTestBase
             initialEmergencyCount = await db.EmergencyContacts.CountAsync();
         }
 
-        // Arm interceptor to fail on Save #2 (after MrnGenerator has saved sequence update on Save #1)
+        // Optional MRN initialization saves must not consume the Patient insertion failure.
         atomicFactory.Interceptor.Reset();
-        atomicFactory.Interceptor.FailOnSaveNumber = 2;
         atomicFactory.Interceptor.ExceptionFactory = () => new DbUpdateException(
-            "[TEST] Injected failure on Save #2 (after MRN sequence update in transaction)",
+            "[TEST] Injected failure while saving Patient after MRN allocation in transaction",
             new Exception("Simulated DB disk failure during patient insert"));
 
         var req = new RegisterWalkInPatientRequest
@@ -317,13 +316,20 @@ public class HospitalCorePhase1FoundationsTests : IntegrationTestBase
         using (var scope = atomicFactory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.SavingChanges += (_, _) =>
+            {
+                if (db.ChangeTracker.Entries<Patient>().Any(e => e.State == EntityState.Added))
+                {
+                    atomicFactory.Interceptor.FailOnSaveNumber = atomicFactory.Interceptor.SaveCallCount + 1;
+                }
+            };
             var mrnGen = new MrnGenerator(db);
             var mpiService = new MpiPatientService(db, mrnGen);
 
             await Assert.ThrowsAsync<DbUpdateException>(() => mpiService.RegisterWalkInPatientAsync(req));
         }
 
-        Assert.True(atomicFactory.Interceptor.WasTriggered, "Interceptor must have been triggered on save #2.");
+        Assert.True(atomicFactory.Interceptor.WasTriggered, "Interceptor must have been triggered while saving the Added Patient after MRN allocation.");
 
         // 3. Verify that the transaction completely rolled back:
         // - MrnSequences was rolled back to its initialSequence!
