@@ -1,0 +1,40 @@
+{
+  "sha256": "c412585e05422cc7d5f1151e96e1dee02c6b3fe022e936a662dd7b7aaf889c4f",
+  "rowCount": 106,
+  "countsByRole": {
+    "Admin": 13,
+    "DiagnosticTechnician": 9,
+    "Doctor": 21,
+    "Patient": 29,
+    "Pharmacist": 17,
+    "Receptionist": 17
+  },
+  "countsByLabel": {
+    "ActionRequest": 6,
+    "AiHealth": 4,
+    "ClinicKnowledge": 6,
+    "DashboardMetrics": 4,
+    "DiagnosticOrders": 4,
+    "DoctorQueue": 4,
+    "Greeting": 6,
+    "Help": 6,
+    "InventoryStatus": 4,
+    "LookupAppointment": 4,
+    "MyAppointments": 4,
+    "MyBills": 4,
+    "MyDiagnosticResults": 4,
+    "MyPrescriptions": 4,
+    "MyVisits": 4,
+    "OutOfScope": 6,
+    "PatientSummary": 4,
+    "PrescriptionPayment": 4,
+    "PrescriptionQueue": 4,
+    "PrescriptionStatus": 4,
+    "ReceptionQueue": 4,
+    "StartBooking": 4,
+    "TechnicianWorklist": 4,
+    "TodayAppointments": 4
+  },
+  "lockedDate": "2026-10-18",
+  "provenance": "Vi\u1EBFt tay b\u1EDFi Nguy\u1EC5n Thanh V\u0169, 2026-10-18, kh\u00F4ng c\u00F3 AI h\u1ED7 tr\u1EE3; n\u1EB1m ngo\u00E0i repo"
+}
