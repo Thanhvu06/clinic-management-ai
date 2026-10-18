@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { classifyBaseline, codes, matchesPrefix, parseOptions, parseRoutes, routeSlug, validateBaseline } from './verify-ui-lib.mjs';
+import { classifyBaseline, codes, formatConsoleError, matchesPrefix, parseOptions, parseRoutes, routeSlug, shouldBuildHost, validateBaseline } from './verify-ui-lib.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const frontendRoot = join(repoRoot, 'src', 'frontend');
@@ -152,14 +152,21 @@ async function login(page, actor) {
 async function inspectPage(context, route, role, viewport, signal) {
     const page = await context.newPage();
     const issues = [];
+    const consoleErrors = [];
+    const failedResponses = [];
     const add = (code, message) => {
         const existing = issues.find(issue => issue.code === code && issue.message === message);
         if (existing) existing.occurrences++;
         else issues.push({ code, name: codes[code], message, occurrences: 1 });
     };
-    page.on('console', message => { if (message.type() === 'error') add('V1', message.text()); });
+    page.on('console', message => {
+        if (message.type() === 'error') consoleErrors.push({ message: message.text(), url: message.location().url });
+    });
     page.on('pageerror', error => add('V1', `${error.name}: ${error.message}`));
     page.on('response', response => {
+        if (response.status() >= 400) {
+            failedResponses.push({ method: response.request().method(), url: response.url(), status: response.status() });
+        }
         if (new URL(response.url()).origin === apiBase && response.status() >= 500) {
             add('V2', `${response.status()} ${response.request().method()} ${response.url()}`);
         }
@@ -221,6 +228,7 @@ async function inspectPage(context, route, role, viewport, signal) {
         return { route, role, viewport, finalUrl: page.url(), durationMs: Date.now() - started, screenshot: saved, issues };
     } finally {
         await page.close().catch(() => {});
+        for (const error of consoleErrors) add('V1', formatConsoleError(error.message, error.url, failedResponses));
     }
 }
 
@@ -282,7 +290,7 @@ async function main() {
     try {
         await waitForPortReleased(apiPort, 1000);
         await waitForPortReleased(frontendPort, 1000);
-        if (!existsSync(canaryExecutable) && !options.skipBuild) {
+        if (shouldBuildHost(options)) {
             await run('dotnet', ['build', 'src/backend/ClinicManagement.sln', '-c', 'Release'], repoRoot, children, controller.signal);
             // LiveCanary is not included in the backend solution.
             await run('dotnet', ['build', 'src/tools/ClinicManagement.AI.LiveCanary/ClinicManagement.AI.LiveCanary.csproj', '-c', 'Release'], repoRoot, children, controller.signal);

@@ -7,6 +7,20 @@ export const codes = {
     V1: 'CONSOLE_ERROR', V2: 'HTTP_5XX', V3: 'BLANK', V4: 'CRASH', V5: 'H_OVERFLOW'
 };
 
+export function shouldBuildHost({ skipBuild = false } = {}) {
+    return !skipBuild;
+}
+
+export function formatConsoleError(message, locationUrl, responses) {
+    if (!message.includes('Failed to load resource')) return message;
+    const status = message.match(/\bstatus(?:\s+of)?\s+(\d{3})\b/i)?.[1];
+    const matches = responses.filter(response => response.status >= 400 &&
+        (!locationUrl || response.url === locationUrl) && (!status || response.status === Number(status)));
+    const details = [...new Set(matches.map(response => `${response.method} ${response.url} -> ${response.status}`))];
+    if (!details.length || (!locationUrl && details.length !== 1)) return message;
+    return `${message} [${details.join('; ')}]`;
+}
+
 export function matchesPrefix(route, prefix) {
     const normalized = prefix.replace(/\/$/, '') || '/';
     return normalized === '/' || route === normalized || route.startsWith(`${normalized}/`);

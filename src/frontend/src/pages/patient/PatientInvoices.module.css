@@ -1,3 +1,4 @@
 .page { width: 100%; max-width: 1000px; margin: 0 auto; padding: var(--cc-space-lg) var(--cc-space-md); display: flex; flex-direction: column; gap: var(--cc-space-lg); }
 .filters { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--cc-space-md); }
+.statusFilterScroll { max-width: 100%; overflow-x: auto; }
 .reference { color: var(--cc-color-text-secondary); margin-top: var(--cc-space-xxs); }
