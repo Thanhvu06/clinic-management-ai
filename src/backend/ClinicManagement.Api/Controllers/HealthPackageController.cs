@@ -37,10 +37,12 @@ public class HealthPackageController : ControllerBase
 
     [HttpGet("/api/v1/admin/health-packages")]
     [Authorize(Roles = RoleNames.Admin)]
-    public async Task<ActionResult<ApiResponse<List<HealthPackageDto>>>> GetAllPackagesForAdmin(CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<PagedResult<HealthPackageDto>>>> GetAllPackagesForAdmin(
+        [FromQuery] string? search, [FromQuery] bool? isActive,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken cancellationToken = default)
     {
-        var packages = await _healthPackageService.GetAllPackagesAsync(cancellationToken);
-        return Ok(ApiResponse<List<HealthPackageDto>>.Ok(packages));
+        var packages = await _healthPackageService.GetAllPackagesAsync(search, isActive, page, pageSize, cancellationToken);
+        return Ok(ApiResponse<PagedResult<HealthPackageDto>>.Ok(packages));
     }
 
     [HttpPost("/api/v1/admin/health-packages")]

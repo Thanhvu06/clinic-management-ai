@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using ClinicManagement.Application.Common.Exceptions;
+using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Application.HealthPackages.DTOs;
 using ClinicManagement.Application.HealthPackages.Interfaces;
 using ClinicManagement.Domain.Entities;
@@ -45,14 +46,28 @@ public class HealthPackageService : IHealthPackageService
         return MapToDto(package);
     }
 
-    public async Task<List<HealthPackageDto>> GetAllPackagesAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResult<HealthPackageDto>> GetAllPackagesAsync(string? search, bool? isActive, int page = 1, int pageSize = 10, CancellationToken cancellationToken = default)
     {
-        var packages = await _dbContext.HealthPackages
-            .AsNoTracking()
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var query = _dbContext.HealthPackages.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLowerInvariant();
+            query = query.Where(p => p.Name.ToLower().Contains(term) || p.Code.ToLower().Contains(term));
+        }
+        if (isActive.HasValue) query = query.Where(p => p.IsActive == isActive.Value);
+
+        var totalItems = await query.CountAsync(cancellationToken);
+        var offset = (long)(page - 1) * pageSize;
+        var packages = offset >= totalItems ? new List<HealthPackage>() : await query
             .OrderByDescending(p => p.CreatedAt)
+            .Skip((int)offset)
+            .Take(pageSize)
             .ToListAsync(cancellationToken);
 
-        return packages.Select(MapToDto).ToList();
+        return new PagedResult<HealthPackageDto>(packages.Select(MapToDto).ToList(), totalItems, page, pageSize);
     }
 
     public async Task<HealthPackageDto> CreatePackageAsync(CreateHealthPackageRequest request, CancellationToken cancellationToken = default)
