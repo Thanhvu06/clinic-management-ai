@@ -385,3 +385,57 @@ Bộ đề do 1 người viết, khoảng 4–6 câu/nhãn nên khoảng tin c�
 Context tối thiểu không có ca bệnh/đơn thuốc được xác minh; router có thể yêu cầu làm rõ. Strict và lenient lần này khác định nghĩa T2 của lần 1 nên không so trực tiếp thành mức cải thiện router. Không chỉnh gì thêm sau khi xem kết quả của lần chấm này.
 
 Kiểm thử runner (XLSX tự tạo, không đọc đề thật): `dotnet test src/tools/ClinicManagement.AI.Training/HiddenEvalRunnerTests.proj --configuration Release`. MSBuild gọi self-test theo pattern Phase4 của tool, không thêm NuGet package.
+
+## Ghi chú kỹ thuật về scanner trước lần chấm 3
+
+Lượt chạy đầu của lần chấm 3 đã inference trong bộ nhớ nhưng dừng ở leakage scanner trước khi xuất hoặc ghi điểm; chưa ai xem điểm. Không dùng kết quả inference để sửa model, dữ liệu, ngưỡng hoặc router.
+
+Người dùng cho phép đọc lại workbook chỉ để chẩn đoán scanner, cấm chấm model/train và cấm mở/đọc receipt hoặc file kết quả inference của lượt lỗi. Chẩn đoán riêng xác nhận Process.StandardInput mặc định dùng Windows code page 1258; rg đọc pattern UTF-8 nên trả exit code 2 (InvalidUtf8), và khi gửi nhiều pattern xảy ra System.IO.IOException do pipe đóng. Không phải phát hiện trùng: scan riêng với UTF-8 tường minh trên cả 105 câu đủ điều kiện có 0 trùng, exit code 1, không stderr. Không in nội dung câu hỏi.
+
+Sửa scanner đặt UTF-8 không BOM cho stdin/stdout/stderr. Test tổng hợp ép Console.InputEncoding=1258 tái hiện lỗi UTF-8 ở cách cũ, rồi kiểm tra cách mới chấp nhận tập không trùng và phát hiện file ẩn có trùng; scanner focused 2/2 pass, không nạp model. Model v3(360), dữ liệu, ngưỡng 0.45 và override 0.8 giữ nguyên.
+
+Theo quyền cấp riêng của người dùng, receipt lỗi được xóa mà không mở/đọc trước đúng một lượt chạy lại --hidden-eval. Lượt chạy lại vẫn được ghi là Lần chấm 3, không phải một lần chọn/tuning mới. Không xóa guard để chạy thêm sau lượt được cho phép này.
+
+
+## Lần chấm 3 (model v3, dữ liệu người viết)
+
+Viết tay bởi Nguyễn Thanh Vũ, 2026-10-18, không có AI hỗ trợ; nằm ngoài repo
+
+Một lần chạy đọc XLSX, chấm T1 cả v2/v3 trên cùng tập và T2 với runtime đã chọn v3 trước khi mở đề. SHA-256: `c412585e05422cc7d5f1151e96e1dee02c6b3fe022e936a662dd7b7aaf889c4f`.
+Dòng hợp lệ: 106; sau loại trùng: 105; trùng data: 1; trùng nội bộ: 0. So trùng với toàn bộ data hiện có, gồm 360 câu người viết.
+T1 dùng RoleIntentModel thật, role mask và ngưỡng metadata: v2=0.75, v3=0.45. T2 dùng Plan quyết định cuối, context tối thiểu, không memory, không gọi provider/tool; override giữ 0.8.
+Fallback luôn sai. Strict loại hỏi lại; lenient chấp nhận hỏi lại khi không fallback. Macro-F1 dùng hợp nhãn gold/dự đoán, P/R/F1 mẫu số 0 bằng 0. Wilson 95% cho accuracy nhị thức.
+
+### T1 v2 và v3, tổng và theo vai trò
+
+| Model | Vai trò | N | Đúng | Accuracy | Macro-F1 | Accepted | Coverage | Accepted accuracy | Không chắc | Wilson 95% |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| v2 | Tổng | 105 | 86 | 81.90% | 82.24% | 61 | 58.10% | 91.80% | 41.90% | [73.46%, 88.10%] |
+| v2 | Patient | 28 | 24 | 85.71% | 78.53% | 15 | 53.57% | 93.33% | 46.43% | [68.51%, 94.30%] |
+| v2 | Receptionist | 17 | 14 | 82.35% | 76.39% | 11 | 64.71% | 100.00% | 35.29% | [58.97%, 93.81%] |
+| v2 | Doctor | 21 | 17 | 80.95% | 69.96% | 14 | 66.67% | 85.71% | 33.33% | [60.00%, 92.33%] |
+| v2 | DiagnosticTechnician | 9 | 6 | 66.67% | 51.39% | 2 | 22.22% | 100.00% | 77.78% | [35.42%, 87.94%] |
+| v2 | Pharmacist | 17 | 15 | 88.24% | 80.16% | 12 | 70.59% | 91.67% | 29.41% | [65.66%, 96.71%] |
+| v2 | Admin | 13 | 10 | 76.92% | 73.33% | 7 | 53.85% | 85.71% | 46.15% | [49.74%, 91.82%] |
+| v3 | Tổng | 105 | 95 | 90.48% | 90.88% | 101 | 96.19% | 92.08% | 3.81% | [83.35%, 94.74%] |
+| v3 | Patient | 28 | 27 | 96.43% | 97.46% | 27 | 96.43% | 96.30% | 3.57% | [82.29%, 99.37%] |
+| v3 | Receptionist | 17 | 16 | 94.12% | 83.33% | 17 | 100.00% | 94.12% | 0.00% | [73.02%, 98.95%] |
+| v3 | Doctor | 21 | 18 | 85.71% | 73.72% | 18 | 85.71% | 94.44% | 14.29% | [65.36%, 95.02%] |
+| v3 | DiagnosticTechnician | 9 | 8 | 88.89% | 77.78% | 9 | 100.00% | 88.89% | 0.00% | [56.50%, 98.01%] |
+| v3 | Pharmacist | 17 | 16 | 94.12% | 96.83% | 17 | 100.00% | 94.12% | 0.00% | [73.02%, 98.95%] |
+| v3 | Admin | 13 | 10 | 76.92% | 73.33% | 13 | 100.00% | 76.92% | 0.00% | [49.74%, 91.82%] |
+
+### T2 runtime đã chọn, tổng và theo vai trò
+
+| Vai trò | N | Hỏi lại | Strict đúng | Strict accuracy | Strict macro-F1 | Strict Wilson 95% | Lenient đúng | Lenient accuracy | Lenient Wilson 95% | rule | model | fallback | override |
+|---|---:|---:|---:|---:|---:|---|---:|---:|---|---:|---:|---:|---:|
+| Tổng | 105 | 24 | 57 | 54.29% | 52.89% | [44.77%, 63.49%] | 81 | 77.14% | [68.24%, 84.13%] | 58 | 31 | 10 | 6 |
+| Patient | 28 | 2 | 19 | 67.86% | 48.08% | [49.34%, 82.07%] | 21 | 75.00% | [56.64%, 87.32%] | 19 | 6 | 1 | 2 |
+| Receptionist | 17 | 2 | 11 | 64.71% | 45.24% | [41.30%, 82.69%] | 13 | 76.47% | [52.74%, 90.44%] | 10 | 3 | 3 | 1 |
+| Doctor | 21 | 13 | 5 | 23.81% | 21.43% | [10.63%, 45.09%] | 18 | 85.71% | [65.36%, 95.02%] | 14 | 5 | 1 | 1 |
+| DiagnosticTechnician | 9 | 1 | 5 | 55.56% | 31.55% | [26.67%, 81.12%] | 6 | 66.67% | [35.42%, 87.94%] | 2 | 5 | 2 | 0 |
+| Pharmacist | 17 | 6 | 9 | 52.94% | 46.67% | [30.96%, 73.83%] | 15 | 88.24% | [65.66%, 96.71%] | 8 | 7 | 2 | 0 |
+| Admin | 13 | 0 | 8 | 61.54% | 39.17% | [35.52%, 82.29%] | 8 | 61.54% | [35.52%, 82.29%] | 5 | 5 | 1 | 2 |
+
+Chống lộ đề: 5 câu ngẫu nhiên truyền qua stdin trong bộ nhớ cho rg --fixed-strings; 0 file trùng. Không ghi mẫu ra đĩa. SHA-256 workbook vẫn khớp manifest sau chấm.
+Giới hạn: tập của một người viết, ít mẫu/nhãn, các câu có thể tương quan nên Wilson chỉ mang tính mô tả. Lenient đo chấp nhận hỏi lại, không chứng minh đúng intent. Dữ liệu người viết đã được tác giả rà soát và viết lại hai câu trước nộp; không khẳng định blind hoàn toàn. Không sửa model, dữ liệu, ngưỡng hoặc code sau khi xem kết quả.

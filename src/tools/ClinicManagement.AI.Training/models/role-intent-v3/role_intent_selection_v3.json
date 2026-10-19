@@ -1,0 +1,12 @@
+{
+  "rule": "Before hidden evaluation: select v3 iff role-filtered validation macro-F1 >= frozen v2 and accepted accuracy at v3's validation-selected threshold >= 90%; otherwise retain v2. Fixed v2 configuration only; no grid search.",
+  "selectedV3": true,
+  "runtimeVersion": "v3",
+  "conclusion": "chọn v3",
+  "v2ModelSha256": "cb62d5995617065a26c5e8facffb662fbc5ab319b8932582b623981da37074ba",
+  "v3ModelSha256": "cce44a467de135d3a7de3822a92617d3ea63237c4185a637a30d6a5f9f3f07a6",
+  "v2ValidationMacroF1": 0.6954607873851296,
+  "v3ValidationMacroF1": 0.7921603064404922,
+  "v3AcceptedAccuracy": 0.9061224489795918,
+  "v3Threshold": 0.45
+}

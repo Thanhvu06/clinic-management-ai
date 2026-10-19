@@ -1,0 +1,40 @@
+{
+  "sha256": "07be86bb26c4162258a6cd8a4754f02fb9961c65c657022b67fd344657c43f44",
+  "rowCount": 310,
+  "countsByLabel": {
+    "ActionRequest": 20,
+    "AiHealth": 20,
+    "ClinicKnowledge": 10,
+    "DashboardMetrics": 10,
+    "DiagnosticOrders": 10,
+    "DoctorQueue": 10,
+    "Greeting": 10,
+    "Help": 10,
+    "InventoryStatus": 10,
+    "LookupAppointment": 20,
+    "MyAppointments": 10,
+    "MyBills": 10,
+    "MyDiagnosticResults": 10,
+    "MyPrescriptions": 10,
+    "MyVisits": 20,
+    "OutOfScope": 20,
+    "PatientSummary": 20,
+    "PrescriptionPayment": 10,
+    "PrescriptionQueue": 10,
+    "PrescriptionStatus": 10,
+    "ReceptionQueue": 10,
+    "StartBooking": 10,
+    "TechnicianWorklist": 20,
+    "TodayAppointments": 10
+  },
+  "countsByRole": {
+    "Admin": 40,
+    "DiagnosticTechnician": 28,
+    "Doctor": 60,
+    "Patient": 88,
+    "Pharmacist": 40,
+    "Receptionist": 54
+  },
+  "provenance": "Nhiều người viết, Nguyễn Thanh Vũ tổng hợp và duyệt nhãn, 2026-10-19, không dùng AI; 2 câu gần giống bộ đề ẩn đã được viết lại trước khi nộp",
+  "sourceWorkbookSha256": "13806d4a63d79d01011199b09f3539da9878b464730f2bc8f6d5d8f07d3484c8"
+}

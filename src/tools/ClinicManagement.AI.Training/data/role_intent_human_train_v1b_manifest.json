@@ -1,0 +1,22 @@
+{
+  "sha256": "69d4b872640d788312bc7ae5edfdb4785a219639e23c1d05ec04a7b7599d64ce",
+  "rowCount": 50,
+  "countsByLabel": {
+    "ActionRequest": 5,
+    "ClinicKnowledge": 10,
+    "MyAppointments": 10,
+    "OutOfScope": 10,
+    "PrescriptionQueue": 5,
+    "StartBooking": 10
+  },
+  "countsByRole": {
+    "Admin": 3,
+    "DiagnosticTechnician": 2,
+    "Doctor": 3,
+    "Patient": 28,
+    "Pharmacist": 7,
+    "Receptionist": 7
+  },
+  "provenance": "Nhiều người viết, Nguyễn Thanh Vũ tổng hợp và duyệt nhãn, 2026-10-19, không dùng AI; bổ sung câu sát ranh giới cho các cặp nhầm trên validation",
+  "sourceWorkbookSha256": "1dd17840ad2ad32087f033eb8e11b230c14cfcb702bc7efcdaf1a3ad1ca8a640"
+}
