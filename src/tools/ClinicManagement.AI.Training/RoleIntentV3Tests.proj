@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+    <TrainingProject>$(MSBuildThisFileDirectory)ClinicManagement.AI.Training.csproj</TrainingProject>
+    <SelfTestCommand Condition="'$(ScannerOnly)' == 'true'">--role-intent-v3-scanner-self-test</SelfTestCommand>
+    <SelfTestCommand Condition="'$(SelfTestCommand)' == ''">--role-intent-v3-self-test</SelfTestCommand>
+  </PropertyGroup>
+  <Target Name="Restore">
+    <MSBuild Projects="$(TrainingProject)" Targets="Restore" Properties="Configuration=$(Configuration)" />
+  </Target>
+  <Target Name="VSTest">
+    <Exec Command="dotnet run --project &quot;$(TrainingProject)&quot; --configuration &quot;$(Configuration)&quot; --no-restore -- $(SelfTestCommand)" />
+  </Target>
+</Project>

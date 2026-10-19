@@ -1,0 +1,51 @@
+vai_tro	cau	nhan	nguon
+BenhNhan	Mình chưa đặt buổi nào, giờ muốn đăng ký khám.	StartBooking	human_crowd_2026-10-19
+BenhNhan	giu t suat kham voi bs Luu Bao An	StartBooking	human_crowd_2026-10-19
+BenhNhan	Có suất khám nội đầu giờ chiều thứ tư cho mình không?	StartBooking	human_crowd_2026-10-19
+BenhNhan	Mình chọn cơ sở Bắc Viên để đăng ký khám lần đầu.	StartBooking	human_crowd_2026-10-19
+BenhNhan	t7 nay toi ranh, lay hen kham phuc hoi chuc nang	StartBooking	human_crowd_2026-10-19
+BenhNhan	Cho mình ghi tên khám với bác sĩ nữ chuyên khoa mắt.	StartBooking	human_crowd_2026-10-19
+BenhNhan	Đăng ký cho tôi một suất khám trước khi đi công tác.	StartBooking	human_crowd_2026-10-19
+BenhNhan	dang ky kham rang o chi nhanh Ben May giup tui	StartBooking	human_crowd_2026-10-19
+BenhNhan	Lấy cho mình một suất khám sau giờ tan làm, tầm sáu giờ tối.	StartBooking	human_crowd_2026-10-19
+BenhNhan	Mình muốn đăng ký một buổi khám cho bé nhà mình.	StartBooking	human_crowd_2026-10-19
+BenhNhan	LH-8627 bo hen nay di	ActionRequest	human_crowd_2026-10-19
+LeTan	Chuyển lịch LH-4936 của khách sang cơ sở Nam Phong.	ActionRequest	human_crowd_2026-10-19
+BenhNhan	Giữ nguyên ngày, chuyển buổi khám đã đặt của tôi xuống cuối chiều.	ActionRequest	human_crowd_2026-10-19
+LeTan	khach xin nghi buoi sang, doi hen da dat sang chieu dum	ActionRequest	human_crowd_2026-10-19
+BenhNhan	Bạn hủy giúp cuộc hẹn đã đặt cho con tôi nhé.	ActionRequest	human_crowd_2026-10-19
+BenhNhan	Nếu phòng khám hủy buổi khám thì tiền cọc được hoàn bằng cách nào?	ClinicKnowledge	human_crowd_2026-10-19
+LeTan	Khách được đổi bác sĩ tối đa mấy lần trước ngày khám?	ClinicKnowledge	human_crowd_2026-10-19
+BacSi	Người đặt qua chatbot có phải xác nhận lại tại quầy không?	ClinicKnowledge	human_crowd_2026-10-19
+KTV	Đổi giờ lấy mẫu tại phòng khám có cần đăng ký lại từ đầu không?	ClinicKnowledge	human_crowd_2026-10-19
+DuocSi	Thuốc mua tại quầy có được đổi khi còn nguyên niêm phong không?	ClinicKnowledge	human_crowd_2026-10-19
+Admin	Chatbot của phòng khám được giới thiệu là hỗ trợ những ngôn ngữ nào?	ClinicKnowledge	human_crowd_2026-10-19
+BenhNhan	huy hen bang chatbot thi pk co gui tin nhan bao lai k	ClinicKnowledge	human_crowd_2026-10-19
+LeTan	dat qua ai thi khach thanh toan coc o buoc nao	ClinicKnowledge	human_crowd_2026-10-19
+BenhNhan	doi sang co so khac co phai dong lai phi dang ky k	ClinicKnowledge	human_crowd_2026-10-19
+LeTan	Nếu khách chuyển khoản nhầm số tiền, phòng khám xử lý theo quy định nào?	ClinicKnowledge	human_crowd_2026-10-19
+BenhNhan	Một vé xem phim 3D cuối tuần thường đắt hơn vé 2D bao nhiêu?	OutOfScope	human_crowd_2026-10-19
+LeTan	tien nuoc nha 4 nguoi 1 thang tam bn	OutOfScope	human_crowd_2026-10-19
+BacSi	Bảng xếp hạng bóng rổ tuần này đội nào đang có nhiều trận thắng nhất?	OutOfScope	human_crowd_2026-10-19
+KTV	mai o Da Nang xac suat mua bao nhieu phan tram	OutOfScope	human_crowd_2026-10-19
+DuocSi	Dân số thành thị hiện chiếm bao nhiêu phần trăm dân số cả nước?	OutOfScope	human_crowd_2026-10-19
+Admin	gui tiet kiem 80tr lai 5 phan tram nam thi 6 thang dc bn	OutOfScope	human_crowd_2026-10-19
+BenhNhan	Môn toán được 7,5 và văn được 8 thì điểm trung bình hai môn là bao nhiêu?	OutOfScope	human_crowd_2026-10-19
+LeTan	Gói mạng nhà tôi tăng từ 180 nghìn lên 210 nghìn là tăng bao nhiêu phần trăm?	OutOfScope	human_crowd_2026-10-19
+BacSi	chay 3km trong 18p thi van toc tb la bn	OutOfScope	human_crowd_2026-10-19
+Admin	Một căn phòng rộng 24 mét vuông cần khoảng bao nhiêu viên gạch 60 × 60?	OutOfScope	human_crowd_2026-10-19
+DuocSi	co toa moi vao hang cho chua	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	Quầy thuốc đang còn mấy toa chưa tới lượt cấp?	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	Những đơn chờ phát nào đang được xếp ưu tiên?	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	toa cho cap phat tu truoc gio nghi trua gom nhung ma nao	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	Trước đơn DT-6814 còn những toa nào chưa được phát?	PrescriptionQueue	human_crowd_2026-10-19
+BenhNhan	Buổi khám sáng mai của mình ở phòng số mấy?	MyAppointments	human_crowd_2026-10-19
+BenhNhan	ca kham t2 tuan toi cua tui gap bs nao	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Lần khám kế tiếp mà tôi đã đăng ký còn bao nhiêu ngày nữa?	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Đợt khám sắp tới của tôi thuộc chuyên khoa nào?	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Ca khám tôi đã đặt cho chiều thứ sáu tới còn hiệu lực không?	MyAppointments	human_crowd_2026-10-19
+BenhNhan	buoi kham mai tui dang ky o chi nhanh nao	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Lần khám tới của tôi bắt đầu lúc 8 giờ hay 9 giờ?	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Tôi đã có những ca khám nào chưa tới ngày trong tháng sau?	MyAppointments	human_crowd_2026-10-19
+BenhNhan	dot kham sap toi cua tui ma dang ky la gi	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Buổi khám đã đăng ký vào cuối tuần tới của tôi được xác nhận chưa?	MyAppointments	human_crowd_2026-10-19

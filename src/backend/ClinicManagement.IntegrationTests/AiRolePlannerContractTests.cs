@@ -451,7 +451,7 @@ public sealed class AiRolePlannerContractTests
     {
         using var handler = new RoleAwareFakeGemini(_ => null);
 
-        var report = await new FullStackHttpCanary().RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
+        var report = await new FullStackHttpCanary(roleIntentEnabled: false).RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
 
         Assert.Equal(LiveCanaryAcceptanceEvaluator.PassFull, report.AcceptanceStatus);
         Assert.Equal(7, report.Cases.Count);
@@ -477,7 +477,7 @@ public sealed class AiRolePlannerContractTests
             _ => null
         });
 
-        var report = await new FullStackHttpCanary().RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
+        var report = await new FullStackHttpCanary(roleIntentEnabled: false).RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
 
         Assert.Equal(LiveCanaryAcceptanceEvaluator.Fail, report.AcceptanceStatus);
         Assert.Equal(3, LiveCanaryAcceptanceEvaluator.ExitCode(report, requireLive: true));
@@ -534,7 +534,7 @@ public sealed class AiRolePlannerContractTests
             _ => null
         });
 
-        var report = await new FullStackHttpCanary().RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
+        var report = await new FullStackHttpCanary(roleIntentEnabled: false).RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
 
         Assert.Equal(LiveCanaryAcceptanceEvaluator.Fail, report.AcceptanceStatus);
         Assert.True(report.DatabaseUnchanged);

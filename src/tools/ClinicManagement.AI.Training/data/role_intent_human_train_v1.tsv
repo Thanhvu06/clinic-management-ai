@@ -1,0 +1,311 @@
+vai_tro	cau	nhan	nguon
+BenhNhan	Chào buổi sáng, mình mới vào đây.	Greeting	human_crowd_2026-10-19
+LeTan	Xin chào trợ lý nhé.	Greeting	human_crowd_2026-10-19
+BacSi	Chào bạn, chúc buổi trực thuận lợi.	Greeting	human_crowd_2026-10-19
+KTV	helo, mình vào ca rồi nè	Greeting	human_crowd_2026-10-19
+DuocSi	Chào em nha.	Greeting	human_crowd_2026-10-19
+Admin	Xin chào cả nhà.	Greeting	human_crowd_2026-10-19
+BenhNhan	hí, chào bạn nè	Greeting	human_crowd_2026-10-19
+LeTan	hello bạn ơi	Greeting	human_crowd_2026-10-19
+BacSi	Chào buổi tối nhé.	Greeting	human_crowd_2026-10-19
+Admin	chao ban, rat vui duoc gap	Greeting	human_crowd_2026-10-19
+BenhNhan	Tôi mới dùng khung chat này, bắt đầu thế nào?	Help	human_crowd_2026-10-19
+LeTan	ê bot ơi chỉ t xài sao	Help	human_crowd_2026-10-19
+BacSi	Tôi cần gõ câu hỏi theo mẫu nào để bạn hiểu?	Help	human_crowd_2026-10-19
+KTV	ktv thi hoi bot dc nhung gi	Help	human_crowd_2026-10-19
+DuocSi	Trong cuộc trò chuyện này tôi có thể hỏi những loại thông tin gì?	Help	human_crowd_2026-10-19
+Admin	Cho tôi biết các chức năng của chatbot theo từng vai trò.	Help	human_crowd_2026-10-19
+BenhNhan	mình nhắn không dấu thì bạn hiểu được ko	Help	human_crowd_2026-10-19
+LeTan	Muốn hỏi tiếp câu vừa rồi thì có cần nhập lại toàn bộ không?	Help	human_crowd_2026-10-19
+BacSi	Bạn có thể hỗ trợ bác sĩ tra cứu những mục nào?	Help	human_crowd_2026-10-19
+DuocSi	Tui chưa quen con bot này, chỉ cách hỏi với.	Help	human_crowd_2026-10-19
+BenhNhan	pk co nhan kham ngoai gio k	ClinicKnowledge	human_crowd_2026-10-19
+LeTan	Khách nước ngoài đến khám có cần mang hộ chiếu không?	ClinicKnowledge	human_crowd_2026-10-19
+BenhNhan	the bhyt trai tuyen co dc giam tien k	ClinicKnowledge	human_crowd_2026-10-19
+BenhNhan	Người đi xe lăn có lối vào riêng không?	ClinicKnowledge	human_crowd_2026-10-19
+LeTan	Khách muốn nhận hóa đơn điện tử cần cung cấp những thông tin gì?	ClinicKnowledge	human_crowd_2026-10-19
+BenhNhan	phongkham co kham da lieu buoi toi ko	ClinicKnowledge	human_crowd_2026-10-19
+BenhNhan	Phòng khám có khu vực ngồi chờ dành cho trẻ nhỏ không?	ClinicKnowledge	human_crowd_2026-10-19
+LeTan	Khách đến sau giờ hẹn thì phòng khám tiếp nhận theo quy trình nào?	ClinicKnowledge	human_crowd_2026-10-19
+BenhNhan	di kham k co cccd ban goc dc ko	ClinicKnowledge	human_crowd_2026-10-19
+Admin	Những kênh tiếp nhận phản ánh nào đang được phòng khám công bố?	ClinicKnowledge	human_crowd_2026-10-19
+BenhNhan	Xóa giúp tôi lịch hẹn mã LH-7301 khỏi hệ thống.	ActionRequest	human_crowd_2026-10-19
+BenhNhan	Đổi lịch LH-7302 của tôi từ sáng sang chiều luôn nhé.	ActionRequest	human_crowd_2026-10-19
+LeTan	checkin luon lich LH-7303 giup em	ActionRequest	human_crowd_2026-10-19
+LeTan	Bỏ bệnh nhân BN-9301 ra khỏi hàng đợi tiếp đón.	ActionRequest	human_crowd_2026-10-19
+BacSi	Chuyển lượt khám LK-8401 sang trạng thái hoàn tất.	ActionRequest	human_crowd_2026-10-19
+BacSi	Thêm một chỉ định xét nghiệm vào hồ sơ BN-9302 cho tôi.	ActionRequest	human_crowd_2026-10-19
+KTV	mau MX-6201 danh dau da xu ly di	ActionRequest	human_crowd_2026-10-19
+KTV	Hủy phiếu xét nghiệm XN-6202 trên hệ thống giúp mình.	ActionRequest	human_crowd_2026-10-19
+DuocSi	Đánh dấu đơn DT-5101 đã phát thuốc ngay.	ActionRequest	human_crowd_2026-10-19
+DuocSi	tru kho TH-4101 them 2 hop	ActionRequest	human_crowd_2026-10-19
+Admin	Khóa tài khoản nhân viên NV-3101 giúp tôi.	ActionRequest	human_crowd_2026-10-19
+Admin	Sửa giờ làm việc của phòng khám thành 7 giờ đến 19 giờ.	ActionRequest	human_crowd_2026-10-19
+BenhNhan	doi so dien thoai trong ho so cua tui giup nha	ActionRequest	human_crowd_2026-10-19
+LeTan	Chuyển lịch LH-7304 sang bác sĩ khác luôn đi.	ActionRequest	human_crowd_2026-10-19
+BacSi	xoa gchu cu o LK-8402 dum	ActionRequest	human_crowd_2026-10-19
+KTV	Lưu kết quả mới vào phiếu XN-6203 giúp em.	ActionRequest	human_crowd_2026-10-19
+DuocSi	Ghi nhận đơn DT-5102 đã thanh toán bằng tiền mặt.	ActionRequest	human_crowd_2026-10-19
+Admin	tao acc le tan NV-3102 giup	ActionRequest	human_crowd_2026-10-19
+BenhNhan	Gỡ yêu cầu đặt hẹn đang chờ của tôi đi.	ActionRequest	human_crowd_2026-10-19
+DuocSi	doi hsd lo LO-4102 sang thang sau	ActionRequest	human_crowd_2026-10-19
+BenhNhan	Chỉ tôi cách nấu chè đậu xanh đi.	OutOfScope	human_crowd_2026-10-19
+LeTan	viet t cai chuc sn ban than di	OutOfScope	human_crowd_2026-10-19
+BacSi	Giải phương trình bậc hai này giúp tôi.	OutOfScope	human_crowd_2026-10-19
+KTV	pc tam 15tr choi game on k	OutOfScope	human_crowd_2026-10-19
+DuocSi	Cuối tuần nên xem phim gì cho vui?	OutOfScope	human_crowd_2026-10-19
+Admin	Kể một truyện trinh thám ngắn đi.	OutOfScope	human_crowd_2026-10-19
+BenhNhan	hom nay nen mac ao mau gi	OutOfScope	human_crowd_2026-10-19
+LeTan	Chỉ cách chụp ảnh hoàng hôn bằng điện thoại.	OutOfScope	human_crowd_2026-10-19
+BacSi	Giúp tôi lập lịch học tiếng Nhật trong một tháng.	OutOfScope	human_crowd_2026-10-19
+KTV	Đội bóng nào vô địch giải này nhiều nhất?	OutOfScope	human_crowd_2026-10-19
+DuocSi	cay trau ba de trong nha tuoi may lan v	OutOfScope	human_crowd_2026-10-19
+Admin	So sánh xe tay ga và xe số để đi làm.	OutOfScope	human_crowd_2026-10-19
+BenhNhan	Lam gi khi banh bong lan nuong xong bi xep?	OutOfScope	human_crowd_2026-10-19
+LeTan	Tóm tắt nội dung truyện Dế Mèn phiêu lưu ký.	OutOfScope	human_crowd_2026-10-19
+BacSi	Viết một bài thơ về mùa mưa.	OutOfScope	human_crowd_2026-10-19
+KTV	man cuoi game nay qua sao	OutOfScope	human_crowd_2026-10-19
+DuocSi	Có cách nào gấp áo thun cho gọn vali không?	OutOfScope	human_crowd_2026-10-19
+Admin	Lên lịch du lịch ba ngày ở Đà Lạt giúp tôi.	OutOfScope	human_crowd_2026-10-19
+BenhNhan	ngu ngon tieng han noi sao	OutOfScope	human_crowd_2026-10-19
+LeTan	Tính giúp tiền điện của nhà tôi tháng này.	OutOfScope	human_crowd_2026-10-19
+BenhNhan	Tôi muốn đăng ký một buổi khám mới vào đầu tuần tới.	StartBooking	human_crowd_2026-10-19
+BenhNhan	dk kham mat sang t4 dc k	StartBooking	human_crowd_2026-10-19
+BenhNhan	Mình chưa có lịch, muốn chọn một buổi khám răng.	StartBooking	human_crowd_2026-10-19
+BenhNhan	Tui muốn lấy hẹn với bác sĩ da liễu chiều thứ sáu.	StartBooking	human_crowd_2026-10-19
+BenhNhan	dat cho minh mot lich kham tong quat vao ngay mai	StartBooking	human_crowd_2026-10-19
+BenhNhan	Có thể bắt đầu đặt lịch khám nhi giúp tôi không?	StartBooking	human_crowd_2026-10-19
+BenhNhan	Mình muốn đăng ký khám ở cơ sở thứ hai vào cuối tuần.	StartBooking	human_crowd_2026-10-19
+BenhNhan	Tôi cần một lịch khám mới vào khung giờ sau 17 giờ.	StartBooking	human_crowd_2026-10-19
+BenhNhan	cho tui dk kham tai mui hong sang thu ba nha	StartBooking	human_crowd_2026-10-19
+BenhNhan	Hỗ trợ tôi tìm giờ trống để đặt một cuộc hẹn khám nội.	StartBooking	human_crowd_2026-10-19
+BenhNhan	Tôi có cuộc hẹn khám nào vào tuần tới không?	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Cho mình xem những lịch đã đặt nhưng chưa tới ngày khám.	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Lịch khám gần nhất sắp tới của tôi ở cơ sở nào?	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Tui đã đặt hẹn với bác sĩ nào vậy?	MyAppointments	human_crowd_2026-10-19
+BenhNhan	xem cac lich hen dang cho cua toi	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Cuộc hẹn ngày thứ năm của mình bắt đầu lúc nào?	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Cho tôi danh sách lịch hẹn cá nhân trong tháng này.	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Tôi muốn kiểm tra lại ngày khám đã đăng ký.	MyAppointments	human_crowd_2026-10-19
+BenhNhan	lich tui dat tuan sau duoc xac nhan chua	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Trong các lịch của tôi, lịch nào đang bị hủy?	MyAppointments	human_crowd_2026-10-19
+BenhNhan	Liệt kê những lần tôi đã tới phòng khám trong năm nay.	MyVisits	human_crowd_2026-10-19
+BenhNhan	Tôi muốn xem lại lần khám đã hoàn tất gần nhất.	MyVisits	human_crowd_2026-10-19
+BenhNhan	thang 6 tui kham bs nao v	MyVisits	human_crowd_2026-10-19
+BenhNhan	Cho xem hồ sơ các đợt tôi đã đến khám trước đây.	MyVisits	human_crowd_2026-10-19
+BenhNhan	tui da di kham o day may lan roi	MyVisits	human_crowd_2026-10-19
+BenhNhan	Lần khám cũ của tôi ở cơ sở số hai là ngày nào?	MyVisits	human_crowd_2026-10-19
+BenhNhan	Mở thông tin buổi khám tôi đã thực hiện hôm qua.	MyVisits	human_crowd_2026-10-19
+BenhNhan	Tôi muốn tra lại lịch sử khám trong quý trước.	MyVisits	human_crowd_2026-10-19
+BenhNhan	lan truoc toi den kham la hom nao	MyVisits	human_crowd_2026-10-19
+BenhNhan	Có thể xem lại các lần tôi đã khám chuyên khoa mắt không?	MyVisits	human_crowd_2026-10-19
+BenhNhan	Cho mình danh sách lượt khám đã kết thúc trong tháng tám.	MyVisits	human_crowd_2026-10-19
+BenhNhan	lan dau tui toi kham la ngay nao	MyVisits	human_crowd_2026-10-19
+BenhNhan	Tôi cần xem thông tin lượt khám cũ mã LK-8501 của mình.	MyVisits	human_crowd_2026-10-19
+BenhNhan	Trong lịch sử của tôi có lần nào khám ở cơ sở trung tâm?	MyVisits	human_crowd_2026-10-19
+BenhNhan	xem lai cac dot kham da xong cua minh voi	MyVisits	human_crowd_2026-10-19
+BenhNhan	Đợt khám đã hoàn thành gần nhất của tui thuộc chuyên khoa gì?	MyVisits	human_crowd_2026-10-19
+BenhNhan	Cho tôi xem những lần đã khám với bác sĩ mã BS-2201.	MyVisits	human_crowd_2026-10-19
+BenhNhan	Mình muốn mở lại nội dung lần tái khám đã thực hiện tháng trước.	MyVisits	human_crowd_2026-10-19
+BenhNhan	Năm ngoái tôi đã có những lượt khám nào tại phòng khám?	MyVisits	human_crowd_2026-10-19
+BenhNhan	tui can xem lich su di kham, nhung lan da den roi a	MyVisits	human_crowd_2026-10-19
+BenhNhan	Cho tôi xem kết quả xét nghiệm của lần khám gần nhất.	MyDiagnosticResults	human_crowd_2026-10-19
+BenhNhan	Phiếu kết quả siêu âm của mình đã có trên hệ thống chưa?	MyDiagnosticResults	human_crowd_2026-10-19
+BenhNhan	Tôi muốn mở bản kết quả chụp X-quang tuần trước.	MyDiagnosticResults	human_crowd_2026-10-19
+BenhNhan	ket qua xet nghiem cua tui tra ve chua	MyDiagnosticResults	human_crowd_2026-10-19
+BenhNhan	Liệt kê các phiếu kết quả xét nghiệm của tôi trong tháng này.	MyDiagnosticResults	human_crowd_2026-10-19
+BenhNhan	Tôi cần xem lại kết quả chẩn đoán hình ảnh đã lưu.	MyDiagnosticResults	human_crowd_2026-10-19
+BenhNhan	kq KQ-6401 cua tui co chua	MyDiagnosticResults	human_crowd_2026-10-19
+BenhNhan	Xem giúp tôi trạng thái trả kết quả xét nghiệm hôm qua.	MyDiagnosticResults	human_crowd_2026-10-19
+BenhNhan	cho minh coi kq chup phim lan vua roi	MyDiagnosticResults	human_crowd_2026-10-19
+BenhNhan	Những kết quả xét nghiệm nào của tôi đã được công bố?	MyDiagnosticResults	human_crowd_2026-10-19
+BenhNhan	Mở cho tôi đơn thuốc của lượt khám vừa hoàn thành.	MyPrescriptions	human_crowd_2026-10-19
+BenhNhan	Bác sĩ đã kê những thuốc nào trong đơn gần nhất của tôi?	MyPrescriptions	human_crowd_2026-10-19
+BenhNhan	Tôi cần xem danh sách các đơn thuốc cá nhân.	MyPrescriptions	human_crowd_2026-10-19
+BenhNhan	xem lai toa thuoc cua tui hoi thang truoc	MyPrescriptions	human_crowd_2026-10-19
+BenhNhan	Trong đơn DT-5201 của tôi có bao nhiêu loại thuốc?	MyPrescriptions	human_crowd_2026-10-19
+BenhNhan	cho coi cach dung ghi tren toa cua tui	MyPrescriptions	human_crowd_2026-10-19
+BenhNhan	Tôi muốn đọc lại đơn thuốc bác sĩ cấp hôm thứ hai.	MyPrescriptions	human_crowd_2026-10-19
+BenhNhan	toathuoc lan moi nhat cua minh dau roi	MyPrescriptions	human_crowd_2026-10-19
+BenhNhan	Có thể mở các đơn đã kê cho tôi trong năm nay không?	MyPrescriptions	human_crowd_2026-10-19
+BenhNhan	Tìm giúp tôi toa thuốc gắn với lượt khám LK-8502.	MyPrescriptions	human_crowd_2026-10-19
+BenhNhan	Cho tôi xem hóa đơn của lần khám vừa rồi.	MyBills	human_crowd_2026-10-19
+BenhNhan	Tổng số tiền tôi còn phải thanh toán là bao nhiêu?	MyBills	human_crowd_2026-10-19
+BenhNhan	Tôi muốn kiểm tra những hóa đơn cá nhân đã trả.	MyBills	human_crowd_2026-10-19
+BenhNhan	hoa don cua tui co nhung khoan nao	MyBills	human_crowd_2026-10-19
+BenhNhan	Mở chi tiết hóa đơn HD-4601 của tôi.	MyBills	human_crowd_2026-10-19
+BenhNhan	thang nay tui dong tien kham het bn roi	MyBills	human_crowd_2026-10-19
+BenhNhan	Hóa đơn lần khám hôm qua của mình còn chưa trả khoản nào?	MyBills	human_crowd_2026-10-19
+BenhNhan	co bill nao cua toi dang cho thanh toan khong	MyBills	human_crowd_2026-10-19
+BenhNhan	Cho mình xem lại biên nhận của hóa đơn khám gần nhất.	MyBills	human_crowd_2026-10-19
+BenhNhan	Tôi cần biết số tiền đã đóng cho lượt khám LK-8503.	MyBills	human_crowd_2026-10-19
+LeTan	Liệt kê toàn bộ lịch hẹn của phòng khám trong hôm nay.	TodayAppointments	human_crowd_2026-10-19
+LeTan	Buổi chiều nay có những khách nào đã đặt lịch?	TodayAppointments	human_crowd_2026-10-19
+LeTan	Hôm nay cơ sở số hai có tổng cộng bao nhiêu lịch hẹn?	TodayAppointments	human_crowd_2026-10-19
+LeTan	cho xem ds lich hen hom nay	TodayAppointments	human_crowd_2026-10-19
+LeTan	Các khung giờ đã được đặt trong sáng nay là những giờ nào?	TodayAppointments	human_crowd_2026-10-19
+LeTan	lich hnay chia theo bs cho tui coi	TodayAppointments	human_crowd_2026-10-19
+LeTan	Từ giờ đến hết ngày còn những lịch hẹn nào?	TodayAppointments	human_crowd_2026-10-19
+LeTan	Danh sách hẹn ngày hôm nay có những lịch nào đã xác nhận?	TodayAppointments	human_crowd_2026-10-19
+LeTan	nay bac si BS-2202 co nhung ca hen nao	TodayAppointments	human_crowd_2026-10-19
+LeTan	Cho tôi xem các lịch hẹn bị hủy trong ngày hôm nay.	TodayAppointments	human_crowd_2026-10-19
+LeTan	Hiện có những bệnh nhân nào đã check-in và đang đợi tiếp đón?	ReceptionQueue	human_crowd_2026-10-19
+LeTan	Cho xem thứ tự hàng chờ tại quầy tiếp nhận.	ReceptionQueue	human_crowd_2026-10-19
+LeTan	Khách nào đang chờ được làm thủ tục lâu nhất?	ReceptionQueue	human_crowd_2026-10-19
+LeTan	hang doi tiep don bay gio con bao nhieu nguoi	ReceptionQueue	human_crowd_2026-10-19
+LeTan	Liệt kê các khách đã tới nhưng chưa được xử lý ở quầy.	ReceptionQueue	human_crowd_2026-10-19
+LeTan	ai ke tiep o quay tiep nhan v	ReceptionQueue	human_crowd_2026-10-19
+LeTan	Có ai vừa check-in và được đưa vào hàng đợi lễ tân không?	ReceptionQueue	human_crowd_2026-10-19
+LeTan	Tôi muốn xem hàng chờ tiếp đón của cơ sở số một.	ReceptionQueue	human_crowd_2026-10-19
+LeTan	cho tui coi ds khach dang doi lam thu tuc	ReceptionQueue	human_crowd_2026-10-19
+LeTan	Quầy tiếp nhận hiện đang giữ bao nhiêu lượt chờ?	ReceptionQueue	human_crowd_2026-10-19
+LeTan	Tìm thông tin lịch hẹn có mã LH-7401.	LookupAppointment	human_crowd_2026-10-19
+LeTan	LH-7402 hen bs nao	LookupAppointment	human_crowd_2026-10-19
+LeTan	Tra cứu giờ hẹn của mã LH-7403 giúp tôi.	LookupAppointment	human_crowd_2026-10-19
+LeTan	kiem tra lich hen LH-7404	LookupAppointment	human_crowd_2026-10-19
+LeTan	Cho tôi biết trạng thái hiện tại của lịch LH-7405.	LookupAppointment	human_crowd_2026-10-19
+LeTan	Mở chi tiết cuộc hẹn LH-7406.	LookupAppointment	human_crowd_2026-10-19
+LeTan	Khách có mã đặt hẹn LH-7407 đăng ký ở cơ sở nào?	LookupAppointment	human_crowd_2026-10-19
+LeTan	Tôi cần tra chuyên khoa đã chọn trong lịch LH-7408.	LookupAppointment	human_crowd_2026-10-19
+LeTan	lich LH-7409 hen ngay may vay	LookupAppointment	human_crowd_2026-10-19
+LeTan	Kiểm tra lịch LH-7410 đã được xác nhận hay vẫn đang chờ.	LookupAppointment	human_crowd_2026-10-19
+LeTan	tra lich theo sdt mau 09xx123456	LookupAppointment	human_crowd_2026-10-19
+LeTan	Tra cuộc hẹn của khách tên Khách Mẫu A vào ngày mai.	LookupAppointment	human_crowd_2026-10-19
+LeTan	Lịch mã LH-7411 có ghi chú gì khi đăng ký?	LookupAppointment	human_crowd_2026-10-19
+LeTan	Giúp tôi tìm lại lịch LH-7412 vừa nhận từ khách.	LookupAppointment	human_crowd_2026-10-19
+LeTan	tra dum thong tin cuoc hen LH-7413	LookupAppointment	human_crowd_2026-10-19
+LeTan	Người đặt lịch LH-7414 chọn khung giờ nào?	LookupAppointment	human_crowd_2026-10-19
+LeTan	ma LH-7415 co tren ht k	LookupAppointment	human_crowd_2026-10-19
+LeTan	Cho xem thông tin liên hệ gắn với cuộc hẹn LH-7416.	LookupAppointment	human_crowd_2026-10-19
+LeTan	Tôi cần đối chiếu ngày và giờ của lịch LH-7417.	LookupAppointment	human_crowd_2026-10-19
+LeTan	tim lich bang ma LH-7418 cho minh voi	LookupAppointment	human_crowd_2026-10-19
+BacSi	Cho tôi xem danh sách người đang chờ mình khám.	DoctorQueue	human_crowd_2026-10-19
+BacSi	Bệnh nhân tiếp theo trong hàng đợi của tôi là ai?	DoctorQueue	human_crowd_2026-10-19
+BacSi	Phòng khám của tôi còn bao nhiêu lượt đang chờ?	DoctorQueue	human_crowd_2026-10-19
+BacSi	ds cho kham cua toi hien gio gom nhung ai	DoctorQueue	human_crowd_2026-10-19
+BacSi	Ai đang đợi lâu nhất trong hàng chờ bác sĩ của tôi?	DoctorQueue	human_crowd_2026-10-19
+BacSi	bn chuyen qua phong toi ma chua kham gom ai	DoctorQueue	human_crowd_2026-10-19
+BacSi	Tôi muốn xem thứ tự các lượt chờ khám được phân cho mình.	DoctorQueue	human_crowd_2026-10-19
+BacSi	Có bệnh nhân mới nào vừa vào hàng đợi khám của tôi không?	DoctorQueue	human_crowd_2026-10-19
+BacSi	cho tui xem nhung ca dang doi toi kham chieu nay	DoctorQueue	human_crowd_2026-10-19
+BacSi	Hàng chờ tại phòng tôi hiện có những số thứ tự nào?	DoctorQueue	human_crowd_2026-10-19
+BacSi	Hồ sơ BN-9401 ghi nhận những lần nhập viện nào trước đây?	PatientSummary	human_crowd_2026-10-19
+BacSi	BN-9402 tung kham nhung dot nao tom tat dum	PatientSummary	human_crowd_2026-10-19
+BacSi	Hồ sơ BN-9403 có ghi nhận tiền sử dị ứng nào không?	PatientSummary	human_crowd_2026-10-19
+BacSi	tom tat benh an BN-9404	PatientSummary	human_crowd_2026-10-19
+BacSi	Tôi cần phần tiền sử đã lưu của người bệnh BN-9405.	PatientSummary	human_crowd_2026-10-19
+BacSi	Tổng hợp thông tin y tế hiện có trong hồ sơ BN-9406.	PatientSummary	human_crowd_2026-10-19
+BacSi	mo tomtat hs BN-9407 truoc khi kham	PatientSummary	human_crowd_2026-10-19
+BacSi	BN-9408 từng được ghi nhận bệnh nền nào trong hồ sơ?	PatientSummary	human_crowd_2026-10-19
+BacSi	cho toi xem tom luoc ho so BN-9409	PatientSummary	human_crowd_2026-10-19
+BacSi	Tóm tắt quá trình khám và điều trị đã lưu của BN-9410.	PatientSummary	human_crowd_2026-10-19
+BacSi	Những lưu ý quan trọng đã ghi trong bệnh án BN-9411 là gì?	PatientSummary	human_crowd_2026-10-19
+BacSi	benh su BN-9412 co gi can luu y	PatientSummary	human_crowd_2026-10-19
+BacSi	Hồ sơ BN-9413 có thông tin tiền sử phẫu thuật không?	PatientSummary	human_crowd_2026-10-19
+BacSi	Tổng hợp các chẩn đoán trước đây đã ghi cho BN-9414.	PatientSummary	human_crowd_2026-10-19
+BacSi	bn BN-9415 co tien su gi da luu	PatientSummary	human_crowd_2026-10-19
+BacSi	Tôi cần bản tóm tắt tiền sử gia đình trong hồ sơ BN-9416.	PatientSummary	human_crowd_2026-10-19
+BacSi	Thông tin tiền sử dùng thuốc của BN-9417 được ghi thế nào?	PatientSummary	human_crowd_2026-10-19
+BacSi	Giúp tôi đọc phần tóm tắt hồ sơ sức khỏe BN-9418.	PatientSummary	human_crowd_2026-10-19
+BacSi	Cho biết các mốc khám chính đã lưu trong bệnh án BN-9419.	PatientSummary	human_crowd_2026-10-19
+BacSi	xem tong quan ho so nguoi benh BN-9420 cho tui	PatientSummary	human_crowd_2026-10-19
+BacSi	Liệt kê các chỉ định cận lâm sàng tôi đã tạo hôm nay.	DiagnosticOrders	human_crowd_2026-10-19
+BacSi	Chỉ định xét nghiệm XN-6501 hiện ở bước nào?	DiagnosticOrders	human_crowd_2026-10-19
+BacSi	Các chỉ định siêu âm tôi đã ra sáng nay có kết quả chưa?	DiagnosticOrders	human_crowd_2026-10-19
+BacSi	cho xem cac chi dinh xet nghiem dang cho cua toi	DiagnosticOrders	human_crowd_2026-10-19
+BacSi	Tôi muốn biết chỉ định chụp X-quang CD-6502 đã được thực hiện chưa.	DiagnosticOrders	human_crowd_2026-10-19
+BacSi	chi dinh toi ke con cai nao chua tiep nhan	DiagnosticOrders	human_crowd_2026-10-19
+BacSi	Cho tôi trạng thái các chỉ định trong lượt khám LK-8601.	DiagnosticOrders	human_crowd_2026-10-19
+BacSi	Danh sách chỉ định tôi đã tạo hôm qua có mục nào đã hoàn thành?	DiagnosticOrders	human_crowd_2026-10-19
+BacSi	phieu chi dinh CD-6503 xu ly toi dau roi	DiagnosticOrders	human_crowd_2026-10-19
+BacSi	Tôi cần xem lại danh sách xét nghiệm đã chỉ định cho BN-9421.	DiagnosticOrders	human_crowd_2026-10-19
+BacSi	Đơn DT-5301 tôi đã kê còn đang chờ phát thuốc không?	PrescriptionStatus	human_crowd_2026-10-19
+BacSi	Cho tôi trạng thái xử lý của những đơn mình kê hôm nay.	PrescriptionStatus	human_crowd_2026-10-19
+BacSi	Nhà thuốc đã phát xong đơn DT-5302 của tôi chưa?	PrescriptionStatus	human_crowd_2026-10-19
+BacSi	toa DT-5303 toi ke dang o buoc nao	PrescriptionStatus	human_crowd_2026-10-19
+BacSi	Liệt kê các đơn do tôi kê vẫn chưa được phát.	PrescriptionStatus	human_crowd_2026-10-19
+BacSi	toa toi ke cho BN-9422 phat du thuoc chua	PrescriptionStatus	human_crowd_2026-10-19
+BacSi	Tôi cần kiểm tra đơn DT-5304 đang chờ hay đã hoàn tất cấp phát.	PrescriptionStatus	human_crowd_2026-10-19
+BacSi	Các toa tôi kê trong ca sáng đã được nhà thuốc xử lý tới đâu?	PrescriptionStatus	human_crowd_2026-10-19
+BacSi	xem tinh trang phat thuoc don DT-5305 giup toi	PrescriptionStatus	human_crowd_2026-10-19
+BacSi	Trong những đơn tôi đã kê hôm qua, đơn nào còn chờ nhà thuốc?	PrescriptionStatus	human_crowd_2026-10-19
+KTV	Cho tôi danh sách xét nghiệm đang chờ kỹ thuật viên thực hiện.	TechnicianWorklist	human_crowd_2026-10-19
+KTV	ca nay phan tui may mau v	TechnicianWorklist	human_crowd_2026-10-19
+KTV	Liệt kê các phiếu siêu âm đang đợi đến lượt làm.	TechnicianWorklist	human_crowd_2026-10-19
+KTV	ds mau cho xu ly cua toi dau	TechnicianWorklist	human_crowd_2026-10-19
+KTV	Hiện có bao nhiêu yêu cầu chụp X-quang chưa thực hiện?	TechnicianWorklist	human_crowd_2026-10-19
+KTV	Những mẫu nào đã tiếp nhận nhưng chưa bắt đầu phân tích?	TechnicianWorklist	human_crowd_2026-10-19
+KTV	cho xem ds cls duoc giao hnay	TechnicianWorklist	human_crowd_2026-10-19
+KTV	Mẫu cần xử lý tiếp theo trong danh sách của tôi là mẫu nào?	TechnicianWorklist	human_crowd_2026-10-19
+KTV	con nhung xet nghiem nao chua chay vay	TechnicianWorklist	human_crowd_2026-10-19
+KTV	Liệt kê các phiếu đang chờ ở khu lấy mẫu.	TechnicianWorklist	human_crowd_2026-10-19
+KTV	Tôi cần xem các yêu cầu chẩn đoán hình ảnh chưa được thực hiện.	TechnicianWorklist	human_crowd_2026-10-19
+KTV	phong xn chieu nay con phieu nao can lam	TechnicianWorklist	human_crowd_2026-10-19
+KTV	Có mẫu mới nào vừa được chuyển đến hàng đợi xử lý của tôi không?	TechnicianWorklist	human_crowd_2026-10-19
+KTV	Lọc giúp các phiếu xét nghiệm đang chờ theo thời điểm tiếp nhận.	TechnicianWorklist	human_crowd_2026-10-19
+KTV	hom nay toi can lam nhung phieu nao	TechnicianWorklist	human_crowd_2026-10-19
+KTV	Tại cơ sở số hai còn bao nhiêu mẫu chờ kỹ thuật viên?	TechnicianWorklist	human_crowd_2026-10-19
+KTV	Những ca chụp nào đã đăng ký nhưng chưa tới bước thực hiện?	TechnicianWorklist	human_crowd_2026-10-19
+KTV	Cho tôi xem các mẫu đang chờ phân tích trong ca tối.	TechnicianWorklist	human_crowd_2026-10-19
+KTV	Trong danh sách việc của tôi có yêu cầu siêu âm nào chưa làm?	TechnicianWorklist	human_crowd_2026-10-19
+KTV	mau uu tien?	TechnicianWorklist	human_crowd_2026-10-19
+DuocSi	Liệt kê các toa đang xếp hàng chờ cấp thuốc.	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	Đơn thuốc nào cần được nhà thuốc xử lý tiếp theo?	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	Hiện còn bao nhiêu đơn đang chờ tại quầy thuốc?	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	ds toa cho phat thuoc bay gio	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	Cho tôi xem các đơn mới chuyển sang nhà thuốc nhưng chưa phát.	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	toa tu sang con don nao chua phat k	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	Sắp theo thời gian nhận, những đơn nào đang chờ phát?	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	Tôi muốn xem hàng đợi đơn thuốc của cơ sở số hai.	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	cho tui coi cac don thuoc chua cap phat	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	Nhà thuốc hiện đang giữ những đơn chờ lấy thuốc nào?	PrescriptionQueue	human_crowd_2026-10-19
+DuocSi	Những thuốc nào trong kho đang dưới mức tồn tối thiểu?	InventoryStatus	human_crowd_2026-10-19
+DuocSi	Kiểm tra số lượng còn lại của mã thuốc TH-4201.	InventoryStatus	human_crowd_2026-10-19
+DuocSi	Có lô thuốc nào sẽ hết hạn trong vòng ba mươi ngày không?	InventoryStatus	human_crowd_2026-10-19
+DuocSi	kho hien co thuoc nao da het hang	InventoryStatus	human_crowd_2026-10-19
+DuocSi	Cho tôi xem hạn sử dụng của lô LO-4202.	InventoryStatus	human_crowd_2026-10-19
+DuocSi	ibuprofen con bn vi	InventoryStatus	human_crowd_2026-10-19
+DuocSi	Liệt kê các mặt hàng thuốc đã hết hạn nhưng còn tồn kho.	InventoryStatus	human_crowd_2026-10-19
+DuocSi	Tồn kho của mã TH-4203 ở cơ sở số hai là bao nhiêu?	InventoryStatus	human_crowd_2026-10-19
+DuocSi	thuoc cetirizine sap het chua	InventoryStatus	human_crowd_2026-10-19
+DuocSi	Những lô thuốc nào có hạn dùng gần nhất trong kho hiện tại?	InventoryStatus	human_crowd_2026-10-19
+DuocSi	Đơn DT-5401 đã được thu tiền hay chưa?	PrescriptionPayment	human_crowd_2026-10-19
+DuocSi	Kiểm tra trạng thái thanh toán của toa DT-5402.	PrescriptionPayment	human_crowd_2026-10-19
+DuocSi	Khách của đơn DT-5403 đã trả đủ tiền thuốc chưa?	PrescriptionPayment	human_crowd_2026-10-19
+DuocSi	toa DT-5404 thanh toan xong chua	PrescriptionPayment	human_crowd_2026-10-19
+DuocSi	Đơn DT-5405 còn thiếu bao nhiêu tiền thuốc?	PrescriptionPayment	human_crowd_2026-10-19
+DuocSi	DT-5406 co xac nhan tra tien chua	PrescriptionPayment	human_crowd_2026-10-19
+DuocSi	Tôi cần đối chiếu số tiền đã thu của đơn DT-5407.	PrescriptionPayment	human_crowd_2026-10-19
+DuocSi	Khoản thanh toán cho toa DT-5408 đã được ghi nhận chưa?	PrescriptionPayment	human_crowd_2026-10-19
+DuocSi	don DT-5409 da dong du tien chua ban	PrescriptionPayment	human_crowd_2026-10-19
+DuocSi	Trạng thái thu tiền của đơn DT-5410 đang là đã trả hay chưa trả?	PrescriptionPayment	human_crowd_2026-10-19
+Admin	Tổng số lượt khám hoàn thành trong bảy ngày qua là bao nhiêu?	DashboardMetrics	human_crowd_2026-10-19
+Admin	Cho tôi doanh thu của từng cơ sở trong tháng này.	DashboardMetrics	human_crowd_2026-10-19
+Admin	Tỷ lệ khách hủy hẹn tuần vừa rồi là bao nhiêu phần trăm?	DashboardMetrics	human_crowd_2026-10-19
+Admin	thong ke so benh nhan moi trong thang	DashboardMetrics	human_crowd_2026-10-19
+Admin	So sánh số lượt khám sáng và chiều của hôm qua.	DashboardMetrics	human_crowd_2026-10-19
+Admin	quy nay khoa nao dong ca kham nhat	DashboardMetrics	human_crowd_2026-10-19
+Admin	Thời gian chờ khám trung bình hôm nay là bao nhiêu?	DashboardMetrics	human_crowd_2026-10-19
+Admin	Tôi muốn xem số lịch hẹn được đặt và hoàn thành trong tháng trước.	DashboardMetrics	human_crowd_2026-10-19
+Admin	doanh thu hom nay tang giam sao voi hom qua	DashboardMetrics	human_crowd_2026-10-19
+Admin	Thống kê tỷ lệ khách không đến theo lịch hẹn trong tuần này.	DashboardMetrics	human_crowd_2026-10-19
+Admin	Dịch vụ trợ lý hiện có phản hồi bình thường không?	AiHealth	human_crowd_2026-10-19
+Admin	api ai 1h nay tre tb bn ms	AiHealth	human_crowd_2026-10-19
+Admin	Hôm nay mô hình phân loại ý định có phát sinh lỗi không?	AiHealth	human_crowd_2026-10-19
+Admin	kiem tra tinh trang hoat dong cua he thong ai	AiHealth	human_crowd_2026-10-19
+Admin	Hạn mức gọi nhà cung cấp mô hình còn lại bao nhiêu?	AiHealth	human_crowd_2026-10-19
+Admin	Chatbot có đang phải sử dụng chế độ dự phòng không?	AiHealth	human_crowd_2026-10-19
+Admin	healthcheck ai lan cuoi ok k	AiHealth	human_crowd_2026-10-19
+Admin	Tôi muốn xem tỷ lệ lỗi của các yêu cầu gửi tới mô hình.	AiHealth	human_crowd_2026-10-19
+Admin	bot phan hoi cham co bi timeout khong	AiHealth	human_crowd_2026-10-19
+Admin	Kết nối giữa hệ thống và nhà cung cấp AI hiện có ổn định không?	AiHealth	human_crowd_2026-10-19
+Admin	Dịch vụ phân loại câu hỏi đã tải mô hình thành công chưa?	AiHealth	human_crowd_2026-10-19
+Admin	30p nay ai bi timeout may lan	AiHealth	human_crowd_2026-10-19
+Admin	Hệ thống có đang báo vượt giới hạn gọi mô hình không?	AiHealth	human_crowd_2026-10-19
+Admin	Trạng thái hiện tại của thành phần trả lời tự động là gì?	AiHealth	human_crowd_2026-10-19
+Admin	ai provider co dang bao loi 429 khong	AiHealth	human_crowd_2026-10-19
+Admin	Có sự cố nào khiến trợ lý ngừng trả lời từ đầu ca đến giờ không?	AiHealth	human_crowd_2026-10-19
+Admin	Thời gian phản hồi của mô hình có vượt ngưỡng cảnh báo không?	AiHealth	human_crowd_2026-10-19
+Admin	Cho tôi xem lần gần nhất dịch vụ AI bị mất kết nối.	AiHealth	human_crowd_2026-10-19
+Admin	Các yêu cầu đến chatbot hiện đang dùng mô hình chính hay dự phòng?	AiHealth	human_crowd_2026-10-19
+Admin	quota con du de tro ly tiep tuc xu ly yeu cau khong	AiHealth	human_crowd_2026-10-19

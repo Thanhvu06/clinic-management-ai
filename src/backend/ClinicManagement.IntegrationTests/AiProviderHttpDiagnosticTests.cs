@@ -58,7 +58,7 @@ public sealed class AiProviderHttpDiagnosticTests
     {
         using var handler = new StaticHandler(HttpStatusCode.BadRequest, GoogleError(400, "INVALID_ARGUMENT", ResponseFormatField));
 
-        var report = await new FullStackHttpCanary().RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
+        var report = await new FullStackHttpCanary(roleIntentEnabled: false).RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
         var patient = Assert.Single(report.Cases, x => x.CaseId == "patient-http-read");
         var serialized = JsonSerializer.Serialize(patient);
 
@@ -91,7 +91,7 @@ public sealed class AiProviderHttpDiagnosticTests
         using var handler = new StaticHandler(HttpStatusCode.BadRequest,
             GoogleError(400, "INVALID_ARGUMENT", "generation_config", UnknownResponseFormatMessage));
 
-        var report = await new FullStackHttpCanary().RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
+        var report = await new FullStackHttpCanary(roleIntentEnabled: false).RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
         var patient = JsonNode.Parse(JsonSerializer.Serialize(Assert.Single(report.Cases, x => x.CaseId == "patient-http-read")))!;
 
         Assert.Equal("UnknownField", (string?)patient["ProviderRejectionKind"]);
@@ -274,7 +274,7 @@ public sealed class AiProviderHttpDiagnosticTests
         using var handler = new StaticHandler(HttpStatusCode.BadRequest, GoogleError(400, "INVALID_ARGUMENT", field, message));
         var sanitizedPath = "generation_config.response_format.text.schema.properties[?].type";
 
-        var report = await new FullStackHttpCanary().RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
+        var report = await new FullStackHttpCanary(roleIntentEnabled: false).RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
 
         Assert.Equal(LiveCanaryAcceptanceEvaluator.Fail, report.AcceptanceStatus);
         var roleCases = report.Cases.Where(x => x.ProviderHttpStatus == "400").ToArray();
@@ -303,7 +303,7 @@ public sealed class AiProviderHttpDiagnosticTests
         Assert.DoesNotContain(SecretMarker, JsonSerializer.Serialize(report), StringComparison.Ordinal);
 
         // Same body straight through the API and the provider logs.
-        using var factory = new SyntheticCanaryFactory(new CanaryProviderAttemptBudget(12), handler);
+        using var factory = new SyntheticCanaryFactory(new CanaryProviderAttemptBudget(12), handler, roleIntentEnabled: false);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         await factory.SeedAsync();
         using (var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { emailOrPhone = "canary.patient@synthetic.invalid", password = "Canary@12345" }))
@@ -584,7 +584,7 @@ public sealed class AiProviderHttpDiagnosticTests
     public async Task Copilot_api_response_carries_the_sanitized_http_diagnostic_and_no_raw_provider_text()
     {
         using var handler = new StaticHandler(HttpStatusCode.BadRequest, GoogleError(400, "INVALID_ARGUMENT", ResponseFormatField));
-        using var factory = new SyntheticCanaryFactory(new CanaryProviderAttemptBudget(12), handler);
+        using var factory = new SyntheticCanaryFactory(new CanaryProviderAttemptBudget(12), handler, roleIntentEnabled: false);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         await factory.SeedAsync();
 
@@ -632,7 +632,7 @@ public sealed class AiProviderHttpDiagnosticTests
     {
         using var handler = new StaticHandler(HttpStatusCode.BadRequest, GoogleError(400, "INVALID_ARGUMENT", ResponseFormatField));
 
-        var report = await new FullStackHttpCanary().RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
+        var report = await new FullStackHttpCanary(roleIntentEnabled: false).RunAsync(new LiveCanaryReport(), maxCalls: 12, providerHandler: handler);
 
         Assert.Equal(LiveCanaryAcceptanceEvaluator.Fail, report.AcceptanceStatus);
         Assert.True(report.DatabaseUnchanged);

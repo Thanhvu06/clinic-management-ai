@@ -98,7 +98,7 @@ public sealed class LiveCanaryAcceptanceTests
     public async Task Full_stack_fake_provider_accepts_a_read_response_without_navigation()
     {
         using var handler = new FakeGeminiHttpHandler("online");
-        var report = await new FullStackHttpCanary().RunAsync(
+        var report = await new FullStackHttpCanary(roleIntentEnabled: false).RunAsync(
             new LiveCanaryReport { DatabaseUnchanged = true },
             maxCalls: 12,
             providerHandler: handler);

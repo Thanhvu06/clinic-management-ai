@@ -16,7 +16,7 @@ public sealed class RoleIntentModelOptions
     public double? Threshold { get; set; }
     public bool OverrideEnabled { get; set; }
     public double? OverrideThreshold { get; set; }
-    public string Directory { get; set; } = Path.Combine(AppContext.BaseDirectory, "models", "role-intent-v2");
+    public string Directory { get; set; } = Path.Combine(AppContext.BaseDirectory, "models", "role-intent-v3");
     public string? LabelsPath { get; set; }
 }
 
@@ -29,10 +29,11 @@ public interface IRoleIntentModel
     RoleIntentModelPrediction? Predict(string text, AiActorRole role);
 }
 
-/// <summary>Loads the frozen v2 once. No training, provider calls or write actions.</summary>
+/// <summary>Loads a frozen role-intent artifact once. No training, provider calls or write actions.</summary>
 public sealed class RoleIntentModel : IRoleIntentModel, IDisposable
 {
-    public const string ExpectedSha256 = "cb62d5995617065a26c5e8facffb662fbc5ab319b8932582b623981da37074ba";
+    public const string ExpectedSha256 = "cce44a467de135d3a7de3822a92617d3ea63237c4185a637a30d6a5f9f3f07a6";
+    private const string V2Sha256 = "cb62d5995617065a26c5e8facffb662fbc5ab319b8932582b623981da37074ba";
     private readonly object _gate = new();
     private readonly ILogger<RoleIntentModel> _logger;
     private PredictionEngine<ModelInput, ModelOutput>? _engine;
@@ -40,7 +41,7 @@ public sealed class RoleIntentModel : IRoleIntentModel, IDisposable
     private string[] _scoreLabels = [];
     private volatile bool _available;
     public bool IsAvailable => _available;
-    public double Threshold { get; private set; } = .75;
+    public double Threshold { get; private set; } = .45;
     public double LoadMilliseconds { get; }
 
     public RoleIntentModel(IOptions<RoleIntentModelOptions> options, ILogger<RoleIntentModel> logger)
@@ -51,11 +52,13 @@ public sealed class RoleIntentModel : IRoleIntentModel, IDisposable
         {
             var settings = options.Value;
             if (!settings.Enabled) return;
-            var zip = Path.Combine(settings.Directory, "role_intent_model_v2.zip");
-            if (!File.Exists(zip) || Hash(zip) != ExpectedSha256) throw new InvalidDataException("Model missing or checksum mismatch.");
-            using var metadata = JsonDocument.Parse(File.ReadAllText(Path.Combine(settings.Directory, "role_intent_model_meta_v2.json")));
+            var version = File.Exists(Path.Combine(settings.Directory, "role_intent_model_meta_v3.json")) ? "v3" : "v2";
+            var expectedSha256 = version == "v3" ? ExpectedSha256 : V2Sha256;
+            var zip = Path.Combine(settings.Directory, $"role_intent_model_{version}.zip");
+            if (!File.Exists(zip) || Hash(zip) != expectedSha256) throw new InvalidDataException("Model missing or checksum mismatch.");
+            using var metadata = JsonDocument.Parse(File.ReadAllText(Path.Combine(settings.Directory, $"role_intent_model_meta_{version}.json")));
             var meta = metadata.RootElement;
-            if (meta.GetProperty("modelSha256").GetString() != ExpectedSha256 || meta.GetProperty("modelVersion").GetString() != "role-intent-mlnet-v2")
+            if (meta.GetProperty("modelSha256").GetString() != expectedSha256 || meta.GetProperty("modelVersion").GetString() != $"role-intent-mlnet-{version}")
                 throw new InvalidDataException("Metadata mismatch.");
             var json = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             _catalog = meta.GetProperty("labelCatalog").Deserialize<RoleIntentLabel[]>(json)!;
@@ -83,7 +86,7 @@ public sealed class RoleIntentModel : IRoleIntentModel, IDisposable
         {
             _engine?.Dispose();
             _engine = null;
-            _logger.LogWarning("Role-intent v2 disabled at startup ({FailureType}); existing routing remains available.", exception.GetType().Name);
+            _logger.LogWarning("Role-intent disabled at startup ({FailureType}); existing routing remains available.", exception.GetType().Name);
         }
         finally { LoadMilliseconds = timer.Elapsed.TotalMilliseconds; }
     }
@@ -105,7 +108,7 @@ public sealed class RoleIntentModel : IRoleIntentModel, IDisposable
             {
                 _available = false;
                 // Do not log exceptions/messages that might contain user input.
-                _logger.LogWarning("Role-intent v2 disabled after prediction failure ({FailureType}).", exception.GetType().Name);
+                _logger.LogWarning("Role-intent disabled after prediction failure ({FailureType}).", exception.GetType().Name);
                 return null;
             }
         }

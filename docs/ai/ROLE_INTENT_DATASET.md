@@ -665,3 +665,132 @@ Kiểm tra: Release build 0 lỗi; 44 test mới; focused router/API 76/76; focu
 Giới hạn: validation nhỏ, do AI/synthetic; 91 trọng số luật đúng và không có damage quan sát không bảo đảm an toàn thống kê trên traffic thật. Override chỉ áp dụng lượt stateless ngoài các guard, không thay legacy booking/hội thoại có context. Clarification đúng tác vụ được tính đúng nhưng không chứng minh grounding trên dữ liệu thật; provider offline vẫn tắt. Eval đã thấy không phải blind. Không có tool/hành động ghi mới; quyền và xác nhận vẫn do gateway cũ kiểm soát.
 
 Reproduce validation only: `dotnet run --project src/tools/ClinicManagement.AI.RuntimeBenchmark -c Release -- calibrate`. Phép eval một lần đã thực hiện bằng `measure-calibration` sau freeze; guard CreateNew ở TEMP từ chối chạy lại. Báo cáo/receipt/journal được lưu để đọc lại mà không rerun eval. Chi tiết ở RUNTIME_CALIBRATION_MEASUREMENTS.json.
+
+## Role-intent v3 — dữ liệu người viết, 2026-10-19
+
+### Dữ liệu và nguồn gốc
+
+Hai workbook nguồn nằm ngoài repo, được đọc bằng System.IO.Compression và XML, không thêm package. Chỉ nhận sheet `Câu train`, header `STT | Vai trò | Câu train | Nhãn đúng | Ghi chú | Kiểm tra`; bỏ dòng trống và Ghi chú `VÍ DỤ`, bỏ qua cột Kiểm tra. Không sao chép workbook vào repo.
+
+- `role_intent_human_train_v1.tsv`: 310 câu; nguồn `human_crowd_2026-10-19`. Provenance: “Nhiều người viết, Nguyễn Thanh Vũ tổng hợp và duyệt nhãn, 2026-10-19, không dùng AI; 2 câu gần giống bộ đề ẩn đã được viết lại trước khi nộp”.
+- `role_intent_human_train_v1b.tsv`: 50 câu. Provenance: “Nhiều người viết, Nguyễn Thanh Vũ tổng hợp và duyệt nhãn, 2026-10-19, không dùng AI; bổ sung câu sát ranh giới cho các cặp nhầm trên validation”.
+- Mỗi TSV có manifest riêng ghi SHA-256 byte, số dòng, phân bố nhãn/vai trò, provenance và SHA-256 workbook nguồn. TSV/manifest dùng UTF-8 không BOM, LF; cùng định dạng bốn cột của seeds. TSV đợt 1 giữ nguyên 310 câu.
+
+| Vai trò | Đợt 1 | Đợt 1b | Tổng |
+|---|---:|---:|---:|
+| Patient | 88 | 28 | 116 |
+| Receptionist | 54 | 7 | 61 |
+| Doctor | 60 | 3 | 63 |
+| DiagnosticTechnician | 28 | 2 | 30 |
+| Pharmacist | 40 | 7 | 47 |
+| Admin | 40 | 3 | 43 |
+| Tổng | 310 | 50 | 360 |
+
+Đợt 1b bổ sung ActionRequest 5, ClinicKnowledge 10, MyAppointments 10, OutOfScope 10, PrescriptionQueue 5, StartBooking 10. Sau gộp: ActionRequest 25, AiHealth 20, ClinicKnowledge 20, DashboardMetrics 10, DiagnosticOrders 10, DoctorQueue 10, Greeting 10, Help 10, InventoryStatus 10, LookupAppointment 20, MyAppointments 20, MyBills 10, MyDiagnosticResults 10, MyPrescriptions 10, MyVisits 20, OutOfScope 30, PatientSummary 20, PrescriptionPayment 10, PrescriptionQueue 15, PrescriptionStatus 10, ReceptionQueue 10, StartBooking 20, TechnicianWorklist 20, TodayAppointments 10.
+
+Đã kiểm nhãn thuộc catalog và hợp lệ với vai trò; không trùng sau `RoleIntentDatasetGenerator.Normalize` giữa hai đợt, nội bộ từng đợt, hoặc seeds/train/validation/eval role-intent cũ. Tổng train = 866 câu train v2 + 360 câu người viết = **1.226**; validation giữ nguyên 283 câu và SHA-256 `fc130cee8a360eec155f770da53985eb26c7d8a3de318a3664ec6faddcc6cbd5`. Câu Patient dùng trong test canary không có trong cả hai TSV.
+
+### Cấu hình, ngưỡng và tái lập
+
+Dùng duy nhất cấu hình v2 đã chốt: L-BFGS maximum entropy, L2 normalization tại các text featurizer và vector ghép, không trọng số lớp, 500 vòng, L1=0, L2=0.01; seed 20261002, một luồng. Giữ nguyên normalize text, word n-gram 1–2 và char n-gram 2/3/4. Không grid search lại. Ngưỡng dùng đúng hàm v2: grid 0.00–0.95 bước 0.05, coverage lớn nhất trong các ngưỡng có ít nhất một accepted và accepted accuracy ≥90%, tie chọn ngưỡng thấp hơn.
+
+Hai lần chạy train ở tiến trình riêng dùng scalar CPU math và tắt tiered compilation. Mỗi lần cũng fit lại cấu hình để đối chiếu top-1 và xác suất validation theo tolerance 1e-6 như v2. Cả hai lần có chênh lệch xác suất 0, cùng model SHA, metadata byte và prediction SHA. Model v3(360): `cce44a467de135d3a7de3822a92617d3ea63237c4185a637a30d6a5f9f3f07a6`; validation prediction SHA: `110468783adf469d86601b2a7972a4d32ecd7f20a3745185bd57aad8ee61ae4a`. Tính tái lập byte được xác nhận trong cùng môi trường Windows/.NET/ML.NET; không khẳng định hash train lại giống trên mọi hệ điều hành.
+
+### Validation và quyết định chọn trước hidden eval
+
+Tất cả số đo dưới đây dùng 283 dòng trước abstention, sau role mask; `Chung` là hợp sáu vai trò. Nhầm tự tin là top-1 sai và confidence ≥ ngưỡng riêng của model. Report `models/role-intent-v3/role_intent_validation_comparison_v3.json` lưu metric, checksum model, ma trận con và nhầm tự tin theo nhãn đúng; v3(310) là thí nghiệm trước khi người dùng yêu cầu bổ sung 50 câu.
+
+| Metric | v2 | v3 (310) | v3 (360) |
+|---|---:|---:|---:|
+| Accuracy lọc role | 73.14% | 85.51% | 82.33% |
+| Macro-F1 lọc role | 69.55% | 83.46% | 79.22% |
+| Ngưỡng | 0.75 | 0.50 | 0.45 |
+| Accepted | 133 | 241 | 245 |
+| Accepted accuracy | 93.23% | 90.87% | 90.61% |
+| Tổng câu sai | 76 | 41 | 50 |
+| Tổng nhầm tự tin | 9 | 22 | 23 |
+
+Ma trận con, hàng là nhãn đúng; Khác là các dự đoán ngoài ba nhãn:
+
+| Model | Nhãn đúng | MyAppointments | MyVisits | StartBooking | Khác |
+|---|---|---:|---:|---:|---:|
+| v2 | MyAppointments | 4 | 1 | 2 | 3 |
+| v2 | MyVisits | 2 | 5 | 4 | 1 |
+| v2 | StartBooking | 0 | 0 | 7 | 5 |
+| v3 (310) | MyAppointments | 10 | 0 | 0 | 0 |
+| v3 (310) | MyVisits | 0 | 11 | 1 | 0 |
+| v3 (310) | StartBooking | 0 | 0 | 7 | 5 |
+| v3 (360) | MyAppointments | 10 | 0 | 0 | 0 |
+| v3 (360) | MyVisits | 1 | 10 | 1 | 0 |
+| v3 (360) | StartBooking | 0 | 0 | 7 | 5 |
+
+Quy tắc chọn được người dùng chốt trước hidden eval: chọn v3 nếu macro-F1 validation lọc role ≥ v2 và accepted accuracy tại ngưỡng v3 ≥90%; nếu không thì giữ v2. **Chọn v3(360)** vì 79.22% ≥69.55% và 90.61% ≥90%. Quy tắc này so với v2, không chọn lại giữa v3(310) và v3(360). V3(360) giảm chất lượng validation so với v3(310); không che giấu mức giảm này hoặc dùng hidden eval để đổi quyết định.
+
+Runtime mặc định dùng `role-intent-mlnet-v3`, model/metadata v3 và ngưỡng 0.45; copy artifact cùng catalog sang output/publish API bằng cơ chế Content hiện có. Thư mục v2 chỉ được nạp khi caller chỉ định, vẫn kiểm checksum v2 để giữ test và phép so sánh. Không đổi HybridIntentRouter, ngưỡng override 0.8, model/dataset v1/v2 hoặc dependency.
+
+### Router validation trước/sau
+
+Baseline v2 đã đo trước đổi runtime trên main `2bcf3cb8f98d08582507099773123f3f31dbfd6e`. Cùng 283 dòng validation, mở rộng 43 dòng Chung thành sáu role, cho 498 cặp. Dùng HybridIntentRouter.Plan thật, AiConversationPipeline mặc định, resource rỗng và không memory; override bật ở 0.8. Fallback luôn sai; strict loại hỏi lại, lenient chấp nhận hỏi lại khi không fallback.
+
+| Metric | Trước v2 | Sau v3 (360) |
+|---|---:|---:|
+| T1 accuracy | 66.67% (332/498) | 82.93% (413/498) |
+| T2 strict accuracy | 26.71% (133/498) | 54.82% (273/498) |
+| T2 lenient accuracy | 40.16% (200/498) | 69.28% (345/498) |
+| T2 strict macro-F1 | 34.92% | 51.78% |
+| Hỏi lại | 67 | 72 |
+| rule / model / fallback / override | 198 / 56 / 226 / 18 | 193 / 200 / 82 / 23 |
+
+### Provider diagnostic và test canary
+
+Trước sửa fixture: cùng nhóm diagnostic/canary trên main đạt 86/86, branch v3(310) và v3(360) đều có 80 pass, 6 fail, 0 skip. Model tự route làm provider không được gọi, nên các assert HTTP diagnostic không có response provider để kiểm. Với câu test công khai “Các buổi khám tôi đã đặt trong thời gian tới có những gì?”, v3(310) từng route MyVisits sai; v3(360) trả **Source=model, Label=MyAppointments, Tool=patient.get_my_appointments, RequiresProvider=false**. Không thêm câu test này vào train.
+
+SyntheticCanaryFactory được tách nguyên lớp từ file đã quá 1.000 dòng trước khi thêm cờ `roleIntentEnabled=true`. Chỉ khi false mới cấu hình `RoleIntentModel:Enabled=false`; E2E giữ mặc định bật. FullStackHttpCanary nhận cùng cờ. Chín test cũ chỉ sửa mười dòng khởi tạo; giữ nguyên câu input và mọi assert. Sáu test đầu được mở khóa trong yêu cầu v3(360); ba test cuối được người dùng cho phép thêm sau khi full backend phát hiện cùng phụ thuộc provider:
+
+1. `AiProviderHttpDiagnosticTests.Full_stack_http_400_reaches_the_copilot_response_and_canary_report_without_raw_text`
+2. `AiProviderHttpDiagnosticTests.Copilot_api_response_carries_the_sanitized_http_diagnostic_and_no_raw_provider_text`
+3. `AiProviderHttpDiagnosticTests.Full_stack_canary_report_names_the_rejected_field_path_and_rejection_kind`
+4. `AiProviderHttpDiagnosticTests.Rejected_path_kind_and_schema_size_reach_the_api_logs_and_full_stack_canary_report_without_the_marker`
+5. `AiProviderHttpDiagnosticTests.Full_stack_canary_reports_the_http_400_diagnostic_and_stays_fail`
+6. `LiveCanaryAcceptanceTests.Full_stack_fake_provider_accepts_a_read_response_without_navigation`
+7. `AiRolePlannerContractTests.Full_stack_http_valid_role_plans_pass_all_seven_cases_with_no_diagnostic`
+8. `AiRolePlannerContractTests.Full_stack_http_rejected_patient_and_technician_plans_reach_the_report_with_diagnostics`
+9. `AiRolePlannerContractTests.Full_stack_http_truncated_patient_output_and_unknown_technician_intent_are_reported_distinctly`
+
+Diff dòng khởi tạo (tám chỗ canary, hai chỗ factory; test số 4 có cả hai):
+
+```diff
+- new FullStackHttpCanary()
++ new FullStackHttpCanary(roleIntentEnabled: false)
+- new SyntheticCanaryFactory(new CanaryProviderAttemptBudget(12), handler)
++ new SyntheticCanaryFactory(new CanaryProviderAttemptBudget(12), handler, roleIntentEnabled: false)
+```
+
+Test mới kiểm default/cờ tắt và API thật: cùng câu Patient khi v3 bật đi tới tool appointments, provider state NotCalled và ngân sách provider tiêu thụ 0. Self-test tool kiểm Excel shared/inline strings, header, dòng trống/VÍ DỤ, STT/nhãn/vai trò, TSV, checksum/manifest, count 310+50, chống trùng giữa đợt, load/corrupt model, parity runtime/offline, ngưỡng và scanner bằng dữ liệu tổng hợp; vẫn gọi nguyên 18 self-test runner cũ, không đọc đề thật.
+
+### Lỗi đã biết và giới hạn
+
+Validation vẫn có 5/12 StartBooking bị đoán ActionRequest, cả năm vượt ngưỡng 0.45. Nhầm tự tin theo nhãn đúng của v3(360): AiHealth 1, ClinicKnowledge 4, DashboardMetrics 1, MyBills 3, MyVisits 1, OutOfScope 5, PrescriptionQueue 3, StartBooking 5; các nhãn khác 0. Ngưỡng khác nhau nên số lỗi accepted không phải phép so sánh calibration ngang bằng. Không thêm rule hoặc chỉnh ngưỡng override để xử lý các lỗi này.
+
+Đợt 1b được viết sau khi xem lỗi validation; validation do đó đã tham gia phát triển dữ liệu, không phải tập kiểm định độc lập. Eval AI đã được thấy từ các phiên bản trước, chỉ đo sau freeze và không dùng chọn model. Kết quả cao hơn v2 không bảo đảm chất lượng production, an toàn lâm sàng hoặc calibration. Hai câu đợt 1 đã được người nộp rà soát/viết lại trước khi nộp; không khẳng định dữ liệu huấn luyện và hidden là blind hoàn toàn. Lần chấm 3 chỉ đọc workbook ngoài repo ở bước cuối, đo T1 v2/v3 và T2 runtime đã chọn trong cùng một lần; kết quả append vào HIDDEN_EVAL.md, giữ nguyên lần 1–2, không điều chỉnh model/dữ liệu/code sau khi xem kết quả.
+
+### Lệnh v3
+
+```powershell
+dotnet run --project src/tools/ClinicManagement.AI.Training -c Release -- --import-role-intent-human --file C:\Users\LEGION\Documents\cliniccare-train-dot1.xlsx
+dotnet run --project src/tools/ClinicManagement.AI.Training -c Release -- --import-role-intent-human --file C:\Users\LEGION\Documents\cliniccare-train-dot1b.xlsx --supplement
+dotnet run --project src/tools/ClinicManagement.AI.Training -c Release -- --train-role-intent --version v3
+dotnet run --project src/tools/ClinicManagement.AI.Training -c Release -- --eval-role-intent --version v3
+dotnet test src/tools/ClinicManagement.AI.Training/RoleIntentV3Tests.proj -c Release
+dotnet test src/tools/ClinicManagement.AI.Training/RoleIntentV3Tests.proj -c Release -p:ScannerOnly=true
+dotnet run --project src/tools/ClinicManagement.AI.Training -c Release -- --validate-role-intent-router --version v3 --report <report.json>
+dotnet run --project src/tools/ClinicManagement.AI.Training -c Release -- --hidden-eval --version v3 --file <external.xlsx>
+```
+
+Train/eval từ chối khi report eval tương ứng đã có; lệnh hidden từ chối khi có mục lần 3 hoặc receipt ngoài repo. Không xóa guard/receipt để chạy lại thí nghiệm đã khóa. verify-ui không áp dụng vì không sửa frontend.
+
+### Xác minh trước lần chấm 3
+
+Release build đạt, 0 lỗi; các warning nullable/analyzer cũ giữ nguyên. Toàn bộ backend 2.063/2.063 pass, 0 fail, 0 skip, gồm ba ca mới kiểm factory/canary. Tool v3 18/18 nhóm self-test đạt, trong đó gọi nguyên 18 self-test hidden runner cũ bằng workbook tổng hợp; scanner kiểm cả tình huống không trùng và có trùng trên file ẩn tổng hợp. EF không có pending model changes. Phase4 dataset/self-test/development/holdout hợp lệ; Gate B registry hợp lệ, ba candidate hoàn tất và deterministic, quyết định NOT_PROMOTED. E2E local giữ role-intent bật mặc định: 39 pass, 0 fail, 0 not-covered. PR Guard self-test 40/40 pass, diff whitespace sạch. Ba file test cũ đã được so với HEAD sau khi đảo riêng thay đổi constructor: input/assert và mọi dòng còn lại giống nguyên bản. Trước bước chấm, fetch xác nhận origin/main vẫn ở baseline 2bcf3cb8f98d08582507099773123f3f31dbfd6e.
+
+Lượt hidden đầu của lần 3 dừng tại scanner sau inference, trước khi xuất/ghi điểm. Chẩn đoán riêng được người dùng cho phép, không nạp model, không train, không đọc receipt hoặc kết quả inference: stdin mặc định của Process dùng code page Windows 1258, rg yêu cầu UTF-8 nên trả exit code 2; gửi nhiều pattern còn làm pipe đóng và phát sinh IOException. Với UTF-8 tường minh, scan riêng toàn bộ 105 câu đủ điều kiện trả exit code 1, không stderr, không trùng. Đã sửa encoding stdin/stdout/stderr của scanner thành UTF-8 không BOM và thêm test tổng hợp ép Console.InputEncoding=1258: tái hiện rg lỗi UTF-8 trước sửa, xác nhận không trùng và phát hiện trùng đúng sau sửa. Hai test scanner focused đạt 2/2, không nạp model. Model, dữ liệu, ngưỡng và quyết định chọn giữ nguyên. Người dùng cho phép xóa receipt lỗi mà không đọc và chạy lại hidden đúng một lần, vẫn là lần chấm 3 vì chưa ai xem điểm; ghi chú kỹ thuật trong HIDDEN_EVAL.md. Đây là ngoại lệ được cho phép riêng cho lỗi scanner, không phải quyền chạy lại để chọn model hoặc tăng điểm.

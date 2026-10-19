@@ -12,7 +12,36 @@ public class Program
 {
     public static int Main(string[] args)
     {
-        if (args.FirstOrDefault() == "--hidden-eval") return HiddenEvalRunner.Run(args[1..]);
+        if (args.FirstOrDefault() == "--hidden-eval") return args.Contains("v3") ? RoleIntentV3Evaluation.RunHidden(args[1..]) : HiddenEvalRunner.Run(args[1..]);
+        if (args.FirstOrDefault() == "--role-intent-v3-scanner-self-test")
+        {
+            Console.WriteLine($"Role-intent v3 scanner self-tests: {RoleIntentV3Tests.RunScannerTests()} passed (synthetic data only; no models loaded).");
+            return 0;
+        }
+        if (args.FirstOrDefault() == "--role-intent-v3-self-test")
+        {
+            var scalarExit = RoleIntentModelPipeline.RunScalarCommand(args);
+            if (scalarExit.HasValue) return scalarExit.Value;
+            Console.WriteLine($"Role-intent v3 self-tests: {RoleIntentV3Tests.Run()} passed (including 18 unchanged hidden-runner tests on synthetic XLSX only).");
+            return 0;
+        }
+        if (args.FirstOrDefault() == "--validate-role-intent-router")
+        {
+            RoleIntentV3Evaluation.ValidateRouter(OptionOrDefault(args, "--version", "v2"), OptionOrDefault(args, "--report", "router-validation.json"));
+            return 0;
+        }
+        if (args.FirstOrDefault() == "--import-role-intent-human")
+        {
+            try
+            {
+                var manifest = RoleIntentHumanData.Import(OptionOrDefault(args, "--file", ""),
+                    OptionOrDefault(args, "--data-dir", Path.Combine("src", "tools", "ClinicManagement.AI.Training", "data")), args.Contains("--supplement"));
+                Console.WriteLine(JsonSerializer.Serialize(manifest));
+                return 0;
+            }
+            catch (InvalidDataException exception) { Console.Error.WriteLine(exception.Message); return 1; }
+            catch (Exception exception) { Console.Error.WriteLine($"Human import stopped ({exception.GetType().Name})."); return 1; }
+        }
 
         Console.WriteLine("=========================================================");
         Console.WriteLine("ClinicCare AI: Specialty Classification Training Tool");
@@ -125,9 +154,9 @@ public class Program
         else if (command is "--train-role-intent" or "--eval-role-intent")
         {
             var version = OptionOrDefault(args, "--version", "v2");
-            if (version is not ("v1" or "v2"))
+            if (version is not ("v1" or "v2" or "v3"))
             {
-                Console.Error.WriteLine("Role-intent --version must be v1 or v2.");
+                Console.Error.WriteLine("Role-intent --version must be v1, v2 or v3.");
                 return 1;
             }
             var scalarExit = RoleIntentModelPipeline.RunScalarCommand(args);
@@ -139,7 +168,17 @@ public class Program
             var outputDirectory = OptionOrDefault(args, "--out-dir", Path.Combine(projectDirectory, "models", $"role-intent-{version}"));
             try
             {
-                if (version == "v2" && command == "--train-role-intent")
+                if (version == "v3" && command == "--train-role-intent")
+                {
+                    var metadata = RoleIntentModelV3Pipeline.Train(dataDirectory, outputDirectory);
+                    Console.WriteLine(JsonSerializer.Serialize(new { metadata.Configuration, metadata.ThresholdPolicy.Threshold, metadata.ValidationPredictionSha256, metadata.Validation.Filtered.Accuracy, metadata.Validation.Filtered.MacroF1, metadata.Validation.Filtered.AcceptedAccuracy }));
+                }
+                else if (version == "v3")
+                {
+                    var report = RoleIntentModelV3Pipeline.EvaluateOnce(dataDirectory, outputDirectory);
+                    Console.WriteLine(JsonSerializer.Serialize(new { report.Eval.Filtered.Accuracy, report.Eval.Filtered.MacroF1, report.Selection }));
+                }
+                else if (version == "v2" && command == "--train-role-intent")
                 {
                     var metadata = RoleIntentModelV2Pipeline.Train(dataDirectory, outputDirectory);
                     Console.WriteLine(JsonSerializer.Serialize(new { metadata.Configuration, metadata.ThresholdPolicy.Threshold, metadata.ValidationPredictionSha256 }));
@@ -197,6 +236,10 @@ public class Program
         Console.WriteLine("Usage:");
         Console.WriteLine("  ClinicManagement.AI.Training --hidden-eval --file <external.xlsx> [--update-manifest]");
         Console.WriteLine("  ClinicManagement.AI.Training --hidden-eval --self-test");
+        Console.WriteLine("  ClinicManagement.AI.Training --hidden-eval --version v3 --file <external.xlsx>");
+        Console.WriteLine("  ClinicManagement.AI.Training --role-intent-v3-self-test");
+        Console.WriteLine("  ClinicManagement.AI.Training --role-intent-v3-scanner-self-test");
+        Console.WriteLine("  ClinicManagement.AI.Training --validate-role-intent-router --version v2|v3 --report <report.json>");
         Console.WriteLine("  ClinicManagement.AI.Training --validate [datasetPath]");
         Console.WriteLine("  ClinicManagement.AI.Training --train [--data datasetPath] [--out outputDir] [--allow-demo-data] [--manifest manifestPath]");
         Console.WriteLine("  ClinicManagement.AI.Training --train-intent [--data datasetPath] [--out outputDir]");
@@ -207,8 +250,9 @@ public class Program
         Console.WriteLine("  ClinicManagement.AI.Training --phase4-self-test");
         Console.WriteLine("  ClinicManagement.AI.Training --benchmark-phase4 [datasetPath] [--train trainDatasetPath] [--report reportPath]");
         Console.WriteLine("  ClinicManagement.AI.Training --gen-role-intent [--data-dir directory]");
-        Console.WriteLine("  ClinicManagement.AI.Training --train-role-intent [--version v1|v2 (default v2)] [--data-dir directory] [--out-dir directory]");
-        Console.WriteLine("  ClinicManagement.AI.Training --eval-role-intent [--version v1|v2 (default v2)] [--data-dir directory] [--out-dir directory]");
+        Console.WriteLine("  ClinicManagement.AI.Training --import-role-intent-human --file <external.xlsx> [--supplement] [--data-dir directory]");
+        Console.WriteLine("  ClinicManagement.AI.Training --train-role-intent [--version v1|v2|v3 (default v2)] [--data-dir directory] [--out-dir directory]");
+        Console.WriteLine("  ClinicManagement.AI.Training --eval-role-intent [--version v1|v2|v3 (default v2)] [--data-dir directory] [--out-dir directory]");
         Console.WriteLine("  ClinicManagement.AI.Training --gateb [--report reportPath] [--promotion promotionPath]");
     }
 

@@ -1,0 +1,208 @@
+{
+  "validationSha256": "fc130cee8a360eec155f770da53985eb26c7d8a3de318a3664ec6faddcc6cbd5",
+  "roleFiltered": true,
+  "provenance": "Validation only; v3(310) is the prior user-authorized experiment, v3(360) follows supplemental human data targeting validation confusion pairs. No hidden data used.",
+  "models": [
+    {
+      "name": "v2",
+      "ModelSha256": "cb62d5995617065a26c5e8facffb662fbc5ab319b8932582b623981da37074ba",
+      "samples": 283,
+      "accuracy": 0.7314487632508834,
+      "macroF1": 0.6954607873851296,
+      "threshold": 0.75,
+      "accepted": 133,
+      "acceptedAccuracy": 0.9323308270676691,
+      "totalErrors": 76,
+      "confidentErrors": 9,
+      "matrix": [
+        {
+          "gold": "MyAppointments",
+          "predictions": {
+            "MyAppointments": 4,
+            "MyVisits": 1,
+            "StartBooking": 2
+          },
+          "other": 3
+        },
+        {
+          "gold": "MyVisits",
+          "predictions": {
+            "MyAppointments": 2,
+            "MyVisits": 5,
+            "StartBooking": 4
+          },
+          "other": 1
+        },
+        {
+          "gold": "StartBooking",
+          "predictions": {
+            "MyAppointments": 0,
+            "MyVisits": 0,
+            "StartBooking": 7
+          },
+          "other": 5
+        }
+      ],
+      "confidentErrorsByGoldLabel": {
+        "ActionRequest": 0,
+        "AiHealth": 1,
+        "ClinicKnowledge": 2,
+        "DashboardMetrics": 1,
+        "DiagnosticOrders": 0,
+        "DoctorQueue": 0,
+        "Greeting": 0,
+        "Help": 0,
+        "InventoryStatus": 0,
+        "LookupAppointment": 0,
+        "MyAppointments": 0,
+        "MyBills": 0,
+        "MyDiagnosticResults": 0,
+        "MyPrescriptions": 0,
+        "MyVisits": 0,
+        "OutOfScope": 5,
+        "PatientSummary": 0,
+        "PrescriptionPayment": 0,
+        "PrescriptionQueue": 0,
+        "PrescriptionStatus": 0,
+        "ReceptionQueue": 0,
+        "StartBooking": 0,
+        "TechnicianWorklist": 0,
+        "TodayAppointments": 0
+      }
+    },
+    {
+      "name": "v3_310",
+      "ModelSha256": "b3fcdfc7896f4b307702aa8395f35d3639b754815d699967b1bf75c3f6bb65ec",
+      "samples": 283,
+      "accuracy": 0.8551236749116607,
+      "macroF1": 0.834582464842687,
+      "threshold": 0.5,
+      "accepted": 241,
+      "acceptedAccuracy": 0.9087136929460581,
+      "totalErrors": 41,
+      "confidentErrors": 22,
+      "matrix": [
+        {
+          "gold": "MyAppointments",
+          "predictions": {
+            "MyAppointments": 10,
+            "MyVisits": 0,
+            "StartBooking": 0
+          },
+          "other": 0
+        },
+        {
+          "gold": "MyVisits",
+          "predictions": {
+            "MyAppointments": 0,
+            "MyVisits": 11,
+            "StartBooking": 1
+          },
+          "other": 0
+        },
+        {
+          "gold": "StartBooking",
+          "predictions": {
+            "MyAppointments": 0,
+            "MyVisits": 0,
+            "StartBooking": 7
+          },
+          "other": 5
+        }
+      ],
+      "confidentErrorsByGoldLabel": {
+        "ActionRequest": 0,
+        "AiHealth": 1,
+        "ClinicKnowledge": 5,
+        "DashboardMetrics": 1,
+        "DiagnosticOrders": 0,
+        "DoctorQueue": 0,
+        "Greeting": 0,
+        "Help": 0,
+        "InventoryStatus": 0,
+        "LookupAppointment": 0,
+        "MyAppointments": 0,
+        "MyBills": 2,
+        "MyDiagnosticResults": 0,
+        "MyPrescriptions": 0,
+        "MyVisits": 0,
+        "OutOfScope": 5,
+        "PatientSummary": 0,
+        "PrescriptionPayment": 0,
+        "PrescriptionQueue": 3,
+        "PrescriptionStatus": 0,
+        "ReceptionQueue": 0,
+        "StartBooking": 5,
+        "TechnicianWorklist": 0,
+        "TodayAppointments": 0
+      }
+    },
+    {
+      "name": "v3_360",
+      "ModelSha256": "cce44a467de135d3a7de3822a92617d3ea63237c4185a637a30d6a5f9f3f07a6",
+      "samples": 283,
+      "accuracy": 0.823321554770318,
+      "macroF1": 0.7921603064404922,
+      "threshold": 0.45,
+      "accepted": 245,
+      "acceptedAccuracy": 0.9061224489795918,
+      "totalErrors": 50,
+      "confidentErrors": 23,
+      "matrix": [
+        {
+          "gold": "MyAppointments",
+          "predictions": {
+            "MyAppointments": 10,
+            "MyVisits": 0,
+            "StartBooking": 0
+          },
+          "other": 0
+        },
+        {
+          "gold": "MyVisits",
+          "predictions": {
+            "MyAppointments": 1,
+            "MyVisits": 10,
+            "StartBooking": 1
+          },
+          "other": 0
+        },
+        {
+          "gold": "StartBooking",
+          "predictions": {
+            "MyAppointments": 0,
+            "MyVisits": 0,
+            "StartBooking": 7
+          },
+          "other": 5
+        }
+      ],
+      "confidentErrorsByGoldLabel": {
+        "ActionRequest": 0,
+        "AiHealth": 1,
+        "ClinicKnowledge": 4,
+        "DashboardMetrics": 1,
+        "DiagnosticOrders": 0,
+        "DoctorQueue": 0,
+        "Greeting": 0,
+        "Help": 0,
+        "InventoryStatus": 0,
+        "LookupAppointment": 0,
+        "MyAppointments": 0,
+        "MyBills": 3,
+        "MyDiagnosticResults": 0,
+        "MyPrescriptions": 0,
+        "MyVisits": 1,
+        "OutOfScope": 5,
+        "PatientSummary": 0,
+        "PrescriptionPayment": 0,
+        "PrescriptionQueue": 3,
+        "PrescriptionStatus": 0,
+        "ReceptionQueue": 0,
+        "StartBooking": 5,
+        "TechnicianWorklist": 0,
+        "TodayAppointments": 0
+      }
+    }
+  ]
+}

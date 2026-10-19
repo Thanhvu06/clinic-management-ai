@@ -29,5 +29,8 @@
     <Content Include="..\..\tools\ClinicManagement.AI.Training\models\role-intent-v2\role_intent_model_v2.zip" Link="models\role-intent-v2\role_intent_model_v2.zip" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\tools\ClinicManagement.AI.Training\models\role-intent-v2\role_intent_model_meta_v2.json" Link="models\role-intent-v2\role_intent_model_meta_v2.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\tools\ClinicManagement.AI.Training\data\role_intent_labels_v1.json" Link="models\role-intent-v2\role_intent_labels_v1.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\tools\ClinicManagement.AI.Training\models\role-intent-v3\role_intent_model_v3.zip" Link="models\role-intent-v3\role_intent_model_v3.zip" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\tools\ClinicManagement.AI.Training\models\role-intent-v3\role_intent_model_meta_v3.json" Link="models\role-intent-v3\role_intent_model_meta_v3.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\tools\ClinicManagement.AI.Training\data\role_intent_labels_v1.json" Link="models\role-intent-v3\role_intent_labels_v1.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
