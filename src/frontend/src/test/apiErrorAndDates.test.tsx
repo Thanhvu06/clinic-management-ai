@@ -99,22 +99,28 @@ describe('API messages and remaining date displays', () => {
     });
 
     it('shows server leave submission errors and formats schedule and affected-appointment dates', async () => {
-        const message = 'Bác sĩ đã có lịch nghỉ trong khoảng thời gian này.';
-        vi.mocked(doctorApi.createLeaveRequest).mockRejectedValue({ message, status: 400 });
-        mount(<DoctorSchedule />);
-        expect(await screen.findByText('(20/10/2026)')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Đăng ký nghỉ phép' }));
-        for (const [label, date] of [['Từ ngày', '20/10/2026'], ['Đến ngày', '21/10/2026']]) {
-            const input = screen.getByLabelText(label);
-            fireEvent.change(input, { target: { value: date } });
-            fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
-            fireEvent.blur(input);
+        vi.useFakeTimers({ toFake: ['Date'], shouldAdvanceTime: true });
+        vi.setSystemTime(new Date('2026-10-18T03:00:00Z'));
+        try {
+            const message = 'Bác sĩ đã có lịch nghỉ trong khoảng thời gian này.';
+            vi.mocked(doctorApi.createLeaveRequest).mockRejectedValue({ message, status: 400 });
+            mount(<DoctorSchedule />);
+            expect(await screen.findByText('(20/10/2026)')).toBeInTheDocument();
+            fireEvent.click(screen.getByRole('button', { name: 'Đăng ký nghỉ phép' }));
+            for (const [label, date] of [['Từ ngày', '20/10/2026'], ['Đến ngày', '21/10/2026']]) {
+                const input = screen.getByLabelText(label);
+                fireEvent.change(input, { target: { value: date } });
+                fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+                fireEvent.blur(input);
+            }
+            fireEvent.change(screen.getByLabelText('Lý do nghỉ phép'), { target: { value: 'Việc gia đình' } });
+            expect(await screen.findByText(/20\/10\/2026 \(09:00 - 09:30\): Người bệnh API/)).toBeInTheDocument();
+            fireEvent.click(screen.getByRole('button', { name: 'Gửi đơn nghỉ phép' }));
+            expect(await screen.findByText(message)).toBeInTheDocument();
+            expect(doctorApi.createLeaveRequest).toHaveBeenCalledWith({ startDate: '2026-10-20', endDate: '2026-10-21', reason: 'Việc gia đình' });
+        } finally {
+            vi.useRealTimers();
         }
-        fireEvent.change(screen.getByLabelText('Lý do nghỉ phép'), { target: { value: 'Việc gia đình' } });
-        expect(await screen.findByText(/20\/10\/2026 \(09:00 - 09:30\): Người bệnh API/)).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Gửi đơn nghỉ phép' }));
-        expect(await screen.findByText(message)).toBeInTheDocument();
-        expect(doctorApi.createLeaveRequest).toHaveBeenCalledWith({ startDate: '2026-10-20', endDate: '2026-10-21', reason: 'Việc gia đình' });
     });
 
     it('formats the preferred date inside the package confirmation dialog', async () => {

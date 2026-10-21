@@ -143,6 +143,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
                 property.SetValueConverter(utcConverter);
         }
 
+        builder.Entity<AppointmentHistory>().Property(x => x.CreatedAt).HasConversion(utcConverter);
+        builder.Entity<SystemAuditLog>().Property(x => x.CreatedAt).HasConversion(utcConverter);
+        builder.Entity<AppointmentChangeRequest>().Property(x => x.CreatedAt).HasConversion(utcConverter);
+        builder.Entity<AppointmentChangeRequest>().Property(x => x.ProcessedAt).HasConversion(utcConverter);
+        builder.Entity<Prescription>().Property(x => x.DispensedAt).HasConversion(utcConverter);
+
         if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
         {
             foreach (var entityType in builder.Model.GetEntityTypes())

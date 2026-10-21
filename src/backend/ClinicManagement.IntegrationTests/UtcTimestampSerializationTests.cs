@@ -32,8 +32,28 @@ public class UtcTimestampSerializationTests(CustomWebApplicationFactory factory,
             var read = Assert.IsType<DateTime>(converter.ConvertFromProvider(Timestamp));
             Assert.Equal(Timestamp.Ticks, read.Ticks); Assert.Equal(DateTimeKind.Utc, read.Kind);
         }
+        var utcExceptions = new HashSet<(Type EntityType, string PropertyName)>
+        {
+            (typeof(AppointmentHistory), nameof(AppointmentHistory.CreatedAt)),
+            (typeof(SystemAuditLog), nameof(SystemAuditLog.CreatedAt)),
+            (typeof(AppointmentChangeRequest), nameof(AppointmentChangeRequest.CreatedAt)),
+            (typeof(AppointmentChangeRequest), nameof(AppointmentChangeRequest.ProcessedAt)),
+            (typeof(Prescription), nameof(Prescription.DispensedAt))
+        };
+        var explicitUtcTimestamps = properties.Where(property =>
+            utcExceptions.Contains((property.DeclaringType.ClrType, property.Name))).ToList();
+        Assert.Equal(5, explicitUtcTimestamps.Count);
+        foreach (var property in explicitUtcTimestamps)
+        {
+            var converter = property.GetValueConverter(); Assert.NotNull(converter);
+            var written = Assert.IsType<DateTime>(converter.ConvertToProvider(Timestamp));
+            Assert.Equal(Timestamp.Ticks, written.Ticks); Assert.Equal(DateTimeKind.Unspecified, written.Kind);
+            var read = Assert.IsType<DateTime>(converter.ConvertFromProvider(Timestamp));
+            Assert.Equal(Timestamp.Ticks, read.Ticks); Assert.Equal(DateTimeKind.Utc, read.Kind);
+        }
         Assert.All(properties.Where(property => property.ClrType == typeof(DateOnly) || property.ClrType == typeof(TimeOnly) ||
-            ((property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTime?)) && !property.Name.EndsWith("Utc", StringComparison.Ordinal))),
+            ((property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTime?)) && !property.Name.EndsWith("Utc", StringComparison.Ordinal) &&
+                !utcExceptions.Contains((property.DeclaringType.ClrType, property.Name)))),
             property => Assert.Null(property.GetValueConverter()));
         output.WriteLine($"UTC convention: {timestamps.Count} properties ({timestamps.Count(property => property.ClrType == typeof(DateTime))} DateTime, {timestamps.Count(property => property.ClrType == typeof(DateTime?))} nullable DateTime)");
     }
