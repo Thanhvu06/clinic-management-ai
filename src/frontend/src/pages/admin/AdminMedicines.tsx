@@ -190,7 +190,7 @@ export const AdminMedicines: React.FC = () => {
             {loading ? <LoadingState message="Đang tải danh mục thuốc..." /> : loadError ? <InlineError message={loadError} onRetry={fetchMedicines} />
                 : medicines.length === 0 ? <EmptyState title="Không tìm thấy thuốc nào trong danh mục." /> : <>
                     <DataTable ariaLabel="Danh mục thuốc" data={medicines} keyExtractor={medicine => medicine.id} columns={[
-                        { header: 'Mã thuốc', accessor: medicine => <Typography.Text strong>{medicine.code}</Typography.Text> },
+                        { header: 'Mã thuốc', accessor: medicine => <Typography.Text strong className={styles.medicineCode}>{medicine.code}</Typography.Text> },
                         { header: 'Tên thuốc', accessor: medicine => <Typography.Text strong>{medicine.name}</Typography.Text> },
                         { header: 'Nhóm', accessor: medicine => medicine.categoryName || '—' },
                         { header: 'Kê đơn', accessor: medicine => <Tag>{(medicine.isPrescriptionRequired ?? true) ? 'Kê đơn' : 'Không kê đơn'}</Tag> },

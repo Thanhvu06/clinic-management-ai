@@ -1,7 +1,7 @@
 import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Button, Card, Col, Row, Flex, Typography } from 'antd';
+import { Button, Card, Flex, Typography } from 'antd';
 import {
     Clock, Users, Stethoscope, CheckCircle,
     Calendar, ArrowRight, RefreshCw, HeartPulse, UserCheck,
@@ -305,55 +305,45 @@ export const DoctorDashboard: React.FC = () => {
                 </Flex>
             </Card>
 
-            <Row gutter={[16, 16]} className={styles.kpiGrid}>
-                <Col xs={12} sm={12} md={8} lg={4}>
-                    <StatCard
-                        title="Tổng số ca hôm nay"
-                        value={loading ? '...' : (kpis?.totalAppointmentsToday ?? 0)}
-                        subtitle="Tất cả lịch khám"
-                        icon={<CalendarDays size={22} />}
-                        color="primary"
-                        onClick={() => navigate('/doctor/appointments')}
-                    />
-                </Col>
-                <Col xs={12} sm={12} md={8} lg={4}>
-                    <StatCard
-                        title="Đang chờ khám"
-                        value={loading ? '...' : (kpis?.waitingCount ?? 0)}
-                        subtitle="Đã xác nhận & tiếp nhận"
-                        icon={<Users size={22} />}
-                        color="warning"
-                        onClick={() => navigate('/doctor/queue')}
-                    />
-                </Col>
-                <Col xs={12} sm={12} md={8} lg={4}>
-                    <StatCard
-                        title="Đang thăm khám"
-                        value={loading ? '...' : (kpis?.inConsultationCount ?? 0)}
-                        subtitle="Phiên khám đang mở"
-                        icon={<Stethoscope size={22} />}
-                        color="teal"
-                    />
-                </Col>
-                <Col xs={12} sm={12} md={8} lg={4}>
-                    <StatCard
-                        title="Đã hoàn tất"
-                        value={loading ? '...' : (kpis?.completedCount ?? 0)}
-                        subtitle="Đã chốt kết quả & đơn"
-                        icon={<CheckCircle size={22} />}
-                        color="success"
-                    />
-                </Col>
-                <Col xs={12} sm={12} md={8} lg={4}>
-                    <StatCard
-                        title="Vắng mặt (No-Show)"
-                        value={loading ? '...' : (kpis?.noShowCount ?? 0)}
-                        subtitle="Không đến khám"
-                        icon={<AlertOctagon size={22} />}
-                        color="danger"
-                    />
-                </Col>
-            </Row>
+            <div className={styles.kpiGrid}>
+                <StatCard
+                    title="Tổng số ca hôm nay"
+                    value={loading ? '...' : (kpis?.totalAppointmentsToday ?? 0)}
+                    subtitle="Tất cả lịch khám"
+                    icon={<CalendarDays size={22} />}
+                    color="primary"
+                    onClick={() => navigate('/doctor/appointments')}
+                />
+                <StatCard
+                    title="Đang chờ khám"
+                    value={loading ? '...' : (kpis?.waitingCount ?? 0)}
+                    subtitle="Đã xác nhận & tiếp nhận"
+                    icon={<Users size={22} />}
+                    color="warning"
+                    onClick={() => navigate('/doctor/queue')}
+                />
+                <StatCard
+                    title="Đang thăm khám"
+                    value={loading ? '...' : (kpis?.inConsultationCount ?? 0)}
+                    subtitle="Phiên khám đang mở"
+                    icon={<Stethoscope size={22} />}
+                    color="teal"
+                />
+                <StatCard
+                    title="Đã hoàn tất"
+                    value={loading ? '...' : (kpis?.completedCount ?? 0)}
+                    subtitle="Đã chốt kết quả & đơn"
+                    icon={<CheckCircle size={22} />}
+                    color="success"
+                />
+                <StatCard
+                    title="Vắng mặt (No-Show)"
+                    value={loading ? '...' : (kpis?.noShowCount ?? 0)}
+                    subtitle="Không đến khám"
+                    icon={<AlertOctagon size={22} />}
+                    color="danger"
+                />
+            </div>
 
             <Card className={styles.nextPatientBanner}>
                 <Flex justify="space-between" align="center" wrap gap="middle">

@@ -211,14 +211,13 @@ export const DoctorSchedule: React.FC = () => {
                             ) : (
                                 <div>
                                     {day.shifts.map(shift => (
-                                        <div key={shift.workScheduleId} className={styles.shiftBox}>
+                                        <div key={shift.scheduleId} className={styles.shiftBox}>
                                             <Flex justify="space-between" align="center" wrap gap="small" className={styles.shiftTitleRow}>
                                                 <Flex align="center" gap="small">
                                                     <Clock size={16} className={styles.icon1} />
                                                     <span className={styles.shiftName}>
                                                         {shift.shiftName}: {shift.startTime.substring(0, 5)} - {shift.endTime.substring(0, 5)}
                                                     </span>
-                                                    <span className={styles.roomTag}>{shift.room}</span>
                                                 </Flex>
                                                 <span className={styles.slotCount}>
                                                     {shift.slots.filter(s => s.isBooked).length}/{shift.slots.length} khung giờ đã được đặt
@@ -227,7 +226,7 @@ export const DoctorSchedule: React.FC = () => {
 
                                             <div className={styles.slotsGrid}>
                                                 {shift.slots.map(slot => (
-                                                    <div key={slot.id} className={`${styles.slotBox} ${slot.isBooked ? styles.slotBoxBooked : ''}`}>
+                                                    <div key={slot.slotId} className={`${styles.slotBox} ${slot.isBooked ? styles.slotBoxBooked : ''}`}>
                                                         <div className={`${styles.slotTimeRow} ${slot.isBooked ? styles.slotTimeRowBooked : ''}`}>
                                                             <span>{slot.startTime.substring(0, 5)} - {slot.endTime.substring(0, 5)}</span>
                                                             <span className={slot.isBooked ? styles.slotStatusBooked : styles.slotStatusFree}>
@@ -237,7 +236,7 @@ export const DoctorSchedule: React.FC = () => {
                                                         {slot.isBooked && (
                                                             <div className={styles.slotPatient}>
                                                                 <div className={styles.slotPatientName}>{slot.patientName}</div>
-                                                                <div className={styles.slotPatientPhone}>{slot.patientPhone}</div>
+                                                                {slot.appointmentCode && <div>{slot.appointmentCode}</div>}
                                                             </div>
                                                         )}
                                                     </div>

@@ -288,7 +288,7 @@ export const ReceptionWorkspace: React.FC = () => {
     const renderStatusBadge = (status: string) => {
         switch (status) {
             case 'Pending': return <StatusBadge status={status} label="Chờ xác nhận" />;
-            case 'Confirmed': return <StatusBadge status={status} label="Đã xác nhận (Chờ tiếp nhận)" />;
+            case 'Confirmed': return <StatusBadge status={status} label="Chờ tiếp nhận" />;
             case 'CheckedIn':
             case 'InProgress': return <StatusBadge status="inconsultation" label="Đang khám" />;
             case 'Completed': return <StatusBadge status={status} label="Đã hoàn thành" />;
@@ -298,7 +298,7 @@ export const ReceptionWorkspace: React.FC = () => {
     };
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
     const queueColumns: DataTableColumn<AppointmentItem>[] = [
-        { header: 'Mã / Giờ hẹn', accessor: item => <><span className={styles.appointmentCode}>{item.appointmentCode}</span><div className={styles.appointmentTime}>{item.startTime} - {item.endTime}</div></> },
+        { header: 'Mã / Giờ hẹn', accessor: item => <><span className={styles.appointmentCode}>{item.appointmentCode}</span><div className={styles.appointmentTime}>{item.startTime.substring(0, 5)} - {item.endTime.substring(0, 5)}</div></> },
         { header: 'Người bệnh', accessor: item => <><div className={styles.patientName}>{item.patientName}</div><div className={styles.patientIdentifiers}>{item.medicalRecordNumber ? `MRN: ${item.medicalRecordNumber}` : ''}{item.patientPhone ? ` • ${item.patientPhone}` : ''}</div></> },
         { header: 'Chuyên khoa / Bác sĩ', accessor: item => <><div className={styles.specialtyName}>{item.specialtyName}</div><div className={styles.doctorName}>BS: {item.doctorName || 'Chưa phân công'}</div></> },
         { header: 'Lý do khám', accessor: item => item.reason || '-', className: styles.visitReason },
