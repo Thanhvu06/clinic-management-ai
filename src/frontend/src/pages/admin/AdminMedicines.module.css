@@ -2,6 +2,7 @@
 .medicineSearch { flex: 1; min-width: 240px; }
 .medicineStatusFilter { width: 200px; }
 .medicinePrice { color: var(--cc-color-info); }
+.medicineCode { white-space: nowrap; }
 .medicineStock { display: inline-flex; align-items: center; gap: var(--cc-space-xs); }
 .stockWarning { display: inline-flex; }
 .medicineRowActions, .medicineFormActions { display: flex; justify-content: flex-end; gap: var(--cc-space-xs); }

@@ -36,8 +36,8 @@ export const doctorApi = {
 
     getSchedule: async (startDate?: string, endDate?: string): Promise<ApiResponse<DoctorScheduleDayDto[]>> => {
         const params = new URLSearchParams();
-        if (startDate) params.append('startDate', startDate);
-        if (endDate) params.append('endDate', endDate);
+        if (startDate) params.append('fromDate', startDate);
+        if (endDate) params.append('toDate', endDate);
         const query = params.toString() ? `?${params.toString()}` : '';
         return axiosClient.get<any, ApiResponse<DoctorScheduleDayDto[]>>(`/doctor/schedule${query}`);
     },

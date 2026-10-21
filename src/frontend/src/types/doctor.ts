@@ -48,25 +48,26 @@ export interface DoctorDashboardDto {
 }
 
 export interface DoctorScheduleSlotDto {
-    id: number;
+    slotId: number;
+    slotDate: string;
     startTime: string;
     endTime: string;
     isBooked: boolean;
-    isAvailable: boolean;
     appointmentId?: number | null;
+    appointmentCode?: string | null;
     patientName?: string | null;
-    patientPhone?: string | null;
-    appointmentStatus?: string | null;
-    reason?: string | null;
+    status?: string | null;
 }
 
 export interface DoctorScheduleShiftDto {
-    workScheduleId: number;
+    scheduleId: number;
     shiftName: string;
     startTime: string;
     endTime: string;
-    room: string;
     isActive: boolean;
+    totalSlots: number;
+    bookedSlots: number;
+    availableSlots: number;
     slots: DoctorScheduleSlotDto[];
 }
 
