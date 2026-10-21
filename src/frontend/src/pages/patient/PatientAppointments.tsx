@@ -401,7 +401,7 @@ export const PatientAppointments: React.FC = () => {
 
     return (
         <div className={styles.page}>
-            <Breadcrumb items={[{ label: 'Trang chủ', path: '/patient' }, { label: 'Lịch sử khám' }]} />
+            <Breadcrumb items={[{ label: 'Trang chủ', path: '/patient' }, { label: 'Lịch hẹn của tôi' }]} />
             <PageHeader title="Lịch hẹn của tôi" actions={<Button type="primary" onClick={() => navigate('/patient/book')}>+ Đặt lịch mới</Button>} />
             <div className={styles.filters} role="group" aria-label="Lọc lịch hẹn">
                 {[{ key: 'All', label: 'Tất cả' }, { key: 'Upcoming', label: 'Sắp tới' }, { key: 'Past', label: 'Đã qua' }].map(tab => <Button key={tab.key} type={activeTab === tab.key ? 'primary' : 'default'} className={activeTab === tab.key ? 'active' : undefined} aria-pressed={activeTab === tab.key} onClick={() => changeTab(tab.key)}>{tab.label}</Button>)}
