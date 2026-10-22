@@ -6,8 +6,6 @@
 .searchActionIcon { color: var(--cc-color-secondary); flex-shrink: 0; }
 .billingActionIcon { color: var(--cc-color-success); flex-shrink: 0; }
 .packageActionIcon { color: var(--cc-color-teal); flex-shrink: 0; }
-.liveClock { display: flex; align-items: center; gap: var(--cc-space-xs); padding: var(--cc-space-xs) var(--cc-space-sm); background: var(--cc-color-primary-light); border-radius: var(--cc-radius-full); color: var(--cc-color-primary); font-size: 0.85rem; }
-.liveClock svg { flex-shrink: 0; }
 .facilityPicker { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); min-width: 0; }
 .facilityLabel { color: var(--cc-color-text-secondary); font-size: 0.85rem; }
 .facilitySelect { width: 280px; max-width: 100%; }
@@ -63,7 +61,6 @@
     .workspaceHeader > :global(.ant-card-body), .searchCard > :global(.ant-card-body), .actionCard > :global(.ant-card-body), .intakeCard > :global(.ant-card-body) { padding: var(--cc-space-md); }
     .searchInput { flex-basis: 100%; }
     .facilitySelect { width: 100%; }
-    .liveClock { border-radius: var(--cc-radius-md); }
 }
 
 /* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */

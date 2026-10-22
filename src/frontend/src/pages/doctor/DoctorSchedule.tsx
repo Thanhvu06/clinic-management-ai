@@ -153,7 +153,6 @@ export const DoctorSchedule: React.FC = () => {
         <div>
             <PageHeader
                 title="Lịch trực & Ca khám tuần"
-                subtitle="Xem lịch trực được phân bổ, danh sách các khung giờ và thông tin bệnh nhân đã đặt."
                 actions={
                     <Flex gap="small" align="center" wrap>
                         <Button danger type="primary" icon={<CalendarPlus size={15} />} onClick={() => setIsLeaveModalOpen(true)}>

@@ -195,7 +195,7 @@ describe('Diagnostic Workflow Frontend Tests', () => {
             </DialogProvider>
         );
 
-        expect(await screen.findByRole('heading', { name: /Kết Quả Cận Lâm Sàng & Sinh Hiệu/i })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Kết quả cận lâm sàng' })).toBeInTheDocument();
         expect(screen.getByText('DX-20260907-0001')).toBeInTheDocument();
         expect(screen.getByText('Đã có kết luận bác sĩ')).toBeInTheDocument();
 

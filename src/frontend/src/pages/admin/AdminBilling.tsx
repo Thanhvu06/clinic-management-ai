@@ -164,7 +164,7 @@ export const AdminBilling: React.FC = () => {
         ]} />}
     </Card>;
     return <div className={styles.page}>
-        <PageHeader title="Doanh thu & Biểu phí phòng khám" subtitle="Theo dõi thực thu tài chính, cấu hình phí khám chuyên khoa và bảng giá cận lâm sàng" />
+        <PageHeader title="Doanh thu & Biểu phí phòng khám" />
         <Tabs activeKey={activeTab} onChange={setActiveTab} destroyOnHidden items={[
             { key: 'revenue', label: 'Báo cáo doanh thu', children: revenueContent },
             { key: 'fees', label: 'Phí khám chuyên khoa', children: feesContent },

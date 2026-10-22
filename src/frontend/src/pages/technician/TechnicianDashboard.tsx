@@ -111,7 +111,7 @@ export const TechnicianDashboard: React.FC = () => {
 
     return (
         <div className={styles.dashboard}>
-            <PageHeader title="Bàn Làm Việc Cận Lâm Sàng" subtitle="Quản lý tiếp nhận mẫu, thực hiện xét nghiệm & chẩn đoán hình ảnh" actions={<Button disabled={loading} onClick={() => loadData(false)}><RefreshCw size={15} aria-hidden="true" />{loading ? 'Đang tải...' : 'Làm mới'}</Button>} />
+            <PageHeader title="Bàn làm việc cận lâm sàng" actions={<Button disabled={loading} onClick={() => loadData(false)}><RefreshCw size={15} aria-hidden="true" />{loading ? 'Đang tải...' : 'Làm mới'}</Button>} />
             <div className={styles.statGrid}>
                 {statFilters.map(stat => {
                     const Icon = stat.icon;

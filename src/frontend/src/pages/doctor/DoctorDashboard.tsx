@@ -250,7 +250,6 @@ export const DoctorDashboard: React.FC = () => {
         <div>
             <PageHeader
                 title="Bàn làm việc Bác sĩ"
-                subtitle="Hệ thống điều phối khám lâm sàng và quản lý hồ sơ y tế bệnh nhân hôm nay"
                 actions={
                     <Flex gap="small">
                         <Button

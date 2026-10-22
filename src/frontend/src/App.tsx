@@ -37,7 +37,7 @@ import { DoctorQueue } from './pages/doctor/DoctorQueue';
 import { DoctorSchedule } from './pages/doctor/DoctorSchedule';
 import { DoctorAppointments } from './pages/doctor/DoctorAppointments';
 import { DoctorAppointmentDetail } from './pages/doctor/DoctorAppointmentDetail';
-import { DoctorExaminationWorkspace } from './pages/doctor/DoctorExaminationWorkspace';
+import { DoctorExaminationPage } from './pages/doctor/DoctorExaminationPage';
 import { DoctorLeaveRequests } from './pages/doctor/DoctorLeaveRequests';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminSpecialties } from './pages/admin/AdminSpecialties';
@@ -141,8 +141,8 @@ function App() {
                                         <Route path="/doctor/schedule" element={<DoctorSchedule />} />
                                         <Route path="/doctor/appointments" element={<DoctorAppointments />} />
                                         <Route path="/doctor/appointments/:id" element={<DoctorAppointmentDetail />} />
-                                        <Route path="/doctor/appointments/:id/examination" element={<DoctorExaminationWorkspace />} />
-                                        <Route path="/doctor/visits/:visitId/examination" element={<DoctorExaminationWorkspace />} />
+                                        <Route path="/doctor/appointments/:id/examination" element={<DoctorExaminationPage />} />
+                                        <Route path="/doctor/visits/:visitId/examination" element={<DoctorExaminationPage />} />
                                         <Route path="/doctor/diagnostic-orders/:id/print" element={<DiagnosticOrderPrint />} />
                                         <Route path="/doctor/diagnostic-orders/:id/result-print" element={<DiagnosticResultPrint actor="doctor" />} />
                                         <Route path="/doctor/diagnostic-verification" element={<DoctorDiagnosticVerification />} />

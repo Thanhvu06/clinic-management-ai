@@ -570,7 +570,7 @@ export const ReceptionBilling: React.FC = () => {
 
     return (
         <div className={styles.container}>
-            <PageHeader title="Quản lý Hóa đơn & Thu ngân" subtitle="Thu tiền tại quầy và theo dõi hóa đơn của phòng khám" badge={<Receipt size={28} className={styles.primaryIcon} />} actions={<><Button onClick={handleRefresh} title="Làm mới dữ liệu" icon={<RefreshCw size={15} />}>Làm mới</Button><Button type="primary" onClick={handleOpenCreateModal} icon={<Plus size={16} />}>Lập hóa đơn mới</Button></>} />
+            <PageHeader title="Thu ngân & hóa đơn" badge={<Receipt size={28} className={styles.primaryIcon} />} actions={<><Button onClick={handleRefresh} title="Làm mới dữ liệu" icon={<RefreshCw size={15} />}>Làm mới</Button><Button type="primary" onClick={handleOpenCreateModal} icon={<Plus size={16} />}>Lập hóa đơn mới</Button></>} />
             <div className={styles.kpiGrid}>
                 <StatCard title="Chờ thanh toán" value={kpiError ? '—' : kpi ? kpi.todayUnpaidInvoices : 0} icon={<Clock size={24} />} color="warning" />
                 <StatCard title="Đã thu hôm nay" value={kpiError ? '—' : kpi ? kpi.todayPaidInvoices : 0} icon={<CheckCircle size={24} />} color="success" />

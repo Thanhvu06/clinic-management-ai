@@ -32,7 +32,7 @@ export const TechnicianVerificationQueue = () => {
         return () => controller.abort();
     }, [load]);
     return <div className={styles.page}>
-        <PageHeader title="Chờ duyệt kết quả" subtitle="Đối chiếu kết quả do kỹ thuật viên khác nhập" actions={<Button disabled={loading} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{loading ? 'Đang tải...' : 'Làm mới'}</Button>} />
+        <PageHeader title="Chờ duyệt kết quả" actions={<Button disabled={loading} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{loading ? 'Đang tải...' : 'Làm mới'}</Button>} />
         {loading ? <LoadingState message="Đang tải phiếu chờ duyệt..." /> : error ? <InlineError message={error} onRetry={() => void load()} /> : items.length === 0 ? <EmptyState title="Không có phiếu chờ duyệt" /> : <div className={styles.table}>
             <DataTable ariaLabel="Phiếu chờ duyệt" data={items} keyExtractor={order => order.id} columns={[
                 { header: 'Mã phiếu', accessor: 'orderCode' },

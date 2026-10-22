@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../auth/AuthContext';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { Pill, CalendarCheck, History, AlertTriangle, CheckCircle2, Clock, RefreshCw } from 'lucide-react';
@@ -16,7 +15,6 @@ interface PharmacyStats {
 }
 
 export const PharmacyDashboard: React.FC = () => {
-    const { user } = useAuth();
     const [stats, setStats] = useState<PharmacyStats | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -40,7 +38,7 @@ export const PharmacyDashboard: React.FC = () => {
 
     return (
         <div className={styles.dashboard}>
-            <PageHeader title="Bàn làm việc Dược sĩ" subtitle={`Xin chào, ${user?.fullName || 'Dược sĩ'}! Quản lý cấp phát đơn thuốc và kiểm soát xuất - nhập kho dược.`} actions={<Button onClick={fetchStats}><RefreshCw size={16} aria-hidden="true" /> Cập nhật số liệu</Button>} />
+            <PageHeader title="Bàn làm việc Dược sĩ" actions={<Button onClick={fetchStats}><RefreshCw size={16} aria-hidden="true" /> Cập nhật số liệu</Button>} />
             <h2 className={styles.sectionTitle}>Tình hình kho & Đơn thuốc</h2>
             <div className={styles.statGrid}>
                 <StatCard title="ĐƠN THUỐC CHỜ CẤP" value={loading ? '...' : (stats?.pendingPrescriptionsCount ?? 0)} subtitle="Cần chuẩn bị & cấp phát" icon={<Clock size={20} />} color="warning" />

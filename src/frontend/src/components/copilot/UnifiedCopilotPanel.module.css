@@ -1,6 +1,6 @@
 @import './chatTokens.css';
 .shell { position: fixed; right: 24px; bottom: 24px; z-index: 80; font-size: 14px; }
-.launcher { display: inline-flex; align-items: center; gap: 8px; min-height: var(--chat-target); border: 0; border-radius: 999px; padding: 8px 16px; background: var(--chat-accent); color: white; box-shadow: 0 8px 24px #134e4a30; cursor: pointer; font-weight: 600; }
+.launcher { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border: 0; border-radius: 999px; padding: 0; background: var(--chat-accent); color: white; box-shadow: 0 8px 24px #134e4a30; cursor: pointer; }
 .panel { display: flex; flex-direction: column; width: min(460px, calc(100vw - 48px)); height: min(640px, 80dvh); overflow: hidden; border: 1px solid var(--chat-border); border-radius: var(--chat-radius); background: #f8fbfb; box-shadow: 0 12px 36px #134e4a30; color: var(--chat-ink); }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 64px; padding: 8px 16px; background: var(--chat-ink); color: white; flex-shrink: 0; }
 .title { display: flex; align-items: center; gap: 8px; min-width: 0; }

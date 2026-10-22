@@ -202,7 +202,7 @@ describe('Connected Outpatient Care Journey - Frontend Tests', () => {
             );
 
             await waitFor(() => {
-                expect(screen.getByText('Quản lý Hóa đơn & Thu ngân')).toBeInTheDocument();
+                expect(screen.getByText('Thu ngân & hóa đơn')).toBeInTheDocument();
             });
 
             // Click "Lập hóa đơn mới"

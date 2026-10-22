@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Alert, Button, Card, Input, Modal, Select, Tag, Upload } from 'antd';
 import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
-import { DataTable, EmptyState, LoadingState, StatusBadge, InlineError } from '../../components/common';
+import { DataTable, EmptyState, LoadingState, PageHeader, StatusBadge, InlineError } from '../../components/common';
 import { diagnosticCategoryLabels, diagnosticStatusLabels, diagnosticStatusTone, diagnosticResultFlagLabels, diagnosticFlagTone, previewDiagnosticFlag, isCriticalDiagnosticFlag, diagnosticNotificationTime, formatDelta } from '../../utils/diagnosticLabels';
 import styles from './TechnicianOrderDetail.module.css';
 import { specimenStatusLabels, specimenRejectionLabels, specimenRejectionValues } from '../../utils/diagnosticLabels';
@@ -366,6 +366,7 @@ export const TechnicianOrderDetail: React.FC = () => {
                     <Input.TextArea id="specimen-rejection-note" aria-label="Ghi chú từ chối" rows={3} maxLength={500} disabled={specimenBusy !== null || verificationPending} value={rejectionNote} onChange={event => { setRejectionNote(event.target.value); setRejectionError(''); }} />
                 </div>
             </Modal>
+            <PageHeader title="Thực hiện phiếu chỉ định CLS" />
             <div className={styles.navigation}>
                 <Button onClick={() => navigate('/diagnostics')}><ArrowLeft size={16} aria-hidden="true" /> Quay lại danh sách</Button>
                 <div className={styles.orderStatus}><span>Trạng thái phiếu:</span><StatusBadge status={diagnosticStatusTone[order.status]} label={diagnosticStatusLabels[order.status]} /></div>
