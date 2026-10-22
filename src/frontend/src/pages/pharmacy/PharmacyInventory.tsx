@@ -169,7 +169,7 @@ export const PharmacyInventory: React.FC = () => {
                         <input className={styles.validationInput} aria-hidden="true" tabIndex={-1} value={selectedMedId || ''} required onChange={e => setSelectedMedId(Number(e.target.value))} />
                     </div>
                     <div className={styles.formPair}>
-                        <div><label className={styles.fieldLabel}>Loại tác vụ (*)</label><Select className={styles.fullWidth} value={transType} onChange={value => setTransType(Number(value))} options={[{value:2,label:'Nhập hàng thêm (Stock In)'},{value:4,label:'Kiểm kê điều chỉnh (Adjustment)'}]} /></div>
+                        <div><label className={styles.fieldLabel}>Loại tác vụ (*)</label><Select className={styles.fullWidth} value={transType} onChange={value => setTransType(Number(value))} options={[{value:2,label:'Nhập thêm hàng'},{value:4,label:'Điều chỉnh sau kiểm kê'}]} /></div>
                         <div><label className={styles.fieldLabel}>Số lượng nhập (*)</label><InputNumber type="number" min={1} className={styles.fullWidth} required value={qty} onChange={value => setQty(Number(value))} /></div>
                     </div>
                     <div><label className={styles.fieldLabel}>Lý do / nhà cung cấp / mã phiếu nhập</label><Input.TextArea rows={3} value={reason} onChange={e => setReason(e.target.value)} placeholder="VD: Nhập 50 hộp từ Dược Hậu Giang theo hóa đơn HD-9821..." /></div>

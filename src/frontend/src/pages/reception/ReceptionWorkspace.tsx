@@ -283,7 +283,7 @@ export const ReceptionWorkspace: React.FC = () => {
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
     const queueColumns: DataTableColumn<AppointmentItem>[] = [
         { header: 'Mã / giờ hẹn', accessor: item => <><span className={styles.appointmentCode}>{item.appointmentCode}</span><div className={styles.appointmentTime}>{item.startTime.substring(0, 5)} - {item.endTime.substring(0, 5)}</div></> },
-        { header: 'Người bệnh', accessor: item => <><div className={styles.patientName}>{item.patientName}</div><div className={styles.patientIdentifiers}>{item.medicalRecordNumber ? `MRN: ${item.medicalRecordNumber}` : ''}{item.patientPhone ? ` • ${item.patientPhone}` : ''}</div></> },
+        { header: 'Người bệnh', accessor: item => <><div className={styles.patientName}>{item.patientName}</div><div className={styles.patientIdentifiers}>{item.medicalRecordNumber ? `Mã bệnh án: ${item.medicalRecordNumber}` : ''}{item.patientPhone ? ` • ${item.patientPhone}` : ''}</div></> },
         { header: 'Chuyên khoa / bác sĩ', accessor: item => <><div className={styles.specialtyName}>{item.specialtyName}</div><div className={styles.doctorName}>BS: {item.doctorName || 'Chưa phân công'}</div></> },
         { header: 'Lý do khám', accessor: item => item.reason || '-', className: styles.visitReason },
         { header: 'Trạng thái', accessor: item => renderStatusBadge(item.status) },
@@ -342,7 +342,7 @@ export const ReceptionWorkspace: React.FC = () => {
             {statsError && <div className={styles.statsError}><span>Không tải được số liệu</span><Button size="small" disabled={statsLoading} onClick={() => fetchStats(selectedFacilityId)}>{statsLoading ? 'Đang tải...' : 'Thử lại'}</Button></div>}
             <Card className={styles.searchCard}>
                 <form onSubmit={handleSearchSubmit} className={styles.searchForm}>
-                    <Input className={styles.searchInput} prefix={<Search size={18} />} placeholder="Tìm nhanh theo mã bệnh nhân (MRN), số CCCD, mã lịch hẹn, tên người bệnh, số điện thoại..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <Input className={styles.searchInput} prefix={<Search size={18} />} placeholder="Tìm nhanh theo mã bệnh án, số CCCD, mã lịch hẹn, tên người bệnh, số điện thoại..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                     <Button type="primary" htmlType="submit"><Search size={16} /> Tra cứu</Button>
                     {searchTerm && <Button htmlType="button" onClick={() => { setSearchTerm(''); setPage(1); fetchWorklist(); }}>Xóa tìm kiếm</Button>}
                 </form>

@@ -1,3 +1,4 @@
+import { getPrescriptionStatusLabel } from '../../utils/prescriptionStatusLabels';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { formatDateOnly } from '../../utils/formatters';
 import type { BatchAllocation } from '../../types/pharmacyBatch';
@@ -5,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { Search, Eye, AlertCircle, Printer } from 'lucide-react';
-import { Button, Input, Modal, Select } from 'antd';
+import { Alert, Button, Input, Modal, Select, Typography } from 'antd';
 import { PageHeader, DataTable, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
 import { usePrescriptionPayment } from './usePrescriptionPayment';
 import { useOpenPrescriptionFromQuery } from './useOpenPrescriptionFromQuery';
@@ -242,7 +243,7 @@ export const PharmacyPrescriptions: React.FC = () => {
                 {header:'Bác sĩ chỉ định',accessor:'doctorName'},
                 {header:'Thời gian kê đơn',accessor:p => formatDateTime(p.createdAt)},
                 {header:'Số lượng thuốc',accessor:p => <span className={styles.itemCount}>{p.itemCount} loại thuốc</span>},
-                {header:'Trạng thái',accessor:p => <StatusBadge status={p.status === 'Dispensed' ? 'completed' : 'pending'} label={p.status === 'Dispensed' ? 'Đã cấp thuốc' : 'Chờ cấp thuốc'} />},
+                {header:'Trạng thái',accessor:p => <StatusBadge status={p.status === 'Dispensed' ? 'completed' : 'pending'} label={getPrescriptionStatusLabel(p.status)} />},
                 {header:'Thao tác',align:'right',accessor:p => <Button type="primary" onClick={() => handleOpenDetail(p.id)}><Eye size={14} aria-hidden="true" /> Xem & cấp phát</Button>}
             ]} /></div>}
             {!loading && prescriptions.length > 0 && totalItems > 10 && <div className={styles.pagination}><span className={styles.secondary}>Tổng số: {totalItems} đơn thuốc</span><div className={styles.pageControls}><Button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Trang trước</Button><span>Trang {page}</span><Button disabled={page * 10 >= totalItems} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
@@ -254,14 +255,11 @@ export const PharmacyPrescriptions: React.FC = () => {
                     <div className={styles.patientBanner}>
                         <div><span className={styles.secondary}>Bệnh nhân:</span><div className={styles.patientName}>{selectedPrescription.patientName}</div><div className={styles.secondary}>SĐT: {selectedPrescription.patientPhone}</div></div>
                         <div><span className={styles.secondary}>Bác sĩ chỉ định:</span><div className={styles.patientName}>{selectedPrescription.doctorName}</div><div className={styles.secondary}>Thời gian kê: {formatDateTime(selectedPrescription.createdAt)}</div></div>
-                        <div><span className={styles.secondary}>Trạng thái cấp phát:</span><div><StatusBadge status={selectedPrescription.status === 'Dispensed' ? 'completed' : 'pending'} label={selectedPrescription.status === 'Dispensed' ? `Đã cấp lúc ${formatDateTime(selectedPrescription.dispensedAt)}` : 'Chờ kiểm tra & cấp phát'} /></div></div>
+                        <div><span className={styles.secondary}>Trạng thái cấp phát:</span><div><StatusBadge status={selectedPrescription.status === 'Dispensed' ? 'completed' : 'pending'} label={getPrescriptionStatusLabel(selectedPrescription.status)} /></div></div>
                     </div>
                     {selectedPrescription.status === 'Issued' && <div>
                         {payment.error ? <InlineError message={payment.error} onRetry={payment.retry} />
-                                : payment.status && <>
-                                    <p>Thanh toán: {payment.isFullyPaid ? 'Đã thanh toán' : 'Chưa thanh toán tại quầy thu ngân'}</p>
-                                    {!payment.isFullyPaid && <p>Chưa thanh toán đủ tiền thuốc. Vui lòng thanh toán tại quầy thu ngân trước khi cấp thuốc.</p>}
-                                </>}
+                                : payment.status && (payment.isFullyPaid ? <Typography.Text>Thanh toán: Đã thanh toán</Typography.Text> : <Alert type="warning" showIcon title="Đơn chưa thanh toán. Người bệnh cần thanh toán tại quầy thu ngân trước khi cấp thuốc." />)}
                     </div>}
                     {selectedPrescription.notes && <div className={styles.doctorNotes}><strong>Ghi chú từ bác sĩ:</strong> {selectedPrescription.notes}</div>}
                     {!!selectedPrescription.safetyWarnings?.length && <PrescriptionSafetyPanel result={{ allergies: [], warnings: selectedPrescription.safetyWarnings }} overrideReason={selectedPrescription.safetyOverrideReason} />}

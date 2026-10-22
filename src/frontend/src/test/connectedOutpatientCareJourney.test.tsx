@@ -116,7 +116,7 @@ describe('Connected Outpatient Care Journey - Frontend Tests', () => {
             );
 
             expect(screen.getByText('PHIẾU KHÁM BỆNH & SỐ THỨ TỰ')).toBeInTheDocument();
-            expect(screen.getByText('STT 15')).toBeInTheDocument();
+            expect(screen.getByText('015')).toBeInTheDocument();
             expect(screen.getByText(/BN-2026-000042/)).toBeInTheDocument();
             expect(screen.getByText('NGUYỄN VĂN THỬ NGHIỆM')).toBeInTheDocument();
             expect(screen.getByText('Khoa Nội Tổng Quát')).toBeInTheDocument();
@@ -209,10 +209,10 @@ describe('Connected Outpatient Care Journey - Frontend Tests', () => {
             const openModalBtn = screen.getByRole('button', { name: /Lập hóa đơn mới/i });
             fireEvent.click(openModalBtn);
 
-            expect(screen.getByText('Lượt khám ngoại trú (Visit)')).toBeInTheDocument();
+            expect(screen.getByText('Lượt khám ngoại trú')).toBeInTheDocument();
 
             // Select Visit radio option
-            const visitRadio = screen.getByLabelText(/Lượt khám ngoại trú \(Visit\)/i);
+            const visitRadio = screen.getByLabelText(/Lượt khám ngoại trú/i);
             fireEvent.click(visitRadio);
 
             // Select the readable visit label instead of entering an internal ID.

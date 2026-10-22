@@ -230,7 +230,6 @@ export const DiagnosticOrderPrint: React.FC = () => {
 
                 {/* Footer Note */}
                 <div className={styles.text14}>
-                    Phiếu chỉ định được khởi tạo từ Hệ thống Quản trị Phòng khám Thông minh ClinicCare AI.
                 </div>
             </div>
         </div>

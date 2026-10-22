@@ -107,7 +107,7 @@ describe('canonical Copilot card contract', () => {
         notFoundView.unmount();
 
         render(<>{renderCopilotCardData({ type: 'unsupported_card', title: 'Không rõ', data: { patientName: 'Không được hiển thị' } })}</>);
-        expect(screen.getByText(/chưa hỗ trợ trình bày đầy đủ cấu trúc dữ liệu này/i)).toBeInTheDocument();
+        expect(screen.getByText(/Trợ lý chưa hiển thị được loại dữ liệu này/i)).toBeInTheDocument();
         expect(screen.queryByText('Không được hiển thị')).not.toBeInTheDocument();
     });
 });

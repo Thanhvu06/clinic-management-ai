@@ -121,7 +121,7 @@ export const Register: React.FC = () => {
                     />
                 </FormField>
 
-                <FormField id="email" label="Địa chỉ Email" required error={fieldErrors.email}>
+                <FormField id="email" label="Địa chỉ email" required error={fieldErrors.email}>
                     <TextInput
                         id="email"
                         name="email"

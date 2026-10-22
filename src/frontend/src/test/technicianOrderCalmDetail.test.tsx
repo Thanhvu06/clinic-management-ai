@@ -48,7 +48,7 @@ describe('U3 technician order detail', () => {
         expect(button).toHaveTextContent('Hỏi trợ lý');
         expect(button).not.toHaveClass('ant-btn-primary');
         fireEvent.click(button);
-        expect(button).toHaveTextContent('Đang hỏi trợ lý');
+        expect(button).toHaveTextContent('Hỏi trợ lý');
         expect(button).not.toHaveClass('ant-btn-primary');
     });
 

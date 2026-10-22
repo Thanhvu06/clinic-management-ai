@@ -164,7 +164,7 @@ export const AdminUsers: React.FC = () => {
                             { header: 'Trạng thái', accessor: user => <Tag color={user.isActive ? 'success' : 'error'}>{user.isActive ? 'Đang hoạt động' : 'Đã khóa'}</Tag> },
                             { header: 'Thao tác', align: 'right', accessor: user => <Button size="small" type="text"
                                 onClick={() => toggleStatus(user.id, user.isActive)} disabled={user.roles.includes('Admin')}
-                                title={user.roles.includes('Admin') ? 'Không thể đổi trạng thái Admin' : ''}>{user.isActive ? 'Khóa' : 'Mở khóa'}</Button> }
+                                title={user.roles.includes('Admin') ? 'Không thể khóa tài khoản quản trị viên' : ''}>{user.isActive ? 'Khóa' : 'Mở khóa'}</Button> }
                         ]} />
                     </div>
                     <Pagination page={page} totalPages={Math.ceil(totalItems / pageSize)} totalRecords={totalItems} onPageChange={setPage} />

@@ -63,7 +63,7 @@ describe('U4 reception check-in modal', () => {
         fireEvent.click(within(dialog).getByRole('button', { name: 'Tiếp nhận & cấp STT' }));
         await waitFor(() => expect(patientVisitApi.receptionCheckInAppointment).toHaveBeenCalledWith(77));
         expect(await screen.findByText('Phiếu tiếp nhận khám')).toBeInTheDocument();
-        expect(screen.getByText('A012')).toBeInTheDocument();
+        expect(screen.getByText('012')).toBeInTheDocument();
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
         expect(screen.queryByText('#AP-77')).not.toBeInTheDocument();
     });
@@ -85,7 +85,7 @@ describe('U6 reception billing copy', () => {
     it('explains the visit source in plain Vietnamese', async () => {
         render(<ConfigProvider theme={{ token: { motion: false } }}><MemoryRouter><ReceptionBilling /></MemoryRouter></ConfigProvider>);
         fireEvent.click(screen.getByRole('button', { name: 'Lập hóa đơn mới' }));
-        fireEvent.click(screen.getByRole('radio', { name: 'Lượt khám ngoại trú (Visit)' }));
+        fireEvent.click(screen.getByRole('radio', { name: 'Lượt khám ngoại trú' }));
         expect(screen.getByText('Chỉ hiện lượt khám đã xong và còn khoản chưa thu.')).toBeInTheDocument();
         expect(screen.queryByText(/In-Billing/)).not.toBeInTheDocument();
     });

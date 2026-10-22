@@ -2,6 +2,13 @@
 
 Bàn làm việc theo phong cách dashboard của Stripe, Linear, GitHub: chữ và số là chính, ít trang trí, viền mảnh thay bóng, một màu nhấn. Quy tắc kỹ thuật chung (antd, token `--cc-*`, trạng thái tải/lỗi/rỗng) xem [AGENTS.md](../../AGENTS.md) và [UI_GUIDELINES.md](../UI_GUIDELINES.md).
 
+## Ngôn ngữ và số liệu
+
+- Số thập phân dùng dấu phẩy, ví dụ 37,2 và 22,5.
+- Dùng “Sinh hiệu” và “trợ lý”; không dùng “Copilot” ở chữ hiển thị mới.
+- Không chèn từ tiếng Anh trong ngoặc sau nhãn tiếng Việt.
+- Không dùng tagline hoặc câu quảng cáo trong giao diện nội bộ và bản in.
+
 ## Chữ
 
 - Viết hoa chữ đầu câu cho mọi tiêu đề, nhãn, nút. Danh từ chung (bác sĩ, dược sĩ, khung giờ) viết thường.

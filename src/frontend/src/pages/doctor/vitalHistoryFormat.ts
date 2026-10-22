@@ -1,8 +1,8 @@
 import type { PatientVitalHistoryItemDto } from '../../types';
 
-const decimal = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
+import { formatDecimalVi } from '../../utils/formatDecimalVi';
 
-const measure = (value: number | null | undefined, unit: string) => value ? `${decimal.format(value)} ${unit}` : '--';
+const measure = (value: number | null | undefined, unit: string) => value ? `${formatDecimalVi(value)} ${unit}` : '--';
 
 export const formatVitalBodyMeasures = (item: Pick<PatientVitalHistoryItemDto, 'bmi' | 'weight' | 'height'>) =>
-    `${item.bmi ? decimal.format(item.bmi) : '--'} · ${measure(item.weight, 'kg')} / ${measure(item.height, 'cm')}`;
+    `${item.bmi ? formatDecimalVi(item.bmi) : '--'} · ${measure(item.weight, 'kg')} / ${measure(item.height, 'cm')}`;

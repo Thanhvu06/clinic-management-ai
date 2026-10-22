@@ -29,9 +29,10 @@ import type {
 import { useDialog } from '../../contexts/DialogContext';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 import { LoadingState, InlineError, DataTable, EmptyState, StatusBadge } from '../../components/common';
+import { DoctorExaminationSyncAction } from './DoctorExaminationHeader';
 import tabStyles from './DoctorExaminationWorkspace.module.css';
 import { formatVitalBodyMeasures } from './vitalHistoryFormat';
-
+import { formatDecimalVi } from '../../utils/formatDecimalVi';
 interface ActiveMedicine {
     id: number;
     code: string;
@@ -851,11 +852,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
     return (
         <div className={tabStyles.workspace}>
-            <div className={tabStyles.workspaceToolbar}>
-                <Button size="small" icon={<RefreshCw size={14} />} onClick={loadContext}>
-                    Đồng bộ dữ liệu
-                </Button>
-            </div>
+            <DoctorExaminationSyncAction onSync={loadContext} />
 
             {/* Read-only Banner if Completed */}
             {isCompleted && (
@@ -901,9 +898,6 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </h2>
                             <span className={tabStyles.appointmentCode}>
                                 #{apt.appointmentCode}
-                            </span>
-                            <span className={[tabStyles.encounterStatusPill, (isCompleted ? tabStyles.successSurface : tabStyles.selectedSurface), (isCompleted ? tabStyles.successText : tabStyles.activeEncounterText)].join(' ')}>
-                                {isCompleted ? 'Hồ sơ đã hoàn tất' : 'Phiên khám lâm sàng'}
                             </span>
                         </div>
 
@@ -1118,7 +1112,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             {/* Region 2: Previous Measurement */}
                             <Col xs={24} md={12} className={tabStyles.responsiveColumn}><Card className={[tabStyles.workspaceCard, tabStyles.previousMeasurementCard].join(' ')} >
                                 <div className={tabStyles.previousMeasurementTitle}>
-                                    VÙNG 2: SỐ LIỆU ĐO LẦN TRƯỚC
+                                    Vùng 2: Số liệu đo lần trước
                                 </div>
                                 <div className={tabStyles.previousMeasurementDate}>
                                     Ngày đo: {new Date(prevMeasurement.recordedAtUtc).toLocaleDateString('vi-VN')} ({new Date(prevMeasurement.recordedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })})
@@ -1127,19 +1121,19 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                     <Col xs={24} md={8} className={tabStyles.responsiveColumn}><div className={tabStyles.previousMeasurementTile}>
                                         <div className={tabStyles.secondaryCaption}>Cân nặng</div>
                                         <div className={tabStyles.previousMeasurementValue}>
-                                            {prevMeasurement.weight ? `${prevMeasurement.weight} kg` : '--'}
+                                            {prevMeasurement.weight ? `${formatDecimalVi(prevMeasurement.weight)} kg` : '--'}
                                         </div>
                                     </div></Col>
                                     <Col xs={24} md={8} className={tabStyles.responsiveColumn}><div className={tabStyles.previousMeasurementTile}>
                                         <div className={tabStyles.secondaryCaption}>Chiều cao</div>
                                         <div className={tabStyles.previousMeasurementValue}>
-                                            {prevMeasurement.height ? `${prevMeasurement.height} cm` : '--'}
+                                            {prevMeasurement.height ? `${formatDecimalVi(prevMeasurement.height)} cm` : '--'}
                                         </div>
                                     </div></Col>
                                     <Col xs={24} md={8} className={tabStyles.responsiveColumn}><div className={tabStyles.previousMeasurementTile}>
                                         <div className={tabStyles.secondaryCaption}>BMI cũ</div>
                                         <div className={tabStyles.previousMeasurementValue}>
-                                            {prevMeasurement.bmi ? prevMeasurement.bmi : '--'}
+                                            {formatDecimalVi(prevMeasurement.bmi)}
                                         </div>
                                     </div></Col>
                                 </Row>
@@ -1148,7 +1142,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             {/* Region 3: Anthropometric Deltas (Color & Badge) */}
                             <Col xs={24} md={12} className={tabStyles.responsiveColumn}><Card className={[tabStyles.workspaceCard, tabStyles.measurementComparisonCard].join(' ')} >
                                 <div className={tabStyles.measurementComparisonTitle}>
-                                    VÙNG 3: BIẾN ĐỘNG THỂ TRẠNG (DELTAS)
+                                    Vùng 3: Biến động thể trạng
                                 </div>
                                 <div className={tabStyles.measurementComparisonSubtitle}>
                                     Chênh lệch so với lần khám trước
@@ -1158,7 +1152,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                         <div className={tabStyles.secondaryCaption}>Δ Cân nặng</div>
                                         <div className={[tabStyles.measurementDeltaValue, ((comparison?.weightDeltaKg || 0) > 0 ? tabStyles.deltaPositive : ((comparison?.weightDeltaKg || 0) < 0 ? tabStyles.infoText : tabStyles.successText))].join(' ')}>
                                             {comparison?.weightDeltaKg !== undefined && comparison?.weightDeltaKg !== null
-                                                ? (comparison.weightDeltaKg > 0 ? `+${comparison.weightDeltaKg} kg` : `${comparison.weightDeltaKg} kg`)
+                                                ? (comparison.weightDeltaKg > 0 ? `+${formatDecimalVi(comparison.weightDeltaKg)} kg` : `${formatDecimalVi(comparison.weightDeltaKg)} kg`)
                                                 : '--'}
                                         </div>
                                     </div></Col>
@@ -1166,7 +1160,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                         <div className={tabStyles.secondaryCaption}>Δ Chiều cao</div>
                                         <div className={tabStyles.heightDeltaValue}>
                                             {comparison?.heightDeltaCm !== undefined && comparison?.heightDeltaCm !== null
-                                                ? (comparison.heightDeltaCm > 0 ? `+${comparison.heightDeltaCm} cm` : `${comparison.heightDeltaCm} cm`)
+                                                ? (comparison.heightDeltaCm > 0 ? `+${formatDecimalVi(comparison.heightDeltaCm)} cm` : `${formatDecimalVi(comparison.heightDeltaCm)} cm`)
                                                 : '--'}
                                         </div>
                                     </div></Col>
@@ -1174,7 +1168,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                         <div className={tabStyles.secondaryCaption}>Δ BMI</div>
                                         <div className={[tabStyles.measurementDeltaValue, ((comparison?.bmiDelta || 0) > 0 ? tabStyles.deltaPositive : ((comparison?.bmiDelta || 0) < 0 ? tabStyles.infoText : tabStyles.successText))].join(' ')}>
                                             {comparison?.bmiDelta !== undefined && comparison?.bmiDelta !== null
-                                                ? (comparison.bmiDelta > 0 ? `+${comparison.bmiDelta}` : `${comparison.bmiDelta}`)
+                                                ? (comparison.bmiDelta > 0 ? `+${formatDecimalVi(comparison.bmiDelta)}` : `${formatDecimalVi(comparison.bmiDelta)}`)
                                                 : '--'}
                                         </div>
                                     </div></Col>
@@ -1201,7 +1195,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                 disabled={savingVitals}
                             >
                                 <Save size={16} />
-                                <span>{savingVitals ? 'Đang lưu...' : 'Lưu dấu hiệu sinh tồn'}</span>
+                                <span>{savingVitals ? 'Đang lưu...' : 'Lưu sinh hiệu'}</span>
                             </Button>
                         </div>
 
@@ -1355,10 +1349,10 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         {/* Calculated BMI Badge Card */}
                         <div className={tabStyles.bmiSummary}>
                             <div>
-                                <div className={tabStyles.bmiHeading}>CHỈ SỐ KHỐI CƠ THỂ (BMI) TỰ ĐỘNG</div>
+                                <div className={tabStyles.bmiHeading}>Chỉ số BMI</div>
                                 <div className={tabStyles.bmiValueRow}>
                                     <span className={tabStyles.bmiValue}>
-                                        {computedBmi !== null ? computedBmi : '--'}
+                                        {formatDecimalVi(computedBmi)}
                                     </span>
                                     {bmiClassification && (
                                         <span className={[tabStyles.bmiBadge, {
@@ -1371,10 +1365,6 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                         </span>
                                     )}
                                 </div>
-                            </div>
-
-                            <div className={tabStyles.bmiExplanation}>
-                                Phân loại BMI theo ngưỡng cấu hình của hệ thống
                             </div>
                         </div>
                     </Card>
@@ -1407,8 +1397,8 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                         }
                                     },
                                     { header: "Mạch (nhịp/phút)", accessor: (item) => { return <>{item.heartRate || '--'}</>; } },
-                                    { header: "Nhiệt độ (°C)", accessor: (item) => { return <>{item.temperature ? `${item.temperature}°C` : '--'}</>; } },
-                                    { header: "SpO2 (%)", accessor: (item) => { return <>{item.spO2 ? `${item.spO2}%` : '--'}</>; } },
+                                    { header: "Nhiệt độ (°C)", accessor: (item) => { return <>{item.temperature ? `${formatDecimalVi(item.temperature)}°C` : '--'}</>; } },
+                                    { header: "SpO2 (%)", accessor: (item) => { return <>{item.spO2 ? `${formatDecimalVi(item.spO2)}%` : '--'}</>; } },
                                     { header: "BMI", accessor: formatVitalBodyMeasures },
                                     { header: "Người đo", accessor: (item) => { return <>{item.recordedByUserName || '--'}</>; } }
                                 ]} />
@@ -1561,7 +1551,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             <div className={tabStyles.diagnosticOrderList}>
                                 {orderGroups.map(group => (
                                 <section key={group.title} aria-label={group.title} className={tabStyles.diagnosticOrderGroup}>
-                                    <h4 className={tabStyles.sectionTitle}>{group.title} ({group.orders.length})</h4>
+                                    <span className={tabStyles.secondaryCaption}>{group.title}</span>
                                     {group.orders.map(order => (
                                     <div
                                         key={order.id}
@@ -1826,7 +1816,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             }
                                         },
                                         {
-                                            header: "Liều dùng", width: '110px', accessor: (item) => {
+                                            header: "Liều dùng", width: '90px', accessor: (item) => {
                                                 const idx = prescriptionItems.indexOf(item); return <>
                                                     <Input
                                                         type="text"
@@ -1839,7 +1829,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             }
                                         },
                                         {
-                                            header: "Tần suất", width: '140px', accessor: (item) => {
+                                            header: "Tần suất", width: '220px', accessor: (item) => {
                                                 const idx = prescriptionItems.indexOf(item); return <>
                                                     <Input
                                                         type="text"
@@ -1852,7 +1842,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             }
                                         },
                                         {
-                                            header: "Số ngày", width: '90px', accessor: (item) => {
+                                            header: "Số ngày", width: '70px', accessor: (item) => {
                                                 const idx = prescriptionItems.indexOf(item); return <>
                                                     <Input
                                                         type="number"
@@ -1866,7 +1856,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             }
                                         },
                                         {
-                                            header: "Hướng dẫn uống", accessor: (item) => {
+                                            header: "Hướng dẫn uống", width: '230px', accessor: (item) => {
                                                 const idx = prescriptionItems.indexOf(item); return <>
                                                     <Input
                                                         type="text"
@@ -1879,7 +1869,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                             }
                                         },
                                         {
-                                            header: "", width: '50px', accessor: (item) => {
+                                            header: "", width: '36px', accessor: (item) => {
                                                 const idx = prescriptionItems.indexOf(item); return <>
                                                     <Button
                                                         htmlType="button"
@@ -1919,7 +1909,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     <Row className={tabStyles.responsiveFormRow}>
                         <Col span={24} className={tabStyles.responsiveColumn}>
                             <h3 className={tabStyles.historySectionTitle}>
-                                Lịch sử các lần khám trước của bệnh nhân ({patient.pastVisits.length} lượt)
+                                Lần khám trước ({patient.pastVisits.length})
                             </h3>
 
                             {patient.pastVisits.length === 0 ? (

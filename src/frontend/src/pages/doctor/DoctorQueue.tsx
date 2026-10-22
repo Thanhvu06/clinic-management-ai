@@ -1,3 +1,4 @@
+import { formatVitalSummaryVi } from '../../utils/formatDecimalVi';
 import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -199,12 +200,12 @@ export const DoctorQueue: React.FC = () => {
             accessor: (item) => <div className={styles.reasonCell}>{item.chiefComplaint || item.reason || 'Khám tổng quát theo lịch hẹn'}</div>
         },
         {
-            header: 'Dấu hiệu sinh tồn',
+            header: 'Sinh hiệu',
             width: 180,
             accessor: (item) => item.isVitalsRecorded ? (
                 <div>
                     <span className={styles.vitalsOk}><CheckCircle2 size={13} /><span>Đã ghi nhận</span></span>
-                    {item.vitalSummaryText && <div className={styles.vitalsSummary}>{item.vitalSummaryText}</div>}
+                    {item.vitalSummaryText && <div className={styles.vitalsSummary}>{formatVitalSummaryVi(item.vitalSummaryText)}</div>}
                 </div>
             ) : (
                 <span className={styles.vitalsPending}>Chưa ghi nhận</span>
