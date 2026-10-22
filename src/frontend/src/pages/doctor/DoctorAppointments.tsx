@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { Button, Card, DatePicker, Flex, Form, Input, Modal, Select, Typography } from 'antd';
+import { Button, DatePicker, Flex, Form, Input, Modal, Select, Typography } from 'antd';
 import { Search, Eye, XCircle, Clock, PlusCircle, RefreshCw, Send, Pill, Stethoscope } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
 import { PageHeader, DataTable, StatusBadge, LoadingState, Pagination, InlineError } from '../../components/common';
@@ -261,40 +261,38 @@ export const DoctorAppointments: React.FC = () => {
     return (
         <div>
             <PageHeader
-                title="Lịch khám của tôi"
+                title="Danh sách lịch khám"
                 actions={<Button icon={<RefreshCw size={14} />} onClick={() => fetchAppointments()}>Làm mới</Button>}
             />
 
-            <Card size="small" className={styles.filterCard}>
-                <Flex gap="middle" wrap>
-                    <Input
-                        className={styles.searchInput}
-                        prefix={<Search size={16} className={styles.mutedIcon} />}
-                        placeholder="Tìm theo mã lịch..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        onPressEnter={handleSearchSubmit}
-                    />
-                    <Select
-                        className={styles.dateFilter}
-                        value={dateFilter || undefined}
-                        placeholder="Tất cả ngày"
-                        allowClear
-                        onChange={(val) => { setDateFilter(val || ''); setPage(1); }}
-                        options={[{ value: 'today', label: 'Hôm nay' }]}
-                    />
-                    <Select
-                        className={styles.statusFilter}
-                        value={statusFilter || undefined}
-                        placeholder="Tất cả trạng thái"
-                        allowClear
-                        onChange={(val) => { setStatusFilter(val || ''); setPage(1); }}
-                        options={['Confirmed', 'CheckedIn', 'InConsultation', 'Completed', 'NoShow', 'Cancelled']
-                            .map(status => ({ value: status, label: getAppointmentStatusLabel(status) }))}
-                    />
-                    <Button onClick={handleSearchSubmit}>Tìm kiếm</Button>
-                </Flex>
-            </Card>
+            <div className={styles.filterCard}>
+                <Input
+                    className={styles.searchInput}
+                    prefix={<Search size={16} className={styles.mutedIcon} />}
+                    placeholder="Tìm theo mã lịch..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    onPressEnter={handleSearchSubmit}
+                />
+                <Select
+                    className={styles.dateFilter}
+                    value={dateFilter || undefined}
+                    placeholder="Tất cả ngày"
+                    allowClear
+                    onChange={(val) => { setDateFilter(val || ''); setPage(1); }}
+                    options={[{ value: 'today', label: 'Hôm nay' }]}
+                />
+                <Select
+                    className={styles.statusFilter}
+                    value={statusFilter || undefined}
+                    placeholder="Tất cả trạng thái"
+                    allowClear
+                    onChange={(val) => { setStatusFilter(val || ''); setPage(1); }}
+                    options={['Confirmed', 'CheckedIn', 'InConsultation', 'Completed', 'NoShow', 'Cancelled']
+                        .map(status => ({ value: status, label: getAppointmentStatusLabel(status) }))}
+                />
+                <Button onClick={handleSearchSubmit}>Tìm</Button>
+            </div>
 
             {fetchError && (
                 <InlineError message={fetchError} onRetry={() => fetchAppointments()} />
@@ -342,7 +340,7 @@ export const DoctorAppointments: React.FC = () => {
                         {modal.view === 'detail' && (
                             <>
                                 <div className={styles.detailBlock}>
-                                    <div className={styles.infoBlockLabel}>Triệu chứng / Lý do khám:</div>
+                                    <div className={styles.infoBlockLabel}>Triệu chứng / lý do khám:</div>
                                     <div className={styles.infoBlockValue}>
                                         {modal.apt.reason || <Typography.Text type="secondary">Không có</Typography.Text>}
                                     </div>
@@ -367,7 +365,7 @@ export const DoctorAppointments: React.FC = () => {
                                 {modal.apt.status === 'Confirmed' && (
                                     <Flex vertical gap="small" className={styles.detailActions}>
                                         <div className={`${styles.infoBanner} ${styles.infoBannerInfo}`}>
-                                            Bệnh nhân cần được tiếp nhận tại Hàng đợi khám trước khi bắt đầu khám.
+                                            Bệnh nhân cần được tiếp nhận tại hàng đợi khám trước khi bắt đầu khám.
                                         </div>
                                         <Flex justify="flex-end" gap="small" wrap>
                                             <Button danger icon={<XCircle size={16} />} onClick={() => setModal({ ...modal, view: 'noshow' })}>
@@ -389,7 +387,7 @@ export const DoctorAppointments: React.FC = () => {
                                             </Flex>
                                             <StatusBadge
                                                 status={currentPrescription.status}
-                                                label={currentPrescription.status === 'Dispensed' ? 'Đã cấp thuốc' : 'Chờ cấp thuốc (Issued)'}
+                                                label={currentPrescription.status === 'Dispensed' ? 'Đã cấp thuốc' : 'Chờ cấp thuốc'}
                                             />
                                         </Flex>
                                         {currentPrescription.notes && (
@@ -419,7 +417,7 @@ export const DoctorAppointments: React.FC = () => {
                                     Hành động này sẽ hủy buổi khám vì bệnh nhân không đến. Vui lòng xác nhận chắc chắn vì không thể hoàn tác.
                                 </div>
                                 <div>
-                                    <div className={styles.infoBlockLabel}>Ghi chú / Lý do (Tùy chọn)</div>
+                                    <div className={styles.infoBlockLabel}>Ghi chú / lý do (tùy chọn)</div>
                                     <Input.TextArea
                                         rows={2}
                                         value={noShowReason}
@@ -441,7 +439,7 @@ export const DoctorAppointments: React.FC = () => {
                                 <Form.Item name="revisitDate" label="Ngày hẹn tái khám đề nghị" rules={[{ required: true, message: 'Vui lòng chọn ngày tái khám' }]}>
                                     <DatePicker className={styles.control1} format="DD/MM/YYYY" />
                                 </Form.Item>
-                                <Form.Item name="revisitNote" label="Tin nhắn / Lý do tái khám (Tùy chọn)">
+                                <Form.Item name="revisitNote" label="Tin nhắn / lý do tái khám (tùy chọn)">
                                     <Input.TextArea rows={3} placeholder="Ví dụ: Tái khám sau khi uống hết thuốc..." />
                                 </Form.Item>
                                 <Flex justify="flex-end" gap="small">

@@ -75,7 +75,7 @@ describe('DoctorQueue Component', () => {
         );
 
         // Header
-        expect(screen.getByText(/Hàng đợi khám lâm sàng/i)).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1, name: 'Hàng đợi khám' })).toBeInTheDocument();
 
         // Patients in queue
         await waitFor(() => {

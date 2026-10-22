@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Select } from 'antd';
-import { Bell, CheckCheck, ChevronRight, Inbox, RotateCcw, Check } from 'lucide-react';
+import { CheckCheck, ChevronRight, RotateCcw, Check } from 'lucide-react';
 import { notificationApi } from '../../api/notificationApi';
 import type { NotificationDto } from '../../types/notification';
 import { NotificationType } from '../../types/notification';
 import { notificationTypeIcon, notificationTypeLabel, notificationTypeTone } from '../../utils/notificationLabels';
 import { DialogProvider, useDialog } from '../../contexts/DialogContext';
-import { EmptyState, InlineError, LoadingState } from '../../components/common';
+import { EmptyState, InlineError, LoadingState, PageHeader } from '../../components/common';
 import styles from './NotificationsPage.module.css';
 
 const errorMessage = (error: unknown, fallback: string) =>
@@ -137,21 +137,15 @@ const NotificationsContent: React.FC = () => {
 
     return (
         <div className={styles.container}>
-            <div className={styles.pageHeader}>
-                <div className={styles.titleArea}>
-                    <h1><Bell size={26} className={styles.icon1} /> Trung tâm thông báo</h1>
-                    <p>Quản lý toàn bộ thông báo và cập nhật mới nhất từ phòng khám ClinicCare AI</p>
-                </div>
-                <div className={styles.headerActions}>
-                    <button type="button" className={styles.actionBtn} onClick={() => void fetchNotifications()} disabled={isLoading}>
-                        <RotateCcw size={16} /> {isLoading ? 'Đang tải...' : 'Làm mới'}
-                    </button>
-                    <button type="button" className={`${styles.actionBtn} ${styles.primary}`}
-                        onClick={() => void handleMarkAllAsRead()} disabled={unreadCount === 0 || isMarkingAll || markingIds.size > 0}>
-                        <CheckCheck size={16} /> {isMarkingAll ? 'Đang xử lý...' : 'Đánh dấu tất cả đã đọc'}
-                    </button>
-                </div>
-            </div>
+            <PageHeader title="Thông báo" actions={<>
+                <button type="button" className={styles.actionBtn} onClick={() => void fetchNotifications()} disabled={isLoading}>
+                    <RotateCcw size={16} /> {isLoading ? 'Đang tải...' : 'Làm mới'}
+                </button>
+                <button type="button" className={`${styles.actionBtn} ${styles.primary}`}
+                    onClick={() => void handleMarkAllAsRead()} disabled={unreadCount === 0 || isMarkingAll || markingIds.size > 0}>
+                    <CheckCheck size={16} /> {isMarkingAll ? 'Đang xử lý...' : 'Đánh dấu tất cả đã đọc'}
+                </button>
+            </>} />
             <div className={styles.filterBar}>
                 <div className={styles.tabsContainer}>
                     <button type="button" className={`${styles.tabBtn} ${activeTab === 'all' ? styles.active : ''}`}
@@ -175,7 +169,7 @@ const NotificationsContent: React.FC = () => {
             {isLoading ? <LoadingState message="Đang tải thông báo..." />
                 : error ? <InlineError message={error} onRetry={() => void fetchNotifications()} />
                 : notifications.length === 0 ? (
-                    <EmptyState icon={<Inbox size={48} />} title={hasTypeFilter ? emptyDescription : 'Không có thông báo nào'}
+                    <EmptyState title={hasTypeFilter ? emptyDescription : 'Không có thông báo nào'}
                         description={hasTypeFilter ? undefined : emptyDescription} />
                 ) : (
                     <div className={styles.notificationsList}>

@@ -41,7 +41,7 @@ describe('Reception billing queue status', () => {
             </DialogProvider>
         );
 
-        fireEvent.click(screen.getByRole('button', { name: /Hàng đợi chờ lập hóa đơn/ }));
+        fireEvent.click(screen.getByRole('radio', { name: /Hàng đợi chờ lập hóa đơn/ }));
 
         expect(await screen.findByText('Chờ bác sĩ')).toBeInTheDocument();
         expect(screen.queryByText('WaitingForDoctor')).not.toBeInTheDocument();

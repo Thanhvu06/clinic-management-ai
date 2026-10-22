@@ -70,7 +70,7 @@ describe('MainLayout shell cleanup', () => {
         { role: 'Doctor', path: '/doctor/appointments/5/examination', routePath: '/doctor/appointments/:id/examination', element: <DoctorExaminationPage />, title: 'Bàn khám lâm sàng' },
         { role: 'Doctor', path: '/doctor/visits/7/examination', routePath: '/doctor/visits/:visitId/examination', element: <DoctorExaminationPage />, title: 'Bàn khám lâm sàng' },
         { role: 'Receptionist', path: '/reception', routePath: '/reception', element: <ReceptionWorkspace />, title: 'Bàn làm việc lễ tân' },
-        { role: 'Pharmacist', path: '/pharmacy', routePath: '/pharmacy', element: <PharmacyDashboard />, title: 'Bàn làm việc Dược sĩ' },
+        { role: 'Pharmacist', path: '/pharmacy', routePath: '/pharmacy', element: <PharmacyDashboard />, title: 'Bàn làm việc dược sĩ' },
         { role: 'DiagnosticTechnician', path: '/diagnostics', routePath: '/diagnostics', element: <TechnicianDashboard />, title: 'Bàn làm việc cận lâm sàng' },
         { role: 'DiagnosticTechnician', path: '/diagnostics/orders/1', routePath: '/diagnostics/orders/:id', element: <TechnicianOrderDetail />, title: 'Thực hiện phiếu chỉ định CLS' },
         { role: 'Admin', path: '/admin/facilities', routePath: '/admin/facilities', element: <AdminFacilities />, title: 'Mạng lưới cơ sở' },

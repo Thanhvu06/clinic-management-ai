@@ -32,7 +32,7 @@ describe('Medicine pricing pages', () => {
     });
     afterEach(() => vi.unstubAllGlobals());
 
-    it('defaults to the inventory grid and applies search to the preserved transaction table', async () => {
+    it('defaults to the transaction table, keeps the grid one click away and applies search to both', async () => {
         vi.mocked(axiosClient.get).mockImplementation(async url => ({ success: true, data: String(url) === '/medicines/active' ? [
             { ...medicine, stockQuantity: 0 },
             { ...medicine, id: 2, code: 'MED-TWO', name: 'Thuốc hai', stockQuantity: 10, unitPrice: null },
@@ -42,12 +42,14 @@ describe('Medicine pricing pages', () => {
         ] } }));
         render(<DialogProvider><PharmacyInventory /></DialogProvider>);
 
+        expect(await screen.findByRole('table')).toBeInTheDocument();
+        fireEvent.click(screen.getByText('Lưới'));
         const grid = screen.getByRole('region', { name: 'Lưới thuốc trong kho' });
         expect(await within(grid).findByText('Thuốc một')).toBeInTheDocument();
         expect(within(grid).getByText(/1\.500\s*₫/)).toBeInTheDocument();
         expect(within(grid).getByText('Chưa có giá')).toBeInTheDocument();
         expect(within(grid).getByText('Hết hàng')).toBeInTheDocument();
-        expect(within(grid).getAllByRole('img', { name: 'Chưa có ảnh thuốc' })).toHaveLength(2);
+        expect(within(grid).queryAllByRole('img', { name: 'Chưa có ảnh thuốc' })).toHaveLength(0);
 
         fireEvent.change(screen.getByLabelText('Tìm thuốc trong kho'), { target: { value: 'MED-ONE' } });
         expect(within(grid).queryByText('Thuốc hai')).not.toBeInTheDocument();

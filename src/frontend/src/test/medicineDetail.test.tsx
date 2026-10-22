@@ -180,6 +180,7 @@ describe('Medicine detail entry points', () => {
         render(<MemoryRouter initialEntries={['/pharmacy/inventory']}><Routes>
             <Route path="/pharmacy/inventory" element={<PharmacyInventory />} /><Route path="/medicines/:id" element={<MedicineDetail />} />
         </Routes></MemoryRouter>);
+        fireEvent.click(screen.getByText('Lưới'));
         fireEvent.click(await screen.findByRole('link', { name: 'Xem chi tiết Thuốc chi tiết' }));
         expect(await screen.findByRole('heading', { name: medicine.name, level: 1 })).toBeInTheDocument();
     });

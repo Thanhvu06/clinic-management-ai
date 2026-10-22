@@ -1,12 +1,10 @@
 .doctorsPage { color: var(--cc-color-text); }
 .doctorSearch { flex: 1; min-width: 240px; }
 .doctorStatusFilter { width: 200px; }
-.doctorIdentity { display: flex; align-items: center; gap: var(--cc-space-sm); }
 .doctorEmail { color: var(--cc-color-text-secondary); }
-.doctorExperience { display: flex; align-items: center; gap: var(--cc-space-xs); margin-bottom: var(--cc-space-xxs); }
-.doctorExperience svg, .selectedSpecialtyName svg { color: var(--cc-color-teal); }
+.doctorExperience { margin-bottom: var(--cc-space-xxs); }
+.selectedSpecialtyName svg { color: var(--cc-color-teal); }
 .specialtyTags { display: flex; flex-wrap: wrap; gap: var(--cc-space-xxs); }
-.specialtyTags :global(.ant-tag) { display: inline-flex; align-items: center; gap: var(--cc-space-xxs); }
 .doctorTotal { margin-top: var(--cc-space-md); color: var(--cc-color-text-secondary); }
 .doctorFormAlert { margin-bottom: var(--cc-space-md); }
 .doctorFormGrid { display: grid; grid-template-columns: 1fr 150px; gap: var(--cc-space-md); }

@@ -88,7 +88,7 @@ export const MpiPatientSearchModal: React.FC<MpiPatientSearchModalProps> = ({
 
     return (
         <Modal open={isOpen} onCancel={onClose} width={900} className={styles.patientSearchModal}
-            title={<div className={styles.modalHeading}><div className={styles.searchIcon}><Search size={20} /></div><div><h3 className={styles.modalTitle}>Tra cứu hồ sơ bệnh nhân (MPI)</h3><p className={styles.modalDescription}>Tìm kiếm bệnh nhân theo Mã bệnh án (MRN), Họ tên, SĐT, CCCD hoặc Thẻ BHYT</p></div></div>}
+            title={<div className={styles.modalHeading}><div className={styles.searchIcon}><Search size={20} /></div><div><h3 className={styles.modalTitle}>Tra cứu hồ sơ bệnh nhân (MPI)</h3><p className={styles.modalDescription}>Tìm kiếm bệnh nhân theo mã bệnh án (MRN), họ tên, SĐT, CCCD hoặc thẻ BHYT</p></div></div>}
             footer={<Button htmlType="button" onClick={onClose}>Đóng</Button>}>
             <form onSubmit={handleSearch} className={styles.patientSearchForm}>
                 <Select className={styles.searchType} value={searchType} onChange={(value) => setSearchType(value)}
@@ -105,7 +105,7 @@ export const MpiPatientSearchModal: React.FC<MpiPatientSearchModalProps> = ({
                         searchType === 'phone' ? 'Nhập số điện thoại (vd: 0912345678)...' :
                         searchType === 'nationalId' ? 'Nhập số CCCD 12 số...' :
                         searchType === 'bhyt' ? 'Nhập mã BHYT 15 ký tự...' :
-                        'Nhập từ khóa tìm kiếm (Tên, MRN, SĐT, CCCD, BHYT)...'
+                        'Nhập từ khóa tìm kiếm (tên, MRN, SĐT, CCCD, BHYT)...'
                     }
                     value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} autoFocus />
                 <Button htmlType="submit" type="primary" disabled={loading || !searchTerm.trim()}><Search size={18} />{loading ? 'Đang tìm...' : 'Tra cứu'}</Button>

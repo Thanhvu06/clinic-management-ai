@@ -39,8 +39,7 @@
 .guardianLabel input { flex-shrink: 0; }
 .allergySection { border-top: 1px solid var(--cc-color-border); padding-top: var(--cc-space-md); }
 .allergySectionHeader { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); margin-bottom: var(--cc-space-sm); }
-.allergyTitle { display: flex; align-items: center; gap: var(--cc-space-xs); margin: 0; color: var(--cc-color-danger); font-size: 0.95rem; font-weight: 600; }
-.allergyTitle svg { flex-shrink: 0; }
+.allergyTitle { margin: 0; font-size: 0.95rem; font-weight: 600; }
 .allergyRow { margin-bottom: var(--cc-space-xs); }
 .nextStepFooter, .stepFooter { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-sm); border-top: 1px solid var(--cc-color-border); padding-top: var(--cc-space-md); margin-top: var(--cc-space-lg); }
 .nextStepFooter { justify-content: flex-end; }

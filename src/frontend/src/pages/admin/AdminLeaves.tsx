@@ -141,7 +141,7 @@ export const AdminLeaves: React.FC = () => {
 
     return (
         <div className={styles.leavesPage}>
-            <PageHeader title="Quản lý yêu cầu nghỉ" />
+            <PageHeader title="Duyệt nghỉ phép" />
             <FilterBar>
                 <Select className={styles.leaveDoctorFilter} aria-label="Bác sĩ" value={doctorIdFilter} loading={doctorsLoading} disabled={!!doctorsError}
                     onChange={value => { setDoctorIdFilter(value); setPage(1); }}
@@ -179,7 +179,7 @@ export const AdminLeaves: React.FC = () => {
                     {modal.req.adminNote && <div className={styles.leaveAdminNoteBox}><span className={styles.leaveNoteLabel}>Ghi chú quản trị:</span>{modal.req.adminNote}</div>}
                     {modal.req.status === 'Pending' ? <>
                         <Form layout="vertical">
-                            <Form.Item label="Thêm ghi chú xử lý (Tùy chọn)" htmlFor="leaveAdminNote">
+                            <Form.Item label="Ghi chú xử lý (tùy chọn)" htmlFor="leaveAdminNote">
                                 <Input.TextArea id="leaveAdminNote" rows={2} value={adminNote} onChange={e => setAdminNote(e.target.value)} placeholder="Ghi chú thêm về quyết định duyệt/từ chối..." />
                             </Form.Item>
                         </Form>

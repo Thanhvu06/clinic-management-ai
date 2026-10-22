@@ -3,11 +3,12 @@ import axiosClient from '../../api/axiosClient';
 import type { ApiResponse, MedicineDto, MedicineCategoryDto } from '../../types';
 import { medicineApi, medicineImageUrl } from '../../api/medicineApi';
 import { MedicineCategoryManager } from './MedicineCategoryManager';
-import { Plus, Edit, AlertTriangle } from 'lucide-react';
+import { Plus, Edit, Search } from 'lucide-react';
 import { Alert, Button, Checkbox, Form, Input, InputNumber, Modal, Select, Tag, Typography } from 'antd';
 import { PageHeader, FilterBar, DataTable, Pagination, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './AdminMedicines.module.css';
 import { useDialog } from '../../contexts/DialogContext';
+import { MedicineStockCell } from './MedicineStockCell';
 
 type Medicine = MedicineDto;
 
@@ -180,9 +181,9 @@ export const AdminMedicines: React.FC = () => {
 
     return (
         <div className={styles.medicinesPage}>
-            <PageHeader title="Danh mục thuốc & Vật tư y tế" actions={<Button type="primary" icon={<Plus size={18} />} onClick={() => openModal({ isActive: true, stockQuantity: 100, reorderLevel: 20, unit: 'Viên' }, false)}>Thêm thuốc mới</Button>} />
+            <PageHeader title="Danh mục thuốc" actions={<Button type="primary" icon={<Plus size={18} />} onClick={() => openModal({ isActive: true, stockQuantity: 100, reorderLevel: 20, unit: 'Viên' }, false)}>Thêm thuốc mới</Button>} />
             <FilterBar>
-                <Input.Search className={styles.medicineSearch} placeholder="Tìm theo tên thuốc hoặc mã..." enterButton="Tìm kiếm" value={search} onChange={e => setSearch(e.target.value)} onSearch={handleSearchSubmit} />
+                <Input.Search className={styles.medicineSearch} prefix={<Search size={16} aria-hidden="true" />} placeholder="Tìm theo tên thuốc hoặc mã..." enterButton="Tìm" value={search} onChange={e => setSearch(e.target.value)} onSearch={handleSearchSubmit} />
                 <Select className={styles.medicineStatusFilter} aria-label="Trạng thái" value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[
                     { value: '', label: 'Tất cả trạng thái' }, { value: 'true', label: 'Đang sử dụng' }, { value: 'false', label: 'Tạm ngưng' }
                 ]} />
@@ -191,15 +192,11 @@ export const AdminMedicines: React.FC = () => {
                 : medicines.length === 0 ? <EmptyState title="Không tìm thấy thuốc nào trong danh mục." /> : <>
                     <DataTable ariaLabel="Danh mục thuốc" data={medicines} keyExtractor={medicine => medicine.id} columns={[
                         { header: 'Mã thuốc', accessor: medicine => <Typography.Text strong className={styles.medicineCode}>{medicine.code}</Typography.Text> },
-                        { header: 'Tên thuốc', accessor: medicine => <Typography.Text strong>{medicine.name}</Typography.Text> },
+                        { header: 'Tên thuốc', accessor: medicine => <span className={styles.medicineName}><Typography.Text strong>{medicine.name}</Typography.Text>{(medicine.isPrescriptionRequired ?? true) && <Tag className={styles.prescriptionTag}>Kê đơn</Tag>}</span> },
                         { header: 'Nhóm', accessor: medicine => medicine.categoryName || '—' },
-                        { header: 'Kê đơn', accessor: medicine => <Tag>{(medicine.isPrescriptionRequired ?? true) ? 'Kê đơn' : 'Không kê đơn'}</Tag> },
-                        { header: 'Đơn vị tính', accessor: medicine => <Tag>{medicine.unit}</Tag> },
+                        { header: 'Đơn vị tính', accessor: medicine => medicine.unit },
                         { header: 'Đơn giá (VNĐ)', accessor: medicine => medicine.unitPrice ? <Typography.Text strong className={styles.medicinePrice}>{medicine.unitPrice.toLocaleString('vi-VN')} đ</Typography.Text> : <Typography.Text type="secondary">Chưa định giá</Typography.Text> },
-                        { header: 'Tồn kho hiện tại', accessor: medicine => <Typography.Text strong type={medicine.stockQuantity <= medicine.reorderLevel ? 'danger' : undefined} className={styles.medicineStock}>
-                            {medicine.stockQuantity}{medicine.stockQuantity <= medicine.reorderLevel && <span className={styles.stockWarning}><AlertTriangle size={15}><title>Tồn kho dưới ngưỡng cảnh báo!</title></AlertTriangle></span>}
-                        </Typography.Text> },
-                        { header: 'Mức cảnh báo', accessor: medicine => <Typography.Text type="secondary">{medicine.reorderLevel}</Typography.Text> },
+                        { header: 'Tồn kho', accessor: medicine => <MedicineStockCell stockQuantity={medicine.stockQuantity} reorderLevel={medicine.reorderLevel} /> },
                         { header: 'Trạng thái', accessor: medicine => <StatusBadge status={medicine.isActive ? 'Approved' : 'Rejected'} label={medicine.isActive ? 'Đang dùng' : 'Tạm ngưng'} /> },
                         { header: 'Thao tác', align: 'right', accessor: medicine => <div className={styles.medicineRowActions}>
                             <Button size="small" icon={<Edit size={14} />} title="Chỉnh sửa" onClick={() => openModal({ ...medicine }, true)}>Sửa</Button>

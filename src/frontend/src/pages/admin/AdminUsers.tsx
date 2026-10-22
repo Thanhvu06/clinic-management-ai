@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { Alert, Button, Form, Input, Modal, Select, Tag, Typography } from 'antd';
 import { PageHeader, FilterBar, DataTable, Pagination, EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './AdminUsers.module.css';
@@ -133,10 +133,6 @@ export const AdminUsers: React.FC = () => {
         }
     };
 
-    const roleColors: Record<string, string> = {
-        Admin: 'error', Doctor: 'processing', Receptionist: 'default', Patient: 'default',
-        Pharmacist: 'green', DiagnosticTechnician: 'purple', LabSupervisor: 'processing'
-    };
     const roleOptions = ['Admin', 'Doctor', 'Receptionist', 'Patient', 'Pharmacist', 'DiagnosticTechnician', 'LabSupervisor']
         .map(role => ({ value: role, label: translateRole(role) }));
 
@@ -148,8 +144,8 @@ export const AdminUsers: React.FC = () => {
                 </Button>
             } />
             <FilterBar>
-                <Input.Search className={styles.userSearch} placeholder="Tìm theo tên, email, sđt..."
-                    value={search} onChange={e => setSearch(e.target.value)} onSearch={handleSearchSubmit} enterButton="Lọc" />
+                <Input.Search className={styles.userSearch} prefix={<Search size={16} aria-hidden="true" />} placeholder="Tìm theo tên, email, sđt..."
+                    value={search} onChange={e => setSearch(e.target.value)} onSearch={handleSearchSubmit} enterButton="Tìm" />
                 <Select className={styles.userFilter} aria-label="Vai trò" value={roleFilter}
                     onChange={value => { setRoleFilter(value); setPage(1); }}
                     options={[{ value: '', label: 'Tất cả vai trò' }, ...roleOptions]} />
@@ -164,9 +160,9 @@ export const AdminUsers: React.FC = () => {
                         <DataTable data={users} keyExtractor={user => user.id} columns={[
                             { header: 'Họ và tên', accessor: user => <><Typography.Text strong>{user.fullName}</Typography.Text><div className={styles.userJoined}>Tham gia: {formatDate(user.createdAt)}</div></> },
                             { header: 'Thông tin liên hệ', accessor: user => <div className={styles.userContact}><div>{user.email}</div><Typography.Text type="secondary">{user.phoneNumber}</Typography.Text></div> },
-                            { header: 'Vai trò', accessor: user => <div className={styles.userRoles}>{user.roles.map(role => <Tag key={role} color={roleColors[role] || 'default'}>{translateRole(role)}</Tag>)}</div> },
+                            { header: 'Vai trò', accessor: user => <div className={styles.userRoles}>{user.roles.map(role => <Tag key={role}>{translateRole(role)}</Tag>)}</div> },
                             { header: 'Trạng thái', accessor: user => <Tag color={user.isActive ? 'success' : 'error'}>{user.isActive ? 'Đang hoạt động' : 'Đã khóa'}</Tag> },
-                            { header: 'Thao tác', align: 'right', accessor: user => <Button size="small" danger={user.isActive} type={user.isActive ? 'default' : 'primary'}
+                            { header: 'Thao tác', align: 'right', accessor: user => <Button size="small" type="text"
                                 onClick={() => toggleStatus(user.id, user.isActive)} disabled={user.roles.includes('Admin')}
                                 title={user.roles.includes('Admin') ? 'Không thể đổi trạng thái Admin' : ''}>{user.isActive ? 'Khóa' : 'Mở khóa'}</Button> }
                         ]} />

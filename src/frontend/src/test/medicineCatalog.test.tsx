@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 it('shows category and prescription labels in the existing table', async () => {
     render(<AdminMedicines />);
-    expect(await screen.findByText('Không kê đơn')).toBeInTheDocument();
+    expect(within((await screen.findByText('Paracetamol')).closest('tr')!).queryByText('Kê đơn')).not.toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Nhóm' })).toBeInTheDocument();
     expect(within(screen.getByRole('table', { name: 'Danh mục thuốc' })).getByText('Giảm đau')).toBeInTheDocument();
 });

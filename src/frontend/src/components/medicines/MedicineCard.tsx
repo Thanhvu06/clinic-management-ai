@@ -15,11 +15,13 @@ interface MedicineCardProps {
     };
     publicView?: boolean;
     to?: string;
+    showImagePlaceholder?: boolean;
 }
 
-export function MedicineCard({ medicine, publicView = false, to }: MedicineCardProps) {
+export function MedicineCard({ medicine, publicView = false, to, showImagePlaceholder = true }: MedicineCardProps) {
     const [failedImage, setFailedImage] = useState<string | null>(null);
     const image = medicine.imageUrl ? medicineImageUrl(medicine.imageUrl) : null;
+    const hasImage = !!image && failedImage !== image;
     const stock = medicine.stockQuantity ?? 0;
     const availability = publicView ? medicine.availability : stock === 0 ? 'out_of_stock'
         : medicine.reorderLevel != null && stock <= medicine.reorderLevel ? 'low' : 'in_stock';
@@ -28,13 +30,13 @@ export function MedicineCard({ medicine, publicView = false, to }: MedicineCardP
 
     const card = (
         <Card className={styles.card}>
-            <div className={styles.imageArea}>
-                {image && failedImage !== image ? (
+            {(hasImage || showImagePlaceholder) && <div className={styles.imageArea}>
+                {image && hasImage ? (
                     <img src={image} alt={medicine.name} className={styles.image} onError={() => setFailedImage(image)} />
                 ) : (
                     <div role="img" aria-label="Chưa có ảnh thuốc" className={styles.placeholder}><Pill size={48} /></div>
                 )}
-            </div>
+            </div>}
             <div className={styles.details}>
                 <span className={styles.code}>{medicine.code}</span>
                 <h3 className={styles.name}>{medicine.name}</h3>

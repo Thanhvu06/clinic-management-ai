@@ -83,22 +83,22 @@ export const AdminAuditLogs: React.FC = () => {
 
     return (
         <div className={styles.auditPage}>
-            <PageHeader title="Nhật ký kiểm toán hệ thống (Audit Logs)" actions={
+            <PageHeader title="Nhật ký hệ thống" actions={
                 <Button icon={<RefreshCw size={16} />} onClick={fetchLogs}>Làm mới</Button>
             } />
             <FilterBar>
                 <Select className={styles.auditFilter} aria-label="Loại hành động" value={actionFilter}
                     onChange={value => { setActionFilter(value); setPage(1); }} options={[
-                        { value: '', label: 'Tất cả loại hành động' }, { value: 'Create', label: 'Create / Thêm mới' },
-                        { value: 'Update', label: 'Update / Cập nhật' }, { value: 'Delete', label: 'Delete / Xóa' },
-                        { value: 'StatusChange', label: 'StatusChange / Đổi trạng thái' }, { value: 'Login', label: 'Login / Đăng nhập' }
+                        { value: '', label: 'Tất cả loại hành động' }, { value: 'Create', label: 'Thêm mới' },
+                        { value: 'Update', label: 'Cập nhật' }, { value: 'Delete', label: 'Xóa' },
+                        { value: 'StatusChange', label: 'Đổi trạng thái' }, { value: 'Login', label: 'Đăng nhập' }
                     ]} />
                 <Select className={styles.auditFilter} aria-label="Đối tượng tác động" value={entityFilter}
                     onChange={value => { setEntityFilter(value); setPage(1); }} options={[
-                        { value: '', label: 'Tất cả đối tượng tác động' }, { value: 'User', label: 'User / Tài khoản' },
-                        { value: 'Doctor', label: 'Doctor / Bác sĩ' }, { value: 'Specialty', label: 'Specialty / Chuyên khoa' },
-                        { value: 'Appointment', label: 'Appointment / Lịch hẹn' }, { value: 'HealthPackage', label: 'HealthPackage / Gói khám' },
-                        { value: 'Medicine', label: 'Medicine / Thuốc' }
+                        { value: '', label: 'Tất cả đối tượng tác động' }, { value: 'User', label: 'Tài khoản' },
+                        { value: 'Doctor', label: 'Bác sĩ' }, { value: 'Specialty', label: 'Chuyên khoa' },
+                        { value: 'Appointment', label: 'Lịch hẹn' }, { value: 'HealthPackage', label: 'Gói khám' },
+                        { value: 'Medicine', label: 'Thuốc' }
                     ]} />
             </FilterBar>
             {loading ? <LoadingState message="Đang tải nhật ký kiểm toán..." /> : loadError ? <InlineError message={loadError} onRetry={fetchLogs} />

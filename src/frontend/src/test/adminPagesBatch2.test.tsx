@@ -65,14 +65,14 @@ describe('admin batch 2 regression', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Thêm hồ sơ bác sĩ' }));
         const modal = await screen.findByRole('dialog');
         expect(get).toHaveBeenCalledWith('/admin/doctors?pageSize=100');
-        await userEvent.click(within(modal).getByRole('combobox', { name: 'Chọn tài khoản User liên kết (*)' }));
+        await userEvent.click(within(modal).getByRole('combobox', { name: 'Tài khoản bác sĩ (*)' }));
         expect(await screen.findByText('Chưa có hồ sơ (free@example.com)', { exact: true })).toBeInTheDocument();
         expect(screen.queryByText('Đã có hồ sơ (assigned@example.com)', { exact: true })).not.toBeInTheDocument();
     });
 
     it('Doctors edits and saves zero years of experience', async () => {
         const modal = await openDoctorEdit();
-        expect(within(modal).getByLabelText('Số năm K.Nghiệm')).toHaveValue('0');
+        expect(within(modal).getByLabelText('Số năm kinh nghiệm')).toHaveValue('0');
         await userEvent.click(within(modal).getByRole('button', { name: 'Xác nhận lưu' }));
         await waitFor(() => expect(axiosClient.put).toHaveBeenCalledWith('/admin/doctors/1', expect.objectContaining({ experienceYears: 0 })));
     });
@@ -106,7 +106,7 @@ describe('admin batch 2 regression', () => {
         get.mockImplementation(async url => url.startsWith('/admin/users?') ? pageResponse([users[0]]) : defaultGet(url));
         render(<AdminDoctors />);
         await userEvent.click(screen.getByRole('button', { name: 'Thêm hồ sơ bác sĩ' }));
-        expect(await screen.findByText('Không còn tài khoản Bác sĩ nào chưa có hồ sơ.')).toBeInTheDocument();
+        expect(await screen.findByText('Không còn tài khoản bác sĩ nào chưa có hồ sơ.')).toBeInTheDocument();
     });
 
     it('HealthPackages exposes the delete action and confirms before deleting', async () => {
@@ -146,9 +146,9 @@ describe('admin batch 2 regression', () => {
     });
 
     it.each([
-        { name: 'Doctors', Component: AdminDoctors, placeholder: 'Tìm theo tên...', button: 'Lọc', endpoint: '/admin/doctors' },
-        { name: 'HealthPackages', Component: AdminHealthPackages, placeholder: 'Tìm theo tên hoặc mã gói...', button: 'Tìm kiếm', endpoint: '/admin/health-packages' },
-        { name: 'Medicines', Component: AdminMedicines, placeholder: 'Tìm theo tên thuốc hoặc mã...', button: 'Tìm kiếm', endpoint: '/admin/medicines' }
+        { name: 'Doctors', Component: AdminDoctors, placeholder: 'Tìm theo tên...', button: 'Tìm', endpoint: '/admin/doctors' },
+        { name: 'HealthPackages', Component: AdminHealthPackages, placeholder: 'Tìm theo tên hoặc mã gói...', button: 'Tìm', endpoint: '/admin/health-packages' },
+        { name: 'Medicines', Component: AdminMedicines, placeholder: 'Tìm theo tên thuốc hoặc mã...', button: 'Tìm', endpoint: '/admin/medicines' }
     ])('$name searches once from page 2 and once from page 1', async ({ Component, placeholder, button, endpoint }) => {
         render(<Component />);
         await screen.findByRole('table');

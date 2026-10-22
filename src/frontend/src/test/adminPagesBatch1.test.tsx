@@ -38,7 +38,7 @@ afterEach(() => cleanup());
 
 async function chooseDoctor() {
     await waitFor(() => expect(screen.queryByText('Đang tải dữ liệu...')).not.toBeInTheDocument());
-    await userEvent.click(screen.getByRole('combobox', { name: 'Chọn Bác sĩ:' }));
+    await userEvent.click(screen.getByRole('combobox', { name: 'Bác sĩ' }));
     await userEvent.click(await screen.findByText('Bác sĩ Minh', { exact: true }));
     await screen.findByRole('table');
 }
@@ -93,7 +93,7 @@ describe('admin batch 1 regression', () => {
         get.mockClear();
         await userEvent.type(screen.getByPlaceholderText(placeholder), 'Minh');
         expect(get).not.toHaveBeenCalled();
-        await userEvent.click(screen.getByRole('button', { name: 'Lọc' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Tìm' }));
         await screen.findByRole('table');
         expect(get).toHaveBeenCalledTimes(1);
         expect(get).toHaveBeenLastCalledWith(`${endpoint}?page=1&pageSize=10&search=Minh`);
@@ -155,7 +155,7 @@ describe('admin batch 1 regression', () => {
         const rows = within(screen.getByRole('table')).getAllByRole('row').slice(1);
         expect(within(rows[0]).getByText('11/10/2026')).toBeInTheDocument();
         expect(within(rows[0]).getByText('Chủ nhật')).toBeInTheDocument();
-        expect(screen.getAllByText(/cần sinh slot/)).toHaveLength(1);
+        expect(screen.getAllByText(/Cần tạo khung giờ/)).toHaveLength(1);
         expect(rows).toHaveLength(3);
     }, 15000);
 
@@ -180,10 +180,10 @@ describe('admin batch 1 regression', () => {
         });
         render(<AdminWorkSchedules />);
         await waitFor(() => expect(screen.queryByText('Đang tải dữ liệu...')).not.toBeInTheDocument());
-        await userEvent.click(screen.getByRole('combobox', { name: 'Chọn Bác sĩ:' }));
+        await userEvent.click(screen.getByRole('combobox', { name: 'Bác sĩ' }));
         await userEvent.click(await screen.findByText('Bác sĩ Minh', { exact: true }));
         expect(await screen.findByText('Không thể tải lịch.')).toBeInTheDocument();
         expect(screen.queryByRole('table')).not.toBeInTheDocument();
-        expect(screen.queryByText(/cần sinh slot/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Cần tạo khung giờ/)).not.toBeInTheDocument();
     }, 15000);
 });

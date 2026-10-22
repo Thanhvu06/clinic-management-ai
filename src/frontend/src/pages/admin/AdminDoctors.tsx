@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { Plus, XCircle, Edit, Briefcase, Award } from 'lucide-react';
-import { Alert, Avatar, Button, Checkbox, Form, Input, InputNumber, Modal, Select, Tag, Typography } from 'antd';
+import { Plus, XCircle, Edit, Award, Search } from 'lucide-react';
+import { Alert, Button, Checkbox, Form, Input, InputNumber, Modal, Select, Tag, Typography } from 'antd';
 import { PageHeader, FilterBar, DataTable, Pagination, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './AdminDoctors.module.css';
 import { useDialog } from '../../contexts/DialogContext';
@@ -257,7 +257,7 @@ export const AdminDoctors: React.FC = () => {
         <div className={styles.doctorsPage}>
             <PageHeader title="Quản lý bác sĩ" actions={<Button type="primary" icon={<Plus size={18} />} loading={openingModal === 'create'} disabled={openingModal !== null} onClick={openCreateModal}>Thêm hồ sơ bác sĩ</Button>} />
             <FilterBar>
-                <Input.Search className={styles.doctorSearch} placeholder="Tìm theo tên..." enterButton="Lọc" value={search} onChange={e => setSearch(e.target.value)} onSearch={handleSearchSubmit} />
+                <Input.Search className={styles.doctorSearch} prefix={<Search size={16} aria-hidden="true" />} placeholder="Tìm theo tên..." enterButton="Tìm" value={search} onChange={e => setSearch(e.target.value)} onSearch={handleSearchSubmit} />
                 <Select className={styles.doctorStatusFilter} aria-label="Trạng thái" value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[
                     { value: '', label: 'Tất cả trạng thái' }, { value: 'true', label: 'Đang hoạt động' }, { value: 'false', label: 'Ngừng hoạt động' }
                 ]} />
@@ -265,13 +265,12 @@ export const AdminDoctors: React.FC = () => {
             {loading ? <LoadingState /> : loadError ? <InlineError message={loadError} onRetry={fetchDoctors} />
                 : doctors.length === 0 ? <EmptyState title="Không tìm thấy dữ liệu." /> : <>
                     <DataTable data={doctors} keyExtractor={doctor => doctor.id} columns={[
-                        { header: 'Bác sĩ', accessor: doctor => <div className={styles.doctorIdentity}>
-                            <Avatar>{doctor.fullName.charAt(0)}</Avatar>
-                            <div><Typography.Text strong>{formatDoctorName(doctor.academicTitle, doctor.fullName)}</Typography.Text><div className={styles.doctorEmail}>{doctor.email}</div></div>
+                        { header: 'Bác sĩ', accessor: doctor => <div>
+                            <Typography.Text strong>{formatDoctorName(doctor.academicTitle, doctor.fullName)}</Typography.Text><div className={styles.doctorEmail}>{doctor.email}</div>
                         </div> },
                         { header: 'Chuyên môn', accessor: doctor => <>
-                            <div className={styles.doctorExperience}><Briefcase size={14} />{doctor.experienceYears} năm kinh nghiệm</div>
-                            <div className={styles.specialtyTags}>{doctor.specialties.map(s => <Tag key={s.specialtyId} color={s.isPrimary ? 'processing' : undefined} title={s.isPrimary ? 'Chuyên khoa chính' : undefined} icon={s.isPrimary ? <Award size={12} /> : undefined}>{s.specialtyName}</Tag>)}</div>
+                            <div className={styles.doctorExperience}>{doctor.experienceYears} năm kinh nghiệm</div>
+                            <div className={styles.specialtyTags}>{doctor.specialties.map(s => <Tag key={s.specialtyId} color={s.isPrimary ? 'processing' : undefined} title={s.isPrimary ? 'Chuyên khoa chính' : undefined}>{s.specialtyName}</Tag>)}</div>
                         </> },
                         { header: 'Trạng thái', accessor: doctor => <StatusBadge status={doctor.isActive ? 'Approved' : 'Rejected'} label={doctor.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'} /> },
                         { header: 'Thao tác', align: 'right', accessor: doctor => <Button size="small" icon={<Edit size={14} />} loading={openingModal === doctor.id} disabled={openingModal !== null} onClick={() => openEditModal(doctor)}>Sửa</Button> }
@@ -284,19 +283,19 @@ export const AdminDoctors: React.FC = () => {
                 {formError && <Alert className={styles.doctorFormAlert} type="error" title={formError} showIcon />}
                 <Form layout="vertical" onFinish={handleFormSubmit} disabled={formLoading}>
                     {!modal.isEdit && <>
-                        {unassignedUsers.length === 0 && <Alert className={styles.doctorFormAlert} type="info" title="Không còn tài khoản Bác sĩ nào chưa có hồ sơ." showIcon />}
-                        <Form.Item label="Chọn tài khoản User liên kết (*)" htmlFor="doctorUser">
-                            <Select id="doctorUser" aria-label="Chọn tài khoản User liên kết (*)" placeholder="-- Chọn User (Role Doctor) --" value={modal.data.userId || undefined} onChange={value => setModal({ ...modal, data: { ...modal.data, userId: value } })}
+                        {unassignedUsers.length === 0 && <Alert className={styles.doctorFormAlert} type="info" title="Không còn tài khoản bác sĩ nào chưa có hồ sơ." showIcon />}
+                        <Form.Item label="Tài khoản bác sĩ (*)" htmlFor="doctorUser">
+                            <Select id="doctorUser" aria-label="Tài khoản bác sĩ (*)" placeholder="Chọn tài khoản bác sĩ" value={modal.data.userId || undefined} onChange={value => setModal({ ...modal, data: { ...modal.data, userId: value } })}
                                 options={unassignedUsers.map(user => ({ value: user.id, label: `${user.fullName} (${user.email})` }))} />
                         </Form.Item>
                     </>}
                     <div className={styles.doctorFormGrid}>
                         <Form.Item label="Học hàm/Học vị" htmlFor="doctorAcademicTitle"><Input id="doctorAcademicTitle" value={modal.data.academicTitle || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, academicTitle: e.target.value } })} placeholder="VD: PGS. TS. BS" /></Form.Item>
-                        <Form.Item label="Số năm K.Nghiệm" htmlFor="doctorExperience"><InputNumber id="doctorExperience" className={styles.doctorNumber} min={0} max={100} value={modal.data.experienceYears ?? 0} onChange={value => setModal({ ...modal, data: { ...modal.data, experienceYears: value ?? 0 } })} /></Form.Item>
+                        <Form.Item label="Số năm kinh nghiệm" htmlFor="doctorExperience"><InputNumber id="doctorExperience" className={styles.doctorNumber} min={0} max={100} value={modal.data.experienceYears ?? 0} onChange={value => setModal({ ...modal, data: { ...modal.data, experienceYears: value ?? 0 } })} /></Form.Item>
                     </div>
                     <Form.Item label="Chuyên khoa (*)" htmlFor="doctorSpecialty">
                         <div className={styles.specialtyPicker}>
-                            <Select id="doctorSpecialty" aria-label="Chuyên khoa (*)" className={styles.specialtySelect} placeholder="-- Chọn chuyên khoa để thêm --" value={selectedSpecialty} onChange={setSelectedSpecialty}
+                            <Select id="doctorSpecialty" aria-label="Chuyên khoa (*)" className={styles.specialtySelect} placeholder="Chọn chuyên khoa để thêm" value={selectedSpecialty} onChange={setSelectedSpecialty}
                                 options={allSpecialties.filter(s => !(modal.data.specialties || []).some(selected => selected.specialtyId === s.id)).map(s => ({ value: s.id, label: s.name }))} />
                             <Button onClick={() => { if (selectedSpecialty) handleAddSpecialty(selectedSpecialty); setSelectedSpecialty(undefined); }}>Thêm</Button>
                         </div>

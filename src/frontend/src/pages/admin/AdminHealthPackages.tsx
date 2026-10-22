@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Search } from 'lucide-react';
 import { Alert, Button, Checkbox, Form, Input, InputNumber, Modal, Select, Tag, Typography } from 'antd';
 import { PageHeader, FilterBar, DataTable, Pagination, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './AdminHealthPackages.module.css';
@@ -153,9 +153,9 @@ export const AdminHealthPackages: React.FC = () => {
 
     return (
         <div className={styles.packagesPage}>
-            <PageHeader title="Quản lý gói khám sức khỏe" actions={<Button type="primary" icon={<Plus size={18} />} onClick={() => openModal({ isActive: true, sortOrder: 0, price: 1000000 }, false)}>Thêm gói khám mới</Button>} />
+            <PageHeader title="Gói khám sức khỏe" actions={<Button type="primary" icon={<Plus size={18} />} onClick={() => openModal({ isActive: true, sortOrder: 0, price: 1000000 }, false)}>Thêm gói khám mới</Button>} />
             <FilterBar>
-                <Input.Search className={styles.packageSearch} placeholder="Tìm theo tên hoặc mã gói..." enterButton="Tìm kiếm" value={search} onChange={e => setSearch(e.target.value)} onSearch={handleSearchSubmit} />
+                <Input.Search className={styles.packageSearch} prefix={<Search size={16} aria-hidden="true" />} placeholder="Tìm theo tên hoặc mã gói..." enterButton="Tìm" value={search} onChange={e => setSearch(e.target.value)} onSearch={handleSearchSubmit} />
                 <Select className={styles.packageStatusFilter} aria-label="Trạng thái" value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[
                     { value: '', label: 'Tất cả trạng thái' }, { value: 'true', label: 'Đang hoạt động' }, { value: 'false', label: 'Tạm ẩn' }
                 ]} />

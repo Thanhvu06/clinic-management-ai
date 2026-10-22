@@ -1,9 +1,9 @@
 import React from 'react';
-import { Empty, Typography } from 'antd';
-import { Inbox } from 'lucide-react';
+import { Typography } from 'antd';
 import styles from './common.module.css';
 
 interface EmptyStateProps {
+    /** Không còn hiển thị; giữ để các trang cũ truyền vào vẫn biên dịch được. */
     icon?: React.ReactNode;
     title: string;
     description?: string;
@@ -11,31 +11,23 @@ interface EmptyStateProps {
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
-    icon,
     title,
     description,
     action
 }) => {
     return (
-        <Empty
-            className={styles.emptyState}
-            image={icon || <Inbox size={48} />}
-            description={
-                <>
-                    <Typography.Title level={3} className={styles.emptyTitle}>{title}</Typography.Title>
-                    {description && (
-                        <Typography.Text type="secondary" className={styles.emptyDescription}>
-                            {description}
-                        </Typography.Text>
-                    )}
-                </>
-            }
-        >
+        <div className={styles.emptyState} data-testid="empty-state">
+            <Typography.Text type="secondary" className={styles.emptyTitle}>{title}</Typography.Text>
+            {description && (
+                <Typography.Text type="secondary" className={styles.emptyDescription}>
+                    {description}
+                </Typography.Text>
+            )}
             {action && (
                 <div className={styles.emptyAction}>
                     {action}
                 </div>
             )}
-        </Empty>
+        </div>
     );
 };

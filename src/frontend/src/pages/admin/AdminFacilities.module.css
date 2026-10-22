@@ -5,11 +5,11 @@
 .selectedCard { border-color: var(--cc-color-primary); background: var(--cc-color-primary-light); }
 .facilityCard:focus-visible, .roomButton:focus-visible { outline: 2px solid var(--cc-color-primary); outline-offset: var(--cc-space-xxs); }
 .facilityFacts { display: flex; flex-wrap: wrap; gap: var(--cc-space-md); margin-top: var(--cc-space-md); padding-top: var(--cc-space-sm); border-top: 1px solid var(--cc-color-border); color: var(--cc-color-text-secondary); }
-.facilityFacts span, .iconHeading { display: flex; align-items: center; gap: var(--cc-space-xxs); }
+.facilityFacts span { display: flex; align-items: center; gap: var(--cc-space-xxs); }
 .sectionHeading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--cc-space-sm); margin-bottom: var(--cc-space-sm); }
 .sectionHeading h2, .sectionHeading h3 { margin: 0; }
 .sectionHeading h2 { font-size: 18px; }
-.iconHeading { font-size: 16px; margin: 0 0 var(--cc-space-sm); }
+.blockHeading { font-size: 16px; margin: 0 0 var(--cc-space-sm); }
 .actions, .formActions { display: flex; flex-wrap: wrap; gap: var(--cc-space-xs); }
 .formActions { justify-content: flex-end; }
 .structureRow { row-gap: var(--cc-space-lg); }

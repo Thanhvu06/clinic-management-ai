@@ -1,10 +1,10 @@
 import { getApiErrorMessage } from '../../utils/apiError';
 import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import React, { useState, useEffect, useCallback } from 'react';
-import { Alert, Button, Card, DatePicker, Flex, Form, Input, Modal } from 'antd';
+import { Alert, Button, DatePicker, Flex, Form, Input, Modal } from 'antd';
 import type { Dayjs } from 'dayjs';
 import {
-    ChevronLeft, ChevronRight, Clock,
+    ChevronLeft, ChevronRight,
     CalendarPlus, AlertTriangle, RefreshCw, ShieldAlert
 } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
@@ -12,6 +12,7 @@ import type { DoctorScheduleDayDto, LeavePreviewDto } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { PageHeader, InlineError, EmptyState, LoadingState } from '../../components/common';
 import styles from './DoctorSchedule.module.css';
+import { DoctorWeekSchedule } from './DoctorWeekSchedule';
 
 const vietnamToday = () => {
     const parts = new Intl.DateTimeFormat('en-CA', {
@@ -152,10 +153,10 @@ export const DoctorSchedule: React.FC = () => {
     return (
         <div>
             <PageHeader
-                title="Lịch trực & Ca khám tuần"
+                title="Lịch trực & ca khám"
                 actions={
                     <Flex gap="small" align="center" wrap>
-                        <Button danger type="primary" icon={<CalendarPlus size={15} />} onClick={() => setIsLeaveModalOpen(true)}>
+                        <Button icon={<CalendarPlus size={15} />} onClick={() => setIsLeaveModalOpen(true)}>
                             Đăng ký nghỉ phép
                         </Button>
                         <Flex align="center" className={styles.surface1}>
@@ -171,16 +172,14 @@ export const DoctorSchedule: React.FC = () => {
                 <InlineError message={loadError} onRetry={loadSchedule} />
             )}
 
-            <Card className={styles.weekBar}>
-                <Flex justify="space-between" align="center">
-                    <span className={styles.weekLabel}>
-                        Tuần từ {currentMonday.toLocaleDateString('vi-VN')} đến {sunday.toLocaleDateString('vi-VN')}
-                    </span>
-                    <Button type="link" onClick={loadSchedule} disabled={loading} icon={<RefreshCw size={14} />}>
-                        {loading ? 'Đang tải...' : 'Làm mới'}
-                    </Button>
-                </Flex>
-            </Card>
+            <div className={styles.weekBar}>
+                <span className={styles.weekLabel}>
+                    Tuần từ {currentMonday.toLocaleDateString('vi-VN')} đến {sunday.toLocaleDateString('vi-VN')}
+                </span>
+                <Button type="link" onClick={loadSchedule} disabled={loading} icon={<RefreshCw size={14} />}>
+                    {loading ? 'Đang tải...' : 'Làm mới'}
+                </Button>
+            </div>
 
             {loading ? (
                 <LoadingState message="Đang tải lịch trực..." height="200px" />
@@ -190,64 +189,7 @@ export const DoctorSchedule: React.FC = () => {
                     description="Hiện chưa có ca trực nào được phân bổ cho khoảng thời gian này."
                 />
             ) : (
-                <div>
-                    {scheduleDays.map(day => (
-                        <Card key={day.date} className={styles.dayCard}>
-                            <Flex justify="space-between" align="center" className={styles.dayHeader}>
-                                <div>
-                                    <span className={styles.dayName}>{day.dayOfWeekName}</span>
-                                    <span className={styles.dayDate}>({formatDateOnly(day.date)})</span>
-                                </div>
-                                <span className={day.shifts.length > 0 ? styles.shiftCountActive : styles.shiftCountIdle}>
-                                    {day.shifts.length > 0 ? `${day.shifts.length} ca trực` : 'Nghỉ trực'}
-                                </span>
-                            </Flex>
-
-                            {day.shifts.length === 0 ? (
-                                <div className={styles.noShift}>
-                                    Không có ca làm việc nào được phân công.
-                                </div>
-                            ) : (
-                                <div>
-                                    {day.shifts.map(shift => (
-                                        <div key={shift.scheduleId} className={styles.shiftBox}>
-                                            <Flex justify="space-between" align="center" wrap gap="small" className={styles.shiftTitleRow}>
-                                                <Flex align="center" gap="small">
-                                                    <Clock size={16} className={styles.icon1} />
-                                                    <span className={styles.shiftName}>
-                                                        {shift.shiftName}: {shift.startTime.substring(0, 5)} - {shift.endTime.substring(0, 5)}
-                                                    </span>
-                                                </Flex>
-                                                <span className={styles.slotCount}>
-                                                    {shift.slots.filter(s => s.isBooked).length}/{shift.slots.length} khung giờ đã được đặt
-                                                </span>
-                                            </Flex>
-
-                                            <div className={styles.slotsGrid}>
-                                                {shift.slots.map(slot => (
-                                                    <div key={slot.slotId} className={`${styles.slotBox} ${slot.isBooked ? styles.slotBoxBooked : ''}`}>
-                                                        <div className={`${styles.slotTimeRow} ${slot.isBooked ? styles.slotTimeRowBooked : ''}`}>
-                                                            <span>{slot.startTime.substring(0, 5)} - {slot.endTime.substring(0, 5)}</span>
-                                                            <span className={slot.isBooked ? styles.slotStatusBooked : styles.slotStatusFree}>
-                                                                {slot.isBooked ? 'Đã đặt' : 'Trống'}
-                                                            </span>
-                                                        </div>
-                                                        {slot.isBooked && (
-                                                            <div className={styles.slotPatient}>
-                                                                <div className={styles.slotPatientName}>{slot.patientName}</div>
-                                                                {slot.appointmentCode && <div>{slot.appointmentCode}</div>}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </Card>
-                    ))}
-                </div>
+                <DoctorWeekSchedule days={scheduleDays} />
             )}
 
             <Modal

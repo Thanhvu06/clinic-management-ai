@@ -2,7 +2,7 @@ import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useCallback } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { CalendarDays, Plus, Clock, Edit, CheckCircle, XCircle, PlayCircle } from 'lucide-react';
+import { Plus, Clock, Edit, CheckCircle, XCircle, PlayCircle } from 'lucide-react';
 import { Alert, Button, DatePicker, Form, Input, Modal, Select, Space, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { PageHeader, FilterBar, DataTable, EmptyState, LoadingState, InlineError } from '../../components/common';
@@ -189,21 +189,21 @@ export const AdminWorkSchedules: React.FC = () => {
 
     return (
         <div className={styles.schedulesPage}>
-            <PageHeader title="Quản lý lịch làm việc" actions={selectedDoctorId ?
+            <PageHeader title="Lịch trực & khung giờ" actions={selectedDoctorId ?
                 <Button type="primary" icon={<Plus size={18} />} onClick={() => { setFormError(''); setModal({ isOpen: true, isEdit: false, data: { workDate: toLocalDateString() } }); }}>Thêm lịch làm việc</Button> : undefined} />
             <FilterBar>
-                <label className={styles.scheduleDoctorLabel} htmlFor="scheduleDoctor">Chọn Bác sĩ:</label>
+                <label className={styles.scheduleDoctorLabel} htmlFor="scheduleDoctor">Bác sĩ</label>
                 <Select id="scheduleDoctor" className={styles.scheduleDoctorFilter} showSearch={{ optionFilterProp: 'label' }} allowClear
-                    placeholder="-- Vui lòng chọn bác sĩ --" value={selectedDoctorId || undefined} loading={doctorsLoading}
+                    placeholder="Chọn bác sĩ" value={selectedDoctorId || undefined} loading={doctorsLoading}
                     onChange={value => { setSelectedDoctorId(value ?? ''); setLoadError(''); setSchedules([]); }}
                     options={doctors.map(doctor => ({ value: doctor.id, label: doctor.fullName }))} />
             </FilterBar>
             {doctorsLoading ? <LoadingState /> : doctorsError ? <InlineError message={doctorsError} onRetry={fetchDoctors} />
-                : !selectedDoctorId ? <EmptyState icon={<CalendarDays size={48} />} title="Chưa chọn bác sĩ" description="Vui lòng chọn một bác sĩ từ danh sách để xem lịch làm việc." />
+                : !selectedDoctorId ? <EmptyState title="Chưa chọn bác sĩ" description="Chọn một bác sĩ để xem lịch làm việc." />
                 : loading ? <LoadingState message="Đang tải lịch làm việc..." />
                 : loadError ? <InlineError message={loadError} onRetry={fetchSchedules} />
                 : schedules.length === 0 ? <EmptyState title="Bác sĩ chưa có lịch làm việc nào." /> : <>
-                    <Alert className={styles.scheduleSlotHint} type="info" title="Lưu ý: Bạn cần sinh slot để bệnh nhân có thể đặt lịch." showIcon />
+                    <Alert className={styles.scheduleSlotHint} type="info" title="Cần tạo khung giờ để bệnh nhân có thể đặt lịch." showIcon />
                     <div className={styles.scheduleTable}>
                         <DataTable data={schedules} keyExtractor={schedule => schedule.id} columns={[
                             { header: 'Ngày', accessor: schedule => <><Typography.Text strong>{formatDate(schedule.workDate)}</Typography.Text><div className={styles.scheduleDay}>{getDayOfWeek(schedule.workDate)}</div></> },

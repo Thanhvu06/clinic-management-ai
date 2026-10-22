@@ -37,7 +37,7 @@ it('requests the weekly schedule using controller query names and renders backen
         expect(url).not.toContain('startDate=');
         expect(url).not.toContain('endDate=');
     }
-    expect(screen.getByText('(19/10/2026)')).toBeInTheDocument();
+    expect(screen.getByText('19/10')).toBeInTheDocument();
     expect(screen.getByText('09:00 - 09:30')).toBeInTheDocument();
     expect(screen.getByText('Đã đặt')).toBeInTheDocument();
     expect(screen.getByText('APT-SCHEDULE-91')).toBeInTheDocument();

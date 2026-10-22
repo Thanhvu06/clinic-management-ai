@@ -64,7 +64,7 @@ describe('Retryable load failures', () => {
     it('unbilled failure replaces the empty queue and retries only that queue', async () => {
         vi.mocked(billingApi.reception.getUnbilledVisits).mockRejectedValueOnce(new Error('offline'));
         render(<ReceptionBilling />);
-        fireEvent.click(screen.getByRole('button', { name: /Hàng đợi chờ lập hóa đơn/ }));
+        fireEvent.click(screen.getByRole('radio', { name: /Hàng đợi chờ lập hóa đơn/ }));
         await screen.findByText('Không thể tải hàng đợi ca khám. Vui lòng thử lại.');
         expect(screen.queryByText('Hiện không có lượt khám nào chờ lập hóa đơn.')).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
@@ -79,7 +79,7 @@ describe('Retryable load failures', () => {
         render(<ReceptionBilling />);
         await screen.findByText('Không tải được số liệu');
         expect(screen.getAllByText('—')).toHaveLength(4);
-        fireEvent.click(screen.getByRole('button', { name: /Hàng đợi chờ lập hóa đơn/ }));
+        fireEvent.click(screen.getByRole('radio', { name: /Hàng đợi chờ lập hóa đơn/ }));
         await screen.findByText('Hiện không có lượt khám nào chờ lập hóa đơn.');
         fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
         await waitFor(() => expect(screen.queryByText('Không tải được số liệu')).not.toBeInTheDocument());

@@ -1,7 +1,11 @@
 /* DoctorAppointments: style riêng không đáp ứng được bằng props antd thuần. Biến lấy từ --cc-*. */
 
 .filterCard {
-    margin-bottom: var(--cc-space-lg);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--cc-space-sm);
+    margin-bottom: var(--cc-space-md);
 }
 
 .totalLine {
@@ -129,6 +133,7 @@
 
 .searchInput {
     flex: 1 1 250px;
+    max-width: 360px;
 }
 
 .mutedIcon {

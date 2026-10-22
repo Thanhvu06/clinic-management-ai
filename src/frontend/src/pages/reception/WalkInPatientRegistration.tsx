@@ -6,7 +6,7 @@ import { PageHeader, StatusBadge, InlineError } from '../../components/common';
 import { spacing } from '../../theme/tokens';
 import styles from './WalkInPatientRegistration.module.css';
 import {
-    UserCheck, UserPlus, Search, ShieldAlert,
+    UserCheck, UserPlus, Search,
     Plus, Trash2, CheckCircle2, ArrowRight, ArrowLeft,
     RefreshCw
 } from 'lucide-react';
@@ -354,7 +354,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                 setCurrentTicket(res.data);
                 setTicketModalOpen(true);
                 showAlert(
-                    'Tiếp nhận & Cấp STT thành công!',
+                    'Tiếp nhận & cấp STT thành công!',
                     `Đã cấp Số thứ tự ${res.data.queueNumber} tại ${res.data.departmentName || 'phòng khám'} cho bệnh nhân ${res.data.patientName}. Mã bệnh án: ${res.data.medicalRecordNumber}.`,
                     'success'
                 );
@@ -396,18 +396,18 @@ export const WalkInPatientRegistration: React.FC = () => {
             <PageHeader title="Tiếp nhận người bệnh"
                 actions={<Button htmlType="button" onClick={() => navigate('/reception')}><ArrowLeft size={16} /> Bàn làm việc lễ tân</Button>} />
             <div className={styles.intakeSteps}>
-                <div className={`${styles.intakeStep} ${step === 1 ? styles.activeStep : ''}`}><span className={`${styles.stepNumber} ${step >= 1 ? styles.reachedStepNumber : ''}`}>1</span><span>Tìm & Chọn Người Bệnh</span></div>
-                <div className={`${styles.intakeStep} ${step === 2 ? styles.activeStep : ''}`}><span className={`${styles.stepNumber} ${step >= 2 ? styles.reachedStepNumber : ''}`}>2</span><span>Chuẩn Bị Lượt Khám</span></div>
-                <div className={`${styles.intakeStep} ${step === 3 ? styles.activeStep : ''}`}><span className={`${styles.stepNumber} ${step >= 3 ? styles.reachedStepNumber : ''}`}>3</span><span>Xác Nhận & Cấp STT</span></div>
+                <div className={`${styles.intakeStep} ${step === 1 ? styles.activeStep : ''}`}><span className={`${styles.stepNumber} ${step >= 1 ? styles.reachedStepNumber : ''}`}>1</span><span>Tìm & chọn người bệnh</span></div>
+                <div className={`${styles.intakeStep} ${step === 2 ? styles.activeStep : ''}`}><span className={`${styles.stepNumber} ${step >= 2 ? styles.reachedStepNumber : ''}`}>2</span><span>Chuẩn bị lượt khám</span></div>
+                <div className={`${styles.intakeStep} ${step === 3 ? styles.activeStep : ''}`}><span className={`${styles.stepNumber} ${step >= 3 ? styles.reachedStepNumber : ''}`}>3</span><span>Xác nhận & cấp STT</span></div>
             </div>
             {step === 1 && <Card className={styles.stepCard}>
                 <div className={styles.patientModeButtons}>
-                    <Button htmlType="button" type={patientMode === 'lookup' ? 'primary' : 'default'} onClick={() => setPatientMode('lookup')}><Search size={16} /> Tra cứu hồ sơ cũ (Khuyên dùng)</Button>
+                    <Button htmlType="button" type={patientMode === 'lookup' ? 'primary' : 'default'} onClick={() => setPatientMode('lookup')}><Search size={16} /> Tra cứu hồ sơ cũ</Button>
                     <Button htmlType="button" type={patientMode === 'new' ? 'primary' : 'default'} onClick={() => setPatientMode('new')}><UserPlus size={16} /> Đăng ký hồ sơ người bệnh mới</Button>
                 </div>
                 {patientMode === 'lookup' && <div>
                     <form onSubmit={handleSearchPatient} className={styles.patientLookupForm}>
-                        <Input type="text" status={prefillError ? 'error' : undefined} className={styles.patientLookupInput} placeholder="Nhập Mã bệnh nhân (MRN), Số CCCD, Số điện thoại hoặc Họ tên..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                        <Input type="text" status={prefillError ? 'error' : undefined} className={styles.patientLookupInput} placeholder="Nhập mã bệnh nhân (MRN), số CCCD, số điện thoại hoặc họ tên..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                         <Button htmlType="submit" type="primary" disabled={searching}>{searching ? <RefreshCw className="spin" size={16} /> : <Search size={16} />} Tìm hồ sơ</Button>
                     </form>
                     {prefillLoading && <small className={styles.loadHint}>Đang tải hồ sơ bệnh nhân...</small>}
@@ -444,7 +444,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                     </Row>
                     <div className={styles.addressField}><label className={styles.fieldLabel}>Địa chỉ cư trú</label><Input type="text" placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành..." value={newAddress} onChange={(e) => setNewAddress(e.target.value)} /></div>
                     <div className={styles.emergencyContactSection}>
-                        <h4 className={styles.sectionTitle}>Người liên hệ khẩn cấp / Giám hộ (Bắt buộc nếu người bệnh không có SĐT)</h4>
+                        <h4 className={styles.sectionTitle}>Người liên hệ khẩn cấp / giám hộ (bắt buộc nếu người bệnh không có SĐT)</h4>
                         <Row gutter={[spacing.md, spacing.md]} className={styles.patientFormRow}>
                             <Col xs={24} md={8}><div className={styles.formField}><label className={styles.fieldLabel}>Họ tên người liên hệ</label><Input type="text" placeholder="VD: Trần Thị B" value={contactName} onChange={(e) => setContactName(e.target.value)} /></div></Col>
                             <Col xs={24} md={8}><div className={styles.formField}><label className={styles.fieldLabel}>Mối quan hệ</label><Select className={styles.formSelect} value={contactRelationship} onChange={(value) => setContactRelationship(value)} options={[{value:'Bố/Mẹ',label:'Bố/Mẹ'},{value:'Vợ/Chồng',label:'Vợ/Chồng'},{value:'Con cái',label:'Con cái'},{value:'Người thân',label:'Người thân khác'},{value:'Người giám hộ',label:'Người giám hộ'}]} /></div></Col>
@@ -453,10 +453,10 @@ export const WalkInPatientRegistration: React.FC = () => {
                         <div className={styles.formField}><label htmlFor="emergency-contact-is-guardian" className={styles.guardianLabel}><input id="emergency-contact-is-guardian" type="checkbox" checked={isGuardian} onChange={(e) => setIsGuardian(e.target.checked)} disabled={!contactPhone.trim()} />Người liên hệ này là người giám hộ của người bệnh</label>{!contactPhone.trim() && <span className={styles.fieldHint}>Nhập số điện thoại liên hệ để chọn.</span>}</div>
                     </div>
                     <div className={styles.allergySection}>
-                        <div className={styles.allergySectionHeader}><h4 className={styles.allergyTitle}><ShieldAlert size={16} /> Tiền sử dị ứng thuốc & thực phẩm</h4><Button htmlType="button" onClick={handleAddAllergy}><Plus size={13} /> Thêm dị ứng</Button></div>
+                        <div className={styles.allergySectionHeader}><h4 className={styles.allergyTitle}>Tiền sử dị ứng thuốc & thực phẩm</h4><Button htmlType="button" onClick={handleAddAllergy}><Plus size={13} /> Thêm dị ứng</Button></div>
                         {allergies.map((al, idx) => <Row key={idx} gutter={[spacing.xs, spacing.xs]} align="middle" className={styles.allergyRow}>
                             <Col xs={24} md={8}><Input type="text" placeholder="Dị nguyên (VD: Penicillin, Paracetamol...)" value={al.allergen} onChange={(e) => handleUpdateAllergy(idx, 'allergen', e.target.value)} /></Col>
-                            <Col xs={24} md={5}><Select className={styles.formSelect} value={al.severity} onChange={(value) => handleUpdateAllergy(idx, 'severity', value)} options={[{value:'Mild',label:'Nhẹ'},{value:'Moderate',label:'Vừa'},{value:'Severe',label:'Nặng / Sốc phản vệ'}]} /></Col>
+                            <Col xs={24} md={5}><Select className={styles.formSelect} value={al.severity} onChange={(value) => handleUpdateAllergy(idx, 'severity', value)} options={[{value:'Mild',label:'Nhẹ'},{value:'Moderate',label:'Vừa'},{value:'Severe',label:'Nặng / sốc phản vệ'}]} /></Col>
                             <Col xs={24} md={8}><Input type="text" placeholder="Phản ứng (VD: Nổi mẩn, khó thở...)" value={al.reaction} onChange={(e) => handleUpdateAllergy(idx, 'reaction', e.target.value)} /></Col>
                             <Col xs={24} md={3}><Button htmlType="button" type="text" danger onClick={() => handleRemoveAllergy(idx)}><Trash2 size={16} /></Button></Col>
                         </Row>)}
@@ -471,17 +471,17 @@ export const WalkInPatientRegistration: React.FC = () => {
                     <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Khoa phòng tiếp nhận *</label><Select aria-label="Khoa phòng tiếp nhận" disabled={departmentsLoading} status={departmentsError ? 'error' : undefined} className={styles.formSelect} value={departmentId || ''} onChange={(value) => setDepartmentId(Number(value))} options={departments.map(d => ({value:d.id,label:`${d.name} (${d.code})`}))} />{departmentsLoading && <small className={styles.loadHint}>Đang tải...</small>}{departmentsError && <div className={styles.loadError}><InlineError message={departmentsError} onRetry={() => setDepartmentsReload(value => value + 1)} /></div>}</div></Col>
                 </Row>
                 <Row gutter={[spacing.md, spacing.md]} className={styles.visitFormRow}>
-                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Phòng bệnh / Buồng khám</label><Select aria-label="Phòng bệnh / Buồng khám" disabled={roomsLoading} status={roomsError ? 'error' : undefined} className={styles.formSelect} value={roomId || ''} onChange={(value) => setRoomId(value ? Number(value) : undefined)} options={[{value:'',label:'-- Tự động xếp phòng trống --'},...rooms.map(r => ({value:r.id,label:`${r.roomNumber} - ${r.name}`}))]} />{roomsLoading && <small className={styles.loadHint}>Đang tải...</small>}{roomsError && <div className={styles.loadError}><InlineError message={roomsError} onRetry={() => setRoomsReload(value => value + 1)} /></div>}</div></Col>
+                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Phòng bệnh / buồng khám</label><Select aria-label="Phòng bệnh / buồng khám" disabled={roomsLoading} status={roomsError ? 'error' : undefined} className={styles.formSelect} value={roomId || ''} onChange={(value) => setRoomId(value ? Number(value) : undefined)} options={[{value:'',label:'-- Tự động xếp phòng trống --'},...rooms.map(r => ({value:r.id,label:`${r.roomNumber} - ${r.name}`}))]} />{roomsLoading && <small className={styles.loadHint}>Đang tải...</small>}{roomsError && <div className={styles.loadError}><InlineError message={roomsError} onRetry={() => setRoomsReload(value => value + 1)} /></div>}</div></Col>
                     <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Bác sĩ phụ trách</label><select aria-label="Bác sĩ phụ trách" disabled={doctorsLoading} aria-invalid={!!doctorsError} className={styles.nativeSelect} value={doctorId || ''} onChange={(e) => setDoctorId(e.target.value ? Number(e.target.value) : undefined)}><option value="">-- Tự động phân công theo ca trực --</option>{doctors.map(doc => <option key={doc.id} value={doc.id}>{doc.fullName} ({doc.specialtyName || 'Đa khoa'})</option>)}</select>{doctorsLoading && <small className={styles.loadHint}>Đang tải...</small>}{doctorsError && <div className={styles.loadError}><InlineError message={doctorsError} onRetry={() => setDoctorsReload(value => value + 1)} /></div>}</div></Col>
                 </Row>
                 <Row gutter={[spacing.md, spacing.md]} className={styles.visitFormRow}>
-                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Mức độ ưu tiên khám *</label><Select className={styles.formSelect} value={priority} onChange={(value) => setPriority(value as VisitPriority)} options={[{value:'Normal',label:'Khám thường (Theo thứ tự hàng đợi)'},{value:'Priority',label:'Ưu tiên (Trẻ < 6T, Người già ≥ 75T, Phụ nữ mang thai)'},{value:'Urgent',label:'Khẩn cấp'},{value:'Emergency',label:'Cấp cứu'}]} /></div></Col>
+                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Mức độ ưu tiên khám *</label><Select className={styles.formSelect} value={priority} onChange={(value) => setPriority(value as VisitPriority)} options={[{value:'Normal',label:'Khám thường (theo thứ tự hàng đợi)'},{value:'Priority',label:'Ưu tiên (trẻ < 6T, người già ≥ 75T, phụ nữ mang thai)'},{value:'Urgent',label:'Khẩn cấp'},{value:'Emergency',label:'Cấp cứu'}]} /></div></Col>
                 </Row>
-                <div className={styles.chiefComplaintField}><label className={styles.fieldLabel}>Lý do khám / Triệu chứng ban đầu *</label><Input.TextArea rows={3} placeholder="Mô tả lý do đến khám, biểu hiện sốt, đau, ho, hoặc yêu cầu kiểm tra sức khỏe..." value={chiefComplaint} onChange={(e) => setChiefComplaint(e.target.value)} required /></div>
+                <div className={styles.chiefComplaintField}><label className={styles.fieldLabel}>Lý do khám / triệu chứng ban đầu *</label><Input.TextArea rows={3} placeholder="Mô tả lý do đến khám, biểu hiện sốt, đau, ho, hoặc yêu cầu kiểm tra sức khỏe..." value={chiefComplaint} onChange={(e) => setChiefComplaint(e.target.value)} required /></div>
                 <div className={styles.stepFooter}><Button htmlType="button" onClick={() => setStep(1)}><ArrowLeft size={16} /> Quay lại bước 1</Button><Button htmlType="button" type="primary" onClick={handleProceedToStep3}>Tiếp tục: Xác nhận thông tin <ArrowRight size={16} /></Button></div>
             </Card>}
             {step === 3 && <Card className={styles.stepCard}>
-                <h3 className={styles.stepTitle}>Kiểm tra & Xác nhận thông tin lượt khám</h3>
+                <h3 className={styles.stepTitle}>Kiểm tra & xác nhận thông tin lượt khám</h3>
                 <div className={styles.patientSummary}><h4 className={styles.summaryTitle}>1. Thông tin người bệnh</h4>
                     <Row gutter={[spacing.md, spacing.sm]}>
                         <Col xs={24} md={12}><strong>Họ tên:</strong>{' '}{patientMode === 'lookup' ? selectedPatient?.fullName : newFullName}</Col>
@@ -490,7 +490,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                         <Col xs={24} md={12}><strong>Ngày sinh:</strong>{' '}{patientMode === 'lookup' ? selectedPatient?.dateOfBirth : newDateOfBirth}</Col>
                     </Row>
                 </div>
-                <div className={styles.visitSummary}><h4 className={styles.summaryTitle}>2. Thông tin tiếp nhận & Phòng khám</h4>
+                <div className={styles.visitSummary}><h4 className={styles.summaryTitle}>2. Thông tin tiếp nhận & phòng khám</h4>
                     <Row gutter={[spacing.md, spacing.sm]}>
                         <Col xs={24} md={12}><strong>Cơ sở:</strong>{' '}{facilities.find(f => f.id === facilityId)?.name}</Col>
                         <Col xs={24} md={12}><strong>Khoa phòng:</strong>{' '}{departments.find(d => d.id === departmentId)?.name}</Col>
@@ -499,7 +499,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                         <Col span={24}><strong>Lý do khám:</strong> {chiefComplaint}</Col>
                     </Row>
                 </div>
-                <div className={styles.stepFooter}><Button htmlType="button" onClick={() => setStep(2)} disabled={submitting}><ArrowLeft size={16} /> Quay lại sửa</Button><Button htmlType="button" type="primary" onClick={handleConfirmIntake} disabled={submitting} className={styles.confirmIntakeButton}>{submitting ? <RefreshCw className="spin" size={18} /> : <CheckCircle2 size={18} />}{submitting ? 'Đang tạo lượt khám...' : 'Xác nhận tiếp nhận & Cấp STT'}</Button></div>
+                <div className={styles.stepFooter}><Button htmlType="button" onClick={() => setStep(2)} disabled={submitting}><ArrowLeft size={16} /> Quay lại sửa</Button><Button htmlType="button" type="primary" onClick={handleConfirmIntake} disabled={submitting} className={styles.confirmIntakeButton}>{submitting ? <RefreshCw className="spin" size={18} /> : <CheckCircle2 size={18} />}{submitting ? 'Đang tạo lượt khám...' : 'Xác nhận tiếp nhận & cấp STT'}</Button></div>
             </Card>}
             <CheckInTicketModal isOpen={ticketModalOpen} ticket={currentTicket} onClose={() => { setTicketModalOpen(false); handleResetAll(); }} />
         </div>
