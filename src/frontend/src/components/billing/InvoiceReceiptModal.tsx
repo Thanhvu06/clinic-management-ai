@@ -3,6 +3,7 @@ import { X, Printer, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import type { InvoiceDetailDto } from '../../types';
 import { InvoiceStatus } from '../../types';
 import styles from './InvoiceReceiptModal.module.css';
+import { useScopedPrint } from '../../hooks/useScopedPrint';
 
 interface InvoiceReceiptModalProps {
     isOpen: boolean;
@@ -17,6 +18,7 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
     invoice,
     loading = false,
 }) => {
+    const handlePrint = useScopedPrint('cc-receipt-printing', isOpen);
     if (!isOpen) return null;
 
     const formatCurrency = (amount: number) => {
@@ -36,10 +38,6 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
         } catch {
             return dateStr;
         }
-    };
-
-    const handlePrint = () => {
-        window.print();
     };
 
     const getStatusTag = (status: InvoiceStatus) => {

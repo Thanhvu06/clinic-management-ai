@@ -193,3 +193,36 @@
     font-weight: 600;
     cursor: pointer;
 }
+
+@media print {
+    :global(body.cc-ticket-printing) * { visibility: hidden; }
+    :global(body.cc-ticket-printing) :global(#printable-ticket),
+    :global(body.cc-ticket-printing) :global(#printable-ticket) * { visibility: visible; }
+    :global(body.cc-ticket-printing) .overlay1 {
+        position: absolute;
+        inset: 0 auto auto 0;
+        width: 100%;
+        display: block;
+        background: none;
+        backdrop-filter: none;
+        padding: 0;
+        overflow: visible;
+    }
+    :global(body.cc-ticket-printing) .stackLayout1 {
+        width: 100%;
+        max-width: none;
+        max-height: none;
+        overflow: visible;
+        box-shadow: none;
+        background: none;
+    }
+    :global(body.cc-ticket-printing) .flexLayout1,
+    :global(body.cc-ticket-printing) .flexLayout7 { display: none; }
+    :global(body.cc-ticket-printing) :global(#printable-ticket) {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+}
