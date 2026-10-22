@@ -147,7 +147,6 @@ export const MainLayout: React.FC = () => {
                     </div>
                     <div>
                         <div className={styles.logoText}>ClinicCare AI</div>
-                        <div className={styles.logoTagline}>Hệ thống y tế thông minh</div>
                     </div>
                 </div>
 

@@ -87,7 +87,7 @@ describe('U1 doctor examination workspace', () => {
         expect(screen.getByRole('heading', { name: 'Sinh hiệu lần này' })).toBeInTheDocument();
         expect(screen.queryByText(/VÙNG 1/)).not.toBeInTheDocument();
         expect(screen.queryByText(/Đây là lần đầu bệnh nhân ghi nhận/)).not.toBeInTheDocument();
-        expect(screen.getByText('Phân loại BMI theo ngưỡng cấu hình của hệ thống')).toBeInTheDocument();
+        expect(screen.getByText('Chỉ số BMI')).toBeInTheDocument();
         const table = screen.getByRole('table');
         expect(within(table).getByRole('columnheader', { name: 'BMI' })).toBeInTheDocument();
         expect(within(table).queryByRole('columnheader', { name: /Cân nặng|Chiều cao/ })).not.toBeInTheDocument();
@@ -117,11 +117,11 @@ describe('U2 doctor appointment detail', () => {
         expect(css).not.toMatch(/text-transform/);
         expect(cssRule('src/pages/doctor/DoctorAppointmentDetail.module.css', '.spotlightCard')).not.toMatch(/border-inline-start/);
         for (const heading of container.querySelectorAll('h2')) expect(heading.parentElement!.querySelector('svg')).toBeNull();
-        const strip = screen.getByRole('group', { name: 'Dấu hiệu sinh tồn' });
+        const strip = screen.getByRole('group', { name: 'Sinh hiệu' });
         expect(within(strip).getByText('Nhiệt độ')).toBeInTheDocument();
         expect(within(strip).getByText('120/80')).toBeInTheDocument();
-        expect(within(strip).getByText('170 / 65')).toBeInTheDocument();
-        expect(within(strip).getByText('22.5')).toBeInTheDocument();
+        expect(within(strip).getByText('170')).toBeInTheDocument();
+        expect(within(strip).getByText('22,5')).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'Nhật ký lịch hẹn' })).toBeInTheDocument();
     });
 });

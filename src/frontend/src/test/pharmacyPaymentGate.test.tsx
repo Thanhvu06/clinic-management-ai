@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import axiosClient from '../api/axiosClient';
@@ -25,7 +26,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 const openDetail = async () => {
-    render(<DialogProvider><PharmacyPrescriptions /></DialogProvider>);
+    render(<MemoryRouter><DialogProvider><PharmacyPrescriptions /></DialogProvider></MemoryRouter>);
     fireEvent.click(await screen.findByRole('button', { name: 'Xem & cấp phát' }));
     return await screen.findByRole('button', { name: 'Xác nhận cấp thuốc & trừ kho' });
 };
@@ -34,11 +35,11 @@ const paidResponse = (isFullyPaid: boolean) => ({ success: true, data: { prescri
 it.each([false, true])('gates dispensing by full payment (%s)', async isFullyPaid => {
     paymentResponse = async () => paidResponse(isFullyPaid);
     const dispense = await openDetail();
-    await screen.findByText(`Thanh toán: ${isFullyPaid ? 'Đã thanh toán' : 'Chưa thanh toán tại quầy thu ngân'}`);
+    await screen.findByText(`${isFullyPaid ? 'Thanh toán: Đã thanh toán' : 'Đơn chưa thanh toán. Người bệnh cần thanh toán tại quầy thu ngân trước khi cấp thuốc.'}`);
     if (isFullyPaid) expect(dispense).toBeEnabled();
     else {
         expect(dispense).toBeDisabled();
-        expect(screen.getByText(/Chưa thanh toán đủ tiền thuốc/)).toBeInTheDocument();
+        expect(screen.getByText(/Đơn chưa thanh toán/)).toBeInTheDocument();
     }
     expect(axiosClient.get).toHaveBeenCalledWith('/pharmacy/prescriptions/10/payment-status');
 });

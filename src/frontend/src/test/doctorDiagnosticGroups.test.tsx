@@ -44,7 +44,7 @@ describe('Doctor diagnostic order groups', () => {
         const waiting = screen.getByRole('region', { name: 'Chờ kết quả' });
         const completed = screen.getByRole('region', { name: 'Đã có kết quả' });
         const cancelled = screen.getByRole('region', { name: 'Đã hủy' });
-        expect(within(waiting).getByText('Chờ kết quả (2)')).toBeInTheDocument();
+        expect(within(waiting).getByText('Chờ kết quả')).toBeInTheDocument();
         expect(within(completed).getAllByText(/^DX-/).map(node => node.textContent)).toEqual(['DX-3', 'DX-4', 'DX-2']);
         expect(within(completed).getByText('2 chỉ số NGUY HIỂM').className).toContain('critical');
         expect(within(completed).getByText('2 chỉ số bất thường').className).toContain('warning');

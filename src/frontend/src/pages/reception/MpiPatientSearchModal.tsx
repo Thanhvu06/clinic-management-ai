@@ -88,13 +88,13 @@ export const MpiPatientSearchModal: React.FC<MpiPatientSearchModalProps> = ({
 
     return (
         <Modal open={isOpen} onCancel={onClose} width={900} className={styles.patientSearchModal}
-            title={<div className={styles.modalHeading}><div className={styles.searchIcon}><Search size={20} /></div><div><h3 className={styles.modalTitle}>Tra cứu hồ sơ bệnh nhân (MPI)</h3><p className={styles.modalDescription}>Tìm kiếm bệnh nhân theo mã bệnh án (MRN), họ tên, SĐT, CCCD hoặc thẻ BHYT</p></div></div>}
+            title={<div className={styles.modalHeading}><div className={styles.searchIcon}><Search size={20} /></div><div><h3 className={styles.modalTitle}>Tra cứu hồ sơ bệnh nhân (MPI)</h3><p className={styles.modalDescription}>Tìm kiếm bệnh nhân theo mã bệnh án, họ tên, SĐT, CCCD hoặc thẻ BHYT</p></div></div>}
             footer={<Button htmlType="button" onClick={onClose}>Đóng</Button>}>
             <form onSubmit={handleSearch} className={styles.patientSearchForm}>
                 <Select className={styles.searchType} value={searchType} onChange={(value) => setSearchType(value)}
                     options={[
                         { value: 'all', label: 'Tất cả thông tin' },
-                        { value: 'mrn', label: 'Mã bệnh án (MRN)' },
+                        { value: 'mrn', label: 'Mã bệnh án' },
                         { value: 'phone', label: 'Số điện thoại' },
                         { value: 'nationalId', label: 'Số CCCD/CMND' },
                         { value: 'bhyt', label: 'Mã thẻ BHYT' }

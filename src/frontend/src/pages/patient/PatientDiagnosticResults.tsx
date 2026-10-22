@@ -1,3 +1,4 @@
+import { formatDecimalVi } from '../../utils/formatDecimalVi';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Card, Collapse, Tabs, Tag } from 'antd';
 import { CheckCircle } from 'lucide-react';
@@ -70,13 +71,13 @@ export const PatientDiagnosticResults: React.FC = () => {
     const vitalsContent = vitalsLoading ? <LoadingState message="Đang tải dữ liệu y tế..." /> : vitalsError ? <InlineError message={vitalsError} onRetry={fetchVitals} /> : vitals.length === 0 ? <EmptyState title="Chưa có lịch sử sinh hiệu nào" /> :
         <DataTable data={vitals} keyExtractor={v => `${v.recordedAtUtc}-${v.appointmentCode}`} columns={[
             { header: 'Ngày khám', accessor: v => <div>{new Date(v.recordedAtUtc).toLocaleDateString('vi-VN')}<div className={styles.resultAuthor}>#{v.appointmentCode}</div></div> },
-            { header: 'Cân nặng', align: 'center', accessor: v => v.weight ? `${v.weight} kg` : '---' },
-            { header: 'Chiều cao', align: 'center', accessor: v => v.height ? `${v.height} cm` : '---' },
-            { header: 'BMI', align: 'center', accessor: v => v.bmi ?? '---' },
+            { header: 'Cân nặng', align: 'center', accessor: v => v.weight ? `${formatDecimalVi(v.weight)} kg` : '---' },
+            { header: 'Chiều cao', align: 'center', accessor: v => v.height ? `${formatDecimalVi(v.height)} cm` : '---' },
+            { header: 'BMI', align: 'center', accessor: v => formatDecimalVi(v.bmi, '---') },
             { header: 'Huyết áp', align: 'center', accessor: v => v.bloodPressureSystolic && v.bloodPressureDiastolic ? `${v.bloodPressureSystolic}/${v.bloodPressureDiastolic}` : '---' },
-            { header: 'Nhịp tim', align: 'center', accessor: v => v.heartRate ? `${v.heartRate} bpm` : '---' },
-            { header: 'Thân nhiệt', align: 'center', accessor: v => v.temperature ? `${v.temperature}°C` : '---' },
-            { header: 'SpO2', align: 'center', accessor: v => v.spO2 ? `${v.spO2}%` : '---' }
+            { header: 'Nhịp tim', align: 'center', accessor: v => v.heartRate ? `${formatDecimalVi(v.heartRate)} bpm` : '---' },
+            { header: 'Thân nhiệt', align: 'center', accessor: v => v.temperature ? `${formatDecimalVi(v.temperature)}°C` : '---' },
+            { header: 'SpO2', align: 'center', accessor: v => v.spO2 ? `${formatDecimalVi(v.spO2)}%` : '---' }
         ]} />;
     return <div className={styles.page}><PageHeader title="Kết quả cận lâm sàng" subtitle="Theo dõi lịch sử xét nghiệm, siêu âm và chỉ số sức khỏe của bạn tại ClinicCare" /><Tabs items={[{ key: 'orders', label: `Phiếu cận lâm sàng (${orders.length})`, children: orderContent }, { key: 'vitals', label: `Chỉ số sinh hiệu (${vitals.length})`, children: vitalsContent }]} /></div>;
 };

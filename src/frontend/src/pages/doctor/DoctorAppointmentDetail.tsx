@@ -1,3 +1,5 @@
+import { getPrescriptionStatusLabel } from '../../utils/prescriptionStatusLabels';
+import { formatDecimalVi } from '../../utils/formatDecimalVi';
 import { getAppointmentHistoryActionLabel } from '../../utils/appointmentHistoryLabels';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
@@ -142,7 +144,7 @@ export const DoctorAppointmentDetail: React.FC = () => {
             <Card className={styles.spotlightCard}>
                 <Flex justify="space-between" align="flex-start" wrap gap="small">
                     <div>
-                        <Flex align="center" gap={10}>
+                        <Flex align="center" gap={10} className={styles.patientIdentity}>
                             <h1 className={styles.patientName}>{context.patientName}</h1>
                             <span className={styles.codeTag}>#{apt.appointmentCode}</span>
                             <StatusBadge status={apt.status} label={getAppointmentStatusLabel(apt.status)} />
@@ -221,21 +223,22 @@ export const DoctorAppointmentDetail: React.FC = () => {
             {vitalSigns && (
                 <Card className={styles.sectionCard}>
                     <div className={styles.sectionTitleRow}>
-                        <h2 className={styles.sectionTitle}>Dấu hiệu sinh tồn</h2>
+                        <h2 className={styles.sectionTitle}>Sinh hiệu</h2>
                     </div>
 
-                    <MetricStrip ariaLabel="Dấu hiệu sinh tồn" className={styles.vitalsStrip} items={[
-                        { label: 'Nhiệt độ', value: vitalSigns.temperature ?? '--', hint: vitalSigns.temperature ? '°C' : undefined },
+                    <MetricStrip ariaLabel="Sinh hiệu" className={styles.vitalsStrip} items={[
+                        { label: 'Nhiệt độ', value: formatDecimalVi(vitalSigns.temperature), hint: vitalSigns.temperature ? '°C' : undefined },
                         {
                             label: 'Huyết áp',
                             value: vitalSigns.bloodPressureSystolic && vitalSigns.bloodPressureDiastolic ? `${vitalSigns.bloodPressureSystolic}/${vitalSigns.bloodPressureDiastolic}` : '--',
                             hint: vitalSigns.bloodPressureSystolic && vitalSigns.bloodPressureDiastolic ? 'mmHg' : undefined
                         },
-                        { label: 'Nhịp tim', value: vitalSigns.heartRate ?? '--', hint: vitalSigns.heartRate ? 'lần/phút' : undefined },
-                        { label: 'Nhịp thở', value: vitalSigns.respiratoryRate ?? '--', hint: vitalSigns.respiratoryRate ? 'lần/phút' : undefined },
-                        { label: 'Chiều cao / cân nặng', value: `${vitalSigns.height ?? '--'} / ${vitalSigns.weight ?? '--'}`, hint: 'cm / kg' },
-                        { label: 'BMI', value: vitalSigns.bmi ?? '--' },
-                        { label: 'SpO2', value: vitalSigns.spO2 ?? '--', hint: vitalSigns.spO2 ? '%' : undefined }
+                        { label: 'Nhịp tim', value: formatDecimalVi(vitalSigns.heartRate), hint: vitalSigns.heartRate ? 'lần/phút' : undefined },
+                        { label: 'Nhịp thở', value: formatDecimalVi(vitalSigns.respiratoryRate), hint: vitalSigns.respiratoryRate ? 'lần/phút' : undefined },
+                        { label: 'Chiều cao', value: formatDecimalVi(vitalSigns.height), hint: 'cm' },
+                        { label: 'Cân nặng', value: formatDecimalVi(vitalSigns.weight), hint: 'kg' },
+                        { label: 'BMI', value: formatDecimalVi(vitalSigns.bmi) },
+                        { label: 'SpO2', value: formatDecimalVi(vitalSigns.spO2), hint: vitalSigns.spO2 ? '%' : undefined }
                     ]} />
                 </Card>
             )}
@@ -243,10 +246,10 @@ export const DoctorAppointmentDetail: React.FC = () => {
             {prescription && prescription.items.length > 0 && (
                 <Card className={styles.sectionCard}>
                     <Flex justify="space-between" align="center" className={styles.sectionTitleRow}>
-                        <h2 className={styles.sectionTitle}>Đơn thuốc đã cấp</h2>
+                        <h2 className={styles.sectionTitle}>Đơn thuốc</h2>
                         <StatusBadge
                             status={prescription.status}
-                            label={prescription.status === 'Issued' ? 'Đã phát hành' : prescription.status === 'Dispensed' ? 'Đã cấp phát' : prescription.status}
+                            label={getPrescriptionStatusLabel(prescription.status)}
                         />
                     </Flex>
 

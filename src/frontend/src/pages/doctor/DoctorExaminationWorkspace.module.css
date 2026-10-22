@@ -51,7 +51,7 @@
 }
 
 .dataTableScroll :global(table) {
-    min-width: 960px;
+    min-width: 0; width: 100%; table-layout: fixed;
 }
 
 .responsiveFormRow {
@@ -132,7 +132,6 @@
     font-size: 0.78rem;
     color: var(--cc-color-text-secondary);
     font-weight: 700;
-    text-transform: uppercase;
     letter-spacing: 0.04em;
 }
 
@@ -176,7 +175,6 @@
     font-size: 0.78rem;
     color: var(--cc-color-success);
     font-weight: 700;
-    text-transform: uppercase;
     letter-spacing: 0.04em;
 }
 
@@ -321,12 +319,6 @@
 .bmiElevated {
     background-color: var(--cc-color-danger-bg);
     color: var(--cc-color-danger);
-}
-
-.bmiExplanation {
-    font-size: 0.8rem;
-    color: var(--cc-color-text-secondary);
-    max-width: 360px;
 }
 
 .vitalHistoryTitle {
@@ -737,12 +729,6 @@
     padding-bottom: var(--cc-space-xl);
 }
 
-.workspaceToolbar {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: var(--cc-space-md);
-}
-
 .completedBanner {
     display: flex;
     align-items: center;
@@ -875,7 +861,7 @@
     margin-top: var(--cc-space-lg);
     background-color: var(--cc-color-bg-container);
     border-top: 1px solid var(--cc-color-border);
-    padding: var(--cc-space-sm) var(--cc-space-lg);
+    padding: var(--cc-space-sm) calc(var(--cc-space-xl) * 3) var(--cc-space-md) var(--cc-space-lg);
     z-index: 100;
     box-shadow: var(--cc-shadow-sm);
     display: flex;
@@ -1047,3 +1033,8 @@
 
 .diagnosticOrderGroup { display: flex; flex-direction: column; gap: var(--cc-space-md); }
 .orderFlagSummary { display: inline-block; padding: var(--cc-space-xxs) var(--cc-space-xs); border: 1px solid currentColor; border-radius: var(--cc-radius-sm); background: var(--cc-color-bg-container); }
+
+.dataTableScroll :global(td), .dataTableScroll :global(th) { overflow-wrap: anywhere; }
+.prescriptionTable :global(.ant-table-cell) { padding-inline: var(--cc-space-xs); }
+.prescriptionTable :global(.ant-btn) { padding-inline: var(--cc-space-xxs); }
+@media (max-width: 767px) { .dataTableScroll :global(table) { min-width: 960px; } .prescriptionTable .dataTableScroll :global(table) { min-width: 1040px; } }

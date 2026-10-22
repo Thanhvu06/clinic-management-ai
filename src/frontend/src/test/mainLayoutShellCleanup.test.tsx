@@ -51,7 +51,7 @@ describe('MainLayout shell cleanup', () => {
         mount('Doctor', '/doctor', '/doctor', <div>Nội dung</div>);
         expect(screen.queryByText('CHỨC NĂNG CHÍNH')).not.toBeInTheDocument();
         expect(screen.queryByText('Hệ Thống Y Tế Thông Minh')).not.toBeInTheDocument();
-        expect(screen.getByText('Hệ thống y tế thông minh')).toBeInTheDocument();
+        expect(screen.getByText('Nội dung')).toBeInTheDocument();
     });
 
     it('keeps only date, role, bell and avatar in the header without a page title', () => {

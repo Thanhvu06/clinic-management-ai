@@ -1,3 +1,4 @@
+import { getCheckInTicketDisplay } from './checkInTicketDisplay';
 import React from 'react';
 import { Printer, X, CheckCircle, Clock, MapPin, User, Stethoscope } from 'lucide-react';
 import type { CheckInTicketDto } from '../types';
@@ -17,6 +18,7 @@ export const CheckInTicketModal: React.FC<CheckInTicketModalProps> = ({
 }) => {
     const handlePrint = useScopedPrint('cc-ticket-printing', isOpen && !!ticket);
     if (!isOpen || !ticket) return null;
+    const queue = getCheckInTicketDisplay(ticket);
 
     const formatDateTime = (isoString?: string) => {
         if (!isoString) return '';
@@ -66,10 +68,10 @@ export const CheckInTicketModal: React.FC<CheckInTicketModalProps> = ({
                     {/* Prominent Queue Display */}
                     <div className={styles.surface1}>
                         <div className={styles.text3}>
-                            Số thứ tự khám
+                            {queue.departmentCode || 'Số thứ tự khám'}
                         </div>
                         <div className={styles.text4}>
-                            {ticket.queueDisplay || ticket.queueNumber}
+                            {queue.number}
                         </div>
                         <div className={styles.text5}>
                             Mã lượt khám: <strong>{ticket.visitCode}</strong>
@@ -86,7 +88,7 @@ export const CheckInTicketModal: React.FC<CheckInTicketModalProps> = ({
                         </div>
 
                         <div className={styles.flexLayout4}>
-                            <span className={styles.text7}>Mã bệnh án (MRN):</span>
+                            <span className={styles.text7}>Mã bệnh án:</span>
                             <span className={styles.text8}>{ticket.medicalRecordNumber || '---'}</span>
                         </div>
 

@@ -213,7 +213,7 @@
 .content {
     padding: var(--cc-content-padding);
     /* Chừa chỗ cho nút Copilot nổi (48px + 24px cách đáy) để phần tử cuối trang không bị che. */
-    padding-bottom: calc(var(--cc-space-xl) * 2 + var(--cc-space-xs));
+    padding-bottom: calc(var(--cc-space-xl) * 4);
     width: 100%;
     max-width: 1560px;
     margin: 0 auto;
@@ -291,7 +291,7 @@
 
     .content {
         padding: var(--cc-space-md);
-        padding-bottom: calc(var(--cc-space-xl) * 2);
+        padding-bottom: calc(var(--cc-space-xl) * 4);
     }
 }
 

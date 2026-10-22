@@ -407,14 +407,14 @@ export const WalkInPatientRegistration: React.FC = () => {
                 </div>
                 {patientMode === 'lookup' && <div>
                     <form onSubmit={handleSearchPatient} className={styles.patientLookupForm}>
-                        <Input type="text" status={prefillError ? 'error' : undefined} className={styles.patientLookupInput} placeholder="Nhập mã bệnh nhân (MRN), số CCCD, số điện thoại hoặc họ tên..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                        <Input type="text" status={prefillError ? 'error' : undefined} className={styles.patientLookupInput} placeholder="Nhập mã bệnh án, số CCCD, số điện thoại hoặc họ tên..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                         <Button htmlType="submit" type="primary" disabled={searching}>{searching ? <RefreshCw className="spin" size={16} /> : <Search size={16} />} Tìm hồ sơ</Button>
                     </form>
                     {prefillLoading && <small className={styles.loadHint}>Đang tải hồ sơ bệnh nhân...</small>}
                     {prefillError && <div className={styles.loadError}><InlineError message={prefillError} onRetry={() => setPrefillReload(value => value + 1)} /></div>}
                     {selectedPatient && <div className={styles.selectedPatient}>
                         <div className={styles.selectedPatientHeader}>
-                            <div className={styles.selectedPatientIdentity}><CheckCircle2 size={24} className={styles.selectionIcon} /><div><h3 className={styles.selectedPatientName}>{selectedPatient.fullName}</h3><div className={styles.selectedPatientIdentifiers}>Mã bệnh nhân (MRN): <strong>{selectedPatient.medicalRecordNumber || 'Chưa gán'}</strong> • CCCD: {selectedPatient.nationalId || '---'}</div></div></div>
+                            <div className={styles.selectedPatientIdentity}><CheckCircle2 size={24} className={styles.selectionIcon} /><div><h3 className={styles.selectedPatientName}>{selectedPatient.fullName}</h3><div className={styles.selectedPatientIdentifiers}>Mã bệnh án: <strong>{selectedPatient.medicalRecordNumber || 'Chưa gán'}</strong> • CCCD: {selectedPatient.nationalId || '---'}</div></div></div>
                             <Button htmlType="button" onClick={() => setSelectedPatient(null)}>Chọn hồ sơ khác</Button>
                         </div>
                         <Row gutter={[spacing.md, spacing.sm]} className={styles.selectedPatientFacts}>
@@ -485,7 +485,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                 <div className={styles.patientSummary}><h4 className={styles.summaryTitle}>1. Thông tin người bệnh</h4>
                     <Row gutter={[spacing.md, spacing.sm]}>
                         <Col xs={24} md={12}><strong>Họ tên:</strong>{' '}{patientMode === 'lookup' ? selectedPatient?.fullName : newFullName}</Col>
-                        <Col xs={24} md={12}><strong>Mã BN / MRN:</strong>{' '}{patientMode === 'lookup' ? (selectedPatient?.medicalRecordNumber || 'Hồ sơ cũ') : '(Hệ thống sẽ cấp tự động)'}</Col>
+                        <Col xs={24} md={12}><strong>Mã bệnh án:</strong>{' '}{patientMode === 'lookup' ? (selectedPatient?.medicalRecordNumber || 'Hồ sơ cũ') : '(Hệ thống sẽ cấp tự động)'}</Col>
                         <Col xs={24} md={12}><strong>Số điện thoại:</strong>{' '}{patientMode === 'lookup' ? (selectedPatient?.phoneNumber || '---') : (newPhone || contactPhone || '---')}</Col>
                         <Col xs={24} md={12}><strong>Ngày sinh:</strong>{' '}{patientMode === 'lookup' ? selectedPatient?.dateOfBirth : newDateOfBirth}</Col>
                     </Row>

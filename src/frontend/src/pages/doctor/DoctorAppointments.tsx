@@ -1,3 +1,4 @@
+import { getPrescriptionStatusLabel } from '../../utils/prescriptionStatusLabels';
 import { getAppointmentHistoryActionLabel } from '../../utils/appointmentHistoryLabels';
 import { toLocalDateString } from '../../utils/formatters';
 import React, { useState, useEffect, useRef } from 'react';
@@ -387,7 +388,7 @@ export const DoctorAppointments: React.FC = () => {
                                             </Flex>
                                             <StatusBadge
                                                 status={currentPrescription.status}
-                                                label={currentPrescription.status === 'Dispensed' ? 'Đã cấp thuốc' : 'Chờ cấp thuốc'}
+                                                label={getPrescriptionStatusLabel(currentPrescription.status)}
                                             />
                                         </Flex>
                                         {currentPrescription.notes && (

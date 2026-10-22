@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PharmacyPrescriptions } from '../pages/pharmacy/PharmacyPrescriptions';
@@ -104,9 +105,9 @@ describe('PharmacyPrescriptions Component', () => {
         });
 
         render(
-            <DialogProvider>
+            <MemoryRouter><DialogProvider>
                 <PharmacyPrescriptions />
-            </DialogProvider>
+            </DialogProvider></MemoryRouter>
         );
 
         expect(screen.getByText('Đang tải danh sách đơn thuốc...')).toBeInTheDocument();
@@ -114,7 +115,7 @@ describe('PharmacyPrescriptions Component', () => {
         await waitFor(() => {
             expect(screen.getByText('Nguyễn Văn Test')).toBeInTheDocument();
             expect(screen.getByText('APT-101')).toBeInTheDocument();
-            expect(screen.getByText('Chờ cấp thuốc')).toBeInTheDocument();
+            expect(screen.getByText('Đã phát hành')).toBeInTheDocument();
         });
     });
 
@@ -134,9 +135,9 @@ describe('PharmacyPrescriptions Component', () => {
             });
 
         render(
-            <DialogProvider>
+            <MemoryRouter><DialogProvider>
                 <PharmacyPrescriptions />
-            </DialogProvider>
+            </DialogProvider></MemoryRouter>
         );
 
         await waitFor(() => {
@@ -168,7 +169,7 @@ describe('PharmacyPrescriptions Component', () => {
         render(
             <CopilotResourceProvider>
                 <CopilotSelectionProbe />
-                <DialogProvider><PharmacyPrescriptions /></DialogProvider>
+                <MemoryRouter><DialogProvider><PharmacyPrescriptions /></DialogProvider></MemoryRouter>
             </CopilotResourceProvider>
         );
 
@@ -194,9 +195,9 @@ describe('PharmacyPrescriptions Component', () => {
             });
 
         render(
-            <DialogProvider>
+            <MemoryRouter><DialogProvider>
                 <PharmacyPrescriptions />
-            </DialogProvider>
+            </DialogProvider></MemoryRouter>
         );
 
         await waitFor(() => {
@@ -229,9 +230,9 @@ describe('PharmacyPrescriptions Component', () => {
             });
 
         render(
-            <DialogProvider>
+            <MemoryRouter><DialogProvider>
                 <PharmacyPrescriptions />
-            </DialogProvider>
+            </DialogProvider></MemoryRouter>
         );
 
         await waitFor(() => {

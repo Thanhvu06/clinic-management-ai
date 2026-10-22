@@ -16,8 +16,8 @@ const visit = { visitId: 101, visitCode: 'VIS-0101', patientId: 1, patientName: 
 const appointment = { id: 201, appointmentCode: 'APT-0201', patientName: 'Trần Thị Mai', appointmentDate: '2026-10-11', status: 'Completed' };
 const registration = { id: 301, registrationCode: 'PKG-0301', patientName: 'Lê Minh Hùng', preferredDate: '2026-10-12', status: 'Confirmed' };
 const cases = [
-    { source: 'visit', radio: 'Lượt khám ngoại trú (Visit)', field: 'Chọn lượt khám *', label: 'VIS-0101 — Nguyễn Văn An — 10/10/2026', create: 'createInvoiceFromVisit' as const, payload: { patientVisitId: 101 } },
-    { source: 'appointment', radio: 'Lịch khám bệnh (Appointment)', field: 'Chọn lịch hẹn đã khám xong *', label: 'APT-0201 — Trần Thị Mai — 11/10/2026', create: 'createInvoiceFromAppointment' as const, payload: { appointmentId: 201 } },
+    { source: 'visit', radio: 'Lượt khám ngoại trú', field: 'Chọn lượt khám *', label: 'VIS-0101 — Nguyễn Văn An — 10/10/2026', create: 'createInvoiceFromVisit' as const, payload: { patientVisitId: 101 } },
+    { source: 'appointment', radio: 'Lịch hẹn đã khám', field: 'Chọn lịch hẹn đã khám xong *', label: 'APT-0201 — Trần Thị Mai — 11/10/2026', create: 'createInvoiceFromAppointment' as const, payload: { appointmentId: 201 } },
     { source: 'package', radio: 'Gói khám sức khỏe (đã xác nhận)', field: 'Chọn đăng ký gói khám đã xác nhận *', label: 'PKG-0301 — Lê Minh Hùng — 12/10/2026', create: 'createInvoiceFromHealthPackage' as const, payload: { healthPackageRegistrationId: 301 } },
 ];
 

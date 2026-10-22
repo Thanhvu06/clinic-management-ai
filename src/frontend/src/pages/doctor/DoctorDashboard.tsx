@@ -1,3 +1,4 @@
+import { formatVitalSummaryVi } from '../../utils/formatDecimalVi';
 import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
@@ -316,7 +317,7 @@ export const DoctorDashboard: React.FC = () => {
                                     <strong>Lý do khám:</strong> {nextPatient.reason || 'Khám tổng quát theo lịch hẹn'}
                                 </div>
                                 {nextPatient.vitalSummaryText && (
-                                    <div className={styles.text4}>Dấu hiệu sinh tồn: {nextPatient.vitalSummaryText}</div>
+                                    <div className={styles.text4}>Sinh hiệu: {formatVitalSummaryVi(nextPatient.vitalSummaryText)}</div>
                                 )}
                             </div>
                         ) : (

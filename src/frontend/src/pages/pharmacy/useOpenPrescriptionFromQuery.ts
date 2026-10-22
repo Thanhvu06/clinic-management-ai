@@ -1,10 +1,9 @@
-import { useContext, useEffect, useRef } from 'react';
-import { UNSAFE_LocationContext } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
-// Trang còn được render ngoài Router (test cũ), nên đọc LocationContext thay vì useSearchParams vốn ném lỗi khi thiếu Router.
 export function useOpenPrescriptionFromQuery(listLoaded: boolean, openPrescription: (id: number) => void) {
-    const search = useContext(UNSAFE_LocationContext)?.location.search ?? '';
-    const requestedId = new URLSearchParams(search).get('id');
+    const [searchParams] = useSearchParams();
+    const requestedId = searchParams.get('id');
     const handledRef = useRef<string | null>(null);
 
     useEffect(() => {

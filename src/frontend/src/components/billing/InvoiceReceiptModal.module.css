@@ -134,7 +134,6 @@
 
 .infoLabel {
     font-size: 0.75rem;
-    text-transform: uppercase;
     letter-spacing: 0.03em;
     color: var(--cc-color-text-secondary);
     font-weight: 600;
@@ -161,7 +160,6 @@
     color: var(--cc-color-text);
     border-bottom: 1px solid var(--cc-color-border);
     font-size: 0.8rem;
-    text-transform: uppercase;
 }
 
 .itemsTable td {

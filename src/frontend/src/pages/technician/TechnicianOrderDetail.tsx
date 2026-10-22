@@ -366,9 +366,9 @@ export const TechnicianOrderDetail: React.FC = () => {
                     <Input.TextArea id="specimen-rejection-note" aria-label="Ghi chú từ chối" rows={3} maxLength={500} disabled={specimenBusy !== null || verificationPending} value={rejectionNote} onChange={event => { setRejectionNote(event.target.value); setRejectionError(''); }} />
                 </div>
             </Modal>
+            <Link to="/diagnostics" className={styles.backLink}><ArrowLeft size={14} aria-hidden="true" /> Quay lại danh sách</Link>
             <PageHeader title="Thực hiện phiếu chỉ định CLS" />
             <div className={styles.navigation}>
-                <Button onClick={() => navigate('/diagnostics')}><ArrowLeft size={16} aria-hidden="true" /> Quay lại danh sách</Button>
                 <div className={styles.orderStatus}><span>Trạng thái phiếu:</span><StatusBadge status={diagnosticStatusTone[order.status]} label={diagnosticStatusLabels[order.status]} /></div>
             </div>
             <Card className={styles.orderCard}>
@@ -420,7 +420,7 @@ export const TechnicianOrderDetail: React.FC = () => {
                             <Card key={item.id}>
                                 <div className={styles.serviceHeader}>
                                     <div className={styles.serviceIdentity}><div className={styles.serviceNumber}>{idx + 1}</div><div><div className={styles.serviceName}>{item.serviceName}</div><div className={styles.secondary}>Mã: {item.serviceCode}</div><Tag className={styles.categoryTag}><CategoryIcon size={13} aria-hidden="true" />{diagnosticCategoryLabels[item.category]}</Tag></div></div>
-                                    {!isCompleted && order.status !== 'Completed' && <Button htmlType="button" onClick={() => setCopilotItemId(item.id)} aria-label={`Chọn ${item.serviceName} cho Copilot`}>{copilotItemId === item.id ? 'Đang hỏi trợ lý' : 'Hỏi trợ lý'}</Button>}
+                                    {!isCompleted && order.status !== 'Completed' && <Button htmlType="button" onClick={() => setCopilotItemId(item.id)} className={copilotItemId === item.id ? styles.assistantSelected : undefined} aria-label={`Chọn ${item.serviceName} cho Copilot`}>Hỏi trợ lý</Button>}
                                     <StatusBadge status={diagnosticStatusTone[item.status]} label={diagnosticStatusLabels[item.status]} />
                                 </div>
                                 {item.preparationInstructions && <div className={styles.preparationNote}>Chuẩn bị: {item.preparationInstructions}</div>}

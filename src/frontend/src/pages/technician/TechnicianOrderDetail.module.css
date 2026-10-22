@@ -79,3 +79,7 @@
 .resultPrintLink { color: var(--cc-color-primary); font-weight: 600; }
 .attachmentPanel { margin-bottom: var(--cc-space-md); padding: var(--cc-space-md); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-sm); }
 .attachmentPanel h3 { margin: 0 0 var(--cc-space-sm); font-size: 1rem; }
+
+.backLink { display: inline-flex; align-items: center; gap: var(--cc-space-xxs); margin-bottom: var(--cc-space-xs); font-size: 13px; color: var(--cc-color-text-secondary); text-decoration: none; }
+.backLink:hover, .backLink:focus-visible { color: var(--cc-color-primary); }
+.detail .assistantSelected:global(.ant-btn) { color: var(--cc-color-primary); border-color: var(--cc-color-primary); }

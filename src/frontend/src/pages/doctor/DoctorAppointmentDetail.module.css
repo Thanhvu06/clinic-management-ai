@@ -261,3 +261,11 @@
     bottom: calc(-1 * var(--cc-space-md));
     border-inline-start: 1px solid var(--cc-color-border);
 }
+
+.patientIdentity { min-width: 0; }
+.codeTag { white-space: nowrap; }
+@media (max-width: 767px) {
+    .patientIdentity { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; }
+    .patientIdentity > .codeTag { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
+    .patientIdentity > h1 { min-width: 0; }
+}

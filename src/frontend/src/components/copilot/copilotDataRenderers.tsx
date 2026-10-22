@@ -119,7 +119,7 @@ export const copilotCardEmptyMessage = (card: AiCopilotCard): string | null => {
         case 'pending_action':
         case 'change_request':
         case 'idempotent_replay': return null;
-        default: return 'Copilot chưa hỗ trợ trình bày đầy đủ cấu trúc dữ liệu này; không hiển thị dữ liệu thô.';
+        default: return 'Trợ lý chưa hiển thị được loại dữ liệu này.';
     }
 };
 
@@ -524,6 +524,6 @@ export const renderCopilotCardData = (card: AiCopilotCard): React.ReactNode => {
         case 'pending_action':
         case 'change_request':
         case 'idempotent_replay': return <ActionResultCard type={card.type} data={card.data} />;
-        default: return <EmptyData message="Copilot chưa hỗ trợ trình bày đầy đủ cấu trúc dữ liệu này; không hiển thị dữ liệu thô." />;
+        default: return <EmptyData message="Trợ lý chưa hiển thị được loại dữ liệu này." />;
     }
 };

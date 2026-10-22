@@ -139,7 +139,7 @@ export const ReceptionAppointments: React.FC = () => {
         const facilityId = apt.facilityId && apt.facilityId > 0 ? apt.facilityId : null;
         setSelectedDepartmentId(null);
         setDepartments([]);
-        setDepartmentsError(facilityId ? '' : 'Không xác định được cơ sở của lịch hẹn nên Copilot chưa thể chuẩn bị thao tác.');
+        setDepartmentsError(facilityId ? '' : 'Không xác định được cơ sở của lịch hẹn nên trợ lý chưa thể chuẩn bị thao tác.');
         setDepartmentsLoading(Boolean(facilityId));
         setSelection({
             context: { appointmentId: apt.id },
