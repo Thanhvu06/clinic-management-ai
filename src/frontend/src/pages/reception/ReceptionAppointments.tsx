@@ -253,6 +253,7 @@ export const ReceptionAppointments: React.FC = () => {
         try {
             const res = await patientVisitApi.receptionCheckInAppointment(apt.id);
             if (res.success && res.data) {
+                if (modal.isOpen && modal.apt?.id === apt.id) closeDetail();
                 setCurrentTicket(res.data);
                 setTicketModalOpen(true);
                 showAlert(
@@ -260,10 +261,6 @@ export const ReceptionAppointments: React.FC = () => {
                     `Bệnh nhân ${res.data.patientName} đã được cấp STT ${res.data.queueNumber} tại ${res.data.departmentName || 'phòng khám'}.`,
                     'success'
                 );
-                if (modal.isOpen && modal.apt?.id === apt.id) {
-                    setModal({ ...modal, apt: { ...apt, status: 'CheckedIn' } });
-                    fetchHistory(apt.id);
-                }
                 fetchAppointments();
             } else {
                 showAlert(res.message || 'Không thể tiếp nhận bệnh nhân.', 'Lỗi tiếp nhận', 'error');
@@ -344,7 +341,7 @@ export const ReceptionAppointments: React.FC = () => {
             {modal.isOpen && modal.apt && <Modal open onCancel={closeDetail} width={600} className={styles.detailModal} mask={{closable:false}} keyboard={false} closable={{'aria-label':'Đóng chi tiết lịch hẹn'}} title={<>Chi tiết lịch hẹn <span className={styles.detailCode}>#{modal.apt.appointmentCode}</span></>} footer={<>
                 <Button onClick={closeDetail}>Đóng</Button>
                 {modal.apt.status === 'Pending' && <Button type="primary" onClick={handleConfirm} disabled={actionLoading}>{actionLoading ? 'Đang xử lý...' : 'Xác nhận lịch hẹn'}</Button>}
-                {modal.apt.status === 'Confirmed' && <Button type="primary" className={styles.checkInButton} style={{ minHeight: '40px' }} onClick={() => handleCheckIn(modal.apt!)} disabled={checkingInId === modal.apt.id || modal.apt.appointmentDate !== toLocalDateString()} title={modal.apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${modal.apt.appointmentDate.split('-').reverse().join('/')}` : undefined} ><UserCheck size={16} aria-hidden="true" />{checkingInId === modal.apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận & Cấp phiếu STT'}</Button>}
+                {modal.apt.status === 'Confirmed' && <Button type="primary" className={`${styles.checkInButton} ${styles.modalCheckInButton}`} onClick={() => handleCheckIn(modal.apt!)} disabled={checkingInId === modal.apt.id || modal.apt.appointmentDate !== toLocalDateString()} title={modal.apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${modal.apt.appointmentDate.split('-').reverse().join('/')}` : undefined} ><UserCheck size={16} aria-hidden="true" />{checkingInId === modal.apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận & cấp STT'}</Button>}
             </>}>
                 <div className={styles.detailGrid}>
                     <div className={styles.factCard}><div className={styles.factLabel}>Bệnh nhân</div><div className={styles.primaryText}>{modal.apt.patientName}</div><div>{modal.apt.patientPhone}</div></div>
@@ -353,13 +350,13 @@ export const ReceptionAppointments: React.FC = () => {
                 </div>
                 <section className={styles.detailSection}><div className={styles.sectionLabel}>Lý do khám:</div><div className={styles.notePanel}>{modal.apt.reason || <span className={styles.secondaryText}>Không có ghi chú</span>}</div></section>
                 <section className={styles.departmentPanel}>
-                    <label htmlFor="copilot-checkin-department" className={styles.sectionLabel}>Khoa tiếp nhận cho Copilot *</label>
+                    <label htmlFor="copilot-checkin-department" className={styles.sectionLabel}>Khoa tiếp nhận *</label>
                     <select id="copilot-checkin-department" className={`form-select ${styles.departmentSelect}`} value={selectedDepartmentId ?? ''} onChange={event => setSelectedDepartmentId(event.target.value ? Number(event.target.value) : null)} disabled={!modal.apt.facilityId || departmentsLoading}>
                         <option value="">{departmentsLoading ? 'Đang tải khoa theo cơ sở…' : 'Chọn khoa từ cơ sở của lịch hẹn'}</option>
                         {departments.map(department => <option key={department.id} value={department.id}>{department.name} ({department.code})</option>)}
                     </select>
                     {departmentsError && <div role="alert" className={styles.departmentError}>{departmentsError}</div>}
-                    <small className={styles.departmentHint}>Đã chọn sẵn khoa theo chuyên khoa của lịch hẹn; bạn có thể đổi. Backend vẫn kiểm tra lại cơ sở, quyền và lịch hẹn.</small>
+                    <small className={styles.departmentHint}>Đã chọn sẵn theo chuyên khoa của lịch hẹn, có thể đổi.</small>
                 </section>
                 <section className={styles.detailSection}>
                     <div className={styles.workflowHeading}><span>Tiến trình xử lý</span>{getStatusBadge(modal.apt.status)}</div>

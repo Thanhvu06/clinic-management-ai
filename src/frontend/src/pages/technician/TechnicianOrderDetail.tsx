@@ -373,7 +373,7 @@ export const TechnicianOrderDetail: React.FC = () => {
             </div>
             <Card className={styles.orderCard}>
                 <div className={styles.orderHeading}>
-                    <div><div className={styles.secondary}>PHIẾU CHỈ ĐỊNH CẬN LÂM SÀNG</div><div className={styles.orderCode}>{order.orderCode}</div></div>
+                    <div className={styles.orderCode}>{order.orderCode}</div>
                     <div className={styles.appointmentInfo}><div>Mã lịch hẹn: <strong>#{order.appointmentCode}</strong></div><div className={styles.secondary}>Chỉ định lúc: {new Date(order.orderedAtUtc).toLocaleString('vi-VN')}</div></div>
                 </div>
                 <div className={styles.patientGrid}>
@@ -394,6 +394,7 @@ export const TechnicianOrderDetail: React.FC = () => {
                     <strong>{milestone.label}</strong><span>{milestone.time ? new Date(milestone.time).toLocaleString('vi-VN') : 'Chưa thực hiện'}</span>{milestone.time && milestone.actor && <span>{milestone.actor}</span>}
                 </li>)}</ol>
             </Card>
+            {order.status === 'InProgress' && !verificationPending && <Card className={styles.completionBar}><div className={styles.completionActions}><div><strong>{needsVerification ? 'Gửi duyệt kết quả cận lâm sàng' : 'Hoàn tất phiếu chỉ định cận lâm sàng'}</strong><div className={styles.secondary}>{allItemsCompleted ? needsVerification ? 'Tất cả dịch vụ đã có kết quả. Gửi kỹ thuật viên khác duyệt.' : 'Tất cả các dịch vụ đã có kết quả. Bạn có thể chốt phiếu.' : 'Vui lòng lưu kết quả cho từng dịch vụ trước khi hoàn tất.'}</div></div><Button type="primary" className={styles.completeButton} onClick={handleCompleteOrder} disabled={!allItemsCompleted || actionLoading}><Check size={18} aria-hidden="true" /> {actionLoading ? 'Đang gửi kết quả...' : needsVerification ? 'Gửi duyệt kết quả' : 'Hoàn tất và gửi kết quả'}</Button></div></Card>}
             <section className={styles.services}>
                 {!returnOpen && verificationError && <Alert type="error" showIcon title={verificationError} />}
                 {order.verificationStatus === 'Returned' && <Alert type="error" showIcon title={`Bị trả lại bởi ${order.returnedByUserName || '—'} lúc ${order.returnedAtUtc ? diagnosticNotificationTime(order.returnedAtUtc) : '—'}: ${order.returnReason || '—'}`} />}
@@ -419,10 +420,10 @@ export const TechnicianOrderDetail: React.FC = () => {
                             <Card key={item.id}>
                                 <div className={styles.serviceHeader}>
                                     <div className={styles.serviceIdentity}><div className={styles.serviceNumber}>{idx + 1}</div><div><div className={styles.serviceName}>{item.serviceName}</div><div className={styles.secondary}>Mã: {item.serviceCode}</div><Tag className={styles.categoryTag}><CategoryIcon size={13} aria-hidden="true" />{diagnosticCategoryLabels[item.category]}</Tag></div></div>
-                                    {!isCompleted && order.status !== 'Completed' && <Button htmlType="button" type={copilotItemId === item.id ? 'primary' : 'default'} onClick={() => setCopilotItemId(item.id)} aria-label={`Chọn ${item.serviceName} cho Copilot`}>{copilotItemId === item.id ? 'Đã chọn Copilot' : 'Chọn cho Copilot'}</Button>}
+                                    {!isCompleted && order.status !== 'Completed' && <Button htmlType="button" onClick={() => setCopilotItemId(item.id)} aria-label={`Chọn ${item.serviceName} cho Copilot`}>{copilotItemId === item.id ? 'Đang hỏi trợ lý' : 'Hỏi trợ lý'}</Button>}
                                     <StatusBadge status={diagnosticStatusTone[item.status]} label={diagnosticStatusLabels[item.status]} />
                                 </div>
-                                {item.preparationInstructions && <div className={styles.preparationNote}><strong>Chuẩn bị:</strong> {item.preparationInstructions}</div>}
+                                {item.preparationInstructions && <div className={styles.preparationNote}>Chuẩn bị: {item.preparationInstructions}</div>}
                                 {(item.category === 'Imaging' || item.category === 'Ultrasound') && <section className={styles.attachmentPanel} aria-label={`Tệp đính kèm: ${item.serviceName}`}>
                                     <h3>Tệp đính kèm</h3>
                                     {order.status === 'InProgress' && !verificationPending && item.status !== 'Cancelled' && <Upload
@@ -520,7 +521,6 @@ export const TechnicianOrderDetail: React.FC = () => {
                     })}
                 </div>
             </section>
-            {order.status === 'InProgress' && !verificationPending && <Card className={styles.completionBar}><div className={styles.completionActions}><div><strong>{needsVerification ? 'Gửi duyệt kết quả cận lâm sàng' : 'Hoàn tất phiếu chỉ định cận lâm sàng'}</strong><div className={styles.secondary}>{allItemsCompleted ? needsVerification ? 'Tất cả dịch vụ đã có kết quả. Gửi kỹ thuật viên khác duyệt.' : 'Tất cả các dịch vụ đã có kết quả. Bạn có thể chốt phiếu.' : 'Vui lòng lưu kết quả cho từng dịch vụ trước khi hoàn tất.'}</div></div><Button type="primary" className={styles.completeButton} onClick={handleCompleteOrder} disabled={!allItemsCompleted || actionLoading}><Check size={18} aria-hidden="true" /> {actionLoading ? 'Đang gửi kết quả...' : needsVerification ? 'Gửi duyệt kết quả' : 'Hoàn tất và gửi kết quả'}</Button></div></Card>}
             {order.status === 'Completed' && <Card className={styles.completedCard}><div className={styles.completionActions}><div><div className={styles.completedTitle}><CheckCircle size={18} /> Phiếu chỉ định đã được hoàn tất</div><div className={styles.secondary}>Hoàn tất bởi: {order.completedByUserName} lúc {new Date(order.completedAtUtc!).toLocaleString('vi-VN')}</div></div>{order.reviewedAtUtc ? <div className={styles.reviewInfo}><strong>Bác sĩ đã xem:</strong> {order.reviewedByDoctorName} ({new Date(order.reviewedAtUtc).toLocaleString('vi-VN')})</div> : <div className={styles.reviewPending}>Chờ bác sĩ khám xác nhận đã xem</div>}</div></Card>}
         </div>
     );

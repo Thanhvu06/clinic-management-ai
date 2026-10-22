@@ -14,6 +14,7 @@
 .detailModal :global(.ant-modal-body) { max-height: 65vh; overflow-y: auto; }
 .detailModal :global(.ant-modal-footer) { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--cc-space-xs); }
 .detailModal :global(.ant-modal-footer > .ant-btn) { margin: 0; height: auto; min-height: var(--cc-control-height); white-space: normal; }
+.detailModal :global(.ant-modal-footer) > .modalCheckInButton { min-height: 40px; }
 .detailCode { color: var(--cc-color-teal); }
 .detailGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cc-space-md); margin-bottom: var(--cc-space-lg); }
 .factCard, .timeCard, .notePanel { padding: var(--cc-space-md); border-radius: var(--cc-radius-md); background: var(--cc-color-bg-subtle); overflow-wrap: anywhere; }

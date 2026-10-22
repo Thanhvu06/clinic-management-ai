@@ -23,8 +23,6 @@
 .availableStock { background: var(--cc-color-success-bg); color: var(--cc-color-success); }
 .instructions { color: var(--cc-color-text-secondary); font-size: 12px; font-style: italic; }
 .modalFooter { justify-content: space-between; }
-.dispenseButton { min-height: var(--cc-control-height); padding: var(--cc-space-xs) var(--cc-space-md); border: 1px solid var(--cc-color-success); border-radius: var(--cc-radius-md); background: var(--cc-color-success); color: var(--cc-color-bg-container); font: inherit; cursor: pointer; white-space: nowrap; }
-.dispenseButton:disabled { border-color: var(--cc-color-border); background: var(--cc-color-bg-subtle); color: var(--cc-color-text-muted); cursor: not-allowed; }
 .detailModal :global(.ant-btn) { white-space: nowrap; }
 @media (max-width: 767px) { .patientBanner { grid-template-columns: 1fr; } }
 @media (max-width: 480px) {

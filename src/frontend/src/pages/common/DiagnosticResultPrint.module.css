@@ -18,6 +18,14 @@
 .barcode { width: 100%; height: 8mm; fill: var(--cc-color-text-dark); shape-rendering: crispEdges; }
 .footer { margin-top: var(--cc-space-lg); border-top: 1px solid var(--cc-color-border); padding-top: var(--cc-space-md); break-inside: avoid; }
 .signature { text-align: right; height: 25mm; padding-top: var(--cc-space-md); }
+@media screen {
+    .tableScroll { max-width: 100%; overflow-x: auto; }
+    .tableScroll > .values { min-width: 480px; }
+}
+@media screen and (max-width: 767px) {
+    .page { padding: var(--cc-space-sm); }
+    .sheet { max-width: 100%; box-sizing: border-box; padding: var(--cc-space-md); }
+}
 @media print {
     @page diagnostic-result { size: A4; margin: 12mm; }
     :global(body):has(.page) { page: diagnostic-result; }

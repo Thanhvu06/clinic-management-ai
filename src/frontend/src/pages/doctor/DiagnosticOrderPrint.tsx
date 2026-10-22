@@ -173,39 +173,41 @@ export const DiagnosticOrderPrint: React.FC = () => {
                     <div className={styles.text7}>
                         Danh Mục Dịch Vụ Chỉ Định ({order.items.length})
                     </div>
-                    <table className={styles.tableLayout1}>
-                        <thead>
-                            <tr className={styles.tableRow1}>
-                                <th className={styles.tableHeading1}>STT</th>
-                                <th className={styles.tableHeading2}>Mã dịch vụ</th>
-                                <th className={styles.tableHeading3}>Tên dịch vụ cận lâm sàng</th>
-                                <th className={styles.tableHeading4}>Phân loại</th>
-                                <th className={styles.tableHeading5}>Trạng thái</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {order.items.map((item, idx) => (
-                                <tr key={item.id} className={styles.tableRow2}>
-                                    <td className={styles.tableCell1}>{idx + 1}</td>
-                                    <td className={styles.tableCell2}>{item.serviceCode}</td>
-                                    <td className={styles.tableCell3}>
-                                        <div>{item.serviceName}</div>
-                                        {item.preparationInstructions && (
-                                            <div className={styles.text8}>
-                                                Chuẩn bị: {item.preparationInstructions}
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td className={styles.tableCell4}>{categoryMap[item.category] || item.category}</td>
-                                    <td className={styles.tableCell5}>
-                                        <span className={[styles.text9, (item.status === 'Completed' ? styles.state1 : (item.status === 'InProgress' ? styles.state2 : styles.state3)), (item.status === 'Completed' ? styles.state4 : (item.status === 'InProgress' ? styles.state5 : styles.state6))].join(' ')}>
-                                            {statusMap[item.status] || item.status}
-                                        </span>
-                                    </td>
+                    <div className={styles.tableScroll}>
+                        <table className={styles.tableLayout1}>
+                            <thead>
+                                <tr className={styles.tableRow1}>
+                                    <th className={styles.tableHeading1}>STT</th>
+                                    <th className={styles.tableHeading2}>Mã dịch vụ</th>
+                                    <th className={styles.tableHeading3}>Tên dịch vụ cận lâm sàng</th>
+                                    <th className={styles.tableHeading4}>Phân loại</th>
+                                    <th className={styles.tableHeading5}>Trạng thái</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {order.items.map((item, idx) => (
+                                    <tr key={item.id} className={styles.tableRow2}>
+                                        <td className={styles.tableCell1}>{idx + 1}</td>
+                                        <td className={styles.tableCell2}>{item.serviceCode}</td>
+                                        <td className={styles.tableCell3}>
+                                            <div>{item.serviceName}</div>
+                                            {item.preparationInstructions && (
+                                                <div className={styles.text8}>
+                                                    Chuẩn bị: {item.preparationInstructions}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className={styles.tableCell4}>{categoryMap[item.category] || item.category}</td>
+                                        <td className={styles.tableCell5}>
+                                            <span className={[styles.text9, (item.status === 'Completed' ? styles.state1 : (item.status === 'InProgress' ? styles.state2 : styles.state3)), (item.status === 'Completed' ? styles.state4 : (item.status === 'InProgress' ? styles.state5 : styles.state6))].join(' ')}>
+                                                {statusMap[item.status] || item.status}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 {/* Signatures */}

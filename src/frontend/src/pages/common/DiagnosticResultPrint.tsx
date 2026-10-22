@@ -47,13 +47,13 @@ export const DiagnosticResultPrint = ({ actor = 'technician', returnPath }: { ac
                 const barcode = item.specimenBarcode ? encodeCode39(item.specimenBarcode) : null;
                 return <section key={item.id} className={styles.service} aria-label={`Kết quả: ${item.serviceName}`}>
                     <h2>{item.serviceName} <span className={styles.code}>({item.serviceCode})</span></h2>
-                    {item.result?.values?.length ? <table aria-label={`Chỉ số: ${item.serviceName}`} className={styles.values}>
+                    {item.result?.values?.length ? <div className={styles.tableScroll}><table aria-label={`Chỉ số: ${item.serviceName}`} className={styles.values}>
                         <thead><tr><th>Chỉ số</th><th>Kết quả</th><th>Đơn vị</th><th>Tham chiếu</th><th>Cờ</th></tr></thead>
                         <tbody>{item.result.values.map(value => <tr key={value.parameterId} className={isCriticalDiagnosticFlag(value.flag) ? styles.critical : undefined}>
                             <td>{value.parameterName} ({value.parameterCode})</td><td>{value.value}</td><td>{value.unit}</td><td>{value.referenceRangeText}</td>
                             <td>{value.flag === 'Normal' ? '—' : `${value.flag.endsWith('High') || value.flag === 'High' ? 'H' : 'L'}${isCriticalDiagnosticFlag(value.flag) ? ' *' : ''}`}</td>
                         </tr>)}</tbody>
-                    </table> : <p className={styles.textResult}>{item.result?.resultText || 'Chưa có kết quả.'}</p>}
+                    </table></div> : <p className={styles.textResult}>{item.result?.resultText || 'Chưa có kết quả.'}</p>}
                     {item.result?.hasCriticalValue && <p className={styles.critical}>* Giá trị nguy hiểm</p>}
                     {item.result?.conclusion && <p>Kết luận: {item.result.conclusion}</p>}
                     {barcode && <div className={styles.barcodeBlock}><svg className={styles.barcode} role="img" aria-label={`Mã vạch ${item.specimenBarcode}`} viewBox={`0 0 ${barcode.width} 28`} preserveAspectRatio="none">{barcode.bars.map(bar => <rect key={bar.x} x={bar.x} y={0} width={bar.width} height={28} />)}</svg><span>{item.specimenBarcode}</span></div>}

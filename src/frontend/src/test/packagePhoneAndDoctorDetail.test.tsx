@@ -73,7 +73,7 @@ describe('Doctor appointment detail', () => {
         const labels = { Created: 'Tạo mới', StatusChanged: 'Cập nhật trạng thái', Cancelled: 'Hủy lịch', Rescheduled: 'Đổi lịch', Confirmed: 'Xác nhận', Completed: 'Hoàn thành', NoShow: 'Đánh dấu vắng', RescheduleRequested: 'Yêu cầu đổi lịch', CancelRequested: 'Yêu cầu hủy' };
         vi.mocked(doctorApi.getAppointmentHistory).mockResolvedValue(ok(Object.keys(labels).map((action, id) => ({ id, action, createdAt: '2026-10-16T03:00:00Z', oldStatus: 'Confirmed', newStatus: 'Cancelled' }))));
         mountDetail();
-        await screen.findByRole('heading', { name: 'Nhật ký điều phối & Thao tác' });
+        await screen.findByRole('heading', { name: 'Nhật ký lịch hẹn' });
         for (const [raw, label] of Object.entries(labels)) {
             expect(screen.getByText(label)).toBeInTheDocument();
             expect(screen.queryByText(raw)).not.toBeInTheDocument();

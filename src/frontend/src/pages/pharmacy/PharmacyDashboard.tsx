@@ -75,7 +75,7 @@ export const PharmacyDashboard: React.FC = () => {
         { header: 'Người bệnh', accessor: 'patientName' },
         { header: 'Bác sĩ', accessor: 'doctorName' },
         { header: 'Số thuốc', accessor: item => <span className={styles.numeric}>{item.itemCount}</span>, align: 'right', width: 100 },
-        { header: 'Thao tác', align: 'right', width: 120, accessor: () => <Button size="small" onClick={() => navigate('/pharmacy/prescriptions')}>Cấp phát</Button> },
+        { header: 'Thao tác', align: 'right', width: 120, accessor: item => <Button size="small" onClick={() => navigate(`/pharmacy/prescriptions?id=${item.id}`)}>Cấp phát</Button> },
     ];
 
     const busy = loading || pendingLoading;

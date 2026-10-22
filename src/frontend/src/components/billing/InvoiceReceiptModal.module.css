@@ -267,6 +267,32 @@
     background: var(--cc-color-bg-subtle);
 }
 
+@media screen {
+    .tableScroll {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .tableScroll > .itemsTable {
+        min-width: 520px;
+    }
+}
+
+@media screen and (max-width: 767px) {
+    .overlay {
+        padding: var(--cc-space-xs);
+    }
+
+    .body,
+    .receiptContainer {
+        padding: var(--cc-space-md);
+    }
+
+    .infoGrid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 /* Print Stylesheet */
 @media print {
     :global(body.cc-receipt-printing) * { visibility: hidden; }

@@ -66,12 +66,12 @@ describe('K1 check-in date and K4 department preselection', () => {
             expect(Number.parseFloat(button.style.minHeight || button.style.height)).toBeGreaterThanOrEqual(40);
             if (Page === ReceptionAppointments) {
                 fireEvent.click(within(row).getByRole('button', { name: 'Chi tiết' }));
-                const modalButton = screen.getByRole('button', { name: 'Tiếp nhận & Cấp phiếu STT' });
+                const modalButton = screen.getByRole('button', { name: 'Tiếp nhận & cấp STT' });
                 if (index < 2) {
                     expect(modalButton).toBeDisabled();
                     expect(modalButton).toHaveAttribute('title', `Chỉ tiếp nhận vào ngày khám ${date}`);
                 } else expect(modalButton).toBeEnabled();
-                expect(Number.parseFloat(modalButton.style.minHeight || modalButton.style.height)).toBeGreaterThanOrEqual(40);
+                expect(modalButton.className).toMatch(/modalCheckInButton/);
                 fireEvent.click(screen.getByRole('button', { name: 'Đóng chi tiết lịch hẹn' }));
             }
         }
@@ -87,12 +87,12 @@ describe('K1 check-in date and K4 department preselection', () => {
         const open = async () => {
             fireEvent.click(within(screen.getByText('K-APT-0').closest('tr')!).getByRole('button', { name: 'Chi tiết' }));
             await waitFor(() => expect(screen.getAllByRole('option', { name: /Khoa Nội/ }).length).toBeGreaterThan(0));
-            return screen.getByRole('combobox', { name: /Khoa tiếp nhận cho Copilot/ });
+            return screen.getByRole('combobox', { name: /Khoa tiếp nhận/ });
         };
         let select = await open();
         await waitFor(() => expect(select).toHaveValue('19'));
         await waitFor(() => expect(screen.getByTestId('department-selection')).toHaveTextContent('"departmentId":19'));
-        expect(screen.getByText(/Đã chọn sẵn khoa theo chuyên khoa của lịch hẹn; bạn có thể đổi/)).toBeInTheDocument();
+        expect(screen.getByText('Đã chọn sẵn theo chuyên khoa của lịch hẹn, có thể đổi.')).toBeInTheDocument();
         fireEvent.change(select, { target: { value: '20' } });
         await waitFor(() => expect(screen.getByTestId('department-selection')).toHaveTextContent('"departmentId":20'));
         for (const departments of [[{ ...matching, specialtyId: 7 }, other], [matching, { ...matching, id: 23 }]]) {

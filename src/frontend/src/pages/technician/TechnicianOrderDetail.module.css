@@ -22,7 +22,7 @@
 .resultForm { gap: var(--cc-space-sm); }
 .serviceHeader { margin-bottom: var(--cc-space-md); }
 .categoryTag { display: inline-flex; align-items: center; gap: var(--cc-space-xxs); margin-top: var(--cc-space-xs); color: var(--cc-color-primary); background: var(--cc-color-primary-light); border-color: var(--cc-color-border-light); }
-.preparationNote { padding: var(--cc-space-sm); margin-bottom: var(--cc-space-md); background: var(--cc-color-info-bg); color: var(--cc-color-text-dark); border-inline-start: 3px solid var(--cc-color-info); border-radius: var(--cc-radius-sm); }
+.preparationNote { margin-bottom: var(--cc-space-md); color: var(--cc-color-text-secondary); font-size: 13px; }
 .resultToggle { margin-bottom: var(--cc-space-md); }
 .resultFields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: var(--cc-space-sm); }
 .resultFields > div { min-width: 0; }
@@ -36,7 +36,7 @@
 .milestone { display: flex; flex-direction: column; gap: var(--cc-space-xxs); border-top: 2px solid var(--cc-color-border); padding-top: var(--cc-space-sm); font-size: 12px; overflow-wrap: anywhere; }
 .milestoneReached { border-color: var(--cc-color-success); color: var(--cc-color-text-dark); }
 .milestonePending { color: var(--cc-color-text-muted); opacity: 0.65; }
-.completionBar { position: sticky; bottom: calc(var(--cc-control-height) + var(--cc-space-xl) + var(--cc-space-sm)); z-index: 5; box-shadow: var(--cc-shadow-md); background: var(--cc-color-bg-container); }
+.completionBar { margin-bottom: var(--cc-space-lg); }
 .serviceIdentity { flex: 1; flex-wrap: nowrap; min-width: 200px; }
 .serviceNumber { flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--cc-radius-full); color: var(--cc-color-primary); background: var(--cc-color-primary-light); font-weight: 700; }
 .startHint { padding: var(--cc-space-md); background: var(--cc-color-bg-subtle); color: var(--cc-color-text-secondary); border-radius: var(--cc-radius-sm); text-align: center; }

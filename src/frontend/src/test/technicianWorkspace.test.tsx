@@ -132,7 +132,7 @@ describe('technician workspace', () => {
         mount(true);
         expect(await screen.findByRole('alert')).toHaveTextContent('Không thể tải phiếu.');
         await userEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-        expect(await screen.findByText('PHIẾU CHỈ ĐỊNH CẬN LÂM SÀNG')).toBeInTheDocument();
+        expect(await screen.findByText('DX-LAB-001')).toBeInTheDocument();
         expect(mocks.detail).toHaveBeenCalledTimes(2);
         expect(mocks.alert).not.toHaveBeenCalled();
     }, 15000);

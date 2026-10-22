@@ -209,7 +209,7 @@ describe('PharmacyPrescriptions Component', () => {
             expect(screen.getByText(/Có thuốc trong đơn không đủ số lượng tồn kho/)).toBeInTheDocument();
         });
 
-        const confirmBtn = screen.getByText('Xác nhận cấp thuốc & trừ kho');
+        const confirmBtn = screen.getByRole('button', { name: 'Xác nhận cấp thuốc & trừ kho' });
         expect(confirmBtn).toBeDisabled();
     });
 
@@ -245,7 +245,7 @@ describe('PharmacyPrescriptions Component', () => {
             expect(screen.getByText('Ngừng hoạt động')).toBeInTheDocument();
         });
 
-        const confirmBtn = screen.getByText('Xác nhận cấp thuốc & trừ kho');
+        const confirmBtn = screen.getByRole('button', { name: 'Xác nhận cấp thuốc & trừ kho' });
         expect(confirmBtn).toBeDisabled();
     });
 });

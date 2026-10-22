@@ -224,7 +224,7 @@ describe('DoctorExaminationWorkspace Controlled Async & Race Condition Tests', (
             resolveManualOrders(ok(manualOrder));
         });
 
-        const diagBtn = await screen.findByRole('button', { name: /Chỉ định Cận lâm sàng/i });
+        const diagBtn = await screen.findByRole('button', { name: /^Cận lâm sàng/i });
         fireEvent.click(diagBtn);
 
         await waitFor(() => {
@@ -258,7 +258,7 @@ describe('DoctorExaminationWorkspace Controlled Async & Race Condition Tests', (
             </MemoryRouter>
         );
 
-        const diagBtn = await screen.findByRole('button', { name: /Chỉ định Cận lâm sàng/i });
+        const diagBtn = await screen.findByRole('button', { name: /^Cận lâm sàng/i });
         fireEvent.click(diagBtn);
 
         await waitFor(() => {
@@ -406,7 +406,7 @@ describe('DoctorExaminationWorkspace Controlled Async & Race Condition Tests', (
             </MemoryRouter>
         );
 
-        const diagBtn = await screen.findByRole('button', { name: /Chỉ định Cận lâm sàng/i });
+        const diagBtn = await screen.findByRole('button', { name: /^Cận lâm sàng/i });
         fireEvent.click(diagBtn);
 
         await waitFor(() => {
@@ -490,7 +490,7 @@ describe('DoctorExaminationWorkspace Controlled Async & Race Condition Tests', (
             ok([createMockOrder(1, 101, 'Completed', false)])
         );
 
-        const diagBtn = screen.getByRole('button', { name: /Chỉ định Cận lâm sàng/i });
+        const diagBtn = screen.getByRole('button', { name: /^Cận lâm sàng/i });
         fireEvent.click(diagBtn);
 
         const refreshBtn = screen.getByRole('button', { name: /Cập nhật kết quả/i });
@@ -501,7 +501,7 @@ describe('DoctorExaminationWorkspace Controlled Async & Race Condition Tests', (
         });
 
         // Switch back to encounter tab ("Diễn tiến lâm sàng")
-        const encBtn = screen.getByRole('button', { name: /Diễn tiến lâm sàng/i });
+        const encBtn = screen.getByRole('button', { name: /^Diễn tiến$/i });
         fireEvent.click(encBtn);
 
         // Draft note is preserved!
@@ -529,7 +529,7 @@ describe('DoctorExaminationWorkspace Controlled Async & Race Condition Tests', (
             </MemoryRouter>
         );
 
-        const diagBtn = await screen.findByRole('button', { name: /Chỉ định Cận lâm sàng/i });
+        const diagBtn = await screen.findByRole('button', { name: /^Cận lâm sàng/i });
         fireEvent.click(diagBtn);
 
         await waitFor(() => {

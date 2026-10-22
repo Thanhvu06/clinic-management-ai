@@ -45,7 +45,7 @@ describe('ReceptionAppointments Copilot resource selection', () => {
 
         await waitFor(() => expect(organizationApi.getDepartments).toHaveBeenCalledWith(9, expect.any(AbortSignal)));
         const department = await screen.findByRole('option', { name: /Khoa Nội/ });
-        fireEvent.change(screen.getByRole('combobox', { name: /Khoa tiếp nhận cho Copilot/ }), { target: { value: '19' } });
+        fireEvent.change(screen.getByRole('combobox', { name: /Khoa tiếp nhận/ }), { target: { value: '19' } });
 
         await waitFor(() => expect(screen.getByTestId('copilot-selection')).toHaveTextContent('"appointmentId":77'));
         expect(screen.getByTestId('copilot-selection')).toHaveTextContent('"departmentId":19');
@@ -56,7 +56,7 @@ describe('ReceptionAppointments Copilot resource selection', () => {
         render(<DialogProvider><CopilotResourceProvider><SelectionProbe /><ReceptionAppointments /></CopilotResourceProvider></DialogProvider>);
         await screen.findByText('AP-77');
         fireEvent.click(screen.getByRole('button', { name: /Chi tiết/i }));
-        const combobox = await screen.findByRole('combobox', { name: /Khoa tiếp nhận cho Copilot/ });
+        const combobox = await screen.findByRole('combobox', { name: /Khoa tiếp nhận/ });
         fireEvent.change(combobox, { target: { value: '19' } });
         await waitFor(() => expect(screen.getByTestId('copilot-selection')).toHaveTextContent('"departmentId":19'));
 
