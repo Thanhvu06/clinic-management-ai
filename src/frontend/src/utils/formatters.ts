@@ -63,6 +63,16 @@ export function formatDisplayDate(dateInput: string | Date | null | undefined): 
     }
 }
 
+/**
+ * Formats a timestamp to DD/MM/YYYY HH:mm in the device's local timezone.
+ */
+export function formatDateTime(dateInput: string | Date | null | undefined): string {
+    if (!dateInput) return '';
+    const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    if (isNaN(d.getTime())) return String(dateInput);
+    return `${formatDisplayDate(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 /** Formats the calendar portion locally, without converting DateOnly values through UTC. */
 export function formatDateOnly(value: string | null | undefined): string {
     if (!value) return '';

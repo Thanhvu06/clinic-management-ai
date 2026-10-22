@@ -66,7 +66,7 @@ describe('MainLayout shell cleanup', () => {
     });
 
     it.each([
-        { role: 'Doctor', path: '/doctor', routePath: '/doctor', element: <DoctorDashboard />, title: 'Bàn làm việc Bác sĩ' },
+        { role: 'Doctor', path: '/doctor', routePath: '/doctor', element: <DoctorDashboard />, title: 'Bàn làm việc bác sĩ' },
         { role: 'Doctor', path: '/doctor/appointments/5/examination', routePath: '/doctor/appointments/:id/examination', element: <DoctorExaminationPage />, title: 'Bàn khám lâm sàng' },
         { role: 'Doctor', path: '/doctor/visits/7/examination', routePath: '/doctor/visits/:visitId/examination', element: <DoctorExaminationPage />, title: 'Bàn khám lâm sàng' },
         { role: 'Receptionist', path: '/reception', routePath: '/reception', element: <ReceptionWorkspace />, title: 'Bàn làm việc lễ tân' },

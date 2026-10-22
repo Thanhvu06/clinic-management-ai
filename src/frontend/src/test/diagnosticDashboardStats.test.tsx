@@ -38,13 +38,13 @@ describe('Diagnostic dashboard statistics', () => {
         expect(screen.getByRole('button', { name: 'Sửa kết quả' })).toHaveClass('ant-btn-primary');
         expect(screen.getByText('Chờ duyệt')).toHaveClass('ant-tag-processing');
         expect(screen.getByText('Bị trả lại')).toHaveClass('ant-tag-warning');
-        expect(within(card('Chờ trưởng khoa duyệt')).getByText('7')).toBeInTheDocument();
-        expect(within(card('Bị trả lại cần sửa')).getByText('8')).toBeInTheDocument();
-        expect(within(card('Chờ quá 30 phút')).getByText('9')).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /Bị trả lại cần sửa/ })).not.toBeInTheDocument();
-        const ordersRequests = mocks.orders.mock.calls.length;
-        fireEvent.click(card('Bị trả lại cần sửa'));
-        expect(mocks.orders).toHaveBeenCalledTimes(ordersRequests);
+        expect(screen.getByRole('button', { name: 'Chờ trưởng khoa duyệt 7' })).toHaveAttribute('aria-pressed', 'false');
+        expect(screen.getByRole('button', { name: 'Bị trả lại cần sửa 8' })).toHaveAttribute('aria-pressed', 'false');
+        expect(within(screen.getByText('Chờ quá 30 phút').parentElement!).getByText('9')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Chờ quá 30 phút/ })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Bị trả lại cần sửa 8' }));
+        await waitFor(() => expect(mocks.orders).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'InProgress', page: 1 })));
+        expect(await screen.findByText('DX-RETURNED')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Lọc: Đang thực hiện' })).toHaveAttribute('aria-pressed', 'false');
     });
     it('disables refresh while loading and supports legacy technician stats', async () => {
@@ -56,7 +56,7 @@ describe('Diagnostic dashboard statistics', () => {
         expect(screen.getAllByRole('button', { name: 'Đang tải...' }).every(button => button.hasAttribute('disabled'))).toBe(true);
         await act(async () => resolve(ok({ items: [], totalItems: 0 })));
         expect(screen.getByRole('button', { name: 'Làm mới' })).toBeEnabled();
-        expect(within(card('Chờ trưởng khoa duyệt')).getByText('0')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Chờ trưởng khoa duyệt 0' })).toBeInTheDocument();
     });
     it('uses scope wide supervisor stats rather than the current queue page and refreshes both APIs', async () => {
         mount(true);

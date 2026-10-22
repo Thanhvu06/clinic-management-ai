@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { Pill, CalendarCheck, History, AlertTriangle, CheckCircle2, Clock, RefreshCw } from 'lucide-react';
-import { Button, Card } from 'antd';
-import { PageHeader, StatCard } from '../../components/common';
+import { RefreshCw } from 'lucide-react';
+import { Button } from 'antd';
+import { PageHeader, MetricStrip, DataTable, LoadingState, EmptyState, InlineError } from '../../components/common';
+import type { DataTableColumn } from '../../components/common';
+import { getApiErrorMessage } from '../../utils/apiError';
+import { formatDateTime } from '../../utils/formatters';
 import styles from './PharmacyDashboard.module.css';
 
 interface PharmacyStats {
@@ -14,11 +17,23 @@ interface PharmacyStats {
     totalActiveMedicines: number;
 }
 
+interface PendingPrescription {
+    id: number;
+    patientName: string;
+    doctorName: string;
+    itemCount: number;
+    createdAt: string;
+}
+
 export const PharmacyDashboard: React.FC = () => {
+    const navigate = useNavigate();
     const [stats, setStats] = useState<PharmacyStats | null>(null);
     const [loading, setLoading] = useState(true);
+    const [pending, setPending] = useState<PendingPrescription[]>([]);
+    const [pendingLoading, setPendingLoading] = useState(true);
+    const [pendingError, setPendingError] = useState<string | null>(null);
 
-    const fetchStats = async () => {
+    const fetchStats = useCallback(async () => {
         setLoading(true);
         try {
             const res = await axiosClient.get<any, ApiResponse<PharmacyStats>>('/pharmacy/dashboard');
@@ -30,28 +45,67 @@ export const PharmacyDashboard: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
+
+    const fetchPending = useCallback(async () => {
+        setPendingLoading(true);
+        setPendingError(null);
+        try {
+            const res = await axiosClient.get<any, ApiResponse<{ items: PendingPrescription[] }>>('/pharmacy/prescriptions?page=1&pageSize=5&status=Issued');
+            if (!res.success || !res.data) throw new Error(res.message);
+            setPending(res.data.items ?? []);
+        } catch (err) {
+            setPendingError(getApiErrorMessage(err, 'Không thể tải danh sách đơn chờ cấp.'));
+        } finally {
+            setPendingLoading(false);
+        }
+    }, []);
+
+    const refresh = useCallback(() => {
+        void fetchStats();
+        void fetchPending();
+    }, [fetchStats, fetchPending]);
 
     useEffect(() => {
-        fetchStats();
-    }, []);
+        void Promise.resolve().then(refresh);
+    }, [refresh]);
+
+    const pendingColumns: DataTableColumn<PendingPrescription>[] = [
+        { header: 'Thời gian kê', accessor: item => <span className={styles.numeric}>{formatDateTime(item.createdAt)}</span>, width: 150 },
+        { header: 'Người bệnh', accessor: 'patientName' },
+        { header: 'Bác sĩ', accessor: 'doctorName' },
+        { header: 'Số thuốc', accessor: item => <span className={styles.numeric}>{item.itemCount}</span>, align: 'right', width: 100 },
+        { header: 'Thao tác', align: 'right', width: 120, accessor: () => <Button size="small" onClick={() => navigate('/pharmacy/prescriptions')}>Cấp phát</Button> },
+    ];
+
+    const busy = loading || pendingLoading;
 
     return (
         <div className={styles.dashboard}>
-            <PageHeader title="Bàn làm việc Dược sĩ" actions={<Button onClick={fetchStats}><RefreshCw size={16} aria-hidden="true" /> Cập nhật số liệu</Button>} />
-            <h2 className={styles.sectionTitle}>Tình hình kho & Đơn thuốc</h2>
-            <div className={styles.statGrid}>
-                <StatCard title="ĐƠN THUỐC CHỜ CẤP" value={loading ? '...' : (stats?.pendingPrescriptionsCount ?? 0)} subtitle="Cần chuẩn bị & cấp phát" icon={<Clock size={20} />} color="warning" />
-                <StatCard title="ĐÃ CẤP HÔM NAY" value={loading ? '...' : (stats?.dispensedTodayCount ?? 0)} subtitle="Đơn thuốc hoàn thành" icon={<CheckCircle2 size={20} />} color="success" />
-                <StatCard title="CẢNH BÁO TỒN KHO" value={loading ? '...' : (stats?.lowStockCount ?? 0)} subtitle="Mặt hàng dưới định mức" icon={<AlertTriangle size={20} />} color={(stats?.lowStockCount ?? 0) > 0 ? 'danger' : 'success'} />
-                <StatCard title="DANH MỤC THUỐC" value={loading ? '...' : (stats?.totalActiveMedicines ?? 0)} subtitle="Đang lưu hành trong kho" icon={<Pill size={20} />} color="info" />
-            </div>
-            <h2 className={styles.sectionTitle}>Nghiệp vụ dược chính</h2>
-            <div className={styles.actionGrid}>
-                <Link to="/pharmacy/prescriptions" className={styles.actionLink}><Card hoverable><CalendarCheck size={24} className={styles.actionIcon} /><div className={styles.actionTitle}>Cấp phát đơn thuốc</div><div className={styles.secondary}>Tiếp nhận đơn thuốc từ bác sĩ, kiểm tra số lượng và trừ kho cấp thuốc.</div></Card></Link>
-                <Link to="/pharmacy/medicines" className={styles.actionLink}><Card hoverable><Pill size={24} className={styles.actionIcon} /><div className={styles.actionTitle}>Danh mục thuốc</div><div className={styles.secondary}>Tra cứu tồn kho, định mức tối thiểu và trạng thái thuốc.</div></Card></Link>
-                <Link to="/pharmacy/inventory" className={styles.actionLink}><Card hoverable><History size={24} className={styles.actionIcon} /><div className={styles.actionTitle}>Lịch sử kho & Nhập hàng</div><div className={styles.secondary}>Theo dõi lịch sử nhập/xuất/điều chỉnh và ghi nhận lô thuốc mới.</div></Card></Link>
-            </div>
+            <PageHeader title="Bàn làm việc Dược sĩ" actions={<Button onClick={refresh} disabled={busy}><RefreshCw size={16} aria-hidden="true" /> {busy ? 'Đang tải...' : 'Cập nhật số liệu'}</Button>} />
+            <MetricStrip
+                ariaLabel="Số liệu nhà thuốc"
+                items={[
+                    { label: 'Đơn chờ cấp', value: loading ? '...' : (stats?.pendingPrescriptionsCount ?? 0), tone: 'attention', to: '/pharmacy/prescriptions' },
+                    { label: 'Đã cấp hôm nay', value: loading ? '...' : (stats?.dispensedTodayCount ?? 0) },
+                    { label: 'Thuốc dưới định mức', value: loading ? '...' : (stats?.lowStockCount ?? 0), tone: 'attention', to: '/pharmacy/inventory' },
+                ]}
+            />
+            <section className={styles.section} aria-label="Đơn chờ cấp">
+                <div className={styles.sectionHeader}>
+                    <h2 className={styles.sectionTitle}>Đơn chờ cấp</h2>
+                    <Link to="/pharmacy/prescriptions">Xem tất cả</Link>
+                </div>
+                {pendingLoading ? (
+                    <LoadingState message="Đang tải đơn chờ cấp..." height="160px" />
+                ) : pendingError ? (
+                    <InlineError message={pendingError} onRetry={fetchPending} />
+                ) : pending.length === 0 ? (
+                    <EmptyState title="Không có đơn chờ cấp" />
+                ) : (
+                    <DataTable columns={pendingColumns} data={pending} keyExtractor={item => item.id} ariaLabel="Đơn chờ cấp" />
+                )}
+            </section>
         </div>
     );
 };

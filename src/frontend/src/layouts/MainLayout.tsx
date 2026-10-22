@@ -50,7 +50,7 @@ const NAV_BY_ROLE: Record<string, NavEntry[]> = {
         { to: '/admin/doctors', icon: Users, label: 'Quản lý bác sĩ' },
         { to: '/admin/packages', icon: Package, label: 'Gói khám sức khỏe' },
         { to: '/admin/medicines', icon: Pill, label: 'Danh mục thuốc' },
-        { to: '/admin/work-schedules', icon: CalendarCheck, label: 'Lịch trực & Slots' },
+        { to: '/admin/work-schedules', icon: CalendarCheck, label: 'Lịch trực & khung giờ' },
         { to: '/admin/leaves', icon: CalendarDays, label: 'Duyệt nghỉ phép' },
         { to: '/admin/audit-logs', icon: History, label: 'Nhật ký hệ thống' },
     ],

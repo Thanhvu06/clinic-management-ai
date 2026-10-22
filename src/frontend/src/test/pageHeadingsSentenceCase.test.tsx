@@ -61,7 +61,7 @@ describe('Sentence-case page headings', () => {
     });
 
     it.each([
-        { name: 'DoctorDashboard', element: <DoctorDashboard />, title: 'Bàn làm việc Bác sĩ', removed: 'Hệ thống điều phối khám lâm sàng và quản lý hồ sơ y tế bệnh nhân hôm nay' },
+        { name: 'DoctorDashboard', element: <DoctorDashboard />, title: 'Bàn làm việc bác sĩ', removed: 'Hệ thống điều phối khám lâm sàng và quản lý hồ sơ y tế bệnh nhân hôm nay' },
         { name: 'DoctorQueue', element: <DoctorQueue />, title: 'Hàng đợi khám lâm sàng', removed: 'Theo dõi thứ tự tiếp nhận, đo sinh hiệu và điều phối bệnh nhân vào phòng khám.' },
         { name: 'DoctorSchedule', element: <DoctorSchedule />, title: 'Lịch trực & Ca khám tuần', removed: 'Xem lịch trực được phân bổ, danh sách các khung giờ và thông tin bệnh nhân đã đặt.' },
         { name: 'AdminFacilities', element: <AdminFacilities />, title: 'Mạng lưới cơ sở', removed: 'Quản lý cây tổ chức: Cơ sở ➔ Tòa nhà ➔ Khoa phòng ➔ Phòng bệnh ➔ Giường bệnh' },

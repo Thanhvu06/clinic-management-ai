@@ -1,9 +1,8 @@
 .dashboard { min-width: 0; }
-.statGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--cc-space-md); margin-bottom: var(--cc-space-lg); }
-.statFilter { min-width: 0; border-radius: var(--cc-radius-lg); cursor: pointer; }
-.statFilterActive, .statFilter:focus-visible { outline: 2px solid var(--cc-color-primary); outline-offset: 2px; }
 .updatedAt { color: var(--cc-color-text-muted); font-size: 12px; margin: 0 0 var(--cc-space-sm); text-align: right; }
-.filters { margin-bottom: var(--cc-space-lg); }
+.filters { margin-bottom: var(--cc-space-md); }
+.verificationFilters { display: flex; flex-wrap: wrap; gap: var(--cc-space-xs); margin-bottom: var(--cc-space-md); }
+.filterCount { margin-inline-start: var(--cc-space-xs); font-variant-numeric: tabular-nums; color: var(--cc-color-text-secondary); }
 .filterRow, .filterControls, .searchForm { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); min-width: 0; }
 .filterRow { gap: var(--cc-space-md); }
 .searchForm { flex: 1; }
@@ -24,7 +23,6 @@
 .waitDanger { color: var(--cc-color-danger); background: var(--cc-color-danger-bg); }
 .dashboard :global(.ant-btn) { white-space: nowrap; }
 @media (max-width: 767px) {
-    .statGrid { grid-template-columns: 1fr; }
     .filterControls { width: 100%; }
     .statusFilter, .dateFilter, .categoryFilter { flex: 1; min-width: 140px; }
 }
