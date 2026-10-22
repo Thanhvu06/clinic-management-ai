@@ -1,8 +1,8 @@
 .page { display: flex; flex-direction: column; gap: var(--cc-space-lg); min-width: 0; }
-.primaryIcon, .registrationCode { color: var(--cc-color-primary); }
+.registrationCode { color: var(--cc-color-primary); }
 .registrationCode { font-family: monospace; font-weight: 600; }
-.filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cc-space-md); padding: var(--cc-space-md); background: var(--cc-color-bg-container); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-lg); }
-.searchForm { display: flex; flex: 1 1 350px; gap: var(--cc-space-xs); min-width: 0; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cc-space-sm); }
+.searchForm { display: flex; flex: 1 1 350px; max-width: 480px; gap: var(--cc-space-xs); min-width: 0; }
 .searchInput { flex: 1; min-width: 0; }
 .statusFilter { width: 200px; max-width: 100%; }
 .tableScroll { overflow-x: auto; min-width: 0; }

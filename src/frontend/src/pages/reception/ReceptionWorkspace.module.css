@@ -24,7 +24,7 @@
 .tabCount { padding: 0 var(--cc-space-xs); border-radius: var(--cc-radius-full); background: var(--cc-color-bg-subtle); color: var(--cc-color-text-secondary); font-size: 0.75rem; }
 .queueTable { overflow-x: auto; }
 .queueTable :global(.ant-table) { min-width: 980px; }
-.appointmentCode { display: inline-block; font-family: monospace; font-weight: 700; color: var(--cc-color-primary); background: var(--cc-color-primary-light); padding: var(--cc-space-xxs); border-radius: var(--cc-radius-sm); }
+.appointmentCode { font-weight: 600; color: var(--cc-color-text); }
 .appointmentTime { margin-top: var(--cc-space-xxs); font-size: 0.8rem; color: var(--cc-color-text-secondary); white-space: nowrap; }
 .patientName { font-weight: 600; color: var(--cc-color-text); }
 .patientIdentifiers, .doctorName { font-size: 0.8rem; color: var(--cc-color-text-secondary); overflow-wrap: anywhere; }

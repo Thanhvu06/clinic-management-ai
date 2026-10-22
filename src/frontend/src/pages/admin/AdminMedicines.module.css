@@ -3,7 +3,10 @@
 .medicineStatusFilter { width: 200px; }
 .medicinePrice { color: var(--cc-color-info); }
 .medicineCode { white-space: nowrap; }
-.medicineStock { display: inline-flex; align-items: center; gap: var(--cc-space-xs); }
+.medicineName { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); }
+.prescriptionTag { margin-inline-end: 0; font-size: 0.75rem; line-height: 18px; }
+.medicineStock { display: inline-flex; align-items: center; gap: var(--cc-space-xxs); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.medicineStockMin { color: var(--cc-color-text-secondary); }
 .stockWarning { display: inline-flex; }
 .medicineRowActions, .medicineFormActions { display: flex; justify-content: flex-end; gap: var(--cc-space-xs); }
 .medicineTotal { margin-top: var(--cc-space-md); color: var(--cc-color-text-secondary); }

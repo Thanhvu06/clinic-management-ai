@@ -282,9 +282,9 @@ export const ReceptionWorkspace: React.FC = () => {
     };
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
     const queueColumns: DataTableColumn<AppointmentItem>[] = [
-        { header: 'Mã / Giờ hẹn', accessor: item => <><span className={styles.appointmentCode}>{item.appointmentCode}</span><div className={styles.appointmentTime}>{item.startTime.substring(0, 5)} - {item.endTime.substring(0, 5)}</div></> },
+        { header: 'Mã / giờ hẹn', accessor: item => <><span className={styles.appointmentCode}>{item.appointmentCode}</span><div className={styles.appointmentTime}>{item.startTime.substring(0, 5)} - {item.endTime.substring(0, 5)}</div></> },
         { header: 'Người bệnh', accessor: item => <><div className={styles.patientName}>{item.patientName}</div><div className={styles.patientIdentifiers}>{item.medicalRecordNumber ? `MRN: ${item.medicalRecordNumber}` : ''}{item.patientPhone ? ` • ${item.patientPhone}` : ''}</div></> },
-        { header: 'Chuyên khoa / Bác sĩ', accessor: item => <><div className={styles.specialtyName}>{item.specialtyName}</div><div className={styles.doctorName}>BS: {item.doctorName || 'Chưa phân công'}</div></> },
+        { header: 'Chuyên khoa / bác sĩ', accessor: item => <><div className={styles.specialtyName}>{item.specialtyName}</div><div className={styles.doctorName}>BS: {item.doctorName || 'Chưa phân công'}</div></> },
         { header: 'Lý do khám', accessor: item => item.reason || '-', className: styles.visitReason },
         { header: 'Trạng thái', accessor: item => renderStatusBadge(item.status) },
         { header: 'Thao tác', align: 'right', className: styles.queueActionsCell, accessor: item => (
@@ -335,21 +335,21 @@ export const ReceptionWorkspace: React.FC = () => {
                 items={[
                     { label: 'Lịch khám hôm nay', value: statsError ? '—' : stats?.appointmentsToday ?? 0 },
                     { label: 'Chờ xác nhận', value: statsError ? '—' : stats?.pendingAppointmentsToday ?? 0, tone: 'attention' },
-                    { label: 'Chờ tiếp đón / Đang khám', value: statsError ? '—' : stats?.confirmedAppointmentsToday ?? 0 },
+                    { label: 'Chờ tiếp đón / đang khám', value: statsError ? '—' : stats?.confirmedAppointmentsToday ?? 0 },
                     { label: 'Đã khám xong hôm nay', value: statsError ? '—' : stats?.completedAppointmentsToday ?? 0 },
                 ]}
             />
             {statsError && <div className={styles.statsError}><span>Không tải được số liệu</span><Button size="small" disabled={statsLoading} onClick={() => fetchStats(selectedFacilityId)}>{statsLoading ? 'Đang tải...' : 'Thử lại'}</Button></div>}
             <Card className={styles.searchCard}>
                 <form onSubmit={handleSearchSubmit} className={styles.searchForm}>
-                    <Input className={styles.searchInput} prefix={<Search size={18} />} placeholder="Tìm kiếm nhanh: Mã bệnh nhân (MRN), Số CCCD, Mã lịch hẹn, Tên người bệnh, Số điện thoại..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <Input className={styles.searchInput} prefix={<Search size={18} />} placeholder="Tìm nhanh theo mã bệnh nhân (MRN), số CCCD, mã lịch hẹn, tên người bệnh, số điện thoại..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                     <Button type="primary" htmlType="submit"><Search size={16} /> Tra cứu</Button>
                     {searchTerm && <Button htmlType="button" onClick={() => { setSearchTerm(''); setPage(1); fetchWorklist(); }}>Xóa tìm kiếm</Button>}
                 </form>
             </Card>
             <section className={styles.worklistCard}>
                     <div className={styles.worklistTabs}>
-                        <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'today' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('today'); setPage(1); }}><span>Hôm nay (Ưu tiên tiếp nhận)</span><span className={styles.tabCount}>{activeTab === 'today' ? totalItems : (stats?.appointmentsToday ?? 0)}</span></Button>
+                        <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'today' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('today'); setPage(1); }}><span>Hôm nay (ưu tiên tiếp nhận)</span><span className={styles.tabCount}>{activeTab === 'today' ? totalItems : (stats?.appointmentsToday ?? 0)}</span></Button>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'pending' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('pending'); setPage(1); }}><span>Chờ xác nhận</span><span className={styles.tabCount}>{stats?.pendingAppointmentsToday ?? 0}</span></Button>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'upcoming' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('upcoming'); setPage(1); }}><span>Sắp tới</span></Button>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'recent' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('recent'); setPage(1); }}><span>Gần đây</span></Button>

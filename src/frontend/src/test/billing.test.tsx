@@ -330,7 +330,7 @@ describe('Billing Module Frontend Tests', () => {
             );
 
             await waitFor(() => {
-                expect(screen.getByText('Doanh thu & Biểu phí phòng khám')).toBeInTheDocument();
+                expect(screen.getByText('Doanh thu & biểu phí')).toBeInTheDocument();
                 expect(screen.getByText('45 lượt')).toBeInTheDocument();
                 expect(screen.getByText('Bảng chi tiết doanh thu theo từng ngày')).toBeInTheDocument();
             });

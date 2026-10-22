@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import axiosClient from '../api/axiosClient';
 import { DialogProvider } from '../contexts/DialogContext';
 import { PharmacyInventory } from '../pages/pharmacy/PharmacyInventory';
@@ -19,6 +19,7 @@ it('renders active medicine images and low-stock or in-stock tags using reorderL
     }));
 
     render(<DialogProvider><PharmacyInventory /></DialogProvider>);
+    fireEvent.click(screen.getByText('Lưới'));
 
     const grid = screen.getByRole('region', { name: 'Lưới thuốc trong kho' });
     const image = await within(grid).findByRole('img', { name: 'Thuốc có ảnh' });

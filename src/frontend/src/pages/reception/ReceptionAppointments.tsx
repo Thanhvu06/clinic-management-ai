@@ -7,7 +7,7 @@ import axiosClient from '../../api/axiosClient';
 import { patientVisitApi } from '../../api/patientVisitApi';
 import { organizationApi, type DepartmentDto } from '../../api/organizationApi';
 import type { ApiResponse, CheckInTicketDto } from '../../types';
-import { Search, CalendarDays, Eye, Clock, RefreshCw, UserCheck } from 'lucide-react';
+import { Search, Eye, Clock, RefreshCw, UserCheck } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
 import { CheckInTicketModal } from '../../components/CheckInTicketModal';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
@@ -298,7 +298,7 @@ export const ReceptionAppointments: React.FC = () => {
         switch (status) {
             case 'Pending': return 'Chờ xác nhận';
             case 'Confirmed': return 'Đã xác nhận';
-            case 'CheckedIn': return 'Đã tiếp nhận (Chờ khám)';
+            case 'CheckedIn': return 'Đã tiếp nhận (chờ khám)';
             case 'Completed': return 'Đã hoàn thành';
             case 'Cancelled': return 'Đã hủy';
             case 'NoShow': return 'Không đến khám';
@@ -323,7 +323,7 @@ export const ReceptionAppointments: React.FC = () => {
     const columns: DataTableColumn<ReceptionAppointment>[] = [
         { header: 'Lịch khám', accessor: apt => <><div className={styles.primaryText}>{apt.appointmentCode}</div><div className={styles.appointmentTime}><Clock size={12} /> {formatDate(apt.appointmentDate)} {apt.startTime.substring(0,5)}</div></> },
         { header: 'Bệnh nhân', accessor: apt => <><div className={styles.primaryText}>{apt.patientName}</div><div className={styles.secondaryText}>{apt.patientPhone}</div></> },
-        { header: 'Bác sĩ & Chuyên khoa', accessor: apt => <><div className={styles.primaryText}>{apt.doctorName}</div><div className={styles.secondaryText}>{apt.specialtyName}</div></> },
+        { header: 'Bác sĩ & chuyên khoa', accessor: apt => <><div className={styles.primaryText}>{apt.doctorName}</div><div className={styles.secondaryText}>{apt.specialtyName}</div></> },
         { header: 'Trạng thái', accessor: apt => getStatusBadge(apt.status) },
         { header: 'Thao tác', align: 'right', className: styles.actionsCell, accessor: apt => <>
             {apt.status === 'Confirmed' && <Button type="primary" className={styles.checkInButton} style={{ minHeight: '40px' }} onClick={() => handleCheckIn(apt)} disabled={checkingInId === apt.id || apt.appointmentDate !== toLocalDateString()} title={apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${apt.appointmentDate.split('-').reverse().join('/')}` : undefined} ><UserCheck size={14} aria-hidden="true" />{checkingInId === apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận'}</Button>}
@@ -333,11 +333,11 @@ export const ReceptionAppointments: React.FC = () => {
 
     return (
         <>
-            <PageHeader title="Quản lý lịch hẹn" badge={<CalendarDays size={24} className={styles.primaryIcon} />} actions={<Button onClick={() => fetchAppointments()} icon={<RefreshCw size={14} />}>Làm mới</Button>} />
+            <PageHeader title="Quản lý lịch hẹn" actions={<Button onClick={() => fetchAppointments()} icon={<RefreshCw size={14} />}>Làm mới</Button>} />
             <form onSubmit={handleSearchSubmit} className={styles.filterForm}>
-                <Input className={styles.searchInput} prefix={<Search size={18} />} placeholder="Tìm theo mã lịch, tên, SĐT..." value={search} onChange={e => setSearch(e.target.value)} />
+                <Input className={styles.searchInput} prefix={<Search size={16} aria-hidden="true" />} placeholder="Tìm theo mã lịch, tên, SĐT..." value={search} onChange={e => setSearch(e.target.value)} />
                 <Select className={styles.statusFilter} value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả trạng thái'},{value:'Pending',label:'Chờ xác nhận'},{value:'Confirmed',label:'Đã xác nhận'},{value:'Completed',label:'Đã hoàn thành'},{value:'Cancelled',label:'Đã hủy'}]} />
-                <Button htmlType="submit">Tìm kiếm</Button>
+                <Button htmlType="submit">Tìm</Button>
             </form>
             {loading ? <LoadingState message="Đang tải dữ liệu..." /> : loadError ? <InlineError message={loadError} onRetry={fetchAppointments} /> : appointments.length === 0 ? <EmptyState title="Không tìm thấy lịch hẹn nào." /> : <div className={styles.tableScroll}><DataTable columns={columns} data={appointments} keyExtractor={apt => apt.id} /></div>}
             <div className={styles.secondaryText}>Tổng cộng: {totalItems} lịch hẹn</div>
@@ -348,7 +348,7 @@ export const ReceptionAppointments: React.FC = () => {
             </>}>
                 <div className={styles.detailGrid}>
                     <div className={styles.factCard}><div className={styles.factLabel}>Bệnh nhân</div><div className={styles.primaryText}>{modal.apt.patientName}</div><div>{modal.apt.patientPhone}</div></div>
-                    <div className={styles.factCard}><div className={styles.factLabel}>Bác sĩ & Chuyên khoa</div><div className={styles.primaryText}>{modal.apt.doctorName}</div><div>{modal.apt.specialtyName}</div></div>
+                    <div className={styles.factCard}><div className={styles.factLabel}>Bác sĩ & chuyên khoa</div><div className={styles.primaryText}>{modal.apt.doctorName}</div><div>{modal.apt.specialtyName}</div></div>
                     <div className={styles.timeCard}><div className={styles.factLabel}>Thời gian khám</div><div className={styles.appointmentTime}><Clock size={16} className={styles.primaryIcon} />{formatDate(modal.apt.appointmentDate)} ({modal.apt.startTime.substring(0,5)} - {modal.apt.endTime.substring(0,5)})</div></div>
                 </div>
                 <section className={styles.detailSection}><div className={styles.sectionLabel}>Lý do khám:</div><div className={styles.notePanel}>{modal.apt.reason || <span className={styles.secondaryText}>Không có ghi chú</span>}</div></section>

@@ -161,7 +161,7 @@ describe('Doctor and pharmacist prescription safety', () => {
         const detail = { id: 9, appointmentCode: 'APT-PS', patientName: 'Bệnh nhân an toàn', doctorName: 'BS. An', status: 'Issued', createdAt: '2026-10-16T01:00:00Z',
             safetyWarnings: [danger], safetyOverrideReason: 'Đã đánh giá và xác nhận chuyên môn', items: [{ medicineId: 1, medicineCode: 'PS-1', medicineName: 'Amoxicillin', unit: 'Viên', quantity: 2, availableStock: 100, isActive: true, dosage: '1 viên', frequency: '2 lần' }] };
         mocks.get.mockImplementation((url: string) => Promise.resolve(ok(url.includes('/prescriptions/9') ? detail : { items: [{ ...detail, itemCount: 1 }], totalItems: 1 })));
-        mount('/pharmacy'); fireEvent.click(await screen.findByRole('button', { name: /Xem & Cấp phát/ }));
+        mount('/pharmacy'); fireEvent.click(await screen.findByRole('button', { name: /Xem & cấp phát/ }));
         const safety = await screen.findByRole('region', { name: 'An toàn kê đơn' });
         expect(within(safety).getByText(danger.title)).toBeInTheDocument(); expect(within(safety).getByText(/Đã đánh giá và xác nhận chuyên môn/)).toBeInTheDocument();
         expect(within(safety).queryByRole('textbox')).not.toBeInTheDocument(); expect(mocks.check).not.toHaveBeenCalled();

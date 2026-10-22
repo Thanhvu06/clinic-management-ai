@@ -68,7 +68,7 @@ describe('NotificationsPage Component', () => {
         );
 
         await waitFor(() => {
-            expect(screen.getByText('Trung tâm thông báo')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { level: 1, name: 'Thông báo' })).toBeInTheDocument();
             expect(screen.getByText('Đặt lịch khám thành công')).toBeInTheDocument();
             expect(screen.getByText('Đơn thuốc đã được phát')).toBeInTheDocument();
             expect(screen.getByText('1')).toBeInTheDocument(); // Unread tab badge
@@ -149,7 +149,7 @@ describe('NotificationsPage Component', () => {
         );
 
         await waitFor(() => {
-            expect(screen.getByText('Trung tâm thông báo')).toBeInTheDocument();
+            expect(screen.getByRole('heading', { level: 1, name: 'Thông báo' })).toBeInTheDocument();
         });
 
         const markAllBtn = screen.getByText('Đánh dấu tất cả đã đọc');

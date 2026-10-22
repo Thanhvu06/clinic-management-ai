@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { Search, Eye, AlertCircle, Printer } from 'lucide-react';
-import { Button, Card, Input, Modal, Select } from 'antd';
+import { Button, Input, Modal, Select } from 'antd';
 import { PageHeader, DataTable, StatusBadge, EmptyState, LoadingState } from '../../components/common';
 import styles from './PharmacyPrescriptions.module.css';
 import { useDialog } from '../../contexts/DialogContext';
@@ -219,14 +219,14 @@ export const PharmacyPrescriptions: React.FC = () => {
 
     return (
         <>
-            <PageHeader title="Quản lý cấp phát đơn thuốc" />
-            <Card className={styles.filters}>
+            <PageHeader title="Đơn thuốc chờ cấp" />
+            <div className={styles.filters}>
                 <form onSubmit={handleSearchSubmit} className={styles.filterForm}>
-                    <Input type="text" className={styles.searchInput} placeholder="Tìm theo tên BN, SĐT hoặc mã lịch..." prefix={<Search size={18} />} value={search} onChange={e => setSearch(e.target.value)} />
-                    <Select className={styles.statusFilter} value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả trạng thái'},{value:'Issued',label:'Đang chờ cấp thuốc'},{value:'Dispensed',label:'Đã hoàn thành cấp phát'}]} />
-                    <Button htmlType="submit">Tìm kiếm</Button>
+                    <Input type="text" className={styles.searchInput} placeholder="Tìm theo tên BN, SĐT hoặc mã lịch..." prefix={<Search size={16} aria-hidden="true" />} value={search} onChange={e => setSearch(e.target.value)} />
+                    <Select className={styles.statusFilter} aria-label="Trạng thái" value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả trạng thái'},{value:'Issued',label:'Đang chờ cấp thuốc'},{value:'Dispensed',label:'Đã hoàn thành cấp phát'}]} />
+                    <Button htmlType="submit">Tìm</Button>
                 </form>
-            </Card>
+            </div>
             {loading ? <LoadingState message="Đang tải danh sách đơn thuốc..." /> : prescriptions.length === 0 ? <EmptyState title="Không có đơn thuốc nào phù hợp." /> : <div className={styles.tableScroll}><DataTable data={prescriptions} keyExtractor={p => p.id} columns={[
                 {header:'Mã đơn',accessor:p => <><strong>#{p.id}</strong><div className={styles.secondary}>{p.appointmentCode}</div></>},
                 {header:'Bệnh nhân',accessor:p => <><strong>{p.patientName}</strong><div className={styles.secondary}>{p.patientPhone}</div></>},
@@ -234,11 +234,11 @@ export const PharmacyPrescriptions: React.FC = () => {
                 {header:'Thời gian kê đơn',accessor:p => formatDateTime(p.createdAt)},
                 {header:'Số lượng thuốc',accessor:p => <span className={styles.itemCount}>{p.itemCount} loại thuốc</span>},
                 {header:'Trạng thái',accessor:p => <StatusBadge status={p.status === 'Dispensed' ? 'completed' : 'pending'} label={p.status === 'Dispensed' ? 'Đã cấp thuốc' : 'Chờ cấp thuốc'} />},
-                {header:'Thao tác',align:'right',accessor:p => <Button type="primary" onClick={() => handleOpenDetail(p.id)}><Eye size={14} aria-hidden="true" /> Xem & Cấp phát</Button>}
+                {header:'Thao tác',align:'right',accessor:p => <Button type="primary" onClick={() => handleOpenDetail(p.id)}><Eye size={14} aria-hidden="true" /> Xem & cấp phát</Button>}
             ]} /></div>}
             {!loading && prescriptions.length > 0 && totalItems > 10 && <div className={styles.pagination}><span className={styles.secondary}>Tổng số: {totalItems} đơn thuốc</span><div className={styles.pageControls}><Button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Trang trước</Button><span>Trang {page}</span><Button disabled={page * 10 >= totalItems} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
             <Modal open={detailModalOpen} onCancel={() => { if (!dispenseLoading) { setDetailModalOpen(false); setSelectedPrescription(null); } }} title={`Chi tiết đơn thuốc #${selectedPrescription?.id}`} width={740} className={styles.detailModal} mask={{closable:false}} keyboard={false} closable={{disabled:dispenseLoading}} footer={
-                <div className={styles.modalFooter}><Button htmlType="button" onClick={() => window.print()}><Printer size={16} aria-hidden="true" /> In đơn thuốc</Button><div className={styles.footerActions}><Button htmlType="button" disabled={dispenseLoading} onClick={() => { setDetailModalOpen(false); setSelectedPrescription(null); }}>Đóng</Button>{selectedPrescription?.status === 'Issued' && <button type="button" className={styles.dispenseButton} disabled={dispenseLoading || !canDispense} onClick={() => handleDispense(selectedPrescription.id)}>{dispenseLoading ? 'Đang xử lý...' : 'Xác nhận cấp thuốc & Trừ kho'}</button>}</div></div>
+                <div className={styles.modalFooter}><Button htmlType="button" onClick={() => window.print()}><Printer size={16} aria-hidden="true" /> In đơn thuốc</Button><div className={styles.footerActions}><Button htmlType="button" disabled={dispenseLoading} onClick={() => { setDetailModalOpen(false); setSelectedPrescription(null); }}>Đóng</Button>{selectedPrescription?.status === 'Issued' && <button type="button" className={styles.dispenseButton} disabled={dispenseLoading || !canDispense} onClick={() => handleDispense(selectedPrescription.id)}>{dispenseLoading ? 'Đang xử lý...' : 'Xác nhận cấp thuốc & trừ kho'}</button>}</div></div>
             }>
                 <div className={styles.appointmentCode}>Mã lịch hẹn: {selectedPrescription?.appointmentCode}</div>
                 {detailLoading ? <LoadingState message="Đang tải dữ liệu đơn thuốc..." /> : selectedPrescription && <>
@@ -247,7 +247,7 @@ export const PharmacyPrescriptions: React.FC = () => {
                         <div><span className={styles.secondary}>Bác sĩ chỉ định:</span><div className={styles.patientName}>{selectedPrescription.doctorName}</div><div className={styles.secondary}>Thời gian kê: {formatDateTime(selectedPrescription.createdAt)}</div></div>
                         <div><span className={styles.secondary}>Trạng thái cấp phát:</span><div><StatusBadge status={selectedPrescription.status === 'Dispensed' ? 'completed' : 'pending'} label={selectedPrescription.status === 'Dispensed' ? `Đã cấp lúc ${formatDateTime(selectedPrescription.dispensedAt)}` : 'Chờ kiểm tra & cấp phát'} /></div></div>
                     </div>
-                    {selectedPrescription.notes && <div className={styles.doctorNotes}><strong>Ghi chú từ Bác sĩ:</strong> {selectedPrescription.notes}</div>}
+                    {selectedPrescription.notes && <div className={styles.doctorNotes}><strong>Ghi chú từ bác sĩ:</strong> {selectedPrescription.notes}</div>}
                     {!!selectedPrescription.safetyWarnings?.length && <PrescriptionSafetyPanel result={{ allergies: [], warnings: selectedPrescription.safetyWarnings }} overrideReason={selectedPrescription.safetyOverrideReason} />}
                     {hasInsufficientStock && selectedPrescription.status === 'Issued' && <div className={styles.stockWarning}><AlertCircle size={20} /><span><strong>Cảnh báo tồn kho:</strong> Có thuốc trong đơn không đủ số lượng tồn kho để cấp phát. Vui lòng nhập thêm hàng hoặc trao đổi lại với bác sĩ!</span></div>}
                     {hasInactiveMedicine && selectedPrescription.status === 'Issued' && <div className={styles.inactiveWarning}><AlertCircle size={20} /><span><strong>Cảnh báo danh mục:</strong> Có thuốc trong đơn đã ngừng cung cấp hoặc ngừng hoạt động. Không thể cấp phát đơn này!</span></div>}
@@ -257,7 +257,7 @@ export const PharmacyPrescriptions: React.FC = () => {
                         {header:'Số lượng',accessor:item => <strong>{item.quantity} {item.unit}</strong>},
                         {header:'Tồn kho',accessor:item => <span className={item.availableStock < item.quantity ? styles.insufficientStock : styles.availableStock}>{item.availableStock} {item.unit}</span>},
                         {header:'Liều dùng',accessor:'dosage'},
-                        {header:'Tần suất & Chỉ dẫn',accessor:item => <><div>{item.frequency}</div>{item.instructions && <div className={styles.instructions}>{item.instructions}</div>}</>}
+                        {header:'Tần suất & chỉ dẫn',accessor:item => <><div>{item.frequency}</div>{item.instructions && <div className={styles.instructions}>{item.instructions}</div>}</>}
                     ]} /></div>
                 </>}
             </Modal>

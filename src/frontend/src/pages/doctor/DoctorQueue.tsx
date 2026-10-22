@@ -195,7 +195,7 @@ export const DoctorQueue: React.FC = () => {
             )
         },
         {
-            header: 'Lý do khám / Chẩn đoán sơ bộ',
+            header: 'Lý do khám / chẩn đoán sơ bộ',
             accessor: (item) => <div className={styles.reasonCell}>{item.chiefComplaint || item.reason || 'Khám tổng quát theo lịch hẹn'}</div>
         },
         {
@@ -294,7 +294,7 @@ export const DoctorQueue: React.FC = () => {
     return (
         <div>
             <PageHeader
-                title="Hàng đợi khám lâm sàng"
+                title="Hàng đợi khám"
                 actions={
                     <Flex align="center" gap="small">
                         <Input

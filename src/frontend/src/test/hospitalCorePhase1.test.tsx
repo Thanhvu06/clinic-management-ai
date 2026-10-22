@@ -341,7 +341,7 @@ describe('Hospital Core Phase 1 Frontend Components', () => {
             fireEvent.click(screen.getByText(/Tiếp tục: Chuẩn bị lượt khám/i));
 
             await waitFor(() => {
-                expect(screen.getByText('Chuẩn Bị Lượt Khám')).toBeInTheDocument();
+                expect(screen.getByText('Chuẩn bị lượt khám')).toBeInTheDocument();
             });
 
             // Fill chief complaint in Step 2
@@ -352,7 +352,7 @@ describe('Hospital Core Phase 1 Frontend Components', () => {
             fireEvent.click(screen.getByText(/Tiếp tục: Xác nhận thông tin/i));
 
             await waitFor(() => {
-                expect(screen.getByText('Xác Nhận & Cấp STT')).toBeInTheDocument();
+                expect(screen.getByText('Xác nhận & cấp STT')).toBeInTheDocument();
             });
 
             // Submit
@@ -438,7 +438,7 @@ describe('Hospital Core Phase 1 Frontend Components', () => {
             fireEvent.click(screen.getByText(/Tiếp tục: Chuẩn bị lượt khám/i));
 
             await waitFor(() => {
-                expect(screen.getByText('Chuẩn Bị Lượt Khám')).toBeInTheDocument();
+                expect(screen.getByText('Chuẩn bị lượt khám')).toBeInTheDocument();
             });
 
             // Fill chief complaint in Step 2
@@ -449,7 +449,7 @@ describe('Hospital Core Phase 1 Frontend Components', () => {
             fireEvent.click(screen.getByText(/Tiếp tục: Xác nhận thông tin/i));
 
             await waitFor(() => {
-                expect(screen.getByText('Xác Nhận & Cấp STT')).toBeInTheDocument();
+                expect(screen.getByText('Xác nhận & cấp STT')).toBeInTheDocument();
             });
 
             // Submit

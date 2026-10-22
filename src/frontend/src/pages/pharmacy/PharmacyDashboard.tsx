@@ -82,7 +82,7 @@ export const PharmacyDashboard: React.FC = () => {
 
     return (
         <div className={styles.dashboard}>
-            <PageHeader title="Bàn làm việc Dược sĩ" actions={<Button onClick={refresh} disabled={busy}><RefreshCw size={16} aria-hidden="true" /> {busy ? 'Đang tải...' : 'Cập nhật số liệu'}</Button>} />
+            <PageHeader title="Bàn làm việc dược sĩ" actions={<Button onClick={refresh} disabled={busy}><RefreshCw size={16} aria-hidden="true" /> {busy ? 'Đang tải...' : 'Cập nhật số liệu'}</Button>} />
             <MetricStrip
                 ariaLabel="Số liệu nhà thuốc"
                 items={[

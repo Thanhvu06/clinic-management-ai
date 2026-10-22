@@ -62,16 +62,16 @@ describe('Sentence-case page headings', () => {
 
     it.each([
         { name: 'DoctorDashboard', element: <DoctorDashboard />, title: 'Bàn làm việc bác sĩ', removed: 'Hệ thống điều phối khám lâm sàng và quản lý hồ sơ y tế bệnh nhân hôm nay' },
-        { name: 'DoctorQueue', element: <DoctorQueue />, title: 'Hàng đợi khám lâm sàng', removed: 'Theo dõi thứ tự tiếp nhận, đo sinh hiệu và điều phối bệnh nhân vào phòng khám.' },
-        { name: 'DoctorSchedule', element: <DoctorSchedule />, title: 'Lịch trực & Ca khám tuần', removed: 'Xem lịch trực được phân bổ, danh sách các khung giờ và thông tin bệnh nhân đã đặt.' },
+        { name: 'DoctorQueue', element: <DoctorQueue />, title: 'Hàng đợi khám', removed: 'Theo dõi thứ tự tiếp nhận, đo sinh hiệu và điều phối bệnh nhân vào phòng khám.' },
+        { name: 'DoctorSchedule', element: <DoctorSchedule />, title: 'Lịch trực & ca khám', removed: 'Xem lịch trực được phân bổ, danh sách các khung giờ và thông tin bệnh nhân đã đặt.' },
         { name: 'AdminFacilities', element: <AdminFacilities />, title: 'Mạng lưới cơ sở', removed: 'Quản lý cây tổ chức: Cơ sở ➔ Tòa nhà ➔ Khoa phòng ➔ Phòng bệnh ➔ Giường bệnh' },
-        { name: 'AdminBilling', element: <AdminBilling />, title: 'Doanh thu & Biểu phí phòng khám', removed: 'Theo dõi thực thu tài chính, cấu hình phí khám chuyên khoa và bảng giá cận lâm sàng' },
+        { name: 'AdminBilling', element: <AdminBilling />, title: 'Doanh thu & biểu phí', removed: 'Theo dõi thực thu tài chính, cấu hình phí khám chuyên khoa và bảng giá cận lâm sàng' },
         { name: 'WalkInPatientRegistration', element: <WalkInPatientRegistration />, title: 'Tiếp nhận người bệnh', removed: 'Quy trình 3 bước chuẩn: Tra cứu hồ sơ cũ ➔ Chuẩn bị lượt khám ➔ Cấp số thứ tự & In phiếu' },
         { name: 'ReceptionPackageRegistrations', element: <ReceptionPackageRegistrations />, title: 'Đăng ký gói khám', removed: 'Xác nhận và hỗ trợ bệnh nhân đã đăng ký các gói khám định kỳ trực tuyến.' },
         { name: 'ReceptionBilling', element: <ReceptionBilling />, title: 'Thu ngân & hóa đơn', removed: 'Thu tiền tại quầy và theo dõi hóa đơn của phòng khám' },
         { name: 'TechnicianDashboard', element: <TechnicianDashboard />, title: 'Bàn làm việc cận lâm sàng', removed: 'Quản lý tiếp nhận mẫu, thực hiện xét nghiệm & chẩn đoán hình ảnh' },
         { name: 'TechnicianVerificationQueue', element: <TechnicianVerificationQueue />, title: 'Chờ duyệt kết quả', removed: 'Đối chiếu kết quả do kỹ thuật viên khác nhập' },
-        { name: 'PharmacyDashboard', element: <PharmacyDashboard />, title: 'Bàn làm việc Dược sĩ', removed: /Xin chào/ },
+        { name: 'PharmacyDashboard', element: <PharmacyDashboard />, title: 'Bàn làm việc dược sĩ', removed: /Xin chào/ },
     ])('$name no longer renders its filler subtitle', async ({ element, title, removed }) => {
         mount(element);
         expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();

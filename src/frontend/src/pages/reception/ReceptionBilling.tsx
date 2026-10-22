@@ -1,7 +1,6 @@
-import { Button, Input, Select, Radio, Modal } from 'antd';
+import { Button, Input, Select, Radio, Modal, Segmented } from 'antd';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-    Receipt,
     Clock,
     CheckCircle,
     XCircle,
@@ -475,7 +474,7 @@ export const ReceptionBilling: React.FC = () => {
                         htmlType="button"
                         className={styles.rowActionBtn}
                         onClick={() => handleViewDetail(inv.id)}
-                        title="Xem chi tiết & In phiếu thu"
+                        title="Xem chi tiết & in phiếu thu"
                     >
                         <Eye size={13} /> Xem
                     </Button>
@@ -524,7 +523,7 @@ export const ReceptionBilling: React.FC = () => {
             ),
         },
         {
-            header: 'Khoa / Bác sĩ',
+            header: 'Khoa / bác sĩ',
             accessor: (v) => (
                 <>
                     <div>{v.departmentName}</div>
@@ -570,7 +569,7 @@ export const ReceptionBilling: React.FC = () => {
 
     return (
         <div className={styles.container}>
-            <PageHeader title="Thu ngân & hóa đơn" badge={<Receipt size={28} className={styles.primaryIcon} />} actions={<><Button onClick={handleRefresh} title="Làm mới dữ liệu" icon={<RefreshCw size={15} />}>Làm mới</Button><Button type="primary" onClick={handleOpenCreateModal} icon={<Plus size={16} />}>Lập hóa đơn mới</Button></>} />
+            <PageHeader title="Thu ngân & hóa đơn" actions={<><Button onClick={handleRefresh} title="Làm mới dữ liệu" icon={<RefreshCw size={15} />}>Làm mới</Button><Button type="primary" onClick={handleOpenCreateModal} icon={<Plus size={16} />}>Lập hóa đơn mới</Button></>} />
             <div className={styles.kpiGrid}>
                 <StatCard title="Chờ thanh toán" value={kpiError ? '—' : kpi ? kpi.todayUnpaidInvoices : 0} icon={<Clock size={24} />} color="warning" />
                 <StatCard title="Đã thu hôm nay" value={kpiError ? '—' : kpi ? kpi.todayPaidInvoices : 0} icon={<CheckCircle size={24} />} color="success" />
@@ -578,14 +577,17 @@ export const ReceptionBilling: React.FC = () => {
                 <StatCard title="Thực thu hôm nay" value={kpiError ? '—' : kpi ? formatCurrency(kpi.todayRevenue) : '0 ₫'} icon={<DollarSign size={24} />} color="info" />
             </div>
             {kpiError && <div className={styles.statsError}><span>Không tải được số liệu</span><Button size="small" disabled={kpiLoading} onClick={fetchKpi}>{kpiLoading ? 'Đang tải...' : 'Thử lại'}</Button></div>}
-            <div className={styles.tabs}><Button type={billingTab === 'invoices' ? 'primary' : 'default'} onClick={() => setBillingTab('invoices')} icon={<Receipt size={16} />}>Danh sách Hóa đơn ({totalItems})</Button><Button type={billingTab === 'unbilled' ? 'primary' : 'default'} onClick={() => setBillingTab('unbilled')} icon={<Clock size={16} />}>Hàng đợi chờ lập hóa đơn ({unbilledTotalCount})</Button></div>
+            <Segmented className={styles.viewSwitch} aria-label="Chế độ xem thu ngân" value={billingTab} onChange={value => setBillingTab(value as typeof billingTab)} options={[
+                { value: 'invoices', label: `Danh sách hóa đơn (${totalItems})` },
+                { value: 'unbilled', label: `Hàng đợi chờ lập hóa đơn (${unbilledTotalCount})` },
+            ]} />
             {billingTab === 'invoices' ? <>
                 <form onSubmit={handleSearch} className={styles.filterForm}>
-                    <Input className={styles.searchInput} prefix={<Search size={18} />} placeholder="Mã HĐ, mã khám, tên hoặc SĐT bệnh nhân..." value={search} onChange={e => setSearch(e.target.value)} />
+                    <Input className={styles.searchInput} prefix={<Search size={16} aria-hidden="true" />} placeholder="Mã HĐ, mã khám, tên hoặc SĐT bệnh nhân..." value={search} onChange={e => setSearch(e.target.value)} />
                     <Select className={styles.filterSelect} value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả trạng thái'},{value:'1',label:'Chờ thanh toán'},{value:'2',label:'Đã thanh toán'},{value:'3',label:'Đã hủy'}]} />
                     <Select className={styles.filterSelect} value={sourceFilter} onChange={value => { setSourceFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả nguồn thu'},{value:'1',label:'Lịch khám chuyên khoa'},{value:'2',label:'Gói khám sức khỏe'}]} />
                     <div className={styles.dateRange}><Input type="date" className={styles.dateInput} value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1); }} title="Từ ngày" /><span>-</span><Input type="date" className={styles.dateInput} value={toDate} onChange={e => { setToDate(e.target.value); setPage(1); }} title="Đến ngày" /></div>
-                    <Button htmlType="submit" icon={<Search size={14} />}>Tìm</Button>
+                    <Button htmlType="submit">Tìm</Button>
                 </form>
                 <div className={styles.tableCard}>{loading ? <LoadingState message="Đang tải danh sách hóa đơn..." /> : <div className={styles.tableScroll}><DataTable columns={invoiceColumns} data={invoices} keyExtractor={inv => inv.id} emptyText="Không tìm thấy hóa đơn nào phù hợp với bộ lọc." /></div>}
                     {totalItems > pageSize && <div className={styles.pagination}><span className={styles.pageInfo}>Hiển thị trang {page} / {totalPages} (Tổng {totalItems} hóa đơn)</span><div className={styles.paginationActions}><Button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Trang trước</Button><Button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
@@ -595,7 +597,7 @@ export const ReceptionBilling: React.FC = () => {
             </div>}
             {createModalOpen && <Modal open width={520} className={styles.formModal} onCancel={() => setCreateModalOpen(false)} title="Lập hóa đơn mới" footer={<><Button onClick={() => setCreateModalOpen(false)}>Hủy bỏ</Button><Button type="primary" htmlType="submit" form="reception-create-invoice" disabled={creatingInvoice || invoiceSourcesLoading || !!invoiceSourcesError || !invoiceSourceOptions.some(option => option.value === referenceId)}>{creatingInvoice ? 'Đang lập hóa đơn...' : 'Tạo hóa đơn'}</Button></>}>
                 <form id="reception-create-invoice" onSubmit={handleCreateInvoice} className={styles.modalForm}>
-                    <div className={styles.formField}><label className={styles.formLabel}>Chọn nguồn tạo hóa đơn</label><div className={styles.radioGroup}><Radio name="sourceType" checked={createSourceType === 'visit'} onChange={() => changeInvoiceSource('visit')}>Lượt khám ngoại trú (Visit)</Radio><Radio name="sourceType" checked={createSourceType === 'appointment'} onChange={() => changeInvoiceSource('appointment')}>Lịch khám bệnh (Appointment)</Radio><Radio name="sourceType" checked={createSourceType === 'package'} onChange={() => changeInvoiceSource('package')}>Gói khám sức khỏe (Đã xác nhận)</Radio></div></div>
+                    <div className={styles.formField}><label className={styles.formLabel}>Chọn nguồn tạo hóa đơn</label><div className={styles.radioGroup}><Radio name="sourceType" checked={createSourceType === 'visit'} onChange={() => changeInvoiceSource('visit')}>Lượt khám ngoại trú (Visit)</Radio><Radio name="sourceType" checked={createSourceType === 'appointment'} onChange={() => changeInvoiceSource('appointment')}>Lịch khám bệnh (Appointment)</Radio><Radio name="sourceType" checked={createSourceType === 'package'} onChange={() => changeInvoiceSource('package')}>Gói khám sức khỏe (đã xác nhận)</Radio></div></div>
                     <div className={styles.formField}>
                         <label htmlFor="invoice-source-reference" className={styles.formLabel}>{createSourceType === 'visit' ? 'Chọn lượt khám *' : createSourceType === 'appointment' ? 'Chọn lịch hẹn đã khám xong *' : 'Chọn đăng ký gói khám đã xác nhận *'}</label>
                         <Select id="invoice-source-reference" className={styles.invoiceSourceSelect} showSearch={{ optionFilterProp: 'label' }} value={referenceId || undefined} onChange={value => setReferenceId(value)} options={invoiceSourceOptions} loading={invoiceSourcesLoading} disabled={creatingInvoice} notFoundContent={invoiceSourcesLoading ? <LoadingState message="Đang tải danh sách nguồn hóa đơn..." height="auto" /> : 'Không có mục nào chờ lập hóa đơn'} />
@@ -608,7 +610,7 @@ export const ReceptionBilling: React.FC = () => {
                     <div className={styles.paymentSummary}><div><strong>Bệnh nhân:</strong> {paymentInvoice.patientName} ({paymentInvoice.patientPhone})</div><div className={styles.paymentTotal}><strong>Tổng số tiền cần thu:</strong>{' '}<span className={styles.amount}>{formatCurrency(paymentInvoice.totalAmount)}</span></div></div>
                     <div className={styles.formField}><label className={styles.formLabel}>Phương thức thanh toán *</label><Select className={styles.paymentSelect} value={paymentMethod} onChange={value => setPaymentMethod(value)} options={[{value:PaymentMethod.Cash,label:'Tiền mặt tại quầy (Cash)'},{value:PaymentMethod.ManualBankTransfer,label:'Chuyển khoản trực tiếp (ManualBankTransfer)'}]} /></div>
                     <div className={styles.formField}><label className={styles.formLabel}>Số tiền khách thanh toán (VNĐ) *</label><Input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} required min="0" /><span className={styles.fieldHint}>Hệ thống yêu cầu thu đúng toàn bộ giá trị hóa đơn ({formatCurrency(paymentInvoice.totalAmount)}).</span></div>
-                    <div className={styles.formField}><label className={styles.formLabel}>Mã giao dịch / Mã tham chiếu ngân hàng</label><Input type="text" placeholder={paymentMethod === PaymentMethod.ManualBankTransfer ? 'Ví dụ: FT26090612345' : 'Tùy chọn'} value={paymentRefCode} onChange={e => setPaymentRefCode(e.target.value)} maxLength={100} /></div>
+                    <div className={styles.formField}><label className={styles.formLabel}>Mã giao dịch / mã tham chiếu ngân hàng</label><Input type="text" placeholder={paymentMethod === PaymentMethod.ManualBankTransfer ? 'Ví dụ: FT26090612345' : 'Tùy chọn'} value={paymentRefCode} onChange={e => setPaymentRefCode(e.target.value)} maxLength={100} /></div>
                     <div className={styles.formField}><label className={styles.formLabel}>Ghi chú thu tiền</label><Input.TextArea rows={2} placeholder="Ghi chú thêm nếu có..." value={paymentNote} onChange={e => setPaymentNote(e.target.value)} maxLength={500} /></div>
                 </form>
             </Modal>}

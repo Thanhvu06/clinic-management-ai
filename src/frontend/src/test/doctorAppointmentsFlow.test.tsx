@@ -100,7 +100,7 @@ describe('DoctorAppointments flow', () => {
         expect(within(row).getByText('Chờ tiếp nhận')).toBeInTheDocument();
         expect(within(row).queryByText('Khám')?.closest('button') ?? null).not.toBeInTheDocument();
         fireEvent.click(within(row).getByText('Chi tiết').closest('button')!);
-        expect(await screen.findByText('Bệnh nhân cần được tiếp nhận tại Hàng đợi khám trước khi bắt đầu khám.')).toBeInTheDocument();
+        expect(await screen.findByText('Bệnh nhân cần được tiếp nhận tại hàng đợi khám trước khi bắt đầu khám.')).toBeInTheDocument();
         expect(screen.getByText('Đánh dấu vắng mặt').closest('button')).toBeInTheDocument();
         expect(screen.queryByText('Bắt đầu khám & Kê đơn')).not.toBeInTheDocument();
         expect(screen.queryByText('Tóm tắt kết quả khám')).not.toBeInTheDocument();

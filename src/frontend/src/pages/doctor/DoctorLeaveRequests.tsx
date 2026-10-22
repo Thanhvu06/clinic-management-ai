@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Card, DatePicker, Form, Input, Modal, Select } from 'antd';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { CalendarCheck, Plus, XCircle, Clock, RefreshCw } from 'lucide-react';
+import { Plus, XCircle, Clock, RefreshCw } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
 import {
     PageHeader, DataTable, StatusBadge, LoadingState, EmptyState, Pagination, InlineError
@@ -145,7 +145,7 @@ export const DoctorLeaveRequests: React.FC = () => {
             align: 'right',
             accessor: (req) => req.status === 'Pending' ? (
                 <Button size="small" danger icon={<XCircle size={14} />} onClick={() => handleWithdraw(req.id)}>
-                    Rút Y/C
+                    Rút yêu cầu
                 </Button>
             ) : null
         }
@@ -154,7 +154,7 @@ export const DoctorLeaveRequests: React.FC = () => {
     return (
         <div>
             <PageHeader
-                title="Yêu cầu nghỉ"
+                title="Yêu cầu nghỉ phép"
                 actions={
                     <>
                         <Button icon={<RefreshCw size={14} />} onClick={() => fetchRequests()}>
@@ -188,7 +188,7 @@ export const DoctorLeaveRequests: React.FC = () => {
             ) : loadError ? (
                 <InlineError message={loadError} onRetry={fetchRequests} />
             ) : requests.length === 0 ? (
-                <EmptyState icon={<CalendarCheck size={44} />} title="Chưa có yêu cầu nghỉ nào." />
+                <EmptyState title="Chưa có yêu cầu nghỉ nào." />
             ) : (
                 <DataTable columns={columns} data={requests} keyExtractor={(req) => req.id} />
             )}
@@ -207,7 +207,7 @@ export const DoctorLeaveRequests: React.FC = () => {
                         label="Lưu ý"
                     >
                         <div className={styles.text1}>
-                            Yêu cầu nghỉ sẽ cần được Quản trị viên duyệt. Vui lòng nộp yêu cầu trước ít nhất 1-2 ngày để tránh ảnh hưởng lịch bệnh nhân.
+                            Yêu cầu nghỉ sẽ cần được quản trị viên duyệt. Vui lòng nộp yêu cầu trước ít nhất 1-2 ngày để tránh ảnh hưởng lịch bệnh nhân.
                         </div>
                     </Form.Item>
                     <Form.Item name="startDate" label="Từ thời gian" rules={[{ required: true, message: 'Vui lòng chọn thời gian bắt đầu' }]}>

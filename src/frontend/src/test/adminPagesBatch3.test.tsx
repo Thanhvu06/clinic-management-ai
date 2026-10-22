@@ -50,7 +50,7 @@ function fillFacility() {
     ]) fireEvent.change(screen.getByPlaceholderText(placeholder), { target: { value } });
 }
 async function changeDate(name: string, value: string) {
-    const input = screen.getByRole('textbox', { name });
+    const input = screen.getByLabelText(name);
     fireEvent.change(input, { target: { value } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
     fireEvent.blur(input);
@@ -77,8 +77,8 @@ describe('Admin Facilities batch 3', () => {
     it('shows a backend payload message in the correct alert argument order', async () => {
         vi.mocked(organizationApi.createFacility).mockRejectedValue({ message: 'Mã cơ sở đã tồn tại.' });
         showFacilities();
-        fireEvent.click(screen.getByRole('button', { name: 'Thêm Cơ sở Mới' }));
-        fillFacility(); fireEvent.click(screen.getByRole('button', { name: 'Lưu Cơ sở' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Thêm cơ sở' }));
+        fillFacility(); fireEvent.click(screen.getByRole('button', { name: 'Lưu cơ sở' }));
         await waitFor(() => expect(dialog.showAlert).toHaveBeenCalledWith('Mã cơ sở đã tồn tại.', 'Lỗi', 'error'));
     });
     it('renders backend full name, email, role and department in staff columns', async () => {
@@ -96,14 +96,14 @@ describe('Admin Facilities batch 3', () => {
         await userEvent.click(screen.getByRole('combobox', { name: 'Nhân viên *' }));
         expect(screen.queryByText('Chỉ bệnh nhân (patient@example.com)')).not.toBeInTheDocument();
         await userEvent.click((await screen.findAllByText('Nguyễn Minh (minh@example.com)')).at(-1)!);
-        fireEvent.click(screen.getByRole('button', { name: 'Lưu Phân công' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Lưu phân công' }));
         await waitFor(() => expect(organizationApi.createStaffAssignment).toHaveBeenCalledWith({ userId: 'staff-1', facilityId: 1, role: 'Receptionist', departmentId: undefined, isPrimary: true }));
     });
     it('submits a pending facility only once and blocks cancel and escape', async () => {
         const pending = deferred<ApiResponse<FacilityDto>>();
         vi.mocked(organizationApi.createFacility).mockReturnValue(pending.promise);
-        showFacilities(); fireEvent.click(screen.getByRole('button', { name: 'Thêm Cơ sở Mới' })); fillFacility();
-        const button = screen.getByRole('button', { name: 'Lưu Cơ sở' });
+        showFacilities(); fireEvent.click(screen.getByRole('button', { name: 'Thêm cơ sở' })); fillFacility();
+        const button = screen.getByRole('button', { name: 'Lưu cơ sở' });
         fireEvent.click(button); fireEvent.click(button);
         expect(organizationApi.createFacility).toHaveBeenCalledTimes(1);
         expect(screen.getByRole('button', { name: 'Đang lưu...' })).toBeDisabled();
@@ -160,7 +160,7 @@ describe('Admin Facilities batch 3', () => {
         showFacilities(); fireEvent.click(await screen.findByRole('tab', { name: /Phân công nhân sự/ }));
         fireEvent.click(screen.getByRole('button', { name: 'Phân công nhân viên mới' }));
         expect(await screen.findByText('Không thể tải tài khoản.')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Lưu Phân công' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Lưu phân công' })).toBeDisabled();
     });
 });
 
@@ -173,7 +173,7 @@ describe('Admin Billing batch 3', () => {
         const today = new Date(); const from = new Date(today); from.setDate(from.getDate() - 30);
         const date = (value: Date) => [value.getFullYear(), String(value.getMonth() + 1).padStart(2, '0'), String(value.getDate()).padStart(2, '0')].join('-');
         await waitFor(() => expect(billingApi.admin.getRevenueReport).toHaveBeenCalledWith(date(from), date(today)));
-        await waitFor(() => expect(screen.getByRole('textbox', { name: 'Từ ngày' })).toHaveValue(date(from)));
+        await waitFor(() => expect(screen.getByLabelText('Từ ngày')).toHaveValue(date(from)));
     });
     it('rejects an inverted date range without requesting a report', async () => {
         showBilling(); await screen.findByText('45 lượt');
@@ -199,7 +199,7 @@ describe('Admin Billing batch 3', () => {
         showBilling(); await screen.findByText('45 lượt');
         expect(diagnosticApi.getDiagnosticPricing).not.toHaveBeenCalled();
         expect(billingApi.admin.getSpecialtyFees).not.toHaveBeenCalled();
-        fireEvent.click(screen.getByRole('tab', { name: 'Bảng giá Cận lâm sàng' }));
+        fireEvent.click(screen.getByRole('tab', { name: 'Bảng giá cận lâm sàng' }));
         await waitFor(() => expect(diagnosticApi.getDiagnosticPricing).toHaveBeenCalledTimes(1));
         expect(await screen.findByText('Chưa có dịch vụ cận lâm sàng nào trong hệ thống.')).toBeInTheDocument();
     });

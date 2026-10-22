@@ -4,37 +4,6 @@
     padding: 24px 16px 64px 16px;
 }
 
-.pageHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 16px;
-    margin-bottom: 24px;
-}
-
-.titleArea h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--cc-color-text-dark);
-    margin: 0 0 4px 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.titleArea p {
-    font-size: 0.9rem;
-    color: var(--cc-color-text-secondary);
-    margin: 0;
-}
-
-.headerActions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
 .actionBtn {
     display: inline-flex;
     align-items: center;
@@ -293,10 +262,6 @@
 }
 
 /* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */
-.icon1.icon1 {
-    color: var(--cc-color-primary);
-}
-
 .iconWrapper.toneInvoice,
 .iconWrapper.tonePayment { background-color: var(--cc-color-info-bg); color: var(--cc-color-info); }
 .iconWrapper.toneDiagnostic { background-color: color-mix(in srgb, var(--cc-color-danger) 12%, transparent); color: var(--cc-color-danger); }

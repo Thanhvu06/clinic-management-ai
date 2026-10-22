@@ -1,7 +1,7 @@
-.filters { margin-bottom: var(--cc-space-lg); }
+.filters { margin-bottom: var(--cc-space-md); }
 .filterForm, .pagination, .pageControls, .modalFooter, .footerActions, .medicineMeta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); min-width: 0; }
-.filterForm { gap: var(--cc-space-md); }
-.searchInput { flex: 1; min-width: 200px; }
+.filterForm { gap: var(--cc-space-sm); }
+.searchInput { flex: 1; min-width: 200px; max-width: 360px; }
 .statusFilter { width: 220px; }
 .tableScroll, .itemsScroll { max-width: 100%; min-width: 0; overflow-x: auto; }
 .tableScroll table { min-width: 950px; }

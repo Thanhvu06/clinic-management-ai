@@ -1,6 +1,8 @@
 .page, .tabContent { display: flex; flex-direction: column; gap: var(--cc-space-lg); }
-.filterForm { display: flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); }
-.filterForm :global(.ant-form-item) { margin-bottom: 0; }
+.filterForm { display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--cc-space-sm); }
+.dateField { display: flex; flex-direction: column; gap: var(--cc-space-xxs); }
+.dateLabel { font-size: 0.85rem; color: var(--cc-color-text-secondary); }
+.dateInput { width: 170px; }
 .kpiGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--cc-space-md); }
 .sectionHeading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--cc-space-sm); margin-bottom: var(--cc-space-md); }
 .sectionHeading h3 { margin: 0 0 var(--cc-space-xxs); }

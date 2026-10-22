@@ -175,7 +175,7 @@ describe('Reception Workspace Rebuild', () => {
         // Metric cards rendered
         await waitFor(() => {
             expect(screen.getByText('Lịch khám hôm nay')).toBeInTheDocument();
-            expect(screen.getByText('Chờ tiếp đón / Đang khám')).toBeInTheDocument();
+            expect(screen.getByText('Chờ tiếp đón / đang khám')).toBeInTheDocument();
             expect(screen.getByText('Đã khám xong hôm nay')).toBeInTheDocument();
         });
 
@@ -283,7 +283,7 @@ describe('Reception Workspace Rebuild', () => {
         );
 
         // Step 1: Default is "Tra cứu hồ sơ cũ" vs "Đăng ký hồ sơ người bệnh mới"
-        expect(screen.getByText('Tìm & Chọn Người Bệnh')).toBeInTheDocument();
+        expect(screen.getByText('Tìm & chọn người bệnh')).toBeInTheDocument();
         const registerNewTab = screen.getByText(/Đăng ký hồ sơ người bệnh mới/i);
         fireEvent.click(registerNewTab);
 
@@ -306,7 +306,7 @@ describe('Reception Workspace Rebuild', () => {
         fireEvent.click(nextButton);
 
         await waitFor(() => {
-            expect(screen.getByText('Chuẩn Bị Lượt Khám')).toBeInTheDocument();
+            expect(screen.getByText('Chuẩn bị lượt khám')).toBeInTheDocument();
         });
 
         // Fill chief complaint
@@ -318,7 +318,7 @@ describe('Reception Workspace Rebuild', () => {
         fireEvent.click(nextToConfirm);
 
         await waitFor(() => {
-            expect(screen.getByText('Xác Nhận & Cấp STT')).toBeInTheDocument();
+            expect(screen.getByText('Xác nhận & cấp STT')).toBeInTheDocument();
             expect(screen.getByText('Bé Nguyễn Cún')).toBeInTheDocument();
         });
 
@@ -371,13 +371,13 @@ describe('Reception Workspace Rebuild', () => {
         });
         fireEvent.click(screen.getByText(/Tiếp tục: Chuẩn bị lượt khám/i));
 
-        await waitFor(() => expect(screen.getByText('Chuẩn Bị Lượt Khám')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Chuẩn bị lượt khám')).toBeInTheDocument());
         fireEvent.change(screen.getByPlaceholderText(/Mô tả lý do đến khám/i), {
             target: { value: 'Khám sức khỏe định kỳ' },
         });
         fireEvent.click(screen.getByText(/Tiếp tục: Xác nhận thông tin/i));
 
-        await waitFor(() => expect(screen.getByText('Xác Nhận & Cấp STT')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Xác nhận & cấp STT')).toBeInTheDocument());
         fireEvent.click(screen.getByText(/Xác nhận tiếp nhận & Cấp STT/i));
 
         await waitFor(() => expect(patientVisitApi.receptionIntake).toHaveBeenCalledTimes(1));
@@ -426,13 +426,13 @@ describe('Reception Workspace Rebuild', () => {
         expect(guardianCheckbox).toBeChecked();
         fireEvent.click(screen.getByText(/Tiếp tục: Chuẩn bị lượt khám/i));
 
-        await waitFor(() => expect(screen.getByText('Chuẩn Bị Lượt Khám')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Chuẩn bị lượt khám')).toBeInTheDocument());
         fireEvent.change(screen.getByPlaceholderText(/Mô tả lý do đến khám/i), {
             target: { value: 'Khám sức khỏe định kỳ' },
         });
         fireEvent.click(screen.getByText(/Tiếp tục: Xác nhận thông tin/i));
 
-        await waitFor(() => expect(screen.getByText('Xác Nhận & Cấp STT')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Xác nhận & cấp STT')).toBeInTheDocument());
         fireEvent.click(screen.getByText(/Xác nhận tiếp nhận & Cấp STT/i));
 
         await waitFor(() => expect(patientVisitApi.receptionIntake).toHaveBeenCalledTimes(1));
@@ -479,13 +479,13 @@ describe('Reception Workspace Rebuild', () => {
         expect(guardianCheckbox).not.toBeChecked();
         fireEvent.click(screen.getByText(/Tiếp tục: Chuẩn bị lượt khám/i));
 
-        await waitFor(() => expect(screen.getByText('Chuẩn Bị Lượt Khám')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Chuẩn bị lượt khám')).toBeInTheDocument());
         fireEvent.change(screen.getByPlaceholderText(/Mô tả lý do đến khám/i), {
             target: { value: 'Khám sức khỏe định kỳ' },
         });
         fireEvent.click(screen.getByText(/Tiếp tục: Xác nhận thông tin/i));
 
-        await waitFor(() => expect(screen.getByText('Xác Nhận & Cấp STT')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Xác nhận & cấp STT')).toBeInTheDocument());
         fireEvent.click(screen.getByText(/Xác nhận tiếp nhận & Cấp STT/i));
 
         await waitFor(() => expect(patientVisitApi.receptionIntake).toHaveBeenCalledTimes(1));

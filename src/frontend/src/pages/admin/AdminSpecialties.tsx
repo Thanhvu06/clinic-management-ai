@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
-import { Plus, Edit, Sparkles } from 'lucide-react';
+import { Plus, Edit, Sparkles, Search } from 'lucide-react';
 import { Alert, Button, Checkbox, Form, Input, Modal, Select, Tag, Typography } from 'antd';
 import { PageHeader, FilterBar, DataTable, Pagination, EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './AdminSpecialties.module.css';
@@ -128,8 +128,8 @@ export const AdminSpecialties: React.FC = () => {
         <div className={styles.specialtiesPage}>
             <PageHeader title="Quản lý chuyên khoa" actions={<Button type="primary" icon={<Plus size={18} />} onClick={openCreateModal}>Thêm chuyên khoa</Button>} />
             <FilterBar>
-                <Input.Search className={styles.specialtySearch} placeholder="Tìm theo mã, tên..." value={search}
-                    onChange={e => setSearch(e.target.value)} onSearch={handleSearchSubmit} enterButton="Lọc" />
+                <Input.Search className={styles.specialtySearch} prefix={<Search size={16} aria-hidden="true" />} placeholder="Tìm theo mã, tên..." value={search}
+                    onChange={e => setSearch(e.target.value)} onSearch={handleSearchSubmit} enterButton="Tìm" />
                 <Select className={styles.specialtyFilter} aria-label="Trạng thái" value={statusFilter}
                     onChange={value => { setStatusFilter(value); setPage(1); }} options={[
                         { value: '', label: 'Tất cả trạng thái' }, { value: 'true', label: 'Đang hoạt động' }, { value: 'false', label: 'Ngừng hoạt động' }
@@ -139,7 +139,7 @@ export const AdminSpecialties: React.FC = () => {
                 : specialties.length === 0 ? <EmptyState title="Không tìm thấy dữ liệu." /> : <>
                     <div className={styles.specialtyTable}>
                         <DataTable data={specialties} keyExtractor={specialty => specialty.id} columns={[
-                            { header: 'Mã Khoa', accessor: specialty => <Typography.Text strong>{specialty.specialtyCode}</Typography.Text> },
+                            { header: 'Mã khoa', accessor: specialty => <Typography.Text strong>{specialty.specialtyCode}</Typography.Text> },
                             { header: 'Tên chuyên khoa', accessor: specialty => <><Typography.Text strong>{specialty.name}</Typography.Text><Typography.Paragraph className={styles.specialtyDescription} type="secondary" ellipsis={{ rows: 1, tooltip: specialty.description }}>{specialty.description || 'Không có mô tả'}</Typography.Paragraph></> },
                             { header: 'Trạng thái', accessor: specialty => <Tag color={specialty.isActive ? 'success' : 'error'}>{specialty.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}</Tag> },
                             { header: 'Tính năng AI', accessor: specialty => specialty.aiEnabled ? <Tag color="processing" icon={<Sparkles size={12} />}>Cho phép gợi ý</Tag> : <Tag>Tắt</Tag> },

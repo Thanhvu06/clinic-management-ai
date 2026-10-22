@@ -44,8 +44,8 @@ describe('Facility role localization', () => {
             expect((await screen.findAllByText(label)).length).toBeGreaterThan(0);
         }
         fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Hủy' }));
-        fireEvent.click(screen.getByRole('tab', { name: /Cấu trúc/ }));
-        fireEvent.click(screen.getByRole('button', { name: /Thêm Khoa/ }));
+        fireEvent.click(screen.getByRole('tab', { name: /Khoa & phòng/ }));
+        fireEvent.click(screen.getByRole('button', { name: /Thêm khoa/ }));
         await userEvent.click(screen.getByRole('combobox', { name: 'Phân loại khoa' }));
         for (const label of ['Lâm sàng', 'Cận lâm sàng', 'Hành chính', 'Dược', 'Cấp cứu', 'Ngoại khoa', 'Điều trị nội trú']) expect((await screen.findAllByText(label)).length).toBeGreaterThan(0);
         expect(screen.queryByText('Lâm sàng (Clinical)')).not.toBeInTheDocument();

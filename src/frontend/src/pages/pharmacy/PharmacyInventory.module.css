@@ -1,5 +1,5 @@
-.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cc-space-md); margin-bottom: var(--cc-space-lg); }
-.search { flex: 1; min-width: 200px; max-width: 480px; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cc-space-sm); margin-bottom: var(--cc-space-md); }
+.search { flex: 1; min-width: 200px; max-width: 360px; height: var(--cc-control-height); }
 .tableScroll { max-width: 100%; min-width: 0; overflow-x: auto; }
 .tableScroll table { min-width: 1000px; }
 .transactionTime { white-space: nowrap; }

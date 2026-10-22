@@ -44,12 +44,25 @@
 
 /* FilterBar */
 .filterBar {
-    margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--cc-space-sm);
+    margin-bottom: var(--cc-space-md);
 }
 
 .filterControls {
+    display: flex;
     flex: 1;
-    min-width: 280px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--cc-space-sm);
+    min-width: 0;
+}
+
+.filterControls :global(:where(.ant-select, .ant-input-affix-wrapper, .ant-input-search .ant-btn, .ant-segmented)) {
+    min-height: var(--cc-control-height);
 }
 
 .filterSearch {
@@ -78,30 +91,21 @@
 
 /* EmptyState */
 .emptyState {
-    padding: 48px var(--cc-space-lg);
-    background: var(--cc-color-bg-container);
-    border-radius: var(--cc-radius-lg);
-    border: 1px dashed var(--cc-color-border);
-    margin: 0;
-}
-
-.emptyState :global(.ant-empty-image) {
-    height: auto;
-    color: var(--cc-color-text-muted);
-    margin-bottom: var(--cc-space-md);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--cc-space-xxs);
+    padding: var(--cc-space-xl) var(--cc-space-md);
+    text-align: center;
 }
 
 .emptyTitle:global(.ant-typography) {
-    font-size: 1.05rem;
-    font-weight: 600;
-    margin: 0 0 var(--cc-space-xs);
+    font-size: 0.9rem;
 }
 
-.emptyDescription {
-    display: block;
-    font-size: 0.88rem;
-    max-width: 400px;
-    margin: 0 auto var(--cc-space-md);
+.emptyDescription:global(.ant-typography) {
+    max-width: 420px;
+    font-size: 0.85rem;
 }
 
 .emptyAction {

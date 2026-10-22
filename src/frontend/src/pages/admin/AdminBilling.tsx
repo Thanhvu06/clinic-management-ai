@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Alert, Button, Card, DatePicker, Form, InputNumber, Modal, Tabs, Tag, Typography } from 'antd';
-import dayjs from 'dayjs';
+import { Alert, Button, Card, Form, Input, InputNumber, Modal, Tabs, Tag, Typography } from 'antd';
 import { DollarSign, Edit, RefreshCw, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { billingApi } from '../../api/billingApi';
 import { diagnosticApi } from '../../api/diagnosticApi';
@@ -118,14 +117,12 @@ export const AdminBilling: React.FC = () => {
     };
     const modalProps = (busy: boolean) => ({ footer: null, maskClosable: !busy, closable: !busy, keyboard: !busy, destroyOnHidden: true });
     const revenueContent = <div className={styles.tabContent}>
-        <Card><Form className={styles.filterForm} onSubmitCapture={event => { event.preventDefault(); void fetchRevenueReport(fromDate, toDate); }}>
-            <strong>Khoảng thời gian:</strong>
-            <Form.Item htmlFor="revenueFrom"><DatePicker id="revenueFrom" aria-label="Từ ngày" title="Từ ngày" format="YYYY-MM-DD" value={fromDate ? dayjs(fromDate) : null} onChange={value => { setFromDate(value?.format('YYYY-MM-DD') || ''); setRangeError(''); }} /></Form.Item>
-            <span>-</span>
-            <Form.Item htmlFor="revenueTo"><DatePicker id="revenueTo" aria-label="Đến ngày" title="Đến ngày" format="YYYY-MM-DD" value={toDate ? dayjs(toDate) : null} onChange={value => { setToDate(value?.format('YYYY-MM-DD') || ''); setRangeError(''); }} /></Form.Item>
+        <form className={styles.filterForm} onSubmit={event => { event.preventDefault(); void fetchRevenueReport(fromDate, toDate); }}>
+            <label className={styles.dateField} htmlFor="revenueFrom"><span className={styles.dateLabel}>Từ ngày</span><Input id="revenueFrom" type="date" className={styles.dateInput} value={fromDate} onChange={event => { setFromDate(event.target.value); setRangeError(''); }} /></label>
+            <label className={styles.dateField} htmlFor="revenueTo"><span className={styles.dateLabel}>Đến ngày</span><Input id="revenueTo" type="date" className={styles.dateInput} value={toDate} onChange={event => { setToDate(event.target.value); setRangeError(''); }} /></label>
             <Button htmlType="submit">Xem báo cáo</Button>
             <Button icon={<RefreshCw size={14} />} onClick={() => { const range = recentRange(); setFromDate(range.from); setToDate(range.to); void fetchRevenueReport(range.from, range.to); }}>30 ngày gần nhất</Button>
-        </Form></Card>
+        </form>
         {rangeError && <Alert type="error" title={rangeError} showIcon />}
         {revLoading ? <LoadingState message="Đang tải báo cáo doanh thu..." /> : revError ? <InlineError message={revError} onRetry={() => { void fetchRevenueReport(fromDate, toDate); }} /> : !revenueReport ? <EmptyState title="Không có dữ liệu báo cáo" /> : <>
             <div className={styles.kpiGrid}>
@@ -154,7 +151,7 @@ export const AdminBilling: React.FC = () => {
         ]} />}
     </Card>;
     const diagnosticsContent = <Card>
-        <div className={styles.sectionHeading}><div><h3>Bảng giá Dịch vụ Cận lâm sàng ({diagnosticServices.length} dịch vụ)</h3><Typography.Text type="secondary">Bảng giá áp dụng khi bác sĩ chỉ định và tính hóa đơn viện phí thực tế</Typography.Text></div><Button icon={<RefreshCw size={14} />} loading={diagLoading} onClick={() => { void fetchDiagnosticServices(); }}>Làm mới</Button></div>
+        <div className={styles.sectionHeading}><div><h3>Bảng giá dịch vụ cận lâm sàng ({diagnosticServices.length} dịch vụ)</h3><Typography.Text type="secondary">Bảng giá áp dụng khi bác sĩ chỉ định và tính hóa đơn viện phí thực tế</Typography.Text></div><Button icon={<RefreshCw size={14} />} loading={diagLoading} onClick={() => { void fetchDiagnosticServices(); }}>Làm mới</Button></div>
         {diagLoading ? <LoadingState message="Đang tải bảng giá cận lâm sàng..." /> : diagError ? <InlineError message={diagError} onRetry={fetchDiagnosticServices} /> : diagnosticServices.length === 0 ? <EmptyState title="Chưa có dịch vụ cận lâm sàng nào trong hệ thống." /> : <DataTable data={diagnosticServices} keyExtractor={svc => svc.id} columns={[
             { header: 'Mã dịch vụ', accessor: svc => <Tag>{svc.code}</Tag> }, { header: 'Tên kỹ thuật / dịch vụ', accessor: 'name' },
             { header: 'Loại dịch vụ', accessor: svc => <Tag color="processing">{svc.category === 'Laboratory' ? 'Xét nghiệm' : svc.category === 'Ultrasound' ? 'Siêu âm' : svc.category === 'Imaging' ? 'Chẩn đoán hình ảnh' : 'Khác'}</Tag> },
@@ -164,11 +161,11 @@ export const AdminBilling: React.FC = () => {
         ]} />}
     </Card>;
     return <div className={styles.page}>
-        <PageHeader title="Doanh thu & Biểu phí phòng khám" />
+        <PageHeader title="Doanh thu & biểu phí" />
         <Tabs activeKey={activeTab} onChange={setActiveTab} destroyOnHidden items={[
             { key: 'revenue', label: 'Báo cáo doanh thu', children: revenueContent },
             { key: 'fees', label: 'Phí khám chuyên khoa', children: feesContent },
-            { key: 'diagnostics', label: 'Bảng giá Cận lâm sàng', children: diagnosticsContent },
+            { key: 'diagnostics', label: 'Bảng giá cận lâm sàng', children: diagnosticsContent },
         ]} />
         <Modal open={editModalOpen} title={'Cập nhật phí khám: ' + (selectedSpecialty?.name || '')} {...modalProps(submittingFee)} onCancel={() => { if (!feePending.current) setEditModalOpen(false); }}>
             <Form layout="vertical" onSubmitCapture={handleSaveFee}>

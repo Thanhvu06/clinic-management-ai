@@ -92,7 +92,7 @@ describe('API messages and remaining date displays', () => {
         fireEvent.change(screen.getByLabelText('Bác sĩ phụ trách'), { target: { value: '51' } });
         fireEvent.change(screen.getByPlaceholderText(/Mô tả lý do đến khám/), { target: { value: 'Khám sức khỏe' } });
         fireEvent.click(screen.getByRole('button', { name: /Tiếp tục: Xác nhận thông tin/ }));
-        fireEvent.click(screen.getByRole('button', { name: 'Xác nhận tiếp nhận & Cấp STT' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Xác nhận tiếp nhận & cấp STT' }));
         expect(await screen.findByText(message)).toBeInTheDocument();
         expect(axiosClient.post).toHaveBeenCalledWith('/patient-visits/intake', expect.objectContaining({ assignedDoctorId: 51, existingPatientId: 17 }), expect.anything());
         expect(screen.queryByText('Không thể hoàn tất tiếp nhận lượt khám.')).not.toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('API messages and remaining date displays', () => {
             const message = 'Bác sĩ đã có lịch nghỉ trong khoảng thời gian này.';
             vi.mocked(doctorApi.createLeaveRequest).mockRejectedValue({ message, status: 400 });
             mount(<DoctorSchedule />);
-            expect(await screen.findByText('(20/10/2026)')).toBeInTheDocument();
+            expect(await screen.findByText('20/10')).toBeInTheDocument();
             fireEvent.click(screen.getByRole('button', { name: 'Đăng ký nghỉ phép' }));
             for (const [label, date] of [['Từ ngày', '20/10/2026'], ['Đến ngày', '21/10/2026']]) {
                 const input = screen.getByLabelText(label);

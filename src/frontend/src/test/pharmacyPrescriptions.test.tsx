@@ -136,10 +136,10 @@ describe('PharmacyPrescriptions Component', () => {
         );
 
         await waitFor(() => {
-            expect(screen.getByText('Xem & Cấp phát')).toBeInTheDocument();
+            expect(screen.getByText('Xem & cấp phát')).toBeInTheDocument();
         });
 
-        fireEvent.click(screen.getByText('Xem & Cấp phát'));
+        fireEvent.click(screen.getByText('Xem & cấp phát'));
 
         await waitFor(() => {
             expect(screen.getByText('Chi tiết đơn thuốc #10')).toBeInTheDocument();
@@ -148,7 +148,7 @@ describe('PharmacyPrescriptions Component', () => {
             expect(screen.getByText('100 Viên')).toBeInTheDocument();
         });
 
-        const confirmBtn = screen.getByText('Xác nhận cấp thuốc & Trừ kho');
+        const confirmBtn = screen.getByText('Xác nhận cấp thuốc & trừ kho');
         expect(confirmBtn).not.toBeDisabled();
     });
 
@@ -164,8 +164,8 @@ describe('PharmacyPrescriptions Component', () => {
             </CopilotResourceProvider>
         );
 
-        await waitFor(() => expect(screen.getByText('Xem & Cấp phát')).toBeInTheDocument());
-        fireEvent.click(screen.getByText('Xem & Cấp phát'));
+        await waitFor(() => expect(screen.getByText('Xem & cấp phát')).toBeInTheDocument());
+        fireEvent.click(screen.getByText('Xem & cấp phát'));
         await waitFor(() => expect(screen.getByText('Chi tiết đơn thuốc #10')).toBeInTheDocument());
         await waitFor(() => expect(screen.getByTestId('copilot-selection')).toHaveTextContent('10'));
     });
@@ -188,16 +188,16 @@ describe('PharmacyPrescriptions Component', () => {
         );
 
         await waitFor(() => {
-            expect(screen.getByText('Xem & Cấp phát')).toBeInTheDocument();
+            expect(screen.getByText('Xem & cấp phát')).toBeInTheDocument();
         });
 
-        fireEvent.click(screen.getByText('Xem & Cấp phát'));
+        fireEvent.click(screen.getByText('Xem & cấp phát'));
 
         await waitFor(() => {
             expect(screen.getByText(/Có thuốc trong đơn không đủ số lượng tồn kho/)).toBeInTheDocument();
         });
 
-        const confirmBtn = screen.getByText('Xác nhận cấp thuốc & Trừ kho');
+        const confirmBtn = screen.getByText('Xác nhận cấp thuốc & trừ kho');
         expect(confirmBtn).toBeDisabled();
     });
 
@@ -219,17 +219,17 @@ describe('PharmacyPrescriptions Component', () => {
         );
 
         await waitFor(() => {
-            expect(screen.getByText('Xem & Cấp phát')).toBeInTheDocument();
+            expect(screen.getByText('Xem & cấp phát')).toBeInTheDocument();
         });
 
-        fireEvent.click(screen.getByText('Xem & Cấp phát'));
+        fireEvent.click(screen.getByText('Xem & cấp phát'));
 
         await waitFor(() => {
             expect(screen.getByText(/Có thuốc trong đơn đã ngừng cung cấp hoặc ngừng hoạt động/)).toBeInTheDocument();
             expect(screen.getByText('Ngừng hoạt động')).toBeInTheDocument();
         });
 
-        const confirmBtn = screen.getByText('Xác nhận cấp thuốc & Trừ kho');
+        const confirmBtn = screen.getByText('Xác nhận cấp thuốc & trừ kho');
         expect(confirmBtn).toBeDisabled();
     });
 });
