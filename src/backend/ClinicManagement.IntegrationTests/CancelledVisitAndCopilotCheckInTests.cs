@@ -25,7 +25,6 @@ public sealed class CancelledVisitAndCopilotCheckInTests : IntegrationTestBase
 {
     private static readonly DateOnly Today = new(2026, 10, 5);
     private static int _minute = 400;
-    private static int _cancelledQueue = 700;
 
     public CancelledVisitAndCopilotCheckInTests(CustomWebApplicationFactory factory) : base(factory) { }
 
@@ -123,12 +122,15 @@ public sealed class CancelledVisitAndCopilotCheckInTests : IntegrationTestBase
         public async Task<PatientVisit> CancelledVisitAsync(Appointment appointment)
         {
             var department = await Db.Departments.FirstAsync(x => x.FacilityId == appointment.FacilityId && x.IsActive);
+            var lastNumber = await Db.PatientVisits
+                .Where(v => v.VisitDate == appointment.AppointmentDate && v.FacilityId == department.FacilityId && v.DepartmentId == department.Id)
+                .MaxAsync(v => (int?)v.QueueNumber) ?? 0;
             var visit = new PatientVisit
             {
                 VisitCode = "R-V-" + Guid.NewGuid().ToString("N"), PatientId = appointment.PatientId,
                 AppointmentId = appointment.Id, FacilityId = department.FacilityId, DepartmentId = department.Id,
                 AssignedDoctorId = appointment.DoctorId, VisitDate = appointment.AppointmentDate,
-                QueueNumber = Interlocked.Increment(ref _cancelledQueue), ArrivalType = VisitArrivalType.Scheduled, Status = VisitStatus.Cancelled,
+                QueueNumber = lastNumber + 1, ArrivalType = VisitArrivalType.Scheduled, Status = VisitStatus.Cancelled,
                 CreatedByUserId = ReceptionistId, CheckedInAtUtc = Clock.UtcNow.AddMinutes(-10),
                 CancelledAtUtc = Clock.UtcNow.AddMinutes(-5), CancellationReason = "Đã hủy"
             };

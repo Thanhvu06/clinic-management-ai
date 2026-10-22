@@ -6,7 +6,8 @@ import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { Search, Eye, AlertCircle, Printer } from 'lucide-react';
 import { Button, Input, Modal, Select } from 'antd';
-import { PageHeader, DataTable, StatusBadge, EmptyState, LoadingState } from '../../components/common';
+import { PageHeader, DataTable, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
+import { usePrescriptionPayment } from './usePrescriptionPayment';
 import styles from './PharmacyPrescriptions.module.css';
 import { useDialog } from '../../contexts/DialogContext';
 import { PrescriptionSafetyPanel } from '../../components/prescriptions/PrescriptionSafetyPanel';
@@ -78,6 +79,9 @@ export const PharmacyPrescriptions: React.FC = () => {
     const [detailModalOpen, setDetailModalOpen] = useState(false);
     const [detailLoading, setDetailLoading] = useState(false);
     const [dispenseLoading, setDispenseLoading] = useState(false);
+    const payment = usePrescriptionPayment(
+        detailModalOpen && selectedPrescription?.status === 'Issued' ? selectedPrescription.id : null
+    );
 
     useEffect(() => {
         if (!selectedPrescription) {
@@ -148,6 +152,7 @@ export const PharmacyPrescriptions: React.FC = () => {
     };
 
     const handleOpenDetail = async (id: number) => {
+        setSelectedPrescription(null);
         setDetailModalOpen(true);
         setDetailLoading(true);
         try {
@@ -215,7 +220,8 @@ export const PharmacyPrescriptions: React.FC = () => {
     const hasInactiveMedicine = selectedPrescription?.items.some(
         item => item.isActive === false
     );
-    const canDispense = selectedPrescription?.status === 'Issued' && !hasInsufficientStock && !hasInactiveMedicine;
+    const canDispense = selectedPrescription?.status === 'Issued' && !hasInsufficientStock && !hasInactiveMedicine
+        && payment.isFullyPaid && !payment.loading && !payment.error;
 
     return (
         <>
@@ -241,12 +247,19 @@ export const PharmacyPrescriptions: React.FC = () => {
                 <div className={styles.modalFooter}><Button htmlType="button" onClick={() => window.print()}><Printer size={16} aria-hidden="true" /> In đơn thuốc</Button><div className={styles.footerActions}><Button htmlType="button" disabled={dispenseLoading} onClick={() => { setDetailModalOpen(false); setSelectedPrescription(null); }}>Đóng</Button>{selectedPrescription?.status === 'Issued' && <button type="button" className={styles.dispenseButton} disabled={dispenseLoading || !canDispense} onClick={() => handleDispense(selectedPrescription.id)}>{dispenseLoading ? 'Đang xử lý...' : 'Xác nhận cấp thuốc & trừ kho'}</button>}</div></div>
             }>
                 <div className={styles.appointmentCode}>Mã lịch hẹn: {selectedPrescription?.appointmentCode}</div>
-                {detailLoading ? <LoadingState message="Đang tải dữ liệu đơn thuốc..." /> : selectedPrescription && <>
+                {detailLoading || payment.loading ? <LoadingState message={payment.loading ? 'Đang kiểm tra thanh toán...' : 'Đang tải dữ liệu đơn thuốc...'} /> : selectedPrescription && <>
                     <div className={styles.patientBanner}>
                         <div><span className={styles.secondary}>Bệnh nhân:</span><div className={styles.patientName}>{selectedPrescription.patientName}</div><div className={styles.secondary}>SĐT: {selectedPrescription.patientPhone}</div></div>
                         <div><span className={styles.secondary}>Bác sĩ chỉ định:</span><div className={styles.patientName}>{selectedPrescription.doctorName}</div><div className={styles.secondary}>Thời gian kê: {formatDateTime(selectedPrescription.createdAt)}</div></div>
                         <div><span className={styles.secondary}>Trạng thái cấp phát:</span><div><StatusBadge status={selectedPrescription.status === 'Dispensed' ? 'completed' : 'pending'} label={selectedPrescription.status === 'Dispensed' ? `Đã cấp lúc ${formatDateTime(selectedPrescription.dispensedAt)}` : 'Chờ kiểm tra & cấp phát'} /></div></div>
                     </div>
+                    {selectedPrescription.status === 'Issued' && <div>
+                        {payment.error ? <InlineError message={payment.error} onRetry={payment.retry} />
+                                : payment.status && <>
+                                    <p>Thanh toán: {payment.isFullyPaid ? 'Đã thanh toán' : 'Chưa thanh toán tại quầy thu ngân'}</p>
+                                    {!payment.isFullyPaid && <p>Chưa thanh toán đủ tiền thuốc. Vui lòng thanh toán tại quầy thu ngân trước khi cấp thuốc.</p>}
+                                </>}
+                    </div>}
                     {selectedPrescription.notes && <div className={styles.doctorNotes}><strong>Ghi chú từ bác sĩ:</strong> {selectedPrescription.notes}</div>}
                     {!!selectedPrescription.safetyWarnings?.length && <PrescriptionSafetyPanel result={{ allergies: [], warnings: selectedPrescription.safetyWarnings }} overrideReason={selectedPrescription.safetyOverrideReason} />}
                     {hasInsufficientStock && selectedPrescription.status === 'Issued' && <div className={styles.stockWarning}><AlertCircle size={20} /><span><strong>Cảnh báo tồn kho:</strong> Có thuốc trong đơn không đủ số lượng tồn kho để cấp phát. Vui lòng nhập thêm hàng hoặc trao đổi lại với bác sĩ!</span></div>}

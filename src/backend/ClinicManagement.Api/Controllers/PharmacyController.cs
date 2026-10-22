@@ -53,6 +53,14 @@ public class PharmacyController : ControllerBase
         return Ok(ApiResponse<PrescriptionDetailDto>.Ok(result, "Xác nhận mua thuốc và giữ tồn kho thành công."));
     }
 
+    [HttpGet("prescriptions/{id}/payment-status")]
+    [Authorize(Roles = RoleNames.Pharmacist + "," + RoleNames.Admin)]
+    public async Task<IActionResult> GetPrescriptionPaymentStatus(long id)
+    {
+        var result = await _pharmacyService.EvaluatePrescriptionPaymentAsync(id, HttpContext.RequestAborted);
+        return Ok(ApiResponse<PrescriptionPaymentEligibilityDto>.Ok(result));
+    }
+
     [HttpPost("prescriptions/{id}/dispense")]
     [Authorize(Roles = RoleNames.Pharmacist + "," + RoleNames.Admin)]
     public async Task<IActionResult> DispensePrescription(long id)

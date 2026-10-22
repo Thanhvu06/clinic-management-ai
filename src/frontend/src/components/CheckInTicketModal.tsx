@@ -2,6 +2,7 @@ import React from 'react';
 import { Printer, X, CheckCircle, Clock, MapPin, User, Stethoscope } from 'lucide-react';
 import type { CheckInTicketDto } from '../types';
 import styles from './CheckInTicketModal.module.css';
+import { useScopedPrint } from '../hooks/useScopedPrint';
 
 interface CheckInTicketModalProps {
     isOpen: boolean;
@@ -14,11 +15,8 @@ export const CheckInTicketModal: React.FC<CheckInTicketModalProps> = ({
     ticket,
     onClose
 }) => {
+    const handlePrint = useScopedPrint('cc-ticket-printing', isOpen && !!ticket);
     if (!isOpen || !ticket) return null;
-
-    const handlePrint = () => {
-        window.print();
-    };
 
     const formatDateTime = (isoString?: string) => {
         if (!isoString) return '';

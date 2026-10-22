@@ -127,6 +127,10 @@ describe('PharmacyPrescriptions Component', () => {
             .mockResolvedValueOnce({
                 success: true,
                 data: mockDetailValid
+            })
+            .mockResolvedValueOnce({
+                success: true,
+                data: { prescriptionId: 10, paymentStatus: 'paid', isFullyPaid: true, items: [] }
             });
 
         render(
@@ -155,7 +159,11 @@ describe('PharmacyPrescriptions Component', () => {
     it('selects the loaded prescription detail, not a typed list identifier, for Copilot', async () => {
         vi.mocked(axiosClient.get)
             .mockResolvedValueOnce({ success: true, data: { items: mockPrescriptions, totalItems: 1 } })
-            .mockResolvedValueOnce({ success: true, data: mockDetailValid });
+            .mockResolvedValueOnce({ success: true, data: mockDetailValid })
+            .mockResolvedValueOnce({
+                success: true,
+                data: { prescriptionId: 10, paymentStatus: 'paid', isFullyPaid: true, items: [] }
+            });
 
         render(
             <CopilotResourceProvider>
@@ -179,6 +187,10 @@ describe('PharmacyPrescriptions Component', () => {
             .mockResolvedValueOnce({
                 success: true,
                 data: mockDetailLowStock
+            })
+            .mockResolvedValueOnce({
+                success: true,
+                data: { prescriptionId: 10, paymentStatus: 'paid', isFullyPaid: true, items: [] }
             });
 
         render(
@@ -210,6 +222,10 @@ describe('PharmacyPrescriptions Component', () => {
             .mockResolvedValueOnce({
                 success: true,
                 data: mockDetailInactive
+            })
+            .mockResolvedValueOnce({
+                success: true,
+                data: { prescriptionId: 10, paymentStatus: 'paid', isFullyPaid: true, items: [] }
             });
 
         render(

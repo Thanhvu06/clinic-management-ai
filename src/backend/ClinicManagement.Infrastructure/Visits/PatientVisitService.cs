@@ -19,7 +19,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ClinicManagement.Infrastructure.Visits;
 
-public class PatientVisitService : IPatientVisitService
+public partial class PatientVisitService : IPatientVisitService
 {
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
@@ -1170,61 +1170,6 @@ public class PatientVisitService : IPatientVisitService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return patient;
-    }
-
-    private async Task<int> GetNextQueueNumberAsync(long facilityId, long departmentId, DateOnly date, CancellationToken cancellationToken)
-    {
-        for (var attempt = 0; attempt < 20; attempt++)
-        {
-            var sequence = await _dbContext.DailyQueueSequences
-                .FirstOrDefaultAsync(s => s.FacilityId == facilityId && s.DepartmentId == departmentId && s.Date == date, cancellationToken);
-
-            if (sequence == null)
-            {
-                sequence = new DailyQueueSequence
-                {
-                    FacilityId = facilityId,
-                    DepartmentId = departmentId,
-                    Date = date,
-                    LastNumber = 1
-                };
-                _dbContext.DailyQueueSequences.Add(sequence);
-                try
-                {
-                    await _dbContext.SaveChangesAsync(cancellationToken);
-                    return sequence.LastNumber;
-                }
-                catch (DbUpdateException)
-                {
-                    _dbContext.Entry(sequence).State = EntityState.Detached;
-                    await Task.Delay(RandomNumberGenerator.GetInt32(10, 50), cancellationToken);
-                    continue;
-                }
-            }
-            else
-            {
-                sequence.LastNumber++;
-                try
-                {
-                    await _dbContext.SaveChangesAsync(cancellationToken);
-                    return sequence.LastNumber;
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    try { await _dbContext.Entry(sequence).ReloadAsync(cancellationToken); } catch { _dbContext.Entry(sequence).State = EntityState.Detached; }
-                    await Task.Delay(RandomNumberGenerator.GetInt32(10, 50), cancellationToken);
-                    continue;
-                }
-                catch (DbUpdateException)
-                {
-                    try { await _dbContext.Entry(sequence).ReloadAsync(cancellationToken); } catch { _dbContext.Entry(sequence).State = EntityState.Detached; }
-                    await Task.Delay(RandomNumberGenerator.GetInt32(10, 50), cancellationToken);
-                    continue;
-                }
-            }
-        }
-
-        throw new InvalidOperationException("Failed to allocate queue number after multiple attempts due to high concurrency (QUEUE_NUMBER_COLLISION).");
     }
 
     private async Task<string> GenerateVisitCodeAsync(DateOnly date, int queueNumber, CancellationToken cancellationToken)

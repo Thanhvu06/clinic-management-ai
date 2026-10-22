@@ -269,45 +269,33 @@
 
 /* Print Stylesheet */
 @media print {
-    body * {
-        visibility: hidden;
-    }
-
-    .modal, .receiptContainer, .receiptContainer * {
-        visibility: visible;
-    }
-
-    .overlay {
-        position: static !important;
+    :global(body.cc-receipt-printing) * { visibility: hidden; }
+    :global(body.cc-receipt-printing) :global(#printable-invoice-receipt),
+    :global(body.cc-receipt-printing) :global(#printable-invoice-receipt) * { visibility: visible; }
+    :global(body.cc-receipt-printing) .overlay {
+        position: absolute !important;
+        inset: 0 auto auto 0;
+        width: 100%;
+        display: block;
         background: none !important;
+        backdrop-filter: none;
         padding: 0 !important;
         overflow: visible !important;
     }
-
-    .modal {
-        position: absolute;
-        left: 0;
-        top: 0;
+    :global(body.cc-receipt-printing) .modal {
         width: 100% !important;
         max-width: 100% !important;
+        max-height: none;
+        overflow: visible;
         box-shadow: none !important;
         border-radius: 0 !important;
         border: none !important;
+        background: none;
     }
-
-    .header, .footer, .closeBtn {
-        display: none !important;
-    }
-
-    .body {
-        padding: 0 !important;
-        overflow: visible !important;
-    }
-
-    .receiptContainer {
-        border: none !important;
-        padding: 20px !important;
-    }
+    :global(body.cc-receipt-printing) .header,
+    :global(body.cc-receipt-printing) .footer { display: none !important; }
+    :global(body.cc-receipt-printing) .body { padding: 0 !important; overflow: visible !important; }
+    :global(body.cc-receipt-printing) .receiptContainer { border: none !important; padding: 20px !important; }
 }
 
 /* Declarations moved from JSX; doubled classes preserve component overrides while allowing print rules. */

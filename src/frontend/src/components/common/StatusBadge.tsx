@@ -16,11 +16,28 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     size = 'md'
 }) => {
     const normalize = (status || '').toLowerCase().trim();
+    const customLabel = label?.trim();
 
     let color: TagColor = 'default';
     let text = 'Không xác định';
 
     switch (normalize) {
+        case 'paid':
+            color = 'success';
+            text = label || 'Đã thanh toán';
+            break;
+        case 'unpaid':
+            color = 'warning';
+            text = label || 'Chờ thanh toán';
+            break;
+        case 'issued':
+            color = 'processing';
+            text = label || 'Đã phát hành';
+            break;
+        case 'dispensed':
+            color = 'success';
+            text = label || 'Đã cấp phát';
+            break;
         case 'registered':
             color = 'processing';
             text = label || 'Đã đăng ký';
@@ -114,6 +131,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
             break;
         default:
             color = 'default';
+            text = customLabel && customLabel.toLowerCase() !== normalize ? customLabel : 'Không xác định';
             break;
     }
 
