@@ -128,9 +128,9 @@ export const LocationsList: React.FC = () => {
                                     <span>{loc.phone}</span>
                                 </div>
 
-                                {loc.services && loc.services.length > 0 && (
+                                {loc.features && loc.features.length > 0 && (
                                     <div className={styles.flexLayout15}>
-                                        {loc.services.map((srv, idx) => (
+                                        {loc.features.map((srv, idx) => (
                                             <span
                                                 key={idx}
                                                 className={styles.text10}

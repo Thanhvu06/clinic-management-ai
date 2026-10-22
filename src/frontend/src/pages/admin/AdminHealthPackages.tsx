@@ -6,15 +6,16 @@ import { Alert, Button, Checkbox, Form, Input, InputNumber, Modal, Select, Tag, 
 import { PageHeader, FilterBar, DataTable, Pagination, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './AdminHealthPackages.module.css';
 import { useDialog } from '../../contexts/DialogContext';
+import { parseIncludedServices } from '../../utils/formatters';
 
 interface HealthPackage {
     id: number;
     code: string;
     name: string;
     description: string;
-    targetGroup: string;
+    targetAudience: string;
     price: number;
-    includedServices: string;
+    includedServices: string[] | string;
     imageUrl?: string;
     isActive: boolean;
     sortOrder: number;
@@ -74,8 +75,17 @@ export const AdminHealthPackages: React.FC = () => {
         else fetchPackages();
     };
 
+    const toServiceList = (value: HealthPackage['includedServices'] | undefined): string[] =>
+        typeof value === 'string' && value.includes('\n')
+            ? parseIncludedServices(value.split('\n').map(item => item.trim()).filter(Boolean))
+            : parseIncludedServices(value);
+
     const handleFormSubmit = async () => {
         setFormError('');
+        if (!modal.data.targetAudience?.trim() || !modal.data.description?.trim()) {
+            setFormError('Vui lòng nhập đối tượng phù hợp và mô tả ngắn.');
+            return;
+        }
         setFormLoading(true);
 
         try {
@@ -83,9 +93,9 @@ export const AdminHealthPackages: React.FC = () => {
                 const res = await axiosClient.put<any, ApiResponse<any>>(`/admin/health-packages/${modal.data.id}`, {
                     name: modal.data.name,
                     description: modal.data.description,
-                    targetGroup: modal.data.targetGroup,
+                    targetAudience: (modal.data.targetAudience ?? '').trim(),
                     price: Number(modal.data.price),
-                    includedServices: modal.data.includedServices,
+                    includedServices: toServiceList(modal.data.includedServices),
                     imageUrl: modal.data.imageUrl || '',
                     isActive: modal.data.isActive ?? true,
                     sortOrder: Number(modal.data.sortOrder) || 0
@@ -100,9 +110,9 @@ export const AdminHealthPackages: React.FC = () => {
                     code: modal.data.code,
                     name: modal.data.name,
                     description: modal.data.description,
-                    targetGroup: modal.data.targetGroup,
+                    targetAudience: (modal.data.targetAudience ?? '').trim(),
                     price: Number(modal.data.price),
-                    includedServices: modal.data.includedServices,
+                    includedServices: toServiceList(modal.data.includedServices),
                     imageUrl: modal.data.imageUrl || '',
                     isActive: modal.data.isActive ?? true,
                     sortOrder: Number(modal.data.sortOrder) || 0
@@ -155,12 +165,12 @@ export const AdminHealthPackages: React.FC = () => {
                     <DataTable data={packages} keyExtractor={pkg => pkg.id} columns={[
                         { header: 'Mã gói', accessor: pkg => <Typography.Text strong>{pkg.code}</Typography.Text> },
                         { header: 'Tên gói khám', accessor: pkg => <><Typography.Text strong>{pkg.name}</Typography.Text><div className={styles.packageDescription} title={pkg.description}>{pkg.description}</div></> },
-                        { header: 'Đối tượng phù hợp', accessor: pkg => <Tag>{pkg.targetGroup || 'Mọi đối tượng'}</Tag> },
+                        { header: 'Đối tượng phù hợp', accessor: pkg => <Tag>{pkg.targetAudience || 'Mọi đối tượng'}</Tag> },
                         { header: 'Giá niêm yết', accessor: pkg => <Typography.Text strong className={styles.packagePrice}>{formatCurrency(pkg.price)}</Typography.Text> },
                         { header: 'Thứ tự', accessor: 'sortOrder' },
                         { header: 'Trạng thái', accessor: pkg => <StatusBadge status={pkg.isActive ? 'Approved' : 'Rejected'} label={pkg.isActive ? 'Đang mở' : 'Đã tắt'} /> },
                         { header: 'Thao tác', align: 'right', accessor: pkg => <div className={styles.packageRowActions}>
-                            <Button size="small" title="Chỉnh sửa" icon={<Edit size={14} />} onClick={() => openModal({ ...pkg }, true)}>Sửa</Button>
+                            <Button size="small" title="Chỉnh sửa" icon={<Edit size={14} />} onClick={() => openModal({ ...pkg, includedServices: parseIncludedServices(pkg.includedServices).join('\n') }, true)}>Sửa</Button>
                             <Button size="small" danger title="Xóa gói khám" aria-label="Xóa gói khám" icon={<Trash2 size={14} />} onClick={() => handleDelete(pkg)} />
                         </div> }
                     ]} />
@@ -175,10 +185,10 @@ export const AdminHealthPackages: React.FC = () => {
                         <Form.Item label="Mã gói (*)" htmlFor="packageCode"><Input id="packageCode" required disabled={modal.isEdit || formLoading} value={modal.data.code || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, code: e.target.value } })} placeholder="VD: PKG-STANDARD" /></Form.Item>
                         <Form.Item label="Tên gói khám (*)" htmlFor="packageName"><Input id="packageName" required value={modal.data.name || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, name: e.target.value } })} placeholder="VD: Gói khám sức khỏe tổng quát tiêu chuẩn" /></Form.Item>
                         <Form.Item label="Giá niêm yết (VNĐ) (*)" htmlFor="packagePrice"><InputNumber className={styles.packageNumber} id="packagePrice" required min={0} step={50000} value={modal.data.price ?? 0} onChange={value => setModal({ ...modal, data: { ...modal.data, price: value ?? 0 } })} /></Form.Item>
-                        <Form.Item label="Đối tượng phù hợp" htmlFor="packageTargetGroup"><Input id="packageTargetGroup" value={modal.data.targetGroup || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, targetGroup: e.target.value } })} placeholder="VD: Nam & Nữ mọi lứa tuổi" /></Form.Item>
+                        <Form.Item label="Đối tượng phù hợp (*)" htmlFor="packageTargetAudience"><Input id="packageTargetAudience" required maxLength={100} value={modal.data.targetAudience || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, targetAudience: e.target.value } })} placeholder="VD: Nam & Nữ mọi lứa tuổi" /></Form.Item>
                     </div>
-                    <Form.Item label="Mô tả ngắn" htmlFor="packageDescription"><Input.TextArea id="packageDescription" rows={2} value={modal.data.description || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, description: e.target.value } })} placeholder="Mô tả lợi ích của gói khám..." /></Form.Item>
-                    <Form.Item label="Danh mục dịch vụ bao gồm (JSON hoặc danh sách)" htmlFor="packageServices"><Input.TextArea id="packageServices" rows={3} value={modal.data.includedServices || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, includedServices: e.target.value } })} placeholder='["Khám tổng quát", "Xét nghiệm máu 18 chỉ số", "Siêu âm bụng", "Chụp X-quang phổi"]' /></Form.Item>
+                    <Form.Item label="Mô tả ngắn (*)" htmlFor="packageDescription"><Input.TextArea id="packageDescription" required rows={2} value={modal.data.description || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, description: e.target.value } })} placeholder="Mô tả lợi ích của gói khám..." /></Form.Item>
+                    <Form.Item label="Danh mục dịch vụ bao gồm (mỗi dịch vụ một dòng)" htmlFor="packageServices"><Input.TextArea id="packageServices" rows={3} value={typeof modal.data.includedServices === 'string' ? modal.data.includedServices : parseIncludedServices(modal.data.includedServices).join('\n')} onChange={e => setModal({ ...modal, data: { ...modal.data, includedServices: e.target.value } })} placeholder={'Khám tổng quát\nXét nghiệm máu 18 chỉ số\nSiêu âm bụng'} /></Form.Item>
                     <Form.Item label="Thứ tự ưu tiên hiển thị" htmlFor="packageSortOrder"><InputNumber className={styles.packageNumber} id="packageSortOrder" value={modal.data.sortOrder ?? 0} onChange={value => setModal({ ...modal, data: { ...modal.data, sortOrder: value ?? 0 } })} /></Form.Item>
                     <Form.Item><Checkbox checked={modal.data.isActive ?? true} onChange={e => setModal({ ...modal, data: { ...modal.data, isActive: e.target.checked } })}>Kích hoạt mở bán gói này</Checkbox></Form.Item>
                     <div className={styles.packageFormActions}><Button disabled={formLoading} onClick={closeModal}>Hủy</Button><Button type="primary" htmlType="submit" disabled={formLoading}>{formLoading ? 'Đang lưu...' : (modal.isEdit ? 'Lưu thay đổi' : 'Tạo gói khám')}</Button></div>

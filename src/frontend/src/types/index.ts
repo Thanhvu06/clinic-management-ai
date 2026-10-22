@@ -48,7 +48,7 @@ export interface ClinicLocationDto {
     phone: string;
     openingHours: string;
     description?: string | null;
-    services: string[];
+    features: string[];
     isActive: boolean;
 }
 

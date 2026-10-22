@@ -56,7 +56,8 @@
 .actionLink:hover { color: var(--cc-color-primary); border-color: var(--cc-color-primary); }
 .intakeLink svg, .actionLink svg { flex-shrink: 0; }
 .unbilledCount { margin-left: auto; padding: var(--cc-space-xxs) var(--cc-space-xs); background: var(--cc-color-warning-bg); color: var(--cc-color-warning); border-radius: var(--cc-radius-full); font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
-@media (max-width: 1023px) { .workspace { grid-template-columns: minmax(0, 1fr); } .metricGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1439px) { .workspace { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1023px) { .metricGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 767px) {
     .metricGrid, .actionPanel { grid-template-columns: minmax(0, 1fr); }
     .workspaceHeader > :global(.ant-card-body), .searchCard > :global(.ant-card-body), .actionCard > :global(.ant-card-body), .intakeCard > :global(.ant-card-body) { padding: var(--cc-space-md); }
