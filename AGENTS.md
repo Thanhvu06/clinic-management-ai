@@ -25,6 +25,7 @@ Chỉ sửa khi prompt mở khóa rõ ràng. Đường dẫn dưới đây tính
 
 ## UI
 
+- Giao diện theo docs/ui/DESIGN.md.
 - Dùng antd và token `--cc-*`; không mã màu hex, không thêm `style={{}}` mới.
 - Code mới không dùng `Row`, `Col`, `Grid`, `Tabs`, `List`, `DatePicker`; ô ngày dùng `<Input type="date">`.
 - Nút bận dùng `disabled` và đổi chữ, không dùng `loading`.

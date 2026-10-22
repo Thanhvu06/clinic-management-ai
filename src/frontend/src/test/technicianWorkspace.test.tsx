@@ -8,6 +8,7 @@ import { TechnicianOrderDetail } from '../pages/technician/TechnicianOrderDetail
 import { CopilotResourceProvider, useCopilotResource } from '../components/copilot/copilotResourceContext';
 import type { DiagnosticOrderDto } from '../types';
 import dashboardStyles from '../pages/technician/TechnicianDashboard.module.css';
+import metricStyles from '../components/common/MetricStrip.module.css';
 
 const mocks = vi.hoisted(() => ({ orders: vi.fn(), stats: vi.fn(), detail: vi.fn(), alert: vi.fn(), toast: vi.fn(), confirm: vi.fn() }));
 vi.mock('../api/diagnosticApi', () => ({ diagnosticApi: { getTechnicianOrders: mocks.orders, getTechnicianStats: mocks.stats, getTechnicianOrderById: mocks.detail } }));
@@ -75,7 +76,7 @@ describe('technician workspace', () => {
         await userEvent.click(stat);
         await waitFor(() => expect(mocks.orders).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'InProgress', page: 1 })));
         expect(stat).toHaveAttribute('aria-pressed', 'true');
-        expect(stat).toHaveClass(dashboardStyles.statFilterActive);
+        expect(stat).toHaveClass(metricStyles.pressed);
     }, 15000);
 
     it('keeps the loaded queue visible when the 25-second silent poll fails', async () => {

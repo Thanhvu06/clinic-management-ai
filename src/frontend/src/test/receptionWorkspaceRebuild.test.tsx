@@ -180,9 +180,9 @@ describe('Reception Workspace Rebuild', () => {
         });
 
         // Action panel quick links
-        expect(screen.getByText('Tiếp nhận người bệnh mới')).toBeInTheDocument();
-        expect(screen.getByText('Mở thu ngân viện phí')).toBeInTheDocument();
-        expect(screen.getByText('Quản lý đăng ký gói khám')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Tiếp nhận người bệnh' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Thu ngân' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Gói khám' })).toBeInTheDocument();
 
         // Appointment table items
         await waitFor(() => {
@@ -215,8 +215,8 @@ describe('Reception Workspace Rebuild', () => {
         await waitFor(() => expect(vi.mocked(axiosClient.get).mock.calls.some(([url]) =>
             url.includes('/reception/appointments') && url.includes('facilityId=1'))).toBe(true));
         await act(async () => { releaseFacilityRows(); });
-        await waitFor(() => expect(screen.getAllByRole('button', { name: 'Chọn Copilot' }).length).toBe(2));
-        fireEvent.click(screen.getAllByRole('button', { name: 'Chọn Copilot' })[0]);
+        await waitFor(() => expect(screen.getAllByRole('button', { name: 'Hỏi trợ lý' }).length).toBe(2));
+        fireEvent.click(screen.getAllByRole('button', { name: 'Hỏi trợ lý' })[0]);
         await waitFor(() => expect(screen.getByTestId('copilot-selection')).toHaveTextContent('101'));
     });
 

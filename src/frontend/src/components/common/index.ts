@@ -1,5 +1,6 @@
 export * from './PageHeader';
 export * from './StatCard';
+export * from './MetricStrip';
 export * from './StatusBadge';
 export * from './FilterBar';
 export * from './DataTable';

@@ -1,12 +1,12 @@
 import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Button, Card, Input, Select } from 'antd';
-import { PageHeader, StatCard, DataTable, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
+import { Badge, Button, Card, Input, Select } from 'antd';
+import { PageHeader, MetricStrip, DataTable, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
 import type { DataTableColumn } from '../../components/common/DataTable';
 import {
-    Users, UserPlus, Search, Clock, Calendar, CheckCircle2,
-    Printer, RefreshCw, CreditCard, Package,
+    Search, CheckCircle2,
+    Printer, RefreshCw,
     Eye, AlertTriangle
 } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
@@ -297,7 +297,7 @@ export const ReceptionWorkspace: React.FC = () => {
                         {actionLoadingId === item.id ? <RefreshCw className="spin" size={13} /> : <CheckCircle2 size={13} />} Tiếp nhận
                     </Button>
                 )}
-                <Button htmlType="button" onClick={() => selectAppointmentForCopilot(item)} title="Chọn đúng lịch hẹn này cho Copilot">Chọn Copilot</Button>
+                <Button htmlType="button" onClick={() => selectAppointmentForCopilot(item)} title="Chọn lịch hẹn này để hỏi trợ lý">Hỏi trợ lý</Button>
                 {item.patientVisitId && <Button htmlType="button" onClick={() => handleViewTicket(item.patientVisitId!)} title="Xem lại phiếu khám và in vé số thứ tự"><Printer size={13} /> Vé khám</Button>}
                 <Link to={`/reception/appointments`} className={styles.detailLink} title="Xem chi tiết lịch hẹn"><Eye size={13} /></Link>
             </>
@@ -307,7 +307,16 @@ export const ReceptionWorkspace: React.FC = () => {
         <div className={styles.workspace}>
             <Card className={styles.workspaceHeader}>
                 <PageHeader title="Bàn làm việc lễ tân"
-                    actions={<Button htmlType="button" onClick={handleRefreshAll}><RefreshCw size={14} className={loading ? 'spin' : ''} /> Làm mới</Button>} />
+                    actions={<>
+                        <Button htmlType="button" type="primary" onClick={() => navigate('/reception/walk-in')}>Tiếp nhận người bệnh</Button>
+                        <Button htmlType="button" onClick={() => setMpiModalOpen(true)}>Tra cứu hồ sơ</Button>
+                        <Button htmlType="button" onClick={() => navigate('/reception/billing')} title={(stats?.unbilledCount ?? 0) > 0 ? `${stats?.unbilledCount} lượt chờ thu` : undefined}>
+                            Thu ngân
+                            {(stats?.unbilledCount ?? 0) > 0 && <Badge className={styles.unbilledBadge} count={stats?.unbilledCount} />}
+                        </Button>
+                        <Button htmlType="button" onClick={() => navigate('/reception/package-registrations')}>Gói khám</Button>
+                        <Button htmlType="button" onClick={handleRefreshAll}><RefreshCw size={14} className={loading ? 'spin' : ''} /> Làm mới</Button>
+                    </>} />
                 <div className={styles.facilityPicker}>
                     <span className={styles.facilityLabel}>Cơ sở trực:</span>
                     {facilityLoading ? <LoadingState message="Đang tải cơ sở..." height="40px" /> : facilityError ? <InlineError title="" message={facilityError} onRetry={loadFacilities} /> : facilities.length === 0 ? (
@@ -320,12 +329,16 @@ export const ReceptionWorkspace: React.FC = () => {
                 </div>
             </Card>
             {!facilityLoading && !facilityError && facilities.length === 0 && <div className={styles.facilityNotice}><AlertTriangle size={20} className={styles.noticeIcon} /><div><strong>Tài khoản chưa được phân công cơ sở trực:</strong> Bạn chưa có phân công làm việc tại cơ sở y tế nào. Vui lòng liên hệ quản trị viên hệ thống để được gán cơ sở trước khi thực hiện tiếp nhận và quản lý hàng đợi.</div></div>}
-            <div className={styles.metricGrid}>
-                <StatCard title="Lịch khám hôm nay" value={statsError ? '—' : stats?.appointmentsToday ?? 0} subtitle="Lịch hẹn đã đặt trong ngày" icon={<Calendar size={24} />} color="info" />
-                <StatCard title="Chờ xác nhận" value={statsError ? '—' : stats?.pendingAppointmentsToday ?? 0} subtitle="Cần lễ tân duyệt hoặc gọi xác nhận" icon={<Clock size={24} />} color="warning" />
-                <StatCard title="Chờ tiếp đón / Đang khám" value={statsError ? '—' : stats?.confirmedAppointmentsToday ?? 0} subtitle="Sẵn sàng tiếp nhận vào hàng đợi" icon={<Users size={24} />} color="primary" />
-                <StatCard title="Đã khám xong hôm nay" value={statsError ? '—' : stats?.completedAppointmentsToday ?? 0} subtitle="Đã hoàn thành lượt khám" icon={<CheckCircle2 size={24} />} color="success" />
-            </div>
+            <MetricStrip
+                className={styles.metricStrip}
+                ariaLabel="Số liệu tiếp nhận hôm nay"
+                items={[
+                    { label: 'Lịch khám hôm nay', value: statsError ? '—' : stats?.appointmentsToday ?? 0 },
+                    { label: 'Chờ xác nhận', value: statsError ? '—' : stats?.pendingAppointmentsToday ?? 0, tone: 'attention' },
+                    { label: 'Chờ tiếp đón / Đang khám', value: statsError ? '—' : stats?.confirmedAppointmentsToday ?? 0 },
+                    { label: 'Đã khám xong hôm nay', value: statsError ? '—' : stats?.completedAppointmentsToday ?? 0 },
+                ]}
+            />
             {statsError && <div className={styles.statsError}><span>Không tải được số liệu</span><Button size="small" disabled={statsLoading} onClick={() => fetchStats(selectedFacilityId)}>{statsLoading ? 'Đang tải...' : 'Thử lại'}</Button></div>}
             <Card className={styles.searchCard}>
                 <form onSubmit={handleSearchSubmit} className={styles.searchForm}>
@@ -334,7 +347,7 @@ export const ReceptionWorkspace: React.FC = () => {
                     {searchTerm && <Button htmlType="button" onClick={() => { setSearchTerm(''); setPage(1); fetchWorklist(); }}>Xóa tìm kiếm</Button>}
                 </form>
             </Card>
-                <section className={styles.worklistCard}>
+            <section className={styles.worklistCard}>
                     <div className={styles.worklistTabs}>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'today' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('today'); setPage(1); }}><span>Hôm nay (Ưu tiên tiếp nhận)</span><span className={styles.tabCount}>{activeTab === 'today' ? totalItems : (stats?.appointmentsToday ?? 0)}</span></Button>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'pending' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('pending'); setPage(1); }}><span>Chờ xác nhận</span><span className={styles.tabCount}>{stats?.pendingAppointmentsToday ?? 0}</span></Button>
@@ -346,12 +359,6 @@ export const ReceptionWorkspace: React.FC = () => {
                     {loading ? <LoadingState message="Đang tải danh sách hàng đợi tiếp nhận..." /> : worklistError ? <InlineError title="" message={worklistError} onRetry={() => fetchWorklist(false)} /> : worklistItems.length === 0 ? <EmptyState title="Không có lịch hẹn nào trong mục này." /> : <div className={styles.queueTable}><DataTable columns={queueColumns} data={worklistItems} keyExtractor={item => item.id} /></div>}
                     {totalItems > pageSize && <div className={styles.queuePagination}><span>Hiển thị trang {page} / {totalPages} (Tổng {totalItems} lượt)</span><div className={styles.paginationButtons}><Button htmlType="button" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Trang trước</Button><Button htmlType="button" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
                 </section>
-                <div className={styles.actionPanel}>
-                    <Card className={styles.intakeCard}><div className={styles.actionCardHeader}><UserPlus size={20} className={styles.primaryIcon} /><h3 className={styles.actionCardTitle}>Tiếp nhận người bệnh</h3></div><p className={styles.actionCardDescription}>Quy trình 3 bước chuẩn bệnh viện: Tìm kiếm hồ sơ cũ qua MRN/CCCD/SĐT, chọn bác sĩ & phòng khám, xác nhận in phiếu khám A5/nhiệt.</p><Link to="/reception/walk-in" className={styles.intakeLink}><UserPlus size={18} /> Tiếp nhận người bệnh mới</Link></Card>
-                    <Card className={styles.actionCard}><div className={styles.actionCardHeader}><Search size={20} className={styles.searchActionIcon} /><h3 className={styles.actionCardTitle}>Tra cứu hồ sơ y bạ (MPI)</h3></div><p className={styles.actionCardDescription}>Kiểm tra lịch sử khám, thẻ BHYT, CCCD, thông tin liên lạc và tiền sử dị ứng người bệnh trên toàn hệ thống.</p><Button htmlType="button" block onClick={() => setMpiModalOpen(true)}><Search size={16} /> Mở tra cứu hồ sơ bệnh nhân</Button></Card>
-                    <Card className={styles.actionCard}><div className={styles.actionCardHeader}><CreditCard size={20} className={styles.billingActionIcon} /><h3 className={styles.actionCardTitle}>Hàng đợi viện phí & Thu ngân</h3>{stats?.unbilledCount !== undefined && stats.unbilledCount > 0 && <span className={styles.unbilledCount}>{stats.unbilledCount} chờ thu</span>}</div><p className={styles.actionCardDescription}>Thu tiền công khám, dịch vụ cận lâm sàng và đơn thuốc đã xác nhận mua theo cơ chế khóa chống thu trùng.</p><Link to="/reception/billing" className={styles.actionLink}><CreditCard size={16} /> Mở thu ngân viện phí</Link></Card>
-                    <Card className={styles.actionCard}><div className={styles.actionCardHeader}><Package size={20} className={styles.packageActionIcon} /><h3 className={styles.actionCardTitle}>Gói khám sức khỏe</h3></div><p className={styles.actionCardDescription}>Tiếp đón và kích hoạt lượt khám cho người bệnh đăng ký gói khám sức khỏe tổng quát.</p><Link to="/reception/package-registrations" className={styles.actionLink}><Package size={16} /> Quản lý đăng ký gói khám</Link></Card>
-                </div>
             <MpiPatientSearchModal isOpen={mpiModalOpen} onClose={() => setMpiModalOpen(false)} onSelectPatient={(patient) => { setMpiModalOpen(false); navigate(`/reception/walk-in?existingPatientId=${patient.id}`); }} />
             <CheckInTicketModal isOpen={ticketModalOpen} ticket={currentTicket} onClose={() => setTicketModalOpen(false)} />
         </div>

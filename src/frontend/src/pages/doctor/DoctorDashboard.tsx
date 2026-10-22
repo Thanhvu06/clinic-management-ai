@@ -3,14 +3,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button, Card, Flex, Typography } from 'antd';
 import {
-    Clock, Users, Stethoscope, CheckCircle,
-    Calendar, ArrowRight, RefreshCw, HeartPulse, UserCheck,
-    CalendarDays, AlertOctagon
+    Stethoscope, CheckCircle,
+    Calendar, ArrowRight, RefreshCw, UserCheck
 } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
 import type { DoctorDashboardDto, DoctorQueueItemDto } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
-import { PageHeader, StatCard, StatusBadge, InlineError, EmptyState, DataTable, LoadingState } from '../../components/common';
+import { PageHeader, MetricStrip, StatusBadge, InlineError, EmptyState, DataTable, LoadingState } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import { toLocalDateString } from '../../utils/formatters';
 import styles from './DoctorDashboard.module.css';
@@ -246,10 +245,22 @@ export const DoctorDashboard: React.FC = () => {
         }
     ];
 
+    const shiftText = (() => {
+        if (!currentShift || typeof currentShift === 'string') {
+            const text = (currentShift || '').trim();
+            if (!text || text === 'Không có ca trực') return 'Hôm nay không có ca trực';
+            return text.replace(/\s*\((\d{2}:\d{2}) - (\d{2}:\d{2})\)/g, ' $1–$2').replace(/(\d{2}:\d{2}) - (\d{2}:\d{2})/g, '$1–$2');
+        }
+        const room = currentShift.room ? ` · ${/^phòng/i.test(currentShift.room) ? currentShift.room : `Phòng ${currentShift.room}`}` : '';
+        return `${currentShift.shiftName} ${currentShift.startTime?.substring(0, 5) || ''}–${currentShift.endTime?.substring(0, 5) || ''}${room}`;
+    })();
+
     return (
         <div>
             <PageHeader
-                title="Bàn làm việc Bác sĩ"
+                title="Bàn làm việc bác sĩ"
+                badge={dashboardData && <span className={styles.titleCount}>· {kpis?.totalAppointmentsToday ?? 0} ca hôm nay</span>}
+                subtitle={dashboardData ? shiftText : undefined}
                 actions={
                     <Flex gap="small">
                         <Button
@@ -272,83 +283,21 @@ export const DoctorDashboard: React.FC = () => {
                 <InlineError message={loadError} onRetry={loadDashboard} />
             )}
 
-            <Card className={`${styles.shiftBanner} ${currentShift ? styles.shiftBannerActive : styles.shiftBannerIdle}`}>
-                <Flex justify="space-between" align="center" wrap gap="middle">
-                    <Flex align="center" gap="middle">
-                        <div className={`${styles.shiftIcon} ${currentShift ? styles.shiftIconActive : styles.shiftIconIdle}`}>
-                            <Clock size={22} />
-                        </div>
-                        <div>
-                            <div className={styles.shiftLabel}>
-                                Ca trực hôm nay ({new Date().toLocaleDateString('vi-VN')})
-                            </div>
-                            <div className={styles.shiftValue}>
-                                {typeof currentShift === 'string' ? (
-                                    currentShift || 'Hôm nay bạn không có ca trực phòng khám được phân bổ'
-                                ) : currentShift ? (
-                                    <>
-                                        {currentShift.shiftName} ({currentShift.startTime?.substring(0, 5) || ''} - {currentShift.endTime?.substring(0, 5) || ''}){currentShift.room ? ` • Phòng ${currentShift.room}` : ''}
-                                    </>
-                                ) : (
-                                    'Hôm nay bạn không có ca trực phòng khám được phân bổ'
-                                )}
-                            </div>
-                        </div>
-                    </Flex>
-                    {currentShift && typeof currentShift === 'object' && (
-                        <StatusBadge
-                            status={currentShift.status === 'InProgress' ? 'Đang trong ca trực' : 'Ca trực hôm nay'}
-                            label={currentShift.status === 'InProgress' ? 'Đang trong ca trực' : 'Ca trực hôm nay'}
-                        />
-                    )}
-                </Flex>
-            </Card>
-
-            <div className={styles.kpiGrid}>
-                <StatCard
-                    title="Tổng số ca hôm nay"
-                    value={loading ? '...' : (kpis?.totalAppointmentsToday ?? 0)}
-                    subtitle="Tất cả lịch khám"
-                    icon={<CalendarDays size={22} />}
-                    color="primary"
-                    onClick={() => navigate('/doctor/appointments')}
-                />
-                <StatCard
-                    title="Đang chờ khám"
-                    value={loading ? '...' : (kpis?.waitingCount ?? 0)}
-                    subtitle="Đã xác nhận & tiếp nhận"
-                    icon={<Users size={22} />}
-                    color="warning"
-                    onClick={() => navigate('/doctor/queue')}
-                />
-                <StatCard
-                    title="Đang thăm khám"
-                    value={loading ? '...' : (kpis?.inConsultationCount ?? 0)}
-                    subtitle="Phiên khám đang mở"
-                    icon={<Stethoscope size={22} />}
-                    color="teal"
-                />
-                <StatCard
-                    title="Đã hoàn tất"
-                    value={loading ? '...' : (kpis?.completedCount ?? 0)}
-                    subtitle="Đã chốt kết quả & đơn"
-                    icon={<CheckCircle size={22} />}
-                    color="success"
-                />
-                <StatCard
-                    title="Vắng mặt (No-Show)"
-                    value={loading ? '...' : (kpis?.noShowCount ?? 0)}
-                    subtitle="Không đến khám"
-                    icon={<AlertOctagon size={22} />}
-                    color="danger"
-                />
-            </div>
+            <MetricStrip
+                ariaLabel="Số liệu hôm nay"
+                items={[
+                    { label: 'Đang chờ khám', value: loading ? '...' : (kpis?.waitingCount ?? 0), tone: 'attention', to: '/doctor/queue' },
+                    { label: 'Đang khám', value: loading ? '...' : (kpis?.inConsultationCount ?? 0) },
+                    { label: 'Đã hoàn tất', value: loading ? '...' : (kpis?.completedCount ?? 0) },
+                    { label: 'Vắng mặt', value: loading ? '...' : (kpis?.noShowCount ?? 0) },
+                ]}
+            />
 
             <Card className={styles.nextPatientBanner}>
                 <Flex justify="space-between" align="center" wrap gap="middle">
                     <div className={styles.spacing1}>
                         <Flex align="center" gap="small" className={styles.spacing2}>
-                            <span className={styles.nextPatientTag}>BỆNH NHÂN TIẾP THEO</span>
+                            <h2 className={styles.nextPatientTag}>Bệnh nhân tiếp theo</h2>
                             {nextPatient && <StatusBadge status={nextPatient.status} />}
                         </Flex>
 
@@ -367,14 +316,11 @@ export const DoctorDashboard: React.FC = () => {
                                     <strong>Lý do khám:</strong> {nextPatient.reason || 'Khám tổng quát theo lịch hẹn'}
                                 </div>
                                 {nextPatient.vitalSummaryText && (
-                                    <Flex align="center" gap={5} className={styles.text4}>
-                                        <HeartPulse size={14} />
-                                        <span>Dấu hiệu sinh tồn: {nextPatient.vitalSummaryText}</span>
-                                    </Flex>
+                                    <div className={styles.text4}>Dấu hiệu sinh tồn: {nextPatient.vitalSummaryText}</div>
                                 )}
                             </div>
                         ) : (
-                            <Typography.Text type="secondary" italic>
+                            <Typography.Text type="secondary">
                                 Hiện không có bệnh nhân nào đang chờ hoặc tiếp nhận trong hàng đợi hôm nay.
                             </Typography.Text>
                         )}
@@ -419,18 +365,10 @@ export const DoctorDashboard: React.FC = () => {
 
             <Card className={styles.sectionCard}>
                 <Flex justify="space-between" align="center" wrap gap="small" className={styles.spacing3}>
-                    <Flex align="center" gap="small">
-                        <div className={styles.sectionIcon}><Users size={18} /></div>
-                        <h2 className={styles.sectionTitle}>
-                            Hàng đợi khám hôm nay ({queue.length} bệnh nhân)
-                        </h2>
-                    </Flex>
-                    <Link to="/doctor/queue">
-                        <Flex align="center" gap={4} className={styles.text5}>
-                            <span>Xem chế độ hàng đợi đầy đủ</span>
-                            <ArrowRight size={14} />
-                        </Flex>
-                    </Link>
+                    <h2 className={styles.sectionTitle}>
+                        Hàng đợi khám hôm nay ({queue.length} bệnh nhân)
+                    </h2>
+                    <Link to="/doctor/queue" className={styles.text5}>Xem chế độ hàng đợi đầy đủ</Link>
                 </Flex>
 
                 {loading ? (
@@ -451,18 +389,10 @@ export const DoctorDashboard: React.FC = () => {
 
             <Card className={styles.sectionCard}>
                 <Flex justify="space-between" align="center" wrap gap="small" className={styles.spacing3}>
-                    <Flex align="center" gap="small">
-                        <div className={`${styles.sectionIcon} ${styles.sectionIconInfo}`}><CalendarDays size={18} /></div>
-                        <h2 className={styles.sectionTitle}>
-                            Lịch khám 7 ngày tới ({upcoming.length} bệnh nhân)
-                        </h2>
-                    </Flex>
-                    <Link to="/doctor/appointments">
-                        <Flex align="center" gap={4} className={styles.text5}>
-                            <span>Xem tất cả lịch hẹn</span>
-                            <ArrowRight size={14} />
-                        </Flex>
-                    </Link>
+                    <h2 className={styles.sectionTitle}>
+                        Lịch khám 7 ngày tới ({upcoming.length} bệnh nhân)
+                    </h2>
+                    <Link to="/doctor/appointments" className={styles.text5}>Xem tất cả lịch hẹn</Link>
                 </Flex>
 
                 {loading ? (

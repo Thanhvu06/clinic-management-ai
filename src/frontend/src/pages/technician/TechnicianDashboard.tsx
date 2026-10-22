@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-    Clock, CheckCircle, PlayCircle, Search, RefreshCw, 
+import {
+    Search, RefreshCw,
     FileText, ArrowRight, FlaskConical, Waves, Scan, Stethoscope
 } from 'lucide-react';
 import { diagnosticApi } from '../../api/diagnosticApi';
-import type { DiagnosticCategory, DiagnosticOrderDto, DiagnosticOrderStatus, TechnicianDiagnosticStatsDto } from '../../types';
+import type { DiagnosticCategory, DiagnosticOrderDto, DiagnosticOrderStatus, DiagnosticVerificationStatus, TechnicianDiagnosticStatsDto } from '../../types';
 import { Button, Card, Input, Select, Tag } from 'antd';
-import { PageHeader, StatCard, StatusBadge, DataTable, LoadingState, EmptyState, InlineError, Pagination } from '../../components/common';
+import { PageHeader, MetricStrip, StatusBadge, DataTable, LoadingState, EmptyState, InlineError, Pagination } from '../../components/common';
 import { diagnosticCategoryLabels, diagnosticStatusLabels, diagnosticStatusTone } from '../../utils/diagnosticLabels';
 import { toLocalDateString } from '../../utils/formatters';
 import styles from './TechnicianDashboard.module.css';
@@ -24,6 +24,7 @@ export const TechnicianDashboard: React.FC = () => {
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [categoryFilter, setCategoryFilter] = useState<DiagnosticCategory | ''>('');
     const [statusFilter, setStatusFilter] = useState<string>('');
+    const [verificationFilter, setVerificationFilter] = useState<DiagnosticVerificationStatus | ''>('');
     const [dateFilter, setDateFilter] = useState<string>('');
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [page, setPage] = useState<number>(1);
@@ -91,16 +92,34 @@ export const TechnicianDashboard: React.FC = () => {
 
     const selectStat = (status: DiagnosticOrderStatus) => {
         setStatusFilter(status);
+        setVerificationFilter('');
         setDateFilter(status === 'Completed' ? toLocalDateString(new Date()) : '');
         setPage(1);
     };
+    const selectVerification = (status: DiagnosticVerificationStatus) => {
+        if (verificationFilter === status) {
+            setVerificationFilter('');
+        } else {
+            // Mirrors the stats query: verification counts only include in-progress orders.
+            setVerificationFilter(status);
+            setStatusFilter('InProgress');
+            setDateFilter('');
+        }
+        setPage(1);
+    };
     const statFilters = [
-        { status: 'Ordered' as const, title: 'Chờ thực hiện', value: stats?.orderedCount ?? 0, icon: Clock, color: 'warning' as const },
-        { status: 'InProgress' as const, title: 'Đang thực hiện', value: stats?.inProgressCount ?? 0, icon: PlayCircle, color: 'info' as const },
-        { status: 'Completed' as const, title: 'Hoàn tất hôm nay', value: stats?.completedTodayCount ?? 0, icon: CheckCircle, color: 'success' as const },
+        { status: 'Ordered' as const, title: 'Chờ thực hiện', value: stats?.orderedCount ?? 0, tone: 'attention' as const },
+        { status: 'InProgress' as const, title: 'Đang thực hiện', value: stats?.inProgressCount ?? 0 },
+        { status: 'Completed' as const, title: 'Hoàn tất hôm nay', value: stats?.completedTodayCount ?? 0 },
     ];
-    // The API has no category parameter: this filter applies only to the current page.
-    const visibleOrders = categoryFilter ? orders.filter(order => order.items.some(item => item.category === categoryFilter)) : orders;
+    const verificationFilters = [
+        { status: 'Pending' as const, title: 'Chờ trưởng khoa duyệt', value: stats?.pendingVerificationCount ?? 0 },
+        { status: 'Returned' as const, title: 'Bị trả lại cần sửa', value: stats?.returnedCount ?? 0 },
+    ];
+    // The API has no category or verification parameter: these filters apply only to the current page.
+    const visibleOrders = orders.filter(order =>
+        (!categoryFilter || order.items.some(item => item.category === categoryFilter))
+        && (!verificationFilter || order.verificationStatus === verificationFilter));
     const waitTime = (order: DiagnosticOrderDto) => {
         if (order.status === 'Completed' || order.status === 'Cancelled') return new Date(order.orderedAtUtc).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
         const orderedAt = new Date(order.orderedAtUtc).getTime();
@@ -112,18 +131,20 @@ export const TechnicianDashboard: React.FC = () => {
     return (
         <div className={styles.dashboard}>
             <PageHeader title="Bàn làm việc cận lâm sàng" actions={<Button disabled={loading} onClick={() => loadData(false)}><RefreshCw size={15} aria-hidden="true" />{loading ? 'Đang tải...' : 'Làm mới'}</Button>} />
-            <div className={styles.statGrid}>
-                {statFilters.map(stat => {
-                    const Icon = stat.icon;
-                    const active = statusFilter === stat.status && (stat.status !== 'Completed' || dateFilter === toLocalDateString(new Date()));
-                    return <div key={stat.status} role="button" tabIndex={0} aria-label={`Lọc: ${stat.title}`} aria-pressed={active} className={`${styles.statFilter} ${active ? styles.statFilterActive : ''}`} onClick={event => { if (event.target === event.currentTarget) selectStat(stat.status); }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectStat(stat.status); } }}>
-                        <StatCard title={stat.title} value={stat.value} icon={<Icon size={24} />} color={stat.color} onClick={() => selectStat(stat.status)} />
-                    </div>;
-                })}
-                <StatCard title="Chờ trưởng khoa duyệt" value={stats?.pendingVerificationCount ?? 0} icon={<Clock size={24} />} color="info" />
-                <StatCard title="Bị trả lại cần sửa" value={stats?.returnedCount ?? 0} icon={<FileText size={24} />} color="warning" />
-                <StatCard title="Chờ quá 30 phút" value={stats?.overdueCount ?? 0} icon={<Clock size={24} />} color="warning" />
-            </div>
+            <MetricStrip
+                ariaLabel="Số liệu cận lâm sàng"
+                items={[
+                    ...statFilters.map(stat => ({
+                        label: stat.title,
+                        value: stat.value,
+                        tone: stat.tone,
+                        ariaLabel: `Lọc: ${stat.title}`,
+                        pressed: statusFilter === stat.status && !verificationFilter && (stat.status !== 'Completed' || dateFilter === toLocalDateString(new Date())),
+                        onClick: () => selectStat(stat.status),
+                    })),
+                    { label: 'Chờ quá 30 phút', value: stats?.overdueCount ?? 0, tone: 'attention' as const },
+                ]}
+            />
             {lastUpdated && <p className={styles.updatedAt}>Cập nhật lúc {lastUpdated.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>}
             <Card className={styles.filters}>
                 <div className={styles.filterRow}>
@@ -132,15 +153,23 @@ export const TechnicianDashboard: React.FC = () => {
                         <Button type="primary" htmlType="submit" disabled={loading}>{loading ? 'Đang tải...' : 'Tìm'}</Button>
                     </form>
                     <div className={styles.filterControls}>
-                        <Select aria-label="Trạng thái phiếu" className={styles.statusFilter} value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[
+                        <Select aria-label="Trạng thái phiếu" className={styles.statusFilter} value={statusFilter} onChange={value => { setStatusFilter(value); setVerificationFilter(''); setPage(1); }} options={[
                             {value:'',label:'Tất cả trạng thái'}, {value:'Ordered',label:'Chờ thực hiện'}, {value:'InProgress',label:'Đang thực hiện'}, {value:'Completed',label:'Đã hoàn tất'}, {value:'Cancelled',label:'Đã hủy'}
                         ]} />
                         <Input aria-label="Ngày chỉ định" type="date" className={styles.dateFilter} value={dateFilter} onChange={e => { setDateFilter(e.target.value); setPage(1); }} />
                         <Select aria-label="Loại dịch vụ" className={styles.categoryFilter} value={categoryFilter} onChange={setCategoryFilter} options={[{ value: '', label: 'Tất cả' }, ...Object.entries(diagnosticCategoryLabels).map(([value, label]) => ({ value, label }))]} />
-                        {(statusFilter || dateFilter || searchTerm || categoryFilter) && <Button onClick={() => { setStatusFilter(''); setDateFilter(''); setSearchTerm(''); setCategoryFilter(''); setPage(1); }}>Xóa lọc</Button>}
+                        {(statusFilter || verificationFilter || dateFilter || searchTerm || categoryFilter) && <Button onClick={() => { setStatusFilter(''); setVerificationFilter(''); setDateFilter(''); setSearchTerm(''); setCategoryFilter(''); setPage(1); }}>Xóa lọc</Button>}
                     </div>
                 </div>
             </Card>
+            <div className={styles.verificationFilters} role="group" aria-label="Lọc theo duyệt kết quả">
+                {verificationFilters.map(filter => {
+                    const active = verificationFilter === filter.status;
+                    return <Button key={filter.status} color={active ? 'primary' : 'default'} variant={active ? 'filled' : 'outlined'} aria-pressed={active} onClick={() => selectVerification(filter.status)}>
+                        <span>{filter.title} <span className={styles.filterCount}>{filter.value}</span></span>
+                    </Button>;
+                })}
+            </div>
             {loading ? <LoadingState message="Đang tải danh sách chỉ định..." /> : error ? <InlineError message={error} onRetry={() => { void loadData(); }} /> : visibleOrders.length === 0 ? <EmptyState icon={<FileText size={40} />} title="Không tìm thấy phiếu chỉ định nào" description="Thử thay đổi bộ lọc hoặc tìm kiếm lại." /> : (
                 <div className={styles.tableScroll}>
                     <DataTable data={visibleOrders} keyExtractor={order => order.id} columns={[

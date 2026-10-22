@@ -1,97 +1,27 @@
 /* DoctorDashboard: style riêng không đáp ứng được bằng props antd thuần. Biến lấy từ --cc-*. */
 
-.shiftBanner {
-    margin-bottom: var(--cc-space-lg);
-    border-radius: var(--cc-radius-lg);
-}
-
-.shiftBanner :global(.ant-card-body) {
-    padding: var(--cc-space-sm) var(--cc-space-md);
-}
-
-.shiftBannerActive {
-    background-color: var(--cc-color-bg-subtle);
-    border-left: 4px solid var(--cc-color-teal);
-}
-
-.shiftBannerIdle {
-    background-color: var(--cc-color-warning-bg);
-    border-left: 4px solid var(--cc-color-warning);
-}
-
-.shiftIcon {
-    width: 42px;
-    height: 42px;
-    border-radius: var(--cc-radius-md);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.shiftIconActive {
-    background-color: var(--cc-color-teal-light);
-    color: var(--cc-color-teal);
-}
-
-.shiftIconIdle {
-    background-color: var(--cc-color-warning-bg);
-    color: var(--cc-color-warning);
-}
-
-.shiftLabel {
-    font-size: 0.78rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.shiftValue {
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: var(--cc-color-text-dark);
-    margin-top: 2px;
-}
-
-.kpiGrid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--cc-space-md);
-    margin-bottom: var(--cc-space-xl);
-}
-
-@media (min-width: 576px) {
-    .kpiGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media (min-width: 768px) {
-    .kpiGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
-@media (min-width: 1200px) {
-    .kpiGrid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.titleCount {
+    font-size: 1.5rem;
+    font-weight: 400;
+    line-height: 1.25;
+    color: var(--cc-color-text-secondary);
+    font-variant-numeric: tabular-nums;
 }
 
 .nextPatientBanner {
-    margin-bottom: var(--cc-space-xl);
-    background-color: var(--cc-color-info-bg);
-    border: 1px solid var(--cc-color-border);
-    border-radius: var(--cc-radius-lg);
+    margin-bottom: var(--cc-space-lg);
 }
 
 .nextPatientTag {
-    background-color: var(--cc-color-primary);
-    color: var(--cc-color-text-on-dark);
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: var(--cc-radius-sm);
-    letter-spacing: 0.04em;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--cc-color-text-secondary);
 }
 
 .nextPatientName {
     font-size: 1.25rem;
-    font-weight: 800;
+    font-weight: 600;
     color: var(--cc-color-text-dark);
 }
 
@@ -117,32 +47,16 @@
 }
 
 .sectionCard {
-    border-radius: var(--cc-radius-lg);
+    border-radius: var(--cc-radius-md);
 }
 
 .sectionCard + .sectionCard {
     margin-top: var(--cc-space-lg);
 }
 
-.sectionIcon {
-    width: 32px;
-    height: 32px;
-    border-radius: var(--cc-radius-md);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: var(--cc-color-primary-light);
-    color: var(--cc-color-primary);
-}
-
-.sectionIconInfo {
-    background-color: var(--cc-color-info-bg);
-    color: var(--cc-color-info);
-}
-
 .sectionTitle {
-    font-size: 1.15rem;
-    font-weight: 700;
+    font-size: 1rem;
+    font-weight: 600;
     color: var(--cc-color-text-dark);
     margin: 0;
 }
@@ -184,9 +98,8 @@
 
 .text4.text4 {
     font-size: 0.82rem;
-    color: var(--cc-color-teal);
+    color: var(--cc-color-text-secondary);
     margin-top: 6px;
-    font-weight: 500;
 }
 
 .spacing3.spacing3 {

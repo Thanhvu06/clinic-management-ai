@@ -111,10 +111,16 @@ h1, h2, h3, h4, h5, h6 {
 /* Card */
 .card {
   background: var(--c-card);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--cc-radius-md);
+  box-shadow: var(--cc-shadow-card);
   padding: 24px;
   border: 1px solid var(--c-border);
+}
+
+/* antd không cho đặt boxShadowCard qua theme có kiểu; card hoverable giữ viền, không bóng khi hover. */
+.ant-card.ant-card-hoverable:hover {
+  border-color: var(--cc-color-border);
+  box-shadow: var(--cc-shadow-card);
 }
 
 /* Buttons */
