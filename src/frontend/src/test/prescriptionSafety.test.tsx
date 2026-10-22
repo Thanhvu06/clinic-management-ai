@@ -47,7 +47,7 @@ function mount(path = '/doctor/appointments/10/examination') {
 }
 const panel = (props: Parameters<typeof PrescriptionSafetyPanel>[0] = {}) => <ConfigProvider theme={{ token: { motion: false } }}><PrescriptionSafetyPanel {...props} /></ConfigProvider>;
 async function confirmCompletion() {
-    fireEvent.click(screen.getByRole('button', { name: 'HOÀN TẤT KHÁM BỆNH' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hoàn tất khám' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận hoàn tất' }));
 }
 
@@ -121,7 +121,7 @@ describe('Doctor and pharmacist prescription safety', () => {
     it.each([false, true])('requires a trimmed override reason for danger and sends it on completion (visit=%s)', async isVisit => {
         mocks.check.mockResolvedValue(ok(dangerous)); mount(isVisit ? '/doctor/visits/10/examination' : undefined);
         await screen.findByText('Bệnh nhân an toàn'); await waitFor(() => expect(mocks.check).toHaveBeenCalledWith(10, [1], isVisit));
-        fireEvent.click(screen.getByRole('button', { name: /Kê đơn thuốc/ }));
+        fireEvent.click(screen.getByRole('button', { name: /^Kê đơn/ }));
         expect(await screen.findByText('Nguy hiểm')).toBeInTheDocument();
         await confirmCompletion();
         const dialog = await screen.findByRole('dialog', { name: 'Xác nhận kê đơn có cảnh báo nguy hiểm' });
@@ -151,7 +151,7 @@ describe('Doctor and pharmacist prescription safety', () => {
     }, 15000);
 
     it('checks changed medicines after adding a catalog medicine', async () => {
-        mount(); await screen.findByText('Bệnh nhân an toàn'); fireEvent.click(screen.getByRole('button', { name: /Kê đơn thuốc/ }));
+        mount(); await screen.findByText('Bệnh nhân an toàn'); fireEvent.click(screen.getByRole('button', { name: /^Kê đơn/ }));
         fireEvent.change(screen.getByPlaceholderText('Gõ tên thuốc hoặc mã thuốc để tìm kiếm và thêm vào đơn...'), { target: { value: 'Thuốc thứ hai' } });
         fireEvent.click(await screen.findByText('Thuốc thứ hai'));
         await waitFor(() => expect(mocks.check).toHaveBeenLastCalledWith(10, [1, 2], false));

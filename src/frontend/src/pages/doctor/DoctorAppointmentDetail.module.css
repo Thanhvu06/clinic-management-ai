@@ -28,7 +28,6 @@
 
 .spotlightCard {
     margin-bottom: 20px;
-    border-inline-start: 5px solid var(--cc-color-primary);
 }
 
 .patientName {
@@ -79,10 +78,8 @@
 }
 
 .fieldLabel {
-    font-weight: 700;
-    color: var(--cc-color-text-muted);
-    font-size: 0.8rem;
-    text-transform: uppercase;
+    color: var(--cc-color-text-secondary);
+    font-size: 13px;
 }
 
 .fieldValue {
@@ -122,29 +119,8 @@
     padding: 12px 0;
 }
 
-.vitalsGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 14px;
-}
-
-.vitalBox {
-    background-color: var(--cc-color-bg-subtle);
-    padding: 12px;
-    border-radius: 6px;
-}
-
-.vitalLabel {
-    font-size: 0.75rem;
-    color: var(--cc-color-text-muted);
-    font-weight: 600;
-}
-
-.vitalValue {
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: var(--cc-color-text-dark);
-    margin-top: 2px;
+.vitalsStrip {
+    margin-bottom: 0;
 }
 
 .notesText {
@@ -216,10 +192,6 @@
     font-weight: 700;
 }
 
-.icon2.icon2 {
-    color: var(--cc-color-primary);
-}
-
 .text4.text4 {
     font-size: 0.92rem;
 }
@@ -228,28 +200,8 @@
     white-space: pre-wrap;
 }
 
-.icon3.icon3 {
-    color: var(--cc-color-primary);
-}
-
-.text5.text5 {
-    font-size: 1.1rem;
-}
-
-.text6.text6 {
-    font-weight: 800;
-}
-
-.icon4.icon4 {
-    color: var(--cc-color-primary);
-}
-
 .spacing2.spacing2 {
     margin-bottom: 14px;
-}
-
-.icon5.icon5 {
-    color: var(--cc-color-primary);
 }
 
 .heading1.heading1 {
@@ -257,27 +209,6 @@
     font-size: 1.05rem;
     font-weight: 700;
     color: var(--cc-color-text-dark);
-}
-
-.statusDanger {
-    border-inline-start-color: var(--cc-color-danger);
-}
-
-.statusWarning {
-    border-inline-start-color: var(--cc-color-warning);
-}
-
-.statusSuccess {
-    border-inline-start-color: var(--cc-color-success);
-}
-
-.statusActive {
-    border-inline-start-color: var(--cc-color-primary);
-}
-
-.sectionTitleRow svg {
-    color: var(--cc-color-primary);
-    flex-shrink: 0;
 }
 
 .appointmentReason {
@@ -304,10 +235,6 @@
 .visitLink {
     color: var(--cc-color-primary);
     font-weight: 700;
-}
-
-.sectionIcon {
-    color: var(--cc-color-primary);
 }
 
 .historyTransition {

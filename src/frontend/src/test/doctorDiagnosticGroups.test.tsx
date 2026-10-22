@@ -31,7 +31,7 @@ beforeEach(() => {
 afterEach(cleanup);
 async function mount() {
     render(<ConfigProvider theme={{ token: { motion: false } }}><MemoryRouter initialEntries={['/doctor/visits/1']}><Routes><Route path="/doctor/visits/:visitId" element={<DoctorExaminationWorkspace />} /></Routes></MemoryRouter></ConfigProvider>);
-    fireEvent.click(await screen.findByRole('button', { name: /Chỉ định Cận lâm sàng/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Cận lâm sàng/ }));
 }
 describe('Doctor diagnostic order groups', () => {
     it('groups orders and puts unreviewed completed orders first with critical, abnormal and normal summaries', async () => {
@@ -40,7 +40,7 @@ describe('Doctor diagnostic order groups', () => {
         critical.items.push({ ...order(9, 'Completed', ['CriticalLow']).items[0], status: 'Cancelled' });
         mocks.orders.mockResolvedValue(ok([reviewed, order(1, 'Ordered'), critical, order(4, 'Completed', ['High', 'Low']), order(5, 'Cancelled'), order(6, 'InProgress')]));
         await mount();
-        expect(screen.getByText('Danh sách phiếu chỉ định cận lâm sàng (6)')).toBeInTheDocument();
+        expect(screen.getByText('Phiếu đã chỉ định (6)')).toBeInTheDocument();
         const waiting = screen.getByRole('region', { name: 'Chờ kết quả' });
         const completed = screen.getByRole('region', { name: 'Đã có kết quả' });
         const cancelled = screen.getByRole('region', { name: 'Đã hủy' });

@@ -128,39 +128,41 @@ export const InvoiceReceiptModal: React.FC<InvoiceReceiptModalProps> = ({
                             </div>
 
                             {/* Items Table */}
-                            <table className={styles.itemsTable}>
-                                <thead>
-                                    <tr>
-                                        <th className={styles.tableHeading1}>STT</th>
-                                        <th>Mô tả khoản mục</th>
-                                        <th className={styles.tableHeading2}>SL</th>
-                                        <th className={styles.tableHeading3}>Đơn giá</th>
-                                        <th className={styles.tableHeading4}>Thành tiền</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {invoice.items && invoice.items.length > 0 ? (
-                                        invoice.items.map((item, idx) => (
-                                            <tr key={item.id || idx}>
-                                                <td>{idx + 1}</td>
-                                                <td>
-                                                    <div className={styles.text1}>{item.description}</div>
-                                                    <div className={styles.text2}>Mã: {item.itemCode}</div>
-                                                </td>
-                                                <td className={styles.tableCell1}>{item.quantity}</td>
-                                                <td className={styles.tableCell2}>{formatCurrency(item.unitPrice)}</td>
-                                                <td className={styles.tableCell3}>{formatCurrency(item.lineTotal)}</td>
-                                            </tr>
-                                        ))
-                                    ) : (
+                            <div className={styles.tableScroll}>
+                                <table className={styles.itemsTable}>
+                                    <thead>
                                         <tr>
-                                            <td colSpan={5} className={styles.tableCell4}>
-                                                Không có chi tiết khoản mục.
-                                            </td>
+                                            <th className={styles.tableHeading1}>STT</th>
+                                            <th>Mô tả khoản mục</th>
+                                            <th className={styles.tableHeading2}>SL</th>
+                                            <th className={styles.tableHeading3}>Đơn giá</th>
+                                            <th className={styles.tableHeading4}>Thành tiền</th>
                                         </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {invoice.items && invoice.items.length > 0 ? (
+                                            invoice.items.map((item, idx) => (
+                                                <tr key={item.id || idx}>
+                                                    <td>{idx + 1}</td>
+                                                    <td>
+                                                        <div className={styles.text1}>{item.description}</div>
+                                                        <div className={styles.text2}>Mã: {item.itemCode}</div>
+                                                    </td>
+                                                    <td className={styles.tableCell1}>{item.quantity}</td>
+                                                    <td className={styles.tableCell2}>{formatCurrency(item.unitPrice)}</td>
+                                                    <td className={styles.tableCell3}>{formatCurrency(item.lineTotal)}</td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={5} className={styles.tableCell4}>
+                                                    Không có chi tiết khoản mục.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
 
                             {/* Total Section */}
                             <div className={styles.totalSection}>

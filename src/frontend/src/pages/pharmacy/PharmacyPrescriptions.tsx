@@ -8,6 +8,7 @@ import { Search, Eye, AlertCircle, Printer } from 'lucide-react';
 import { Button, Input, Modal, Select } from 'antd';
 import { PageHeader, DataTable, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
 import { usePrescriptionPayment } from './usePrescriptionPayment';
+import { useOpenPrescriptionFromQuery } from './useOpenPrescriptionFromQuery';
 import styles from './PharmacyPrescriptions.module.css';
 import { useDialog } from '../../contexts/DialogContext';
 import { PrescriptionSafetyPanel } from '../../components/prescriptions/PrescriptionSafetyPanel';
@@ -201,6 +202,8 @@ export const PharmacyPrescriptions: React.FC = () => {
         });
     };
 
+    useOpenPrescriptionFromQuery(!loading, handleOpenDetail);
+
     const formatDateTime = (dateStr?: string) => {
         if (!dateStr) return '-';
         try {
@@ -244,7 +247,7 @@ export const PharmacyPrescriptions: React.FC = () => {
             ]} /></div>}
             {!loading && prescriptions.length > 0 && totalItems > 10 && <div className={styles.pagination}><span className={styles.secondary}>Tổng số: {totalItems} đơn thuốc</span><div className={styles.pageControls}><Button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Trang trước</Button><span>Trang {page}</span><Button disabled={page * 10 >= totalItems} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
             <Modal open={detailModalOpen} onCancel={() => { if (!dispenseLoading) { setDetailModalOpen(false); setSelectedPrescription(null); } }} title={`Chi tiết đơn thuốc #${selectedPrescription?.id}`} width={740} className={styles.detailModal} mask={{closable:false}} keyboard={false} closable={{disabled:dispenseLoading}} footer={
-                <div className={styles.modalFooter}><Button htmlType="button" onClick={() => window.print()}><Printer size={16} aria-hidden="true" /> In đơn thuốc</Button><div className={styles.footerActions}><Button htmlType="button" disabled={dispenseLoading} onClick={() => { setDetailModalOpen(false); setSelectedPrescription(null); }}>Đóng</Button>{selectedPrescription?.status === 'Issued' && <button type="button" className={styles.dispenseButton} disabled={dispenseLoading || !canDispense} onClick={() => handleDispense(selectedPrescription.id)}>{dispenseLoading ? 'Đang xử lý...' : 'Xác nhận cấp thuốc & trừ kho'}</button>}</div></div>
+                <div className={styles.modalFooter}><Button htmlType="button" onClick={() => window.print()}><Printer size={16} aria-hidden="true" /> In đơn thuốc</Button><div className={styles.footerActions}><Button htmlType="button" disabled={dispenseLoading} onClick={() => { setDetailModalOpen(false); setSelectedPrescription(null); }}>Đóng</Button>{selectedPrescription?.status === 'Issued' && <Button type="primary" htmlType="button" disabled={dispenseLoading || !canDispense} onClick={() => handleDispense(selectedPrescription.id)}>{dispenseLoading ? 'Đang xử lý...' : 'Xác nhận cấp thuốc & trừ kho'}</Button>}</div></div>
             }>
                 <div className={styles.appointmentCode}>Mã lịch hẹn: {selectedPrescription?.appointmentCode}</div>
                 {detailLoading || payment.loading ? <LoadingState message={payment.loading ? 'Đang kiểm tra thanh toán...' : 'Đang tải dữ liệu đơn thuốc...'} /> : selectedPrescription && <>

@@ -2,13 +2,10 @@ import { getAppointmentHistoryActionLabel } from '../../utils/appointmentHistory
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Button, Card, Flex } from 'antd';
-import {
-    ArrowLeft, Stethoscope, HeartPulse, Pill, History,
-    Printer, AlertCircle
-} from 'lucide-react';
+import { ArrowLeft, Stethoscope, Printer, AlertCircle } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
 import type { PatientClinicalContextDto } from '../../types';
-import { LoadingState, StatusBadge, DataTable, InlineError, EmptyState } from '../../components/common';
+import { LoadingState, StatusBadge, DataTable, InlineError, EmptyState, MetricStrip } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import styles from './DoctorAppointmentDetail.module.css';
 import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
@@ -22,13 +19,6 @@ interface AppointmentHistory {
     note?: string | null;
     createdAt: string;
 }
-
-const statusClass = (status: string) => {
-    if (status === 'Cancelled' || status === 'NoShow') return styles.statusDanger;
-    if (status.startsWith('Pending')) return styles.statusWarning;
-    if (status === 'Completed') return styles.statusSuccess;
-    return styles.statusActive;
-};
 
 export const DoctorAppointmentDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -149,7 +139,7 @@ export const DoctorAppointmentDetail: React.FC = () => {
                 </Flex>
             </Flex>
 
-            <Card className={`${styles.spotlightCard} ${statusClass(apt.status)}`}>
+            <Card className={styles.spotlightCard}>
                 <Flex justify="space-between" align="flex-start" wrap gap="small">
                     <div>
                         <Flex align="center" gap={10}>
@@ -171,7 +161,6 @@ export const DoctorAppointmentDetail: React.FC = () => {
 
             <Card className={styles.sectionCard}>
                 <div className={styles.sectionTitleRow}>
-                    <Stethoscope size={20} className={styles.icon2} />
                     <h2 className={styles.sectionTitle}>Hồ sơ khám lâm sàng</h2>
                 </div>
 
@@ -232,56 +221,29 @@ export const DoctorAppointmentDetail: React.FC = () => {
             {vitalSigns && (
                 <Card className={styles.sectionCard}>
                     <div className={styles.sectionTitleRow}>
-                        <HeartPulse size={20} className={styles.icon3} />
                         <h2 className={styles.sectionTitle}>Dấu hiệu sinh tồn</h2>
                     </div>
 
-                    <div className={styles.vitalsGrid}>
-                        <div className={styles.vitalBox}>
-                            <div className={styles.vitalLabel}>NHIỆT ĐỘ</div>
-                            <div className={styles.vitalValue}>{vitalSigns.temperature ? `${vitalSigns.temperature} °C` : '--'}</div>
-                        </div>
-                        <div className={styles.vitalBox}>
-                            <div className={styles.vitalLabel}>HUYẾT ÁP</div>
-                            <div className={styles.vitalValue}>
-                                {vitalSigns.bloodPressureSystolic && vitalSigns.bloodPressureDiastolic
-                                    ? `${vitalSigns.bloodPressureSystolic}/${vitalSigns.bloodPressureDiastolic} mmHg`
-                                    : '--'}
-                            </div>
-                        </div>
-                        <div className={styles.vitalBox}>
-                            <div className={styles.vitalLabel}>NHỊP TIM</div>
-                            <div className={styles.vitalValue}>{vitalSigns.heartRate ? `${vitalSigns.heartRate} bpm` : '--'}</div>
-                        </div>
-                        <div className={styles.vitalBox}>
-                            <div className={styles.vitalLabel}>NHỊP THỞ</div>
-                            <div className={styles.vitalValue}>{vitalSigns.respiratoryRate ? `${vitalSigns.respiratoryRate} /phút` : '--'}</div>
-                        </div>
-                        <div className={styles.vitalBox}>
-                            <div className={styles.vitalLabel}>CHIỀU CAO / CÂN NẶNG</div>
-                            <div className={[styles.vitalValue, styles.text5].join(' ')}>
-                                {vitalSigns.height ? `${vitalSigns.height}cm` : '--'} / {vitalSigns.weight ? `${vitalSigns.weight}kg` : '--'}
-                            </div>
-                        </div>
-                        <div className={styles.vitalBox}>
-                            <div className={styles.vitalLabel}>CHỈ SỐ BMI</div>
-                            <div className={[styles.vitalValue, styles.text6].join(' ')}>{vitalSigns.bmi ?? '--'}</div>
-                        </div>
-                        <div className={styles.vitalBox}>
-                            <div className={styles.vitalLabel}>SPO2</div>
-                            <div className={styles.vitalValue}>{vitalSigns.spO2 ? `${vitalSigns.spO2} %` : '--'}</div>
-                        </div>
-                    </div>
+                    <MetricStrip ariaLabel="Dấu hiệu sinh tồn" className={styles.vitalsStrip} items={[
+                        { label: 'Nhiệt độ', value: vitalSigns.temperature ?? '--', hint: vitalSigns.temperature ? '°C' : undefined },
+                        {
+                            label: 'Huyết áp',
+                            value: vitalSigns.bloodPressureSystolic && vitalSigns.bloodPressureDiastolic ? `${vitalSigns.bloodPressureSystolic}/${vitalSigns.bloodPressureDiastolic}` : '--',
+                            hint: vitalSigns.bloodPressureSystolic && vitalSigns.bloodPressureDiastolic ? 'mmHg' : undefined
+                        },
+                        { label: 'Nhịp tim', value: vitalSigns.heartRate ?? '--', hint: vitalSigns.heartRate ? 'lần/phút' : undefined },
+                        { label: 'Nhịp thở', value: vitalSigns.respiratoryRate ?? '--', hint: vitalSigns.respiratoryRate ? 'lần/phút' : undefined },
+                        { label: 'Chiều cao / cân nặng', value: `${vitalSigns.height ?? '--'} / ${vitalSigns.weight ?? '--'}`, hint: 'cm / kg' },
+                        { label: 'BMI', value: vitalSigns.bmi ?? '--' },
+                        { label: 'SpO2', value: vitalSigns.spO2 ?? '--', hint: vitalSigns.spO2 ? '%' : undefined }
+                    ]} />
                 </Card>
             )}
 
             {prescription && prescription.items.length > 0 && (
                 <Card className={styles.sectionCard}>
                     <Flex justify="space-between" align="center" className={styles.sectionTitleRow}>
-                        <Flex align="center" gap={8}>
-                            <Pill size={20} className={styles.icon4} />
-                            <h2 className={styles.sectionTitle}>Đơn thuốc đã cấp</h2>
-                        </Flex>
+                        <h2 className={styles.sectionTitle}>Đơn thuốc đã cấp</h2>
                         <StatusBadge
                             status={prescription.status}
                             label={prescription.status === 'Issued' ? 'Đã phát hành' : prescription.status === 'Dispensed' ? 'Đã cấp phát' : prescription.status}
@@ -304,7 +266,6 @@ export const DoctorAppointmentDetail: React.FC = () => {
 
             <Card className={styles.sectionCard}>
                 <div className={styles.sectionTitleRow}>
-                    <History size={20} className={styles.sectionIcon} />
                     <h2 className={styles.sectionTitle}>Lần khám trước ({context.totalPastVisits})</h2>
                 </div>
                 {context.pastVisits.length === 0 ? <EmptyState title="Chưa có lần khám trước." /> : (
@@ -327,12 +288,9 @@ export const DoctorAppointmentDetail: React.FC = () => {
 
             {histories.length > 0 && (
                 <Card className={styles.sectionCard}>
-                    <Flex align="center" gap={8} className={styles.sectionTitleRow}>
-                        <History size={20} className={styles.icon5} />
-                        <h2 className={styles.sectionTitle}>
-                            Nhật ký điều phối & Thao tác
-                        </h2>
-                    </Flex>
+                    <div className={styles.sectionTitleRow}>
+                        <h2 className={styles.sectionTitle}>Nhật ký lịch hẹn</h2>
+                    </div>
 
                     <div className={styles.historyList}>
                         {histories.map(h => (

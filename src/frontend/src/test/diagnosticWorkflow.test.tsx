@@ -145,7 +145,7 @@ describe('Diagnostic Workflow Frontend Tests', () => {
             </CopilotResourceProvider>
         );
 
-        await waitFor(() => expect(screen.getByText('PHIẾU CHỈ ĐỊNH CẬN LÂM SÀNG')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('DX-20260907-0001')).toBeInTheDocument());
         await waitFor(() => expect(screen.getByTestId('copilot-selection')).toHaveTextContent('1'));
     });
 

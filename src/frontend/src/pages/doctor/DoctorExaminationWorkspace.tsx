@@ -8,8 +8,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Alert, Button, Card, Col, Form, Input, Modal, Row, Tag } from 'antd';
 import {
-    Stethoscope, HeartPulse, Pill, History, Save, CheckCircle,
-    AlertCircle, ArrowLeft, Trash2, Search, Clock, Calendar,
+    Pill, History, Save, CheckCircle,
+    AlertCircle, Trash2, Search, Clock, Calendar,
     User, Phone, MapPin, RefreshCw, FlaskConical, Printer,
     Check, AlertTriangle
 } from 'lucide-react';
@@ -30,6 +30,7 @@ import { useDialog } from '../../contexts/DialogContext';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 import { LoadingState, InlineError, DataTable, EmptyState, StatusBadge } from '../../components/common';
 import tabStyles from './DoctorExaminationWorkspace.module.css';
+import { formatVitalBodyMeasures } from './vitalHistoryFormat';
 
 interface ActiveMedicine {
     id: number;
@@ -850,12 +851,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
     return (
         <div className={tabStyles.workspace}>
-            {/* Top Navigation Bar */}
-            <div className={tabStyles.sectionHeader}>
-                <Link to="/doctor" className={tabStyles.backToWorkspaceLink}>
-                    <ArrowLeft size={16} />
-                    <span>Quay lại Bàn làm việc Bác sĩ</span>
-                </Link>
+            <div className={tabStyles.workspaceToolbar}>
                 <Button size="small" icon={<RefreshCw size={14} />} onClick={loadContext}>
                     Đồng bộ dữ liệu
                 </Button>
@@ -914,7 +910,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         <div className={tabStyles.patientMetadata}>
                             <div className={tabStyles.iconTextRow}>
                                 <User size={16} className={tabStyles.secondaryText} />
-                                <span>{patient.patientGender === 'Male' ? 'Nam' : patient.patientGender === 'Female' ? 'Nữ' : 'Khác'} {patient.patientDob ? `• NS: ${patient.patientDob}` : ''}</span>
+                                <span>{patient.patientGender === 'Male' ? 'Nam' : patient.patientGender === 'Female' ? 'Nữ' : 'Khác'} {patient.patientDob ? `• NS: ${formatDateOnly(patient.patientDob)}` : ''}</span>
                             </div>
                             <div className={tabStyles.iconTextRow}>
                                 <Phone size={16} className={tabStyles.secondaryText} />
@@ -939,11 +935,8 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className={tabStyles.patientHistorySummary}>
-                        <div className={tabStyles.secondaryLabel}>Lịch sử tại phòng khám</div>
-                        <div className={tabStyles.pastVisitCount}>
-                            {patient.totalPastVisits} lượt khám trước
-                        </div>
+                    <div className={[tabStyles.patientHistorySummary, tabStyles.secondaryLabel].join(' ')}>
+                        {patient.totalPastVisits} lượt khám trước
                     </div>
                 </div>
             </Card>
@@ -955,8 +948,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     onClick={() => setActiveTab('encounter')}
                     className={`${tabStyles.workspaceTabButton} ${activeTab === 'encounter' ? tabStyles.activeWorkspaceTab : ''}`}
                 >
-                    <Stethoscope size={18} />
-                    <span>Diễn tiến lâm sàng</span>
+                    Diễn tiến
                 </button>
 
                 <button
@@ -964,8 +956,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     onClick={() => setActiveTab('vitals')}
                     className={`${tabStyles.workspaceTabButton} ${activeTab === 'vitals' ? tabStyles.activeWorkspaceTab : ''}`}
                 >
-                    <HeartPulse size={18} />
-                    <span>Dấu hiệu sinh tồn {computedBmi ? `(BMI ${computedBmi})` : ''}</span>
+                    Sinh hiệu
                 </button>
 
                 <button
@@ -973,8 +964,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     onClick={() => setActiveTab('diagnostics')}
                     className={`${tabStyles.workspaceTabButton} ${activeTab === 'diagnostics' ? tabStyles.activeWorkspaceTab : ''}`}
                 >
-                    <FlaskConical size={18} />
-                    <span>Chỉ định Cận lâm sàng ({diagnosticOrders.length})</span>
+                    Cận lâm sàng ({diagnosticOrders.length})
                 </button>
 
                 <button
@@ -982,8 +972,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     onClick={() => setActiveTab('prescription')}
                     className={`${tabStyles.workspaceTabButton} ${activeTab === 'prescription' ? tabStyles.activeWorkspaceTab : ''}`}
                 >
-                    <Pill size={18} />
-                    <span>Kê đơn thuốc ({prescriptionItems.length})</span>
+                    Kê đơn ({prescriptionItems.length})
                 </button>
 
                 <button
@@ -991,8 +980,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     onClick={() => setActiveTab('history')}
                     className={`${tabStyles.workspaceTabButton} ${activeTab === 'history' ? tabStyles.activeWorkspaceTab : ''}`}
                 >
-                    <History size={18} />
-                    <span>Lịch sử khám ({patient.totalPastVisits})</span>
+                    Lịch sử ({patient.totalPastVisits})
                 </button>
             </div>
 
@@ -1125,7 +1113,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             {activeTab === 'vitals' && (
                 <Card className={[tabStyles.workspaceCard, tabStyles.stackedTabContent].join(' ')}>
                     {/* Region 2 & Region 3: Historical Comparison & Anthropometric Deltas */}
-                    {prevMeasurement ? (
+                    {prevMeasurement && (
                         <Row className={tabStyles.responsiveFormRow}>
                             {/* Region 2: Previous Measurement */}
                             <Col xs={24} md={12} className={tabStyles.responsiveColumn}><Card className={[tabStyles.workspaceCard, tabStyles.previousMeasurementCard].join(' ')} >
@@ -1193,10 +1181,6 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                 </Row>
                             </Card></Col>
                         </Row>
-                    ) : (
-                        <Card className={[tabStyles.workspaceCard, tabStyles.measurementHistoryNotice].join(' ')} >
-                            ℹ️ Đây là lần đầu bệnh nhân ghi nhận dấu hiệu sinh tồn tại phòng khám. Dữ liệu so sánh thể trạng (deltas) sẽ xuất hiện từ lần khám kế tiếp.
-                        </Card>
                     )}
 
                     {/* Region 1: Current Measurement Form */}
@@ -1204,7 +1188,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                         <div className={tabStyles.sectionHeader}>
                             <div>
                                 <h3 className={tabStyles.sectionTitle}>
-                                    VÙNG 1: ĐO LƯỜNG SINH HIỆU HIỆN TẠI
+                                    Sinh hiệu lần này
                                 </h3>
                                 <p className={tabStyles.sectionDescription}>
                                     Nhập kết quả đo tại phòng khám hôm nay. BMI được tự động tính và phân loại.
@@ -1390,7 +1374,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </div>
 
                             <div className={tabStyles.bmiExplanation}>
-                                * BMI được tính theo công thức kg/m² và phân nhóm theo ngưỡng đang cấu hình trong hệ thống: Thiếu cân (&lt;18.5), Bình thường (18.5 - 24.9), Tiền béo phì (25 - 29.9), Béo phì (≥30).
+                                Phân loại BMI theo ngưỡng cấu hình của hệ thống
                             </div>
                         </div>
                     </Card>
@@ -1407,7 +1391,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             <EmptyState title="Chưa có dữ liệu lịch sử sinh hiệu từ các lần khám trước." />
                         ) : (
                             <div className={tabStyles.vitalHistoryTableScroll}>
-                                <div className={tabStyles.dataTableScroll}><DataTable data={historyList} keyExtractor={(item) => historyList.indexOf(item)} columns={[
+                                <DataTable data={historyList} keyExtractor={(item) => historyList.indexOf(item)} columns={[
                                     {
                                         header: "Thời điểm đo", accessor: (item) => {
                                             return <>
@@ -1425,11 +1409,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                     { header: "Mạch (nhịp/phút)", accessor: (item) => { return <>{item.heartRate || '--'}</>; } },
                                     { header: "Nhiệt độ (°C)", accessor: (item) => { return <>{item.temperature ? `${item.temperature}°C` : '--'}</>; } },
                                     { header: "SpO2 (%)", accessor: (item) => { return <>{item.spO2 ? `${item.spO2}%` : '--'}</>; } },
-                                    { header: "Cân nặng (kg)", accessor: (item) => { return <>{item.weight || '--'}</>; } },
-                                    { header: "Chiều cao (cm)", accessor: (item) => { return <>{item.height || '--'}</>; } },
-                                    { header: "BMI", accessor: (item) => { return <>{item.bmi || '--'}</>; } },
+                                    { header: "BMI", accessor: formatVitalBodyMeasures },
                                     { header: "Người đo", accessor: (item) => { return <>{item.recordedByUserName || '--'}</>; } }
-                                ]} /></div>
+                                ]} />
                             </div>
                         )}
                     </Card>
@@ -1450,14 +1432,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     {!isCompleted && (
                         <Card className={[tabStyles.workspaceCard].join(' ')} >
                             <div className={tabStyles.sectionHeader}>
-                                <div>
-                                    <h3 className={tabStyles.sectionTitle}>
-                                        Tạo phiếu chỉ định Cận lâm sàng mới
-                                    </h3>
-                                    <p className={tabStyles.sectionDescription}>
-                                        Chọn các xét nghiệm hoặc chẩn đoán hình ảnh từ danh mục để chuyển đến Kỹ thuật viên.
-                                    </p>
-                                </div>
+                                <h3 className={tabStyles.sectionTitle}>
+                                    Tạo phiếu chỉ định
+                                </h3>
                             </div>
 
                             {/* Category filter tabs */}
@@ -1563,7 +1540,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     <Card className={[tabStyles.workspaceCard].join(' ')} >
                         <div className={tabStyles.sectionHeader}>
                             <h3 className={tabStyles.sectionTitle}>
-                                Danh sách phiếu chỉ định cận lâm sàng ({diagnosticOrders.length})
+                                Phiếu đã chỉ định ({diagnosticOrders.length})
                             </h3>
                             <Button
                                 htmlType="button"
@@ -1757,14 +1734,9 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                     <Row className={tabStyles.responsiveFormRow}>
                         <Col span={24} className={tabStyles.responsiveColumn}>
                             <div className={tabStyles.sectionHeader}>
-                                <div>
-                                    <h3 className={tabStyles.sectionTitle}>
-                                        Kê đơn thuốc cho bệnh nhân
-                                    </h3>
-                                    <p className={tabStyles.sectionDescription}>
-                                        Tìm kiếm thuốc từ danh mục hoạt động của phòng khám và điều chỉnh liều dùng.
-                                    </p>
-                                </div>
+                                <h3 className={tabStyles.sectionTitle}>
+                                    Kê đơn
+                                </h3>
                                 <Button
                                     htmlType="button"
                                     className={[tabStyles.iconActionButton].join(' ')}
@@ -2051,7 +2023,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             className={[tabStyles.iconActionButton, tabStyles.completeConsultationButton, ((pendingDiagnosticOrder || unreviewedDiagnosticOrder) ? tabStyles.completionBlockedSurface : tabStyles.completionReadySurface)].join(' ')}
                         >
                             <CheckCircle size={18} />
-                            <span>HOÀN TẤT KHÁM BỆNH</span>
+                            <span>Hoàn tất khám</span>
                         </Button>
                     </div>
                 )}
