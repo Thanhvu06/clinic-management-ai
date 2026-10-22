@@ -108,52 +108,6 @@ export const MainLayout: React.FC = () => {
         }
     };
 
-    const getPageTitle = (pathname: string) => {
-        if (pathname.endsWith('/result-print')) return 'Phiếu kết quả cận lâm sàng';
-        if (pathname === '/lab/tat') return 'Thời gian trả kết quả';
-        if (pathname.startsWith('/lab/orders/')) return 'Duyệt kết quả xét nghiệm';
-        if (pathname === '/lab') return 'Tổng quan xét nghiệm';
-        if (pathname.startsWith('/doctor/diagnostic-verification/')) return 'Duyệt phiếu kết quả CLS';
-        if (pathname.startsWith('/doctor/diagnostic-verification')) return 'Duyệt kết quả CLS';
-        if (pathname.startsWith('/doctor/queue')) return 'Hàng đợi khám bệnh';
-        if (pathname.startsWith('/doctor/schedule')) return 'Lịch trực & ca khám';
-        if (pathname.startsWith('/doctor/appointments') && pathname.includes('/examination')) return 'Bàn khám lâm sàng';
-        if (pathname.startsWith('/doctor/appointments')) return 'Danh sách lịch khám';
-        if (pathname.startsWith('/doctor/leave-requests')) return 'Quản lý nghỉ phép';
-        if (pathname.startsWith('/doctor')) return 'Bàn làm việc Bác sĩ';
-
-        if (pathname.startsWith('/reception/walk-in')) return 'Tiếp nhận bệnh nhân vãng lai';
-        if (pathname.startsWith('/reception/billing')) return 'Quản lý Hóa đơn & Thu ngân';
-        if (pathname.startsWith('/reception/appointments')) return 'Quản lý lịch hẹn';
-        if (pathname.startsWith('/reception/package-registrations')) return 'Đăng ký gói khám';
-        if (pathname.startsWith('/reception/change-requests')) return 'Yêu cầu đổi/hủy lịch';
-        if (pathname.startsWith('/reception')) return 'Bàn tiếp tân phòng khám';
-
-        if (pathname.startsWith('/admin/facilities')) return 'Mạng lưới cơ sở & Phòng bệnh';
-        if (pathname.startsWith('/admin/billing')) return 'Doanh thu & Biểu phí phòng khám';
-        if (pathname.startsWith('/admin/accounts')) return 'Quản trị tài khoản';
-        if (pathname.startsWith('/admin/specialties')) return 'Quản lý chuyên khoa';
-        if (pathname.startsWith('/admin/doctors')) return 'Quản lý đội ngũ bác sĩ';
-        if (pathname.startsWith('/admin/packages')) return 'Gói khám sức khỏe';
-        if (pathname.startsWith('/admin/medicines')) return 'Danh mục dược phẩm';
-        if (pathname.startsWith('/admin/work-schedules')) return 'Phân ca & Lịch làm việc';
-        if (pathname.startsWith('/admin/leaves')) return 'Phê duyệt nghỉ phép';
-        if (pathname.startsWith('/admin/audit-logs')) return 'Nhật ký hệ thống';
-        if (pathname.startsWith('/admin')) return 'Tổng quan quản trị';
-
-        if (pathname.startsWith('/pharmacy/prescriptions')) return 'Đơn thuốc chờ cấp';
-        if (pathname.startsWith('/pharmacy/medicines')) return 'Kho dược phẩm';
-        if (pathname.startsWith('/pharmacy/inventory')) return 'Biến động tồn kho';
-        if (pathname.startsWith('/pharmacy/batches')) return 'Lô thuốc & hạn dùng';
-        if (pathname.startsWith('/pharmacy')) return 'Bàn làm việc Dược sĩ';
-
-        if (pathname.startsWith('/diagnostics/verification')) return 'Chờ duyệt kết quả';
-        if (pathname.startsWith('/diagnostics/orders/')) return 'Thực hiện phiếu chỉ định CLS';
-        if (pathname.startsWith('/diagnostics')) return 'Bàn làm việc Cận lâm sàng';
-
-        return 'ClinicCare AI - Quản trị y tế';
-    };
-
     // Format current date in Vietnamese
     const todayFormatted = new Intl.DateTimeFormat('vi-VN', {
         weekday: 'long',
@@ -193,12 +147,11 @@ export const MainLayout: React.FC = () => {
                     </div>
                     <div>
                         <div className={styles.logoText}>ClinicCare AI</div>
-                        <div className={styles.logoTagline}>Hệ Thống Y Tế Thông Minh</div>
+                        <div className={styles.logoTagline}>Hệ thống y tế thông minh</div>
                     </div>
                 </div>
 
                 <nav className={styles.nav}>
-                    <div className={styles.navSectionTitle}>CHỨC NĂNG CHÍNH</div>
                     <Menu
                         mode="inline"
                         theme="dark"
@@ -254,10 +207,6 @@ export const MainLayout: React.FC = () => {
 
                 {/* Desktop Topbar Header */}
                 <Layout.Header className={styles.header}>
-                    <div className={styles.pageHeaderTitle}>
-                        <span>{getPageTitle(location.pathname)}</span>
-                    </div>
-
                     <div className={styles.headerRight}>
                         <NotificationBell />
                         <div className={styles.currentDateBadge}>

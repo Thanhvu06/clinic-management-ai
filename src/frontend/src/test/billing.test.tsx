@@ -224,7 +224,7 @@ describe('Billing Module Frontend Tests', () => {
             );
 
             await waitFor(() => {
-                expect(screen.getByText('Quản lý Hóa đơn & Thu ngân')).toBeInTheDocument();
+                expect(screen.getByText('Thu ngân & hóa đơn')).toBeInTheDocument();
                 expect(screen.getByText('3')).toBeInTheDocument(); // Unpaid KPI
                 expect(screen.getByText('5')).toBeInTheDocument(); // Paid KPI
                 expect(screen.getByText('INV-20260906-0002')).toBeInTheDocument();

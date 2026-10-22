@@ -126,7 +126,7 @@ export const PackageRegistration: React.FC = () => {
     const services = pkg.includedServices?.length ? pkg.includedServices : parseIncludedServices(pkg.includedServicesJson);
     return <div className={styles.page}>
         <Link className={styles.backLink} to={`/health-packages/${pkg.id}`}><ArrowLeft size={16} /> Quay lại chi tiết gói khám</Link>
-        <PageHeader title="Đăng ký Gói khám Sức khỏe" subtitle="Quy trình 3 bước đăng ký tiện lợi, giúp bạn tiết kiệm thời gian chờ đợi tại phòng khám." />
+        <PageHeader title="Đăng ký gói khám" subtitle="Quy trình 3 bước đăng ký tiện lợi, giúp bạn tiết kiệm thời gian chờ đợi tại phòng khám." />
         <ol className={styles.steps} aria-label="Các bước đăng ký">
             {['Gói khám & Quyền lợi', 'Thông tin & Ngày khám', 'Xác nhận đăng ký'].map((label, index) => <li key={label} className={step >= index + 1 ? styles.reachedStep : styles.upcomingStep} aria-current={step === index + 1 ? 'step' : undefined}><span className={styles.stepNumber}>{step > index + 1 ? <Check size={18} /> : index + 1}</span><span>{label}</span></li>)}
         </ol>

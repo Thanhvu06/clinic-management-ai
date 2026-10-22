@@ -74,16 +74,6 @@
     overflow-y: auto;
 }
 
-.navSectionTitle {
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: #64748B;
-    margin-bottom: var(--cc-space-xs);
-    padding: 0 var(--cc-space-lg);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-
 .menu {
     border-inline-end: none !important;
     font-weight: 500;
@@ -176,26 +166,13 @@
 .header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: var(--cc-space-md);
     border-bottom: 1px solid var(--cc-color-border);
     position: sticky;
     top: 0;
     z-index: 30;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-}
-
-.pageHeaderTitle {
-    font-size: 1.05rem;
-    font-weight: 600;
-    color: var(--cc-color-text-dark);
-    display: flex;
-    align-items: center;
-    gap: var(--cc-gap);
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .headerRight {
@@ -235,6 +212,8 @@
 /* Content Area */
 .content {
     padding: var(--cc-content-padding);
+    /* Chừa chỗ cho nút Copilot nổi (48px + 24px cách đáy) để phần tử cuối trang không bị che. */
+    padding-bottom: calc(var(--cc-space-xl) * 2 + var(--cc-space-xs));
     width: 100%;
     max-width: 1560px;
     margin: 0 auto;
@@ -312,6 +291,7 @@
 
     .content {
         padding: var(--cc-space-md);
+        padding-bottom: calc(var(--cc-space-xl) * 2);
     }
 }
 

@@ -180,7 +180,7 @@ describe('Hospital Core Phase 1 Frontend Components', () => {
             );
 
             await waitFor(() => {
-                expect(screen.getByText('Quản trị Mạng lưới Bệnh viện & Cơ sở')).toBeInTheDocument();
+                expect(screen.getByText('Mạng lưới cơ sở')).toBeInTheDocument();
                 expect(screen.getByText('Bệnh viện Đa khoa Trung tâm')).toBeInTheDocument();
             });
 

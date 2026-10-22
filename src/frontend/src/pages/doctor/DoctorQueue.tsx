@@ -295,7 +295,6 @@ export const DoctorQueue: React.FC = () => {
         <div>
             <PageHeader
                 title="Hàng đợi khám lâm sàng"
-                subtitle="Theo dõi thứ tự tiếp nhận, đo sinh hiệu và điều phối bệnh nhân vào phòng khám."
                 actions={
                     <Flex align="center" gap="small">
                         <Input

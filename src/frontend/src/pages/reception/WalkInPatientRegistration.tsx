@@ -393,7 +393,7 @@ export const WalkInPatientRegistration: React.FC = () => {
 
     return (
         <div className={styles.registration}>
-            <PageHeader title="Quy Trình Tiếp Nhận Người Bệnh Khám" subtitle="Quy trình 3 bước chuẩn: Tra cứu hồ sơ cũ ➔ Chuẩn bị lượt khám ➔ Cấp số thứ tự & In phiếu"
+            <PageHeader title="Tiếp nhận người bệnh"
                 actions={<Button htmlType="button" onClick={() => navigate('/reception')}><ArrowLeft size={16} /> Bàn làm việc lễ tân</Button>} />
             <div className={styles.intakeSteps}>
                 <div className={`${styles.intakeStep} ${step === 1 ? styles.activeStep : ''}`}><span className={`${styles.stepNumber} ${step >= 1 ? styles.reachedStepNumber : ''}`}>1</span><span>Tìm & Chọn Người Bệnh</span></div>

@@ -96,7 +96,7 @@ export const UnifiedCopilotPanel: React.FC = () => {
     };
 
     if (!copilot.user) return null;
-    if (!copilot.open) return <div className={styles.shell}><button ref={launcherRef} type="button" className={styles.launcher} onClick={() => copilot.setOpen(true)} aria-label={`Mở ${copilot.config.label}`}><Bot size={18} /> {copilot.config.shortLabel}</button></div>;
+    if (!copilot.open) return <div className={styles.shell}><button ref={launcherRef} type="button" className={styles.launcher} onClick={() => copilot.setOpen(true)} aria-label={`Mở ${copilot.config.label}`}><Bot size={22} /><span className="visually-hidden">{copilot.config.shortLabel}</span></button></div>;
 
     const latestAssistant = copilot.messages.slice().reverse().find(message => message.role === 'assistant');
     const empty = !copilot.messages.some(message => message.role === 'user');

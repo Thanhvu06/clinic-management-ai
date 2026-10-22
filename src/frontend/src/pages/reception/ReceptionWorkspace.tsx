@@ -7,7 +7,7 @@ import type { DataTableColumn } from '../../components/common/DataTable';
 import {
     Users, UserPlus, Search, Clock, Calendar, CheckCircle2,
     Printer, RefreshCw, CreditCard, Package,
-    Building2, Eye, AlertTriangle
+    Eye, AlertTriangle
 } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import { organizationApi, type FacilityDto } from '../../api/organizationApi';
@@ -50,9 +50,6 @@ export const ReceptionWorkspace: React.FC = () => {
     const [selectedFacilityId, setSelectedFacilityId] = useState<number | undefined>(undefined);
     const [facilityLoading, setFacilityLoading] = useState<boolean>(true);
     const [facilityError, setFacilityError] = useState<string | null>(null);
-
-    // Live clock
-    const [currentTime, setCurrentTime] = useState<string>('');
 
     // Metrics
     const [stats, setStats] = useState<{
@@ -97,19 +94,6 @@ export const ReceptionWorkspace: React.FC = () => {
     const [statsError, setStatsError] = useState(false);
     const [statsLoading, setStatsLoading] = useState(false);
     const statsFetchIdRef = useRef(0);
-
-    // Update live clock
-    useEffect(() => {
-        const updateClock = () => {
-            const now = new Date();
-            const dateStr = now.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
-            const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            setCurrentTime(`${dateStr} • ${timeStr}`);
-        };
-        updateClock();
-        const timer = setInterval(updateClock, 1000);
-        return () => clearInterval(timer);
-    }, []);
 
     // Fetch user-assigned facilities on mount
     const loadFacilities = useCallback(async () => {
@@ -322,8 +306,8 @@ export const ReceptionWorkspace: React.FC = () => {
     return (
         <div className={styles.workspace}>
             <Card className={styles.workspaceHeader}>
-                <PageHeader title="Bàn Làm Việc Lễ Tân" badge={<Building2 size={24} className={styles.primaryIcon} />}
-                    actions={<><div className={styles.liveClock}><Clock size={16} /><span>{currentTime}</span></div><Button htmlType="button" onClick={handleRefreshAll}><RefreshCw size={14} className={loading ? 'spin' : ''} /> Làm mới</Button></>} />
+                <PageHeader title="Bàn làm việc lễ tân"
+                    actions={<Button htmlType="button" onClick={handleRefreshAll}><RefreshCw size={14} className={loading ? 'spin' : ''} /> Làm mới</Button>} />
                 <div className={styles.facilityPicker}>
                     <span className={styles.facilityLabel}>Cơ sở trực:</span>
                     {facilityLoading ? <LoadingState message="Đang tải cơ sở..." height="40px" /> : facilityError ? <InlineError title="" message={facilityError} onRetry={loadFacilities} /> : facilities.length === 0 ? (

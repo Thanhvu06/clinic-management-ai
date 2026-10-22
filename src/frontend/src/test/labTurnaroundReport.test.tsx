@@ -170,6 +170,6 @@ describe('Lab turnaround report', () => {
         mount('/lab/tat', true);
         expect(await screen.findByRole('link', { name: 'Thời gian trả kết quả' })).toHaveAttribute('href', '/lab/tat');
         expect(screen.getByRole('link', { name: 'Tổng quan xét nghiệm' })).toHaveAttribute('href', '/lab');
-        expect(screen.getAllByText('Thời gian trả kết quả').length).toBeGreaterThan(1);
+        expect(screen.getAllByText('Thời gian trả kết quả')).toHaveLength(1);
     }, 15000);
 });

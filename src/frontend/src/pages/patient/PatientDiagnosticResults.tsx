@@ -78,5 +78,5 @@ export const PatientDiagnosticResults: React.FC = () => {
             { header: 'Thân nhiệt', align: 'center', accessor: v => v.temperature ? `${v.temperature}°C` : '---' },
             { header: 'SpO2', align: 'center', accessor: v => v.spO2 ? `${v.spO2}%` : '---' }
         ]} />;
-    return <div className={styles.page}><PageHeader title="Kết Quả Cận Lâm Sàng & Sinh Hiệu" subtitle="Theo dõi lịch sử xét nghiệm, siêu âm và chỉ số sức khỏe của bạn tại ClinicCare" /><Tabs items={[{ key: 'orders', label: `Phiếu cận lâm sàng (${orders.length})`, children: orderContent }, { key: 'vitals', label: `Chỉ số sinh hiệu (${vitals.length})`, children: vitalsContent }]} /></div>;
+    return <div className={styles.page}><PageHeader title="Kết quả cận lâm sàng" subtitle="Theo dõi lịch sử xét nghiệm, siêu âm và chỉ số sức khỏe của bạn tại ClinicCare" /><Tabs items={[{ key: 'orders', label: `Phiếu cận lâm sàng (${orders.length})`, children: orderContent }, { key: 'vitals', label: `Chỉ số sinh hiệu (${vitals.length})`, children: vitalsContent }]} /></div>;
 };

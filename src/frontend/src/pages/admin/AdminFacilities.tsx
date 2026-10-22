@@ -187,7 +187,7 @@ export const AdminFacilities: React.FC = () => {
     const departmentOptions = departments.map(d => ({ value: d.id, label: d.name + ' (' + d.code + ')' }));
 
     return <div className={styles.page}>
-        <PageHeader title="Quản trị Mạng lưới Bệnh viện & Cơ sở" subtitle="Quản lý cây tổ chức: Cơ sở ➔ Tòa nhà ➔ Khoa phòng ➔ Phòng bệnh ➔ Giường bệnh" actions={<Button type="primary" icon={<Plus size={18} />} onClick={() => setFacilityModalOpen(true)}>Thêm Cơ sở Mới</Button>} />
+        <PageHeader title="Mạng lưới cơ sở" actions={<Button type="primary" icon={<Plus size={18} />} onClick={() => setFacilityModalOpen(true)}>Thêm Cơ sở Mới</Button>} />
         {loading ? <LoadingState message="Đang tải dữ liệu mạng lưới cơ sở..." /> : facilityError ? <InlineError message={facilityError} onRetry={fetchFacilities} /> : facilities.length === 0 ? <EmptyState title="Chưa có cơ sở bệnh viện nào." /> : <>
             <div className={styles.facilityGrid}>{facilities.map(fac => <Card key={fac.id} role="button" tabIndex={0} aria-pressed={selectedFacility?.id === fac.id} className={[styles.facilityCard, selectedFacility?.id === fac.id ? styles.selectedCard : ''].join(' ')} onClick={() => { void selectFacility(fac); }} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void selectFacility(fac); } }}>
                 <div className={styles.sectionHeading}><Tag color="processing">{fac.code}</Tag><StatusBadge status={fac.isActive ? 'Approved' : 'Rejected'} label={fac.isActive ? 'Hoạt động' : 'Tạm dừng'} /></div>
