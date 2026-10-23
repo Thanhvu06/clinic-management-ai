@@ -127,8 +127,8 @@ public class HospitalCorePhase1FoundationsTests : IntegrationTestBase
                 var facility = new Facility
                 {
                     Code = "FAC-SMOKE-01",
-                    Name = "Bệnh viện Đa khoa Quốc tế",
-                    Address = "100 Đường Giải Phóng",
+                    Name = "Phòng khám đa khoa ClinicCare AI – Thủ Dầu Một",
+                    Address = "Số 20 Trần Văn Ơn, Thủ Dầu Một",
                     City = "Hà Nội",
                     Phone = "02438690000",
                     IsActive = true,
@@ -140,7 +140,7 @@ public class HospitalCorePhase1FoundationsTests : IntegrationTestBase
 
                 var fetchedFac = await verifyContext.Facilities.FirstOrDefaultAsync(f => f.Code == "FAC-SMOKE-01");
                 Assert.NotNull(fetchedFac);
-                Assert.Equal("Bệnh viện Đa khoa Quốc tế", fetchedFac.Name);
+                Assert.Equal("Phòng khám đa khoa ClinicCare AI – Thủ Dầu Một", fetchedFac.Name);
             }
         }
         finally

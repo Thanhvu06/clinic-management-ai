@@ -43,7 +43,7 @@ vi.mock('../api/axiosClient', () => ({
 }));
 
 const mockFacilities = [
-    { id: 1, code: 'FAC-01', name: 'Cơ sở Quận 1 - Trung tâm', address: '123 Nguyễn Huệ', isActive: true },
+    { id: 1, code: 'FAC-01', name: 'Phòng khám đa khoa ClinicCare AI – Thủ Dầu Một', address: 'Số 20 Trần Văn Ơn, Thủ Dầu Một', isActive: true },
     { id: 2, code: 'FAC-02', name: 'Cơ sở Quận 7 - Nam Sài Gòn', address: '456 Nguyễn Lương Bằng', isActive: true },
 ];
 
@@ -259,7 +259,7 @@ describe('Reception Workspace Rebuild', () => {
                 medicalRecordNumber: 'BN-2026-000099',
                 phoneNumber: '0988112233',
                 facilityId: 1,
-                facilityName: 'Cơ sở Quận 1 - Trung tâm',
+                facilityName: 'Phòng khám đa khoa ClinicCare AI – Thủ Dầu Một',
                 departmentId: 10,
                 departmentName: 'Khoa Nội Tổng Quát',
                 roomId: 101,
@@ -528,7 +528,7 @@ describe('Reception Workspace Rebuild', () => {
         );
 
         await waitFor(() => {
-            expect(screen.getByText('Cơ sở Quận 1 - Trung tâm (FAC-01)')).toBeInTheDocument();
+            expect(screen.getByText('Phòng khám đa khoa ClinicCare AI – Thủ Dầu Một (FAC-01)')).toBeInTheDocument();
         });
         expect(screen.queryByRole('combobox')).toBeNull();
     });

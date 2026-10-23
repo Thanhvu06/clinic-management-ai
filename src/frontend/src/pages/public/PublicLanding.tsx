@@ -5,6 +5,7 @@ import { Button, Collapse, Input } from 'antd';
 import { Search } from 'lucide-react';
 import styles from './PublicLanding.module.css';
 import axiosClient from '../../api/axiosClient';
+import { getPublicLocations } from '../../api/publicLocationsApi';
 import { AppointmentLookupModal } from '../../components/AppointmentLookupModal';
 import { InlineError } from '../../components/common/InlineError';
 import { LoadingState } from '../../components/common/LoadingState';
@@ -43,7 +44,7 @@ export const PublicLanding: React.FC = () => {
                     axiosClient.get<any, any>('/specialties'),
                     axiosClient.get<any, any>('/doctors'),
                     axiosClient.get<any, any>('/health-packages').catch(() => null),
-                    axiosClient.get<any, any>('/locations').catch(() => null)
+                    getPublicLocations().catch(() => null)
                 ]);
                 setError(null);
                 setSpecialties(listOf(specRes));
@@ -83,7 +84,7 @@ export const PublicLanding: React.FC = () => {
 
             <section className={styles.hero} aria-labelledby="landing-title">
                 <div className={styles.container}>
-                    <h1 id="landing-title" className={styles.heroTitle}>Đặt lịch khám tại ClinicCare</h1>
+                    <h1 id="landing-title" className={styles.heroTitle}>Đặt lịch khám tại ClinicCare AI</h1>
                     <div className={styles.searchArea}>
                         <form onSubmit={handleSearch} className={styles.searchForm} role="search">
                             <Input

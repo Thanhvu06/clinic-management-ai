@@ -168,17 +168,17 @@ public static class DevelopmentDataSeeder
         // 2. 11 Specialties with clean UTF-8
         var specialtyDefs = new[]
         {
-            new Specialty { SpecialtyCode = "SP01", Name = "Nội tổng quát", Description = "Khám và điều trị các bệnh lý nội khoa chung (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 150000m },
-            new Specialty { SpecialtyCode = "SP02", Name = "Nhi khoa", Description = "Khám, chẩn đoán và điều trị bệnh cho trẻ em (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
-            new Specialty { SpecialtyCode = "SP03", Name = "Sản phụ khoa", Description = "Khám thai định kỳ và tư vấn sức khỏe phụ khoa (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 200000m },
-            new Specialty { SpecialtyCode = "SP04", Name = "Da liễu", Description = "Chuyên trị các vấn đề về da, tóc và móng (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 200000m },
-            new Specialty { SpecialtyCode = "SP05", Name = "Tai mũi họng", Description = "Khám và điều trị bệnh lý tai mũi họng (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
-            new Specialty { SpecialtyCode = "SP06", Name = "Tim mạch", Description = "Kiểm tra huyết áp, đo điện tâm đồ và bệnh lý tim mạch (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 250000m },
-            new Specialty { SpecialtyCode = "SP07", Name = "Cơ xương khớp", Description = "Điều trị viêm khớp, thoái hóa khớp và các chấn thương (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 220000m },
-            new Specialty { SpecialtyCode = "SP08", Name = "Thần kinh", Description = "Khám và điều trị các bệnh lý thần kinh và đau đầu (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 250000m },
-            new Specialty { SpecialtyCode = "SP09", Name = "Nội tiết", Description = "Khám và điều trị bệnh lý tiểu đường, tuyến giáp và rối loạn nội tiết (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 220000m },
-            new Specialty { SpecialtyCode = "SP10", Name = "Nhãn khoa", Description = "Khám và điều trị các bệnh lý về mắt và thị lực (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
-            new Specialty { SpecialtyCode = "SP11", Name = "Tiêu hóa", Description = "Khám và điều trị các bệnh lý dạ dày, đại tràng và tiêu hóa (Dữ liệu demo)", IsActive = true, AiEnabled = true, ConsultationFee = 200000m }
+            new Specialty { SpecialtyCode = "SP01", Name = "Nội tổng quát", Description = "Khám và điều trị các bệnh lý nội khoa chung", IsActive = true, AiEnabled = true, ConsultationFee = 150000m },
+            new Specialty { SpecialtyCode = "SP02", Name = "Nhi khoa", Description = "Khám, chẩn đoán và điều trị bệnh cho trẻ em", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
+            new Specialty { SpecialtyCode = "SP03", Name = "Sản phụ khoa", Description = "Khám thai định kỳ và tư vấn sức khỏe phụ khoa", IsActive = true, AiEnabled = true, ConsultationFee = 200000m },
+            new Specialty { SpecialtyCode = "SP04", Name = "Da liễu", Description = "Chuyên trị các vấn đề về da, tóc và móng", IsActive = true, AiEnabled = true, ConsultationFee = 200000m },
+            new Specialty { SpecialtyCode = "SP05", Name = "Tai mũi họng", Description = "Khám và điều trị bệnh lý tai mũi họng", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
+            new Specialty { SpecialtyCode = "SP06", Name = "Tim mạch", Description = "Kiểm tra huyết áp, đo điện tâm đồ và bệnh lý tim mạch", IsActive = true, AiEnabled = true, ConsultationFee = 250000m },
+            new Specialty { SpecialtyCode = "SP07", Name = "Cơ xương khớp", Description = "Điều trị viêm khớp, thoái hóa khớp và các chấn thương", IsActive = true, AiEnabled = true, ConsultationFee = 220000m },
+            new Specialty { SpecialtyCode = "SP08", Name = "Thần kinh", Description = "Khám và điều trị các bệnh lý thần kinh và đau đầu", IsActive = true, AiEnabled = true, ConsultationFee = 250000m },
+            new Specialty { SpecialtyCode = "SP09", Name = "Nội tiết", Description = "Khám và điều trị bệnh lý tiểu đường, tuyến giáp và rối loạn nội tiết", IsActive = true, AiEnabled = true, ConsultationFee = 220000m },
+            new Specialty { SpecialtyCode = "SP10", Name = "Nhãn khoa", Description = "Khám và điều trị các bệnh lý về mắt và thị lực", IsActive = true, AiEnabled = true, ConsultationFee = 180000m },
+            new Specialty { SpecialtyCode = "SP11", Name = "Tiêu hóa", Description = "Khám và điều trị các bệnh lý dạ dày, đại tràng và tiêu hóa", IsActive = true, AiEnabled = true, ConsultationFee = 200000m }
         };
         foreach (var sdef in specialtyDefs)
         {
@@ -341,54 +341,7 @@ public static class DevelopmentDataSeeder
         var patients = await db.Patients.ToListAsync();
 
         // 5. Clinic Locations
-        var locationDefs = new[]
-        {
-            new ClinicLocation
-            {
-                Code = "CS01",
-                Name = "Cơ sở 1 - Quận 1 (Trụ sở chính)",
-                Address = "123 Nguyễn Thị Minh Khai, Phường Bến Thành, Quận 1",
-                City = "TP. Hồ Chí Minh",
-                Phone = "028 3930 1234",
-                OpeningHours = "07:30 - 17:30 (Thứ 2 - Thứ 7) | 07:30 - 11:30 (Chủ nhật)",
-                Description = "Phòng khám đa khoa hiện đại đầy đủ các chuyên khoa, trang thiết bị chẩn đoán hình ảnh tiên tiến.",
-                ServicesJson = "[\"Khám tổng quát\",\"Chẩn đoán hình ảnh\",\"Xét nghiệm\",\"Nội soi tiêu hóa\",\"Nhà thuốc GPP\"]",
-                IsActive = true
-            },
-            new ClinicLocation
-            {
-                Code = "CS02",
-                Name = "Cơ sở 2 - Quận 7",
-                Address = "456 Nguyễn Lương Bằng, Phường Tân Phú, Quận 7",
-                City = "TP. Hồ Chí Minh",
-                Phone = "028 5412 5678",
-                OpeningHours = "07:30 - 17:00 (Thứ 2 - Thứ 7) | Chủ nhật nghỉ",
-                Description = "Cơ sở phía Nam thành phố, chuyên sâu Nhi khoa, Sản phụ khoa và Tim mạch can thiệp.",
-                ServicesJson = "[\"Khám Nhi - Sản\",\"Xét nghiệm máu nhanh\",\"Siêu âm tim Doppler màu\",\"Nhà thuốc GPP\"]",
-                IsActive = true
-            },
-            new ClinicLocation
-            {
-                Code = "CS03",
-                Name = "Cơ sở 3 - Thành phố Thủ Đức",
-                Address = "789 Võ Văn Ngân, Phường Linh Chiểu, TP. Thủ Đức",
-                City = "TP. Hồ Chí Minh",
-                Phone = "028 3896 9012",
-                OpeningHours = "07:30 - 17:00 (Thứ 2 - Thứ 7) | Chủ nhật nghỉ",
-                Description = "Cơ sở khu vực phía Đông, thuận tiện cho sinh viên, kỹ sư và cư dân khu công nghệ cao.",
-                ServicesJson = "[\"Khám nội tổng quát\",\"Da liễu & Thẩm mỹ y khoa\",\"Cơ xương khớp\",\"X-quang kỹ thuật số\"]",
-                IsActive = true
-            }
-        };
-        foreach (var ldef in locationDefs)
-        {
-            if (!await db.ClinicLocations.AnyAsync(l => l.Code == ldef.Code))
-            {
-                db.ClinicLocations.Add(ldef);
-            }
-        }
-        await db.SaveChangesAsync();
-        logger.LogInformation("Clinic locations seeded.");
+        await ClinicBrandDevelopmentSeed.SeedLocationAsync(db);
 
         var today = dateTimeProvider.VietnamToday;
 
@@ -412,78 +365,7 @@ public static class DevelopmentDataSeeder
         }
 
         // 8. Health Packages
-        var packageDefs = new[]
-        {
-            new HealthPackage
-            {
-                Code = "PKG01",
-                Name = "Gói Khám Sức Khỏe Tổng Quát Tiêu Chuẩn",
-                TargetAudience = "Mọi độ tuổi từ 18 trở lên",
-                Description = "Kiểm tra toàn diện các chỉ số huyết học, chức năng gan, thận, đường huyết, mỡ máu, X-quang phổi và siêu âm bụng tổng quát.",
-                Price = 1250000m,
-                IncludedServicesJson = "[\"Khám nội tổng quát\",\"Công thức máu 18 chỉ số\",\"Đo đường huyết Glucose\",\"Men gan AST/ALT\",\"Chức năng thận Ure/Creatinine\",\"X-quang tim phổi thẳng\",\"Siêu âm bụng tổng quát\"]",
-                IsActive = true
-            },
-            new HealthPackage
-            {
-                Code = "PKG02",
-                Name = "Gói Tầm Soát Tim Mạch Toàn Diện",
-                TargetAudience = "Người trưởng thành, trung niên và có tiền sử tim mạch",
-                Description = "Tầm soát chuyên sâu bệnh lý mạch vành, huyết áp, rối loạn nhịp tim và xơ vữa động mạch.",
-                Price = 2800000m,
-                IncludedServicesJson = "[\"Khám chuyên khoa Tim mạch\",\"Điện tâm đồ ECG 12 chuyển đạo\",\"Siêu âm tim Doppler màu\",\"Bộ mỡ máu toàn phần (Cholesterol, Triglyceride, HDL, LDL)\",\"Đo chỉ số xơ vữa ABI\",\"Tư vấn chế độ dinh dưỡng tim mạch\"]",
-                IsActive = true
-            },
-            new HealthPackage
-            {
-                Code = "PKG03",
-                Name = "Gói Chăm Sóc Sức Khỏe Nhi Khoa Toàn Diện",
-                TargetAudience = "Trẻ em từ 0 - 15 tuổi",
-                Description = "Đánh giá phát triển thể chất, dinh dưỡng, tầm soát thiếu máu, vi chất và kiểm tra tai mũi họng tổng quát.",
-                Price = 950000m,
-                IncludedServicesJson = "[\"Khám chuyên khoa Nhi\",\"Đánh giá chỉ số phát triển chiều cao - cân nặng\",\"Tổng phân tích tế bào máu\",\"Kiểm tra vi chất kẽm, canxi, sắt\",\"Nội soi tai mũi họng\",\"Tư vấn lịch tiêm chủng\"]",
-                IsActive = true
-            },
-            new HealthPackage
-            {
-                Code = "PKG04",
-                Name = "Gói Tầm Soát Sức Khỏe Phụ Nữ Chuyên Sâu",
-                TargetAudience = "Nữ giới từ 18 tuổi trở lên",
-                Description = "Tầm soát bệnh lý phụ khoa, ung thư cổ tử cung, tầm soát tuyến vú và các rối loạn nội tiết.",
-                Price = 1950000m,
-                IncludedServicesJson = "[\"Khám Sản phụ khoa chuyên sâu\",\"Soi tươi dịch âm đạo\",\"Siêu âm đầu dò tử cung buồng trứng\",\"Siêu âm tuyến vú 2 bên\",\"Xét nghiệm Pap smear tầm soát sớm\",\"Định lượng hormon nội tiết\"]",
-                IsActive = true
-            },
-            new HealthPackage
-            {
-                Code = "PKG05",
-                Name = "Gói Khám Cơ Xương Khớp & Loãng Xương",
-                TargetAudience = "Người cao tuổi, nhân viên văn phòng, người vận động thể thao",
-                Description = "Tầm soát thoái hóa khớp, thoát vị đĩa đệm, viêm khớp dạng thấp và đo mật độ xương toàn thân.",
-                Price = 1650000m,
-                IncludedServicesJson = "[\"Khám chuyên khoa Cơ xương khớp\",\"Đo mật độ xương DEXA\",\"X-quang khớp gối / cột sống thắt lưng\",\"Xét nghiệm Axit Uric (gút)\",\"Định lượng Canxi và Vitamin D3\"]",
-                IsActive = true
-            },
-            new HealthPackage
-            {
-                Code = "PKG06",
-                Name = "Gói Tầm Soát Gan Mật & Rối Loạn Chuyển Hóa",
-                TargetAudience = "Người có nguy cơ gan nhiễm mỡ, viêm gan, đái tháo đường",
-                Description = "Đánh giá chức năng gan mật, tầm soát virus viêm gan B/C, men gan và các chỉ số rối loạn chuyển hóa.",
-                Price = 1750000m,
-                IncludedServicesJson = "[\"Khám chuyên khoa Nội\",\"Xét nghiệm HBsAg, Anti-HCV\",\"Men gan toàn diện AST, ALT, GGT\",\"Siêu âm Doppler gan mật tụy lách\",\"Chỉ số đường huyết HbA1c\"]",
-                IsActive = true
-            }
-        };
-        foreach (var pdef in packageDefs)
-        {
-            if (!await db.HealthPackages.AnyAsync(p => p.Code == pdef.Code))
-            {
-                db.HealthPackages.Add(pdef);
-            }
-        }
-        await db.SaveChangesAsync();
-        logger.LogInformation("HealthPackages seeded.");
+        await ClinicBrandDevelopmentSeed.SeedPackagesAsync(db);
         var packages = await db.HealthPackages.ToListAsync();
 
         // 9. Health Package Registrations
@@ -662,25 +544,7 @@ public static class DevelopmentDataSeeder
         await SeedDiagnosticParametersAsync(db);
 
         // 11. Facility BV-TW-01, Departments, Rooms & Staff Facility Assignments
-        var fac = await db.Facilities.FirstOrDefaultAsync(f => f.Code == "BV-TW-01");
-        if (fac == null)
-        {
-            fac = new Facility
-            {
-                Code = "BV-TW-01",
-                Name = "Bệnh viện Đa khoa Trung Ương",
-                Address = "789 Đường Giải Phóng, Phường Phương Mai, Quận Đống Đa",
-                City = "Hà Nội",
-                Phone = "02438693731",
-                Email = "contact@bvtw.vn",
-                HospitalLevel = "Hạng Đặc biệt",
-                Description = "Bệnh viện Đa khoa Trung Ương - Cơ sở chính tiếp nhận",
-                IsActive = true,
-                CreatedAtUtc = DateTime.UtcNow
-            };
-            db.Facilities.Add(fac);
-            await db.SaveChangesAsync();
-        }
+        var fac = await ClinicBrandDevelopmentSeed.SeedFacilityAsync(db);
 
         var building = await db.Buildings.FirstOrDefaultAsync(b => b.FacilityId == fac.Id && b.Code == "TN-A");
         if (building == null)

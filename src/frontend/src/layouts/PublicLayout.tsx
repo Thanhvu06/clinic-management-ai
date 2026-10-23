@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { getRoleDashboardPath } from '../utils/roleRoutes';
+import { PublicClinicFooter } from './PublicClinicFooter';
 import styles from './PublicLayout.module.css';
 import { AppointmentLookupModal } from '../components/AppointmentLookupModal';
 import {
@@ -92,7 +93,7 @@ export const PublicLayout: React.FC = () => {
                 <div className={styles.headerContainer}>
                     <Link to="/" className={styles.logoArea}>
                         <ShieldPlus size={22} aria-hidden="true" />
-                        ClinicCare
+                        ClinicCare AI
                     </Link>
 
                     <nav className={styles.nav} aria-label="Điều hướng chính">
@@ -199,7 +200,7 @@ export const PublicLayout: React.FC = () => {
                     <div className={styles.mobileMenuHeader}>
                         <div className={styles.logoArea}>
                             <ShieldPlus size={22} aria-hidden="true" />
-                            ClinicCare
+                            ClinicCare AI
                         </div>
                         <button
                             className={styles.closeMobileBtn}
@@ -263,8 +264,8 @@ export const PublicLayout: React.FC = () => {
             <footer className={styles.footer}>
                 <div className={styles.footerContainer}>
                     <div className={styles.footerCol}>
-                        <div className={styles.footerBrand}>ClinicCare</div>
-                        <Link to="/locations" className={styles.footerLink}>Địa chỉ, giờ làm việc và số điện thoại các cơ sở</Link>
+                        <div className={styles.footerBrand}>ClinicCare AI</div>
+                        <PublicClinicFooter />
                     </div>
                     <div className={styles.footerCol}>
                         <h3>Khám bệnh</h3>
@@ -287,7 +288,7 @@ export const PublicLayout: React.FC = () => {
                     </div>
                 </div>
                 <div className={styles.footerBottom}>
-                    <span>&copy; {new Date().getFullYear()} ClinicCare</span>
+                    <span>© 2026 ClinicCare AI</span>
                     <span>Trợ lý AI chỉ gợi ý chuyên khoa để tham khảo, không thay thế chẩn đoán của bác sĩ.</span>
                 </div>
             </footer>

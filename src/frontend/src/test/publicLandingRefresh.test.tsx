@@ -69,7 +69,7 @@ describe('Public landing refresh L1–L7', () => {
         const { container } = await mount();
         expect(container.querySelector('img')).toBeNull();
         expect(screen.queryByAltText('Bác sĩ chuyên khoa ClinicCare')).not.toBeInTheDocument();
-        expect(screen.getByRole('heading', { level: 1, name: 'Đặt lịch khám tại ClinicCare' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1, name: 'Đặt lịch khám tại ClinicCare AI' })).toBeInTheDocument();
     });
 
     it('L2 shows five sentence-case headings without an eyebrow or accent', async () => {

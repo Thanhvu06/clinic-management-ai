@@ -108,7 +108,11 @@ public class SeedDataIntegrityTests : IntegrationTestBase
 
         // 3. Verify Clinic Locations
         var locations = await db.ClinicLocations.Where(l => l.IsActive).ToListAsync();
-        Assert.True(locations.Count >= 3);
+        var publicLocation = Assert.Single(locations);
+        Assert.Equal("CS01", publicLocation.Code);
+        Assert.Equal("Phòng khám đa khoa ClinicCare AI – Thủ Dầu Một", publicLocation.Name);
+        Assert.Equal("Số 20 Trần Văn Ơn, Thủ Dầu Một", publicLocation.Address);
+        Assert.All(await db.ClinicLocations.Where(l => l.Code == "CS02" || l.Code == "CS03").ToListAsync(), l => Assert.False(l.IsActive));
         foreach (var loc in locations)
         {
             Assert.False(string.IsNullOrWhiteSpace(loc.Code));
