@@ -2,7 +2,7 @@
 .filterForm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cc-space-sm); margin-bottom: var(--cc-space-md); }
 .searchInput { flex: 1 1 250px; max-width: 360px; min-width: 0; }
 .statusFilter { width: 200px; max-width: 100%; }
-.checkInButton { white-space: nowrap; }
+.checkInButton { white-space: nowrap; min-height: 40px; }
 .tableScroll { overflow-x: auto; min-width: 0; margin-bottom: var(--cc-space-lg); }
 .tableScroll :global(.ant-table) { min-width: 850px; }
 .primaryText { font-weight: 600; color: var(--cc-color-text); overflow-wrap: anywhere; }

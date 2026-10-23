@@ -1,3 +1,4 @@
+import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
 import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -269,17 +270,7 @@ export const ReceptionWorkspace: React.FC = () => {
         }
     };
 
-    const renderStatusBadge = (status: string) => {
-        switch (status) {
-            case 'Pending': return <StatusBadge status={status} label="Chờ xác nhận" />;
-            case 'Confirmed': return <StatusBadge status={status} label="Chờ tiếp nhận" />;
-            case 'CheckedIn':
-            case 'InProgress': return <StatusBadge status="inconsultation" label="Đang khám" />;
-            case 'Completed': return <StatusBadge status={status} label="Đã hoàn thành" />;
-            case 'Cancelled': return <StatusBadge status={status} label="Đã hủy" />;
-            default: return <StatusBadge status={status} label="Chưa rõ" />;
-        }
-    };
+    const renderStatusBadge = (status: string) => <StatusBadge status={status === 'CheckedIn' || status === 'InProgress' ? 'inconsultation' : status} label={getAppointmentStatusLabel(status)} />;
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
     const queueColumns: DataTableColumn<AppointmentItem>[] = [
         { header: 'Mã / giờ hẹn', accessor: item => <><span className={styles.appointmentCode}>{item.appointmentCode}</span><div className={styles.appointmentTime}>{item.startTime.substring(0, 5)} - {item.endTime.substring(0, 5)}</div></> },

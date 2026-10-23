@@ -1,3 +1,4 @@
+import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
 import { Button, Input, Select, Modal } from 'antd';
 import { PageHeader, DataTable, StatusBadge, LoadingState, EmptyState, InlineError } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
@@ -291,19 +292,7 @@ export const ReceptionAppointments: React.FC = () => {
         }
     };
 
-    const translateStatus = (status: string) => {
-        switch (status) {
-            case 'Pending': return 'Chờ xác nhận';
-            case 'Confirmed': return 'Đã xác nhận';
-            case 'CheckedIn': return 'Đã tiếp nhận (chờ khám)';
-            case 'Completed': return 'Đã hoàn thành';
-            case 'Cancelled': return 'Đã hủy';
-            case 'NoShow': return 'Không đến khám';
-            default: return '—';
-        }
-    };
-
-    const getStatusBadge = (status: string) => <StatusBadge status={status} label={translateStatus(status)} />;
+    const getStatusBadge = (status: string) => <StatusBadge status={status} label={getAppointmentStatusLabel(status)} />;
 
     const translateAction = (action: string) => {
         switch (action) {
@@ -323,7 +312,7 @@ export const ReceptionAppointments: React.FC = () => {
         { header: 'Bác sĩ & chuyên khoa', accessor: apt => <><div className={styles.primaryText}>{apt.doctorName}</div><div className={styles.secondaryText}>{apt.specialtyName}</div></> },
         { header: 'Trạng thái', accessor: apt => getStatusBadge(apt.status) },
         { header: 'Thao tác', align: 'right', className: styles.actionsCell, accessor: apt => <>
-            {apt.status === 'Confirmed' && <Button type="primary" className={styles.checkInButton} style={{ minHeight: '40px' }} onClick={() => handleCheckIn(apt)} disabled={checkingInId === apt.id || apt.appointmentDate !== toLocalDateString()} title={apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${apt.appointmentDate.split('-').reverse().join('/')}` : undefined} ><UserCheck size={14} aria-hidden="true" />{checkingInId === apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận'}</Button>}
+            {apt.status === 'Confirmed' && <Button type="primary" className={styles.checkInButton} onClick={() => handleCheckIn(apt)} disabled={checkingInId === apt.id || apt.appointmentDate !== toLocalDateString()} title={apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${apt.appointmentDate.split('-').reverse().join('/')}` : undefined} ><UserCheck size={14} aria-hidden="true" />{checkingInId === apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận'}</Button>}
             <Button onClick={() => openDetail(apt)} ><Eye size={14} aria-hidden="true" />Chi tiết</Button>
         </> },
     ];
@@ -333,7 +322,7 @@ export const ReceptionAppointments: React.FC = () => {
             <PageHeader title="Quản lý lịch hẹn" actions={<Button onClick={() => fetchAppointments()} icon={<RefreshCw size={14} />}>Làm mới</Button>} />
             <form onSubmit={handleSearchSubmit} className={styles.filterForm}>
                 <Input className={styles.searchInput} prefix={<Search size={16} aria-hidden="true" />} placeholder="Tìm theo mã lịch, tên, SĐT..." value={search} onChange={e => setSearch(e.target.value)} />
-                <Select className={styles.statusFilter} value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả trạng thái'},{value:'Pending',label:'Chờ xác nhận'},{value:'Confirmed',label:'Đã xác nhận'},{value:'Completed',label:'Đã hoàn thành'},{value:'Cancelled',label:'Đã hủy'}]} />
+                <Select className={styles.statusFilter} value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{ value: '', label: 'Tất cả trạng thái' }, ...['Pending', 'Confirmed', 'Completed', 'Cancelled'].map(value => ({ value, label: getAppointmentStatusLabel(value) }))]} />
                 <Button htmlType="submit">Tìm</Button>
             </form>
             {loading ? <LoadingState message="Đang tải dữ liệu..." /> : loadError ? <InlineError message={loadError} onRetry={fetchAppointments} /> : appointments.length === 0 ? <EmptyState title="Không tìm thấy lịch hẹn nào." /> : <div className={styles.tableScroll}><DataTable columns={columns} data={appointments} keyExtractor={apt => apt.id} /></div>}

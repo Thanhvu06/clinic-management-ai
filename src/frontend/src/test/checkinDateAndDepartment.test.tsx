@@ -1,4 +1,5 @@
 import React from 'react';
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -63,7 +64,10 @@ describe('K1 check-in date and K4 department preselection', () => {
                 expect(button).toBeDisabled();
                 expect(button).toHaveAttribute('title', `Chỉ tiếp nhận vào ngày khám ${date}`);
             } else expect(button).toBeEnabled();
-            expect(Number.parseFloat(button.style.minHeight || button.style.height)).toBeGreaterThanOrEqual(40);
+            if (Page === ReceptionAppointments) {
+                expect(button.className).toMatch(/checkInButton/);
+                expect(readFileSync('src/pages/reception/ReceptionAppointments.module.css', 'utf8')).toMatch(/\.checkInButton\s*\{[^}]*min-height:\s*40px/);
+            } else expect(Number.parseFloat(button.style.minHeight || button.style.height)).toBeGreaterThanOrEqual(40);
             if (Page === ReceptionAppointments) {
                 fireEvent.click(within(row).getByRole('button', { name: 'Chi tiết' }));
                 const modalButton = screen.getByRole('button', { name: 'Tiếp nhận & cấp STT' });

@@ -76,7 +76,7 @@ export const PatientRevisit: React.FC = () => {
     };
     const pending = requests.filter(r => r.status === 'PendingPatientResponse');
     const history = requests.filter(r => r.status !== 'PendingPatientResponse');
-    const badge = (status: string) => <StatusBadge {...(statuses[status] || { status: 'Unknown', label: 'Chưa xác định' })} />;
+    const badge = (status: string) => <StatusBadge {...(statuses[status] || { status: 'Unknown', label: 'Không xác định' })} />;
     const busy = actionLoading !== null;
     return <div className={styles.page}>
         <Breadcrumb items={[{ label: 'Trang chủ', path: '/patient' }, { label: 'Tái khám' }]} />

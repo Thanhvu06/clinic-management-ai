@@ -1,3 +1,4 @@
+import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
 import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import React, { useState, useEffect, useRef } from "react";
 import { Alert, Button, Card, Form, Input, Modal } from 'antd';
@@ -133,8 +134,7 @@ export const PatientAppointments: React.FC = () => {
 
     const getStatusBadge = (status: string | null) => {
         if (!status) return '—';
-        const labels: Record<string, string> = { Pending: 'Chờ xác nhận', Confirmed: 'Đã xác nhận', PendingCancellation: 'Chờ hủy', PendingReschedule: 'Chờ đổi lịch', Completed: 'Đã hoàn thành', Cancelled: 'Đã hủy', NoShow: 'Vắng mặt' };
-        return <StatusBadge status={status.startsWith('Pending') ? 'Pending' : status} label={labels[status] || 'Chưa xác định'} />;
+        return <StatusBadge status={status.startsWith('Pending') ? 'Pending' : status} label={getAppointmentStatusLabel(status, 'patient')} />;
     };
 
     const getActionLabel = (action: string) => {
