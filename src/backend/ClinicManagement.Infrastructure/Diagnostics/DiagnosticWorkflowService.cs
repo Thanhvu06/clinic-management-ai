@@ -1852,7 +1852,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
     private void AddVerificationAudit(DiagnosticOrder order, string action, string? note) => _dbContext.SystemAuditLogs.Add(new SystemAuditLog
     {
         UserId = GetUserId(), Action = action, EntityName = "DiagnosticOrder", EntityId = order.Id.ToString(),
-        Description = DiagnosticAuditDescriptions.Verification(order, GetVerificationRole(), note), CreatedAt = DateTime.UtcNow
+        Description = DiagnosticAuditDescriptions.Verification(order, action, GetVerificationRole(), note), CreatedAt = DateTime.UtcNow
     });
 
     private async Task<DiagnosticOrderDto> SaveVerificationAsync(DiagnosticOrder order)

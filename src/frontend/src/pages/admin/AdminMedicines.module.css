@@ -1,14 +1,21 @@
-.medicinesPage { color: var(--cc-color-text); }
+.medicinesPage { min-width: 0; color: var(--cc-color-text); }
 .medicineSearch { flex: 1; min-width: 240px; }
 .medicineStatusFilter { width: 200px; }
 .medicinePrice { color: var(--cc-color-info); }
 .medicineCode { white-space: nowrap; }
 .medicineName { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--cc-space-xs); }
+.medicineTable :global(.ant-table .ant-table-thead > tr > th), .medicineTable :global(.ant-table .ant-table-tbody > tr > td) { padding-inline: var(--cc-space-sm); }
+.medicineNameCell { min-width: 160px; word-break: normal; overflow-wrap: normal; hyphens: none; }
+.medicineCategoryCell { min-width: 120px; max-width: 168px; }
+.medicineCategory { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; text-overflow: ellipsis; word-break: normal; overflow-wrap: normal; }
+.medicineActionsCell { white-space: nowrap; }
+.medicineStockNote { display: block; margin-top: var(--cc-space-xs); font-size: 0.8125rem; }
 .prescriptionTag { margin-inline-end: 0; font-size: 0.75rem; line-height: 18px; }
 .medicineStock { display: inline-flex; align-items: center; gap: var(--cc-space-xxs); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .medicineStockMin { color: var(--cc-color-text-secondary); }
 .stockWarning { display: inline-flex; }
 .medicineRowActions, .medicineFormActions { display: flex; justify-content: flex-end; gap: var(--cc-space-xs); }
+.medicineRowActions { flex-wrap: nowrap; }
 .medicineTotal { margin-top: var(--cc-space-md); color: var(--cc-color-text-secondary); }
 .medicineFormAlert { margin-bottom: var(--cc-space-md); }
 .medicineModal :global(.ant-modal-body) { max-height: 75vh; overflow-y: auto; padding-right: var(--cc-space-xs); }
