@@ -1,51 +1,40 @@
-import { useChatContext } from '../../contexts/ChatContext';
 import { ChatConsultationLink } from '../../components/chat/ChatConsultationLink';
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Avatar, Button, Collapse, Flex } from 'antd';
-import {
-    Search, Calendar, Bot, Stethoscope, ChevronRight, CheckCircle2,
-    ShieldCheck, Clock, FileText, MapPin,
-    Phone, Award, Sparkles, Check, CalendarCheck, Package, Pill
-} from 'lucide-react';
+import { Button, Collapse, Input } from 'antd';
+import { Search } from 'lucide-react';
 import styles from './PublicLanding.module.css';
-import landingHero from '../../assets/landing-hero.jpg';
 import axiosClient from '../../api/axiosClient';
 import { AppointmentLookupModal } from '../../components/AppointmentLookupModal';
+import { InlineError } from '../../components/common/InlineError';
+import { LoadingState } from '../../components/common/LoadingState';
 import type { ClinicLocationDto } from '../../types';
 import { parseIncludedServices, formatVndCurrency } from '../../utils/formatters';
 import { formatDoctorName } from '../../utils/doctorNameHelper';
-
-const SectionTitle = ({ eyebrow, children }: { eyebrow: string; children: React.ReactNode }) => (
-    <>
-        <span className={styles.sectionEyebrow}>{eyebrow}</span>
-        <h2>{children}</h2>
-    </>
-);
+import { getApiErrorMessage } from '../../utils/apiError';
 
 const doctorInitials = (fullName: string = '') => {
     const name = fullName.replace(/^(?:(?:PGS|GS|ThS|TS|BS|CKII|CKI)\.?\s*)+/i, '').trim();
     return name.split(/\s+/).filter(Boolean).slice(-2).map(word => word[0]).join('').toLocaleUpperCase('vi-VN');
 };
 
+const listOf = (res: any) => (res?.success && Array.isArray(res.data) ? res.data : []);
+const matches = (value: unknown, query: string) => typeof value === 'string' && value.toLowerCase().includes(query);
+
 export const PublicLanding: React.FC = () => {
-    const { openChat } = useChatContext();
     const navigate = useNavigate();
     const [specialties, setSpecialties] = useState<any[]>([]);
     const [doctors, setDoctors] = useState<any[]>([]);
     const [healthPackages, setHealthPackages] = useState<any[]>([]);
     const [locations, setLocations] = useState<ClinicLocationDto[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
-    const [packagesError, setPackagesError] = useState(false);
-    const [isSearching, setIsSearching] = useState(false);
-    const [showDropdown, setShowDropdown] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedQuery, setDebouncedQuery] = useState('');
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
     const [openFaq, setOpenFaq] = useState<string | undefined>('0');
-    
-    // Filtered results for quick search dropdown
-    const [filteredSpecialties, setFilteredSpecialties] = useState<any[]>([]);
-    const [filteredDoctors, setFilteredDoctors] = useState<any[]>([]);
+
+    const [reloadKey, setReloadKey] = useState(0);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -53,44 +42,33 @@ export const PublicLanding: React.FC = () => {
                 const [specRes, docRes, pkgRes, locRes] = await Promise.all([
                     axiosClient.get<any, any>('/specialties'),
                     axiosClient.get<any, any>('/doctors'),
-                    axiosClient.get<any, any>('/health-packages').catch(() => ({ success: false, data: [] })),
-                    axiosClient.get<any, any>('/locations').catch(() => ({ success: false, data: [] }))
+                    axiosClient.get<any, any>('/health-packages').catch(() => null),
+                    axiosClient.get<any, any>('/locations').catch(() => null)
                 ]);
-                if (specRes.success) setSpecialties(specRes.data || []);
-                if (docRes.success) setDoctors(docRes.data || []);
-                if (pkgRes.success && pkgRes.data) {
-                    setHealthPackages(pkgRes.data);
-                } else {
-                    setPackagesError(true);
-                }
-                if (locRes.success && locRes.data) {
-                    setLocations(locRes.data);
-                }
-            } catch (error) {
-                console.error("Failed to fetch landing data", error);
-                setPackagesError(true);
+                setError(null);
+                setSpecialties(listOf(specRes));
+                setDoctors(listOf(docRes));
+                setHealthPackages(listOf(pkgRes));
+                setLocations(listOf(locRes));
+            } catch (err) {
+                setError(getApiErrorMessage(err, 'Không tải được thông tin phòng khám.'));
             } finally {
                 setLoading(false);
             }
         };
-        fetchData();
-    }, []);
+        void fetchData();
+    }, [reloadKey]);
 
     useEffect(() => {
-        const delayDebounceFn = setTimeout(() => {
-            if (searchQuery.trim()) {
-                setIsSearching(true);
-                const query = searchQuery.toLowerCase();
-                setFilteredSpecialties(specialties.filter(s => (s.specialtyName || s.name)?.toLowerCase().includes(query)));
-                setFilteredDoctors(doctors.filter(d => (d.fullName)?.toLowerCase().includes(query)));
-                setShowDropdown(true);
-                setIsSearching(false);
-            } else {
-                setShowDropdown(false);
-            }
-        }, 300);
-        return () => clearTimeout(delayDebounceFn);
-    }, [searchQuery, specialties, doctors]);
+        const timer = setTimeout(() => setDebouncedQuery(searchQuery.trim().toLowerCase()), 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    const suggestedSpecialties = debouncedQuery ? specialties.filter(s => matches(s.specialtyName || s.name, debouncedQuery)).slice(0, 5) : [];
+    const suggestedDoctors = debouncedQuery ? doctors.filter(d => matches(d.fullName, debouncedQuery)).slice(0, 5) : [];
+    const suggestedPackages = debouncedQuery ? healthPackages.filter(p => matches(p.name, debouncedQuery)).slice(0, 5) : [];
+    const showSuggestions = debouncedQuery.length > 0 && debouncedQuery === searchQuery.trim().toLowerCase();
+    const hasSuggestions = suggestedSpecialties.length + suggestedDoctors.length + suggestedPackages.length > 0;
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -103,478 +81,182 @@ export const PublicLanding: React.FC = () => {
         <main className={styles.mainContainer}>
             <AppointmentLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} />
 
-            {/* 1. Hero Section */}
-            <section className={styles.heroSection}>
+            <section className={styles.hero} aria-labelledby="landing-title">
                 <div className={styles.container}>
-                    <div className={styles.heroContent}>
-                        <div className={styles.heroText}>
-                            <span className={styles.eyebrow}>Hệ thống Y tế Kỹ thuật số ClinicCare</span>
-                            <h1>Chăm sóc sức khỏe thông minh với Trợ lý AI</h1>
-                            <p>
-                                Đặt khám chuyên khoa dễ dàng, định tuyến triệu chứng chuẩn xác bằng Trí tuệ Nhân tạo và quản lý hồ sơ bệnh án trực tuyến 24/7.
-                            </p>
-                            
-                            <Flex className={styles.heroActions}>
-                                <Link to="/patient/book" className={styles.btnPrimary} title="Đặt lịch khám">
-                                    <Calendar size={18} /> Đặt lịch khám
-                                </Link>
-                                <ChatConsultationLink to="/patient/ai-consultation" className={styles.btnSecondary}>
-                                    <Bot size={18} /> Trò chuyện với Trợ lý AI
-                                </ChatConsultationLink>
-                            </Flex>
-                            <Flex wrap className={styles.heroTools}>
-                                <Link to="/specialties" className={styles.heroToolLink} title="Xem danh mục chuyên khoa">
-                                    <Stethoscope size={16} /> Tìm chuyên khoa
-                                </Link>
-                                <Button
-                                    type="link"
-                                    onClick={() => setIsLookupModalOpen(true)}
-                                    title="Tra cứu lịch hẹn"
-                                    icon={<Search size={16} />}
-                                >
-                                    Tra cứu lịch hẹn
-                                </Button>
-                                <Button
-                                    type="link"
-                                    icon={<Pill size={16} />}
-                                    onClick={() => navigate('/medicines')}
-                                    title="Tra giá thuốc"
-                                >
-                                    Tra giá thuốc
-                                </Button>
-                            </Flex>
-
-                            <div className={styles.trustPoints}>
-                                <span className={styles.trustPoint}><CheckCircle2 size={16} /> Đặt lịch không chờ đợi</span>
-                                <span className={styles.trustPoint}><CheckCircle2 size={16} /> Bác sĩ chuyên khoa đầu ngành</span>
-                                <span className={styles.trustPoint}><CheckCircle2 size={16} /> AI phân luồng bảo mật</span>
-                            </div>
-                        </div>
-
-                        <div className={styles.heroImageWrapper}>
-                            <div className={styles.imageDecoration}></div>
-                            <img 
-                                src={landingHero}
-                                alt="Bác sĩ chuyên khoa ClinicCare" 
-                                className={styles.heroImage}
+                    <h1 id="landing-title" className={styles.heroTitle}>Đặt lịch khám tại ClinicCare</h1>
+                    <div className={styles.searchArea}>
+                        <form onSubmit={handleSearch} className={styles.searchForm} role="search">
+                            <Input
+                                size="large"
+                                prefix={<Search size={18} aria-hidden="true" />}
+                                placeholder="Tìm bác sĩ, chuyên khoa, gói khám"
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Escape') setSearchQuery(''); }}
+                                aria-label="Tìm bác sĩ, chuyên khoa, gói khám"
+                                className={styles.searchInput}
                             />
-                            <div className={styles.floatingBadge}>
-                                <div className={styles.badgeIcon}><Sparkles size={20} /></div>
-                                <div className={styles.badgeText}>
-                                    <strong>Trợ lý AI ClinicCare</strong>
-                                    <span>Tư vấn định tuyến 24/7</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* 2. Benefit Pillars Bar (Replaces Fake Stats) */}
-            <section className={styles.statsSection}>
-                <div className={styles.container}>
-                    <div className={styles.statsGrid}>
-                        <div className={`${styles.statItem} ${styles.statPadding}`}>
-                            <div className={styles.statIcon}>
-                                <CalendarCheck size={28} color="var(--cc-color-primary)" />
-                            </div>
-                            <div className={styles.statTitle}>Đặt lịch trực tuyến 24/7</div>
-                            <div className={styles.statLabel}>Chủ động chọn giờ khám, tiếp đón ưu tiên không chờ đợi</div>
-                        </div>
-                        <div className={`${styles.statItem} ${styles.statPadding}`}>
-                            <div className={styles.statIcon}>
-                                <Sparkles size={28} color="var(--cc-color-primary)" />
-                            </div>
-                            <div className={styles.statTitle}>Định tuyến AI an toàn</div>
-                            <div className={styles.statLabel}>Gợi ý chuyên khoa phù hợp theo triệu chứng bất thường</div>
-                        </div>
-                        <div className={`${styles.statItem} ${styles.statPadding}`}>
-                            <div className={styles.statIcon}>
-                                <Stethoscope size={28} color="var(--cc-color-primary)" />
-                            </div>
-                            <div className={styles.statTitle}>Bác sĩ giàu kinh nghiệm</div>
-                            <div className={styles.statLabel}>Chuyên gia y tế tận tâm, đào tạo chính quy trong & ngoài nước</div>
-                        </div>
-                        <div className={`${styles.statItem} ${styles.statPadding}`}>
-                            <div className={styles.statIcon}>
-                                <ShieldCheck size={28} color="var(--cc-color-primary)" />
-                            </div>
-                            <div className={styles.statTitle}>Minh bạch chi phí & hồ sơ</div>
-                            <div className={styles.statLabel}>Quản lý lịch hẹn, đơn thuốc và hồ sơ bệnh án trực tuyến</div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* 3. Search Section */}
-            <section className={styles.searchSection}>
-                <div className={styles.container}>
-                    <div className={styles.searchCard}>
-                        <form onSubmit={handleSearch} className={styles.searchForm}>
-                            <div className={styles.searchInputWrapper}>
-                                <Search className={styles.searchIcon} size={20} />
-                                <input 
-                                    type="text" 
-                                    placeholder="Tìm kiếm bác sĩ, chuyên khoa khám bệnh, gói khám..." 
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className={styles.searchInput}
-                                    aria-label="Tìm kiếm dịch vụ y tế"
-                                />
-                            </div>
-                            <button type="submit" className={styles.btnSearch}>Tìm kiếm</button>
+                            <Button type="primary" size="large" htmlType="submit">Tìm kiếm</Button>
                         </form>
-                        
-                        {/* Search Dropdown Panel */}
-                        {showDropdown && (
-                            <div className={styles.searchDropdown}>
-                                <div className={styles.dropdownHeader}>
-                                    Gợi ý tìm kiếm cho "{searchQuery}"
-                                    <button className={styles.closeDropdown} onClick={() => setShowDropdown(false)}>&times;</button>
-                                </div>
-                                
-                                {isSearching ? (
-                                    <div className={styles.dropdownLoading}>Đang tìm kiếm...</div>
-                                ) : (
-                                    <div className={styles.dropdownContent}>
-                                        {filteredSpecialties.length === 0 && filteredDoctors.length === 0 ? (
-                                            <div className={styles.dropdownEmpty}>
-                                                Không tìm thấy kết quả nhanh. Nhấn "Tìm kiếm" để xem toàn bộ kết quả.
-                                            </div>
-                                        ) : (
-                                            <>
-                                                {filteredSpecialties.length > 0 && (
-                                                    <div className={styles.dropdownGroup}>
-                                                        <h4>Chuyên khoa ({filteredSpecialties.length})</h4>
-                                                        <ul>
-                                                            {filteredSpecialties.map(s => (
-                                                                <li key={s.id}>
-                                                                    <Link to={`/specialties/${s.id}`} onClick={() => setShowDropdown(false)}>
-                                                                        <Stethoscope size={16} /> {s.specialtyName || s.name}
-                                                                    </Link>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                                
-                                                {filteredDoctors.length > 0 && (
-                                                    <div className={styles.dropdownGroup}>
-                                                        <h4>Bác sĩ ({filteredDoctors.length})</h4>
-                                                        <ul>
-                                                            {filteredDoctors.map(d => (
-                                                                <li key={d.id}>
-                                                                    <Link to={`/doctors/${d.id}`} onClick={() => setShowDropdown(false)}>
-                                                                        <Stethoscope size={16} /> {formatDoctorName(d.academicTitle, d.fullName)} <span className={styles.mutedText}>- {d.specialtyName || 'Đa khoa'}</span>
-                                                                    </Link>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
 
-                                                <div className={styles.dropdownFooter}>
-                                                    <Link 
-                                                        to={`/search?q=${encodeURIComponent(searchQuery)}`}
-                                                        className={styles.dropdownViewAll}
-                                                        onClick={() => setShowDropdown(false)}
-                                                    >
-                                                        Xem toàn bộ kết quả tìm kiếm &rarr;
-                                                    </Link>
-                                                </div>
-                                            </>
+                        {showSuggestions && (
+                            <div className={styles.suggestions} role="region" aria-label="Gợi ý tìm kiếm">
+                                {!hasSuggestions ? (
+                                    <p className={styles.suggestionEmpty}>Không có gợi ý nhanh. Bấm Tìm kiếm để xem tất cả kết quả.</p>
+                                ) : (
+                                    <>
+                                        {suggestedSpecialties.length > 0 && (
+                                            <div className={styles.suggestionGroup}>
+                                                <h2>Chuyên khoa</h2>
+                                                {suggestedSpecialties.map(s => <Link key={s.id} to={`/specialties/${s.id}`}>{s.specialtyName || s.name}</Link>)}
+                                            </div>
                                         )}
-                                    </div>
+                                        {suggestedDoctors.length > 0 && (
+                                            <div className={styles.suggestionGroup}>
+                                                <h2>Bác sĩ</h2>
+                                                {suggestedDoctors.map(d => (
+                                                    <Link key={d.id} to={`/doctors/${d.id}`}>
+                                                        {formatDoctorName(d.academicTitle, d.fullName)}
+                                                        {d.specialtyName && <span className={styles.muted}> · {d.specialtyName}</span>}
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {suggestedPackages.length > 0 && (
+                                            <div className={styles.suggestionGroup}>
+                                                <h2>Gói khám</h2>
+                                                {suggestedPackages.map(p => <Link key={p.id} to={`/health-packages/${p.id}`}>{p.name}</Link>)}
+                                            </div>
+                                        )}
+                                    </>
                                 )}
+                                <Link to={`/search?q=${encodeURIComponent(searchQuery.trim())}`} className={styles.suggestionAll}>Xem tất cả kết quả</Link>
                             </div>
                         )}
                     </div>
+
+                    <nav className={styles.quickLinks} aria-label="Lối tắt">
+                        <Link to="/patient/book">Đặt lịch khám</Link>
+                        <button type="button" onClick={() => setIsLookupModalOpen(true)}>Tra cứu lịch hẹn</button>
+                        <Link to="/medicines">Bảng giá thuốc</Link>
+                        <ChatConsultationLink to="/patient/ai-consultation">Hỏi trợ lý AI</ChatConsultationLink>
+                    </nav>
                 </div>
             </section>
 
-            {/* 4. Featured Specialties */}
-            <section id="specialties" className={styles.sectionLight}>
-                <div className={styles.container}>
-                    <div className={styles.sectionHeader}>
-                        <div>
-                            <SectionTitle eyebrow="CHUYÊN KHOA">Danh mục <span className={styles.titleAccent}>Chuyên khoa</span></SectionTitle>
-                            <p className={styles.sectionDescription}>Đa dạng chuyên khoa y tế phục vụ khám chữa bệnh toàn diện</p>
-                        </div>
-                        <Link to="/specialties" className={styles.viewAll}>
-                            Xem tất cả <ChevronRight size={20} />
-                        </Link>
-                    </div>
-                    
-                    {loading ? (
-                        <div className={styles.grid}>
-                            {[1, 2, 3, 4, 5, 6].map(i => (
-                                <div key={i} className={styles.skeletonCard}></div>
-                            ))}
-                        </div>
-                    ) : specialties.length > 0 ? (
-                        <div className={styles.grid}>
-                            {specialties.slice(0, 8).map(spec => (
-                                <div key={spec.id} className={styles.specialtyCard}>
-                                    <div className={styles.specialtyIconWrapper}>
-                                        <Stethoscope size={28} />
-                                    </div>
-                                    <h3>{spec.specialtyName || spec.name}</h3>
-                                    <p>{spec.description || 'Chăm sóc sức khỏe chuyên sâu với đội ngũ chuyên gia tận tâm.'}</p>
-                                    <div className={styles.specialtyActions}>
-                                        <Link to={`/specialties/${spec.id}`} className={styles.specialtyDetail}>
-                                            Xem chi tiết <ChevronRight size={14} />
+            {loading ? (
+                <div className={styles.container}><LoadingState message="Đang tải thông tin phòng khám..." /></div>
+            ) : error ? (
+                <div className={styles.container}><InlineError message={error} onRetry={() => { setLoading(true); setError(null); setReloadKey(key => key + 1); }} /></div>
+            ) : (
+                <>
+                    {specialties.length > 0 && (
+                        <section id="specialties" className={styles.section} aria-labelledby="landing-specialties-title">
+                            <div className={styles.container}>
+                                <div className={styles.sectionHeader}>
+                                    <h2 id="landing-specialties-title">Chuyên khoa</h2>
+                                    <Link to="/specialties">Tất cả chuyên khoa</Link>
+                                </div>
+                                <div className={styles.specialtyGrid}>
+                                    {specialties.slice(0, 12).map(spec => (
+                                        <Link key={spec.id} to={`/specialties/${spec.id}`} className={styles.specialtyItem}>
+                                            <span className={styles.specialtyName}>{spec.specialtyName || spec.name}</span>
+                                            {spec.description && <span className={styles.specialtyDesc}>{spec.description}</span>}
                                         </Link>
-                                        <Link to={`/patient/book?specialtyId=${spec.id}`} className={styles.specialtyBooking}>
-                                            <Calendar size={14} /> Đặt lịch
-                                        </Link>
-                                    </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className={styles.emptyState}>Chưa có dữ liệu chuyên khoa</div>
+                                <p className={styles.aiLine}>
+                                    Chưa biết nên khám khoa nào? <ChatConsultationLink to="/patient/ai-consultation">Hỏi trợ lý AI</ChatConsultationLink> để được gợi ý chuyên khoa theo triệu chứng.
+                                </p>
+                            </div>
+                        </section>
                     )}
-                </div>
-            </section>
 
-            {/* 5. Health Care Packages (ClinicCare Branded) */}
-            <section id="packages" className={styles.catalogSection}>
-                <div className={styles.container}>
-                    <div className={styles.sectionHeader}>
-                        <div>
-                            <SectionTitle eyebrow="GÓI KHÁM">Gói <span className={styles.titleAccent}>Chăm Sóc Sức Khỏe</span> ClinicCare</SectionTitle>
-                            <p className={styles.sectionDescription}>Thiết kế khoa học, tiết kiệm chi phí và tầm soát toàn diện từng đối tượng</p>
-                        </div>
-                        <Link to="/health-packages" className={styles.viewAll}>
-                            Xem tất cả gói khám <ChevronRight size={20} />
-                        </Link>
-                    </div>
-
-                    {loading ? (
-                        <div className={styles.packageGrid}>
-                            {[1, 2, 3].map(i => (
-                                <div key={i} className={`${styles.skeletonCard} ${styles.packageSkeleton}`}></div>
-                            ))}
-                        </div>
-                    ) : healthPackages.length > 0 ? (
-                        <div className={styles.packageGrid}>
-                            {healthPackages.slice(0, 6).map(pkg => {
-                                const services = parseIncludedServices(pkg.includedServicesJson || pkg.includedServices);
-                                return (
-                                    <div key={pkg.id || pkg.code} className={styles.packageCard}>
-                                        <div>
-                                            <span className={styles.packageBadge}>{pkg.code}</span>
-                                            <h3 className={styles.packageName}>{pkg.name}</h3>
-                                            <div className={styles.packageAudience}>👥 Đối tượng: {pkg.targetAudience}</div>
-                                            <p className={styles.packageDesc}>{pkg.description}</p>
-                                            
-                                            {services.length > 0 && (
-                                                <ul className={styles.packageIncluded}>
-                                                    {services.slice(0, 4).map((srv: string, i: number) => (
-                                                        <li key={i}>
-                                                            <Check size={16} color="var(--cc-color-info)" className={styles.detailIcon} />
-                                                            <span>{srv}</span>
-                                                        </li>
-                                                    ))}
-                                                    {services.length > 4 && (
-                                                        <li className={styles.moreServices}>
-                                                            + {services.length - 4} xét nghiệm và dịch vụ khác
-                                                        </li>
-                                                    )}
-                                                </ul>
-                                            )}
-                                        </div>
-
-                                        <div className={styles.packageFooter}>
-                                            <div>
-                                                <span className={styles.priceLabel}>Chi phí trọn gói</span>
-                                                <div className={styles.packagePrice}>{formatVndCurrency(pkg.price)}</div>
+                    {doctors.length > 0 && (
+                        <section id="doctors" className={styles.section} aria-labelledby="landing-doctors-title">
+                            <div className={styles.container}>
+                                <div className={styles.sectionHeader}>
+                                    <h2 id="landing-doctors-title">Bác sĩ</h2>
+                                    <Link to="/doctors">Tất cả bác sĩ</Link>
+                                </div>
+                                <div className={styles.cardGrid}>
+                                    {doctors.slice(0, 8).map(doc => (
+                                        <article key={doc.id} className={styles.card}>
+                                            <div className={styles.doctorHeading}>
+                                                <span className={styles.doctorAvatar} aria-hidden="true">{doctorInitials(doc.fullName)}</span>
+                                                <div>
+                                                    <h3>{formatDoctorName(doc.academicTitle, doc.fullName)}</h3>
+                                                    {doc.specialtyName && <p className={styles.muted}>{doc.specialtyName}</p>}
+                                                </div>
                                             </div>
-                                            <div className={styles.packageActions}>
-                                                <Link to={`/health-packages/${pkg.id}`} className={`${styles.btnSecondary} ${styles.packageAction}`}>
-                                                    Chi tiết
-                                                </Link>
-                                                <Link to={`/patient/health-packages/${pkg.id}/register`} className={`${styles.btnPrimary} ${styles.packageAction}`}>
-                                                    Đăng ký
-                                                </Link>
+                                            <p className={styles.muted}>{doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật kinh nghiệm'}</p>
+                                            <div className={styles.cardActions}>
+                                                <Link to={`/patient/book?doctorId=${doc.id}`}>Đặt khám</Link>
+                                                <Link to={`/doctors/${doc.id}`}>Hồ sơ</Link>
                                             </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    ) : (
-                        <div className={styles.emptyState}>
-                            <Package size={40} className={styles.emptyIcon} />
-                            <div>{packagesError ? 'Hiện chưa tải được danh sách gói khám. Bạn vui lòng thử lại sau ít phút.' : 'Các gói khám đang được cập nhật, bạn vui lòng quay lại sau nhé.'}</div>
-                        </div>
+                                        </article>
+                                    ))}
+                                </div>
+                            </div>
+                        </section>
                     )}
-                </div>
-            </section>
 
-            {/* 6. AI Consultation Teaser */}
-            <section className={styles.aiTeaserSection}>
-                <div className={styles.container}>
-                    <div className={styles.aiTeaserCard}>
-                        <div className={styles.aiTeaserContent}>
-                            <h2>Bạn chưa rõ nên khám chuyên khoa nào?</h2>
-                            <p>Trợ lý AI của ClinicCare giúp bạn phân tích sơ bộ các biểu hiện bất thường để gợi ý chuyên khoa phù hợp và tiết kiệm thời gian nhất.</p>
-                            <div className={styles.symptomChips}>
-                                {['Đau tức ngực, hồi hộp', 'Đau đầu, chóng mặt kéo dài', 'Ho sốt, đau rát họng', 'Đau nhức khớp gối, thắt lưng'].map(symptom => (
-                                    <Button key={symptom} shape="round" className={styles.chip} onClick={openChat}>{symptom}</Button>
-                                ))}
+                    {healthPackages.length > 0 && (
+                        <section id="packages" className={styles.section} aria-labelledby="landing-packages-title">
+                            <div className={styles.container}>
+                                <div className={styles.sectionHeader}>
+                                    <h2 id="landing-packages-title">Gói khám</h2>
+                                    <Link to="/health-packages">Tất cả gói khám</Link>
+                                </div>
+                                <div className={styles.cardGrid}>
+                                    {healthPackages.slice(0, 6).map(pkg => {
+                                        const serviceCount = parseIncludedServices(pkg.includedServicesJson || pkg.includedServices).length;
+                                        return (
+                                            <article key={pkg.id || pkg.code} className={styles.card}>
+                                                <h3>{pkg.name}</h3>
+                                                {pkg.targetAudience && <p className={styles.muted}>Dành cho: {pkg.targetAudience}</p>}
+                                                {serviceCount > 0 && <p className={styles.muted}>Gồm {serviceCount} dịch vụ</p>}
+                                                <div className={styles.price}>{formatVndCurrency(pkg.price)}</div>
+                                                <div className={styles.cardActions}>
+                                                    <Link to={`/patient/health-packages/${pkg.id}/register`}>Đăng ký</Link>
+                                                    <Link to={`/health-packages/${pkg.id}`}>Chi tiết</Link>
+                                                </div>
+                                            </article>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                            <div className={styles.aiWarning}>
-                                <ShieldCheck size={18} /> 
-                                <span>Lưu ý an toàn: Trợ lý AI chỉ mang tính định tuyến tham khảo, không chẩn đoán hay kê đơn thuốc.</span>
-                            </div>
-                            <Flex wrap className={styles.aiActions}>
-                                <ChatConsultationLink to="/patient/ai-consultation" className={styles.btnAi}>
-                                    <Bot size={20} /> Trò chuyện với Trợ lý AI
-                                </ChatConsultationLink>
-                                <Link to="/patient/book" className={styles.aiBooking}>Đặt lịch khám ngay</Link>
-                            </Flex>
-                        </div>
-                        <div className={styles.aiTeaserVisual}>
-                            <div className={styles.aiCircle}>
-                                <Bot size={64} className={styles.aiIconLg} />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
+                        </section>
+                    )}
 
-            {/* 7. Doctor Team */}
-            <section id="doctors" className={styles.sectionLight}>
+                    {locations.length > 0 && (
+                        <section id="locations" className={styles.section} aria-labelledby="landing-locations-title">
+                            <div className={styles.container}>
+                                <div className={styles.sectionHeader}>
+                                    <h2 id="landing-locations-title">Cơ sở khám</h2>
+                                    <Link to="/locations">Tất cả cơ sở</Link>
+                                </div>
+                                <div className={styles.locationGrid}>
+                                    {locations.slice(0, 4).map(loc => (
+                                        <article key={loc.id} className={styles.card}>
+                                            <h3>{loc.name}</h3>
+                                            <p>{loc.address}</p>
+                                            {loc.openingHours && <p className={styles.muted}>Giờ làm việc: {loc.openingHours}</p>}
+                                            {loc.phone && <p className={styles.muted}>Điện thoại: <a href={`tel:${loc.phone.replace(/\s+/g, '')}`}>{loc.phone}</a></p>}
+                                        </article>
+                                    ))}
+                                </div>
+                            </div>
+                        </section>
+                    )}
+                </>
+            )}
+
+            <section className={styles.section} aria-labelledby="landing-faq-title">
                 <div className={styles.container}>
                     <div className={styles.sectionHeader}>
-                        <div>
-                            <SectionTitle eyebrow="ĐỘI NGŨ BÁC SĨ">Đội ngũ <span className={styles.titleAccent}>Bác sĩ Chuyên khoa</span></SectionTitle>
-                            <p className={styles.sectionDescription}>Bác sĩ giỏi chuyên môn, giàu y đức và giàu kinh nghiệm điều trị</p>
-                        </div>
-                        <Link to="/doctors" className={styles.viewAll}>
-                            Xem danh sách <ChevronRight size={20} />
-                        </Link>
+                        <h2 id="landing-faq-title">Câu hỏi thường gặp</h2>
                     </div>
-
-                    {loading ? (
-                        <div className={styles.grid4}>
-                            {[1, 2, 3, 4].map(i => (
-                                <div key={i} className={styles.skeletonDoctorCard}></div>
-                            ))}
-                        </div>
-                    ) : doctors.length > 0 ? (
-                        <div className={styles.grid4}>
-                            {doctors.slice(0, 4).map(doc => (
-                                <div key={doc.id} className={styles.doctorCard}>
-                                    <Avatar size={100} className={styles.doctorAvatar}>{doctorInitials(doc.fullName)}</Avatar>
-                                    <div className={styles.doctorInfo}>
-                                        <h3>{formatDoctorName(doc.academicTitle, doc.fullName)}</h3>
-                                        <p className={styles.doctorSpec}>{doc.specialtyName || 'Bác sĩ Đa khoa'}</p>
-                                        <p className={styles.doctorExp}>{doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật kinh nghiệm'}</p>
-                                        <div className={styles.doctorActions}>
-                                            <Link to={`/doctors/${doc.id}`} className={`${styles.btnOutline} ${styles.doctorAction}`}>
-                                                Hồ sơ
-                                            </Link>
-                                            <Link to={`/patient/book?doctorId=${doc.id}`} className={`${styles.btnPrimary} ${styles.doctorAction}`}>
-                                                Đặt khám
-                                            </Link>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className={styles.emptyState}>Chưa có dữ liệu bác sĩ</div>
-                    )}
-                    <div className={styles.doctorBooking}>
-                        <Link to="/patient/book" className={`${styles.btnPrimary} ${styles.actionLink}`}>Đặt lịch khám với bác sĩ</Link>
-                    </div>
-                </div>
-            </section>
-
-            {/* 8. Clinic Locations (Điểm khám) */}
-            <section id="locations" className={styles.catalogSection}>
-                <div className={styles.container}>
-                    <div className={styles.sectionHeader}>
-                        <div>
-                            <SectionTitle eyebrow="ĐIỂM KHÁM">Hệ thống <span className={styles.titleAccent}>Điểm khám</span> ClinicCare</SectionTitle>
-                            <p className={styles.sectionDescription}>Mạng lưới phòng khám rộng khắp, cơ sở vật chất khang trang, hiện đại</p>
-                        </div>
-                        <Link to="/locations" className={styles.viewAll}>
-                            Xem tất cả cơ sở <ChevronRight size={20} />
-                        </Link>
-                    </div>
-
-                    <div className={styles.locationsGrid}>
-                        {locations.slice(0, 3).map((loc) => (
-                            <div key={loc.id} className={styles.locationCard}>
-                                <div className={styles.locationHeading}>
-                                    <Award size={18} color="var(--cc-color-info)" />
-                                    <h4 className={styles.locationName}>{loc.name}</h4>
-                                </div>
-                                <div className={styles.locationDetail}>
-                                    <MapPin size={16} color="var(--cc-color-text-secondary)" className={styles.detailIcon} />
-                                    <span>{loc.address}</span>
-                                </div>
-                                <div className={styles.locationDetail}>
-                                    <Clock size={16} color="var(--cc-color-text-secondary)" className={styles.fixedIcon} />
-                                    <span>{loc.openingHours}</span>
-                                </div>
-                                <div className={styles.locationDetail}>
-                                    <Phone size={16} color="var(--cc-color-text-secondary)" className={styles.fixedIcon} />
-                                    <span>{loc.phone}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* 9. 4-Step Booking Process */}
-            <section className={styles.processSection}>
-                <div className={styles.container}>
-                    <div className={styles.sectionHeaderCenter}>
-                        <SectionTitle eyebrow="QUY TRÌNH">Quy trình đặt lịch <span className={styles.titleAccent}>4 bước đơn giản</span></SectionTitle>
-                        <p>Tiết kiệm thời gian, tối ưu trải nghiệm khám chữa bệnh</p>
-                    </div>
-                    <div className={styles.processSteps}>
-                        <div className={styles.stepCard}>
-                            <div className={styles.stepNumber}>01</div>
-                            <div className={styles.stepIcon}><Stethoscope size={24} /></div>
-                            <h3>Chọn chuyên khoa</h3>
-                            <p>Tự chọn chuyên khoa mong muốn hoặc nhờ AI phân tích triệu chứng.</p>
-                        </div>
-                        <div className={styles.stepCard}>
-                            <div className={styles.stepNumber}>02</div>
-                            <div className={styles.stepIcon}><Calendar size={24} /></div>
-                            <h3>Chọn bác sĩ & Giờ khám</h3>
-                            <p>Chọn khung giờ 30 phút thuận tiện với lịch trình của bạn.</p>
-                        </div>
-                        <div className={styles.stepCard}>
-                            <div className={styles.stepNumber}>03</div>
-                            <div className={styles.stepIcon}><Clock size={24} /></div>
-                            <h3>Nhận mã hẹn tức thì</h3>
-                            <p>Hệ thống tự động xác nhận và lưu trữ trong tài khoản của bạn.</p>
-                        </div>
-                        <div className={styles.stepCard}>
-                            <div className={styles.stepNumber}>04</div>
-                            <div className={styles.stepIcon}><FileText size={24} /></div>
-                            <h3>Khám & Nhận đơn thuốc</h3>
-                            <p>Đến khám đúng giờ và tra cứu kết quả, đơn thuốc trực tuyến.</p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* 10. FAQ Section */}
-            <section className={styles.faqSection}>
-                <div className={styles.container}>
-                    <div className={styles.sectionHeaderCenter}>
-                        <SectionTitle eyebrow="HỎI ĐÁP">Câu hỏi <span className={styles.titleAccent}>thường gặp</span></SectionTitle>
-                        <p>Giải đáp thắc mắc phổ biến về quy trình khám bệnh tại ClinicCare</p>
-                    </div>
-
                     <div className={styles.faqContainer}>
                         <Collapse accordion collapsible="icon" activeKey={openFaq ? [openFaq] : []}
                             onChange={keys => setOpenFaq(Array.isArray(keys) ? keys[0] : keys)}
@@ -590,44 +272,33 @@ export const PublicLanding: React.FC = () => {
                     </div>
                 </div>
             </section>
-            <section className={styles.finalCallToAction} aria-labelledby="landing-booking-title">
-                <div className={styles.container}>
-                    <h2 id="landing-booking-title">Sẵn sàng đặt lịch khám?</h2>
-                    <p>Chọn bác sĩ và giờ khám trực tuyến, nhận mã lịch hẹn ngay.</p>
-                    <Flex className={styles.finalActions}>
-                        <Link to="/patient/book" className={`${styles.btnPrimary} ${styles.actionLink}`}>Đặt lịch khám</Link>
-                        <ChatConsultationLink to="/patient/ai-consultation" className={`${styles.btnSecondary} ${styles.actionLink}`}>Trò chuyện với Trợ lý AI</ChatConsultationLink>
-                    </Flex>
-                </div>
-            </section>
         </main>
     );
 };
 
-// FAQ items
 const faqItems = [
     {
-        question: "Tôi cần chuẩn bị gì khi đến khám theo lịch hẹn đã đặt?",
-        answer: "Quý khách chỉ cần đến trước giờ hẹn 10-15 phút, xuất trình mã lịch hẹn (APT-...) hoặc số điện thoại tại quầy lễ tân để được tiếp đón ngay mà không cần bốc số chờ đợi."
+        question: 'Tôi cần chuẩn bị gì khi đến khám theo lịch hẹn?',
+        answer: 'Bạn đến trước giờ hẹn 10–15 phút và đọc mã lịch hẹn (APT-...) hoặc số điện thoại tại quầy lễ tân để làm thủ tục.'
     },
     {
-        question: "Trợ lý AI của ClinicCare hoạt động như thế nào và có an toàn không?",
-        answer: "Trợ lý AI phân tích các mô tả triệu chứng bạn cung cấp để định hướng chuyên khoa phù hợp nhất dựa trên danh mục thực tế của phòng khám. Hệ thống tuyệt đối không chẩn đoán thay bác sĩ, không kê đơn và không thu thập thông tin định danh cá nhân nhạy cảm."
+        question: 'Trợ lý AI dùng để làm gì?',
+        answer: 'Trợ lý AI đọc mô tả triệu chứng của bạn và gợi ý chuyên khoa có trong danh mục của phòng khám. Trợ lý không chẩn đoán và không kê đơn; bác sĩ là người khám và kết luận.'
     },
     {
-        question: "Tôi có thể đổi hoặc hủy lịch hẹn đã đặt được không?",
-        answer: "Quý khách hoàn toàn có thể gửi yêu cầu dời lịch sang khung giờ khác hoặc hủy lịch trực tiếp trong mục 'Lịch hẹn của tôi'. Bộ phận lễ tân sẽ xét duyệt và phản hồi nhanh chóng."
+        question: 'Tôi có thể đổi hoặc hủy lịch hẹn không?',
+        answer: 'Có. Vào mục Lịch hẹn của tôi để gửi yêu cầu đổi giờ hoặc hủy lịch. Lễ tân sẽ duyệt yêu cầu và báo lại cho bạn.'
     },
     {
-        question: "Khung thời gian cho mỗi ca khám là bao lâu?",
-        answer: "Mỗi slot khám bệnh tiêu chuẩn tại ClinicCare kéo dài 30 phút, đảm bảo bác sĩ có đủ thời gian thăm khám kỹ lưỡng, lắng nghe và tư vấn chi tiết cho từng bệnh nhân."
+        question: 'Mỗi lượt khám kéo dài bao lâu?',
+        answer: 'Mỗi khung giờ đặt lịch dài 30 phút.'
     },
     {
-        question: "Làm thế nào để tôi xem lại đơn thuốc và kết quả ca khám?",
-        answer: "Sau khi bác sĩ hoàn tất ca khám, kết quả tóm tắt và đơn thuốc điện tử sẽ được cập nhật ngay trên tài khoản của bạn tại mục 'Đơn thuốc của tôi'. Bạn có thể xem lại hoặc in ra bất kỳ lúc nào."
+        question: 'Tôi xem đơn thuốc và kết quả khám ở đâu?',
+        answer: 'Sau khi khám xong, đơn thuốc nằm ở mục Đơn thuốc của tôi, kết quả xét nghiệm nằm ở mục Kết quả cận lâm sàng. Bạn có thể in đơn thuốc từ trang này.'
     },
     {
-        question: "Tôi cần chuẩn bị gì khi đến khám gói sức khỏe?",
-        answer: "Quý khách nên nhịn ăn ít nhất 6-8 tiếng trước khi lấy mẫu máu xét nghiệm, uống đủ nước lọc và mang theo các kết quả khám, đơn thuốc đang dùng nếu có."
+        question: 'Khám gói sức khỏe cần chuẩn bị gì?',
+        answer: 'Nhịn ăn 6–8 tiếng trước khi lấy máu xét nghiệm, chỉ uống nước lọc. Mang theo kết quả khám và đơn thuốc đang dùng nếu có.'
     }
 ];

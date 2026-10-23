@@ -126,7 +126,7 @@ export const PackageRegistration: React.FC = () => {
     const services = pkg.includedServices?.length ? pkg.includedServices : parseIncludedServices(pkg.includedServicesJson);
     return <div className={styles.page}>
         <Link className={styles.backLink} to={`/health-packages/${pkg.id}`}><ArrowLeft size={16} /> Quay lại chi tiết gói khám</Link>
-        <PageHeader title="Đăng ký gói khám" subtitle="Quy trình 3 bước đăng ký tiện lợi, giúp bạn tiết kiệm thời gian chờ đợi tại phòng khám." />
+        <PageHeader title="Đăng ký gói khám" />
         <ol className={styles.steps} aria-label="Các bước đăng ký">
             {['Gói khám & Quyền lợi', 'Thông tin & Ngày khám', 'Xác nhận đăng ký'].map((label, index) => <li key={label} className={step >= index + 1 ? styles.reachedStep : styles.upcomingStep} aria-current={step === index + 1 ? 'step' : undefined}><span className={styles.stepNumber}>{step > index + 1 ? <Check size={18} /> : index + 1}</span><span>{label}</span></li>)}
         </ol>
@@ -144,7 +144,7 @@ export const PackageRegistration: React.FC = () => {
         {step === 2 && <Card>
             <h2 className={styles.stepTitle}>Thông tin liên hệ & Thời gian mong muốn</h2>
             <Form layout="vertical">
-                <Form.Item label="Ngày khám mong muốn" htmlFor="preferredDate" required validateStatus={fieldErrors.preferredDate ? 'error' : undefined} help={fieldErrors.preferredDate || undefined} extra="Quý khách vui lòng chọn ngày khám cách thời điểm đăng ký ít nhất 1 ngày để phòng khám chuẩn bị chu đáo.">
+                <Form.Item label="Ngày khám mong muốn" htmlFor="preferredDate" required validateStatus={fieldErrors.preferredDate ? 'error' : undefined} help={fieldErrors.preferredDate || undefined} extra="Chọn ngày khám từ ngày mai trở đi.">
                     <Input type="date" id="preferredDate" min={tomorrowStr} value={preferredDate} onChange={event => { setPreferredDate(event.target.value); setFieldErrors(prev => ({ ...prev, preferredDate: '' })); }} />
                 </Form.Item>
                 <Form.Item label="Số điện thoại liên hệ" htmlFor="contactPhone" required validateStatus={fieldErrors.contactPhone ? 'error' : undefined} help={fieldErrors.contactPhone || undefined} extra="Số điện thoại dùng để nhân viên lễ tân gọi điện xác nhận và gửi tin nhắn hướng dẫn.">

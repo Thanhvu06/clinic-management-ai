@@ -243,7 +243,7 @@ export const PharmacyPrescriptions: React.FC = () => {
                 {header:'Bác sĩ chỉ định',accessor:'doctorName'},
                 {header:'Thời gian kê đơn',accessor:p => formatDateTime(p.createdAt)},
                 {header:'Số lượng thuốc',accessor:p => <span className={styles.itemCount}>{p.itemCount} loại thuốc</span>},
-                {header:'Trạng thái',accessor:p => <StatusBadge status={p.status === 'Dispensed' ? 'completed' : 'pending'} label={getPrescriptionStatusLabel(p.status)} />},
+                {header:'Trạng thái',accessor:p => <StatusBadge status={p.status === 'Dispensed' ? 'completed' : 'pending'} label={getPrescriptionStatusLabel(p.status, 'pharmacy')} />},
                 {header:'Thao tác',align:'right',accessor:p => <Button type="primary" onClick={() => handleOpenDetail(p.id)}><Eye size={14} aria-hidden="true" /> Xem & cấp phát</Button>}
             ]} /></div>}
             {!loading && prescriptions.length > 0 && totalItems > 10 && <div className={styles.pagination}><span className={styles.secondary}>Tổng số: {totalItems} đơn thuốc</span><div className={styles.pageControls}><Button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Trang trước</Button><span>Trang {page}</span><Button disabled={page * 10 >= totalItems} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
@@ -255,7 +255,7 @@ export const PharmacyPrescriptions: React.FC = () => {
                     <div className={styles.patientBanner}>
                         <div><span className={styles.secondary}>Bệnh nhân:</span><div className={styles.patientName}>{selectedPrescription.patientName}</div><div className={styles.secondary}>SĐT: {selectedPrescription.patientPhone}</div></div>
                         <div><span className={styles.secondary}>Bác sĩ chỉ định:</span><div className={styles.patientName}>{selectedPrescription.doctorName}</div><div className={styles.secondary}>Thời gian kê: {formatDateTime(selectedPrescription.createdAt)}</div></div>
-                        <div><span className={styles.secondary}>Trạng thái cấp phát:</span><div><StatusBadge status={selectedPrescription.status === 'Dispensed' ? 'completed' : 'pending'} label={getPrescriptionStatusLabel(selectedPrescription.status)} /></div></div>
+                        <div><span className={styles.secondary}>Trạng thái cấp phát:</span><div><StatusBadge status={selectedPrescription.status === 'Dispensed' ? 'completed' : 'pending'} label={getPrescriptionStatusLabel(selectedPrescription.status, 'pharmacy')} /></div></div>
                     </div>
                     {selectedPrescription.status === 'Issued' && <div>
                         {payment.error ? <InlineError message={payment.error} onRetry={payment.retry} />

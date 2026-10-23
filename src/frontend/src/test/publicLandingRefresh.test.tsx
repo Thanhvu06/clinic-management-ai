@@ -17,21 +17,27 @@ const doctors = [
     { id: 9, fullName: 'PGS.TS.BS.CKII Lê Hoàng Nam', specialtyName: 'Nội khoa', experienceYears: 5 },
 ];
 const questions = [
-    'Tôi cần chuẩn bị gì khi đến khám theo lịch hẹn đã đặt?',
-    'Trợ lý AI của ClinicCare hoạt động như thế nào và có an toàn không?',
-    'Tôi có thể đổi hoặc hủy lịch hẹn đã đặt được không?',
-    'Khung thời gian cho mỗi ca khám là bao lâu?',
-    'Làm thế nào để tôi xem lại đơn thuốc và kết quả ca khám?',
-    'Tôi cần chuẩn bị gì khi đến khám gói sức khỏe?',
+    'Tôi cần chuẩn bị gì khi đến khám theo lịch hẹn?',
+    'Trợ lý AI dùng để làm gì?',
+    'Tôi có thể đổi hoặc hủy lịch hẹn không?',
+    'Mỗi lượt khám kéo dài bao lâu?',
+    'Tôi xem đơn thuốc và kết quả khám ở đâu?',
+    'Khám gói sức khỏe cần chuẩn bị gì?',
 ];
 const answers = [
-    'Quý khách chỉ cần đến trước giờ hẹn 10-15 phút, xuất trình mã lịch hẹn (APT-...) hoặc số điện thoại tại quầy lễ tân để được tiếp đón ngay mà không cần bốc số chờ đợi.',
-    'Trợ lý AI phân tích các mô tả triệu chứng bạn cung cấp để định hướng chuyên khoa phù hợp nhất dựa trên danh mục thực tế của phòng khám. Hệ thống tuyệt đối không chẩn đoán thay bác sĩ, không kê đơn và không thu thập thông tin định danh cá nhân nhạy cảm.',
-    "Quý khách hoàn toàn có thể gửi yêu cầu dời lịch sang khung giờ khác hoặc hủy lịch trực tiếp trong mục 'Lịch hẹn của tôi'. Bộ phận lễ tân sẽ xét duyệt và phản hồi nhanh chóng.",
-    'Mỗi slot khám bệnh tiêu chuẩn tại ClinicCare kéo dài 30 phút, đảm bảo bác sĩ có đủ thời gian thăm khám kỹ lưỡng, lắng nghe và tư vấn chi tiết cho từng bệnh nhân.',
-    "Sau khi bác sĩ hoàn tất ca khám, kết quả tóm tắt và đơn thuốc điện tử sẽ được cập nhật ngay trên tài khoản của bạn tại mục 'Đơn thuốc của tôi'. Bạn có thể xem lại hoặc in ra bất kỳ lúc nào.",
-    'Quý khách nên nhịn ăn ít nhất 6-8 tiếng trước khi lấy mẫu máu xét nghiệm, uống đủ nước lọc và mang theo các kết quả khám, đơn thuốc đang dùng nếu có.',
+    'Bạn đến trước giờ hẹn 10–15 phút và đọc mã lịch hẹn (APT-...) hoặc số điện thoại tại quầy lễ tân để làm thủ tục.',
+    'Trợ lý AI đọc mô tả triệu chứng của bạn và gợi ý chuyên khoa có trong danh mục của phòng khám. Trợ lý không chẩn đoán và không kê đơn; bác sĩ là người khám và kết luận.',
+    'Có. Vào mục Lịch hẹn của tôi để gửi yêu cầu đổi giờ hoặc hủy lịch. Lễ tân sẽ duyệt yêu cầu và báo lại cho bạn.',
+    'Mỗi khung giờ đặt lịch dài 30 phút.',
+    'Sau khi khám xong, đơn thuốc nằm ở mục Đơn thuốc của tôi, kết quả xét nghiệm nằm ở mục Kết quả cận lâm sàng. Bạn có thể in đơn thuốc từ trang này.',
+    'Nhịn ăn 6–8 tiếng trước khi lấy máu xét nghiệm, chỉ uống nước lọc. Mang theo kết quả khám và đơn thuốc đang dùng nếu có.',
 ];
+const fullData: Record<string, unknown[]> = {
+    '/doctors': doctors,
+    '/specialties': [{ id: 1, specialtyName: 'Nội khoa' }],
+    '/health-packages': [{ id: 3, code: 'PKG-1', name: 'Gói tổng quát', price: 1500000, includedServicesJson: '["Khám nội","Xét nghiệm máu"]' }],
+    '/locations': [{ id: 4, name: 'Cơ sở Quận 1', address: '12 Lê Lợi', openingHours: '07:00–17:00', phone: '028 1234 5678', city: 'TP. Hồ Chí Minh' }],
+};
 const RouteProbe = () => <output aria-label="Đường dẫn hiện tại">{useLocation().pathname}</output>;
 const mount = async () => {
     const result = render(<ConfigProvider theme={{ token: { motion: false } }}><AuthProvider><ChatProvider><MemoryRouter><PublicLanding /><RouteProbe /><MedicalChatWidget /></MemoryRouter></ChatProvider></AuthProvider></ConfigProvider>);
@@ -45,49 +51,44 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Public landing refresh L1–L7', () => {
-    it('L1 keeps exactly two primary hero links and three tools with their original roles and destinations', async () => {
+    it('L1 keeps exactly three hero text links and one lookup button with their destinations', async () => {
         const { container } = await mount();
         const hero = container.querySelector('main > section')!;
-        const booking = within(hero as HTMLElement).getByRole('link', { name: 'Đặt lịch khám' });
-        const actions = booking.parentElement!;
-        expect(within(actions).getAllByRole('link')).toHaveLength(2);
-        expect(booking).toHaveAttribute('href', '/patient/book');
-        expect(within(actions).getByRole('link', { name: 'Trò chuyện với Trợ lý AI' })).toHaveAttribute('href', '/patient/ai-consultation');
-        expect(within(hero as HTMLElement).getByRole('link', { name: 'Tìm chuyên khoa' })).toHaveAttribute('href', '/specialties');
-        fireEvent.click(within(hero as HTMLElement).getByRole('button', { name: 'Tra giá thuốc' }));
-        expect(screen.getByLabelText('Đường dẫn hiện tại')).toHaveTextContent('/medicines');
-        fireEvent.click(within(hero as HTMLElement).getByRole('button', { name: 'Tra cứu lịch hẹn' }));
+        const actions = within(hero as HTMLElement).getByRole('navigation', { name: 'Lối tắt' });
+        expect(within(actions).getAllByRole('link')).toHaveLength(3);
+        expect(within(actions).getByRole('link', { name: 'Đặt lịch khám' })).toHaveAttribute('href', '/patient/book');
+        expect(within(actions).getByRole('link', { name: 'Hỏi trợ lý AI' })).toHaveAttribute('href', '/patient/ai-consultation');
+        expect(within(actions).getByRole('link', { name: 'Bảng giá thuốc' })).toHaveAttribute('href', '/medicines');
+        fireEvent.click(within(actions).getByRole('button', { name: 'Tra cứu lịch hẹn' }));
         expect(screen.getByPlaceholderText(/APT-/)).toBeInTheDocument();
+        fireEvent.click(within(actions).getByRole('link', { name: 'Bảng giá thuốc' }));
+        expect(screen.getByLabelText('Đường dẫn hiện tại')).toHaveTextContent('/medicines');
     });
 
-    it('L1 uses the local hero asset and preserves the alt text', async () => {
-        await mount();
-        const image = screen.getByAltText('Bác sĩ chuyên khoa ClinicCare');
-        expect(image.getAttribute('src')).toContain('landing-hero.jpg');
-        expect(image.getAttribute('src')).not.toContain('images.unsplash.com');
+    it('L1 shows no hero image and a short title', async () => {
+        const { container } = await mount();
+        expect(container.querySelector('img')).toBeNull();
+        expect(screen.queryByAltText('Bác sĩ chuyên khoa ClinicCare')).not.toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1, name: 'Đặt lịch khám tại ClinicCare' })).toBeInTheDocument();
     });
 
-    it('L2 preserves all six complete headings and supplies an eyebrow and accent', async () => {
+    it('L2 shows five sentence-case headings without an eyebrow or accent', async () => {
+        mocks.get.mockImplementation(async (url: string) => ({ success: true, data: fullData[url] ?? [] }));
         await mount();
-        for (const [title, eyebrow] of [
-            ['Danh mục Chuyên khoa', 'CHUYÊN KHOA'],
-            ['Gói Chăm Sóc Sức Khỏe ClinicCare', 'GÓI KHÁM'],
-            ['Đội ngũ Bác sĩ Chuyên khoa', 'ĐỘI NGŨ BÁC SĨ'],
-            ['Hệ thống Điểm khám ClinicCare', 'ĐIỂM KHÁM'],
-            ['Quy trình đặt lịch 4 bước đơn giản', 'QUY TRÌNH'],
-            ['Câu hỏi thường gặp', 'HỎI ĐÁP'],
-        ]) {
-            const heading = screen.getByRole('heading', { name: title });
-            expect(heading.previousElementSibling).toHaveTextContent(eyebrow);
-            expect(heading.querySelector('span')).toBeInTheDocument();
+        for (const title of ['Chuyên khoa', 'Bác sĩ', 'Gói khám', 'Cơ sở khám', 'Câu hỏi thường gặp']) {
+            const heading = screen.getByRole('heading', { level: 2, name: title });
+            expect(heading.previousElementSibling).toBeNull();
+            expect(heading.querySelector('span')).not.toBeInTheDocument();
         }
+        for (const eyebrow of ['CHUYÊN KHOA', 'GÓI KHÁM', 'ĐỘI NGŨ BÁC SĨ', 'ĐIỂM KHÁM', 'QUY TRÌNH', 'HỎI ĐÁP']) expect(screen.queryByText(eyebrow)).not.toBeInTheDocument();
     });
 
-    it.each(['Đau tức ngực, hồi hộp', 'Đau đầu, chóng mặt kéo dài', 'Ho sốt, đau rát họng', 'Đau nhức khớp gối, thắt lưng'])('L3 routes the symptom button %s to AI consultation', async symptom => {
+    it.each(['Đau tức ngực, hồi hộp', 'Đau đầu, chóng mặt kéo dài', 'Ho sốt, đau rát họng', 'Đau nhức khớp gối, thắt lưng'])('L3 drops the symptom button %s and opens AI consultation from the quick link', async symptom => {
         await mount();
-        fireEvent.click(screen.getByRole('button', { name: symptom }));
+        expect(screen.queryByRole('button', { name: symptom })).not.toBeInTheDocument();
+        fireEvent.click(within(screen.getByRole('navigation', { name: 'Lối tắt' })).getByRole('link', { name: 'Hỏi trợ lý AI' }));
         expect(screen.getByRole('dialog', { name: 'Trợ lý ClinicCare AI' })).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'Đặt lịch khám ngay' })).toHaveAttribute('href', '/patient/book');
+        expect(screen.queryByRole('link', { name: 'Đặt lịch khám ngay' })).not.toBeInTheDocument();
     });
 
     it('L4 derives two initials from API names, strips ThS. BS. and preserves doctor links', async () => {
@@ -96,17 +97,17 @@ describe('Public landing refresh L1–L7', () => {
         expect(within(section).getByText('VA')).toBeInTheDocument();
         expect(within(section).getByText('TB')).toBeInTheDocument();
         expect(within(section).getByText('HN')).toBeInTheDocument();
-        const card = screen.getByRole('heading', { name: 'BS. Nguyễn Văn An' }).parentElement!.parentElement!;
+        const card = screen.getByRole('heading', { name: 'BS. Nguyễn Văn An' }).closest('article')!;
         expect(within(card).getByRole('link', { name: 'Hồ sơ' })).toHaveAttribute('href', '/doctors/7');
         expect(within(card).getByRole('link', { name: 'Đặt khám' })).toHaveAttribute('href', '/patient/book?doctorId=7');
-        expect(within(section).getByRole('link', { name: 'Đặt lịch khám với bác sĩ' })).toHaveAttribute('href', '/patient/book');
+        expect(within(section).queryByRole('link', { name: 'Đặt lịch khám với bác sĩ' })).not.toBeInTheDocument();
     });
 
-    it('L5 numbers the unchanged four booking steps 01–04', async () => {
+    it('L5 drops the four numbered booking steps 01–04', async () => {
         await mount();
-        const section = screen.getByRole('heading', { name: 'Quy trình đặt lịch 4 bước đơn giản' }).closest('section')!;
-        for (const number of ['01', '02', '03', '04']) expect(within(section).getByText(number)).toBeInTheDocument();
-        expect(within(section).getAllByRole('heading', { level: 3 }).map(node => node.textContent)).toEqual(['Chọn chuyên khoa', 'Chọn bác sĩ & Giờ khám', 'Nhận mã hẹn tức thì', 'Khám & Nhận đơn thuốc']);
+        expect(screen.queryByRole('heading', { name: 'Quy trình đặt lịch 4 bước đơn giản' })).not.toBeInTheDocument();
+        for (const number of ['01', '02', '03', '04']) expect(screen.queryByText(number)).not.toBeInTheDocument();
+        for (const step of ['Chọn chuyên khoa', 'Chọn bác sĩ & Giờ khám', 'Nhận mã hẹn tức thì', 'Khám & Nhận đơn thuốc']) expect(screen.queryByRole('heading', { name: step })).not.toBeInTheDocument();
     });
 
     it('L6 opens the first question by default and keeps all six questions and answers in an accordion', async () => {
@@ -124,14 +125,13 @@ describe('Public landing refresh L1–L7', () => {
         }
     });
 
-    it('L7 places the final call to action immediately after FAQ with two correct links', async () => {
+    it('L7 ends with FAQ and no final call to action', async () => {
         await mount();
-        const section = screen.getByRole('region', { name: 'Sẵn sàng đặt lịch khám?' });
-        expect(section.previousElementSibling).toContainElement(screen.getByRole('heading', { name: 'Câu hỏi thường gặp' }));
-        expect(within(section).getByText('Chọn bác sĩ và giờ khám trực tuyến, nhận mã lịch hẹn ngay.')).toBeInTheDocument();
-        expect(within(section).getAllByRole('link')).toHaveLength(2);
-        expect(within(section).getByRole('link', { name: 'Đặt lịch khám' })).toHaveAttribute('href', '/patient/book');
-        expect(within(section).getByRole('link', { name: 'Trò chuyện với Trợ lý AI' })).toHaveAttribute('href', '/patient/ai-consultation');
+        expect(screen.queryByRole('region', { name: 'Sẵn sàng đặt lịch khám?' })).not.toBeInTheDocument();
+        expect(screen.queryByText('Chọn bác sĩ và giờ khám trực tuyến, nhận mã lịch hẹn ngay.')).not.toBeInTheDocument();
+        const faq = screen.getByRole('region', { name: 'Câu hỏi thường gặp' });
+        expect(faq.nextElementSibling).toBeNull();
+        expect(screen.queryByRole('link', { name: 'Trò chuyện với Trợ lý AI' })).not.toBeInTheDocument();
     });
 });
 

@@ -79,11 +79,12 @@ describe('Sentence-case page headings', () => {
     });
 
     it.each([
-        { name: 'PatientPackageRegistrations', element: <PatientPackageRegistrations />, kept: 'Theo dõi tình trạng xét duyệt và quản lý các yêu cầu đăng ký gói khám của bạn.' },
-        { name: 'PatientDiagnosticResults', element: <PatientDiagnosticResults />, kept: 'Theo dõi lịch sử xét nghiệm, siêu âm và chỉ số sức khỏe của bạn tại ClinicCare' },
-    ])('$name keeps its patient-facing subtitle', async ({ element, kept }) => {
+        { name: 'PatientPackageRegistrations', element: <PatientPackageRegistrations />, kept: 'Theo dõi tình trạng xét duyệt và quản lý các yêu cầu đăng ký gói khám của bạn.', title: 'Gói khám đã đăng ký' },
+        { name: 'PatientDiagnosticResults', element: <PatientDiagnosticResults />, kept: 'Theo dõi lịch sử xét nghiệm, siêu âm và chỉ số sức khỏe của bạn tại ClinicCare', title: 'Kết quả cận lâm sàng' },
+    ])('$name drops the subtitle that repeats its title', async ({ element, kept, title }) => {
         mount(element);
-        expect(await screen.findByText(kept)).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+        expect(screen.queryByText(kept)).not.toBeInTheDocument();
     });
 
     it('ReceptionWorkspace drops the title icon and live clock but keeps refresh and duty facility', async () => {

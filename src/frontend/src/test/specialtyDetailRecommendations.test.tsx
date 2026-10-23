@@ -60,7 +60,7 @@ describe('Specialty doctor recommendations', () => {
         expect(within(cards[0]).getByText('Lịch trống sớm nhất: Thứ Tư, 14/10, 00:30')).toBeInTheDocument();
         expect(within(region).queryByText('Bác sĩ thứ tư')).not.toBeInTheDocument();
         expect(within(region).getByText('Gợi ý dựa trên kinh nghiệm và lịch trống gần nhất của bác sĩ.')).toBeInTheDocument();
-        const teamHeading = screen.getByRole('heading', { name: 'Đội ngũ Bác sĩ phụ trách (1)' });
+        const teamHeading = screen.getByRole('heading', { name: 'Bác sĩ của khoa (1)' });
         expect(region.compareDocumentPosition(teamHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         expect(screen.queryByText('Chỉ định thăm khám thường gặp')).not.toBeInTheDocument();
     }, 15000);
@@ -93,7 +93,7 @@ describe('Specialty doctor recommendations', () => {
         const region = await recommendationsRegion();
         expect(within(region).getByRole('alert')).toHaveTextContent('Không thể tải bác sĩ được gợi ý.');
         expect(screen.getByRole('heading', { name: 'Nội khoa', level: 1 })).toBeInTheDocument();
-        expect(screen.getByRole('heading', { name: 'Đội ngũ Bác sĩ phụ trách (1)' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Bác sĩ của khoa (1)' })).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'BS. Nguyễn Văn An' })).toBeInTheDocument();
         fireEvent.click(within(region).getByRole('button', { name: 'Thử lại' }));
         await within(region).findByText('82%');
@@ -115,7 +115,7 @@ describe('Specialty doctor recommendations', () => {
         mount();
         await screen.findByRole('heading', { name: 'Nội khoa', level: 1 });
         expect(screen.queryByRole('region', { name: 'Bác sĩ được gợi ý' })).not.toBeInTheDocument();
-        expect(screen.getByRole('heading', { name: 'Đội ngũ Bác sĩ phụ trách (1)' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Bác sĩ của khoa (1)' })).toBeInTheDocument();
     }, 15000);
 
     it('loads recommendations independently while displaying the specialty and doctors', async () => {
@@ -124,7 +124,7 @@ describe('Specialty doctor recommendations', () => {
         mount();
         const region = await recommendationsRegion();
         expect(within(region).getByRole('status', { name: 'Đang tải bác sĩ được gợi ý' })).toBeInTheDocument();
-        expect(screen.getByRole('heading', { name: 'Đội ngũ Bác sĩ phụ trách (1)' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Bác sĩ của khoa (1)' })).toBeInTheDocument();
         await act(async () => { resolveRecommendations(response(recommendations)); });
         expect(within(region).queryByRole('status')).not.toBeInTheDocument();
         expect(within(region).getAllByRole('article')).toHaveLength(3);
@@ -144,17 +144,17 @@ describe('Specialty doctor recommendations', () => {
         expect(await screen.findByRole('alert')).toHaveTextContent('Không thể tải thông tin chuyên khoa.');
         fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
         await screen.findByRole('heading', { name: 'Nội khoa', level: 1 });
-        expect(screen.getByRole('link', { name: 'Đặt lịch khám ngay' })).toHaveAttribute('href', '/patient/book?specialtyId=2');
+        expect(screen.getByRole('link', { name: 'Đặt lịch khám' })).toHaveAttribute('href', '/patient/book?specialtyId=2');
         expect(screen.getByRole('link', { name: 'Đặt khám với bác sĩ' })).toHaveAttribute('href', '/patient/book?specialtyId=2&doctorId=7');
-        expect(screen.getByRole('link', { name: 'Định tuyến triệu chứng AI' })).toHaveAttribute('href', '/patient/ai-consultation');
+        expect(screen.getByRole('link', { name: 'Hỏi trợ lý AI' })).toHaveAttribute('href', '/patient/ai-consultation');
         expect(mocks.get.mock.calls.filter(call => call[0] === recommendationsUrl)).toHaveLength(1);
     }, 15000);
 
     it('preserves the not-found message and return link for a missing specialty', async () => {
         mocks.get.mockRejectedValueOnce({ status: 404 });
         mount();
-        await waitFor(() => expect(screen.getByText('Không tìm thấy thông tin chuyên khoa.')).toBeInTheDocument());
-        expect(screen.getByRole('link', { name: '← Quay lại danh sách chuyên khoa' })).toHaveAttribute('href', '/specialties');
+        await waitFor(() => expect(screen.getByText('Không tìm thấy chuyên khoa')).toBeInTheDocument());
+        expect(screen.getByRole('link', { name: 'Quay lại danh sách chuyên khoa' })).toHaveAttribute('href', '/specialties');
         expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     }, 15000);
 });

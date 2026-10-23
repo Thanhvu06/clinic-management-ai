@@ -118,6 +118,12 @@ export const tokenCssVariables: Record<string, string> = {
     '--cc-color-danger-bg': colors.dangerBg,
     '--cc-color-info': colors.info,
     '--cc-color-info-bg': colors.infoBg,
+    // Trang công khai và trang bệnh nhân chỉ dùng nhóm này cùng chữ/viền trung tính; trang nhân viên không đọc các biến này.
+    '--cc-color-public-bg': colors.bgSubtle,
+    '--cc-color-public-surface': colors.bgContainer,
+    '--cc-color-public-accent': colors.primary,
+    '--cc-color-public-accent-hover': colors.primaryHover,
+    '--cc-color-public-accent-soft': colors.primaryLight,
     '--cc-space-xxs': px(spacing.xxs),
     '--cc-space-xs': px(spacing.xs),
     '--cc-space-sm': px(spacing.sm),

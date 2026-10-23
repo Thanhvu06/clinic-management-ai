@@ -2,7 +2,6 @@ import { ChatConsultationLink } from '../../components/chat/ChatConsultationLink
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Tag } from 'antd';
-import { Stethoscope, User, Calendar, Bot, ChevronRight, Sparkles } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import { InlineError } from '../../components/common/InlineError';
 import { formatDoctorName } from '../../utils/doctorNameHelper';
@@ -138,10 +137,9 @@ export const SpecialtyDetail: React.FC = () => {
     if (error) return <div className={styles.pageContainer}><InlineError message={error} onRetry={() => void fetchSpecialtyData()} /></div>;
     if (!specialty) return <div className={styles.pageContainer}>
         <div className={styles.emptyState}>
-            <Stethoscope size={48} className={styles.emptyIcon} />
-            <div className={styles.emptyStateTitle}>Không tìm thấy thông tin chuyên khoa.</div>
-            <p className={styles.emptyDescription}>Chuyên khoa bạn đang tìm kiếm có thể đã bị thay đổi hoặc không có sẵn.</p>
-            <Link to="/specialties" className={styles.profileLink}>&larr; Quay lại danh sách chuyên khoa</Link>
+            <div className={styles.emptyStateTitle}>Không tìm thấy chuyên khoa</div>
+            <p className={styles.emptyDescription}>Chuyên khoa có thể đã đổi tên hoặc ngừng nhận lịch.</p>
+            <Link to="/specialties" className={styles.profileLink}>Quay lại danh sách chuyên khoa</Link>
         </div>
     </div>;
 
@@ -154,13 +152,14 @@ export const SpecialtyDetail: React.FC = () => {
             <div className={styles.mainColumn}>
                 <div className={styles.detailHeader}>
                     <div className={styles.headerIdentity}>
-                        <div className={styles.specialtyIcon}><Stethoscope size={28} /></div>
-                        <div><span className={styles.specialtyCode}>MÃ KHOA: {specialty.specialtyCode}</span><h1 className={styles.pageTitle}>{specialty.specialtyName}</h1></div>
+                        <div><h1 className={styles.pageTitle}>{specialty.specialtyName}</h1><span className={styles.specialtyCode}>Mã khoa {specialty.specialtyCode}</span></div>
                     </div>
-                    {specialty.aiEnabled && <div className={styles.aiBadge}><Sparkles size={16} /> Chuyên khoa được tích hợp hỗ trợ sàng lọc triệu chứng bằng AI</div>}
+                    {specialty.aiEnabled && <p className={styles.aiBadge}>Trợ lý AI có thể gợi ý khoa này khi bạn mô tả triệu chứng.</p>}
                 </div>
-                <h2 className={styles.sectionTitle}>Giới thiệu chuyên khoa</h2>
-                <p className={styles.specialtyDescription}>{specialty.description || 'Khoa phụ trách thăm khám, chẩn đoán và điều trị toàn diện các bệnh lý chuyên khoa với phác đồ y khoa cập nhật nhất và trang thiết bị hiện đại.'}</p>
+                {specialty.description && <>
+                    <h2 className={styles.sectionTitle}>Giới thiệu</h2>
+                    <p className={styles.specialtyDescription}>{specialty.description}</p>
+                </>}
 
                 {(recommendationsLoading || recommendationsError || recommendations.length > 0) && <section className={styles.recommendationsSection} aria-labelledby="recommended-doctors-title">
                     <h2 id="recommended-doctors-title" className={styles.sectionTitle}>Bác sĩ được gợi ý</h2>
@@ -183,33 +182,32 @@ export const SpecialtyDetail: React.FC = () => {
                                     {Array.from({ length: 100 }, (_, step) => <span key={step} aria-hidden="true" className={step < score ? styles.scoreFilled : styles.scoreEmpty} />)}
                                 </div>
                                 <div className={styles.recommendationActions}>
-                                    <Link to={bookingUrl} className={styles.bookingLink}><Calendar size={14} /> Đặt lịch</Link>
-                                    <Link to={`/doctors/${doctor.doctorId}`} className={styles.profileLink}>Hồ sơ <ChevronRight size={15} /></Link>
+                                    <Link to={bookingUrl} className={styles.bookingLink}>Đặt lịch</Link>
+                                    <Link to={`/doctors/${doctor.doctorId}`} className={styles.profileLink}>Hồ sơ</Link>
                                 </div>
                             </article>;
                         })}
                     </div>}
                 </section>}
 
-                <h2 className={styles.sectionTitle}>Đội ngũ Bác sĩ phụ trách ({doctors.length})</h2>
+                <h2 className={styles.sectionTitle}>Bác sĩ của khoa ({doctors.length})</h2>
                 {doctors.length > 0 ? <div className={styles.doctorGrid}>
                     {doctors.map(doc => <article key={doc.id} className={styles.doctorCard}>
-                        <div className={styles.doctorAvatar}><User size={36} /></div>
                         <h3 className={styles.doctorName}>{formatDoctorName(doc.academicTitle, doc.fullName)}</h3>
                         <span className={styles.doctorSpecialty}>{specialty.specialtyName}</span>
                         <span className={styles.doctorExperience}>{doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật kinh nghiệm'}</span>
                         <div className={styles.doctorActions}>
-                            <Link to={`/doctors/${doc.id}`} className={styles.profileLink}>Hồ sơ bác sĩ <ChevronRight size={15} /></Link>
-                            <Link to={`/patient/book?specialtyId=${specialty.id}&doctorId=${doc.id}`} className={styles.bookingLink}><Calendar size={14} /> Đặt khám với bác sĩ</Link>
+                            <Link to={`/patient/book?specialtyId=${specialty.id}&doctorId=${doc.id}`} className={styles.bookingLink}>Đặt khám với bác sĩ</Link>
+                            <Link to={`/doctors/${doc.id}`} className={styles.profileLink}>Hồ sơ bác sĩ</Link>
                         </div>
                     </article>)}
-                </div> : <div className={styles.doctorsEmpty}>Hiện chưa có danh sách bác sĩ cụ thể cho chuyên khoa này. Bạn vẫn có thể đăng ký đặt lịch tổng quát.</div>}
+                </div> : <div className={styles.doctorsEmpty}>Khoa chưa có bác sĩ nhận lịch trực tuyến. Bạn vẫn có thể đặt lịch theo chuyên khoa.</div>}
             </div>
             <aside className={styles.sidebarCard}>
-                <h3 className={styles.sidebarTitle}>Đăng ký Thăm khám</h3>
-                <p className={styles.sidebarDescription}>Chọn bác sĩ chuyên khoa hoặc đặt hẹn để được tiếp đón theo khung giờ mong muốn, không chờ đợi.</p>
-                <Link to={`/patient/book?specialtyId=${specialty.id}`} className={styles.bookingLink}><Calendar size={18} /> Đặt lịch khám ngay</Link>
-                {specialty.aiEnabled && <ChatConsultationLink to="/patient/ai-consultation" className={styles.aiLink}><Bot size={18} /> Định tuyến triệu chứng AI</ChatConsultationLink>}
+                <h2 className={styles.sidebarTitle}>Đặt lịch khám</h2>
+                <p className={styles.sidebarDescription}>Chọn bác sĩ và giờ khám ở bước tiếp theo.</p>
+                <Link to={`/patient/book?specialtyId=${specialty.id}`} className={styles.bookingLink}>Đặt lịch khám</Link>
+                {specialty.aiEnabled && <ChatConsultationLink to="/patient/ai-consultation" className={styles.aiLink}>Hỏi trợ lý AI</ChatConsultationLink>}
             </aside>
         </div>
     </div>;

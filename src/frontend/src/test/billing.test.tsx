@@ -295,7 +295,7 @@ describe('Billing Module Frontend Tests', () => {
             );
 
             await waitFor(() => {
-                expect(screen.getByText('Hóa đơn dịch vụ của tôi')).toBeInTheDocument();
+                expect(screen.getByText('Hóa đơn của tôi')).toBeInTheDocument();
                 expect(screen.getByText(/Quý khách vui lòng xuất trình mã hóa đơn/)).toBeInTheDocument();
                 expect(screen.getByText('INV-20260906-0002')).toBeInTheDocument();
                 expect(screen.getByText('Xem phiếu')).toBeInTheDocument();

@@ -2,11 +2,16 @@ import { formatDateOnly } from '../../utils/formatters';
 import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { User, Calendar, Stethoscope, Award, CheckCircle2, Clock, CalendarDays } from 'lucide-react';
+import { Button } from 'antd';
 import axiosClient from '../../api/axiosClient';
 import type { DoctorAvailabilityDto, DoctorDayAvailabilityDto } from '../../types';
-import styles from './PublicPages.module.css';
+import { InlineError } from '../../components/common/InlineError';
+import { LoadingState } from '../../components/common/LoadingState';
+import { LinkButton } from '../../components/common/LinkButton';
+import shared from './PublicPages.module.css';
+import styles from './DoctorDetail.module.css';
 import { formatDoctorName } from '../../utils/doctorNameHelper';
+import { formatFreeSlotCount, formatScheduleDayShort, formatScheduleWeekday, formatTimeRange } from './doctorScheduleLabels';
 
 interface DoctorDetail {
     id: number;
@@ -22,6 +27,13 @@ interface Specialty {
     specialtyCode: string;
 }
 
+const getDoctorInitials = (name?: string) => {
+    if (!name) return 'BS';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[parts.length - 2][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 export const DoctorDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -31,276 +43,177 @@ export const DoctorDetail: React.FC = () => {
     const [availability, setAvailability] = useState<DoctorAvailabilityDto | null>(null);
     const [selectedDate, setSelectedDate] = useState<string>('');
     const [loading, setLoading] = useState(true);
+    const [notFound, setNotFound] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [reloadKey, setReloadKey] = useState(0);
 
     useEffect(() => {
         const fetchDoctorData = async () => {
             if (!id) return;
             try {
-                setLoading(true);
                 const [docRes, specRes, availRes] = await Promise.all([
                     axiosClient.get<any, any>(`/doctors/${id}`),
                     axiosClient.get<any, any>(`/doctors/${id}/specialties`).catch(() => ({ success: false, data: [] })),
                     axiosClient.get<any, any>(`/doctors/${id}/availability`).catch(() => ({ success: false, data: null }))
                 ]);
 
-                if (docRes.success && docRes.data) {
-                    setDoctor(docRes.data);
-                } else {
-                    setError('Không tìm thấy thông tin bác sĩ.');
-                }
+                setError(null);
+                setNotFound(!(docRes.success && docRes.data));
+                if (docRes.success && docRes.data) setDoctor(docRes.data);
 
-                if (specRes.success && specRes.data) {
-                    setSpecialties(specRes.data);
-                }
+                if (specRes.success && specRes.data) setSpecialties(specRes.data);
 
                 if (availRes.success && availRes.data) {
                     setAvailability(availRes.data);
-                    if (availRes.data.days && availRes.data.days.length > 0) {
-                        setSelectedDate(availRes.data.days[0].date);
-                    }
+                    const days: DoctorDayAvailabilityDto[] = availRes.data.days || [];
+                    const firstOpen = days.find(d => d.availableSlots?.length) ?? days[0];
+                    if (firstOpen) setSelectedDate(firstOpen.date);
                 }
             } catch (err: any) {
-                setError(getApiErrorMessage(err, 'Không thể tải thông tin bác sĩ.'));
+                if (err?.status === 404) setNotFound(true);
+                else setError(getApiErrorMessage(err, 'Không thể tải thông tin bác sĩ.'));
             } finally {
                 setLoading(false);
             }
         };
+        void fetchDoctorData();
+    }, [id, reloadKey]);
 
-        fetchDoctorData();
-    }, [id]);
-
-    const getDoctorInitials = (name?: string) => {
-        if (!name) return 'BS';
-        const parts = name.trim().split(/\s+/);
-        if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-        return (parts[parts.length - 2][0] + parts[parts.length - 1][0]).toUpperCase();
+    const retry = () => {
+        setLoading(true);
+        setError(null);
+        setReloadKey(key => key + 1);
     };
 
     if (loading) {
-        return (
-            <div className={styles.pageContainer}>
-                <div className={[styles.skeletonCard, styles.spacing1].join(' ')} />
-            </div>
-        );
+        return <div className={shared.pageContainer}><LoadingState message="Đang tải thông tin bác sĩ..." /></div>;
     }
 
-    if (error || !doctor) {
+    if (error) {
+        return <div className={shared.pageContainer}><InlineError message={error} onRetry={retry} /></div>;
+    }
+
+    if (notFound || !doctor) {
         return (
-            <div className={styles.pageContainer}>
-                <div className={styles.emptyState}>
-                    <User size={48} className={styles.icon1} />
-                    <div className={styles.emptyStateTitle}>{error || 'Bác sĩ không tồn tại'}</div>
-                    <p className={styles.paragraph1}>Thông tin bác sĩ có thể đã được cập nhật hoặc không còn công tác.</p>
-                    <Link to="/doctors" className={styles.cardActionLink}>
-                        &larr; Quay lại danh sách bác sĩ
-                    </Link>
+            <div className={shared.pageContainer}>
+                <div className={shared.emptyState}>
+                    <div className={shared.emptyStateTitle}>Không tìm thấy bác sĩ</div>
+                    <p className={shared.paragraph1}>Bác sĩ có thể đã ngừng nhận lịch khám.</p>
+                    <Link to="/doctors" className={shared.cardActionLink}>Quay lại danh sách bác sĩ</Link>
                 </div>
             </div>
         );
     }
 
+    const doctorName = formatDoctorName(doctor.academicTitle, doctor.fullName);
     const primarySpecialty = specialties[0];
-    const selectedDayData: DoctorDayAvailabilityDto | undefined = availability?.days.find(d => d.date === selectedDate);
+    const specialtyParam = primarySpecialty ? `&specialtyId=${primarySpecialty.id}` : '';
+    const days = availability?.days ?? [];
+    const selectedDay = days.find(d => d.date === selectedDate);
+    const nextOpenDay = days.find(d => d.availableSlots?.length);
+    const description = doctor.description?.trim();
 
     const handleSlotClick = (slotId: number) => {
-        const specParam = primarySpecialty ? `&specialtyId=${primarySpecialty.id}` : '';
-        navigate(`/patient/book?doctorId=${doctor.id}${specParam}&date=${selectedDate}&slotId=${slotId}`);
+        navigate(`/patient/book?doctorId=${doctor.id}${specialtyParam}&date=${selectedDate}&slotId=${slotId}`);
     };
 
     return (
-        <div className={styles.pageContainer}>
-            <nav className={styles.breadcrumb} aria-label="Đường dẫn trang">
+        <div className={shared.pageContainer}>
+            <nav className={shared.breadcrumb} aria-label="Đường dẫn trang">
                 <Link to="/">Trang chủ</Link>
                 <span>/</span>
                 <Link to="/doctors">Bác sĩ</Link>
                 <span>/</span>
-                <span aria-current="page">{formatDoctorName(doctor.academicTitle, doctor.fullName)}</span>
+                <span aria-current="page">{doctorName}</span>
             </nav>
 
-            <div className={styles.detailLayout}>
-                {/* Main Column */}
-                <div className={styles.mainColumn}>
-                    <div className={[styles.detailHeader, styles.flexLayout1].join(' ')}>
-                        <div 
-                            className={[styles.doctorAvatar, styles.flexLayout2].join(' ')}
-                        >
-                            {getDoctorInitials(doctor.fullName)}
-                        </div>
-                        <div>
-                            <span className={styles.text1}>
-                                {doctor.academicTitle || 'Bác sĩ Chuyên khoa'}
-                            </span>
-                            <h1 className={[styles.pageTitle, styles.heading1].join(' ')}>
-                                {doctor.fullName}
-                            </h1>
-                            <div className={styles.flexLayout3}>
+            <div className={styles.layout}>
+                <div className={styles.main}>
+                    <header className={styles.profile}>
+                        <div className={styles.avatar} aria-hidden="true">{getDoctorInitials(doctor.fullName)}</div>
+                        <div className={styles.identity}>
+                            <h1 className={styles.name}>{doctorName}</h1>
+                            <div className={styles.meta}>
                                 {specialties.map(s => (
-                                    <Link 
-                                        key={s.id} 
-                                        to={`/specialties/${s.id}`}
-                                        className={[styles.doctorSpecialty, styles.icon2].join(' ')}
-                                    >
-                                        <Stethoscope size={13} className={styles.icon3} />
-                                        {s.specialtyName}
-                                    </Link>
+                                    <Link key={s.id} to={`/specialties/${s.id}`}>{s.specialtyName}</Link>
                                 ))}
-                                <span className={styles.flexLayout4}>
-                                    <Award size={15} color="var(--cc-color-secondary)" />
-                                    {doctor.experienceYears > 0 ? `${doctor.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật kinh nghiệm'}
-                                </span>
+                                <span>{doctor.experienceYears > 0 ? `${doctor.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật kinh nghiệm'}</span>
                             </div>
                         </div>
-                    </div>
+                    </header>
 
-                    {/* 14-Day Availability Schedule */}
-                    <div className={styles.surface1}>
-                        <div className={styles.flexLayout5}>
-                            <CalendarDays size={22} color="var(--cc-color-primary)" />
-                            <div>
-                                <h2 className={styles.heading2}>
-                                    Lịch khám & Khung giờ còn trống (14 ngày tới)
-                                </h2>
-                                <p className={styles.paragraph2}>
-                                    Chọn ngày để xem các ca trực sáng/chiều và khung giờ 30 phút khả dụng
-                                </p>
-                            </div>
-                        </div>
-
-                        {availability && availability.days && availability.days.length > 0 ? (
+                    <section className={styles.panel} aria-labelledby="doctor-schedule-title">
+                        <h2 id="doctor-schedule-title" className={styles.sectionTitle}>Lịch còn trống 14 ngày tới</h2>
+                        {days.length > 0 ? (
                             <>
-                                {/* 14-day date strip */}
-                                <div className={styles.flexLayout6}>
-                                    {availability.days.map(d => {
-                                        const isSelected = d.date === selectedDate;
-                                        const hasSlots = d.availableSlots && d.availableSlots.length > 0;
-                                        const dateParts = d.date.split('-');
-                                        const displayDate = `${dateParts[2]}/${dateParts[1]}`;
-
+                                <div className={styles.dateStrip} role="group" aria-label="Chọn ngày khám">
+                                    {days.map(d => {
+                                        const count = d.availableSlots?.length ?? 0;
                                         return (
                                             <button
                                                 key={d.date}
                                                 type="button"
+                                                aria-pressed={d.date === selectedDate}
                                                 onClick={() => setSelectedDate(d.date)}
-                                                className={[styles.button1, (isSelected ? styles.state1 : styles.state2), (isSelected ? styles.state3 : (hasSlots ? styles.state4 : styles.state5))].join(' ')}
+                                                className={styles.dayButton}
                                             >
-                                                <div className={[styles.text2, (isSelected ? styles.state6 : styles.state7)].join(' ')}>
-                                                    {d.dayOfWeek}
-                                                </div>
-                                                <div className={styles.text3}>
-                                                    {displayDate}
-                                                </div>
-                                                <div className={[styles.text4, (hasSlots ? styles.state8 : styles.state9)].join(' ')}>
-                                                    {hasSlots ? `${d.availableSlots.length} slot` : 'Hết chỗ'}
-                                                </div>
+                                                <span className={styles.dayLabel}>{formatScheduleDayShort(d.date)}</span>
+                                                <span className={count > 0 ? styles.dayCount : styles.dayFull}>{formatFreeSlotCount(count)}</span>
                                             </button>
                                         );
                                     })}
                                 </div>
 
-                                {/* Active day slots display */}
-                                {selectedDayData ? (
-                                    <div className={styles.surface2}>
-                                        <div className={styles.flexLayout7}>
-                                            <span className={styles.text5}>
-                                                Khung giờ ngày {formatDateOnly(selectedDayData.date)} ({selectedDayData.dayOfWeek}):
-                                            </span>
-                                            {selectedDayData.scheduleBlocks && selectedDayData.scheduleBlocks.length > 0 && (
-                                                <span className={styles.text6}>
-                                                    Ca trực: {selectedDayData.scheduleBlocks.map(b => `${b.startTime.substring(0, 5)} - ${b.endTime.substring(0, 5)}`).join(' | ')}
+                                {selectedDay && (
+                                    <div className={styles.dayDetail}>
+                                        <div className={styles.dayHeading}>
+                                            <strong>{formatScheduleWeekday(selectedDay.date)}, {formatDateOnly(selectedDay.date)}</strong>
+                                            {selectedDay.scheduleBlocks?.length > 0 && (
+                                                <span className={styles.shift}>
+                                                    Ca trực {selectedDay.scheduleBlocks.map(b => formatTimeRange(b.startTime, b.endTime)).join(' · ')}
                                                 </span>
                                             )}
                                         </div>
-
-                                        {selectedDayData.availableSlots && selectedDayData.availableSlots.length > 0 ? (
-                                            <div className={styles.flexLayout8}>
-                                                {selectedDayData.availableSlots.map(slot => (
-                                                    <button
-                                                        key={slot.slotId}
-                                                        type="button"
-                                                        onClick={() => handleSlotClick(slot.slotId)}
-                                                        className={styles.flexLayout9}
-                                                        onMouseEnter={(e) => {
-                                                            e.currentTarget.style.background = 'var(--cc-color-primary)';
-                                                            e.currentTarget.style.color = 'var(--cc-color-bg-container)';
-                                                        }}
-                                                        onMouseLeave={(e) => {
-                                                            e.currentTarget.style.background = 'var(--cc-color-bg-container)';
-                                                            e.currentTarget.style.color = 'var(--cc-color-primary)';
-                                                        }}
-                                                    >
-                                                        <Clock size={14} />
-                                                        {slot.startTime.substring(0, 5)} - {slot.endTime.substring(0, 5)}
-                                                    </button>
+                                        {selectedDay.availableSlots?.length > 0 ? (
+                                            <div className={styles.slots}>
+                                                {selectedDay.availableSlots.map(slot => (
+                                                    <Button key={slot.slotId} onClick={() => handleSlotClick(slot.slotId)}>
+                                                        {formatTimeRange(slot.startTime, slot.endTime)}
+                                                    </Button>
                                                 ))}
                                             </div>
                                         ) : (
-                                            <div className={styles.text7}>
-                                                Bác sĩ không có khung giờ trống trong ngày này. Vui lòng chọn ngày khác.
-                                            </div>
+                                            <p className={styles.muted}>Ngày này đã hết giờ trống. Bạn chọn ngày khác nhé.</p>
                                         )}
                                     </div>
-                                ) : null}
+                                )}
                             </>
                         ) : (
-                            <div className={styles.text8}>
-                                Chưa có thông tin lịch trực cho 14 ngày tới.
-                            </div>
+                            <p className={styles.muted}>Bác sĩ chưa có lịch khám trong 14 ngày tới.</p>
                         )}
-                    </div>
+                    </section>
 
-                    <h2 className={styles.sectionTitle}>Giới thiệu & Quá trình công tác</h2>
-                    <p className={styles.paragraph3}>
-                        {doctor.description || 'Bác sĩ chuyên khoa tại phòng khám ClinicCare, chuyên sâu trong chẩn đoán và điều trị bệnh lý chuyên khoa với thái độ y đức chuẩn mực và tận tâm.'}
-                    </p>
-
-                    <h2 className={styles.sectionTitle}>Lĩnh vực chuyên môn</h2>
-                    <div className={styles.gridLayout1}>
-                        {[
-                            'Thăm khám lâm sàng và chẩn đoán bệnh lý chuyên khoa',
-                            'Tư vấn phác đồ điều trị cá thể hóa theo tiêu chuẩn y tế hiện đại',
-                            'Theo dõi và phòng ngừa tái phát cho người bệnh',
-                            'Hướng dẫn quản lý sức khỏe chủ động và cải thiện lối sống'
-                        ].map((item, idx) => (
-                            <div key={idx} className={styles.flexLayout10}>
-                                <CheckCircle2 size={18} color="var(--cc-color-secondary)" className={styles.icon4} />
-                                <span>{item}</span>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className={styles.surface3}>
-                        <h3 className={styles.flexLayout11}>
-                            <Clock size={18} color="var(--cc-color-primary)" /> Quy chuẩn ca khám 30 phút
-                        </h3>
-                        <p className={styles.paragraph4}>
-                            ClinicCare tổ chức lịch khám theo các slot tiêu chuẩn 30 phút. Bác sĩ dành thời gian thăm khám kỹ lưỡng, giải thích kết quả xét nghiệm và tư vấn phác đồ điều trị phù hợp nhất cho bạn.
-                        </p>
-                    </div>
+                    {description && (
+                        <section className={styles.panel} aria-labelledby="doctor-about-title">
+                            <h2 id="doctor-about-title" className={styles.sectionTitle}>Giới thiệu</h2>
+                            <p className={styles.about}>{description}</p>
+                        </section>
+                    )}
                 </div>
 
-                {/* Sticky Sidebar */}
-                <aside className={styles.sidebarCard}>
-                    <h3 className={styles.heading3}>
-                        Đặt lịch khám bác sĩ
-                    </h3>
-                    <p className={styles.paragraph5}>
-                        Chọn ngày và khung giờ khám trực tuyến cùng {formatDoctorName(doctor.academicTitle, doctor.fullName)}.
+                <aside className={styles.aside} aria-labelledby="doctor-booking-title">
+                    <h2 id="doctor-booking-title" className={styles.sectionTitle}>Đặt lịch khám</h2>
+                    <p className={styles.muted}>
+                        {nextOpenDay
+                            ? `Giờ trống gần nhất: ${formatScheduleDayShort(nextOpenDay.date)}, ${nextOpenDay.availableSlots[0].startTime.substring(0, 5)}`
+                            : 'Chưa có giờ trống trong 14 ngày tới.'}
                     </p>
-
-                    <Link 
-                        to={`/patient/book?doctorId=${doctor.id}${primarySpecialty ? `&specialtyId=${primarySpecialty.id}` : ''}`}
-                        className={["btn btn-primary", styles.icon5].join(' ')}
-                    >
-                        <Calendar size={18} /> Đặt lịch khám ngay
-                    </Link>
-
+                    <LinkButton type="primary" size="large" block to={`/patient/book?doctorId=${doctor.id}${specialtyParam}`}>
+                        Đặt lịch khám
+                    </LinkButton>
                     {primarySpecialty && (
-                        <Link 
-                            to={`/specialties/${primarySpecialty.id}`}
-                            className={["btn btn-secondary", styles.icon6].join(' ')}
-                        >
-                            <Stethoscope size={16} /> Xem khoa {primarySpecialty.specialtyName}
+                        <Link to={`/specialties/${primarySpecialty.id}`} className={styles.secondaryLink}>
+                            Xem chuyên khoa {primarySpecialty.specialtyName}
                         </Link>
                     )}
                 </aside>

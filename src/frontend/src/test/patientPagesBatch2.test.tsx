@@ -92,7 +92,7 @@ describe('Patient appointments batch 2', () => {
         mocks.get.mockImplementation((url: string) => url.includes('fromDate=2026-10-13') ? new Promise(resolve => { resolveA = resolve; }) : url.includes('fromDate=2026-10-14') ? new Promise(resolve => { resolveB = resolve; }) : defaultGet(url));
         mountAppointments();
         fireEvent.click(await screen.findByRole('button', { name: 'Đổi lịch' }));
-        const date = screen.getByLabelText('Chọn ngày khám mới (*)');
+        const date = screen.getByLabelText('Chọn ngày khám mới');
         expect(date).toHaveAttribute('type', 'date');
         expect(date).toHaveAttribute('min', '2026-10-12');
         fireEvent.change(date, { target: { value: '2026-10-13' } });
@@ -107,7 +107,7 @@ describe('Patient appointments batch 2', () => {
         mocks.get.mockImplementation((url: string) => url.includes('fromDate=2026-10-13') ? new Promise((_resolve, reject) => { rejectA = reject; }) : url.includes('fromDate=2026-10-14') ? Promise.resolve(ok([{ slotId: 22, startTime: '15:00', endTime: '15:30' }])) : defaultGet(url));
         mountAppointments();
         fireEvent.click(await screen.findByRole('button', { name: 'Đổi lịch' }));
-        const date = screen.getByLabelText('Chọn ngày khám mới (*)');
+        const date = screen.getByLabelText('Chọn ngày khám mới');
         fireEvent.change(date, { target: { value: '2026-10-13' } });
         fireEvent.change(date, { target: { value: '2026-10-14' } });
         await screen.findByRole('button', { name: '15:00 - 15:30' });
@@ -139,7 +139,7 @@ describe('Patient appointments batch 2', () => {
     it('blocks cancellation reasons shorter than five characters', async () => {
         mountAppointments();
         fireEvent.click(await screen.findByRole('button', { name: 'Hủy lịch' }));
-        fireEvent.change(screen.getByLabelText('Lý do hủy lịch (*)'), { target: { value: 'abc' } });
+        fireEvent.change(screen.getByLabelText('Lý do hủy lịch'), { target: { value: 'abc' } });
         fireEvent.click(screen.getByRole('button', { name: 'Xác nhận gửi yêu cầu' }));
         expect(screen.getByText('Vui lòng nhập lý do hủy (ít nhất 5 ký tự).')).toBeInTheDocument();
         expect(mocks.post).not.toHaveBeenCalled();

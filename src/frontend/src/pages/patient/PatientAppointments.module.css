@@ -11,11 +11,11 @@
 .pendingAlert { margin-top: var(--cc-space-md); }
 .requestReason { font-style: italic; color: var(--cc-color-text); }
 .filters { display: flex; gap: var(--cc-space-xs); flex-wrap: wrap; margin-bottom: var(--cc-space-lg); }
-.details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: var(--cc-space-md); padding: var(--cc-space-md); background: var(--cc-color-bg-subtle); border-radius: var(--cc-radius-md); gap: var(--cc-space-md); }
-.sectionTitle { margin: 0 0 var(--cc-space-xs); color: var(--cc-color-text-secondary); font-size: 0.85rem; text-transform: uppercase; }
+.details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: var(--cc-space-md); padding-top: var(--cc-space-md); border-top: 1px solid var(--cc-color-border-light); gap: var(--cc-space-md); }
+.sectionTitle { margin: 0 0 var(--cc-space-xs); color: var(--cc-color-text-secondary); font-size: 0.85rem; font-weight: 500; }
 .notes, .statusChange, .historyNote { margin: 0; }
 .modalAlert, .currentAppointment { margin-bottom: var(--cc-space-md); }
-.currentAppointment { padding: var(--cc-space-sm); background: var(--cc-color-success-bg); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); }
+.currentAppointment { padding: var(--cc-space-sm); background: var(--cc-color-public-bg); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); }
 .dateInput { width: 100%; }
 .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--cc-space-xs); max-height: 160px; overflow-y: auto; padding: var(--cc-space-xxs); }
 .history { max-height: 300px; overflow-y: auto; padding-right: var(--cc-space-xxs); }

@@ -1,12 +1,13 @@
 import { ChatConsultationLink } from '../../components/chat/ChatConsultationLink';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Search, Stethoscope, User, Package, ChevronRight, Calendar, CalendarCheck } from 'lucide-react';
+import { Search } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import { formatVndCurrency } from '../../utils/formatters';
 import { formatDoctorName } from '../../utils/doctorNameHelper';
 import styles from './PublicPages.module.css';
 import { InlineError } from '../../components/common';
+import { LinkButton } from '../../components/common/LinkButton';
 
 export const SearchResults: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -100,11 +101,8 @@ export const SearchResults: React.FC = () => {
                     <span aria-current="page">Tìm kiếm</span>
                 </nav>
                 <h1 className={styles.pageTitle}>
-                    {query ? `Kết quả tìm kiếm cho "${query}"` : 'Tìm kiếm dịch vụ y tế'}
+                    {query ? `Kết quả tìm kiếm cho "${query}"` : 'Tìm kiếm'}
                 </h1>
-                <p className={styles.pageSubtitle}>
-                    Tra cứu nhanh chóng thông tin chuyên khoa, bác sĩ điều trị và các gói khám sức khỏe tổng quát.
-                </p>
             </div>
 
             {/* Search Bar */}
@@ -113,7 +111,7 @@ export const SearchResults: React.FC = () => {
                     <Search className={styles.searchBoxIcon} size={20} />
                     <input
                         type="text"
-                        placeholder="Tìm theo tên bác sĩ, chuyên khoa, triệu chứng hoặc gói khám..."
+                        placeholder="Tên bác sĩ, chuyên khoa hoặc gói khám"
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         aria-label="Từ khóa tìm kiếm"
@@ -148,14 +146,10 @@ export const SearchResults: React.FC = () => {
                 </div>
             ) : error ? <InlineError message={error} onRetry={() => setReload(value => value + 1)} /> : totalMatches === 0 ? (
                 <div className={styles.emptyState}>
-                    <Search size={48} className={styles.icon1} />
                     <div className={styles.emptyStateTitle}>Không tìm thấy kết quả phù hợp</div>
-                    <p>Hãy thử tìm với các từ khóa ngắn hơn, tên chuyên khoa (Nội khoa, Tim mạch...) hoặc liên hệ trợ lý AI.</p>
-                    <ChatConsultationLink
-                        to="/patient/ai-consultation"
-                        className={["btn btn-secondary", styles.flexLayout20].join(' ')}
-                    >
-                        Nhờ Trợ lý AI định tuyến triệu chứng
+                    <p>Thử từ khóa ngắn hơn hoặc tên chuyên khoa, ví dụ Nội khoa, Tim mạch.</p>
+                    <ChatConsultationLink to="/patient/ai-consultation" className={styles.flexLayout20}>
+                        Hỏi trợ lý AI nên khám chuyên khoa nào
                     </ChatConsultationLink>
                 </div>
             ) : (
@@ -165,23 +159,23 @@ export const SearchResults: React.FC = () => {
                         <div>
                             <div className={styles.flexLayout21}>
                                 <h2 className={styles.flexLayout22}>
-                                    <Stethoscope size={20} color="var(--cc-color-primary)" /> Chuyên khoa ({matchedSpecialties.length})
+                                    Chuyên khoa ({matchedSpecialties.length})
                                 </h2>
                                 <Link to="/specialties" className={styles.cardActionLink}>
-                                    Tất cả chuyên khoa <ChevronRight size={16} />
+                                    Tất cả chuyên khoa
                                 </Link>
                             </div>
                             <div className={styles.grid3}>
                                 {matchedSpecialties.map(spec => (
                                     <div key={spec.id} className={styles.card}>
                                         <h3 className={styles.cardTitle}>{spec.specialtyName || spec.name}</h3>
-                                        <p className={styles.cardDesc}>{spec.description || 'Chuyên khoa mũi nhọn tại ClinicCare.'}</p>
+                                        {spec.description && <p className={styles.cardDesc}>{spec.description}</p>}
                                         <div className={styles.cardFooter}>
                                             <Link to={`/specialties/${spec.id}`} className={styles.cardActionLink}>
-                                                Xem chi tiết <ChevronRight size={16} />
+                                                Xem chi tiết
                                             </Link>
-                                            <Link to={`/patient/book?specialtyId=${spec.id}`} className={[styles.cardActionLink, styles.icon11].join(' ')}>
-                                                <Calendar size={14} /> Đặt khám
+                                            <Link to={`/patient/book?specialtyId=${spec.id}`} className={styles.cardActionLink}>
+                                                Đặt lịch
                                             </Link>
                                         </div>
                                     </div>
@@ -195,33 +189,25 @@ export const SearchResults: React.FC = () => {
                         <div>
                             <div className={styles.flexLayout21}>
                                 <h2 className={styles.flexLayout22}>
-                                    <User size={20} color="var(--cc-color-primary)" /> Bác sĩ chuyên khoa ({matchedDoctors.length})
+                                    Bác sĩ ({matchedDoctors.length})
                                 </h2>
                                 <Link to="/doctors" className={styles.cardActionLink}>
-                                    Tất cả bác sĩ <ChevronRight size={16} />
+                                    Tất cả bác sĩ
                                 </Link>
                             </div>
                             <div className={styles.grid4}>
                                 {matchedDoctors.map(doc => (
                                     <div key={doc.id} className={styles.doctorCard}>
-                                        <div className={styles.doctorAvatar}>
-                                            <User size={36} />
-                                        </div>
                                         <h3 className={styles.doctorName}>
                                             {formatDoctorName(doc.academicTitle, doc.fullName)}
                                         </h3>
-                                        <span className={styles.doctorSpecialty}>
-                                            {doc.specialtyName || 'Bác sĩ Đa khoa'}
-                                        </span>
+                                        {doc.specialtyName && <span className={styles.doctorSpecialty}>{doc.specialtyName}</span>}
                                         <div className={styles.doctorActions}>
-                                            <Link to={`/doctors/${doc.id}`} className={[styles.cardActionLink, styles.icon12].join(' ')}>
-                                                Xem hồ sơ <ChevronRight size={15} />
-                                            </Link>
-                                            <Link 
-                                                to={`/patient/book?doctorId=${doc.id}${doc.specialtyId ? `&specialtyId=${doc.specialtyId}` : ''}`}
-                                                className={["btn btn-primary btn-sm", styles.icon13].join(' ')}
-                                            >
-                                                <Calendar size={14} /> Đặt lịch
+                                            <LinkButton type="primary" block to={`/patient/book?doctorId=${doc.id}${doc.specialtyId ? `&specialtyId=${doc.specialtyId}` : ''}`}>
+                                                Đặt lịch khám
+                                            </LinkButton>
+                                            <Link to={`/doctors/${doc.id}`} className={styles.cardActionLink}>
+                                                Xem hồ sơ
                                             </Link>
                                         </div>
                                     </div>
@@ -235,10 +221,10 @@ export const SearchResults: React.FC = () => {
                         <div>
                             <div className={styles.flexLayout21}>
                                 <h2 className={styles.flexLayout22}>
-                                    <Package size={20} color="var(--cc-color-primary)" /> Gói khám sức khỏe ({matchedPackages.length})
+                                    Gói khám ({matchedPackages.length})
                                 </h2>
                                 <Link to="/health-packages" className={styles.cardActionLink}>
-                                    Tất cả gói khám <ChevronRight size={16} />
+                                    Tất cả gói khám
                                 </Link>
                             </div>
                             <div className={styles.grid3}>
@@ -250,12 +236,8 @@ export const SearchResults: React.FC = () => {
                                         <div className={styles.packagePriceRow}>
                                             <div className={styles.packagePrice}>{formatVndCurrency(pkg.price)}</div>
                                             <div className={styles.flexLayout23}>
-                                                <Link to={`/health-packages/${pkg.id}`} className={["btn btn-secondary btn-sm", styles.icon8].join(' ')}>
-                                                    Chi tiết
-                                                </Link>
-                                                <Link to={`/patient/health-packages/${pkg.id}/register`} className={["btn btn-primary btn-sm", styles.icon8].join(' ')}>
-                                                    <CalendarCheck size={14} /> Đăng ký
-                                                </Link>
+                                                <LinkButton to={`/health-packages/${pkg.id}`}>Chi tiết</LinkButton>
+                                                <LinkButton type="primary" to={`/patient/health-packages/${pkg.id}/register`}>Đăng ký</LinkButton>
                                             </div>
                                         </div>
                                     </div>

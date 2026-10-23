@@ -55,9 +55,9 @@ export const PatientPrescriptions: React.FC = () => {
     const price = (value?: number | null) => value == null ? '—' : formatVndCurrency(value);
     return <div className={styles.page}>
         <Breadcrumb items={[{ label: 'Trang chủ', path: '/patient' }, { label: 'Đơn thuốc của tôi' }]} />
-        <PageHeader title="Đơn thuốc điện tử" subtitle="Xem lịch sử đơn thuốc được bác sĩ chỉ định và theo dõi tình trạng cấp phát" />
+        <PageHeader title="Đơn thuốc của tôi" />
         <Input allowClear prefix={<Search size={18} />} placeholder="Tìm theo mã đơn, bác sĩ, tên thuốc..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-        {loading ? <LoadingState message="Đang tải danh sách đơn thuốc từ hệ thống..." /> : error ? <InlineError message={error} onRetry={fetchPrescriptions} /> : filtered.length === 0 ? <EmptyState title="Chưa có đơn thuốc nào" description={term ? 'Không tìm thấy đơn thuốc khớp với từ khóa tìm kiếm.' : 'Các đơn thuốc do bác sĩ kê sau khi hoàn tất ca khám sẽ hiển thị tại đây.'} /> : filtered.map(p =>
+        {loading ? <LoadingState message="Đang tải đơn thuốc..." /> : error ? <InlineError message={error} onRetry={fetchPrescriptions} /> : filtered.length === 0 ? <EmptyState title="Chưa có đơn thuốc nào" description={term ? 'Không tìm thấy đơn thuốc khớp với từ khóa tìm kiếm.' : 'Các đơn thuốc do bác sĩ kê sau khi hoàn tất ca khám sẽ hiển thị tại đây.'} /> : filtered.map(p =>
             <Card key={p.id} data-prescription-id={p.id} className={printingId === p.id ? styles.printingPrescription : undefined} title={<div className={styles.heading}><span>Mã đơn: {p.code}</span><Tag color={p.status === 'Dispensed' ? 'success' : 'warning'}>{getPrescriptionStatusLabel(p.status)}</Tag></div>} extra={<Button className={styles.printButton} title="In đơn thuốc" icon={<Printer size={18} />} onClick={() => handlePrint(p.id)}>In đơn thuốc</Button>}>
                 <div className={styles.content}>
                     <div className={styles.appointment}><span>Ngày kê: {formatDateOnly(p.appointmentDate)}</span>{p.appointmentCode && <span>Lịch hẹn: <strong>{p.appointmentCode}</strong></span>}</div>

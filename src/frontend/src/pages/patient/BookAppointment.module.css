@@ -1,20 +1,19 @@
 .pageWrapper { max-width: 1200px; width: 100%; margin: 0 auto; padding: var(--cc-space-xl) var(--cc-space-lg); }
-.pageHeader { text-align: center; margin-bottom: var(--cc-space-xl); }
-.pageTitle { font-size: 2rem; color: var(--cc-color-navy); margin: 0 0 var(--cc-space-xs); }
+.pageHeader { margin-bottom: var(--cc-space-lg); }
+.pageTitle { font-size: 1.75rem; font-weight: 600; color: var(--cc-color-text-dark); margin: 0; }
 .pageSubtitle, .stepSubtitle, .consultationHint { color: var(--cc-color-text-secondary); }
 .pageSubtitle { margin: 0; }
 .stepperContainer { max-width: 900px; margin: 0 auto var(--cc-space-xl); }
 .bookingLayout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--cc-space-lg); align-items: start; }
 .mainCard { min-width: 0; }
-.stepTitle { font-size: 1.3rem; color: var(--cc-color-navy); margin: 0 0 var(--cc-space-xs); }
+.stepTitle { font-size: 1.15rem; font-weight: 600; color: var(--cc-color-text-dark); margin: 0 0 var(--cc-space-xs); }
 .stepSubtitle { margin: 0 0 var(--cc-space-lg); }
 .selectionGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--cc-space-md); }
-.selectionCard { text-align: center; cursor: pointer; }
-.selectionCard:focus-visible { outline: 2px solid var(--cc-color-primary); outline-offset: 2px; }
-.selectionCardActive { border-color: var(--cc-color-primary); background: var(--cc-color-primary-light); }
-.selectionCard h4 { margin: var(--cc-space-xs) 0; color: var(--cc-color-navy); }
+.selectionCard { cursor: pointer; }
+.selectionCard:focus-visible { outline: 2px solid var(--cc-color-public-accent); outline-offset: 2px; }
+.selectionCardActive { border-color: var(--cc-color-public-accent); background: var(--cc-color-public-accent-soft); }
+.selectionCard h4 { margin: 0 0 var(--cc-space-xxs); font-weight: 600; color: var(--cc-color-text-dark); }
 .selectionCard p { margin: 0; color: var(--cc-color-text-secondary); }
-.cardIcon { color: var(--cc-color-primary); }
 .aiTag { margin: var(--cc-space-xs) 0 0; }
 .doctorAvatar { color: var(--cc-color-primary); background: var(--cc-color-primary-light); }
 .slotGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--cc-space-sm); }
@@ -23,12 +22,12 @@
 .dateField { max-width: 320px; }
 .stepFooter { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--cc-space-md); margin-top: var(--cc-space-xl); padding-top: var(--cc-space-lg); border-top: 1px solid var(--cc-color-border-light); }
 .consultationLink { color: var(--cc-color-primary); font-weight: 600; }
-.summaryTitle { display: flex; align-items: center; gap: var(--cc-space-xs); color: var(--cc-color-navy); }
+.summaryTitle { color: var(--cc-color-text-dark); }
 .summaryList { display: flex; flex-direction: column; gap: var(--cc-space-md); }
 .summaryItem { display: flex; align-items: flex-start; gap: var(--cc-space-sm); }
 .summaryItemIcon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: var(--cc-radius-sm); background: var(--cc-color-bg-subtle); color: var(--cc-color-primary); }
 .summaryItemLabel { font-size: .75rem; color: var(--cc-color-text-secondary); }
-.summaryItemValue { font-weight: 600; color: var(--cc-color-navy); }
+.summaryItemValue { font-weight: 600; color: var(--cc-color-text-dark); }
 .summaryItemEmpty { color: var(--cc-color-text-muted); font-style: italic; }
 .notice { margin-bottom: var(--cc-space-lg); }
 .successPanel { max-width: 740px; margin: 0 auto; }

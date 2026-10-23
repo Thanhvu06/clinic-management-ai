@@ -9,17 +9,17 @@
 .stepNumber { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: var(--cc-radius-full); background: var(--cc-color-bg-subtle); border: 1px solid currentColor; }
 .reachedStep[aria-current] { font-weight: 700; }
 .packageHeader, .actions, .successActions { display: flex; justify-content: space-between; gap: var(--cc-space-sm); flex-wrap: wrap; }
-.packageCode { display: inline-block; padding: var(--cc-space-xxs) var(--cc-space-xs); background: var(--cc-color-navy); color: var(--cc-color-text-on-dark); border-radius: var(--cc-radius-sm); font-weight: 700; }
-.packageName { margin: var(--cc-space-xs) 0 var(--cc-space-xxs); color: var(--cc-color-navy); }
+.packageCode { display: inline-block; color: var(--cc-color-text-secondary); font-size: 0.85rem; }
+.packageName { margin: var(--cc-space-xxs) 0; font-weight: 600; color: var(--cc-color-text-dark); }
 .packagePrice { display: flex; flex-direction: column; text-align: right; }
-.packagePrice strong { font-size: 1.5rem; color: var(--cc-color-primary); }
+.packagePrice strong { font-size: 1.4rem; color: var(--cc-color-text-dark); font-variant-numeric: tabular-nums; }
 .description { margin: var(--cc-space-lg) 0; padding-bottom: var(--cc-space-md); border-bottom: 1px solid var(--cc-color-border-light); }
-.servicesTitle { color: var(--cc-color-navy); margin-bottom: var(--cc-space-md); }
-.servicesTitle svg, .service svg { color: var(--cc-color-secondary); flex-shrink: 0; }
+.servicesTitle { color: var(--cc-color-text-dark); font-weight: 600; margin-bottom: var(--cc-space-md); }
+.servicesTitle svg, .service svg { color: var(--cc-color-public-accent); flex-shrink: 0; }
 .services { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cc-space-sm); margin-bottom: var(--cc-space-xl); }
 .service { align-items: flex-start; }
 .nextAction { display: flex; justify-content: flex-end; }
-.stepTitle { margin: 0 0 var(--cc-space-lg); color: var(--cc-color-navy); }
+.stepTitle { margin: 0 0 var(--cc-space-lg); font-weight: 600; color: var(--cc-color-text-dark); }
 .summary { padding: var(--cc-space-lg); margin-bottom: var(--cc-space-lg); background: var(--cc-color-bg-subtle); border: 1px solid var(--cc-color-border-light); border-radius: var(--cc-radius-lg); }
 .summaryLine { margin-bottom: var(--cc-space-sm); overflow-wrap: anywhere; }
 .summaryLine:last-child { margin-bottom: 0; }
