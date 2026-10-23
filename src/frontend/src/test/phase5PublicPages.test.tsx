@@ -187,7 +187,7 @@ describe('GĐ5 mục 5 và 6: header và footer', () => {
         const footer = container.querySelector('footer')!;
         expect(footer).not.toHaveTextContent(/thông minh|trí tuệ nhân tạo|trải nghiệm/);
         const note = within(footer).getByText('Trợ lý AI chỉ gợi ý chuyên khoa để tham khảo, không thay thế chẩn đoán của bác sĩ.');
-        expect(note.parentElement).toHaveTextContent(/© \d{4} ClinicCare/);
+        expect(note.parentElement).toHaveTextContent(/© 2026 ClinicCare AI/);
         const policy = within(footer).getByRole('heading', { name: 'Chính sách' }).parentElement!;
         expect(policy).not.toContainElement(note);
         expect(within(footer).getAllByRole('heading', { level: 3 }).map(node => node.textContent)).toEqual(['Khám bệnh', 'Tra cứu', 'Chính sách']);
@@ -219,7 +219,7 @@ describe('GĐ5 mục 7 và 8: trang chủ', () => {
     it('shows search first, four quick links, then specialties, doctors, packages, locations and FAQ in order', async () => {
         mount('/', '/', <PublicLanding />);
         await screen.findByRole('heading', { level: 2, name: 'Chuyên khoa' });
-        const hero = screen.getByRole('heading', { level: 1, name: 'Đặt lịch khám tại ClinicCare' }).closest('section')!;
+        const hero = screen.getByRole('heading', { level: 1, name: 'Đặt lịch khám tại ClinicCare AI' }).closest('section')!;
         expect(within(hero).getByRole('textbox', { name: 'Tìm bác sĩ, chuyên khoa, gói khám' })).toBeInTheDocument();
         const quick = within(hero).getByRole('navigation', { name: 'Lối tắt' });
         expect([...quick.children].map(node => node.textContent)).toEqual(['Đặt lịch khám', 'Tra cứu lịch hẹn', 'Bảng giá thuốc', 'Hỏi trợ lý AI']);

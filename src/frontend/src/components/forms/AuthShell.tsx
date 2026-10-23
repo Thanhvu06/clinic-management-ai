@@ -15,7 +15,7 @@ export const AuthShell: React.FC<AuthShellProps> = ({ title, subtitle, children,
         <div className={styles.authBox}>
             <Link to="/" className={styles.authLogo}>
                 <ShieldPlus size={22} aria-hidden="true" />
-                ClinicCare
+                ClinicCare AI
             </Link>
             <div className={styles.authCard}>
                 <h1 className={styles.authTitle}>{title}</h1>
