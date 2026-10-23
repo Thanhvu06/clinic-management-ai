@@ -190,20 +190,21 @@ export const AdminMedicines: React.FC = () => {
             </FilterBar>
             {loading ? <LoadingState message="Đang tải danh mục thuốc..." /> : loadError ? <InlineError message={loadError} onRetry={fetchMedicines} />
                 : medicines.length === 0 ? <EmptyState title="Không tìm thấy thuốc nào trong danh mục." /> : <>
-                    <DataTable ariaLabel="Danh mục thuốc" data={medicines} keyExtractor={medicine => medicine.id} columns={[
+                    <div className={styles.medicineTable}><DataTable ariaLabel="Danh mục thuốc" data={medicines} keyExtractor={medicine => medicine.id} columns={[
                         { header: 'Mã thuốc', accessor: medicine => <Typography.Text strong className={styles.medicineCode}>{medicine.code}</Typography.Text> },
-                        { header: 'Tên thuốc', accessor: medicine => <span className={styles.medicineName}><Typography.Text strong>{medicine.name}</Typography.Text>{(medicine.isPrescriptionRequired ?? true) && <Tag className={styles.prescriptionTag}>Kê đơn</Tag>}</span> },
-                        { header: 'Nhóm', accessor: medicine => medicine.categoryName || '—' },
+                        { header: 'Tên thuốc', className: styles.medicineNameCell, accessor: medicine => <span className={styles.medicineName}><Typography.Text strong>{medicine.name}</Typography.Text>{(medicine.isPrescriptionRequired ?? true) && <Tag className={styles.prescriptionTag}>Kê đơn</Tag>}</span> },
+                        { header: 'Nhóm', className: styles.medicineCategoryCell, accessor: medicine => medicine.categoryName ? <span className={styles.medicineCategory} title={medicine.categoryName}>{medicine.categoryName}</span> : '—' },
                         { header: 'Đơn vị tính', accessor: medicine => medicine.unit },
                         { header: 'Đơn giá (VNĐ)', accessor: medicine => medicine.unitPrice ? <Typography.Text strong className={styles.medicinePrice}>{medicine.unitPrice.toLocaleString('vi-VN')} đ</Typography.Text> : <Typography.Text type="secondary">Chưa định giá</Typography.Text> },
                         { header: 'Còn dùng được', accessor: medicine => <MedicineStockCell stockQuantity={medicine.usableStock ?? medicine.stockQuantity} reorderLevel={medicine.reorderLevel} /> },
-                        { header: 'Tổng tồn (gồm lô hết hạn)', accessor: medicine => medicine.usableStock === undefined ? '—' : medicine.stockQuantity },
+                        { header: 'Tổng tồn', accessor: medicine => medicine.usableStock === undefined ? '—' : medicine.stockQuantity },
                         { header: 'Trạng thái', accessor: medicine => <StatusBadge status={medicine.isActive ? 'Approved' : 'Rejected'} label={medicine.isActive ? 'Đang dùng' : 'Tạm ngưng'} /> },
-                        { header: 'Thao tác', align: 'right', accessor: medicine => <div className={styles.medicineRowActions}>
+                        { header: 'Thao tác', align: 'right', className: styles.medicineActionsCell, accessor: medicine => <div className={styles.medicineRowActions}>
                             <Button size="small" icon={<Edit size={14} />} title="Chỉnh sửa" onClick={() => openModal({ ...medicine }, true)}>Sửa</Button>
                             <Button size="small" title={medicine.isActive ? 'Ngưng sử dụng' : 'Mở lại'} disabled={togglingId !== null} onClick={() => handleToggleStatus(medicine.id)}>{togglingId === medicine.id ? 'Đang cập nhật...' : medicine.isActive ? 'Khóa' : 'Mở'}</Button>
                         </div> }
-                    ]} />
+                    ]} /></div>
+                    <Typography.Text type="secondary" className={styles.medicineStockNote}>Tổng tồn gồm cả lô đã hết hạn.</Typography.Text>
                     <Pagination page={page} totalPages={Math.ceil(totalItems / 10)} totalRecords={totalItems} onPageChange={setPage} />
                 </>}
             {!loading && !loadError && <div className={styles.medicineTotal}>Tổng số: {totalItems} thuốc</div>}

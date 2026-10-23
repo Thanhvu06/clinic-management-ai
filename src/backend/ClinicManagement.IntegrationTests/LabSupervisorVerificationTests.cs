@@ -119,7 +119,7 @@ public class LabSupervisorVerificationTests(CustomWebApplicationFactory factory)
         using var scope = Factory.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.Equal(VisitStatus.ResultsReady, (await db.PatientVisits.FindAsync(order.PatientVisitId))!.Status);
         Assert.True(await db.Notifications.AnyAsync(n => n.UserId == DoctorId && n.DedupeKey == $"diag_completed_doc_{order.Id}_{DoctorId}"));
-        Assert.Contains(role == RoleNames.Doctor ? "Bác sĩ:" : role == RoleNames.LabSupervisor ? "Trưởng phòng xét nghiệm:" : "Kỹ thuật viên:", (await db.SystemAuditLogs.SingleAsync(a => a.Action == "DiagnosticResultsVerified" && a.EntityId == order.Id.ToString())).Description);
+        Assert.Contains(role == RoleNames.Doctor ? "(Bác sĩ)." : role == RoleNames.LabSupervisor ? "(Trưởng phòng xét nghiệm)." : "(Kỹ thuật viên).", (await db.SystemAuditLogs.SingleAsync(a => a.Action == "DiagnosticResultsVerified" && a.EntityId == order.Id.ToString())).Description);
         Assert.Equal(role, (await DetailAsync(order.Id)).VerifiedByRole);
     }
 

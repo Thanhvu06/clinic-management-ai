@@ -96,10 +96,11 @@ export const AdminDashboard: React.FC = () => {
 
     const logColumns: DataTableColumn<AuditLogEntry>[] = [
         { header: 'Thời gian', accessor: item => <span className={styles.numeric}>{formatDateTime(item.createdAt)}</span> },
-        { header: 'Người làm', accessor: 'userFullName' },
-        { header: 'Hành động', accessor: item => getAuditActionLabel(item.action) },
-        { header: 'Thực thể', accessor: item => getAuditEntityLabel(item.entityName) },
-        { header: 'Mô tả', accessor: 'description', className: styles.description },
+        { header: 'Người làm', accessor: 'userFullName', className: styles.actor },
+        { header: 'Mô tả', className: styles.description, accessor: item => <>
+            <span className={styles.activityHeading}><strong>{getAuditActionLabel(item.action)}</strong><span className={styles.activityEntity}>{getAuditEntityLabel(item.entityName)}</span></span>
+            {item.description && <span className={styles.activityText}>{item.description}</span>}
+        </> },
     ];
 
     return (

@@ -4,5 +4,9 @@
 .panelHeader { display: flex; align-items: baseline; justify-content: space-between; gap: var(--cc-space-sm); margin-bottom: var(--cc-space-sm); }
 .panelTitle { font-size: 1rem; font-weight: 600; color: var(--cc-color-text-dark); margin: 0; }
 .numeric { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.description { min-width: 200px; overflow-wrap: anywhere; }
+.actor { min-width: 96px; }
+.description { min-width: 160px; overflow-wrap: anywhere; }
+.activityHeading { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--cc-space-xxs) var(--cc-space-xs); }
+.activityEntity { color: var(--cc-color-text-secondary); }
+.activityText { display: block; }
 @media (min-width: 1200px) { .panels { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
