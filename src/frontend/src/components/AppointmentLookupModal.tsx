@@ -1,3 +1,4 @@
+import { getAppointmentStatusLabel } from '../utils/appointmentStatusLabels';
 import { formatDateOnly } from '../utils/formatters';
 import React, { useState } from 'react';
 import { Search, Calendar, Clock, User, Stethoscope, AlertCircle, X, CheckCircle, Clock4, XCircle } from 'lucide-react';
@@ -69,31 +70,31 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
             case 'Confirmed':
                 return (
                     <span className={styles.flexLayout1}>
-                        <CheckCircle size={14} /> Đã xác nhận
+                        <CheckCircle size={14} /> {getAppointmentStatusLabel(status, 'patient')}
                     </span>
                 );
             case 'Pending':
                 return (
                     <span className={styles.flexLayout2}>
-                        <Clock4 size={14} /> Đang chờ duyệt
+                        <Clock4 size={14} /> {getAppointmentStatusLabel(status, 'patient')}
                     </span>
                 );
             case 'Completed':
                 return (
                     <span className={styles.flexLayout3}>
-                        <CheckCircle size={14} /> Đã khám xong
+                        <CheckCircle size={14} /> {getAppointmentStatusLabel(status, 'patient')}
                     </span>
                 );
             case 'Cancelled':
                 return (
                     <span className={styles.flexLayout4}>
-                        <XCircle size={14} /> Đã hủy
+                        <XCircle size={14} /> {getAppointmentStatusLabel(status, 'patient')}
                     </span>
                 );
             default:
                 return (
                     <span className={styles.text1}>
-                        {status}
+                        {getAppointmentStatusLabel(status, 'patient')}
                     </span>
                 );
         }

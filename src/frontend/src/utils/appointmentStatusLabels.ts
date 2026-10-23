@@ -7,8 +7,11 @@ export const appointmentStatusLabels: Readonly<Record<string, string>> = {
     Completed: 'Đã khám xong',
     NoShow: 'Vắng mặt',
     CheckedIn: 'Đã tiếp nhận',
-    InConsultation: 'Đang khám'
+    InConsultation: 'Đang khám',
+    InProgress: 'Đang khám'
 };
 
-export const getAppointmentStatusLabel = (status: string): string =>
-    Object.hasOwn(appointmentStatusLabels, status) ? appointmentStatusLabels[status] : 'Không xác định';
+export const getAppointmentStatusLabel = (status: string, audience: 'staff' | 'patient' = 'staff'): string => {
+    if (status === 'Confirmed' && audience === 'patient') return 'Đã xác nhận';
+    return Object.hasOwn(appointmentStatusLabels, status) ? appointmentStatusLabels[status] : 'Không xác định';
+};

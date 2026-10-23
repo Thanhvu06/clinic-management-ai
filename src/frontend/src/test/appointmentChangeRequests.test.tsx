@@ -137,7 +137,7 @@ describe('Appointment Change Request UI Workflows', () => {
             expect(screen.getByText('Hủy lịch')).toBeInTheDocument();
 
             // Status badge and withdraw button for APT-102 (PendingReschedule)
-            expect(screen.getByText('Chờ đổi lịch')).toBeInTheDocument();
+            expect(screen.getByText('Chờ duyệt đổi lịch')).toBeInTheDocument();
             expect(screen.getByText('Rút yêu cầu')).toBeInTheDocument();
         });
 

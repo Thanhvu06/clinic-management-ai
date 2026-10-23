@@ -11,19 +11,41 @@ public static class MedicineBatchDevelopmentSeed
     {
         if (!demoEnabled) return;
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
-        if (await db.MedicineBatches.AnyAsync()) return;
+        var batches = await db.MedicineBatches.OrderBy(batch => batch.Id).ToListAsync();
+        var usedNumbers = batches.Select(batch => batch.BatchNumber).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var sequence = 1;
+        string NextBatchNumber()
+        {
+            while (sequence <= 999)
+            {
+                var number = $"LOT-{clock.VietnamNow:yyMM}-{sequence++:D3}";
+                if (usedNumbers.Add(number)) return number;
+            }
+            throw new InvalidOperationException("Không còn số lô trống cho tháng hiện tại.");
+        }
+        var legacy = batches.Where(batch => batch.BatchNumber.StartsWith("DEMO-", StringComparison.Ordinal)).ToList();
+        foreach (var batch in legacy) batch.BatchNumber = NextBatchNumber();
+        var legacyIds = legacy.Select(batch => batch.Id).ToList();
+        foreach (var entry in await db.MedicineStockTransactions.Where(entry => entry.MedicineBatchId.HasValue && legacyIds.Contains(entry.MedicineBatchId.Value) && entry.Reason == "Lô hết hạn minh họa dữ liệu demo").ToListAsync())
+            entry.Reason = "Nhập lô thuốc hết hạn";
+        if (batches.Count > 0)
+        {
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return;
+        }
         var medicines = await db.Medicines.Where(medicine => medicine.StockQuantity > 0).OrderBy(medicine => medicine.Id).ToListAsync();
         foreach (var medicine in medicines)
         {
             var first = medicine.StockQuantity / 2;
             db.MedicineBatches.AddRange(
-                Batch(medicine, $"DEMO-{medicine.Id}-60", clock.VietnamToday.AddDays(60), first),
-                Batch(medicine, $"DEMO-{medicine.Id}-400", clock.VietnamToday.AddDays(400), medicine.StockQuantity - first));
+                Batch(medicine, clock.VietnamToday.AddDays(60), first),
+                Batch(medicine, clock.VietnamToday.AddDays(400), medicine.StockQuantity - first));
         }
         if (medicines.FirstOrDefault(medicine => medicine.StockQuantity < int.MaxValue) is { } demoMedicine)
         {
             var quantity = Math.Min(5, int.MaxValue - demoMedicine.StockQuantity);
-            var expired = Batch(demoMedicine, $"DEMO-{demoMedicine.Id}-EXPIRED", clock.VietnamToday.AddDays(-15), quantity);
+            var expired = Batch(demoMedicine, clock.VietnamToday.AddDays(-15), quantity);
             db.MedicineBatches.Add(expired);
             demoMedicine.StockQuantity += quantity;
             demoMedicine.UpdatedAt = clock.UtcNow;
@@ -31,15 +53,15 @@ public static class MedicineBatchDevelopmentSeed
             {
                 MedicineId = demoMedicine.Id, MedicineBatch = expired, Type = MedicineStockTransactionType.StockIn,
                 QuantityChange = quantity, BalanceAfter = demoMedicine.StockQuantity, ActorUserId = actor,
-                Reason = "Lô hết hạn minh họa dữ liệu demo", CreatedAt = clock.UtcNow
+                Reason = "Nhập lô thuốc hết hạn", CreatedAt = clock.UtcNow
             });
         }
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
 
-        MedicineBatch Batch(Medicine medicine, string number, DateOnly expiry, int quantity) => new()
+        MedicineBatch Batch(Medicine medicine, DateOnly expiry, int quantity) => new()
         {
-            Medicine = medicine, BatchNumber = number, ExpiryDate = expiry, QuantityReceived = quantity,
+            Medicine = medicine, BatchNumber = NextBatchNumber(), ExpiryDate = expiry, QuantityReceived = quantity,
             QuantityRemaining = quantity, ReceivedAt = clock.UtcNow, CreatedByUserId = actor
         };
     }
