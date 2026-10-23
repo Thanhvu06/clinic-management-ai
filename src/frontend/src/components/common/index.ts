@@ -8,3 +8,4 @@ export * from './LoadingState';
 export * from './EmptyState';
 export * from './InlineError';
 export * from './Pagination';
+export * from './LinkButton';

@@ -2,7 +2,7 @@ import { getApiErrorMessage } from '../utils/apiError';
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
-import { User, Mail, Phone, ArrowRight } from 'lucide-react';
+import { User, Mail, Phone } from 'lucide-react';
 import { useDialog } from '../contexts/DialogContext';
 import { AuthShell, FormField, TextInput, PasswordInput, Button, FormError } from '../components/forms';
 import { sanitizeReturnUrl } from '../utils/roleRoutes';
@@ -86,17 +86,12 @@ export const Register: React.FC = () => {
 
     return (
         <AuthShell
-            title="Tạo tài khoản mới"
-            subtitle="Đăng ký tài khoản để khám chữa bệnh và quản lý hồ sơ gia đình thuận tiện"
-            heroTitle="Đồng hành cùng sức khỏe gia đình bạn"
-            heroDescription="Hệ thống quản lý phòng khám thông minh ClinicCare giúp bạn tiếp cận dịch vụ y tế chuẩn mực, minh bạch chi phí và an tâm điều trị."
-            heroImageUrl="https://images.unsplash.com/photo-1551076805-e18690c5e561?auto=format&fit=crop&w=800&q=80"
+            title="Tạo tài khoản"
+            subtitle="Tài khoản dùng để đặt lịch, xem đơn thuốc và kết quả khám."
             footerLink={
                 <span>
                     Đã có tài khoản?{' '}
-                    <Link to={loginUrl} className={styles.icon1}>
-                        Đăng nhập ngay &rarr;
-                    </Link>
+                    <Link to={loginUrl} className={styles.icon1}>Đăng nhập</Link>
                 </span>
             }
         >
@@ -154,7 +149,7 @@ export const Register: React.FC = () => {
                     label="Mật khẩu" 
                     required 
                     error={fieldErrors.password}
-                    helpText="Mật khẩu tối thiểu 8 ký tự, nên bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt."
+                    helpText="Tối thiểu 8 ký tự, nên có chữ hoa, chữ thường, số và ký tự đặc biệt."
                 >
                     <PasswordInput
                         id="password"
@@ -170,13 +165,12 @@ export const Register: React.FC = () => {
                 <div className={styles.spacing2}>
                     <Button
                         type="submit"
-                        variant="secondary"
+                        variant="primary"
                         size="lg"
                         fullWidth
-                        loading={loading}
                         disabled={loading}
                     >
-                        Đăng ký tài khoản <ArrowRight size={18} />
+                        {loading ? 'Đang tạo tài khoản...' : 'Đăng ký'}
                     </Button>
                 </div>
             </form>

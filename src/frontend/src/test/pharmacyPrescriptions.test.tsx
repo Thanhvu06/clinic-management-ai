@@ -115,7 +115,7 @@ describe('PharmacyPrescriptions Component', () => {
         await waitFor(() => {
             expect(screen.getByText('Nguyễn Văn Test')).toBeInTheDocument();
             expect(screen.getByText('APT-101')).toBeInTheDocument();
-            expect(screen.getByText('Đã phát hành')).toBeInTheDocument();
+            expect(screen.getByText('Chờ cấp thuốc')).toBeInTheDocument();
         });
     });
 

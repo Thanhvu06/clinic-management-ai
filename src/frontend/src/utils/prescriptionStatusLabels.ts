@@ -6,5 +6,12 @@ const labels: Readonly<Record<string, string>> = {
     ReservedForPurchase: 'Giữ thuốc chờ mua'
 };
 
-export const getPrescriptionStatusLabel = (status: string): string =>
-    Object.hasOwn(labels, status) ? labels[status] : 'Không xác định';
+export type PrescriptionStatusContext = 'default' | 'pharmacy';
+
+// Với dược sĩ, đơn đã phát hành là việc đang chờ mình xử lý.
+const pharmacyLabels: Readonly<Record<string, string>> = { ...labels, Issued: 'Chờ cấp thuốc' };
+
+export const getPrescriptionStatusLabel = (status: string, context: PrescriptionStatusContext = 'default'): string => {
+    const source = context === 'pharmacy' ? pharmacyLabels : labels;
+    return Object.hasOwn(source, status) ? source[status] : 'Không xác định';
+};

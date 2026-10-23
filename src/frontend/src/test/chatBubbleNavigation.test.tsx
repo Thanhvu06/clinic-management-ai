@@ -107,16 +107,16 @@ describe('Chat bubble entry points', () => {
         expect(screen.getByLabelText('Địa chỉ').textContent).toBe('/before?source=old#details');
     });
 
-    it.each(['Đau tức ngực, hồi hộp', 'Đau đầu, chóng mặt kéo dài', 'Ho sốt, đau rát họng', 'Đau nhức khớp gối, thắt lưng'])('opens from home symptom %s without navigating', async symptom => {
+    it.each(['Lối tắt'])('opens from home %s without navigating', async navigation => {
         await mount();
-        await click(screen.getByRole('button', { name: symptom }));
+        await click(within(screen.getByRole('navigation', { name: navigation })).getByRole('link', { name: 'Hỏi trợ lý AI' }));
         expect(dialog()).toBeInTheDocument();
         expect(screen.getByLabelText('Địa chỉ').textContent).toBe('/');
     });
 
-    it.each([0, 1, 2])('opens from landing AI link %i without changing its href or the URL', async index => {
+    it.each([0, 1])('opens from landing AI link %i without changing its href or the URL', async index => {
         await mount();
-        const link = screen.getAllByRole('link', { name: 'Trò chuyện với Trợ lý AI' })[index];
+        const link = screen.getAllByRole('link', { name: 'Hỏi trợ lý AI' })[index];
         expect(link).toHaveAttribute('href', '/patient/ai-consultation');
         await click(link);
         expect(dialog()).toBeInTheDocument();
@@ -129,19 +129,19 @@ describe('Chat bubble entry points', () => {
         const links = [...document.querySelectorAll<HTMLAnchorElement>('a[href="/patient/ai-consultation"]')]
             .filter(link => link.textContent !== 'Mở liên kết cũ');
         await click(links[index]);
-        expect(screen.getByRole('heading', { name: 'Tính năng dành cho Bệnh nhân' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Về Không gian làm việc (Doctor)' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Tính năng dành cho người bệnh' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Về bàn làm việc' })).toBeInTheDocument();
         expect(screen.queryByRole('dialog', { name: /ClinicCare AI/ })).not.toBeInTheDocument();
         expect(screen.getByLabelText('Địa chỉ').textContent).toBe('/before');
     });
 
     it.each([
-        ['/patient/book', 'Tư vấn cùng AI →'],
-        ['/search?q=unknown', 'Nhờ Trợ lý AI định tuyến triệu chứng'],
-        ['/specialties/1', 'Định tuyến triệu chứng AI'],
+        ['/patient/book', 'Hỏi trợ lý AI'],
+        ['/search?q=unknown', 'Hỏi trợ lý AI nên khám chuyên khoa nào'],
+        ['/specialties/1', 'Hỏi trợ lý AI'],
     ])('opens the bubble from %s without navigation', async (route, name) => {
         await mount(route);
-        const link = await screen.findByRole('link', { name });
+        const link = await within(screen.getByRole('main')).findByRole('link', { name });
         expect(link).toHaveAttribute('href', '/patient/ai-consultation');
         await click(link);
         expect(dialog()).toBeInTheDocument();
@@ -167,7 +167,7 @@ describe('Chat bubble entry points', () => {
         } }));
         mocks.post.mockResolvedValueOnce({ success: true, data: { id: 42, appointmentCode: 'BUBBLE-42', ...review.payload } });
         await mount('/before');
-        await click(screen.getAllByRole('link', { name: 'Tư vấn AI' })[0]);
+        await click(screen.getAllByRole('link', { name: 'Trợ lý AI' })[0]);
         expect(dialog().querySelector('[data-provider-status]')).not.toBeNull();
         const chips = await screen.findByRole('group', { name: 'Tra cứu nhanh dữ liệu của bạn' });
         await click(within(chips).getByRole('button', { name: 'Gợi ý: Đặt lịch khám' }));

@@ -1,9 +1,10 @@
 import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { User, Search, ChevronRight, Calendar } from 'lucide-react';
+import { Search } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import styles from './PublicPages.module.css';
+import { LinkButton } from '../../components/common/LinkButton';
 import { formatDoctorName } from '../../utils/doctorNameHelper';
 
 interface Doctor {
@@ -94,12 +95,9 @@ export const DoctorsList: React.FC = () => {
                 <nav className={styles.breadcrumb} aria-label="Đường dẫn trang">
                     <Link to="/">Trang chủ</Link>
                     <span>/</span>
-                    <span aria-current="page">Đội ngũ Bác sĩ</span>
+                    <span aria-current="page">Bác sĩ</span>
                 </nav>
-                <h1 className={styles.pageTitle}>Đội ngũ Bác sĩ Chuyên khoa ClinicCare</h1>
-                <p className={styles.pageSubtitle}>
-                    Các chuyên gia y tế giàu y đức, được đào tạo bài bản trong nước và quốc tế, tận tâm vì sức khỏe toàn diện của người bệnh.
-                </p>
+                <h1 className={styles.pageTitle}>Đội ngũ bác sĩ</h1>
             </div>
 
             <div className={styles.toolbar}>
@@ -159,35 +157,32 @@ export const DoctorsList: React.FC = () => {
                 <div className={styles.grid4}>
                     {filteredDoctors.map(doc => (
                         <div key={doc.id} className={styles.doctorCard}>
-                            <div className={[styles.doctorAvatar, styles.text16].join(' ')}>
-                                {getDoctorInitials(doc.fullName)}
+                            <div className={styles.doctorHeading}>
+                                <div className={styles.doctorAvatar} aria-hidden="true">
+                                    {getDoctorInitials(doc.fullName)}
+                                </div>
+                                <div>
+                                    <h2 className={styles.doctorName}>
+                                        {formatDoctorName(doc.academicTitle, doc.fullName)}
+                                    </h2>
+                                    {doc.specialtyName && <span className={styles.doctorSpecialty}>{doc.specialtyName}</span>}
+                                </div>
                             </div>
-                            <h2 className={styles.doctorName}>
-                                {formatDoctorName(doc.academicTitle, doc.fullName)}
-                            </h2>
-                            <span className={styles.doctorSpecialty}>
-                                {doc.specialtyName || 'Chuyên khoa'}
-                            </span>
                             <span className={styles.doctorExp}>
-                                {doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật'}
+                                {doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật kinh nghiệm'}
                             </span>
-                            
-                            <p className={styles.paragraph10}>
-                                {doc.description || 'Bác sĩ chuyên khoa tại hệ thống phòng khám ClinicCare.'}
-                            </p>
+                            {doc.description && <p className={styles.paragraph10}>{doc.description}</p>}
 
                             <div className={styles.doctorActions}>
-                                <Link 
-                                    to={`/doctors/${doc.id}`} 
-                                    className={[styles.cardActionLink, styles.icon12].join(' ')}
-                                >
-                                    Xem lý lịch & hồ sơ <ChevronRight size={15} />
-                                </Link>
-                                <Link 
+                                <LinkButton
+                                    type="primary"
+                                    block
                                     to={`/patient/book?doctorId=${doc.id}${doc.specialtyId ? `&specialtyId=${doc.specialtyId}` : ''}`}
-                                    className={["btn btn-primary btn-sm", styles.icon13].join(' ')}
                                 >
-                                    <Calendar size={14} /> Đặt lịch khám
+                                    Đặt lịch khám
+                                </LinkButton>
+                                <Link to={`/doctors/${doc.id}`} className={styles.cardActionLink}>
+                                    Xem hồ sơ
                                 </Link>
                             </div>
                         </div>
@@ -195,9 +190,8 @@ export const DoctorsList: React.FC = () => {
                 </div>
             ) : (
                 <div className={styles.emptyState}>
-                    <User size={48} className={styles.icon1} />
                     <div className={styles.emptyStateTitle}>Không tìm thấy bác sĩ phù hợp</div>
-                    <p>Vui lòng thử tìm kiếm với từ khóa hoặc chuyên khoa khác.</p>
+                    <p>Thử tìm với tên khác hoặc chọn chuyên khoa khác.</p>
                 </div>
             )}
         </div>

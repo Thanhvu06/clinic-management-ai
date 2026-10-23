@@ -402,7 +402,7 @@ export const PatientAppointments: React.FC = () => {
     return (
         <div className={styles.page}>
             <Breadcrumb items={[{ label: 'Trang chủ', path: '/patient' }, { label: 'Lịch hẹn của tôi' }]} />
-            <PageHeader title="Lịch hẹn của tôi" actions={<Button type="primary" onClick={() => navigate('/patient/book')}>+ Đặt lịch mới</Button>} />
+            <PageHeader title="Lịch hẹn của tôi" actions={<Button type="primary" onClick={() => navigate('/patient/book')}>Đặt lịch mới</Button>} />
             <div className={styles.filters} role="group" aria-label="Lọc lịch hẹn">
                 {[{ key: 'All', label: 'Tất cả' }, { key: 'Upcoming', label: 'Sắp tới' }, { key: 'Past', label: 'Đã qua' }].map(tab => <Button key={tab.key} type={activeTab === tab.key ? 'primary' : 'default'} className={activeTab === tab.key ? 'active' : undefined} aria-pressed={activeTab === tab.key} onClick={() => changeTab(tab.key)}>{tab.label}</Button>)}
             </div>
@@ -437,7 +437,7 @@ export const PatientAppointments: React.FC = () => {
                                 <div className={styles.infoLine}><Stethoscope size={16} /><span>Chuyên khoa: <strong>{app.specialtyName || '...'}</strong></span></div>
                                 <div className={styles.infoLine}><User size={16} /><span>Bác sĩ: <strong>{app.doctorName || '...'}</strong></span></div>
                             </div>
-                            <div><h3 className={styles.sectionTitle}>Triệu chứng / Ghi chú</h3><p className={styles.notes}>{app.reason || 'Không có ghi chú'}</p></div>
+                            <div><h3 className={styles.sectionTitle}>Triệu chứng / ghi chú</h3><p className={styles.notes}>{app.reason || 'Không có ghi chú'}</p></div>
                         </div>
                     </Card>;
                 })}
@@ -447,7 +447,7 @@ export const PatientAppointments: React.FC = () => {
                 <Button type="primary" danger onClick={submitCancel} disabled={canceling}>{canceling ? 'Đang xử lý...' : 'Xác nhận gửi yêu cầu'}</Button>
             </>}>
                 <Alert type="warning" showIcon className={styles.modalAlert} title="Yêu cầu hủy sẽ được gửi đến lễ tân duyệt. Bạn có chắc chắn muốn yêu cầu hủy lịch khám này?" />
-                <Form layout="vertical"><Form.Item label="Lý do hủy lịch (*)" htmlFor="cancel-reason"><Input.TextArea id="cancel-reason" rows={3} placeholder="Vui lòng nhập lý do (ít nhất 5 ký tự)..." value={cancelModal.reason} onChange={event => setCancelModal(p => ({ ...p, reason: event.target.value }))} disabled={canceling} /></Form.Item></Form>
+                <Form layout="vertical"><Form.Item label="Lý do hủy lịch" htmlFor="cancel-reason" required><Input.TextArea id="cancel-reason" rows={3} placeholder="Vui lòng nhập lý do (ít nhất 5 ký tự)..." value={cancelModal.reason} onChange={event => setCancelModal(p => ({ ...p, reason: event.target.value }))} disabled={canceling} /></Form.Item></Form>
                 {cancelModal.inlineError && <Alert type="error" title={cancelModal.inlineError} showIcon />}
             </Modal>
             <Modal getContainer={false} open={rescheduleModal.isOpen} title={`Đổi lịch khám #${rescheduleModal.app?.appointmentCode}`} onCancel={closeReschedule} maskClosable={!rescheduling} closable={!rescheduling} keyboard={!rescheduling} footer={<>
@@ -460,15 +460,15 @@ export const PatientAppointments: React.FC = () => {
                     <div>Lịch hiện tại: <strong>{formatDateOnly(rescheduleModal.app?.appointmentDate)} ({rescheduleModal.app?.startTime?.substring(0, 5)} - {rescheduleModal.app?.endTime?.substring(0, 5)})</strong></div>
                 </div>
                 <Form layout="vertical">
-                    <Form.Item label="Chọn ngày khám mới (*)" htmlFor="reschedule-date"><Input type="date" id="reschedule-date" className={styles.dateInput} min={tomorrowStr} value={rescheduleModal.targetDate} onChange={event => handleTargetDateChange(event.target.value)} disabled={rescheduling} /></Form.Item>
-                    <Form.Item label="Chọn ca khám mới (*)" htmlFor="reschedule-slots">
+                    <Form.Item label="Chọn ngày khám mới" htmlFor="reschedule-date" required><Input type="date" id="reschedule-date" className={styles.dateInput} min={tomorrowStr} value={rescheduleModal.targetDate} onChange={event => handleTargetDateChange(event.target.value)} disabled={rescheduling} /></Form.Item>
+                    <Form.Item label="Chọn ca khám mới" htmlFor="reschedule-slots" required>
                         <div id="reschedule-slots">
                             {rescheduleModal.loadingSlots ? <LoadingState message="Đang tìm ca khám trống..." height="120px" /> : rescheduleModal.inlineError ? null : rescheduleModal.availableSlots.length === 0 ? <Alert type="error" title="Bác sĩ không có ca khám trống trong ngày này. Vui lòng chọn ngày khác." /> : <div className={styles.slots}>
                                 {rescheduleModal.availableSlots.map(slot => <Button key={slot.slotId} type={rescheduleModal.selectedSlotId === slot.slotId ? 'primary' : 'default'} disabled={rescheduling} icon={rescheduleModal.selectedSlotId === slot.slotId ? <Check size={14} /> : undefined} onClick={() => setRescheduleModal(p => ({ ...p, selectedSlotId: slot.slotId, inlineError: '' }))}>{slot.startTime?.substring(0, 5)} - {slot.endTime?.substring(0, 5)}</Button>)}
                             </div>}
                         </div>
                     </Form.Item>
-                    <Form.Item label="Lý do đổi lịch (*)" htmlFor="reschedule-reason"><Input.TextArea id="reschedule-reason" rows={2} placeholder="Vui lòng nhập lý do (ít nhất 5 ký tự)..." value={rescheduleModal.reason} onChange={event => setRescheduleModal(p => ({ ...p, reason: event.target.value }))} disabled={rescheduling} /></Form.Item>
+                    <Form.Item label="Lý do đổi lịch" htmlFor="reschedule-reason" required><Input.TextArea id="reschedule-reason" rows={2} placeholder="Vui lòng nhập lý do (ít nhất 5 ký tự)..." value={rescheduleModal.reason} onChange={event => setRescheduleModal(p => ({ ...p, reason: event.target.value }))} disabled={rescheduling} /></Form.Item>
                 </Form>
                 {rescheduleModal.inlineError && <Alert type="error" title={rescheduleModal.inlineError} showIcon />}
             </Modal>

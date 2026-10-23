@@ -128,14 +128,14 @@ describe('Patient revisit invitations', () => {
     it('rejects reasons shorter than five characters without calling the API', async () => {
         mocks.get.mockResolvedValue({ success: true, data: [revisit] }); mount(<PatientRevisit />);
         fireEvent.click(await screen.findByRole('button', { name: 'Từ chối' }));
-        fireEvent.change(screen.getByLabelText('Lý do từ chối (*)'), { target: { value: 'abc' } });
+        fireEvent.change(screen.getByLabelText('Lý do từ chối'), { target: { value: 'abc' } });
         fireEvent.click(screen.getByRole('button', { name: 'Xác nhận từ chối' }));
         expect(await screen.findByText('Vui lòng nhập lý do (ít nhất 5 ký tự).')).toBeInTheDocument(); expect(mocks.post).not.toHaveBeenCalled();
     });
     it('keeps the rejection modal open on payload errors and closes it after success', async () => {
         mocks.get.mockResolvedValue({ success: true, data: [revisit] }); mocks.post.mockRejectedValueOnce({ message: 'Không thể từ chối X' }).mockResolvedValueOnce({ success: true });
         mount(<PatientRevisit />); fireEvent.click(await screen.findByRole('button', { name: 'Từ chối' }));
-        fireEvent.change(screen.getByLabelText('Lý do từ chối (*)'), { target: { value: 'Đã khỏe lại' } });
+        fireEvent.change(screen.getByLabelText('Lý do từ chối'), { target: { value: 'Đã khỏe lại' } });
         fireEvent.click(screen.getByRole('button', { name: 'Xác nhận từ chối' }));
         expect(await screen.findByText('Không thể từ chối X')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Xác nhận từ chối' }));

@@ -1,0 +1,123 @@
+.layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: var(--cc-space-lg);
+    align-items: start;
+}
+
+.main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--cc-space-md);
+}
+
+.title {
+    margin: 0 0 var(--cc-space-xxs);
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--cc-color-text-dark);
+    overflow-wrap: anywhere;
+}
+
+.meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cc-space-xxs) var(--cc-space-md);
+    color: var(--cc-color-text-secondary);
+    font-size: 0.9rem;
+}
+
+.description {
+    margin: var(--cc-space-sm) 0 0;
+    line-height: 1.6;
+    color: var(--cc-color-text);
+}
+
+.panel,
+.aside {
+    min-width: 0;
+    background: var(--cc-color-public-surface);
+    border: 1px solid var(--cc-color-border);
+    border-radius: var(--cc-radius-md);
+    padding: var(--cc-space-lg);
+}
+
+.sectionTitle {
+    margin: 0 0 var(--cc-space-sm);
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--cc-color-text-dark);
+}
+
+.services {
+    margin: 0;
+    padding-left: var(--cc-space-lg);
+    columns: 2;
+    column-gap: var(--cc-space-xl);
+    line-height: 1.9;
+    color: var(--cc-color-text);
+}
+
+.services li {
+    break-inside: avoid;
+}
+
+.notes {
+    margin: 0;
+    padding-left: var(--cc-space-lg);
+    line-height: 1.8;
+    color: var(--cc-color-text);
+}
+
+.aside {
+    position: sticky;
+    top: 88px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--cc-space-sm);
+}
+
+.priceLabel {
+    color: var(--cc-color-text-secondary);
+    font-size: 0.85rem;
+}
+
+.price {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--cc-color-text-dark);
+    font-variant-numeric: tabular-nums;
+}
+
+.muted {
+    margin: 0;
+    color: var(--cc-color-text-secondary);
+    font-size: 0.9rem;
+}
+
+.secondaryLink {
+    align-self: center;
+    font-size: 0.9rem;
+}
+
+@media (max-width: 960px) {
+    .layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .aside {
+        position: static;
+    }
+}
+
+@media (max-width: 600px) {
+    .panel,
+    .aside {
+        padding: var(--cc-space-md);
+    }
+
+    .services {
+        columns: 1;
+    }
+}

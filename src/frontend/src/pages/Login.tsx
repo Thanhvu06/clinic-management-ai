@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
 import { useAuth } from '../auth/AuthContext';
-import { Mail, ArrowRight } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import { useDialog } from '../contexts/DialogContext';
 import { ForgotPasswordModal } from '../components/ForgotPasswordModal';
 import { AuthShell, FormField, TextInput, PasswordInput, Button, FormError } from '../components/forms';
@@ -62,17 +62,12 @@ export const Login: React.FC = () => {
 
     return (
         <AuthShell
-            title="Chào mừng trở lại"
-            subtitle="Đăng nhập để đặt lịch khám, xem đơn thuốc và hồ sơ bệnh án"
-            heroTitle="Chăm sóc sức khỏe thông minh và tin cậy"
-            heroDescription="ClinicCare AI giúp bạn kết nối nhanh chóng với đội ngũ bác sĩ chuyên khoa, đặt hẹn dễ dàng và quản lý toàn diện lịch sử khám bệnh trực tuyến."
-            heroImageUrl="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80"
+            title="Đăng nhập"
+            subtitle="Dùng email hoặc số điện thoại đã đăng ký."
             footerLink={
                 <span>
                     Chưa có tài khoản?{' '}
-                    <Link to={registerUrl} className={styles.icon1}>
-                        Đăng ký tài khoản mới &rarr;
-                    </Link>
+                    <Link to={registerUrl} className={styles.icon1}>Đăng ký</Link>
                 </span>
             }
         >
@@ -124,15 +119,16 @@ export const Login: React.FC = () => {
                 </div>
 
                 <div className={styles.spacing3}>
+                    {/* Tên truy cập giữ cụm cũ vì kịch bản E2E tìm nút theo "Đăng nhập vào hệ thống". */}
                     <Button
                         type="submit"
                         variant="primary"
                         size="lg"
                         fullWidth
-                        loading={loading}
                         disabled={loading}
+                        aria-label="Đăng nhập vào hệ thống"
                     >
-                        Đăng nhập vào hệ thống <ArrowRight size={18} />
+                        {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
                     </Button>
                 </div>
             </form>

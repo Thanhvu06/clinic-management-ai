@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Phone, Clock, Calendar, Navigation, Building } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import type { ClinicLocationDto } from '../../types';
 import styles from './PublicPages.module.css';
+import { InlineError } from '../../components/common/InlineError';
+import { LinkButton } from '../../components/common/LinkButton';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 export const LocationsList: React.FC = () => {
     const [locations, setLocations] = useState<ClinicLocationDto[]>([]);
@@ -11,26 +13,26 @@ export const LocationsList: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [selectedCity, setSelectedCity] = useState<string>('all');
 
+    const [reloadKey, setReloadKey] = useState(0);
+
     useEffect(() => {
         const fetchLocations = async () => {
             try {
-                setLoading(true);
                 const res = await axiosClient.get<any, any>('/locations');
                 if (res.success && res.data) {
+                    setError(null);
                     setLocations(res.data);
                 } else {
-                    setError('Không thể tải danh sách cơ sở phòng khám.');
+                    setError('Không thể tải danh sách cơ sở khám.');
                 }
             } catch (err) {
-                console.error('Failed to fetch clinic locations:', err);
-                setError('Đã xảy ra lỗi khi kết nối máy chủ.');
+                setError(getApiErrorMessage(err, 'Không thể tải danh sách cơ sở khám.'));
             } finally {
                 setLoading(false);
             }
         };
-
-        fetchLocations();
-    }, []);
+        void fetchLocations();
+    }, [reloadKey]);
 
     const uniqueCities = Array.from(new Set(locations.map(loc => loc.city))).filter(Boolean);
     const cities = [
@@ -49,12 +51,9 @@ export const LocationsList: React.FC = () => {
                 <nav className={styles.breadcrumb} aria-label="Đường dẫn trang">
                     <Link to="/">Trang chủ</Link>
                     <span>/</span>
-                    <span aria-current="page">Hệ thống cơ sở phòng khám</span>
+                    <span aria-current="page">Cơ sở khám</span>
                 </nav>
-                <h1 className={styles.pageTitle}>Hệ thống Cơ sở & Điểm khám ClinicCare</h1>
-                <p className={styles.pageSubtitle}>
-                    Mạng lưới phòng khám đa khoa hiện đại, tọa lạc tại các vị trí trung tâm, giao thông thuận tiện và trang bị cơ sở vật chất đồng bộ phục vụ người bệnh.
-                </p>
+                <h1 className={styles.pageTitle}>Cơ sở khám</h1>
             </div>
 
             <div className={styles.toolbar}>
@@ -82,16 +81,7 @@ export const LocationsList: React.FC = () => {
                     ))}
                 </div>
             ) : error ? (
-                <div className={styles.tone1}>
-                    <p>{error}</p>
-                    <button
-                        type="button"
-                        className={["btn btn-primary btn-sm", styles.button3].join(' ')}
-                        onClick={() => window.location.reload()}
-                    >
-                        Thử lại
-                    </button>
-                </div>
+                <InlineError message={error} onRetry={() => { setLoading(true); setError(null); setReloadKey(key => key + 1); }} />
             ) : filteredLocations.length === 0 ? (
                 <div className={styles.tone2}>
                     Chưa có cơ sở nào trong khu vực đã chọn.
@@ -101,9 +91,6 @@ export const LocationsList: React.FC = () => {
                     {filteredLocations.map(loc => (
                         <div key={loc.id} className={styles.card}>
                             <div className={styles.flexLayout13}>
-                                <div className={[styles.cardIcon, styles.surface4].join(' ')}>
-                                    <Building size={24} />
-                                </div>
                                 <div>
                                     <span className={styles.text9}>
                                         {loc.city}
@@ -115,18 +102,9 @@ export const LocationsList: React.FC = () => {
                             </div>
 
                             <div className={styles.stackLayout1}>
-                                <div className={styles.flexLayout10}>
-                                    <MapPin size={16} color="var(--cc-color-primary)" className={styles.icon4} />
-                                    <span>{loc.address}</span>
-                                </div>
-                                <div className={styles.flexLayout14}>
-                                    <Clock size={16} color="var(--cc-color-text-muted)" className={styles.icon7} />
-                                    <span>{loc.openingHours}</span>
-                                </div>
-                                <div className={styles.flexLayout14}>
-                                    <Phone size={16} color="var(--cc-color-text-muted)" className={styles.icon7} />
-                                    <span>{loc.phone}</span>
-                                </div>
+                                <div className={styles.flexLayout10}>{loc.address}</div>
+                                {loc.openingHours && <div className={styles.flexLayout14}>Giờ làm việc: {loc.openingHours}</div>}
+                                {loc.phone && <div className={styles.flexLayout14}>Điện thoại: <a href={`tel:${loc.phone.replace(/\s+/g, '')}`}>{loc.phone}</a></div>}
 
                                 {loc.features && loc.features.length > 0 && (
                                     <div className={styles.flexLayout15}>
@@ -149,14 +127,9 @@ export const LocationsList: React.FC = () => {
                                     rel="noopener noreferrer"
                                     className={styles.cardActionLink}
                                 >
-                                    <Navigation size={14} /> Chỉ đường
+                                    Chỉ đường
                                 </a>
-                                <Link 
-                                    to="/patient/book"
-                                    className={["btn btn-primary btn-sm", styles.icon8].join(' ')}
-                                >
-                                    <Calendar size={14} /> Đặt khám
-                                </Link>
+                                <LinkButton type="primary" to="/patient/book">Đặt lịch khám</LinkButton>
                             </div>
                         </div>
                     ))}

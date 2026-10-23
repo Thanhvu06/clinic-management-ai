@@ -1,7 +1,7 @@
 import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Stethoscope, Search, ChevronRight, Calendar, Sparkles } from 'lucide-react';
+import { Search } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import styles from './PublicPages.module.css';
 
@@ -52,10 +52,7 @@ export const SpecialtiesList: React.FC = () => {
                     <span>/</span>
                     <span aria-current="page">Chuyên khoa</span>
                 </nav>
-                <h1 className={styles.pageTitle}>Danh mục Chuyên khoa Khám bệnh</h1>
-                <p className={styles.pageSubtitle}>
-                    ClinicCare cung cấp dịch vụ khám chữa bệnh đa dạng với các chuyên khoa mũi nhọn, trang thiết bị tiên tiến cùng đội ngũ bác sĩ chuyên sâu.
-                </p>
+                <h1 className={styles.pageTitle}>Chuyên khoa</h1>
             </div>
 
             <div className={styles.toolbar}>
@@ -64,7 +61,7 @@ export const SpecialtiesList: React.FC = () => {
                         <Search className={styles.searchBoxIcon} size={18} />
                         <input
                             type="text"
-                            placeholder="Tìm kiếm chuyên khoa theo tên hoặc triệu chứng..."
+                            placeholder="Tìm chuyên khoa theo tên hoặc mô tả"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             aria-label="Tìm chuyên khoa"
@@ -92,39 +89,20 @@ export const SpecialtiesList: React.FC = () => {
                 <div className={styles.grid3}>
                     {filteredSpecialties.map(spec => (
                         <div key={spec.id} className={styles.card}>
-                            <div className={styles.flexLayout24}>
-                                <div className={styles.cardIcon}>
-                                    <Stethoscope size={24} />
-                                </div>
-                                {spec.aiEnabled && (
-                                    <span className={styles.flexLayout25}>
-                                        <Sparkles size={12} /> Hỗ trợ AI
-                                    </span>
-                                )}
-                            </div>
                             <h2 className={styles.cardTitle}>{spec.specialtyName}</h2>
-                            <p className={styles.cardDesc}>
-                                {spec.description || 'Chăm sóc sức khỏe toàn diện và điều trị chuyên sâu theo chuẩn y khoa.'}
-                            </p>
+                            {spec.description && <p className={styles.cardDesc}>{spec.description}</p>}
+                            {spec.aiEnabled && <span className={styles.flexLayout25}>Trợ lý AI có thể gợi ý khoa này</span>}
                             <div className={styles.cardFooter}>
-                                <Link to={`/specialties/${spec.id}`} className={styles.cardActionLink}>
-                                    Xem chi tiết <ChevronRight size={16} />
-                                </Link>
-                                <Link 
-                                    to={`/patient/book?specialtyId=${spec.id}`} 
-                                    className={[styles.cardActionLink, styles.icon11].join(' ')}
-                                >
-                                    <Calendar size={15} /> Đặt lịch
-                                </Link>
+                                <Link to={`/specialties/${spec.id}`} className={styles.cardActionLink}>Xem chi tiết</Link>
+                                <Link to={`/patient/book?specialtyId=${spec.id}`} className={styles.cardActionLink}>Đặt lịch</Link>
                             </div>
                         </div>
                     ))}
                 </div>
             ) : (
                 <div className={styles.emptyState}>
-                    <Stethoscope size={48} className={styles.icon1} />
                     <div className={styles.emptyStateTitle}>Không tìm thấy chuyên khoa phù hợp</div>
-                    <p>Vui lòng thử tìm kiếm với từ khóa khác.</p>
+                    <p>Thử tìm với từ khóa khác.</p>
                 </div>
             )}
         </div>

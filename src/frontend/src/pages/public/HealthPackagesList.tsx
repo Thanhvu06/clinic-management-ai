@@ -1,10 +1,11 @@
 import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, Check, Search, Users, CalendarCheck } from 'lucide-react';
+import { Search } from 'lucide-react';
 import axiosClient from '../../api/axiosClient';
 import { parseIncludedServices, formatVndCurrency } from '../../utils/formatters';
 import styles from './PublicPages.module.css';
+import { LinkButton } from '../../components/common/LinkButton';
 
 interface HealthPackage {
     id: number;
@@ -57,12 +58,9 @@ export const HealthPackagesList: React.FC = () => {
                 <nav className={styles.breadcrumb} aria-label="Đường dẫn trang">
                     <Link to="/">Trang chủ</Link>
                     <span>/</span>
-                    <span aria-current="page">Gói khám sức khỏe</span>
+                    <span aria-current="page">Gói khám</span>
                 </nav>
-                <h1 className={styles.pageTitle}>Gói Khám Sức Khỏe & Tầm Soát Toàn Diện</h1>
-                <p className={styles.pageSubtitle}>
-                    Chương trình khám sức khỏe định kỳ được thiết kế chuyên biệt theo từng độ tuổi và nhu cầu, kết hợp hệ thống cận lâm sàng đồng bộ giúp phát hiện sớm các nguy cơ tiềm ẩn.
-                </p>
+                <h1 className={styles.pageTitle}>Gói khám sức khỏe</h1>
             </div>
 
             <div className={styles.toolbar}>
@@ -71,7 +69,7 @@ export const HealthPackagesList: React.FC = () => {
                         <Search className={styles.searchBoxIcon} size={18} />
                         <input
                             type="text"
-                            placeholder="Tìm kiếm theo tên gói khám hoặc đối tượng..."
+                            placeholder="Tìm theo tên gói hoặc đối tượng"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             aria-label="Tìm gói khám"
@@ -105,9 +103,7 @@ export const HealthPackagesList: React.FC = () => {
                             <div key={pkg.id} className={styles.packageCard}>
                                 <span className={styles.packageBadge}>{pkg.code}</span>
                                 <h2 className={styles.packageName}>{pkg.name}</h2>
-                                <div className={styles.packageAudience}>
-                                    <Users size={15} color="var(--cc-color-primary)" /> {pkg.targetAudience}
-                                </div>
+                                {pkg.targetAudience && <div className={styles.packageAudience}>Dành cho: {pkg.targetAudience}</div>}
                                 <p className={styles.packageDesc}>
                                     {pkg.description}
                                 </p>
@@ -115,14 +111,11 @@ export const HealthPackagesList: React.FC = () => {
                                 {services.length > 0 && (
                                     <ul className={styles.serviceList}>
                                         {services.slice(0, 4).map((service, idx) => (
-                                            <li key={idx} className={styles.serviceItem}>
-                                                <Check size={16} />
-                                                <span>{service}</span>
-                                            </li>
+                                            <li key={idx} className={styles.serviceItem}>{service}</li>
                                         ))}
                                         {services.length > 4 && (
                                             <li className={styles.text15}>
-                                                + {services.length - 4} danh mục & xét nghiệm khác
+                                                và {services.length - 4} dịch vụ khác
                                             </li>
                                         )}
                                     </ul>
@@ -130,22 +123,12 @@ export const HealthPackagesList: React.FC = () => {
 
                                 <div className={styles.packagePriceRow}>
                                     <div>
-                                        <span className={styles.packagePriceLabel}>Chi phí trọn gói</span>
+                                        <span className={styles.packagePriceLabel}>Giá gói</span>
                                         <div className={styles.packagePrice}>{formatVndCurrency(pkg.price)}</div>
                                     </div>
                                     <div className={styles.flexLayout23}>
-                                        <Link 
-                                            to={`/health-packages/${pkg.id}`}
-                                            className={["btn btn-secondary btn-sm", styles.icon8].join(' ')}
-                                        >
-                                            Chi tiết
-                                        </Link>
-                                        <Link 
-                                            to={`/patient/health-packages/${pkg.id}/register`}
-                                            className={["btn btn-primary btn-sm", styles.icon8].join(' ')}
-                                        >
-                                            <CalendarCheck size={14} /> Đăng ký
-                                        </Link>
+                                        <LinkButton to={`/health-packages/${pkg.id}`}>Chi tiết</LinkButton>
+                                        <LinkButton type="primary" to={`/patient/health-packages/${pkg.id}/register`}>Đăng ký</LinkButton>
                                     </div>
                                 </div>
                             </div>
@@ -154,9 +137,8 @@ export const HealthPackagesList: React.FC = () => {
                 </div>
             ) : (
                 <div className={styles.emptyState}>
-                    <Package size={48} className={styles.icon1} />
                     <div className={styles.emptyStateTitle}>Không tìm thấy gói khám phù hợp</div>
-                    <p>Vui lòng thử từ khóa tìm kiếm khác hoặc liên hệ hotline để được tư vấn.</p>
+                    <p>Thử tìm với từ khóa khác.</p>
                 </div>
             )}
         </div>

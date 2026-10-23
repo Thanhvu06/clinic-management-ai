@@ -115,26 +115,26 @@ describe('BookAppointment batch 3', () => {
     });
     it('B4 submitting changes the button text, disables both controls and has no loading class', async () => {
         mocks.post.mockImplementation(() => new Promise(() => {})); mount(); await review();
-        fireEvent.click(screen.getByRole('button', { name: 'Xác nhận & Đặt lịch' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Xác nhận & đặt lịch' }));
         const submit = await screen.findByRole('button', { name: 'Đang đặt lịch...' });
         expect(submit).toBeDisabled(); expect(submit).not.toHaveClass('ant-btn-loading');
         expect(screen.getByRole('button', { name: /Quay lại/ })).toBeDisabled();
         fireEvent.click(submit); expect(mocks.post).toHaveBeenCalledTimes(1);
     });
     it('B5 success shows all five saved fields, the notice and reset action', async () => {
-        mount(); await review(); fireEvent.click(screen.getByRole('button', { name: 'Xác nhận & Đặt lịch' }));
+        mount(); await review(); fireEvent.click(screen.getByRole('button', { name: 'Xác nhận & đặt lịch' }));
         await screen.findByText('Đặt lịch khám thành công!');
         for (const label of ['Mã lịch hẹn:', 'Chuyên khoa:', 'Bác sĩ khám:', 'Thời gian hẹn:', 'Lý do khám:']) expect(screen.getByText(label)).toBeInTheDocument();
         expect(screen.getAllByText('#APT-B3')).toHaveLength(2);
         expect(screen.getByText('08:00 - 08:30 (02/01/2030)')).toBeInTheDocument();
         expect(screen.getByText('"Khám sức khỏe định kỳ"')).toBeInTheDocument();
-        expect(screen.getByRole('alert')).toHaveTextContent('trước giờ hẹn 10-15 phút');
+        expect(screen.getByRole('alert')).toHaveTextContent('trước giờ hẹn 10–15 phút');
         fireEvent.click(screen.getByRole('button', { name: 'Đặt thêm lịch hẹn khác' }));
         expect(await screen.findByRole('heading', { name: 'Bước 1: Chọn chuyên khoa khám' })).toBeInTheDocument();
         expect(screen.getAllByText('Chưa chọn')).toHaveLength(3);
     });
     it('B5 success navigates to my appointments', async () => {
-        mount(); await review(); fireEvent.click(screen.getByRole('button', { name: 'Xác nhận & Đặt lịch' }));
+        mount(); await review(); fireEvent.click(screen.getByRole('button', { name: 'Xác nhận & đặt lịch' }));
         fireEvent.click(await screen.findByRole('button', { name: 'Xem lịch hẹn của tôi' }));
         expect(screen.getByText('Danh sách lịch hẹn')).toBeInTheDocument();
     });
@@ -157,7 +157,7 @@ describe('BookAppointment batch 3', () => {
     });
     it('B7 uncertain attempt preserves status/actions and hides the technical term', async () => {
         mocks.post.mockRejectedValue(new Error('Gián đoạn kết nối')); mount(); await review();
-        fireEvent.click(screen.getByRole('button', { name: 'Xác nhận & Đặt lịch' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Xác nhận & đặt lịch' }));
         const banner = await screen.findByRole('status');
         expect(banner).toHaveTextContent('Lượt đặt lịch trước đó đang chưa rõ kết quả');
         expect(banner).not.toHaveTextContent('Idempotency-Key');
@@ -198,17 +198,17 @@ describe('BookAppointment batch 3', () => {
         fireEvent.change(reason, { target: { value: 'a'.repeat(501) } }); expect(await screen.findByText('Lý do khám vượt quá 500 ký tự.')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Tiếp tục: Xác nhận/ })).toBeDisabled();
     });
-    it('B12 review has five bordered description rows and the privacy Alert', async () => {
+    it('B12 review has five bordered description rows and no promise Alert', async () => {
         const { container } = mount(); await review(); const panel = container.querySelector('[class*="reviewPanel"]') as HTMLElement;
         expect(panel).toHaveClass('ant-descriptions-bordered');
         for (const label of ['Chuyên khoa', 'Bác sĩ phụ trách', 'Thời gian khám', 'Ngày', 'Triệu chứng/Ghi chú']) expect(within(panel).getByText(label)).toBeInTheDocument();
         expect(within(panel).getByText('02/01/2030')).toBeInTheDocument(); expect(within(panel).getByText('"Khám sức khỏe định kỳ"')).toBeInTheDocument();
-        expect(screen.getByRole('alert')).toHaveTextContent('bảo mật thông tin hồ sơ y tế.');
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument(); expect(screen.queryByText(/cam kết/)).not.toBeInTheDocument();
     });
     it('B13 summary stays in a Card with unchanged empty copy and AI link', async () => {
         const { container } = mount(); await screen.findByRole('button', { name: /^Nội khoa/ });
         const summary = container.querySelector('aside .ant-card') as HTMLElement;
         expect(within(summary).getByText('Tóm tắt lịch khám')).toBeInTheDocument(); expect(within(summary).getAllByText('Chưa chọn')).toHaveLength(3);
-        expect(screen.getByRole('link', { name: 'Tư vấn cùng AI →' })).toHaveAttribute('href', '/patient/ai-consultation');
+        expect(screen.getByRole('link', { name: 'Hỏi trợ lý AI' })).toHaveAttribute('href', '/patient/ai-consultation');
     });
 });

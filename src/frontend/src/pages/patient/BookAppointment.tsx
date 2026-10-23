@@ -9,8 +9,8 @@ import axiosClient from "../../api/axiosClient";
 import styles from "./BookAppointment.module.css";
 import type { ApiResponse } from "../../types";
 import { 
-    User, Clock, Stethoscope, FileText,
-    ArrowRight, ArrowLeft, Calendar, Sparkles
+    User, Clock, Stethoscope,
+    ArrowRight, ArrowLeft, Calendar
 } from "lucide-react";
 import {
     useChatContext,
@@ -845,7 +845,7 @@ export const BookAppointment: React.FC = () => {
         return (
             <div className={styles.pageWrapper}>
                 <Card className={styles.successPanel}>
-                    <Result status="success" title="Đặt lịch khám thành công!" subTitle="Lịch hẹn của bạn đã được ghi nhận vào hệ thống phòng khám ClinicCare." />
+                    <Result status="success" title="Đặt lịch khám thành công!" subTitle="Lịch hẹn của bạn đã được ghi nhận." />
                     <Descriptions bordered column={1} items={[
                         { key: 'code', label: 'Mã lịch hẹn:', children: <strong>#{successBooking.appointmentCode}</strong> },
                         { key: 'specialty', label: 'Chuyên khoa:', children: successBooking.specialtyName },
@@ -853,7 +853,7 @@ export const BookAppointment: React.FC = () => {
                         { key: 'time', label: 'Thời gian hẹn:', children: <strong>{successBooking.startTime} - {successBooking.endTime} ({formatDateOnly(successBooking.slotDate)})</strong> },
                         { key: 'reason', label: 'Lý do khám:', children: successBooking.reason ? `"${successBooking.reason}"` : 'Không có' }
                     ]} />
-                    <Alert className={styles.notice} type="info" showIcon title={<><strong>Lưu ý:</strong> Vui lòng có mặt tại quầy lễ tân trước giờ hẹn 10-15 phút và cung cấp mã lịch hẹn <strong>#{successBooking.appointmentCode}</strong> để được tiếp đón ưu tiên.</>} />
+                    <Alert className={styles.notice} type="info" showIcon title={<><strong>Lưu ý:</strong> Bạn đến quầy lễ tân trước giờ hẹn 10–15 phút và đọc mã lịch hẹn <strong>#{successBooking.appointmentCode}</strong> để làm thủ tục.</>} />
                     <div className={styles.actions}>
                         <Button type="primary" onClick={() => navigate('/patient/appointments')}>Xem lịch hẹn của tôi</Button>
                         <Button onClick={() => {
@@ -880,8 +880,7 @@ export const BookAppointment: React.FC = () => {
             <Breadcrumb items={[{ label: 'Trang chủ', path: '/' }, { label: 'Đặt lịch khám' }]} />
             {revisitRequestId && <Alert className={styles.notice} role="status" type="info" showIcon title="Bạn đang chọn khung giờ cho một đề xuất tái khám. Lịch mới chỉ được tạo sau khi xác nhận ở bước cuối." />}
             <div className={styles.pageHeader}>
-                <h1 className={styles.pageTitle}>Đặt lịch khám Chuyên khoa</h1>
-                <p className={styles.pageSubtitle}>Chọn chuyên khoa, bác sĩ và khung giờ 30 phút thuận tiện để được tiếp đón chu đáo không phải chờ đợi.</p>
+                <h1 className={styles.pageTitle}>Đặt lịch khám</h1>
             </div>
             <div className={styles.stepperContainer} role="progressbar" aria-valuenow={displayStep} aria-valuemin={1} aria-valuemax={4}>
                 <Steps current={displayStep - 1} items={[
@@ -909,13 +908,12 @@ export const BookAppointment: React.FC = () => {
                                 className={`${styles.selectionCard} ${specialtyId === s.id ? styles.selectionCardActive : ''}`}
                                 onClick={() => handleSelectSpecialty(s.id)}
                                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectSpecialty(s.id); } }}>
-                                <Stethoscope size={30} className={styles.cardIcon} />
-                                <h4>{s.specialtyName}</h4><p>{s.description || 'Khám và điều trị chuyên sâu'}</p>
-                                {s.aiEnabled && <Tag className={styles.aiTag} icon={<Sparkles size={12} />}>Hỗ trợ AI</Tag>}
+                                <h4>{s.specialtyName}</h4>{s.description && <p>{s.description}</p>}
+                                {s.aiEnabled && <Tag className={styles.aiTag}>Hỗ trợ AI</Tag>}
                             </Card>)}
                         </div>}
                         <div className={styles.stepFooter}>
-                            <span className={styles.consultationHint}>Chưa biết nên chọn khoa nào? <ChatConsultationLink to="/patient/ai-consultation" className={styles.consultationLink}>Tư vấn cùng AI &rarr;</ChatConsultationLink></span>
+                            <span className={styles.consultationHint}>Chưa biết nên chọn khoa nào? <ChatConsultationLink to="/patient/ai-consultation" className={styles.consultationLink}>Hỏi trợ lý AI</ChatConsultationLink></span>
                             <Button type="primary" size="large" onClick={() => setStep(2)} disabled={!specialtyId}>Tiếp tục: Chọn bác sĩ <ArrowRight size={18} /></Button>
                         </div>
                     </div>}
@@ -924,7 +922,7 @@ export const BookAppointment: React.FC = () => {
                         <p className={styles.stepSubtitle}>Chọn bác sĩ mà bạn muốn trực tiếp thăm khám và tư vấn.</p>
                         {loadingDocs ? <div className={styles.loadingPanel}><Spin /><span>Đang tải danh sách bác sĩ thuộc chuyên khoa...</span></div>
                             : doctorsError ? <Alert type="error" showIcon title="Không tải được danh sách bác sĩ." action={<Button onClick={() => setDoctorsReloadKey(key => key + 1)}>Thử lại</Button>} />
-                            : doctors.length === 0 ? <Empty description={<><p>Chưa có bác sĩ thuộc chuyên khoa này</p><p>Vui lòng quay lại chọn chuyên khoa khác hoặc liên hệ hotline phòng khám.</p></>}>
+                            : doctors.length === 0 ? <Empty description={<><p>Chưa có bác sĩ thuộc chuyên khoa này</p><p>Bạn chọn chuyên khoa khác nhé.</p></>}>
                                 <Button onClick={() => setStep(1)}><ArrowLeft size={16} /> Chọn lại chuyên khoa</Button>
                             </Empty> : <div className={styles.selectionGrid}>
                                 {doctors.map(d => <Card key={d.id} hoverable role="button" tabIndex={0} aria-pressed={doctorId === d.id}
@@ -947,14 +945,14 @@ export const BookAppointment: React.FC = () => {
                             <Form.Item className={styles.dateField} label="Chọn ngày khám" htmlFor="slotDate" required>
                                 <Input type="date" id="slotDate" min={toLocalDateString()} value={slotDate} onChange={e => handleSlotDateChange(e.target.value)} />
                             </Form.Item>
-                            <Form.Item label="Khung giờ khám còn trống (*)">
+                            <Form.Item label="Khung giờ khám còn trống" required>
                                 {isSundayDateString(slotDate) ? <Alert type="warning" showIcon title={<><strong>Lưu ý:</strong> Phòng khám không mở lịch bác sĩ vào Chủ nhật. Vui lòng chọn ngày từ Thứ Hai đến Thứ Bảy.</>} />
                                     : loadingSlots ? <div className={styles.loadingPanel}><Spin /><span>Đang kiểm tra lịch trống của bác sĩ...</span></div>
                                     : slotsError ? <Alert type="error" showIcon title="Không tải được khung giờ khám." action={<Button onClick={() => setSlotsReloadKey(key => key + 1)}>Thử lại</Button>} />
-                                    : slots.length === 0 ? <Empty description={`Bác sĩ chưa có lịch trống trong ngày ${slotDate}. Quý khách vui lòng chọn một ngày khám khác.`} />
+                                    : slots.length === 0 ? <Empty description={`Bác sĩ chưa có lịch trống ngày ${formatDateOnly(slotDate)}. Bạn chọn ngày khác nhé.`} />
                                     : <div className={styles.slotGrid}>{slots.map(s => <Button key={s.slotId} className={`${styles.slotBtn} ${slotId === s.slotId ? styles.slotBtnActive : ""}`} type={slotId === s.slotId ? 'primary' : 'default'} aria-pressed={slotId === s.slotId} onClick={() => handleSelectSlot(s)}><Clock size={14} />{s.startTime.substring(0, 5)}</Button>)}</div>}
                             </Form.Item>
-                            <Form.Item label="Triệu chứng hoặc lý do thăm khám (*)" htmlFor="reason" required
+                            <Form.Item label="Triệu chứng hoặc lý do thăm khám" htmlFor="reason" required
                                 extra={`Tối thiểu 10 ký tự, tối đa 500 ký tự. (${reason.trim().length}/500 ký tự)`}
                                 validateStatus={reason.trim().length > 0 && (reason.trim().length < 10 || reason.trim().length > 500) ? 'error' : undefined}
                                 help={reason.trim().length > 0 && reason.trim().length < 10 ? 'Lý do khám phải có tối thiểu 10 ký tự.' : reason.trim().length > 500 ? 'Lý do khám vượt quá 500 ký tự.' : undefined}>
@@ -971,7 +969,7 @@ export const BookAppointment: React.FC = () => {
                         </div>
                     </div>}
                     {displayStep === 4 && <div>
-                        <h2 className={styles.stepTitle}>Bước 4: Kiểm tra & Xác nhận thông tin</h2>
+                        <h2 className={styles.stepTitle}>Bước 4: Kiểm tra và xác nhận</h2>
                         <p className={styles.stepSubtitle}>Vui lòng kiểm tra lại toàn bộ chi tiết lịch hẹn trước khi gửi yêu cầu đặt khám.</p>
                         <Descriptions className={styles.reviewPanel} bordered column={1} items={[
                             { key: 'specialty', label: 'Chuyên khoa', children: selectedSpec?.specialtyName },
@@ -980,15 +978,14 @@ export const BookAppointment: React.FC = () => {
                             { key: 'date', label: 'Ngày', children: slotDate.split('-').reverse().join('/') },
                             { key: 'reason', label: 'Triệu chứng/Ghi chú', children: reason ? `"${reason}"` : 'Không có' }
                         ]} />
-                        <Alert className={styles.notice} type="success" showIcon title="Phòng khám cam kết giữ đúng lịch hẹn và bảo mật thông tin hồ sơ y tế." />
                         <div className={styles.stepFooter}>
                             <Button onClick={() => setStep(3)} disabled={submitting}><ArrowLeft size={16} /> Quay lại</Button>
-                            <Button type="primary" size="large" onClick={handleConfirm} disabled={submitting}>{submitting ? 'Đang đặt lịch...' : 'Xác nhận & Đặt lịch'}</Button>
+                            <Button type="primary" size="large" onClick={handleConfirm} disabled={submitting}>{submitting ? 'Đang đặt lịch...' : 'Xác nhận & đặt lịch'}</Button>
                         </div>
                     </div>}
                 </Card>
                 <aside>
-                    <Card className={styles.summaryCard} title={<span className={styles.summaryTitle}><FileText size={18} /> Tóm tắt lịch khám</span>}>
+                    <Card className={styles.summaryCard} title={<span className={styles.summaryTitle}>Tóm tắt lịch khám</span>}>
                         <div className={styles.summaryList}>
                             <div className={styles.summaryItem}>
                                 <div className={styles.summaryItemIcon}><Stethoscope size={18} /></div>
