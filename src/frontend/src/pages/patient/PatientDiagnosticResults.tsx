@@ -45,7 +45,7 @@ export const PatientDiagnosticResults: React.FC = () => {
             const complete = order.items.length > 0 && order.items.every(item => !!item.result);
             return { key: String(order.id), label: <div className={styles.orderHeading}><strong>{order.orderCode}</strong><span>Khám: #{order.appointmentCode} • Bác sĩ: {order.orderingDoctorName} ({order.specialtyName || '---'})</span></div>, extra: <div className={styles.orderStatus}><Tag color={reviewed ? 'success' : complete ? 'processing' : 'warning'}>{reviewed ? 'Đã có kết luận bác sĩ' : complete ? 'Đã có kết quả' : 'Đang chờ kết quả'}</Tag><span>{new Date(order.orderedAtUtc).toLocaleDateString('vi-VN')}</span></div>, children: <div className={styles.results}>
                 <div className={styles.orderDetails}>
-                    <div className={styles.resultLine}><strong>Chỉ định:</strong> {order.clinicalIndication}</div>
+                    {order.clinicalIndication && <div className={styles.resultLine}><strong>Chỉ định:</strong> {order.clinicalIndication}</div>}
                     {order.note && <div className={styles.resultLine}><strong>Ghi chú:</strong> {order.note}</div>}
                     {reviewed && <div className={styles.review}><CheckCircle size={16} /> Bác sĩ {order.reviewedByDoctorName} đã xác nhận xem kết quả lúc {new Date(order.reviewedAtUtc!).toLocaleString('vi-VN')}</div>}
                 </div>

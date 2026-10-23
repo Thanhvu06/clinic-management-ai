@@ -442,7 +442,7 @@ export const PatientAppointments: React.FC = () => {
                     </Card>;
                 })}
             </div>}
-            <Modal getContainer={false} open={cancelModal.isOpen} title={`Hủy lịch hẹn #${cancelModal.app?.appointmentCode}`} onCancel={handleCancelClose} maskClosable={!canceling} closable={!canceling} keyboard={!canceling} footer={<>
+            <Modal getContainer={false} open={cancelModal.isOpen} title={`Hủy lịch hẹn #${cancelModal.app?.appointmentCode}`} onCancel={handleCancelClose} mask={{ closable: !canceling }} closable={!canceling} keyboard={!canceling} footer={<>
                 <Button onClick={handleCancelClose} disabled={canceling}>Đóng</Button>
                 <Button type="primary" danger onClick={submitCancel} disabled={canceling}>{canceling ? 'Đang xử lý...' : 'Xác nhận gửi yêu cầu'}</Button>
             </>}>
@@ -450,7 +450,7 @@ export const PatientAppointments: React.FC = () => {
                 <Form layout="vertical"><Form.Item label="Lý do hủy lịch" htmlFor="cancel-reason" required><Input.TextArea id="cancel-reason" rows={3} placeholder="Vui lòng nhập lý do (ít nhất 5 ký tự)..." value={cancelModal.reason} onChange={event => setCancelModal(p => ({ ...p, reason: event.target.value }))} disabled={canceling} /></Form.Item></Form>
                 {cancelModal.inlineError && <Alert type="error" title={cancelModal.inlineError} showIcon />}
             </Modal>
-            <Modal getContainer={false} open={rescheduleModal.isOpen} title={`Đổi lịch khám #${rescheduleModal.app?.appointmentCode}`} onCancel={closeReschedule} maskClosable={!rescheduling} closable={!rescheduling} keyboard={!rescheduling} footer={<>
+            <Modal getContainer={false} open={rescheduleModal.isOpen} title={`Đổi lịch khám #${rescheduleModal.app?.appointmentCode}`} onCancel={closeReschedule} mask={{ closable: !rescheduling }} closable={!rescheduling} keyboard={!rescheduling} footer={<>
                 <Button onClick={closeReschedule} disabled={rescheduling}>Đóng</Button>
                 <Button type="primary" onClick={submitReschedule} disabled={rescheduling || rescheduleModal.loadingSlots}>{rescheduling ? 'Đang gửi...' : 'Gửi yêu cầu dời lịch'}</Button>
             </>}>
@@ -472,7 +472,7 @@ export const PatientAppointments: React.FC = () => {
                 </Form>
                 {rescheduleModal.inlineError && <Alert type="error" title={rescheduleModal.inlineError} showIcon />}
             </Modal>
-            <Modal getContainer={false} open={historyModal.isOpen} title={`Lịch sử thay đổi #${historyModal.appCode}`} onCancel={closeHistory} maskClosable={!historyModal.loading} closable={!historyModal.loading} keyboard={!historyModal.loading} footer={<Button type="primary" onClick={closeHistory} disabled={historyModal.loading}>Đóng</Button>}>
+            <Modal getContainer={false} open={historyModal.isOpen} title={`Lịch sử thay đổi #${historyModal.appCode}`} onCancel={closeHistory} mask={{ closable: !historyModal.loading }} closable={!historyModal.loading} keyboard={!historyModal.loading} footer={<Button type="primary" onClick={closeHistory} disabled={historyModal.loading}>Đóng</Button>}>
                 {historyModal.loading ? <LoadingState message="Đang tải lịch sử..." height="120px" /> : historyModal.error ? <InlineError message={historyModal.error} onRetry={() => historyModal.appId !== null && handleViewHistory(historyModal.appId, historyModal.appCode)} /> : historyModal.histories.length === 0 ? <EmptyState title="Không có lịch sử thay đổi." /> : <div className={styles.history}>
                     {historyModal.histories.map((history, index) => <Card key={history.id ?? index} size="small">
                         <div className={styles.historyHeader}><strong>{getActionLabel(history.action)}</strong><span>{new Date(history.createdAt).toLocaleString('vi-VN')}</span></div>

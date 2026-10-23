@@ -1,3 +1,4 @@
+import { auditActionLabels, auditEntityLabels, getAuditActionLabel, getAuditEntityLabel } from '../../utils/auditLogLabels';
 import React, { useState, useEffect, useCallback } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
@@ -70,15 +71,15 @@ export const AdminAuditLogs: React.FC = () => {
     const getActionBadge = (action: string) => {
         const act = action.toUpperCase();
         if (act.includes('CREATE') || act.includes('ADD') || act.includes('INITIAL')) {
-            return <Tag color="success">{action}</Tag>;
+            return <Tag color="success">{getAuditActionLabel(action)}</Tag>;
         }
         if (act.includes('UPDATE') || act.includes('EDIT') || act.includes('CHANGE')) {
-            return <Tag color="processing">{action}</Tag>;
+            return <Tag color="processing">{getAuditActionLabel(action)}</Tag>;
         }
         if (act.includes('DELETE') || act.includes('CANCEL') || act.includes('REMOVE')) {
-            return <Tag color="error">{action}</Tag>;
+            return <Tag color="error">{getAuditActionLabel(action)}</Tag>;
         }
-        return <Tag color="default">{action}</Tag>;
+        return <Tag color="default">{getAuditActionLabel(action)}</Tag>;
     };
 
     return (
@@ -89,16 +90,13 @@ export const AdminAuditLogs: React.FC = () => {
             <FilterBar>
                 <Select className={styles.auditFilter} aria-label="Loại hành động" value={actionFilter}
                     onChange={value => { setActionFilter(value); setPage(1); }} options={[
-                        { value: '', label: 'Tất cả loại hành động' }, { value: 'Create', label: 'Thêm mới' },
-                        { value: 'Update', label: 'Cập nhật' }, { value: 'Delete', label: 'Xóa' },
-                        { value: 'StatusChange', label: 'Đổi trạng thái' }, { value: 'Login', label: 'Đăng nhập' }
+                        { value: '', label: 'Tất cả loại hành động' },
+                        ...Object.entries(auditActionLabels).map(([value, label]) => ({ value, label }))
                     ]} />
                 <Select className={styles.auditFilter} aria-label="Đối tượng tác động" value={entityFilter}
                     onChange={value => { setEntityFilter(value); setPage(1); }} options={[
-                        { value: '', label: 'Tất cả đối tượng tác động' }, { value: 'User', label: 'Tài khoản' },
-                        { value: 'Doctor', label: 'Bác sĩ' }, { value: 'Specialty', label: 'Chuyên khoa' },
-                        { value: 'Appointment', label: 'Lịch hẹn' }, { value: 'HealthPackage', label: 'Gói khám' },
-                        { value: 'Medicine', label: 'Thuốc' }
+                        { value: '', label: 'Tất cả đối tượng tác động' },
+                        ...Object.entries(auditEntityLabels).map(([value, label]) => ({ value, label }))
                     ]} />
             </FilterBar>
             {loading ? <LoadingState message="Đang tải nhật ký kiểm toán..." /> : loadError ? <InlineError message={loadError} onRetry={fetchLogs} />
@@ -108,7 +106,7 @@ export const AdminAuditLogs: React.FC = () => {
                             { header: 'Thời gian', accessor: log => <div className={styles.auditTime}><Clock size={14} /><span>{formatDateTime(log.createdAt)}</span></div> },
                             { header: 'Người thực hiện', accessor: log => <div className={styles.auditActor}><User size={14} /><span>{log.userFullName}</span></div> },
                             { header: 'Hành động', accessor: log => getActionBadge(log.action) },
-                            { header: 'Thực thể', accessor: log => <Tag>{log.entityName}</Tag> },
+                            { header: 'Thực thể', accessor: log => <Tag>{getAuditEntityLabel(log.entityName)}</Tag> },
                             { header: 'Mã tham chiếu', accessor: log => <Typography.Text code>{log.entityId || '-'}</Typography.Text> },
                             { header: 'Mô tả chi tiết', accessor: 'description' }
                         ]} />

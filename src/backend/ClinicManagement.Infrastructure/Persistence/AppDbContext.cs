@@ -148,6 +148,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         builder.Entity<AppointmentChangeRequest>().Property(x => x.CreatedAt).HasConversion(utcConverter);
         builder.Entity<AppointmentChangeRequest>().Property(x => x.ProcessedAt).HasConversion(utcConverter);
         builder.Entity<Prescription>().Property(x => x.DispensedAt).HasConversion(utcConverter);
+        builder.Entity<Prescription>().Property(x => x.CreatedAt).HasConversion(utcConverter);
+        builder.Entity<MedicineStockTransaction>().Property(x => x.CreatedAt).HasConversion(utcConverter);
+        builder.Entity<MedicineBatch>().Property(x => x.ReceivedAt).HasConversion(utcConverter);
+        builder.Entity<MedicineBatch>().Property(x => x.DisposedAt).HasConversion(utcConverter);
+        builder.Entity<Medicine>().Property(x => x.CreatedAt).HasConversion(utcConverter);
+        builder.Entity<Medicine>().Property(x => x.UpdatedAt).HasConversion(utcConverter);
 
         if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
         {

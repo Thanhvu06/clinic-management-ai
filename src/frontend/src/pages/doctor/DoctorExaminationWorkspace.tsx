@@ -501,12 +501,12 @@ export const DoctorExaminationWorkspace: React.FC = () => {
             const res = isVisit
                 ? await diagnosticApi.createDoctorOrderForVisit(currentId, {
                     serviceIds: selectedServiceIds,
-                    clinicalIndication: clinicalIndication.trim() || 'Chỉ định cận lâm sàng',
+                    clinicalIndication: clinicalIndication.trim(),
                     note: orderNotes.trim() || undefined
                 })
                 : await diagnosticApi.createDoctorOrder(appointmentId, {
                     serviceIds: selectedServiceIds,
-                    clinicalIndication: clinicalIndication.trim() || 'Chỉ định cận lâm sàng',
+                    clinicalIndication: clinicalIndication.trim(),
                     note: orderNotes.trim() || undefined
                 });
 

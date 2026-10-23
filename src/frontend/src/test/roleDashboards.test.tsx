@@ -81,7 +81,7 @@ describe('Doctor dashboard', () => {
         expect(strip('Số liệu hôm nay').children).toHaveLength(4);
         expect(screen.getByRole('link', { name: /Đang chờ khám/ })).toHaveAttribute('href', '/doctor/queue');
         expect(within(cell('Đang chờ khám')).getByText('3')).toHaveAttribute('data-tone', 'attention');
-        for (const [label, value] of [['Đang khám', '1'], ['Đã hoàn tất', '6'], ['Vắng mặt', '2']]) {
+        for (const [label, value] of [['Đang khám', '1'], ['Đã khám xong', '6'], ['Vắng mặt', '2']]) {
             expect(within(cell(label)).getByText(value)).toBeInTheDocument();
         }
         expect(screen.queryByText('Tổng số ca hôm nay')).not.toBeInTheDocument();

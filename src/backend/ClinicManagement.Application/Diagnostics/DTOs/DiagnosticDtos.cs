@@ -197,7 +197,6 @@ public class DiagnosticOrderDto
 
 public class CreateDiagnosticOrderRequest
 {
-    [Required(ErrorMessage = "Chỉ định lâm sàng không được để trống.")]
     [MaxLength(1000)]
     public string ClinicalIndication { get; set; } = string.Empty;
 

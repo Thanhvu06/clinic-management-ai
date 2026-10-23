@@ -417,7 +417,7 @@ public class AppointmentService : IAppointmentService
                 UserId = currentUserId.Value,
                 Type = NotificationType.Appointment,
                 Title = "Đặt lịch khám thành công",
-                Message = $"Lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm} đã được tiếp nhận.",
+                Message = $"Lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm} đã được gửi, đang chờ phòng khám xác nhận.",
                 Route = "/patient/appointments",
                 RelatedEntityType = "Appointment",
                 RelatedEntityId = appointment.Id.ToString(),

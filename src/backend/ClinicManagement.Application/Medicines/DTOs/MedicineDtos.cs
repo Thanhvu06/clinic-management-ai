@@ -5,6 +5,7 @@ namespace ClinicManagement.Application.Medicines.DTOs;
 
 public class MedicineDto
 {
+    public int UsableStock { get; set; }
     public long Id { get; set; }
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;

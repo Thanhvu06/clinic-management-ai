@@ -156,7 +156,7 @@ export const PharmacyInventory: React.FC = () => {
                     {header:'Mặt hàng thuốc',accessor:t => <><strong>{t.medicineName}</strong><div className={styles.secondary}>{t.medicineCode}</div></>},
                     {header:'Loại giao dịch',accessor:t => getTypeBadge(t.type,t.quantityChange)},
                     {header:'Số lượng biến động',accessor:t => <strong className={t.quantityChange > 0 ? styles.stockIncrease : styles.stockDecrease}>{t.quantityChange > 0 ? `+${t.quantityChange}` : t.quantityChange} {t.unit}</strong>},
-                    {header:'Tồn sau giao dịch',accessor:t => <strong>{t.balanceAfter} {t.unit}</strong>},
+                    {header:'Tổng tồn sau giao dịch (gồm lô hết hạn)',accessor:t => <strong>{t.balanceAfter} {t.unit}</strong>},
                     {header:'Lý do / căn cứ',accessor:t => t.reason || (t.prescriptionId ? `Đơn thuốc #${t.prescriptionId}` : '-')},
                     {header:'Người thực hiện',accessor:t => <div className={styles.inlineContent}><User size={14} className={styles.actorIcon} /><span>{t.actorName}</span></div>}
                 ]} /></div>}
@@ -165,7 +165,7 @@ export const PharmacyInventory: React.FC = () => {
             <Modal open={modalOpen} onCancel={() => { if (!formLoading) setModalOpen(false); }} title="Nhập kho / điều chỉnh tồn kho" width={520} className={styles.stockModal} mask={{closable:false}} keyboard={false} closable={{disabled:formLoading}} footer={<><Button htmlType="button" disabled={formLoading} onClick={() => setModalOpen(false)}>Hủy</Button><Button type="primary" htmlType="submit" form="pharmacy-stock-adjustment" disabled={formLoading}>{formLoading ? 'Đang lưu...' : 'Xác nhận nhập kho'}</Button></>}>
                 <form id="pharmacy-stock-adjustment" onSubmit={handleFormSubmit} className={styles.stockForm}>
                     {formError && <InlineError title={formError} message="" />}
-                    <div><label className={styles.fieldLabel}>Chọn mặt hàng thuốc (*)</label><Select className={styles.fullWidth} value={selectedMedId} onChange={value => setSelectedMedId(Number(value))} options={activeMedicines.map(m => ({value:m.id,label:`${m.name} (${m.code}) - Hiện tồn: ${m.stockQuantity} ${m.unit}`}))} />
+                    <div><label className={styles.fieldLabel}>Chọn mặt hàng thuốc (*)</label><Select className={styles.fullWidth} value={selectedMedId} onChange={value => setSelectedMedId(Number(value))} options={activeMedicines.map(m => ({value:m.id,label:`${m.name} (${m.code}) - Còn dùng được: ${m.usableStock}; Tổng tồn (gồm lô hết hạn): ${m.stockQuantity} ${m.unit}`}))} />
                         <input className={styles.validationInput} aria-hidden="true" tabIndex={-1} value={selectedMedId || ''} required onChange={e => setSelectedMedId(Number(e.target.value))} />
                     </div>
                     <div className={styles.formPair}>

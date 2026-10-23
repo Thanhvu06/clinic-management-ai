@@ -42,8 +42,8 @@ public partial class DiagnosticWorkflowService
 
         var resolvedFacilityId = await ResolveAppointmentFacilityAsync(doctor, appointment, facilityId);
 
-        if (string.IsNullOrWhiteSpace(request.ClinicalIndication))
-            throw new BusinessException("VALIDATION_ERROR", "Chỉ định lâm sàng không được để trống.");
+        var clinicalIndication = await ResolveClinicalIndicationAsync(request.ClinicalIndication,
+            appointment.PatientVisit?.Id, appointment.Id, appointment.PatientVisit?.ChiefComplaint ?? appointment.Reason);
 
         var cleanServiceIds = request.ServiceIds?.Distinct().ToList() ?? new List<long>();
         if (cleanServiceIds.Count == 0)
@@ -73,7 +73,7 @@ public partial class DiagnosticWorkflowService
                     SourceAiActionId = sourceAiActionId,
                     PatientId = appointment.PatientId,
                     OrderingDoctorId = doctor.Id,
-                    ClinicalIndication = request.ClinicalIndication.Trim(),
+                    ClinicalIndication = clinicalIndication,
                     Note = request.Note?.Trim(),
                     Status = DiagnosticOrderStatus.Ordered,
                     OrderedAtUtc = DateTime.UtcNow,

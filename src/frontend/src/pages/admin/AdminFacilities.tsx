@@ -182,7 +182,7 @@ export const AdminFacilities: React.FC = () => {
             } catch (error) { showAlert(errorMessage(error, 'Không thể hủy phân công.'), 'Lỗi', 'error'); }
         });
     };
-    const modalProps = (busy: boolean) => ({ footer: null, maskClosable: !busy, closable: !busy, keyboard: !busy, destroyOnHidden: true });
+    const modalProps = (busy: boolean) => ({ footer: null, mask: { closable: !busy }, closable: !busy, keyboard: !busy, destroyOnHidden: true });
     const footer = (busy: boolean, close: () => void, label: string, disabled = false) => <div className={styles.formActions}><Button disabled={busy} onClick={close}>Hủy</Button><Button type="primary" htmlType="submit" disabled={busy || disabled}>{busy ? 'Đang lưu...' : label}</Button></div>;
     const departmentOptions = departments.map(d => ({ value: d.id, label: d.name + ' (' + d.code + ')' }));
 

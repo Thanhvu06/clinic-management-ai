@@ -269,7 +269,7 @@ export const PharmacyPrescriptions: React.FC = () => {
                     <div className={styles.itemsScroll}><DataTable data={selectedPrescription.items.map((item,index) => ({...item,lineIndex:index}))} keyExtractor={item => item.lineIndex} columns={[
                         {header:'Tên thuốc',accessor:item => <><strong>{item.medicineName}</strong><div className={styles.medicineMeta}><span>{item.medicineCode}</span>{item.isActive === false && <StatusBadge status="cancelled" label="Ngừng hoạt động" size="sm" />}</div>{item.batchAllocations?.map((allocation, index) => <div key={`${allocation.batchNumber}-${allocation.expiryDate}-${index}`} className={styles.instructions}>Lô {allocation.batchNumber} · HSD {formatDateOnly(allocation.expiryDate).slice(3)} · {allocation.quantity} {item.unit}</div>)}</>},
                         {header:'Số lượng',accessor:item => <strong>{item.quantity} {item.unit}</strong>},
-                        {header:'Tồn kho',accessor:item => <span className={item.availableStock < item.quantity ? styles.insufficientStock : styles.availableStock}>{item.availableStock} {item.unit}</span>},
+                        {header:'Còn dùng được',accessor:item => <span className={item.availableStock < item.quantity ? styles.insufficientStock : styles.availableStock}>{item.availableStock} {item.unit}</span>},
                         {header:'Liều dùng',accessor:'dosage'},
                         {header:'Tần suất & chỉ dẫn',accessor:item => <><div>{item.frequency}</div>{item.instructions && <div className={styles.instructions}>{item.instructions}</div>}</>}
                     ]} /></div>

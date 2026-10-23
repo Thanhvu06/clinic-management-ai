@@ -167,7 +167,7 @@ export const AdminLeaves: React.FC = () => {
                 </>}
             {!loading && !loadError && <div className={styles.leaveTotal}>Tổng cộng: {totalItems} yêu cầu</div>}
             <Modal title="Chi tiết yêu cầu nghỉ" open={modal.isOpen} onCancel={closeModal} footer={null} destroyOnHidden
-                maskClosable={!actionLoading} closable={!actionLoading} keyboard={!actionLoading}>
+                mask={{ closable: !actionLoading }} closable={!actionLoading} keyboard={!actionLoading}>
                 {modal.req && <>
                     {formError && <Alert className={styles.leaveFormError} type={formErrorType} title={formError} showIcon />}
                     <Descriptions column={1} items={[

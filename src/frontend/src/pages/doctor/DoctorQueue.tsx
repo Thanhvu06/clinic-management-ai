@@ -1,5 +1,7 @@
 import { formatVitalSummaryVi } from '../../utils/formatDecimalVi';
 import { toLocalDateString } from '../../utils/formatters';
+import { isConsultationInProgress } from '../../utils/doctorQueueStatus';
+import { getVisitStatusLabel } from '../../utils/visitStatusLabels';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Flex, Input, Segmented } from 'antd';
@@ -165,7 +167,7 @@ export const DoctorQueue: React.FC = () => {
         { value: 'InConsultation', label: `Đang khám (${statusCounts.InConsultation})` },
         { value: 'InDiagnostics', label: `Chờ CLS (${statusCounts.InDiagnostics})` },
         { value: 'ResultsReady', label: `Có kết quả CLS (${statusCounts.ResultsReady})` },
-        { value: 'Completed', label: `Đã xong (${statusCounts.Completed})` },
+        { value: 'Completed', label: `${getVisitStatusLabel('Completed')} (${statusCounts.Completed})` },
         { value: 'NoShow', label: `Vắng mặt (${statusCounts.NoShow})` },
     ];
 
@@ -211,7 +213,7 @@ export const DoctorQueue: React.FC = () => {
                 <span className={styles.vitalsPending}>Chưa ghi nhận</span>
             )
         },
-        { header: 'Trạng thái', width: 130, accessor: (item) => <StatusBadge status={item.status} /> },
+        { header: 'Trạng thái', width: 130, accessor: (item) => <StatusBadge status={item.status} label={getVisitStatusLabel(item.status)} /> },
         {
             header: 'Thao tác',
             align: 'right',
@@ -254,21 +256,9 @@ export const DoctorQueue: React.FC = () => {
                         </Button>
                     )}
 
-                    {item.status === 'InConsultation' && (
+                    {isConsultationInProgress(item.status) && (
                         <Button type="primary" size="small" icon={<Stethoscope size={14} />} onClick={() => navigate(getExaminationUrl(item))}>
                             Tiếp tục khám
-                        </Button>
-                    )}
-
-                    {item.status === 'InDiagnostics' && (
-                        <Button size="small" icon={<Eye size={14} />} onClick={() => navigate(getExaminationUrl(item))}>
-                            Chờ CLS
-                        </Button>
-                    )}
-
-                    {item.status === 'ResultsReady' && (
-                        <Button type="primary" size="small" icon={<CheckCircle2 size={14} />} onClick={() => navigate(getExaminationUrl(item))}>
-                            Có kết quả CLS
                         </Button>
                     )}
 

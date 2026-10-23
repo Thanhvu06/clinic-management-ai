@@ -178,7 +178,7 @@ export const AdminHealthPackages: React.FC = () => {
                 </>}
             {!loading && !loadError && <div className={styles.packageTotal}>Tổng số: {totalItems} gói khám</div>}
             <Modal title={modal.isEdit ? 'Chỉnh sửa gói khám' : 'Thêm gói khám mới'} open={modal.isOpen} onCancel={closeModal} footer={null} destroyOnHidden width={600}
-                maskClosable={!formLoading} closable={!formLoading} keyboard={!formLoading}>
+                mask={{ closable: !formLoading }} closable={!formLoading} keyboard={!formLoading}>
                 {formError && <Alert className={styles.packageFormAlert} type="error" title={formError} showIcon />}
                 <Form layout="vertical" onFinish={handleFormSubmit} disabled={formLoading}>
                     <div className={styles.packageFormGrid}>

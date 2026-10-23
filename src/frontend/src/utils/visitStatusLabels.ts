@@ -2,7 +2,7 @@ import type { VisitStatus } from '../types/visit';
 
 export const statusLabels: Record<string, string> & Record<VisitStatus, string> = {
     Pending: 'Chờ xử lý', Confirmed: 'Đã xác nhận', PendingReschedule: 'Chờ đổi lịch', PendingCancellation: 'Chờ hủy',
-    Cancelled: 'Đã hủy', Completed: 'Đã hoàn tất', NoShow: 'Không đến', CheckedIn: 'Đã tiếp nhận', Registered: 'Đã đăng ký',
+    Cancelled: 'Đã hủy', Completed: 'Đã khám xong', NoShow: 'Không đến', CheckedIn: 'Đã tiếp nhận', Registered: 'Đã đăng ký',
     WaitingForDoctor: 'Chờ bác sĩ', WaitingDoctor: 'Chờ bác sĩ', InConsultation: 'Đang khám',
     WaitingForDiagnostics: 'Chờ cận lâm sàng', InDiagnostics: 'Đang làm cận lâm sàng', ResultsReady: 'Đã có kết quả',
     Transferred: 'Đã chuyển', ConsultationCompleted: 'Đã kết thúc khám', InPharmacy: 'Đang tại quầy thuốc', InBilling: 'Đang thanh toán',

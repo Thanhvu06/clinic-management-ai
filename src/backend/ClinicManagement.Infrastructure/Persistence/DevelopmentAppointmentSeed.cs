@@ -390,16 +390,16 @@ internal static class DevelopmentAppointmentSeed
             db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
             {
                 DoctorId = mainDoc.Id,
-                StartDateTime = DateTime.UtcNow.AddDays(2),
-                EndDateTime = DateTime.UtcNow.AddDays(3),
+                StartDateTime = dateTimeProvider.VietnamNow.AddDays(2),
+                EndDateTime = dateTimeProvider.VietnamNow.AddDays(3),
                 Reason = "Nghỉ phép cá nhân giải quyết việc gia đình",
                 Status = DoctorLeaveRequestStatus.Pending
             });
             db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
             {
                 DoctorId = doctors[1].Id,
-                StartDateTime = DateTime.UtcNow.AddDays(5),
-                EndDateTime = DateTime.UtcNow.AddDays(6),
+                StartDateTime = dateTimeProvider.VietnamNow.AddDays(5),
+                EndDateTime = dateTimeProvider.VietnamNow.AddDays(6),
                 Reason = "Tham gia hội thảo chuyên ngành tại Hà Nội",
                 Status = DoctorLeaveRequestStatus.Approved,
                 AdminNote = "Đã duyệt, yêu cầu chuyển giao ca trực và hỗ trợ bệnh nhân ngày 5."

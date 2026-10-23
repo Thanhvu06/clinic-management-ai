@@ -116,7 +116,7 @@ public class BillingService : IBillingService
                     EntityName = "Invoice",
                     EntityId = invoice.Id.ToString(),
                     Description = $"Lập hóa đơn #{invoice.InvoiceCode} cho lịch hẹn #{appointment.AppointmentCode} ({invoice.TotalAmount:N0}đ)",
-                    CreatedAt = _dateTimeProvider.VietnamNow
+                    CreatedAt = _dateTimeProvider.UtcNow
                 });
 
                 if (appointment.Patient.UserId.HasValue)
@@ -356,7 +356,7 @@ public class BillingService : IBillingService
                     EntityName = "Invoice",
                     EntityId = invoice.Id.ToString(),
                     Description = $"Lập hóa đơn tổng hợp #{invoice.InvoiceCode} cho lượt khám #{visit.VisitCode} ({invoice.TotalAmount:N0}đ)",
-                    CreatedAt = _dateTimeProvider.VietnamNow
+                    CreatedAt = _dateTimeProvider.UtcNow
                 });
 
                 if (visit.Patient.UserId.HasValue)
@@ -648,7 +648,7 @@ public class BillingService : IBillingService
                     EntityName = "Invoice",
                     EntityId = invoice.Id.ToString(),
                     Description = $"Lập hóa đơn #{invoice.InvoiceCode} cho đăng ký gói #{registration.RegistrationCode} ({invoice.TotalAmount:N0}đ)",
-                    CreatedAt = _dateTimeProvider.VietnamNow
+                    CreatedAt = _dateTimeProvider.UtcNow
                 });
 
                 if (registration.Patient.UserId.HasValue)
@@ -792,8 +792,8 @@ public class BillingService : IBillingService
                     Action = "PROCESS_PAYMENT",
                     EntityName = "Payment",
                     EntityId = paymentCode,
-                    Description = $"Thu tiền hóa đơn #{currentInvoice.InvoiceCode}: {payment.Amount:N0}đ ({payment.Method})",
-                    CreatedAt = _dateTimeProvider.VietnamNow
+                    Description = $"Thu tiền hóa đơn #{currentInvoice.InvoiceCode}: {payment.Amount:N0}đ ({(payment.Method == PaymentMethod.Cash ? "Tiền mặt" : "Chuyển khoản")})",
+                    CreatedAt = _dateTimeProvider.UtcNow
                 });
 
                 var methodLabel = payment.Method == PaymentMethod.Cash ? "Tiền mặt" : "Chuyển khoản";
@@ -882,7 +882,7 @@ public class BillingService : IBillingService
             EntityName = "Invoice",
             EntityId = invoice.Id.ToString(),
             Description = $"Hủy hóa đơn #{invoice.InvoiceCode}. Lý do: {invoice.CancellationReason}",
-            CreatedAt = _dateTimeProvider.VietnamNow
+            CreatedAt = _dateTimeProvider.UtcNow
         });
 
         if (invoice.Patient.UserId.HasValue)
@@ -1248,7 +1248,7 @@ public class BillingService : IBillingService
             EntityName = "Specialty",
             EntityId = specialty.Id.ToString(),
             Description = $"Cập nhật phí {specialty.SpecialtyCode} từ {previousFee:N0}đ thành {fee:N0}đ",
-            CreatedAt = _dateTimeProvider.VietnamNow
+            CreatedAt = _dateTimeProvider.UtcNow
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);

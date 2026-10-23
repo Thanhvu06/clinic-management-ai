@@ -1,5 +1,7 @@
 import { formatVitalSummaryVi } from '../../utils/formatDecimalVi';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { isConsultationInProgress } from '../../utils/doctorQueueStatus';
+import { getVisitStatusLabel } from '../../utils/visitStatusLabels';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button, Card, Flex, Typography } from 'antd';
@@ -162,7 +164,7 @@ export const DoctorDashboard: React.FC = () => {
                 ? <span className={styles.vitalsOk}><CheckCircle size={14} /><span>Đã đo</span></span>
                 : <span className={styles.vitalsPending}>Chưa đo</span>
         },
-        { header: 'Trạng thái', accessor: (item) => <StatusBadge status={item.status} size="sm" /> },
+        { header: 'Trạng thái', accessor: (item) => <StatusBadge status={item.status} label={getVisitStatusLabel(item.status)} size="sm" /> },
         {
             header: 'Thao tác',
             align: 'right',
@@ -196,13 +198,13 @@ export const DoctorDashboard: React.FC = () => {
                             Vào khám
                         </Button>
                     )}
-                    {item.status === 'InConsultation' && (
+                    {isConsultationInProgress(item.status) && (
                         <Button
                             type="primary"
                             size="small"
                             onClick={() => navigate(item.patientVisitId ? `/doctor/visits/${item.patientVisitId}/examination` : `/doctor/appointments/${item.appointmentId}/examination`)}
                         >
-                            Tiếp tục khám →
+                            Tiếp tục khám
                         </Button>
                     )}
                     {item.status === 'Completed' && (
@@ -234,7 +236,7 @@ export const DoctorDashboard: React.FC = () => {
             )
         },
         { header: 'Lý do khám', accessor: (item) => item.reason || 'Khám theo lịch hẹn' },
-        { header: 'Trạng thái', accessor: (item) => <StatusBadge status={item.status} size="sm" /> },
+        { header: 'Trạng thái', accessor: (item) => <StatusBadge status={item.status} label={getVisitStatusLabel(item.status)} size="sm" /> },
         {
             header: 'Thao tác',
             align: 'right',
@@ -289,7 +291,7 @@ export const DoctorDashboard: React.FC = () => {
                 items={[
                     { label: 'Đang chờ khám', value: loading ? '...' : (kpis?.waitingCount ?? 0), tone: 'attention', to: '/doctor/queue' },
                     { label: 'Đang khám', value: loading ? '...' : (kpis?.inConsultationCount ?? 0) },
-                    { label: 'Đã hoàn tất', value: loading ? '...' : (kpis?.completedCount ?? 0) },
+                    { label: getVisitStatusLabel('Completed'), value: loading ? '...' : (kpis?.completedCount ?? 0) },
                     { label: 'Vắng mặt', value: loading ? '...' : (kpis?.noShowCount ?? 0) },
                 ]}
             />
@@ -350,7 +352,7 @@ export const DoctorDashboard: React.FC = () => {
                                 </Button>
                             )}
 
-                            {nextPatient.status === 'InConsultation' && (
+                            {isConsultationInProgress(nextPatient.status) && (
                                 <Button
                                     type="primary"
                                     icon={<ArrowRight size={16} />}

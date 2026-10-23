@@ -196,7 +196,8 @@ export const AdminMedicines: React.FC = () => {
                         { header: 'Nhóm', accessor: medicine => medicine.categoryName || '—' },
                         { header: 'Đơn vị tính', accessor: medicine => medicine.unit },
                         { header: 'Đơn giá (VNĐ)', accessor: medicine => medicine.unitPrice ? <Typography.Text strong className={styles.medicinePrice}>{medicine.unitPrice.toLocaleString('vi-VN')} đ</Typography.Text> : <Typography.Text type="secondary">Chưa định giá</Typography.Text> },
-                        { header: 'Tồn kho', accessor: medicine => <MedicineStockCell stockQuantity={medicine.stockQuantity} reorderLevel={medicine.reorderLevel} /> },
+                        { header: 'Còn dùng được', accessor: medicine => <MedicineStockCell stockQuantity={medicine.usableStock ?? medicine.stockQuantity} reorderLevel={medicine.reorderLevel} /> },
+                        { header: 'Tổng tồn (gồm lô hết hạn)', accessor: medicine => medicine.usableStock === undefined ? '—' : medicine.stockQuantity },
                         { header: 'Trạng thái', accessor: medicine => <StatusBadge status={medicine.isActive ? 'Approved' : 'Rejected'} label={medicine.isActive ? 'Đang dùng' : 'Tạm ngưng'} /> },
                         { header: 'Thao tác', align: 'right', accessor: medicine => <div className={styles.medicineRowActions}>
                             <Button size="small" icon={<Edit size={14} />} title="Chỉnh sửa" onClick={() => openModal({ ...medicine }, true)}>Sửa</Button>
@@ -208,7 +209,7 @@ export const AdminMedicines: React.FC = () => {
             {!loading && !loadError && <div className={styles.medicineTotal}>Tổng số: {totalItems} thuốc</div>}
             <MedicineCategoryManager categories={categories} onChanged={() => { fetchCategories(); fetchMedicines(); }} />
             <Modal className={styles.medicineModal} centered title={modal.isEdit ? 'Chỉnh sửa thông tin thuốc' : 'Thêm thuốc mới'} open={modal.isOpen} onCancel={closeModal} footer={null} destroyOnHidden width={600}
-                maskClosable={!modalBusy} closable={!modalBusy} keyboard={!modalBusy}>
+                mask={{ closable: !modalBusy }} closable={!modalBusy} keyboard={!modalBusy}>
                 {formError && <Alert className={styles.medicineFormAlert} type="error" title={formError} showIcon />}
                 <Form layout="vertical" onFinish={handleFormSubmit} disabled={modalBusy}>
                     <div className={styles.medicineFormGrid}>
