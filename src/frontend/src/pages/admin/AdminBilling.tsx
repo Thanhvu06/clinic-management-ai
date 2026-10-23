@@ -115,7 +115,7 @@ export const AdminBilling: React.FC = () => {
         } catch (error) { showAlert(errorMessage(error, 'Không thể cập nhật đơn giá.'), 'Lỗi cập nhật', 'error'); }
         finally { diagPending.current = false; setSubmittingDiagPrice(false); }
     };
-    const modalProps = (busy: boolean) => ({ footer: null, maskClosable: !busy, closable: !busy, keyboard: !busy, destroyOnHidden: true });
+    const modalProps = (busy: boolean) => ({ footer: null, mask: { closable: !busy }, closable: !busy, keyboard: !busy, destroyOnHidden: true });
     const revenueContent = <div className={styles.tabContent}>
         <form className={styles.filterForm} onSubmit={event => { event.preventDefault(); void fetchRevenueReport(fromDate, toDate); }}>
             <label className={styles.dateField} htmlFor="revenueFrom"><span className={styles.dateLabel}>Từ ngày</span><Input id="revenueFrom" type="date" className={styles.dateInput} value={fromDate} onChange={event => { setFromDate(event.target.value); setRangeError(''); }} /></label>

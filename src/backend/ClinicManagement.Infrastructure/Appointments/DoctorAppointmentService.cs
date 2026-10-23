@@ -257,7 +257,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
 
         var total = queue.Count;
         var checkedIn = queue.Count(q => q.Status == nameof(AppointmentStatus.CheckedIn));
-        var inConsultation = queue.Count(q => q.Status == nameof(AppointmentStatus.InConsultation));
+        var inConsultation = queue.Count(q => DoctorQueueStatus.IsConsultationInProgress(q.Status));
         var completed = queue.Count(q => q.Status == nameof(AppointmentStatus.Completed));
         var noShow = queue.Count(q => q.Status == nameof(AppointmentStatus.NoShow));
 
@@ -283,7 +283,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             }
         }
 
-        var nextPatient = queue.FirstOrDefault(q => q.Status == nameof(AppointmentStatus.InConsultation))
+        var nextPatient = queue.FirstOrDefault(q => DoctorQueueStatus.IsConsultationInProgress(q.Status))
                        ?? queue.FirstOrDefault(q => q.Status == nameof(AppointmentStatus.CheckedIn))
                        ?? queue.FirstOrDefault(q => q.Status == nameof(AppointmentStatus.Confirmed));
 

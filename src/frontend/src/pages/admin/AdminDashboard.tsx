@@ -1,3 +1,4 @@
+import { getAuditActionLabel, getAuditEntityLabel } from '../../utils/auditLogLabels';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from 'antd';
@@ -25,6 +26,8 @@ interface PendingLeave {
 }
 
 interface AuditLogEntry {
+    action: string;
+    entityName: string;
     id: number;
     userFullName: string;
     description: string;
@@ -94,6 +97,8 @@ export const AdminDashboard: React.FC = () => {
     const logColumns: DataTableColumn<AuditLogEntry>[] = [
         { header: 'Thời gian', accessor: item => <span className={styles.numeric}>{formatDateTime(item.createdAt)}</span> },
         { header: 'Người làm', accessor: 'userFullName' },
+        { header: 'Hành động', accessor: item => getAuditActionLabel(item.action) },
+        { header: 'Thực thể', accessor: item => getAuditEntityLabel(item.entityName) },
         { header: 'Mô tả', accessor: 'description', className: styles.description },
     ];
 

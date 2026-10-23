@@ -10,6 +10,7 @@ import styles from './MedicineCard.module.css';
 interface MedicineCardProps {
     medicine: Pick<PublicMedicineDto, 'code' | 'name' | 'unit' | 'strength' | 'activeIngredient' | 'unitPrice' | 'imageUrl' | 'isPrescriptionRequired'> & {
         stockQuantity?: number;
+        usableStock?: number;
         reorderLevel?: number;
         availability?: PublicMedicineDto['availability'];
     };
@@ -22,7 +23,7 @@ export function MedicineCard({ medicine, publicView = false, to, showImagePlaceh
     const [failedImage, setFailedImage] = useState<string | null>(null);
     const image = medicine.imageUrl ? medicineImageUrl(medicine.imageUrl) : null;
     const hasImage = !!image && failedImage !== image;
-    const stock = medicine.stockQuantity ?? 0;
+    const stock = medicine.usableStock ?? medicine.stockQuantity ?? 0;
     const availability = publicView ? medicine.availability : stock === 0 ? 'out_of_stock'
         : medicine.reorderLevel != null && stock <= medicine.reorderLevel ? 'low' : 'in_stock';
     const stockLabel = availability === 'out_of_stock' ? 'Hết hàng' : availability === 'low' ? 'Sắp hết' : 'Còn hàng';
@@ -44,7 +45,7 @@ export function MedicineCard({ medicine, publicView = false, to, showImagePlaceh
                 <p className={styles.secondary}>{medicine.strength || 'Chưa có hàm lượng'} · {medicine.unit}</p>
                 <p className={styles.price}>{medicine.unitPrice == null ? 'Chưa có giá' : formatVndCurrency(medicine.unitPrice)}</p>
                 <div className={styles.tags}>
-                    {!publicView && <span>Tồn kho: {stock} {medicine.unit}</span>}
+                    {!publicView && <><span>Còn dùng được: {stock} {medicine.unit}</span><span>Tổng tồn (gồm lô hết hạn): {medicine.stockQuantity ?? 0} {medicine.unit}</span></>}
                     <Tag color={stockColor}>{stockLabel}</Tag>
                     {medicine.isPrescriptionRequired && <Tag>Kê đơn</Tag>}
                 </div>

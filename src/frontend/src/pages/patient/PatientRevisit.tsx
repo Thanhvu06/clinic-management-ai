@@ -90,7 +90,7 @@ export const PatientRevisit: React.FC = () => {
             </Card></Col>)}</Row>}
             {history.length > 0 && <section className={styles.history}><h3>Lịch sử tái khám</h3>{history.map(r => <Card key={r.id} size="small" extra={badge(r.status)}><p>Ngày hẹn: {formatDateOnly(r.suggestedDate)}</p><p>Bác sĩ: <strong>{r.doctorName}</strong></p>{r.note && <p>Lý do: {r.note}</p>}</Card>)}</section>}
         </>}
-        <Modal open={rejectModal.isOpen} title="Từ chối tái khám" onCancel={closeRejectModal} maskClosable={!busy} closable={!busy} keyboard={!busy} footer={<div className={styles.actions}><Button onClick={closeRejectModal} disabled={busy}>Đóng</Button><Button danger onClick={submitReject} disabled={busy}>{busy ? 'Đang xử lý...' : 'Xác nhận từ chối'}</Button></div>}>
+        <Modal open={rejectModal.isOpen} title="Từ chối tái khám" onCancel={closeRejectModal} mask={{ closable: !busy }} closable={!busy} keyboard={!busy} footer={<div className={styles.actions}><Button onClick={closeRejectModal} disabled={busy}>Đóng</Button><Button danger onClick={submitReject} disabled={busy}>{busy ? 'Đang xử lý...' : 'Xác nhận từ chối'}</Button></div>}>
             <p>Xin hãy cho chúng tôi biết lý do bạn không thể tham gia tái khám đợt này.</p>
             <Form layout="vertical"><Form.Item label="Lý do từ chối" htmlFor="revisit-reason" required><Input.TextArea id="revisit-reason" rows={3} placeholder="Vui lòng nhập lý do (ví dụ: Đã khỏe lại, Bận công tác...)" value={rejectModal.reason} onChange={e => setRejectModal(p => ({ ...p, reason: e.target.value }))} disabled={busy} /></Form.Item></Form>
             {rejectModal.error && <Alert type="error" showIcon title={rejectModal.error} />}

@@ -13,7 +13,7 @@ describe('getVisitStatusLabel', () => {
             ResultsReady: 'Đã có kết quả',
             InPharmacy: 'Đang tại quầy thuốc',
             InBilling: 'Đang thanh toán',
-            Completed: 'Đã hoàn tất',
+            Completed: 'Đã khám xong',
             Cancelled: 'Đã hủy',
             NoShow: 'Không đến',
             Transferred: 'Đã chuyển',

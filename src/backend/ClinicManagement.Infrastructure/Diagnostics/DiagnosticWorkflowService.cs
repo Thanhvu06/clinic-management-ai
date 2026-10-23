@@ -401,8 +401,8 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
         var resolvedFacilityId = await ResolveVisitFacilityAsync(doctor, visit, facilityId);
 
-        if (string.IsNullOrWhiteSpace(request.ClinicalIndication))
-            throw new BusinessException("VALIDATION_ERROR", "Chỉ định lâm sàng không được để trống.");
+        var clinicalIndication = await ResolveClinicalIndicationAsync(request.ClinicalIndication,
+            visit.Id, visit.AppointmentId, visit.ChiefComplaint ?? visit.Appointment?.Reason);
 
         var cleanServiceIds = request.ServiceIds?.Distinct().ToList() ?? new List<long>();
         if (cleanServiceIds.Count == 0)
@@ -432,7 +432,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
                     SourceAiActionId = sourceAiActionId,
                     PatientId = visit.PatientId,
                     OrderingDoctorId = doctor.Id,
-                    ClinicalIndication = request.ClinicalIndication.Trim(),
+                    ClinicalIndication = clinicalIndication,
                     Note = request.Note?.Trim(),
                     Status = DiagnosticOrderStatus.Ordered,
                     OrderedAtUtc = DateTime.UtcNow,
@@ -1290,7 +1290,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
         _dbContext.SystemAuditLogs.Add(new SystemAuditLog
         {
             UserId = GetUserId(), Action = action, EntityName = "DiagnosticOrderItem", EntityId = item.Id.ToString(),
-            Description = $"Phiếu #{order.OrderCode}; mẫu {item.SpecimenBarcode}; lần lấy lại {item.RecollectCount}; {note?.Trim()}", CreatedAt = DateTime.UtcNow
+            Description = DiagnosticAuditDescriptions.Specimen(order, item, action, note), CreatedAt = DateTime.UtcNow
         });
         try { await _dbContext.SaveChangesAsync(); }
         catch (DbUpdateConcurrencyException)
@@ -1852,7 +1852,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
     private void AddVerificationAudit(DiagnosticOrder order, string action, string? note) => _dbContext.SystemAuditLogs.Add(new SystemAuditLog
     {
         UserId = GetUserId(), Action = action, EntityName = "DiagnosticOrder", EntityId = order.Id.ToString(),
-        Description = $"VerifiedByRole={GetVerificationRole()}; Phiếu #{order.OrderCode}; {note}", CreatedAt = DateTime.UtcNow
+        Description = DiagnosticAuditDescriptions.Verification(order, GetVerificationRole(), note), CreatedAt = DateTime.UtcNow
     });
 
     private async Task<DiagnosticOrderDto> SaveVerificationAsync(DiagnosticOrder order)
@@ -1890,7 +1890,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
             Action = "DiagnosticOrderCompleted",
             EntityName = "DiagnosticOrder",
             EntityId = order.Id.ToString(),
-            Description = $"Kỹ thuật viên hoàn tất phiếu chỉ định #{order.OrderCode}.",
+            Description = $"Phiếu chỉ định #{order.OrderCode} đã hoàn tất.",
             CreatedAt = DateTime.UtcNow
         });
 
@@ -2188,8 +2188,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
             SubmittedForVerificationAtUtc = AsUtc(order.SubmittedForVerificationAtUtc),
             SubmittedForVerificationByUserName = UserName(order.SubmittedForVerificationByUserId),
             VerifiedAtUtc = AsUtc(order.VerifiedAtUtc), VerifiedByUserName = UserName(order.VerifiedByUserId),
-            VerifiedByRole = new[] { RoleNames.DiagnosticTechnician, RoleNames.LabSupervisor, RoleNames.Doctor }
-                .FirstOrDefault(role => verificationAudit?.StartsWith($"VerifiedByRole={role};", StringComparison.Ordinal) == true),
+            VerifiedByRole = DiagnosticAuditDescriptions.VerificationRole(verificationAudit),
             VerificationNote = order.VerificationNote, ReturnedAtUtc = AsUtc(order.ReturnedAtUtc),
             ReturnedByUserName = UserName(order.ReturnedByUserId), ReturnReason = order.ReturnReason, ReturnCount = order.ReturnCount,
             CanCurrentUserVerify = order.Status == DiagnosticOrderStatus.InProgress && order.VerificationStatus == DiagnosticVerificationStatus.Pending &&

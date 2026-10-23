@@ -279,7 +279,7 @@ export const AdminDoctors: React.FC = () => {
                 </>}
             {!loading && !loadError && <div className={styles.doctorTotal}>Tổng cộng: {totalItems} bác sĩ</div>}
             <Modal title={modal.isEdit ? 'Cập nhật hồ sơ bác sĩ' : 'Thêm hồ sơ bác sĩ'} open={modal.isOpen} onCancel={closeModal} footer={null} destroyOnHidden width={600}
-                maskClosable={!formLoading} closable={!formLoading} keyboard={!formLoading}>
+                mask={{ closable: !formLoading }} closable={!formLoading} keyboard={!formLoading}>
                 {formError && <Alert className={styles.doctorFormAlert} type="error" title={formError} showIcon />}
                 <Form layout="vertical" onFinish={handleFormSubmit} disabled={formLoading}>
                     {!modal.isEdit && <>

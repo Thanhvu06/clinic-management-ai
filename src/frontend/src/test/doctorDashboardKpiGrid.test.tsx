@@ -20,7 +20,7 @@ it('places the four doctor metrics in one MetricStrip without ant columns', asyn
     const grid = screen.getByRole('group', { name: 'Số liệu hôm nay' });
     expect(grid.tagName).toBe('DIV');
     expect(grid.children).toHaveLength(4);
-    for (const title of ['Đang chờ khám', 'Đang khám', 'Đã hoàn tất', 'Vắng mặt']) {
+    for (const title of ['Đang chờ khám', 'Đang khám', 'Đã khám xong', 'Vắng mặt']) {
         const cell = within(grid).getByText(title).parentElement;
         expect(cell?.parentElement).toBe(grid);
     }

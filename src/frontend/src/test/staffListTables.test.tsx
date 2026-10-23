@@ -75,7 +75,7 @@ describe('AdminMedicines table', () => {
     it('merges stock and reorder level into one column and warns only below the minimum', async () => {
         mount(<AdminMedicines />);
         const table = await screen.findByRole('table', { name: 'Danh mục thuốc' });
-        expect(within(table).getByRole('columnheader', { name: 'Tồn kho' })).toBeInTheDocument();
+        expect(within(table).getByRole('columnheader', { name: 'Còn dùng được' })).toBeInTheDocument();
         for (const removed of ['Kê đơn', 'Mức cảnh báo', 'Tồn kho hiện tại']) expect(within(table).queryByRole('columnheader', { name: removed })).not.toBeInTheDocument();
         const okCell = within(within(table).getByText('Thuốc đủ').closest('tr')!).getByText('100').closest('.ant-typography') as HTMLElement;
         expect(okCell).toHaveTextContent('100 · tối thiểu 10');

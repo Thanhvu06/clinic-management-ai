@@ -220,7 +220,7 @@ export const AdminWorkSchedules: React.FC = () => {
                     </div>
                 </>}
             <Modal title={modal.isEdit ? 'Cập nhật lịch làm việc' : 'Thêm lịch làm việc'} open={modal.isOpen} onCancel={closeModal}
-                footer={null} destroyOnHidden maskClosable={!formLoading} closable={!formLoading} keyboard={!formLoading}>
+                footer={null} destroyOnHidden mask={{ closable: !formLoading }} closable={!formLoading} keyboard={!formLoading}>
                 {formError && <Alert className={styles.scheduleFormError} type="error" title={formError} showIcon />}
                 <Form layout="vertical" onFinish={handleFormSubmit}>
                     <Form.Item label="Ngày làm việc (*)" htmlFor="scheduleWorkDate">

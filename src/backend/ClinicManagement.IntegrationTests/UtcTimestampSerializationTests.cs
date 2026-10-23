@@ -38,11 +38,17 @@ public class UtcTimestampSerializationTests(CustomWebApplicationFactory factory,
             (typeof(SystemAuditLog), nameof(SystemAuditLog.CreatedAt)),
             (typeof(AppointmentChangeRequest), nameof(AppointmentChangeRequest.CreatedAt)),
             (typeof(AppointmentChangeRequest), nameof(AppointmentChangeRequest.ProcessedAt)),
-            (typeof(Prescription), nameof(Prescription.DispensedAt))
+            (typeof(Prescription), nameof(Prescription.DispensedAt)),
+            (typeof(Prescription), nameof(Prescription.CreatedAt)),
+            (typeof(MedicineStockTransaction), nameof(MedicineStockTransaction.CreatedAt)),
+            (typeof(MedicineBatch), nameof(MedicineBatch.ReceivedAt)),
+            (typeof(MedicineBatch), nameof(MedicineBatch.DisposedAt)),
+            (typeof(Medicine), nameof(Medicine.CreatedAt)),
+            (typeof(Medicine), nameof(Medicine.UpdatedAt))
         };
         var explicitUtcTimestamps = properties.Where(property =>
             utcExceptions.Contains((property.DeclaringType.ClrType, property.Name))).ToList();
-        Assert.Equal(5, explicitUtcTimestamps.Count);
+        Assert.Equal(11, explicitUtcTimestamps.Count);
         foreach (var property in explicitUtcTimestamps)
         {
             var converter = property.GetValueConverter(); Assert.NotNull(converter);

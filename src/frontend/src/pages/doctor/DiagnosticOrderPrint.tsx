@@ -163,7 +163,7 @@ export const DiagnosticOrderPrint: React.FC = () => {
                         </div>
                     </div>
                     <div className={styles.spacing6}>
-                        <div><strong>Chỉ định lâm sàng / Lý do:</strong> {order.clinicalIndication}</div>
+                        {order.clinicalIndication && <div><strong>Chỉ định lâm sàng / Lý do:</strong> {order.clinicalIndication}</div>}
                         {order.note && <div className={styles.spacing7}><strong>Ghi chú bổ sung:</strong> {order.note}</div>}
                     </div>
                 </div>

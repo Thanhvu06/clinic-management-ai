@@ -80,6 +80,7 @@ public class MedicineService : IMedicineService
             .Select(MedicineProjections.Admin)
             .ToListAsync();
 
+        await PopulateUsableStocksAsync(items);
         return new PagedResult<MedicineDto>(items, totalItems, page, pageSize);
     }
 
@@ -88,7 +89,17 @@ public class MedicineService : IMedicineService
         var m = await _dbContext.Medicines.AsNoTracking().Where(x => x.Id == id).Select(MedicineProjections.Admin).FirstOrDefaultAsync();
         if (m == null) throw new NotFoundException("Thuốc không tồn tại.");
 
+        await PopulateUsableStocksAsync(new[] { m });
         return m;
+    }
+
+    private async Task PopulateUsableStocksAsync(IReadOnlyCollection<MedicineDto> medicines)
+    {
+        var ids = medicines.Select(medicine => medicine.Id).ToList();
+        var stocks = await _dbContext.Medicines.AsNoTracking().Where(medicine => ids.Contains(medicine.Id))
+            .WithUsableStock(_dbContext, _dateTimeProvider.VietnamToday)
+            .ToDictionaryAsync(stock => stock.Medicine.Id, stock => stock.Quantity);
+        foreach (var medicine in medicines) medicine.UsableStock = stocks.GetValueOrDefault(medicine.Id);
     }
 
     public async Task<MedicineDto> CreateMedicineAsync(CreateMedicineDto dto)

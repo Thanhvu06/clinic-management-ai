@@ -171,7 +171,7 @@ export const AdminUsers: React.FC = () => {
                 </>}
             {!loading && !loadError && <div className={styles.userTotal}>Tổng cộng: {totalItems} tài khoản</div>}
             <Modal title="Tạo tài khoản nhân sự" open={isCreateModalOpen} footer={null} destroyOnHidden
-                onCancel={() => { if (!formLoading) setIsCreateModalOpen(false); }} maskClosable={!formLoading} closable={!formLoading} keyboard={!formLoading}>
+                onCancel={() => { if (!formLoading) setIsCreateModalOpen(false); }} mask={{ closable: !formLoading }} closable={!formLoading} keyboard={!formLoading}>
                 {formError && <Alert className={styles.userFormError} type="error" title={formError} showIcon />}
                 <Form layout="vertical" onFinish={handleCreateSubmit}>
                     <Form.Item label="Họ và tên (*)" htmlFor="userFullName"><Input id="userFullName" required value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} placeholder="Nguyễn Văn A" /></Form.Item>

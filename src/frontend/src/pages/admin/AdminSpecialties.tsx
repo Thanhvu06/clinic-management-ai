@@ -150,7 +150,7 @@ export const AdminSpecialties: React.FC = () => {
                 </>}
             {!loading && !loadError && <div className={styles.specialtyTotal}>Tổng cộng: {totalItems} chuyên khoa</div>}
             <Modal title={modal.isEdit ? 'Cập nhật chuyên khoa' : 'Thêm chuyên khoa'} open={modal.isOpen} onCancel={closeModal}
-                footer={null} destroyOnHidden maskClosable={!formLoading} closable={!formLoading} keyboard={!formLoading}>
+                footer={null} destroyOnHidden mask={{ closable: !formLoading }} closable={!formLoading} keyboard={!formLoading}>
                 {formError && <Alert className={styles.specialtyFormError} type="error" title={formError} showIcon />}
                 <Form layout="vertical" onFinish={handleFormSubmit}>
                     <Form.Item label="Mã chuyên khoa (*)" htmlFor="specialtyCode"><Input id="specialtyCode" required disabled={modal.isEdit} value={modal.data.specialtyCode || ''} onChange={e => setModal({ ...modal, data: { ...modal.data, specialtyCode: e.target.value } })} placeholder="VD: CARDIO" /></Form.Item>

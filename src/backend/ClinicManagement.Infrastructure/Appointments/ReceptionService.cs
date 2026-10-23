@@ -271,7 +271,7 @@ public class ReceptionService : IReceptionService
                 UserId = patientUserId.Value,
                 Type = NotificationType.Appointment,
                 Title = "Lịch khám đã được xác nhận",
-                Message = $"Lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm} đã được tiếp nhận và xác nhận.",
+                Message = $"Lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm} đã được xác nhận.",
                 Route = "/patient/appointments",
                 RelatedEntityType = "Appointment",
                 RelatedEntityId = appointment.Id.ToString(),
