@@ -61,8 +61,7 @@ describe('Specialty doctor recommendations', () => {
         expect(within(cards[0]).getByText('Lịch trống sớm nhất: Thứ Tư, 14/10, 00:30')).toBeInTheDocument();
         expect(within(region).queryByText('Bác sĩ thứ tư')).not.toBeInTheDocument();
         expect(within(region).getByText('Gợi ý dựa trên kinh nghiệm và lịch trống gần nhất của bác sĩ.')).toBeInTheDocument();
-        const teamHeading = screen.getByRole('heading', { name: 'Bác sĩ của khoa (1)' });
-        expect(region.compareDocumentPosition(teamHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(screen.queryByRole('heading', { name: /Bác sĩ của khoa/ })).not.toBeInTheDocument();
         expect(screen.queryByText('Chỉ định thăm khám thường gặp')).not.toBeInTheDocument();
     }, 15000);
 
@@ -146,7 +145,7 @@ describe('Specialty doctor recommendations', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
         await screen.findByRole('heading', { name: 'Nội khoa', level: 1 });
         expect(screen.getAllByRole('link', { name: 'Đặt lịch khám' })[0]).toHaveAttribute('href', '/patient/book?specialtyId=2');
-        expect(screen.getByRole('link', { name: 'Đặt khám với bác sĩ' })).toHaveAttribute('href', '/patient/book?specialtyId=2&doctorId=7');
+        expect(within(await recommendationsRegion()).getAllByRole('link', { name: 'Đặt lịch' })[0]).toHaveAttribute('href', '/patient/book?specialtyId=2&doctorId=7&date=2026-10-14');
         expect(screen.getAllByRole('link', { name: 'Hỏi trợ lý AI' })[0]).toHaveAttribute('href', '/patient/ai-consultation');
         expect(mocks.get.mock.calls.filter(call => call[0] === recommendationsUrl)).toHaveLength(1);
     }, 15000);

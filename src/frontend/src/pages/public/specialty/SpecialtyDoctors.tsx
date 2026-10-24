@@ -9,6 +9,8 @@ import styles from '../SpecialtyDetail.module.css';
 export function SpecialtyDoctors({ data }: { data: ReturnType<typeof useSpecialtyDetail> }) {
     const { specialty, doctors, recommendations, recommendationsLoading, recommendationsError, fetchRecommendations } = data;
     if (!specialty) return null;
+    const recommendedIds = new Set(recommendations.map(item => item.doctorId));
+    const teamDoctors = doctors.filter(doc => !recommendedIds.has(doc.id));
     return <>
                 {(recommendationsLoading || recommendationsError || recommendations.length > 0) && <section className={styles.recommendationsSection} aria-labelledby="recommended-doctors-title">
                     <h2 id="recommended-doctors-title" className={styles.sectionTitle}>Bác sĩ được gợi ý</h2>
@@ -39,17 +41,20 @@ export function SpecialtyDoctors({ data }: { data: ReturnType<typeof useSpecialt
                     </div>}
                 </section>}
 
-                <h2 className={styles.sectionTitle}>Bác sĩ của khoa ({doctors.length})</h2>
-                {doctors.length > 0 ? <div className={styles.doctorGrid}>
-                    {doctors.map(doc => <article key={doc.id} className={styles.doctorCard}>
-                        <h3 className={styles.doctorName}>{formatDoctorName(doc.academicTitle, doc.fullName)}</h3>
-                        <span className={styles.doctorSpecialty}>{specialty.specialtyName}</span>
-                        <span className={styles.doctorExperience}>{doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật kinh nghiệm'}</span>
-                        <div className={styles.doctorActions}>
-                            <Link to={`/patient/book?specialtyId=${specialty.id}&doctorId=${doc.id}`} className={styles.bookingLink}>Đặt khám với bác sĩ</Link>
-                            <Link to={`/doctors/${doc.id}`} className={styles.profileLink}>Hồ sơ bác sĩ</Link>
+                {doctors.length === 0 ? recommendations.length === 0 && <div className={styles.doctorsEmpty}>Khoa chưa có bác sĩ nhận lịch trực tuyến. Bạn vẫn có thể đặt lịch theo chuyên khoa.</div>
+                    : teamDoctors.length > 0 && <section aria-labelledby="specialty-doctors-title">
+                        <h2 id="specialty-doctors-title" className={styles.sectionTitle}>Bác sĩ của khoa ({teamDoctors.length})</h2>
+                        <div className={styles.doctorGrid}>
+                            {teamDoctors.map(doc => <article key={doc.id} className={styles.doctorCard}>
+                                <h3 className={styles.doctorName}>{formatDoctorName(doc.academicTitle, doc.fullName)}</h3>
+                                <span className={styles.doctorSpecialty}>{specialty.specialtyName}</span>
+                                <span className={styles.doctorExperience}>{doc.experienceYears > 0 ? `${doc.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật kinh nghiệm'}</span>
+                                <div className={styles.doctorActions}>
+                                    <Link to={`/patient/book?specialtyId=${specialty.id}&doctorId=${doc.id}`} className={styles.bookingLink}>Đặt khám với bác sĩ</Link>
+                                    <Link to={`/doctors/${doc.id}`} className={styles.profileLink}>Hồ sơ bác sĩ</Link>
+                                </div>
+                            </article>)}
                         </div>
-                    </article>)}
-                </div> : <div className={styles.doctorsEmpty}>Khoa chưa có bác sĩ nhận lịch trực tuyến. Bạn vẫn có thể đặt lịch theo chuyên khoa.</div>}
+                    </section>}
     </>;
 }

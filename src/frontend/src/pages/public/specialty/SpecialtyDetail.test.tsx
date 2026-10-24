@@ -52,4 +52,27 @@ describe('Rich specialty page', () => {
         fireEvent.click(within(error).getByRole('button', { name: 'Thử lại' }));
         expect(await screen.findByText('Địa chỉ demo')).toBeInTheDocument();
     });
+    it('lists only doctors not already recommended under the team section', async () => {
+        const doctor = (id: number, fullName: string) => ({ id, fullName, experienceYears: 5 });
+        const recommended = (doctorId: number, fullName: string) => ({ doctorId, fullName, experienceYears: 5, experienceScore: .5, availabilityScore: .5, totalScore: .5, earliestAvailableSlot: null });
+        vi.mocked(axiosClient.get).mockImplementation(async url => ({ success: true, data: url === '/specialties/2' ? specialty
+            : url === '/specialties/2/doctors?page=1&pageSize=20' ? [doctor(1, 'Bác sĩ Một'), doctor(2, 'Bác sĩ Hai'), doctor(3, 'Bác sĩ Ba')]
+                : url === '/specialties/2/recommended-doctors' ? [recommended(1, 'Bác sĩ Một')] : [] }));
+        mount();
+        const team = await screen.findByRole('region', { name: 'Bác sĩ của khoa (2)' });
+        const recommendations = screen.getByRole('region', { name: 'Bác sĩ được gợi ý' });
+        expect(within(recommendations).getByRole('heading', { name: 'Bác sĩ Một' })).toBeInTheDocument();
+        expect(within(team).queryByRole('heading', { name: 'Bác sĩ Một' })).not.toBeInTheDocument();
+        expect(within(team).getAllByRole('heading', { level: 3 }).map(item => item.textContent)).toEqual(['Bác sĩ Hai', 'Bác sĩ Ba']);
+    });
+    it('hides the team section when every doctor is already recommended', async () => {
+        vi.mocked(axiosClient.get).mockImplementation(async url => ({ success: true, data: url === '/specialties/2' ? specialty
+            : url === '/specialties/2/doctors?page=1&pageSize=20' ? [{ id: 1, fullName: 'Bác sĩ Một', experienceYears: 5 }]
+                : url === '/specialties/2/recommended-doctors' ? [{ doctorId: 1, fullName: 'Bác sĩ Một', experienceYears: 5, experienceScore: .5, availabilityScore: .5, totalScore: .5, earliestAvailableSlot: null }] : [] }));
+        mount();
+        await screen.findByRole('region', { name: 'Bác sĩ được gợi ý' });
+        expect(screen.getAllByRole('heading', { name: 'Bác sĩ Một' })).toHaveLength(1);
+        expect(screen.queryByRole('heading', { name: /Bác sĩ của khoa/ })).not.toBeInTheDocument();
+        expect(screen.queryByText(/Khoa chưa có bác sĩ nhận lịch trực tuyến/)).not.toBeInTheDocument();
+    });
 });

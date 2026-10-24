@@ -22,7 +22,7 @@
 .sectionTitle { font-size: 1.1rem; font-weight: 600; color: var(--cc-color-text-dark); margin: 0 0 var(--cc-space-md); }
 .recommendationsSection { margin-bottom: var(--cc-space-xl); }
 .recommendationsExplanation { font-size: 0.875rem; color: var(--cc-color-text-secondary); margin: 0 0 var(--cc-space-md); line-height: 1.5; }
-.doctorGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--cc-space-md); }
+.doctorGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 320px)); gap: var(--cc-space-md); }
 .doctorCard, .recommendationCard { min-width: 0; display: flex; flex-direction: column; padding: var(--cc-space-md); background: var(--cc-color-public-surface); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); }
 .bestMatchBadge { align-self: flex-start; margin: 0 0 var(--cc-space-sm); color: var(--cc-color-public-accent); background: var(--cc-color-public-accent-soft); border-color: var(--cc-color-border); }
 .doctorName { margin: 0 0 var(--cc-space-xs); font-size: 1rem; font-weight: 600; line-height: 1.5; color: var(--cc-color-text-dark); }
@@ -57,7 +57,6 @@
 @media (prefers-reduced-motion: reduce) { .pageSkeleton, .recommendationSkeleton { animation: none; } }
 @media (max-width: 768px) {
     .pageContainer { padding: var(--cc-space-lg) var(--cc-space-md); }
-    .detailLayout, .doctorGrid { grid-template-columns: minmax(0, 1fr); }
     .sidebarCard { position: static; }
     .pageTitle { font-size: 1.5rem; }
 }
@@ -72,12 +71,13 @@
 .headerActions { display: flex; flex-wrap: wrap; gap: var(--cc-space-sm); }
 .headerActions a { min-width: 160px; }
 .detailLayout { grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); }
-.sidebar { position: sticky; top: calc(var(--cc-header-height) + var(--cc-space-lg)); display: flex; flex-direction: column; gap: var(--cc-space-lg); }
+.mainColumn { grid-column: 1; grid-row: 1; }
+.sidebar { grid-column: 2; grid-row: 1; position: sticky; top: calc(var(--cc-header-height) + var(--cc-space-lg)); display: flex; flex-direction: column; gap: var(--cc-space-lg); }
 .sidebarCard { position: static; }
 .contentSection { padding: 0 0 var(--cc-space-xl); margin-bottom: var(--cc-space-xl); border-bottom: 1px solid var(--cc-color-border); }
 .sectionTitle { font-size: 1.35rem; line-height: 1.4; }
 .conditionGrid, .serviceGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cc-space-sm); padding: 0; list-style: none; margin: 0; }
-.conditionGrid li { display: flex; align-items: center; gap: var(--cc-space-sm); padding: var(--cc-space-sm); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); }
+.conditionGrid li { min-width: 0; display: flex; align-items: center; gap: var(--cc-space-sm); padding: var(--cc-space-sm); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); }
 .conditionGrid svg { flex-shrink: 0; color: var(--cc-color-primary); }
 .serviceGrid li { padding: var(--cc-space-sm) 0; border-bottom: 1px solid var(--cc-color-border-light); }
 .readingList { padding-left: var(--cc-space-lg); margin: 0; line-height: 1.8; }
@@ -90,16 +90,25 @@
 .locations address { display: flex; flex-direction: column; gap: var(--cc-space-xs); font-style: normal; line-height: 1.7; }
 .locations a { color: var(--cc-color-primary); }
 .doctorSection { margin-top: var(--cc-space-xl); }
-.doctorGrid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
-.packageGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: var(--cc-space-md); }
-.packageCard { overflow: hidden; border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); }
-.packageCard img { display: block; width: 100%; height: 180px; object-fit: cover; }
+.packageGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cc-space-md); }
+.packageCard { min-width: 0; overflow: hidden; border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); }
+.packageCard img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; }
+.packageSingle { grid-template-columns: minmax(0, 1fr); }
+.packageSingle .packageCard { display: grid; grid-template-columns: 280px minmax(0, 1fr); align-items: center; }
 .packageCard > div { display: flex; flex-direction: column; align-items: flex-start; gap: var(--cc-space-sm); padding: var(--cc-space-md); }
 .packageCard h3, .packageCard p { margin: 0; }
 .disclaimer { padding-top: var(--cc-space-xl); margin-top: var(--cc-space-xl); border-top: 1px solid var(--cc-color-border); font-size: .875rem; color: var(--cc-color-text-secondary); line-height: 1.7; }
-@media (max-width: 768px) {
+@media (max-width: 899px) {
     .detailLayout { grid-template-columns: minmax(0, 1fr); }
+    .mainColumn, .sidebar { grid-column: 1; grid-row: auto; }
     .sidebar { position: static; }
-    .conditionGrid, .serviceGrid { grid-template-columns: minmax(0, 1fr); }
+    .bookingCard { display: none; }
+}
+@media (max-width: 768px) {
+    .serviceGrid, .packageGrid { grid-template-columns: minmax(0, 1fr); }
+    .packageSingle .packageCard { display: block; }
+    .conditionGrid { gap: var(--cc-space-xs); }
+    .conditionGrid li { align-items: flex-start; gap: var(--cc-space-xs); padding: var(--cc-space-xs) var(--cc-space-sm); font-size: .875rem; line-height: 1.5; }
+    .conditionGrid svg { margin-top: 2px; }
     .detailHeader { padding-top: var(--cc-space-lg); }
 }

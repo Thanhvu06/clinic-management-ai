@@ -41,12 +41,8 @@ export const SpecialtyDetail = () => {
             <div className={styles.headerActions}>{actions}</div>
         </header>
         <div className={styles.detailLayout}>
-            <div className={styles.mainColumn}>
-                {content && <SpecialtyClinicalContent content={content} />}
-                <SpecialtyPackages key={specialty.id} name={specialty.specialtyName} />
-            </div>
             <aside className={styles.sidebar}>
-                <section className={styles.sidebarCard} aria-label="Đặt lịch theo chuyên khoa">
+                <section className={`${styles.sidebarCard} ${styles.bookingCard}`} aria-label="Đặt lịch theo chuyên khoa">
                     <h2 className={styles.sidebarTitle}>Đặt lịch khám</h2>
                     <p className={styles.sidebarDescription}>Chọn bác sĩ và giờ khám ở bước tiếp theo.</p>
                     <Link to={`/patient/book?specialtyId=${specialty.id}`} className={styles.bookingLink}>Đặt lịch khám</Link>
@@ -57,6 +53,10 @@ export const SpecialtyDetail = () => {
                     <PublicLocations />
                 </section>
             </aside>
+            <div className={styles.mainColumn}>
+                {content && <SpecialtyClinicalContent content={content} />}
+                <SpecialtyPackages key={specialty.id} name={specialty.specialtyName} />
+            </div>
         </div>
         <div className={styles.doctorSection}><SpecialtyDoctors data={data} /></div>
         <p className={styles.disclaimer}>Thông tin chỉ mang tính tham khảo, không thay thế chẩn đoán của bác sĩ.</p>

@@ -13,7 +13,6 @@ export function MedicineOverview({ medicine }: { medicine: PublicMedicineDto }) 
     const facts = [
         ['Mã thuốc', medicine.code], ['Hoạt chất', medicine.activeIngredient], ['Hàm lượng', medicine.strength],
         ['Dạng bào chế', medicine.dosageForm], ['Đơn vị', medicine.unit], ['Nhóm', medicine.categoryName],
-        ...(medicine.storageInstructions?.trim() ? [['Bảo quản', medicine.storageInstructions]] : []),
     ];
     return <div className={styles.summary}>
         <div className={styles.imageArea}>
@@ -35,9 +34,9 @@ export function MedicineOverview({ medicine }: { medicine: PublicMedicineDto }) 
                     <Link to="/patient/book" className={styles.bookingLink}>Đặt lịch khám</Link>
                 </> : <><p><strong>Có bán tại nhà thuốc phòng khám</strong></p><PublicLocations /></>}
             </div>
-            <dl className={styles.facts}>{facts.map(([label, value]) => <div key={label}>
-                <dt>{label}</dt><dd>{value?.trim() || 'Chưa cập nhật'}</dd>
-            </div>)}</dl>
         </div>
+        <dl className={styles.facts}>{facts.map(([label, value]) => <div key={label}>
+            <dt>{label}</dt><dd>{value?.trim() || 'Chưa cập nhật'}</dd>
+        </div>)}</dl>
     </div>;
 }
