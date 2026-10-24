@@ -248,7 +248,12 @@ export const DoctorDashboard: React.FC = () => {
         }
     ];
 
+    const todayShifts = dashboardData?.todayShifts;
     const shiftText = (() => {
+        if (todayShifts) {
+            if (todayShifts.length === 0) return 'Hôm nay không có ca trực';
+            return todayShifts.map(shift => `${shift.shiftName} ${shift.startTime.substring(0, 5)}–${shift.endTime.substring(0, 5)}`).join(' · ');
+        }
         if (!currentShift || typeof currentShift === 'string') {
             const text = (currentShift || '').trim();
             if (!text || text === 'Không có ca trực') return 'Hôm nay không có ca trực';
@@ -262,7 +267,7 @@ export const DoctorDashboard: React.FC = () => {
         <div>
             <PageHeader
                 title="Bàn làm việc bác sĩ"
-                badge={dashboardData && <span className={styles.titleCount}>· {kpis?.totalAppointmentsToday ?? 0} ca hôm nay</span>}
+                badge={todayShifts && todayShifts.length > 0 && <span className={styles.titleCount}>· {todayShifts.length} ca hôm nay</span>}
                 subtitle={dashboardData ? shiftText : undefined}
                 actions={
                     <Flex gap="small">

@@ -97,6 +97,8 @@ internal static class DevelopmentAppointmentSeed
         var mainDocSpecId = mainDoc.DoctorSpecialties.FirstOrDefault(ds => ds.IsPrimary)?.SpecialtyId ?? specs[0].Id;
         var initialized = false;
         var reasonVariants = new Dictionary<long, int>();
+        var bookedPatients = new HashSet<(long DoctorId, DateOnly Date, long PatientId)>();
+        var approvedLeaveDate = today.AddDays(5);
 
         async Task CreateApt(Patient p, Doctor d, AppointmentSlot s, AppointmentStatus status)
         {
@@ -108,8 +110,8 @@ internal static class DevelopmentAppointmentSeed
             var docSpecId = d.DoctorSpecialties.FirstOrDefault(ds => ds.IsPrimary)?.SpecialtyId
                 ?? d.DoctorSpecialties.FirstOrDefault()?.SpecialtyId
                 ?? specs[0].Id;
-            if (specs.Single(spec => spec.Id == docSpecId).SpecialtyCode == "SP03" && p.Gender != Gender.Female)
-                p = patients.Where(patient => patient.Gender == Gender.Female).ElementAt(reasonVariants.GetValueOrDefault(d.Id) % patients.Count(patient => patient.Gender == Gender.Female));
+            p = RealisticDevelopmentSeed.PickPatient(patients, bookedPatients, d.Id, s.SlotDate, patients.IndexOf(p),
+                specs.Single(spec => spec.Id == docSpecId).SpecialtyCode == "SP03");
             var bookingDate = s.SlotDate > today ? today.AddDays(-2) : s.SlotDate.AddDays(-2);
             var bookedAt = RealisticDevelopmentSeed.At(dateTimeProvider, bookingDate, 9);
             var seenAt = RealisticDevelopmentSeed.At(dateTimeProvider, s.SlotDate, s.EndTime.Hour, s.EndTime.Minute);
@@ -345,6 +347,24 @@ internal static class DevelopmentAppointmentSeed
             }
         }
 
+        for (var index = 0; index < doctors.Count; index++)
+        {
+            var doc = doctors[index];
+            var openDays = slots
+                .Where(s => s.DoctorId == doc.Id && !s.IsBooked && s.SlotDate > today && s.SlotDate <= today.AddDays(7)
+                    && !(doc.Id == doctors[1 % doctors.Count].Id && s.SlotDate == approvedLeaveDate))
+                .GroupBy(s => s.SlotDate).OrderBy(g => g.Key).ToList();
+            var alreadyUpcoming = db.Appointments.Local.Count(a => a.DoctorId == doc.Id && a.AppointmentDate > today && a.AppointmentDate <= today.AddDays(7));
+            var count = Math.Min(Math.Max(0, 2 + index % 3 - alreadyUpcoming), openDays.Count);
+            for (var n = 0; n < count; n++)
+            {
+                var daySlots = openDays[n].Where(s => !s.IsBooked).OrderBy(s => s.StartTime).ToList();
+                var slot = daySlots[(index * 2 + n * 3) % daySlots.Count];
+                var status = (index + n) % 2 == 0 ? AppointmentStatus.Pending : AppointmentStatus.Confirmed;
+                await CreateApt(patients[(index * 3 + n * 5 + 2) % patients.Count], doc, slot, status);
+            }
+        }
+
         logger.LogInformation("Appointments seeded.");
 
         if (!await db.AppointmentChangeRequests.AnyAsync())
@@ -412,8 +432,8 @@ internal static class DevelopmentAppointmentSeed
             db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
             {
                 DoctorId = doctors[1].Id,
-                StartDateTime = today.AddDays(5).ToDateTime(new TimeOnly(8, 0)),
-                EndDateTime = today.AddDays(5).ToDateTime(new TimeOnly(17, 0)),
+                StartDateTime = approvedLeaveDate.ToDateTime(new TimeOnly(8, 0)),
+                EndDateTime = approvedLeaveDate.ToDateTime(new TimeOnly(17, 0)),
                 Reason = "Tham gia hội thảo chuyên ngành tại Hà Nội",
                 Status = DoctorLeaveRequestStatus.Approved,
                 AdminNote = "Đã duyệt, yêu cầu chuyển giao ca trực và hỗ trợ bệnh nhân ngày 5."

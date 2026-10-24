@@ -8,7 +8,7 @@ import { diagnosticApi } from '../../api/diagnosticApi';
 import type { DiagnosticCategory, DiagnosticOrderDto, DiagnosticOrderStatus, DiagnosticVerificationStatus, TechnicianDiagnosticStatsDto } from '../../types';
 import { Button, Card, Input, Select, Tag } from 'antd';
 import { PageHeader, MetricStrip, StatusBadge, DataTable, LoadingState, EmptyState, InlineError, Pagination } from '../../components/common';
-import { diagnosticCategoryLabels, diagnosticStatusLabels, diagnosticStatusTone } from '../../utils/diagnosticLabels';
+import { diagnosticCategoryLabels, diagnosticNotificationTime, diagnosticStatusLabels, diagnosticStatusTone } from '../../utils/diagnosticLabels';
 import { toLocalDateString } from '../../utils/formatters';
 import styles from './TechnicianDashboard.module.css';
 const categoryIcons = { Laboratory: FlaskConical, Ultrasound: Waves, Imaging: Scan, Other: Stethoscope };
@@ -120,7 +120,7 @@ export const TechnicianDashboard: React.FC = () => {
         (!categoryFilter || order.items.some(item => item.category === categoryFilter))
         && (!verificationFilter || order.verificationStatus === verificationFilter));
     const waitTime = (order: DiagnosticOrderDto) => {
-        if (order.status === 'Completed' || order.status === 'Cancelled') return new Date(order.orderedAtUtc).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+        if (order.status === 'Completed' || order.status === 'Cancelled') return diagnosticNotificationTime(order.orderedAtUtc);
         const orderedAt = new Date(order.orderedAtUtc).getTime();
         const minutes = Math.max(0, Math.floor(((lastUpdated?.getTime() ?? orderedAt) - orderedAt) / 60000));
         const text = minutes >= 60 ? `Chờ ${Math.floor(minutes / 60)} giờ ${minutes % 60} phút` : `Chờ ${minutes} phút`;

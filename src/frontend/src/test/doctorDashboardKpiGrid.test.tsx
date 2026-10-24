@@ -16,7 +16,7 @@ it('places the four doctor metrics in one MetricStrip without ant columns', asyn
     } });
     const { container } = render(<MemoryRouter><DoctorDashboard /></MemoryRouter>);
 
-    await screen.findByText('· 12 ca hôm nay');
+    await screen.findByText('Hôm nay không có ca trực');
     const grid = screen.getByRole('group', { name: 'Số liệu hôm nay' });
     expect(grid.tagName).toBe('DIV');
     expect(grid.children).toHaveLength(4);

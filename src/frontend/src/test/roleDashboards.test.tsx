@@ -75,9 +75,9 @@ describe('Doctor dashboard', () => {
     it('shows four metrics, the case count in the title and the shift as one line', async () => {
         vi.mocked(doctorApi.getDashboard).mockResolvedValue(dashboard('Ca sáng (07:00 - 11:30)') as never);
         mount(<DoctorDashboard />);
-        expect(await screen.findByText('· 12 ca hôm nay')).toBeInTheDocument();
+        expect(await screen.findByText('Ca sáng 07:00–11:30')).toBeInTheDocument();
+        expect(screen.queryByText('· 12 ca hôm nay')).not.toBeInTheDocument();
         expect(screen.getByRole('heading', { level: 1, name: 'Bàn làm việc bác sĩ' })).toBeInTheDocument();
-        expect(screen.getByText('Ca sáng 07:00–11:30')).toBeInTheDocument();
         expect(strip('Số liệu hôm nay').children).toHaveLength(4);
         expect(screen.getByRole('link', { name: /Đang chờ khám/ })).toHaveAttribute('href', '/doctor/queue');
         expect(within(cell('Đang chờ khám')).getByText('3')).toHaveAttribute('data-tone', 'attention');
@@ -99,7 +99,7 @@ describe('Doctor dashboard', () => {
         vi.mocked(doctorApi.getDashboard).mockRejectedValueOnce(new Error('offline')).mockResolvedValue(dashboard(null) as never);
         mount(<DoctorDashboard />);
         fireEvent.click(await screen.findByRole('button', { name: /Thử lại/ }));
-        expect(await screen.findByText('· 12 ca hôm nay')).toBeInTheDocument();
+        expect(await screen.findByText('Hôm nay không có ca trực')).toBeInTheDocument();
         expect(doctorApi.getDashboard).toHaveBeenCalledTimes(2);
     });
 });
