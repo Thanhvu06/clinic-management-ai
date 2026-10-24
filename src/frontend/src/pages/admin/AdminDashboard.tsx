@@ -1,3 +1,4 @@
+import { formatAuditTime } from '../../utils/auditTime';
 import { getAuditActionLabel, getAuditEntityLabel } from '../../utils/auditLogLabels';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -95,7 +96,7 @@ export const AdminDashboard: React.FC = () => {
     ];
 
     const logColumns: DataTableColumn<AuditLogEntry>[] = [
-        { header: 'Thời gian', accessor: item => <span className={styles.numeric}>{formatDateTime(item.createdAt)}</span> },
+        { header: 'Thời gian', accessor: item => <span className={styles.numeric}>{formatAuditTime(item.createdAt)}</span> },
         { header: 'Người làm', accessor: 'userFullName', className: styles.actor },
         { header: 'Mô tả', className: styles.description, accessor: item => <>
             <span className={styles.activityHeading}><strong>{getAuditActionLabel(item.action)}</strong><span className={styles.activityEntity}>{getAuditEntityLabel(item.entityName)}</span></span>

@@ -112,6 +112,13 @@ internal static class DevelopmentAppointmentSeed
                 ?? specs[0].Id;
             p = RealisticDevelopmentSeed.PickPatient(patients, bookedPatients, d.Id, s.SlotDate, patients.IndexOf(p),
                 specs.Single(spec => spec.Id == docSpecId).SpecialtyCode == "SP03");
+            var patientAppointments = await db.Appointments.Where(a => a.PatientId == p.Id && a.AppointmentDate == s.SlotDate && a.Status != AppointmentStatus.Cancelled).ToListAsync();
+            var available = await db.AppointmentSlots.Where(slot => slot.DoctorId == d.Id && slot.SlotDate == s.SlotDate && !slot.IsBooked).OrderBy(slot => slot.StartTime).ToListAsync();
+            if (status != AppointmentStatus.Cancelled && available.Count > 0)
+            {
+                var stagger = (int)d.Id % available.Count;
+                s = available.Skip(stagger).Concat(available.Take(stagger)).First(slot => !patientAppointments.Any(a => a.StartTime < slot.EndTime && a.EndTime > slot.StartTime));
+            }
             var bookingDate = s.SlotDate > today ? today.AddDays(-2) : s.SlotDate.AddDays(-2);
             var bookedAt = RealisticDevelopmentSeed.At(dateTimeProvider, bookingDate, 9);
             var seenAt = RealisticDevelopmentSeed.At(dateTimeProvider, s.SlotDate, s.EndTime.Hour, s.EndTime.Minute);

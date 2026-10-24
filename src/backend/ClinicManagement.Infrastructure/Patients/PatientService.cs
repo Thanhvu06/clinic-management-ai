@@ -157,7 +157,7 @@ public class PatientService : IPatientService
             return new PatientPrescriptionDto
             {
                 Id = p.Id,
-                Code = $"RX-{p.CreatedAt:yyMMdd}-{p.Id:D4}",
+                Code = $"RX-{_dateTimeProvider.ConvertUtcToVietnam(p.CreatedAt):yyMMdd}-{p.Id:D4}",
                 AppointmentId = p.AppointmentId,
                 AppointmentCode = p.Appointment?.AppointmentCode ?? string.Empty,
                 PatientVisitId = p.PatientVisitId,
@@ -187,20 +187,17 @@ public class PatientService : IPatientService
 
         var safeLimit = Math.Clamp(limit, 1, 100);
 
-        var vitalsAppointments = await _dbContext.Appointments
-            .AsNoTracking()
-            .Include(a => a.VitalSigns)
-            .Where(a => a.PatientId == patient.Id &&
-                        a.Status != AppointmentStatus.Cancelled &&
-                        a.Status != AppointmentStatus.NoShow &&
-                        a.VitalSigns != null)
-            .OrderByDescending(a => a.AppointmentDate)
-            .ThenByDescending(a => a.StartTime)
-            .Take(safeLimit)
-            .ToListAsync();
+        var measurements = await _dbContext.AppointmentVitalSigns.AsNoTracking()
+            .Include(v => v.Appointment).Include(v => v.PatientVisit)
+            .Where(v => (v.PatientVisit != null && v.PatientVisit.PatientId == patient.Id &&
+                         v.PatientVisit.Status != VisitStatus.Cancelled && v.PatientVisit.Status != VisitStatus.NoShow) ||
+                        (v.PatientVisit == null && v.Appointment != null && v.Appointment.PatientId == patient.Id &&
+                         v.Appointment.Status != AppointmentStatus.Cancelled && v.Appointment.Status != AppointmentStatus.NoShow))
+            .OrderByDescending(v => v.PatientVisit != null ? v.PatientVisit.VisitDate : v.Appointment!.AppointmentDate)
+            .ThenByDescending(v => v.RecordedAtUtc).Take(safeLimit).ToListAsync();
 
-        var recorderUserIds = vitalsAppointments
-            .Select(a => a.VitalSigns!.RecordedByUserId)
+        var recorderUserIds = measurements
+            .Select(v => v.RecordedByUserId)
             .Distinct()
             .ToList();
 
@@ -208,15 +205,15 @@ public class PatientService : IPatientService
             .Where(u => recorderUserIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.FullName);
 
-        return vitalsAppointments.Select(a =>
+        return measurements.Select(vs =>
         {
-            var vs = a.VitalSigns!;
             recorderUsers.TryGetValue(vs.RecordedByUserId, out var recName);
             return new PatientVitalHistoryItemDto
             {
-                AppointmentId = a.Id,
-                AppointmentCode = a.AppointmentCode,
-                AppointmentDate = a.AppointmentDate,
+                AppointmentId = vs.AppointmentId ?? vs.PatientVisit?.AppointmentId ?? 0,
+                PatientVisitId = vs.PatientVisitId,
+                AppointmentCode = vs.PatientVisit?.VisitCode ?? vs.Appointment?.AppointmentCode ?? string.Empty,
+                AppointmentDate = vs.PatientVisit?.VisitDate ?? vs.Appointment!.AppointmentDate,
                 RecordedAtUtc = vs.RecordedAtUtc,
                 Height = vs.Height,
                 Weight = vs.Weight,

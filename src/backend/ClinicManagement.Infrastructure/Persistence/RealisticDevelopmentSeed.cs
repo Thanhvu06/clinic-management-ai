@@ -1,3 +1,4 @@
+using ClinicManagement.Infrastructure.HealthPackages;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
@@ -108,7 +109,7 @@ internal static class RealisticDevelopmentSeed
             return;
         }
         await using var transaction = await db.Database.BeginTransactionAsync();
-        var facility = await db.Facilities.SingleAsync(f => f.Code == "BV-TW-01");
+        var facility = await db.Facilities.SingleAsync(f => f.Code == "CS01");
         var departments = await db.Departments.Include(d => d.Specialty).Where(d => d.FacilityId == facility.Id).ToListAsync();
         var outpatient = departments.Single(d => d.Code == "KKB");
         var doctors = await db.Doctors.Include(d => d.DoctorSpecialties).ThenInclude(ds => ds.Specialty).OrderBy(d => d.Id).ToListAsync();
@@ -126,8 +127,8 @@ internal static class RealisticDevelopmentSeed
 
         for (var i = 0; i < 30; i++)
         {
-            if (i % 6 == 5) continue;
             var date = today.AddDays(-i);
+            if (date.DayOfWeek == DayOfWeek.Sunday) continue;
             var time = At(clock, date, 9, (i % 4) * 10);
             var status = i is 1 or 7 or 13 ? InvoiceStatus.Unpaid : i is 3 or 8 ? InvoiceStatus.Cancelled : InvoiceStatus.Paid;
             var invoice = new Invoice
@@ -142,17 +143,19 @@ internal static class RealisticDevelopmentSeed
             };
             if (i % 4 == 3)
             {
-                var patient = patients[i % patients.Count];
                 var package = packages[packageIndex++ % packages.Count];
+                var patient = patients.Where(p => HealthPackageEligibility.Allows(package, p.Gender)).ElementAt(i % patients.Count(p => HealthPackageEligibility.Allows(package, p.Gender)));
                 invoice.PatientId = patient.Id;
                 invoice.SourceType = InvoiceSourceType.HealthPackageRegistration;
                 invoice.HealthPackageRegistration = new HealthPackageRegistration
                 {
-                    RegistrationCode = $"PKG-{date:yyMMdd}-S{i + 1:D4}", PatientId = patient.Id,
+                    RegistrationCode = $"REG-{date.AddDays(-2):yyMMdd}-SEED{i + 1:D4}", PatientId = patient.Id,
                     HealthPackageId = package.Id, PreferredDate = date, ContactPhone = patient.PhoneNumber ?? "0900000004",
                     Status = HealthPackageRegistrationStatus.Confirmed, CreatedAt = time.AddDays(-2),
                 };
-                invoice.Items.Add(Item(package.Code, package.Name, package.Price, 1, "HealthPackage", package.Id));
+                db.HealthPackageRegistrations.Add(invoice.HealthPackageRegistration);
+                await db.SaveChangesAsync();
+                invoice.Items.Add(Item(package.Code, package.Name, package.Price, 1, "HealthPackage", invoice.HealthPackageRegistration.Id));
             }
             else
             {
@@ -249,7 +252,7 @@ internal static class RealisticDevelopmentSeed
                 OrderCode = $"CLS-{today:yyMMdd}-D{i + 1:D4}", PatientVisit = visit, PatientId = patient.Id,
                 OrderingDoctorId = doctor.Id, FacilityId = facility.Id, ClinicalIndication = definition.Indication,
                 OrderedAtUtc = orderedAt, Status = i == 4 ? DiagnosticOrderStatus.Completed : started ? DiagnosticOrderStatus.InProgress : DiagnosticOrderStatus.Ordered,
-                StartedAtUtc = started ? orderedAt.AddMinutes(8) : null, StartedByUserId = started ? technician : null,
+                StartedAtUtc = started ? orderedAt.AddMinutes(2) : null, StartedByUserId = started ? technician : null,
                 CompletedAtUtc = i == 4 ? orderedAt.AddMinutes(22) : null, CompletedByUserId = i == 4 ? technician : null,
                 VerificationStatus = i == 3 ? DiagnosticVerificationStatus.Pending : i == 4 ? DiagnosticVerificationStatus.Verified : DiagnosticVerificationStatus.NotRequired,
                 SubmittedForVerificationAtUtc = resulted ? orderedAt.AddMinutes(18) : null, SubmittedForVerificationByUserId = resulted ? technician : null,

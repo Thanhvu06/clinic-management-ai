@@ -1,3 +1,4 @@
+import { formatDateTime } from '../../utils/formatters';
 import { getGenderLabel } from '../../utils/genderLabels';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
@@ -374,7 +375,7 @@ export const TechnicianOrderDetail: React.FC = () => {
             <Card className={styles.orderCard}>
                 <div className={styles.orderHeading}>
                     <div className={styles.orderCode}>{order.orderCode}</div>
-                    <div className={styles.appointmentInfo}><div>Mã lịch hẹn: <strong>{order.appointmentCode}</strong></div><div className={styles.secondary}>Chỉ định lúc: {new Date(order.orderedAtUtc).toLocaleString('vi-VN')}</div></div>
+                    <div className={styles.appointmentInfo}><div>{order.visitCode ? 'Mã lượt khám:' : 'Mã lịch hẹn:'} <strong>{order.visitCode || order.appointmentCode}</strong></div><div className={styles.secondary}>Chỉ định lúc: {formatDateTime(order.orderedAtUtc)}</div></div>
                 </div>
                 <div className={styles.patientGrid}>
                     <div><div className={styles.secondary}>Bệnh nhân:</div><div className={styles.patientName}>{order.patientName}</div><div className={styles.secondary}>{getGenderLabel(order.patientGender)} • {order.patientAge ? `${order.patientAge} tuổi` : '---'}</div></div>
@@ -391,7 +392,7 @@ export const TechnicianOrderDetail: React.FC = () => {
                     {activeItems.map(item => <span key={item.id} className={`${styles.progressSegment} ${item.result ? styles.progressSegmentDone : ''}`} />)}
                 </div>
                 <ol className={styles.timeline}>{milestones.map(milestone => <li key={milestone.label} className={`${styles.milestone} ${milestone.time ? styles.milestoneReached : styles.milestonePending}`}>
-                    <strong>{milestone.label}</strong><span>{milestone.time ? new Date(milestone.time).toLocaleString('vi-VN') : 'Chưa thực hiện'}</span>{milestone.time && milestone.actor && <span>{milestone.actor}</span>}
+                    <strong>{milestone.label}</strong><span>{milestone.time ? formatDateTime(milestone.time) : 'Chưa thực hiện'}</span>{milestone.time && milestone.actor && <span>{milestone.actor}</span>}
                 </li>)}</ol>
             </Card>
             {order.status === 'InProgress' && !verificationPending && <Card className={styles.completionBar}><div className={styles.completionActions}><div><strong>{needsVerification ? 'Gửi duyệt kết quả cận lâm sàng' : 'Hoàn tất phiếu chỉ định cận lâm sàng'}</strong><div className={styles.secondary}>{allItemsCompleted ? needsVerification ? 'Tất cả dịch vụ đã có kết quả. Gửi bác sĩ duyệt.' : 'Tất cả các dịch vụ đã có kết quả. Bạn có thể chốt phiếu.' : 'Vui lòng lưu kết quả cho từng dịch vụ trước khi hoàn tất.'}</div></div><Button type="primary" className={styles.completeButton} onClick={handleCompleteOrder} disabled={!allItemsCompleted || actionLoading}><Check size={18} aria-hidden="true" /> {actionLoading ? 'Đang gửi kết quả...' : needsVerification ? 'Gửi duyệt kết quả' : 'Hoàn tất và gửi kết quả'}</Button></div></Card>}
@@ -513,7 +514,7 @@ export const TechnicianOrderDetail: React.FC = () => {
                                             <div><label htmlFor={`unit-${item.id}`} className={styles.fieldLabel}>Đơn vị tính</label><Input id={`unit-${item.id}`} type="text" disabled={order.status === 'Completed' || verificationPending} value={current.unit} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], unit: e.target.value }}))} placeholder="VD: U/L, mg/dL" /></div></>}
                                         </div>
                                         {order.status !== 'Completed' && <div className={styles.saveActions}><Button type="primary" onClick={() => handleSaveItemResult(item.id)} disabled={savingItemId === item.id || verificationPending}><Save size={15} aria-hidden="true" /> {savingItemId === item.id ? 'Đang lưu...' : 'Lưu kết quả dịch vụ'}</Button></div>}
-                                        {item.result && <div className={styles.resultAuthor}>Nhập bởi: {item.result.resultedByUserName} • {new Date(item.result.resultedAtUtc).toLocaleString('vi-VN')}</div>}
+                                        {item.result && <div className={styles.resultAuthor}>Nhập bởi: {item.result.resultedByUserName} • {formatDateTime(item.result.resultedAtUtc)}</div>}
                                     </div>
                                 )}
                             </Card>
@@ -521,7 +522,7 @@ export const TechnicianOrderDetail: React.FC = () => {
                     })}
                 </div>
             </section>
-            {order.status === 'Completed' && <Card className={styles.completedCard}><div className={styles.completionActions}><div><div className={styles.completedTitle}><CheckCircle size={18} /> Phiếu chỉ định đã được hoàn tất</div><div className={styles.secondary}>Hoàn tất bởi: {order.completedByUserName} lúc {new Date(order.completedAtUtc!).toLocaleString('vi-VN')}</div></div>{order.reviewedAtUtc ? <div className={styles.reviewInfo}><strong>Bác sĩ đã xem:</strong> {order.reviewedByDoctorName} ({new Date(order.reviewedAtUtc).toLocaleString('vi-VN')})</div> : <div className={styles.reviewPending}>Chờ bác sĩ khám xác nhận đã xem</div>}</div></Card>}
+            {order.status === 'Completed' && <Card className={styles.completedCard}><div className={styles.completionActions}><div><div className={styles.completedTitle}><CheckCircle size={18} /> Phiếu chỉ định đã được hoàn tất</div><div className={styles.secondary}>Hoàn tất bởi: {order.completedByUserName} lúc {formatDateTime(order.completedAtUtc!)}</div></div>{order.reviewedAtUtc ? <div className={styles.reviewInfo}><strong>Bác sĩ đã xem:</strong> {order.reviewedByDoctorName} ({formatDateTime(order.reviewedAtUtc)})</div> : <div className={styles.reviewPending}>Chờ bác sĩ khám xác nhận đã xem</div>}</div></Card>}
         </div>
     );
 };

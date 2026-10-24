@@ -1,3 +1,4 @@
+import { ClinicalEditor } from './ClinicalEditor';
 import { getGenderLabel } from '../../utils/genderLabels';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
@@ -52,7 +53,6 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const [context, setContext] = useState<PatientClinicalContextDto | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'encounter' | 'vitals' | 'diagnostics' | 'prescription' | 'history'>('encounter');
-
     // Medicine Catalog
     const [medicines, setMedicines] = useState<ActiveMedicine[]>([]);
     const [medicineSearch, setMedicineSearch] = useState('');
@@ -979,7 +979,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Tab 1: Clinical Encounter */}
             {activeTab === 'encounter' && (
-                <Card className={[tabStyles.workspaceCard].join(' ')} >
+                <ClinicalEditor readOnly={isCompleted}><Card className={[tabStyles.workspaceCard].join(' ')} >
                     <div className={tabStyles.sectionHeader}>
                         <h3 className={tabStyles.sectionTitle}>
                             Ghi nhận diễn tiến lâm sàng
@@ -1099,12 +1099,12 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             className={[tabStyles.formControl].join(' ')}
                         />
                     </Form.Item>
-                </Card>
+                </Card></ClinicalEditor>
             )}
 
             {/* Tab 2: Longitudinal Vital Signs with 3 Distinct Regions */}
             {activeTab === 'vitals' && (
-                <Card className={[tabStyles.workspaceCard, tabStyles.stackedTabContent].join(' ')}>
+                <ClinicalEditor readOnly={isCompleted}><Card className={[tabStyles.workspaceCard, tabStyles.stackedTabContent].join(' ')}>
                     {/* Region 2 & Region 3: Historical Comparison & Anthropometric Deltas */}
                     {prevMeasurement && (
                         <Row className={tabStyles.responsiveFormRow}>
@@ -1404,7 +1404,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </div>
                         )}
                     </Card>
-                </Card>
+                </Card></ClinicalEditor>
             )}
 
             {/* Tab 3: Diagnostic Orders (Chỉ định Cận lâm sàng) */}
@@ -1719,7 +1719,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
             {/* Tab 4: Prescription */}
             {activeTab === 'prescription' && (
-                <Card className={[tabStyles.workspaceCard].join(' ')} >
+                <ClinicalEditor readOnly={isCompleted}><Card className={[tabStyles.workspaceCard].join(' ')} >
                     <Row className={tabStyles.responsiveFormRow}>
                         <Col span={24} className={tabStyles.responsiveColumn}>
                             <div className={tabStyles.sectionHeader}>
@@ -1899,7 +1899,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </Form.Item>
                         </Col>
                     </Row>
-                </Card>
+                </Card></ClinicalEditor>
             )}
 
             {/* Tab 5: Past Visits History */}

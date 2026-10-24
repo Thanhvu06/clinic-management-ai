@@ -8,7 +8,7 @@ import type { DiagnosticOrderDto } from '../../types';
 import { diagnosticNotificationTime } from '../../utils/diagnosticLabels';
 import styles from './TechnicianVerificationQueue.module.css';
 
-export const TechnicianVerificationQueue = () => {
+export const TechnicianVerificationQueue = ({ reviewPath = '/diagnostics/orders' }: { reviewPath?: string }) => {
     const [items, setItems] = useState<DiagnosticOrderDto[]>([]);
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
@@ -40,7 +40,7 @@ export const TechnicianVerificationQueue = () => {
                 { header: 'Dịch vụ', accessor: order => <>{order.items.filter(item => item.status !== 'Cancelled').map(item => <div key={item.id}>{item.serviceName}</div>)}{order.items.some(item => item.result?.hasCriticalValue) && <Tag className={styles.critical}>Có giá trị nguy hiểm</Tag>}</> },
                 { header: 'Người gửi', accessor: order => order.submittedForVerificationByUserName || '—' },
                 { header: 'Thời gian chờ duyệt', accessor: order => order.submittedForVerificationAtUtc ? <><div>{diagnosticNotificationTime(order.submittedForVerificationAtUtc)}</div><div>{Math.max(0, Math.floor((loadedAt - new Date(order.submittedForVerificationAtUtc).getTime()) / 60000))} phút</div></> : '—' },
-                { header: 'Thao tác', accessor: order => <Link className={styles.link} to={`/diagnostics/orders/${order.id}`}>Mở phiếu</Link> },
+                { header: 'Thao tác', accessor: order => <Link className={styles.link} to={`${reviewPath}/${order.id}`}>Mở phiếu</Link> },
             ]} />
             <Pagination page={page} totalPages={Math.ceil(total / 15)} totalRecords={total} onPageChange={setPage} />
         </div>}

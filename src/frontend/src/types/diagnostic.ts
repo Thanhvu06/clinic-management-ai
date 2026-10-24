@@ -106,6 +106,7 @@ export interface DiagnosticOrderItemDto {
 }
 
 export interface DiagnosticOrderDto {
+    visitCode?: string;
     id: number;
     facilityName?: string | null;
     appointmentId: number;

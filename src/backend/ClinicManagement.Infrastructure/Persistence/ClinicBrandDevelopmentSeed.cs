@@ -37,12 +37,13 @@ internal static class ClinicBrandDevelopmentSeed
 
     internal static async Task<Facility> SeedFacilityAsync(AppDbContext db)
     {
-        var facility = await db.Facilities.SingleOrDefaultAsync(f => f.Code == "BV-TW-01");
+        var facility = await db.Facilities.SingleOrDefaultAsync(f => f.Code == "CS01" || f.Code == "BV-TW-01");
         if (facility == null)
         {
-            facility = new Facility { Code = "BV-TW-01", CreatedAtUtc = DateTime.UtcNow, IsActive = true };
+            facility = new Facility { Code = "CS01", CreatedAtUtc = DateTime.UtcNow, IsActive = true };
             db.Facilities.Add(facility);
         }
+        facility.Code = "CS01";
         facility.Name = Name;
         facility.Address = Address;
         facility.City = City;

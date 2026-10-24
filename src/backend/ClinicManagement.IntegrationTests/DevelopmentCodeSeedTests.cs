@@ -34,7 +34,7 @@ public class DevelopmentCodeSeedTests
             db.Notifications.Add(new Notification { UserId = actor, Type = NotificationType.Appointment, Title = first.AppointmentCode, Message = $"Đã tiếp nhận {first.AppointmentCode}" });
             db.AppointmentHistories.Add(new AppointmentHistory { AppointmentId = first.Id, Action = AppointmentHistoryAction.CheckedIn, PerformedByUserId = actor, Note = $"Tiếp nhận {first.AppointmentCode}" });
         }
-        var facility = await db.Facilities.SingleAsync(f => f.Code == "BV-TW-01");
+        var facility = await db.Facilities.SingleAsync(f => f.Code == "CS01");
         var department = await db.Departments.FirstAsync(d => d.FacilityId == facility.Id);
         var visit = new PatientVisit
         {

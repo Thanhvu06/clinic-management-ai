@@ -9,6 +9,7 @@ public class WorkScheduleDto
     public DateOnly WorkDate { get; set; }
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
+    public int SlotCount { get; set; }
     public bool IsActive { get; set; }
 }
 

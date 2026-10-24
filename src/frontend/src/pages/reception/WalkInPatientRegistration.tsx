@@ -1,3 +1,4 @@
+import { formatDateOnly } from '../../utils/formatters';
 import { getGenderLabel } from '../../utils/genderLabels';
 import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect } from 'react';
@@ -417,7 +418,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                             <Button htmlType="button" onClick={() => setSelectedPatient(null)}>Chọn hồ sơ khác</Button>
                         </div>
                         <Row gutter={[spacing.md, spacing.sm]} className={styles.selectedPatientFacts}>
-                            <Col xs={24} md={12}><strong>Ngày sinh:</strong> {selectedPatient.dateOfBirth || '---'}</Col>
+                            <Col xs={24} md={12}><strong>Ngày sinh:</strong> {formatDateOnly(selectedPatient.dateOfBirth)}</Col>
                             <Col xs={24} md={12}><strong>Giới tính:</strong> {getGenderLabel(selectedPatient.gender)}</Col>
                             <Col xs={24} md={12}><strong>Số điện thoại:</strong> {selectedPatient.phoneNumber || '---'}</Col>
                             <Col xs={24} md={12}><strong>Địa chỉ:</strong> {selectedPatient.address || '---'}</Col>
@@ -426,7 +427,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                     {!selectedPatient && searchResults.length > 0 && <div className={styles.patientLookupResults}>
                         <div className={styles.lookupResultCount}>Tìm thấy {searchResults.length} hồ sơ người bệnh phù hợp:</div>
                         {searchResults.map(p => <div key={p.id} onClick={() => setSelectedPatient(p)} className={styles.patientLookupResult}>
-                            <div className={styles.lookupPatientDetails}><div className={styles.lookupPatientName}>{p.fullName} <span className={styles.lookupMedicalRecord}>({p.medicalRecordNumber || 'Chưa có MRN'})</span></div><div className={styles.lookupPatientIdentifiers}>CCCD: {p.nationalId || '---'} • SĐT: {p.phoneNumber || '---'} • Sinh: {p.dateOfBirth || '---'} ({getGenderLabel(p.gender)})</div></div>
+                            <div className={styles.lookupPatientDetails}><div className={styles.lookupPatientName}>{p.fullName} <span className={styles.lookupMedicalRecord}>({p.medicalRecordNumber || 'Chưa có MRN'})</span></div><div className={styles.lookupPatientIdentifiers}>CCCD: {p.nationalId || '---'} • SĐT: {p.phoneNumber || '---'} • Sinh: {formatDateOnly(p.dateOfBirth)} ({getGenderLabel(p.gender)})</div></div>
                             <Button htmlType="button" type="primary"><UserCheck size={14} /> Chọn hồ sơ này</Button>
                         </div>)}
                     </div>}
@@ -486,7 +487,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                         <Col xs={24} md={12}><strong>Họ tên:</strong>{' '}{patientMode === 'lookup' ? selectedPatient?.fullName : newFullName}</Col>
                         <Col xs={24} md={12}><strong>Mã bệnh án:</strong>{' '}{patientMode === 'lookup' ? (selectedPatient?.medicalRecordNumber || 'Hồ sơ cũ') : '(Hệ thống sẽ cấp tự động)'}</Col>
                         <Col xs={24} md={12}><strong>Số điện thoại:</strong>{' '}{patientMode === 'lookup' ? (selectedPatient?.phoneNumber || '---') : (newPhone || contactPhone || '---')}</Col>
-                        <Col xs={24} md={12}><strong>Ngày sinh:</strong>{' '}{patientMode === 'lookup' ? selectedPatient?.dateOfBirth : newDateOfBirth}</Col>
+                        <Col xs={24} md={12}><strong>Ngày sinh:</strong>{' '}{formatDateOnly(patientMode === 'lookup' ? selectedPatient?.dateOfBirth : newDateOfBirth)}</Col>
                     </Row>
                 </div>
                 <div className={styles.visitSummary}><h4 className={styles.summaryTitle}>2. Thông tin tiếp nhận & phòng khám</h4>

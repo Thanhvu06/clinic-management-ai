@@ -250,7 +250,7 @@ describe('Admin dashboard', () => {
             expect(screen.queryByText(removed)).not.toBeInTheDocument();
         }
         const logRow = screen.getByText('Cập nhật giá thuốc').closest('tr')!;
-        expect(within(logRow).getByText('21/10/2026 09:15')).toBeInTheDocument();
+        expect(within(logRow).getByText('09:15 21/10/2026')).toBeInTheDocument();
         expect(within(logRow).getByText('Quản trị viên')).toBeInTheDocument();
         fireEvent.click(within(screen.getByText('BS. Phạm Hà').closest('tr')!).getByRole('button', { name: 'Duyệt' }));
         expect(location()).toHaveTextContent('/admin/leaves');

@@ -60,7 +60,7 @@ public class DemoBrandSeedTests
         foreach (var original in originalLocations)
             Assert.Equal(original.Value, (await db.ClinicLocations.SingleAsync(l => l.Code == original.Key)).Id);
 
-        var facility = await db.Facilities.SingleAsync(f => f.Code == "BV-TW-01");
+        var facility = await db.Facilities.SingleAsync(f => f.Code == "CS01");
         Assert.Equal(Name, facility.Name);
         Assert.Equal(Address, facility.Address);
         Assert.Equal(location.City, facility.City);

@@ -44,6 +44,9 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
         if (package == null)
             throw new BusinessException("PACKAGE_NOT_FOUND", "Gói khám không tồn tại hoặc đã ngừng hoạt động.");
 
+        if (!HealthPackageEligibility.Allows(package, patient.Gender))
+            throw new BusinessException("PACKAGE_GENDER_MISMATCH", "Gói khám không phù hợp với giới tính trong hồ sơ bệnh nhân.");
+
         var today = _dateTimeProvider.VietnamToday;
         if (request.PreferredDate < today)
             throw new BusinessException("INVALID_DATE", "Ngày mong muốn khám không được nằm trong quá khứ.");
