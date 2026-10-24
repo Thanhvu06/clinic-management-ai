@@ -18,12 +18,12 @@ const medicine: PublicMedicineDto = {
     indications: 'Chỉ định thử nghiệm', dosageAndAdministration: 'Dùng theo đơn của bác sĩ', contraindications: null,
     sideEffects: 'Tác dụng phụ mẫu', precautions: 'Thận trọng mẫu', overdoseManagement: 'Xử trí mẫu', storageInstructions: 'Bảo quản mẫu', description: 'Mô tả mẫu', interactions: [],
 };
-const labels = ['Chỉ định', 'Liều dùng và cách dùng', 'Chống chỉ định', 'Tác dụng không mong muốn', 'Thận trọng', 'Tương tác thuốc', 'Quá liều và xử trí', 'Bảo quản', 'Mô tả'];
+const labels = ['Mô tả', 'Chỉ định', 'Liều dùng và cách dùng', 'Tác dụng không mong muốn', 'Thận trọng', 'Xử trí quá liều', 'Bảo quản'];
 const monographFields = [
     ['indications', 'Chỉ định', 2000], ['dosageAndAdministration', 'Liều dùng và cách dùng', 2000], ['contraindications', 'Chống chỉ định', 2000],
     ['sideEffects', 'Tác dụng không mong muốn', 2000], ['precautions', 'Thận trọng', 2000], ['overdoseManagement', 'Quá liều và xử trí', 1000],
 ] as const;
-const reference = 'Thông tin mang tính tham khảo. Đọc kỹ hướng dẫn sử dụng và hỏi ý kiến bác sĩ/dược sĩ trước khi dùng.';
+const reference = 'Thông tin thuốc chỉ mang tính tham khảo. Dùng thuốc theo chỉ định của bác sĩ/dược sĩ.';
 function mount(path = '/medicines/501', state?: unknown) {
     return render(<MemoryRouter initialEntries={[{ pathname: path.split('?')[0], search: path.includes('?') ? '?' + path.split('?')[1] : '', state }]}>
         <Routes><Route path="/medicines/:id" element={<MedicineDetail />} /><Route path="/medicines" element={<p>Danh sách đích</p>} /></Routes>
@@ -38,28 +38,26 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Medicine detail', () => {
-    it('renders metadata and all sections in order with the first two expanded and empty content marked', async () => {
+    it('renders metadata and populated article sections in reading order', async () => {
         mount();
         await screen.findByRole('heading', { name: medicine.name });
         expect(axiosClient.get).toHaveBeenCalledWith('/public/medicines/501');
-        for (const text of ['DETAIL501', 'Ciprofloxacin', '500 mg', 'Viên nén', 'Kháng sinh', 'Còn hàng', 'Kê đơn']) expect(screen.getByText(text)).toBeInTheDocument();
-        expect(screen.getByText(/6\.000\s*₫/)).toBeInTheDocument();
-        const sections = screen.getAllByRole('button').filter(button => labels.includes(button.textContent?.trim() ?? ''));
-        expect(sections.map(section => section.textContent?.trim())).toEqual(labels);
-        expect(screen.getByRole('button', { name: 'Chỉ định' })).toHaveAttribute('aria-expanded', 'true');
-        expect(screen.getByRole('button', { name: 'Liều dùng và cách dùng' })).toHaveAttribute('aria-expanded', 'true');
+        for (const text of ['DETAIL501', 'Ciprofloxacin', '500 mg', 'Viên nén', 'Còn hàng', 'Thuốc kê đơn']) expect(screen.getByText(text)).toBeInTheDocument();
+        expect(screen.getAllByText('Kháng sinh')).toHaveLength(2);
+        expect(screen.getByText(/6\.000\s*đ/)).toBeInTheDocument();
+        const toc = screen.getByRole('navigation', { name: 'Mục lục thông tin thuốc' });
+        expect(within(toc).getAllByRole('link').map(link => link.textContent)).toEqual(labels);
         expect(screen.getByText('Chỉ định thử nghiệm')).toBeVisible();
-        fireEvent.click(screen.getByRole('button', { name: 'Chống chỉ định' }));
-        await waitFor(() => expect(screen.getByText('Chưa cập nhật')).toBeVisible());
+        expect(screen.queryByRole('heading', { name: 'Chống chỉ định' })).not.toBeInTheDocument();
         expect(screen.getByText(reference)).toBeInTheDocument();
-        expect(screen.getByText('Thuốc kê đơn — chỉ dùng khi có đơn của bác sĩ.')).toBeInTheDocument();
+        expect(screen.getByText('Thuốc này chỉ được bán theo đơn của bác sĩ. Vui lòng khám để được kê đơn.')).toBeInTheDocument();
     });
 
     it('renders error, warning and default interaction tags with descriptions and recommendations', async () => {
         const severities = ['Contraindicated', 'Major', 'Moderate', 'Minor'] as const;
         vi.mocked(axiosClient.get).mockResolvedValue({ success: true, data: { ...medicine, interactions: severities.map(severity => ({ otherIngredient: 'other-' + severity, severity, description: 'Mô tả ' + severity, recommendation: 'Khuyến cáo ' + severity })) } });
         mount();
-        fireEvent.click(await screen.findByRole('button', { name: 'Tương tác thuốc' }));
+        await screen.findByRole('heading', { name: 'Tương tác thuốc' });
         for (const severity of severities) {
             expect(await screen.findByText(severity)).toHaveClass('ant-tag-' + (severity === 'Moderate' ? 'warning' : severity === 'Minor' ? 'default' : 'error'));
             expect(screen.getByText('other-' + severity)).toBeInTheDocument();
@@ -68,14 +66,13 @@ describe('Medicine detail', () => {
         }
     });
 
-    it('shows the reference alert for OTC drugs and explains an empty interaction list', async () => {
+    it('shows the reference for OTC drugs and omits empty interactions', async () => {
         vi.mocked(axiosClient.get).mockResolvedValue({ success: true, data: { ...medicine, isPrescriptionRequired: false } });
         mount();
         await screen.findByRole('heading', { name: medicine.name });
         expect(screen.getByText(reference)).toBeInTheDocument();
-        expect(screen.queryByText('Thuốc kê đơn — chỉ dùng khi có đơn của bác sĩ.')).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Tương tác thuốc' }));
-        await waitFor(() => expect(screen.getByText('Chưa ghi nhận tương tác trong dữ liệu hệ thống')).toBeVisible());
+        expect(screen.queryByText('Thuốc này chỉ được bán theo đơn của bác sĩ. Vui lòng khám để được kê đơn.')).not.toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Tương tác thuốc' })).not.toBeInTheDocument();
     });
 
     it('separates loading from retryable errors and retries the same detail', async () => {
@@ -84,13 +81,13 @@ describe('Medicine detail', () => {
         mount();
         expect(screen.getByText('Đang tải thông tin thuốc...')).toBeInTheDocument();
         expect(screen.queryByText('Không tìm thấy thuốc')).not.toBeInTheDocument();
-        expect(screen.getByText(reference)).toBeInTheDocument();
+        expect(screen.queryByText(reference)).not.toBeInTheDocument();
         rejectRequest({ status: 500, message: 'Lỗi tải thuốc' });
         expect(await screen.findByText('Lỗi tải thuốc')).toBeInTheDocument();
         expect(screen.queryByText('Đang tải thông tin thuốc...')).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
         await screen.findByRole('heading', { name: medicine.name });
-        expect(axiosClient.get).toHaveBeenCalledTimes(2);
+        expect(vi.mocked(axiosClient.get).mock.calls.filter(call => call[0] === '/public/medicines/501')).toHaveLength(2);
     });
 
     it('renders a distinct 404 without the retry control', async () => {
@@ -98,7 +95,7 @@ describe('Medicine detail', () => {
         mount();
         expect(await screen.findByText('Không tìm thấy thuốc')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Thử lại' })).not.toBeInTheDocument();
-        expect(screen.getByText(reference)).toBeInTheDocument();
+        expect(screen.queryByText(reference)).not.toBeInTheDocument();
     });
 
     it('rejects an invalid medicine id without requesting the API', async () => {

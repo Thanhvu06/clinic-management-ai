@@ -24,6 +24,7 @@ const RouteProbe = () => {
 };
 function mockApi(recommendedResponse: () => Promise<unknown> = async () => response(recommendations)) {
     mocks.get.mockImplementation(async (url: string) => {
+        if (url === '/health-packages' || url === '/locations') return response([]);
         if (url === recommendationsUrl) return recommendedResponse();
         if (url === '/specialties/2') return response(specialty);
         if (url === '/specialties/2/doctors?page=1&pageSize=20') return response({ items: doctors });
@@ -97,7 +98,7 @@ describe('Specialty doctor recommendations', () => {
         expect(screen.getByRole('heading', { name: 'BS. Nguyễn Văn An' })).toBeInTheDocument();
         fireEvent.click(within(region).getByRole('button', { name: 'Thử lại' }));
         await within(region).findByText('82%');
-        expect(mocks.get.mock.calls.map(call => call[0])).toEqual([
+        expect(mocks.get.mock.calls.map(call => call[0]).filter(url => url !== '/locations' && url !== '/health-packages')).toEqual([
             '/specialties/2', '/specialties/2/doctors?page=1&pageSize=20', recommendationsUrl, recommendationsUrl,
         ]);
     }, 15000);
@@ -144,9 +145,9 @@ describe('Specialty doctor recommendations', () => {
         expect(await screen.findByRole('alert')).toHaveTextContent('Không thể tải thông tin chuyên khoa.');
         fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
         await screen.findByRole('heading', { name: 'Nội khoa', level: 1 });
-        expect(screen.getByRole('link', { name: 'Đặt lịch khám' })).toHaveAttribute('href', '/patient/book?specialtyId=2');
+        expect(screen.getAllByRole('link', { name: 'Đặt lịch khám' })[0]).toHaveAttribute('href', '/patient/book?specialtyId=2');
         expect(screen.getByRole('link', { name: 'Đặt khám với bác sĩ' })).toHaveAttribute('href', '/patient/book?specialtyId=2&doctorId=7');
-        expect(screen.getByRole('link', { name: 'Hỏi trợ lý AI' })).toHaveAttribute('href', '/patient/ai-consultation');
+        expect(screen.getAllByRole('link', { name: 'Hỏi trợ lý AI' })[0]).toHaveAttribute('href', '/patient/ai-consultation');
         expect(mocks.get.mock.calls.filter(call => call[0] === recommendationsUrl)).toHaveLength(1);
     }, 15000);
 
