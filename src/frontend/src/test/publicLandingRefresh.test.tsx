@@ -51,11 +51,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Public landing refresh L1–L7', () => {
-    it('L1 keeps exactly three hero text links and one lookup button with their destinations', async () => {
+    it('L1 keeps four hero shortcut links and one lookup button with their destinations', async () => {
         const { container } = await mount();
         const hero = container.querySelector('main > section')!;
         const actions = within(hero as HTMLElement).getByRole('navigation', { name: 'Lối tắt' });
-        expect(within(actions).getAllByRole('link')).toHaveLength(3);
+        expect(within(actions).getAllByRole('link')).toHaveLength(4);
+        expect(within(actions).getByRole('link', { name: 'Gói khám' })).toHaveAttribute('href', '/health-packages');
         expect(within(actions).getByRole('link', { name: 'Đặt lịch khám' })).toHaveAttribute('href', '/patient/book');
         expect(within(actions).getByRole('link', { name: 'Hỏi trợ lý AI' })).toHaveAttribute('href', '/patient/ai-consultation');
         expect(within(actions).getByRole('link', { name: 'Bảng giá thuốc' })).toHaveAttribute('href', '/medicines');
@@ -65,9 +66,9 @@ describe('Public landing refresh L1–L7', () => {
         expect(screen.getByLabelText('Đường dẫn hiện tại')).toHaveTextContent('/medicines');
     });
 
-    it('L1 shows no hero image and a short title', async () => {
+    it('L1 shows the supplied hero image and keeps the short title', async () => {
         const { container } = await mount();
-        expect(container.querySelector('img')).toBeNull();
+        expect(container.querySelector('img')).toHaveAttribute('src', '/images/landing/hero-hanh-lang.webp');
         expect(screen.queryByAltText('Bác sĩ chuyên khoa ClinicCare')).not.toBeInTheDocument();
         expect(screen.getByRole('heading', { level: 1, name: 'Đặt lịch khám tại ClinicCare AI' })).toBeInTheDocument();
     });
@@ -75,7 +76,7 @@ describe('Public landing refresh L1–L7', () => {
     it('L2 shows five sentence-case headings without an eyebrow or accent', async () => {
         mocks.get.mockImplementation(async (url: string) => ({ success: true, data: fullData[url] ?? [] }));
         await mount();
-        for (const title of ['Chuyên khoa', 'Bác sĩ', 'Gói khám', 'Cơ sở khám', 'Câu hỏi thường gặp']) {
+        for (const title of ['Chuyên khoa', 'Bác sĩ', 'Gói khám', 'Liên hệ', 'Câu hỏi thường gặp']) {
             const heading = screen.getByRole('heading', { level: 2, name: title });
             expect(heading.previousElementSibling).toBeNull();
             expect(heading.querySelector('span')).not.toBeInTheDocument();
@@ -140,9 +141,10 @@ describe('Public landing SPA links', () => {
         const { container } = await mount();
         const hero = container.querySelector('main > section')!;
         const routeProbe = screen.getByLabelText('Đường dẫn hiện tại');
-        fireEvent.click(within(hero as HTMLElement).getByRole('link', { name: 'Đặt lịch khám' }));
+        const shortcuts = within(hero as HTMLElement).getByRole('navigation', { name: 'Lối tắt' });
+        fireEvent.click(within(shortcuts).getByRole('link', { name: 'Đặt lịch khám' }));
         expect(routeProbe).toHaveTextContent('/patient/book');
         expect(screen.getByLabelText('Đường dẫn hiện tại')).toBe(routeProbe);
-        expect(mocks.get).toHaveBeenCalledTimes(4);
+        expect(mocks.get.mock.calls.filter(([url]) => !url.includes('/available-slots'))).toHaveLength(5);
     });
 });

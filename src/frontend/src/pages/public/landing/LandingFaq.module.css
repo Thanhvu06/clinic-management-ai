@@ -1,0 +1,4 @@
+.faqContainer { max-width: 860px; }
+.faqQuestion.faqQuestion { height: auto; min-height: 0; padding: 0; white-space: normal; text-align: left; font-weight: 500; color: var(--cc-color-text-dark); }
+.faqAnswer { margin: 0; color: var(--cc-color-text); line-height: 1.6; }
+.credit { margin: var(--cc-space-xl) 0 0; font-size: .75rem; color: var(--cc-color-text-secondary); }

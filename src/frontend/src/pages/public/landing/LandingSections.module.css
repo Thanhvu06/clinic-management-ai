@@ -1,0 +1,21 @@
+.container { max-width: 1200px; margin: 0 auto; padding: 0 var(--cc-space-lg); width: 100%; }
+.section { padding: calc(var(--cc-space-xl) * 1.5) 0; }
+.section:nth-of-type(even) { background: var(--cc-color-public-surface); }
+.sectionHeader { display: flex; align-items: baseline; justify-content: space-between; gap: var(--cc-space-sm); margin-bottom: var(--cc-space-lg); }
+.sectionHeader h2 { margin: 0; font-size: 1.45rem; line-height: 1.35; font-weight: 600; color: var(--cc-color-text-dark); }
+.sectionHeader a { font-size: .9rem; flex-shrink: 0; }
+.card { min-width: 0; display: flex; flex-direction: column; gap: var(--cc-space-xs); padding: var(--cc-space-lg); background: var(--cc-color-public-surface); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); overflow-wrap: anywhere; }
+.card h3 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--cc-color-text-dark); }
+.card p { margin: 0; font-size: .9rem; }
+.muted { color: var(--cc-color-text-secondary); }
+.cardActions { display: flex; align-items: center; gap: var(--cc-space-md); margin-top: auto; padding-top: var(--cc-space-sm); font-size: .9rem; font-weight: 500; }
+.cardActions a:first-child { padding: var(--cc-space-xs) var(--cc-space-md); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-sm); }
+.cardActions a:first-child:hover { border-color: var(--cc-color-public-accent); }
+@media (max-width: 600px) {
+    .container { padding: 0 var(--cc-space-md); }
+    .section { padding: var(--cc-space-xl) 0; }
+    .sectionHeader { align-items: flex-start; margin-bottom: var(--cc-space-md); }
+    .sectionHeader h2 { font-size: 1.2rem; }
+    .sectionHeader a { font-size: .8rem; }
+    .card { padding: var(--cc-space-md); }
+}

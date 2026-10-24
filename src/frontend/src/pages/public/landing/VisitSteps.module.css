@@ -1,0 +1,7 @@
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--cc-space-lg); }
+.steps li { padding-top: var(--cc-space-md); border-top: 1px solid var(--cc-color-border); }
+.marker { display: flex; align-items: center; gap: var(--cc-space-sm); color: var(--cc-color-public-accent); font-size: .85rem; font-weight: 600; }
+.steps h3 { margin: var(--cc-space-md) 0 var(--cc-space-xs); font-size: 1rem; color: var(--cc-color-text-dark); font-weight: 600; }
+.steps p { margin: 0; font-size: .9rem; color: var(--cc-color-text-secondary); line-height: 1.6; }
+@media (max-width: 800px) { .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .steps { grid-template-columns: 1fr; gap: var(--cc-space-md); } .steps h3 { margin-top: var(--cc-space-xs); } }

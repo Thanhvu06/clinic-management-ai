@@ -1,0 +1,12 @@
+.searchArea { position: relative; width: 100%; }
+.searchForm { display: flex; gap: var(--cc-space-xs); }
+.searchInput { flex: 1; min-width: 0; }
+.suggestions { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20; background: var(--cc-color-public-surface); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); padding: var(--cc-space-sm) var(--cc-space-md); display: flex; flex-direction: column; gap: var(--cc-space-sm); max-height: 420px; overflow-y: auto; }
+.suggestionGroup { display: flex; flex-direction: column; gap: var(--cc-space-xxs); }
+.suggestionGroup h2 { margin: 0; font-size: .8rem; font-weight: 600; color: var(--cc-color-text-secondary); }
+.suggestionGroup a { color: var(--cc-color-text); padding: 2px 0; }
+.suggestionGroup a:hover { color: var(--cc-color-public-accent); }
+.suggestionGroup span, .suggestionEmpty { color: var(--cc-color-text-secondary); }
+.suggestionEmpty { margin: 0; font-size: .9rem; }
+.suggestionAll { border-top: 1px solid var(--cc-color-border-light); padding-top: var(--cc-space-xs); font-size: .9rem; }
+@media (max-width: 600px) { .searchForm { flex-direction: column; } }

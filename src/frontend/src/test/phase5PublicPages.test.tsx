@@ -205,10 +205,10 @@ describe('GĐ5 mục 5 và 6: header và footer', () => {
 });
 
 describe('GĐ5 mục 7 và 8: trang chủ', () => {
-    it('drops the hero image, slogan, feature row, steps, AI banner, eyebrows and two-tone titles', async () => {
+    it('uses the supplied hero image and keeps slogans, AI banners and two-tone titles absent', async () => {
         const { container } = mount('/', '/', <PublicLanding />);
         await screen.findByRole('heading', { level: 2, name: 'Chuyên khoa' });
-        expect(container.querySelector('main img')).toBeNull();
+        expect(container.querySelector('main img')).toHaveAttribute('src', '/images/landing/hero-hanh-lang.webp');
         for (const removed of ['Chăm sóc sức khỏe thông minh với Trợ lý AI', 'Đặt lịch trực tuyến 24/7', 'Định tuyến AI an toàn',
             'Quy trình đặt lịch', 'Bạn chưa rõ nên khám chuyên khoa nào?', 'CHUYÊN KHOA', 'GÓI KHÁM', 'ĐỘI NGŨ BÁC SĨ', 'Sẵn sàng đặt lịch khám?']) {
             expect(document.body.textContent).not.toContain(removed);
@@ -216,16 +216,16 @@ describe('GĐ5 mục 7 và 8: trang chủ', () => {
         expect(container.querySelectorAll('h2 span')).toHaveLength(0);
     });
 
-    it('shows search first, four quick links, then specialties, doctors, packages, locations and FAQ in order', async () => {
+    it('shows search, five shortcuts, specialties, packages, doctors, contact and FAQ in order', async () => {
         mount('/', '/', <PublicLanding />);
         await screen.findByRole('heading', { level: 2, name: 'Chuyên khoa' });
         const hero = screen.getByRole('heading', { level: 1, name: 'Đặt lịch khám tại ClinicCare AI' }).closest('section')!;
         expect(within(hero).getByRole('textbox', { name: 'Tìm bác sĩ, chuyên khoa, gói khám' })).toBeInTheDocument();
         const quick = within(hero).getByRole('navigation', { name: 'Lối tắt' });
-        expect([...quick.children].map(node => node.textContent)).toEqual(['Đặt lịch khám', 'Tra cứu lịch hẹn', 'Bảng giá thuốc', 'Hỏi trợ lý AI']);
+        expect([...quick.children].map(node => node.textContent)).toEqual(['Đặt lịch khám', 'Tra cứu lịch hẹn', 'Gói khám', 'Bảng giá thuốc', 'Hỏi trợ lý AI']);
         const headings = [...document.querySelectorAll('main main h2')].map(node => node.textContent);
-        expect(headings.filter(text => ['Chuyên khoa', 'Bác sĩ', 'Gói khám', 'Cơ sở khám', 'Câu hỏi thường gặp'].includes(text ?? ''))).toEqual(['Chuyên khoa', 'Bác sĩ', 'Gói khám', 'Cơ sở khám', 'Câu hỏi thường gặp']);
-        const locations = screen.getByRole('region', { name: 'Cơ sở khám' });
+        expect(headings.filter(text => ['Chuyên khoa', 'Bác sĩ', 'Gói khám', 'Liên hệ', 'Câu hỏi thường gặp'].includes(text ?? ''))).toEqual(['Chuyên khoa', 'Gói khám', 'Bác sĩ', 'Liên hệ', 'Câu hỏi thường gặp']);
+        const locations = screen.getByRole('region', { name: 'Liên hệ' });
         expect(within(locations).getByText('12 Lê Lợi')).toBeInTheDocument();
         expect(within(locations).getByText('Giờ làm việc: 07:00–17:00')).toBeInTheDocument();
         expect(within(locations).getByRole('link', { name: '028 1234 5678' })).toHaveAttribute('href', 'tel:02812345678');
@@ -236,7 +236,7 @@ describe('GĐ5 mục 7 và 8: trang chủ', () => {
     it('hides every data section that has no data and keeps FAQ', async () => {
         mocks.data = {};
         mount('/', '/', <PublicLanding />);
-        await waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(4));
+        await waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(5));
         await screen.findByRole('heading', { level: 2, name: 'Câu hỏi thường gặp' });
         for (const name of ['Chuyên khoa', 'Bác sĩ', 'Gói khám', 'Cơ sở khám']) expect(screen.queryByRole('heading', { level: 2, name })).not.toBeInTheDocument();
     });
@@ -249,19 +249,18 @@ describe('GĐ5 mục 7 và 8: trang chủ', () => {
         mount('/', '/', <PublicLanding />);
         await screen.findByRole('heading', { level: 2, name: 'Bác sĩ' });
         expect(screen.queryByRole('heading', { level: 2, name: 'Gói khám' })).not.toBeInTheDocument();
-        expect(screen.getByRole('heading', { level: 2, name: 'Cơ sở khám' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 2, name: 'Liên hệ' })).toBeInTheDocument();
     });
 
-    it('shows a retryable error when the core data fails', async () => {
+    it('hides a failed core section and keeps the remaining page usable', async () => {
         mocks.get.mockImplementation(async (url: string) => {
             if (url === '/specialties') throw { status: 503, message: 'Mất kết nối' };
-            return { success: true, data: [] };
+            return { success: true, data: url in mocks.data ? mocks.data[url] : [] };
         });
         mount('/', '/', <PublicLanding />);
-        expect(await screen.findByText('Mất kết nối')).toBeInTheDocument();
-        mocks.get.mockImplementation(async (url: string) => ({ success: true, data: url in mocks.data ? mocks.data[url] : [] }));
-        fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-        expect(await screen.findByRole('heading', { level: 2, name: 'Chuyên khoa' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { level: 2, name: 'Bác sĩ' })).toBeInTheDocument();
+        expect(screen.queryByRole('heading', { level: 2, name: 'Chuyên khoa' })).not.toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Câu hỏi thường gặp' })).toBeInTheDocument();
     });
 
     it('suggests doctors, specialties and packages while typing', async () => {

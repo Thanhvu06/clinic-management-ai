@@ -1,0 +1,33 @@
+.infoStrip { background: var(--cc-color-public-surface); border-bottom: 1px solid var(--cc-color-border); }
+.infoContent { display: flex; align-items: center; gap: var(--cc-space-lg); min-height: 36px; font-size: .8rem; color: var(--cc-color-text-secondary); }
+.infoContent a, .infoContent span { display: inline-flex; align-items: center; gap: var(--cc-space-xs); }
+.infoContent svg { flex-shrink: 0; }
+.address { margin-left: auto; }
+.hero { position: relative; isolation: isolate; padding: calc(var(--cc-space-xl) * 1.5) 0 var(--cc-space-lg); border-bottom: 1px solid var(--cc-color-border); }
+.heroImage, .overlay { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; }
+.heroImage { object-fit: cover; object-position: center 46%; }
+.overlay { background: var(--cc-color-public-surface); opacity: .9; }
+.heroGrid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: center; gap: calc(var(--cc-space-xl) * 1.5); }
+.heroCopy { padding: var(--cc-space-lg) 0; min-width: 0; }
+.heroCopy h1 { max-width: 540px; margin: 0; font-size: clamp(1.9rem, 3vw, 2.6rem); letter-spacing: -.035em; line-height: 1.18; font-weight: 650; color: var(--cc-color-text-dark); }
+.heroCopy h1 span { white-space: nowrap; }
+.heroCopy > p { max-width: 470px; margin: var(--cc-space-md) 0 var(--cc-space-lg); color: var(--cc-color-text); font-size: 1rem; line-height: 1.7; }
+.shortcuts { margin-top: var(--cc-space-xl); }
+.quickLinks { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--cc-color-public-surface); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); }
+.quickLinks > * { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: var(--cc-space-sm); padding: var(--cc-space-lg) var(--cc-space-xs); min-width: 0; font-size: .9rem; font-weight: 600; color: var(--cc-color-public-accent); text-align: center; }
+.quickLinks > * + * { border-left: 1px solid var(--cc-color-border); }
+.quickLinks button { border: 0; border-left: 1px solid var(--cc-color-border); border-radius: 0; background: transparent; cursor: pointer; font-family: inherit; }
+.quickLinks > *:hover { background: var(--cc-color-public-bg); color: var(--cc-color-public-accent-hover); }
+@media (max-width: 900px) { .heroGrid { grid-template-columns: 1fr; gap: var(--cc-space-lg); } .heroCopy { padding: 0; } .heroCopy h1 { max-width: 620px; } .hero { padding-top: var(--cc-space-xl); } .infoContent { gap: var(--cc-space-md); } }
+@media (max-width: 600px) {
+    .infoContent { justify-content: space-between; flex-wrap: wrap; gap: var(--cc-space-xxs) var(--cc-space-sm); padding-block: var(--cc-space-xs); font-size: .75rem; }
+    .infoContent .address { display: none; }
+    .hero { padding-top: var(--cc-space-lg); }
+    .heroImage { height: 260px; }
+    .heroCopy h1 { font-size: 1.9rem; }
+    .heroCopy > p { font-size: .9rem; margin-bottom: var(--cc-space-md); }
+    .quickLinks { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .quickLinks > * { padding: var(--cc-space-md) var(--cc-space-xs); font-size: .8rem; }
+    .quickLinks > :nth-child(4) { border-left: 0; }
+    .quickLinks > :nth-child(n+4) { border-top: 1px solid var(--cc-color-border); }
+}
