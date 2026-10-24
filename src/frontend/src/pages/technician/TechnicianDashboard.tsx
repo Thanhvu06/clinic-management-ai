@@ -11,7 +11,6 @@ import { PageHeader, MetricStrip, StatusBadge, DataTable, LoadingState, EmptySta
 import { diagnosticCategoryLabels, diagnosticStatusLabels, diagnosticStatusTone } from '../../utils/diagnosticLabels';
 import { toLocalDateString } from '../../utils/formatters';
 import styles from './TechnicianDashboard.module.css';
-
 const categoryIcons = { Laboratory: FlaskConical, Ultrasound: Waves, Imaging: Scan, Other: Stethoscope };
 
 export const TechnicianDashboard: React.FC = () => {
@@ -173,7 +172,7 @@ export const TechnicianDashboard: React.FC = () => {
             {loading ? <LoadingState message="Đang tải danh sách chỉ định..." /> : error ? <InlineError message={error} onRetry={() => { void loadData(); }} /> : visibleOrders.length === 0 ? <EmptyState icon={<FileText size={40} />} title="Không tìm thấy phiếu chỉ định nào" description="Thử thay đổi bộ lọc hoặc tìm kiếm lại." /> : (
                 <div className={styles.tableScroll}>
                     <DataTable data={visibleOrders} keyExtractor={order => order.id} columns={[
-                        {header:'Mã phiếu',accessor:order => <><strong className={styles.orderCode}>{order.orderCode}</strong><div className={styles.secondary}>#{order.appointmentCode}</div></>},
+                        {header:'Mã phiếu',accessor:order => <><strong className={styles.orderCode}>{order.orderCode}</strong><div className={styles.secondary}>{order.appointmentCode}</div></>},
                         {header:'Bệnh nhân',accessor:order => <><strong>{order.patientName}</strong><div className={styles.secondary}>{order.patientPhone || 'Không có SĐT'} • {order.patientAge ? `${order.patientAge}t` : ''}</div></>},
                         {header:'Bác sĩ & chuyên khoa',accessor:order => <><div>{order.orderingDoctorName}</div><div className={styles.secondary}>{order.specialtyName || '---'}</div></>},
                         {header:'Dịch vụ chỉ định',accessor:order => <><div className={styles.categoryTags}>{[...new Set(order.items.map(item => item.category))].map(category => { const Icon = categoryIcons[category]; return <Tag key={category} className={styles.categoryTag}><Icon size={13} aria-hidden="true" />{diagnosticCategoryLabels[category]}</Tag>; })}</div><div className={styles.serviceNames}>{order.items.slice(0, 2).map(item => <div key={item.id}>{item.serviceName}</div>)}{order.items.length > 2 && <span>+{order.items.length - 2}</span>}</div></>},

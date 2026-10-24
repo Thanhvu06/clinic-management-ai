@@ -1,3 +1,4 @@
+import { getGenderLabel } from '../../utils/genderLabels';
 import { getPrescriptionStatusLabel } from '../../utils/prescriptionStatusLabels';
 import { formatDecimalVi } from '../../utils/formatDecimalVi';
 import { getAppointmentHistoryActionLabel } from '../../utils/appointmentHistoryLabels';
@@ -12,7 +13,6 @@ import type { DataTableColumn } from '../../components/common';
 import styles from './DoctorAppointmentDetail.module.css';
 import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
 import { formatDateOnly } from '../../utils/formatters';
-
 interface AppointmentHistory {
     id: number;
     action: string;
@@ -146,11 +146,11 @@ export const DoctorAppointmentDetail: React.FC = () => {
                     <div>
                         <Flex align="center" gap={10} className={styles.patientIdentity}>
                             <h1 className={styles.patientName}>{context.patientName}</h1>
-                            <span className={styles.codeTag}>#{apt.appointmentCode}</span>
+                            <span className={styles.codeTag}>{apt.appointmentCode}</span>
                             <StatusBadge status={apt.status} label={getAppointmentStatusLabel(apt.status)} />
                         </Flex>
                         <div className={styles.metaRow}>
-                            <span>{context.patientGender === 'Male' ? 'Nam' : context.patientGender === 'Female' ? 'Nữ' : 'Khác'} {context.patientDob ? `• ${formatDateOnly(context.patientDob)}` : ''}</span>
+                            <span>{getGenderLabel(context.patientGender)} {context.patientDob ? `• ${formatDateOnly(context.patientDob)}` : ''}</span>
                             <span>SĐT: {context.patientPhone}</span>
                             {apt.specialtyName && <span>Chuyên khoa: {apt.specialtyName}</span>}
                             {context.address && <span>Địa chỉ: {context.address}</span>}

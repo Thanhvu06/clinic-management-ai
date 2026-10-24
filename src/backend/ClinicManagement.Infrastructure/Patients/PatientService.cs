@@ -157,7 +157,7 @@ public class PatientService : IPatientService
             return new PatientPrescriptionDto
             {
                 Id = p.Id,
-                Code = $"RX-{p.CreatedAt:yyyyMMdd}-{p.Id:D4}",
+                Code = $"RX-{p.CreatedAt:yyMMdd}-{p.Id:D4}",
                 AppointmentId = p.AppointmentId,
                 AppointmentCode = p.Appointment?.AppointmentCode ?? string.Empty,
                 PatientVisitId = p.PatientVisitId,

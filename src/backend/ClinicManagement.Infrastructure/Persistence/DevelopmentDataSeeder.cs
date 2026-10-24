@@ -86,6 +86,7 @@ public static class DevelopmentDataSeeder
         var dateTimeProvider = serviceProvider.GetService<ClinicManagement.Application.Common.Interfaces.IDateTimeProvider>()
             ?? new ClinicManagement.Infrastructure.Services.DateTimeProvider();
 
+        var seedTime = RealisticDevelopmentSeed.At(dateTimeProvider, dateTimeProvider.VietnamToday, 9);
         var config = serviceProvider.GetService<IConfiguration>();
         var seedSchedules = options?.SeedDoctorSchedulesAndSlots
             ?? config?.GetValue<bool>("DemoSeed:GenerateSlots", false)
@@ -103,17 +104,17 @@ public static class DevelopmentDataSeeder
         var password = "Demo@12345";
 
         // 1. Seed Users
-        var adminId1 = await SeedUserAsync(userManager, "admin@cliniccare.local", "Quản trị viên", "0999999999", "Admin", password);
-        var adminId2 = await SeedUserAsync(userManager, "admin.02@cliniccare.local", "Quản trị viên 2", "0980000002", "Admin", password);
+        var adminId1 = await SeedUserAsync(userManager, "admin@cliniccare.local", "Quản trị viên", "0999999999", "Admin", password, dateTimeProvider);
+        var adminId2 = await SeedUserAsync(userManager, "admin.02@cliniccare.local", "Quản trị viên 2", "0980000002", "Admin", password, dateTimeProvider);
 
-        var pharmacist = await SeedUserAsync(userManager, "pharmacist@cliniccare.local", "Dược sĩ Lâm Sàng", "0977777777", "Pharmacist", password);
-        var technician = await SeedUserAsync(userManager, "technician@cliniccare.local", "Kỹ thuật viên cận lâm sàng", "0966666666", ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician, password);
-        var labSupervisor = await SeedUserAsync(userManager, "labsupervisor@cliniccare.local", "Trưởng khoa Xét nghiệm Đỗ Thị Lan", "0966666601", ClinicManagement.Application.Common.Constants.RoleNames.LabSupervisor, password);
-        var technician02 = await SeedUserAsync(userManager, "technician.02@cliniccare.local", "Kỹ thuật viên Phạm Quốc Bảo", "0966666602", ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician, password);
+        var pharmacist = await SeedUserAsync(userManager, "pharmacist@cliniccare.local", "Dược sĩ Lâm Sàng", "0977777777", "Pharmacist", password, dateTimeProvider);
+        var technician = await SeedUserAsync(userManager, "technician@cliniccare.local", "Kỹ thuật viên cận lâm sàng", "0966666666", ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician, password, dateTimeProvider);
+        var labSupervisor = await SeedUserAsync(userManager, "labsupervisor@cliniccare.local", "Trưởng khoa Xét nghiệm Đỗ Thị Lan", "0966666601", ClinicManagement.Application.Common.Constants.RoleNames.LabSupervisor, password, dateTimeProvider);
+        var technician02 = await SeedUserAsync(userManager, "technician.02@cliniccare.local", "Kỹ thuật viên Phạm Quốc Bảo", "0966666602", ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician, password, dateTimeProvider);
 
-        var rec1 = await SeedUserAsync(userManager, "reception@cliniccare.local", "Lễ tân Nguyễn Thu Trang", "0900000002", "Receptionist", password);
-        var rec2 = await SeedUserAsync(userManager, "letan.02@cliniccare.local", "Lễ tân Trần Mai Anh", "0981000002", "Receptionist", password);
-        var rec3 = await SeedUserAsync(userManager, "letan.03@cliniccare.local", "Lễ tân Lê Hoàng Yến", "0981000003", "Receptionist", password);
+        var rec1 = await SeedUserAsync(userManager, "reception@cliniccare.local", "Lễ tân Nguyễn Thu Trang", "0900000002", "Receptionist", password, dateTimeProvider);
+        var rec2 = await SeedUserAsync(userManager, "letan.02@cliniccare.local", "Lễ tân Trần Mai Anh", "0981000002", "Receptionist", password, dateTimeProvider);
+        var rec3 = await SeedUserAsync(userManager, "letan.03@cliniccare.local", "Lễ tân Lê Hoàng Yến", "0981000003", "Receptionist", password, dateTimeProvider);
 
         // 10 Doctors with clean FullName (without duplicated academic titles) and exact specialty mappings
         var doctorDefs = new[]
@@ -133,7 +134,7 @@ public static class DevelopmentDataSeeder
         var docUsers = new List<ApplicationUser>();
         foreach (var def in doctorDefs)
         {
-            var u = await SeedUserAsync(userManager, def.Email, def.Name, def.Phone, "Doctor", password);
+            var u = await SeedUserAsync(userManager, def.Email, def.Name, def.Phone, "Doctor", password, dateTimeProvider);
             docUsers.Add(u);
         }
 
@@ -161,7 +162,7 @@ public static class DevelopmentDataSeeder
         var patUsers = new List<ApplicationUser>();
         foreach (var pdef in patientDefs)
         {
-            var u = await SeedUserAsync(userManager, pdef.Email, pdef.Name, pdef.Phone, "Patient", password);
+            var u = await SeedUserAsync(userManager, pdef.Email, pdef.Name, pdef.Phone, "Patient", password, dateTimeProvider);
             patUsers.Add(u);
         }
 
@@ -322,7 +323,7 @@ public static class DevelopmentDataSeeder
             {
                 var mrn = mrnGenerator != null
                     ? await mrnGenerator.GenerateNextMrnAsync()
-                    : $"BN-{DateTime.UtcNow.Year}-{(1000 + i + 1):D6}";
+                    : $"BN-{seedTime.Year}-{(1000 + i + 1):D6}";
 
                 db.Patients.Add(new Patient
                 {
@@ -382,7 +383,7 @@ public static class DevelopmentDataSeeder
                     ContactPhone = "0900000004",
                     Note = "Ưu tiên khám buổi sáng sớm trước 9h",
                     Status = HealthPackageRegistrationStatus.Pending,
-                    CreatedAt = DateTime.UtcNow.AddDays(-2)
+                    CreatedAt = seedTime.AddDays(-2)
                 },
                 new HealthPackageRegistration
                 {
@@ -394,8 +395,8 @@ public static class DevelopmentDataSeeder
                     Note = "Có tiền sử tăng huyết áp gia đình",
                     AdminNotes = "Đã liên hệ xác nhận hẹn lịch vào 8h30 ngày hẹn",
                     Status = HealthPackageRegistrationStatus.Confirmed,
-                    CreatedAt = DateTime.UtcNow.AddDays(-3),
-                    UpdatedAt = DateTime.UtcNow.AddDays(-2)
+                    CreatedAt = seedTime.AddDays(-3),
+                    UpdatedAt = seedTime.AddDays(-2)
                 },
                 new HealthPackageRegistration
                 {
@@ -407,8 +408,8 @@ public static class DevelopmentDataSeeder
                     Note = "Khám tư vấn định kỳ",
                     CancellationReason = "Khách hàng bận lịch công tác không đến được",
                     Status = HealthPackageRegistrationStatus.Cancelled,
-                    CreatedAt = DateTime.UtcNow.AddDays(-4),
-                    UpdatedAt = DateTime.UtcNow.AddDays(-1)
+                    CreatedAt = seedTime.AddDays(-4),
+                    UpdatedAt = seedTime.AddDays(-1)
                 }
             );
             await db.SaveChangesAsync();
@@ -440,7 +441,7 @@ public static class DevelopmentDataSeeder
                     BalanceAfter = m.StockQuantity,
                     Reason = "Nhập kho ban đầu hệ thống",
                     ActorUserId = pharmacistId,
-                    CreatedAt = DateTime.UtcNow.AddDays(-10)
+                    CreatedAt = seedTime.AddDays(-10)
                 });
             }
             await db.SaveChangesAsync();
@@ -461,7 +462,7 @@ public static class DevelopmentDataSeeder
                     DoctorId = completedAppts[0].DoctorId,
                     Status = PrescriptionStatus.Issued,
                     Notes = "Uống thuốc sau ăn, uống nhiều nước ấm. Nghỉ ngơi hợp lý.",
-                    CreatedAt = DateTime.UtcNow.AddHours(-2)
+                    CreatedAt = seedTime.AddHours(1)
                 };
                 db.Prescriptions.Add(pres1);
                 await db.SaveChangesAsync();
@@ -479,8 +480,8 @@ public static class DevelopmentDataSeeder
                     DoctorId = completedAppts[1].DoctorId,
                     Status = PrescriptionStatus.Dispensed,
                     Notes = "Kiêng đồ cay nóng, bia rượu và chất kích thích.",
-                    CreatedAt = DateTime.UtcNow.AddDays(-1),
-                    DispensedAt = DateTime.UtcNow.AddDays(-1).AddHours(1),
+                    CreatedAt = seedTime.AddHours(1),
+                    DispensedAt = seedTime.AddHours(2),
                     DispensedByUserId = pharmacistId
                 };
                 db.Prescriptions.Add(pres2);
@@ -666,7 +667,7 @@ public static class DevelopmentDataSeeder
                     Role = role,
                     IsPrimary = true,
                     IsActive = true,
-                    AssignedAtUtc = DateTime.UtcNow
+                    AssignedAtUtc = seedTime
                 });
             }
         }
@@ -675,6 +676,7 @@ public static class DevelopmentDataSeeder
 
         await MedicineBatchDevelopmentSeed.SeedAsync(db, dateTimeProvider, pharmacist.Id,
             config?.GetValue<bool>("DemoSeed:Enabled") == true);
+        if (seedAppointments) await RealisticDevelopmentSeed.SeedAsync(db, dateTimeProvider, rec1.Id, technician.Id, labSupervisor.Id);
         logger.LogInformation("Development Data Seeding completed.");
     }
 
@@ -830,7 +832,7 @@ public static class DevelopmentDataSeeder
         logger.LogInformation("Work schedules ({Days} days [VietnamToday..+{DaysMinusOne}], 2 shifts) and slots (14 slots/day) seeded and synchronized.", days, days - 1);
     }
 
-    private static async Task<ApplicationUser> SeedUserAsync(UserManager<ApplicationUser> userManager, string email, string name, string phone, string role, string password)
+    private static async Task<ApplicationUser> SeedUserAsync(UserManager<ApplicationUser> userManager, string email, string name, string phone, string role, string password, ClinicManagement.Application.Common.Interfaces.IDateTimeProvider clock)
     {
         var user = await userManager.FindByEmailAsync(email);
         if (user == null)
@@ -842,6 +844,7 @@ public static class DevelopmentDataSeeder
                 existingByPhone.Email = email;
                 existingByPhone.FullName = name;
                 existingByPhone.IsActive = true;
+                if (existingByPhone.CreatedAt.Year <= 1900) existingByPhone.CreatedAt = RealisticDevelopmentSeed.At(clock, clock.VietnamToday.AddDays(-90), 8);
                 await userManager.UpdateAsync(existingByPhone);
                 if (!await userManager.IsInRoleAsync(existingByPhone, role))
                 {
@@ -850,7 +853,7 @@ public static class DevelopmentDataSeeder
                 return existingByPhone;
             }
 
-            user = new ApplicationUser { UserName = email, Email = email, FullName = name, PhoneNumber = phone, IsActive = true };
+            user = new ApplicationUser { UserName = email, Email = email, FullName = name, PhoneNumber = phone, IsActive = true, CreatedAt = RealisticDevelopmentSeed.At(clock, clock.VietnamToday.AddDays(-90), 8) };
             await userManager.CreateAsync(user, password);
             await userManager.AddToRoleAsync(user, role);
         }
@@ -859,6 +862,7 @@ public static class DevelopmentDataSeeder
             user.FullName = name;
             user.PhoneNumber = phone;
             user.IsActive = true;
+            if (user.CreatedAt.Year <= 1900) user.CreatedAt = RealisticDevelopmentSeed.At(clock, clock.VietnamToday.AddDays(-90), 8);
             await userManager.UpdateAsync(user);
             if (!await userManager.IsInRoleAsync(user, role))
             {

@@ -24,7 +24,6 @@ import { useAuth } from "../../auth/AuthContext";
 import { Breadcrumb } from "../../components/Breadcrumb";
 import { formatDoctorName, getNextWorkingDateString, isSundayDateString } from "../../utils/doctorNameHelper";
 import { isValidBookingReason, normalizeBookingReason } from "../../hooks/useAiBookingFlow";
-
 interface Specialty {
     id: number;
     specialtyCode: string;
@@ -847,13 +846,13 @@ export const BookAppointment: React.FC = () => {
                 <Card className={styles.successPanel}>
                     <Result status="success" title="Đặt lịch khám thành công!" subTitle="Lịch hẹn của bạn đã được ghi nhận." />
                     <Descriptions bordered column={1} items={[
-                        { key: 'code', label: 'Mã lịch hẹn:', children: <strong>#{successBooking.appointmentCode}</strong> },
+                        { key: 'code', label: 'Mã lịch hẹn:', children: <strong>{successBooking.appointmentCode}</strong> },
                         { key: 'specialty', label: 'Chuyên khoa:', children: successBooking.specialtyName },
                         { key: 'doctor', label: 'Bác sĩ khám:', children: successBooking.doctorName },
                         { key: 'time', label: 'Thời gian hẹn:', children: <strong>{successBooking.startTime} - {successBooking.endTime} ({formatDateOnly(successBooking.slotDate)})</strong> },
                         { key: 'reason', label: 'Lý do khám:', children: successBooking.reason ? `"${successBooking.reason}"` : 'Không có' }
                     ]} />
-                    <Alert className={styles.notice} type="info" showIcon title={<><strong>Lưu ý:</strong> Bạn đến quầy lễ tân trước giờ hẹn 10–15 phút và đọc mã lịch hẹn <strong>#{successBooking.appointmentCode}</strong> để làm thủ tục.</>} />
+                    <Alert className={styles.notice} type="info" showIcon title={<><strong>Lưu ý:</strong> Bạn đến quầy lễ tân trước giờ hẹn 10–15 phút và đọc mã lịch hẹn <strong>{successBooking.appointmentCode}</strong> để làm thủ tục.</>} />
                     <div className={styles.actions}>
                         <Button type="primary" onClick={() => navigate('/patient/appointments')}>Xem lịch hẹn của tôi</Button>
                         <Button onClick={() => {

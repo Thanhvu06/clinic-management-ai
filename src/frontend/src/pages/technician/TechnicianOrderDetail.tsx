@@ -1,3 +1,4 @@
+import { getGenderLabel } from '../../utils/genderLabels';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -14,7 +15,6 @@ import { diagnosticApi } from '../../api/diagnosticApi';
 import type { DiagnosticOrderDto, RecordDiagnosticResultRequest } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
-
 const categoryIcons = { Laboratory: FlaskConical, Ultrasound: Waves, Imaging: Scan, Other: Stethoscope };
 const quickConclusions = ['Bình thường', 'Bất thường — đề nghị bác sĩ xem', 'Cần làm lại'];
 
@@ -374,10 +374,10 @@ export const TechnicianOrderDetail: React.FC = () => {
             <Card className={styles.orderCard}>
                 <div className={styles.orderHeading}>
                     <div className={styles.orderCode}>{order.orderCode}</div>
-                    <div className={styles.appointmentInfo}><div>Mã lịch hẹn: <strong>#{order.appointmentCode}</strong></div><div className={styles.secondary}>Chỉ định lúc: {new Date(order.orderedAtUtc).toLocaleString('vi-VN')}</div></div>
+                    <div className={styles.appointmentInfo}><div>Mã lịch hẹn: <strong>{order.appointmentCode}</strong></div><div className={styles.secondary}>Chỉ định lúc: {new Date(order.orderedAtUtc).toLocaleString('vi-VN')}</div></div>
                 </div>
                 <div className={styles.patientGrid}>
-                    <div><div className={styles.secondary}>Bệnh nhân:</div><div className={styles.patientName}>{order.patientName}</div><div className={styles.secondary}>{order.patientGender?.toLowerCase() === 'female' ? 'Nữ' : order.patientGender?.toLowerCase() === 'male' ? 'Nam' : 'Chưa cập nhật'} • {order.patientAge ? `${order.patientAge} tuổi` : '---'}</div></div>
+                    <div><div className={styles.secondary}>Bệnh nhân:</div><div className={styles.patientName}>{order.patientName}</div><div className={styles.secondary}>{getGenderLabel(order.patientGender)} • {order.patientAge ? `${order.patientAge} tuổi` : '---'}</div></div>
                     <div><div className={styles.secondary}>Số điện thoại:</div><strong>{order.patientPhone || '---'}</strong></div>
                     <div><div className={styles.secondary}>Bác sĩ chỉ định:</div><strong>{order.orderingDoctorName}</strong><div className={styles.secondary}>{order.specialtyName || '---'}</div></div>
                 </div>

@@ -33,13 +33,13 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); document.body.classList.remove('cc-prescription-printing'); });
 
 describe('DateOnly calendar formatting', () => {
-    it.each([['2026-10-11', '11/10/2026'], ['2026-10-11T00:00:00', '11/10/2026'], ['', '']])('formats %s as %s', (input, expected) => {
+    it.each([['2026-10-11', '11/10/2026'], ['2026-10-11T00:00:00', '11/10/2026'], ['', '—']])('formats %s as %s', (input, expected) => {
         expect(formatDateOnly(input)).toBe(expected);
     });
     it('preserves invalid calendar dates and accepts leap days', () => {
         expect(formatDateOnly('2026-02-29')).toBe('2026-02-29');
         expect(formatDateOnly('invalid')).toBe('invalid');
-        expect(formatDateOnly(null)).toBe('');
+        expect(formatDateOnly(null)).toBe('—');
         expect(formatDateOnly('2024-02-29')).toBe('29/02/2024');
     });
 });

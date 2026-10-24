@@ -48,6 +48,7 @@ public class StockTransactionDto
     public int QuantityChange { get; set; }
     public int BalanceAfter { get; set; }
     public long? PrescriptionId { get; set; }
+    public DateTime? PrescriptionCreatedAt { get; set; }
     public string? Reason { get; set; }
     public string ActorName { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }

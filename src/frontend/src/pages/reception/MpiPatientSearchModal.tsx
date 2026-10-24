@@ -1,17 +1,12 @@
+import { getGenderLabel } from '../../utils/genderLabels';
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, AlertTriangle, UserCheck, ShieldAlert, Phone, CreditCard } from 'lucide-react';
 import { Button, Input, List, Modal, Select } from 'antd';
 import { EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './MpiPatientSearchModal.module.css';
 import { mpiApi, type MpiPatientDto, type GenderType } from '../../api/mpiApi';
-
-export const formatGender = (gender?: GenderType | number | null, genderName?: string | null): string => {
-    if (genderName) return genderName;
-    if (gender === 'Male' || gender === 0) return 'Nam';
-    if (gender === 'Female' || gender === 1) return 'Nữ';
-    if (gender === 'Other' || gender === 2) return 'Khác';
-    return 'Chưa rõ';
-};
+export const formatGender = (gender?: GenderType | number | null, genderName?: string | null): string =>
+    (genderName ? getGenderLabel(genderName) : getGenderLabel(gender)).replace('Chưa cập nhật', 'Chưa rõ');
 
 interface MpiPatientSearchModalProps {
     isOpen: boolean;

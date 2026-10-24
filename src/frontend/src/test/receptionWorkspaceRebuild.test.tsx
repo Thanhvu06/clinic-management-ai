@@ -528,7 +528,7 @@ describe('Reception Workspace Rebuild', () => {
         );
 
         await waitFor(() => {
-            expect(screen.getByText('Phòng khám đa khoa ClinicCare AI – Thủ Dầu Một (FAC-01)')).toBeInTheDocument();
+            expect(screen.getByText('Phòng khám đa khoa ClinicCare AI – Thủ Dầu Một')).toBeInTheDocument();
         });
         expect(screen.queryByRole('combobox')).toBeNull();
     });

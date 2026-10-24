@@ -1,3 +1,4 @@
+import { getGenderLabel } from '../../utils/genderLabels';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from 'antd';
@@ -7,7 +8,6 @@ import type { DiagnosticOrderDto } from '../../types';
 import { diagnosticNotificationTime } from '../../utils/diagnosticLabels';
 import { encodeCode39 } from '../../utils/code39';
 import styles from './SpecimenLabelPrint.module.css';
-
 export const SpecimenLabelPrint = () => {
     const { id } = useParams<{ id: string }>();
     const [order, setOrder] = useState<DiagnosticOrderDto | null>(null);
@@ -41,7 +41,7 @@ export const SpecimenLabelPrint = () => {
                 const barcode = encodeCode39(item.specimenBarcode!);
                 return <article key={item.id} className={styles.label} aria-label={`Nhãn ${item.specimenBarcode}`}>
                     <strong className={styles.patientName}>{order.patientName}</strong>
-                    <div>{order.patientGender?.toLowerCase() === 'female' ? 'Nữ' : order.patientGender?.toLowerCase() === 'male' ? 'Nam' : 'Chưa cập nhật'} / {order.patientAge ?? '—'} tuổi • {order.orderCode}</div>
+                    <div>{getGenderLabel(order.patientGender)} / {order.patientAge ?? '—'} tuổi • {order.orderCode}</div>
                     <div className={styles.serviceName}>{item.serviceName}</div>
                     <div className={styles.sampleType}>{item.specimenType} / {item.containerType}</div>
                     <div>Lấy mẫu: {item.collectedAtUtc ? diagnosticNotificationTime(item.collectedAtUtc) : '—'}</div>

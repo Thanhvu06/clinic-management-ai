@@ -76,7 +76,7 @@ describe('StatCard', () => {
 describe('formatDateTime', () => {
     it('formats timestamps as dd/MM/yyyy HH:mm', () => {
         expect(formatDateTime(new Date(2026, 9, 5, 7, 3))).toBe('05/10/2026 07:03');
-        expect(formatDateTime('')).toBe('');
+        expect(formatDateTime('')).toBe('—');
         expect(formatDateTime('không hợp lệ')).toBe('không hợp lệ');
     });
 });

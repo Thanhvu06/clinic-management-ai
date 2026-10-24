@@ -1,3 +1,4 @@
+import { getGenderLabel } from '../../utils/genderLabels';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from 'antd';
@@ -7,7 +8,6 @@ import type { DiagnosticOrderDto } from '../../types';
 import { diagnosticNotificationTime, isCriticalDiagnosticFlag } from '../../utils/diagnosticLabels';
 import { encodeCode39 } from '../../utils/code39';
 import styles from './DiagnosticResultPrint.module.css';
-
 export const DiagnosticResultPrint = ({ actor = 'technician', returnPath }: { actor?: 'technician' | 'doctor' | 'verification'; returnPath?: string }) => {
     const { id } = useParams<{ id: string }>();
     const [order, setOrder] = useState<DiagnosticOrderDto | null>(null);
@@ -40,7 +40,7 @@ export const DiagnosticResultPrint = ({ actor = 'technician', returnPath }: { ac
         <article className={styles.sheet} aria-label="Phiếu kết quả cận lâm sàng">
             <header className={styles.header}><strong>{order.facilityName || 'ClinicCare AI'}</strong><h1>PHIẾU KẾT QUẢ CẬN LÂM SÀNG</h1><p>Mã phiếu: <strong>{order.orderCode}</strong></p></header>
             <section className={styles.patient} aria-label="Thông tin bệnh nhân">
-                <p>Họ tên: <strong>{order.patientName}</strong></p><p>Giới tính: {order.patientGender === 'Female' ? 'Nữ' : order.patientGender === 'Male' ? 'Nam' : '—'} • Tuổi: {order.patientAge ?? '—'} • SĐT: {order.patientPhone || '—'}</p>
+                <p>Họ tên: <strong>{order.patientName}</strong></p><p>Giới tính: {getGenderLabel(order.patientGender)} • Tuổi: {order.patientAge ?? '—'} • SĐT: {order.patientPhone || '—'}</p>
                 <p>Bác sĩ chỉ định: {order.orderingDoctorName}</p><p>Chỉ định lâm sàng: {order.clinicalIndication}</p>
             </section>
             {order.items.filter(item => item.status !== 'Cancelled').map(item => {

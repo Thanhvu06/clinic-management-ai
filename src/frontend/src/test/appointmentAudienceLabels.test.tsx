@@ -76,7 +76,7 @@ describe('Shared appointment labels by audience', () => {
 
     it('renders all four patient labels and keeps actions restricted to confirmed appointments', async () => {
         mount(<PatientAppointments />);
-        await screen.findByText('#APT-LABEL-1');
+        await screen.findByText('APT-LABEL-1');
         for (const [index, label] of ['Đã xác nhận', 'Đã tiếp nhận', 'Đang khám', 'Đã khám xong'].entries()) {
             const card = document.getElementById(`appointment-card-${index + 1}`)!;
             expect(within(card).getByText(label)).toBeInTheDocument();

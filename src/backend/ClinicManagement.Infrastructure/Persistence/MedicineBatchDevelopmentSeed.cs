@@ -35,12 +35,15 @@ public static class MedicineBatchDevelopmentSeed
             return;
         }
         var medicines = await db.Medicines.Where(medicine => medicine.StockQuantity > 0).OrderBy(medicine => medicine.Id).ToListAsync();
+        var index = 0;
+        var receivedAt = RealisticDevelopmentSeed.At(clock, clock.VietnamToday.AddDays(-30), 8);
         foreach (var medicine in medicines)
         {
             var first = medicine.StockQuantity / 2;
             db.MedicineBatches.AddRange(
-                Batch(medicine, clock.VietnamToday.AddDays(60), first),
-                Batch(medicine, clock.VietnamToday.AddDays(400), medicine.StockQuantity - first));
+                Batch(medicine, index < 3 ? clock.VietnamToday.AddDays(20 + index * 15) : clock.VietnamToday.AddMonths(6 + index % 19), first),
+                Batch(medicine, clock.VietnamToday.AddMonths(6 + (index + 9) % 19), medicine.StockQuantity - first));
+            index++;
         }
         if (medicines.FirstOrDefault(medicine => medicine.StockQuantity < int.MaxValue) is { } demoMedicine)
         {
@@ -48,12 +51,12 @@ public static class MedicineBatchDevelopmentSeed
             var expired = Batch(demoMedicine, clock.VietnamToday.AddDays(-15), quantity);
             db.MedicineBatches.Add(expired);
             demoMedicine.StockQuantity += quantity;
-            demoMedicine.UpdatedAt = clock.UtcNow;
+            demoMedicine.UpdatedAt = receivedAt;
             db.MedicineStockTransactions.Add(new MedicineStockTransaction
             {
                 MedicineId = demoMedicine.Id, MedicineBatch = expired, Type = MedicineStockTransactionType.StockIn,
                 QuantityChange = quantity, BalanceAfter = demoMedicine.StockQuantity, ActorUserId = actor,
-                Reason = "Nhập lô thuốc hết hạn", CreatedAt = clock.UtcNow
+                Reason = "Nhập lô thuốc hết hạn", CreatedAt = receivedAt
             });
         }
         await db.SaveChangesAsync();
@@ -62,7 +65,7 @@ public static class MedicineBatchDevelopmentSeed
         MedicineBatch Batch(Medicine medicine, DateOnly expiry, int quantity) => new()
         {
             Medicine = medicine, BatchNumber = NextBatchNumber(), ExpiryDate = expiry, QuantityReceived = quantity,
-            QuantityRemaining = quantity, ReceivedAt = clock.UtcNow, CreatedByUserId = actor
+            QuantityRemaining = quantity, ReceivedAt = receivedAt, CreatedByUserId = actor
         };
     }
 }

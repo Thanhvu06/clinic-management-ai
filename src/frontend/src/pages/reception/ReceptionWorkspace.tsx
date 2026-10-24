@@ -312,10 +312,10 @@ export const ReceptionWorkspace: React.FC = () => {
                     <span className={styles.facilityLabel}>Cơ sở trực:</span>
                     {facilityLoading ? <LoadingState message="Đang tải cơ sở..." height="40px" /> : facilityError ? <InlineError title="" message={facilityError} onRetry={loadFacilities} /> : facilities.length === 0 ? (
                         <span className={styles.unassignedFacility}>Chưa được phân công cơ sở trực</span>
-                    ) : facilities.length === 1 ? <span className={styles.assignedFacility}>{facilities[0].name} ({facilities[0].code})</span> : (
+                    ) : facilities.length === 1 ? <span className={styles.assignedFacility}>{facilities[0].name}</span> : (
                         <Select className={styles.facilitySelect} value={selectedFacilityId || undefined}
                             onChange={(value) => { setWorklistError(null); setIsStale(false); setWorklistItems([]); setPage(1); setSelectedFacilityId(Number(value)); }}
-                            options={facilities.map(f => ({ value: f.id, label: `${f.name} (${f.code})` }))} />
+                            options={facilities.map(f => ({ value: f.id, label: f.name }))} />
                     )}
                 </div>
             </Card>

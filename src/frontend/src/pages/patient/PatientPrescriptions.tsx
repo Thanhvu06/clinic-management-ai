@@ -1,3 +1,4 @@
+import { formatPrescriptionCode } from '../../utils/prescriptionCode';
 import { getPrescriptionStatusLabel } from '../../utils/prescriptionStatusLabels';
 import { MedicineLink } from '../../components/medicines/MedicineLink';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -14,7 +15,6 @@ import { LoadingState } from '../../components/common/LoadingState';
 import { InlineError } from '../../components/common/InlineError';
 import { formatDateOnly, formatVndCurrency } from '../../utils/formatters';
 import styles from './PatientPrescriptions.module.css';
-
 interface PrescriptionItem {
     medicineId: number; name: string; unit: string; quantity: number;
     unitPrice?: number | null; lineTotal?: number | null;
@@ -58,7 +58,7 @@ export const PatientPrescriptions: React.FC = () => {
         <PageHeader title="Đơn thuốc của tôi" />
         <Input allowClear prefix={<Search size={18} />} placeholder="Tìm theo mã đơn, bác sĩ, tên thuốc..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
         {loading ? <LoadingState message="Đang tải đơn thuốc..." /> : error ? <InlineError message={error} onRetry={fetchPrescriptions} /> : filtered.length === 0 ? <EmptyState title="Chưa có đơn thuốc nào" description={term ? 'Không tìm thấy đơn thuốc khớp với từ khóa tìm kiếm.' : 'Các đơn thuốc do bác sĩ kê sau khi hoàn tất ca khám sẽ hiển thị tại đây.'} /> : filtered.map(p =>
-            <Card key={p.id} data-prescription-id={p.id} className={printingId === p.id ? styles.printingPrescription : undefined} title={<div className={styles.heading}><span>Mã đơn: {p.code}</span><Tag color={p.status === 'Dispensed' ? 'success' : 'warning'}>{getPrescriptionStatusLabel(p.status)}</Tag></div>} extra={<Button className={styles.printButton} title="In đơn thuốc" icon={<Printer size={18} />} onClick={() => handlePrint(p.id)}>In đơn thuốc</Button>}>
+            <Card key={p.id} data-prescription-id={p.id} className={printingId === p.id ? styles.printingPrescription : undefined} title={<div className={styles.heading}><span>Mã đơn: {formatPrescriptionCode(p)}</span><Tag color={p.status === 'Dispensed' ? 'success' : 'warning'}>{getPrescriptionStatusLabel(p.status)}</Tag></div>} extra={<Button className={styles.printButton} title="In đơn thuốc" icon={<Printer size={18} />} onClick={() => handlePrint(p.id)}>In đơn thuốc</Button>}>
                 <div className={styles.content}>
                     <div className={styles.appointment}><span>Ngày kê: {formatDateOnly(p.appointmentDate)}</span>{p.appointmentCode && <span>Lịch hẹn: <strong>{p.appointmentCode}</strong></span>}</div>
                     <Descriptions column={{ xs: 1, md: 2 }} items={[{ key: 'doctor', label: 'Bác sĩ chỉ định', children: `${p.doctorName} (${p.specialtyName})` }, { key: 'diagnosis', label: 'Chẩn đoán / Tóm tắt ca khám', children: p.diagnosis }]} />

@@ -50,10 +50,11 @@ export function formatVndCurrency(amount: number | null | undefined): string {
  * Formats a Date or ISO date string to DD/MM/YYYY.
  */
 export function formatDisplayDate(dateInput: string | Date | null | undefined): string {
-    if (!dateInput) return '';
+    if (!dateInput) return '—';
     try {
         const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
         if (isNaN(d.getTime())) return String(dateInput);
+        if (d.getFullYear() <= 1900) return '—';
         const day = String(d.getDate()).padStart(2, '0');
         const month = String(d.getMonth() + 1).padStart(2, '0');
         const year = d.getFullYear();
@@ -67,17 +68,19 @@ export function formatDisplayDate(dateInput: string | Date | null | undefined): 
  * Formats a timestamp to DD/MM/YYYY HH:mm in the device's local timezone.
  */
 export function formatDateTime(dateInput: string | Date | null | undefined): string {
-    if (!dateInput) return '';
+    if (!dateInput) return '—';
     const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
     if (isNaN(d.getTime())) return String(dateInput);
+    if (d.getFullYear() <= 1900) return '—';
     return `${formatDisplayDate(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 /** Formats the calendar portion locally, without converting DateOnly values through UTC. */
 export function formatDateOnly(value: string | null | undefined): string {
-    if (!value) return '';
+    if (!value) return '—';
     const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
     if (!match) return value;
+    if (Number(match[1]) <= 1900) return '—';
     const [, year, month, day] = match;
     const date = new Date(0);
     date.setFullYear(Number(year), Number(month) - 1, Number(day));

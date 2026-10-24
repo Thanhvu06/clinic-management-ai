@@ -13,26 +13,26 @@ const items = [
 beforeEach(() => { get.mockImplementation(async (url: string) => ({ success: true, data: url.startsWith('/appointments/my') ? { items } : url === '/specialties' ? [] : { items: [] } })); HTMLElement.prototype.scrollIntoView = vi.fn(); });
 it('opens upcoming, sorts chronologically and retains the requested highlight', async () => {
     render(<MemoryRouter initialEntries={['/patient/appointments?tab=upcoming&appointmentId=1']}><PatientAppointments /></MemoryRouter>);
-    await screen.findByText('#LATE');
+    await screen.findByText('LATE');
     expect(screen.getByRole('button', { name: 'Sắp tới' })).toHaveClass('active');
-    expect(screen.queryByText('#PAST')).not.toBeInTheDocument();
+    expect(screen.queryByText('PAST')).not.toBeInTheDocument();
     const cards = [...document.querySelectorAll('[id^="appointment-card-"]')];
     expect(cards.map(c => c.id)).toEqual(['appointment-card-2', 'appointment-card-1']);
     await waitFor(() => expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled());
 });
 it('opens the past query tab', async () => {
     render(<MemoryRouter initialEntries={['/patient/appointments?tab=past']}><PatientAppointments /></MemoryRouter>);
-    await screen.findByText('#PAST');
-    expect(screen.queryByText('#LATE')).not.toBeInTheDocument();
+    await screen.findByText('PAST');
+    expect(screen.queryByText('LATE')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Đã qua' })).toHaveClass('active');
 });
 it('refreshes an already open appointment page after a success-card deep link', async () => {
     const Link = () => { const navigate = useNavigate(); return <button onClick={() => navigate('/patient/appointments?tab=upcoming&appointmentId=4')}>Xem lịch vừa đặt</button>; };
     render(<MemoryRouter initialEntries={['/patient/appointments']}><Link /><PatientAppointments /></MemoryRouter>);
-    await screen.findByText('#PAST');
+    await screen.findByText('PAST');
     get.mockImplementation(async (url: string) => ({ success: true, data: url.startsWith('/appointments/my') ? { items: [...items, { id: 4, appointmentCode: 'NEW', status: 'Confirmed', slotDate: '2027-01-03', startTime: '09:00', endTime: '09:30' }] } : url === '/specialties' ? [] : { items: [] } }));
     fireEvent.click(screen.getByRole('button', { name: 'Xem lịch vừa đặt' }));
-    await screen.findByText('#NEW');
+    await screen.findByText('NEW');
     expect(screen.getByRole('button', { name: 'Sắp tới' })).toHaveClass('active');
-    expect(screen.queryByText('#PAST')).not.toBeInTheDocument();
+    expect(screen.queryByText('PAST')).not.toBeInTheDocument();
 });

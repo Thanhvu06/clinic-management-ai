@@ -1,3 +1,4 @@
+import { getGenderLabel } from '../../utils/genderLabels';
 import { formatVitalSummaryVi } from '../../utils/formatDecimalVi';
 import { toLocalDateString } from '../../utils/formatters';
 import { isConsultationInProgress } from '../../utils/doctorQueueStatus';
@@ -18,11 +19,9 @@ import {
 } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import styles from './DoctorQueue.module.css';
-
 export const DoctorQueue: React.FC = () => {
     const navigate = useNavigate();
     const { showConfirm, showToast } = useDialog();
-
     const todayStr = toLocalDateString();
     const [selectedDate, setSelectedDate] = useState(todayStr);
     const [queue, setQueue] = useState<DoctorQueueItemDto[]>([]);
@@ -191,7 +190,7 @@ export const DoctorQueue: React.FC = () => {
                     <div className={styles.text1}>{item.patientName}</div>
                     <div className={styles.patientMeta}>
                         {item.patientPhone}
-                        {item.patientGender === 'Male' ? ' • Nam' : item.patientGender === 'Female' ? ' • Nữ' : ''}
+                        {` • ${getGenderLabel(item.patientGender)}`}
                         {item.patientAge ? ` • ${item.patientAge} tuổi` : ''}
                     </div>
                 </div>
@@ -310,11 +309,6 @@ export const DoctorQueue: React.FC = () => {
                 searchTerm={searchTerm}
                 onSearchChange={setSearchTerm}
                 searchPlaceholder="Tìm theo tên bệnh nhân, mã khám, SĐT..."
-                onReset={() => {
-                    setStatusFilter('ALL');
-                    setSearchTerm('');
-                    setSelectedDate(todayStr);
-                }}
             >
                 <Segmented options={statusTabOptions} value={statusFilter} onChange={(val) => setStatusFilter(String(val))} />
             </FilterBar>
