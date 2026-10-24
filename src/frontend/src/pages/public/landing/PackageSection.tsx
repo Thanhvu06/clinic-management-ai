@@ -8,7 +8,7 @@ import styles from './PackageSection.module.css';
 export function PackageSection({ packages }: { packages: LandingPackage[] }) {
     if (!packages.length) return null;
     const featured = packages.find(pkg => pkg.name.toLocaleLowerCase('vi-VN').includes('tổng quát')) ?? packages[0];
-    const ordered = [featured, ...packages.filter(pkg => pkg.id !== featured.id)].slice(0, 6);
+    const ordered = [featured, ...packages.filter(pkg => pkg.id !== featured.id)].slice(0, 5);
     return <section id="packages" className={shared.section} aria-labelledby="landing-packages-title">
         <div className={shared.container}>
             <div className={shared.sectionHeader}><h2 id="landing-packages-title">Gói khám</h2><Link to="/health-packages">Tất cả gói khám</Link></div>

@@ -18,17 +18,18 @@ export function MedicineSection({ medicines }: { medicines: PublicMedicineDto[] 
             <div className={styles.grid}>{featured.map(medicine => <Link key={medicine.id} to={`/medicines/${medicine.id}`} className={styles.card}>
                 <div className={styles.imageArea}>{medicine.imageUrl
                     ? <img src={medicineImageUrl(medicine.imageUrl)} alt={`Thuốc ${medicine.name}`} loading="lazy" width={240} height={240} />
-                    : <Pill size={36} strokeWidth={1} aria-hidden="true" />}</div>
+                    : <Pill size={36} strokeWidth={1} aria-hidden="true" />}
+                    {(medicine.isPrescriptionRequired || medicine.availability === 'out_of_stock') && <div className={styles.labels}>
+                        {medicine.isPrescriptionRequired && <span className={styles.label}>Cần đơn bác sĩ</span>}
+                        {medicine.availability === 'out_of_stock' && <span className={styles.unavailable}>Hết hàng</span>}
+                    </div>}
+                </div>
                 <div className={styles.body}>
-                    <h3>{medicine.name}</h3>
+                    <h3 className={styles.name}>{medicine.name}</h3>
                     {(medicine.strength || medicine.dosageForm) && <p>{[medicine.strength, medicine.dosageForm].filter(Boolean).join(' · ')}</p>}
                     <div className={styles.price}>{medicine.unitPrice != null
                         ? <><strong>{new Intl.NumberFormat('vi-VN').format(medicine.unitPrice)} đ</strong><span> / {medicine.unit}</span></>
                         : <span>Liên hệ nhà thuốc</span>}</div>
-                    <div className={styles.labels}>
-                        {medicine.isPrescriptionRequired && <span className={styles.label}>Cần đơn bác sĩ</span>}
-                        {medicine.availability === 'out_of_stock' && <span className={styles.unavailable}>Hết hàng</span>}
-                    </div>
                 </div>
             </Link>)}</div>
         </div>
