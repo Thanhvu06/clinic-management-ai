@@ -1,3 +1,4 @@
+import { formatAuditTime as formatDateTime } from '../../utils/auditTime';
 import { auditActionLabels, auditEntityLabels, getAuditActionLabel, getAuditEntityLabel } from '../../utils/auditLogLabels';
 import React, { useState, useEffect, useCallback } from 'react';
 import axiosClient from '../../api/axiosClient';
@@ -56,17 +57,6 @@ export const AdminAuditLogs: React.FC = () => {
     useEffect(() => {
         fetchLogs();
     }, [fetchLogs]);
-
-    const formatDateTime = (dateString: string) => {
-        try {
-            return new Intl.DateTimeFormat('vi-VN', {
-                dateStyle: 'short',
-                timeStyle: 'medium'
-            }).format(new Date(dateString));
-        } catch {
-            return dateString;
-        }
-    };
 
     const getActionBadge = (action: string) => {
         const act = action.toUpperCase();

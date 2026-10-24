@@ -1115,7 +1115,7 @@ public class BillingService : IBillingService
         var endUtc = _dateTimeProvider.ConvertVietnamToUtc(todayVn.ToDateTime(TimeOnly.MaxValue));
 
         var unpaidCount = await invoices
-            .CountAsync(i => i.Status == InvoiceStatus.Unpaid && i.CreatedAtUtc >= startUtc && i.CreatedAtUtc <= endUtc, cancellationToken);
+            .CountAsync(i => i.Status == InvoiceStatus.Unpaid, cancellationToken);
 
         var paidCount = await invoices
             .CountAsync(i => i.Status == InvoiceStatus.Paid && i.PaidAtUtc.HasValue && i.PaidAtUtc >= startUtc && i.PaidAtUtc <= endUtc, cancellationToken);

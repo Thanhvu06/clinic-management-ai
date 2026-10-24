@@ -104,17 +104,17 @@ public static class DevelopmentDataSeeder
         var password = "Demo@12345";
 
         // 1. Seed Users
-        var adminId1 = await SeedUserAsync(userManager, "admin@cliniccare.local", "Quản trị viên", "0999999999", "Admin", password, dateTimeProvider);
-        var adminId2 = await SeedUserAsync(userManager, "admin.02@cliniccare.local", "Quản trị viên 2", "0980000002", "Admin", password, dateTimeProvider);
+        var adminId1 = await SeedUserAsync(userManager, "admin@cliniccare.local", "Nguyễn Hoàng Phúc", "0999999999", "Admin", password, dateTimeProvider);
+        var adminId2 = await SeedUserAsync(userManager, "admin.02@cliniccare.local", "Trần Quốc Huy", "0980000002", "Admin", password, dateTimeProvider);
 
-        var pharmacist = await SeedUserAsync(userManager, "pharmacist@cliniccare.local", "Dược sĩ Lâm Sàng", "0977777777", "Pharmacist", password, dateTimeProvider);
-        var technician = await SeedUserAsync(userManager, "technician@cliniccare.local", "Kỹ thuật viên cận lâm sàng", "0966666666", ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician, password, dateTimeProvider);
-        var labSupervisor = await SeedUserAsync(userManager, "labsupervisor@cliniccare.local", "Trưởng khoa Xét nghiệm Đỗ Thị Lan", "0966666601", ClinicManagement.Application.Common.Constants.RoleNames.LabSupervisor, password, dateTimeProvider);
-        var technician02 = await SeedUserAsync(userManager, "technician.02@cliniccare.local", "Kỹ thuật viên Phạm Quốc Bảo", "0966666602", ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician, password, dateTimeProvider);
+        var pharmacist = await SeedUserAsync(userManager, "pharmacist@cliniccare.local", "Lê Minh Tâm", "0977777777", "Pharmacist", password, dateTimeProvider);
+        var technician = await SeedUserAsync(userManager, "technician@cliniccare.local", "Nguyễn Thị Ánh", "0966666666", ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician, password, dateTimeProvider);
+        var labSupervisor = await SeedUserAsync(userManager, "labsupervisor@cliniccare.local", "Đỗ Thị Lan", "0966666601", ClinicManagement.Application.Common.Constants.RoleNames.LabSupervisor, password, dateTimeProvider);
+        var technician02 = await SeedUserAsync(userManager, "technician.02@cliniccare.local", "Phạm Quốc Bảo", "0966666602", ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician, password, dateTimeProvider);
 
-        var rec1 = await SeedUserAsync(userManager, "reception@cliniccare.local", "Lễ tân Nguyễn Thu Trang", "0900000002", "Receptionist", password, dateTimeProvider);
-        var rec2 = await SeedUserAsync(userManager, "letan.02@cliniccare.local", "Lễ tân Trần Mai Anh", "0981000002", "Receptionist", password, dateTimeProvider);
-        var rec3 = await SeedUserAsync(userManager, "letan.03@cliniccare.local", "Lễ tân Lê Hoàng Yến", "0981000003", "Receptionist", password, dateTimeProvider);
+        var rec1 = await SeedUserAsync(userManager, "reception@cliniccare.local", "Nguyễn Thu Trang", "0900000002", "Receptionist", password, dateTimeProvider);
+        var rec2 = await SeedUserAsync(userManager, "letan.02@cliniccare.local", "Trần Mai Anh", "0981000002", "Receptionist", password, dateTimeProvider);
+        var rec3 = await SeedUserAsync(userManager, "letan.03@cliniccare.local", "Lê Hoàng Yến", "0981000003", "Receptionist", password, dateTimeProvider);
 
         // 10 Doctors with clean FullName (without duplicated academic titles) and exact specialty mappings
         var doctorDefs = new[]
@@ -371,12 +371,12 @@ public static class DevelopmentDataSeeder
         var packages = await db.HealthPackages.ToListAsync();
 
         // 9. Health Package Registrations
-        if (!await db.HealthPackageRegistrations.AnyAsync(r => r.RegistrationCode.StartsWith("PKG-REG-")) && packages.Count > 0 && patients.Count > 0)
+        if (!await db.HealthPackageRegistrations.AnyAsync(r => r.RegistrationCode.StartsWith("REG-")) && packages.Count > 0 && patients.Count > 0)
         {
             db.HealthPackageRegistrations.AddRange(
                 new HealthPackageRegistration
                 {
-                    RegistrationCode = "PKG-REG-001",
+                    RegistrationCode = $"REG-{today.AddDays(-2):yyMMdd}-SEED0001",
                     PatientId = patients[0].Id,
                     HealthPackageId = packages[0].Id,
                     PreferredDate = today.AddDays(3),
@@ -387,7 +387,7 @@ public static class DevelopmentDataSeeder
                 },
                 new HealthPackageRegistration
                 {
-                    RegistrationCode = "PKG-REG-002",
+                    RegistrationCode = $"REG-{today.AddDays(-3):yyMMdd}-SEED0002",
                     PatientId = patients[1 % patients.Count].Id,
                     HealthPackageId = packages[1 % packages.Count].Id,
                     PreferredDate = today.AddDays(5),
@@ -400,8 +400,8 @@ public static class DevelopmentDataSeeder
                 },
                 new HealthPackageRegistration
                 {
-                    RegistrationCode = "PKG-REG-003",
-                    PatientId = patients[2 % patients.Count].Id,
+                    RegistrationCode = $"REG-{today.AddDays(-4):yyMMdd}-SEED0003",
+                    PatientId = patients.First(p => p.Gender == Gender.Female).Id,
                     HealthPackageId = packages[3 % packages.Count].Id,
                     PreferredDate = today.AddDays(2),
                     ContactPhone = "0983000002",
@@ -462,7 +462,7 @@ public static class DevelopmentDataSeeder
                     DoctorId = completedAppts[0].DoctorId,
                     Status = PrescriptionStatus.Issued,
                     Notes = "Uống thuốc sau ăn, uống nhiều nước ấm. Nghỉ ngơi hợp lý.",
-                    CreatedAt = seedTime.AddHours(1)
+                    CreatedAt = RealisticDevelopmentSeed.At(dateTimeProvider, completedAppts[0].AppointmentDate, completedAppts[0].EndTime.Hour, completedAppts[0].EndTime.Minute)
                 };
                 db.Prescriptions.Add(pres1);
                 await db.SaveChangesAsync();
@@ -480,7 +480,7 @@ public static class DevelopmentDataSeeder
                     DoctorId = completedAppts[1].DoctorId,
                     Status = PrescriptionStatus.Issued,
                     Notes = "Kiêng đồ cay nóng, bia rượu và chất kích thích.",
-                    CreatedAt = seedTime.AddHours(1)
+                    CreatedAt = RealisticDevelopmentSeed.At(dateTimeProvider, completedAppts[1].AppointmentDate, completedAppts[1].EndTime.Hour, completedAppts[1].EndTime.Minute)
                 };
                 db.Prescriptions.Add(pres2);
                 await db.SaveChangesAsync();
@@ -490,7 +490,7 @@ public static class DevelopmentDataSeeder
                     new PrescriptionItem { PrescriptionId = pres2.Id, MedicineId = med12.Id, Quantity = 15, Dosage = "1 gói / lần", Frequency = "3 lần / ngày khi đau hoặc sau ăn 1h", DurationDays = 5, Instructions = "Lắc kỹ trước khi dùng" }
                 );
                 await db.SaveChangesAsync();
-                await RealisticDevelopmentSeed.DispenseAsync(db, dateTimeProvider, pres2, pharmacistId, seedTime.AddHours(2));
+                await RealisticDevelopmentSeed.DispenseAsync(db, dateTimeProvider, pres2, pharmacistId, pres2.CreatedAt.AddMinutes(30));
 
                 await db.SaveChangesAsync();
                 logger.LogInformation("Sample Prescriptions seeded.");
@@ -676,7 +676,11 @@ public static class DevelopmentDataSeeder
 
         await MedicineBatchDevelopmentSeed.SeedAsync(db, dateTimeProvider, pharmacist.Id,
             config?.GetValue<bool>("DemoSeed:Enabled") == true);
-        if (seedAppointments) await RealisticDevelopmentSeed.SeedAsync(db, dateTimeProvider, rec1.Id, technician.Id, labSupervisor.Id, pharmacist.Id);
+        if (seedAppointments)
+        {
+            await RealisticDevelopmentSeed.SeedAsync(db, dateTimeProvider, rec1.Id, technician.Id, labSupervisor.Id, pharmacist.Id);
+            await DemoClinicalDevelopmentSeed.SeedAsync(db, dateTimeProvider, rec1.Id, technician.Id, labSupervisor.Id, pharmacist.Id);
+        }
         logger.LogInformation("Development Data Seeding completed.");
     }
 

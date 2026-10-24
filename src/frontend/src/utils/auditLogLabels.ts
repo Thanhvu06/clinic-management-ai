@@ -1,4 +1,16 @@
 export const auditActionLabels: Readonly<Record<string, string>> = {
+    CreateAppointment: 'Đặt lịch hẹn',
+    ConfirmAppointment: 'Xác nhận lịch hẹn',
+    CompleteConsultation: 'Hoàn tất khám',
+    InitializeClinicalDemo: 'Khởi tạo dữ liệu lâm sàng',
+    CheckInPatient: 'Tiếp nhận bệnh nhân',
+    CreateDiagnosticOrder: 'Chỉ định cận lâm sàng',
+    SubmitDiagnosticResults: 'Gửi kết quả duyệt',
+    ReviewDiagnosticResults: 'Công bố kết quả',
+    CreateInvoice: 'Lập hóa đơn',
+    ReceivePayment: 'Thu tiền',
+    IssuePrescription: 'Kê đơn thuốc',
+    DispensePrescription: 'Cấp thuốc',
     CREATE_INVOICE: 'Lập hóa đơn',
     PROCESS_PAYMENT: 'Thu tiền',
     CANCEL_INVOICE: 'Hủy hóa đơn',
@@ -28,6 +40,8 @@ export const auditActionLabels: Readonly<Record<string, string>> = {
 };
 
 export const auditEntityLabels: Readonly<Record<string, string>> = {
+    Appointment: 'Lịch hẹn',
+    PatientVisit: 'Lượt khám',
     Payment: 'Thanh toán',
     Invoice: 'Hóa đơn',
     Specialty: 'Chuyên khoa',

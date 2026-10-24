@@ -45,6 +45,7 @@ public class ScheduleService : IScheduleService
                 WorkDate = ws.WorkDate,
                 StartTime = ws.StartTime,
                 EndTime = ws.EndTime,
+                SlotCount = _dbContext.AppointmentSlots.Count(slot => slot.DoctorId == ws.DoctorId && slot.SlotDate == ws.WorkDate && slot.StartTime >= ws.StartTime && slot.EndTime <= ws.EndTime),
                 IsActive = ws.IsActive
             })
             .ToListAsync();

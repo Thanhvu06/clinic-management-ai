@@ -58,7 +58,7 @@ import { DiagnosticOrderPrint } from './pages/doctor/DiagnosticOrderPrint';
 import { TechnicianDashboard } from './pages/technician/TechnicianDashboard';
 import { TechnicianOrderDetail } from './pages/technician/TechnicianOrderDetail';
 import { SpecimenLabelPrint } from './pages/technician/SpecimenLabelPrint';
-import { TechnicianVerificationQueue } from './pages/technician/TechnicianVerificationQueue';
+import { VerificationQueueRoute } from './layouts/VerificationQueueRoute';
 import { DiagnosticResultPrint } from './pages/common/DiagnosticResultPrint';
 import { LabSupervisorDashboard } from './pages/lab/LabSupervisorDashboard';
 import { LabTurnaroundReport } from './pages/lab/LabTurnaroundReport';
@@ -67,7 +67,7 @@ import { DoctorDiagnosticVerification } from './pages/doctor/DoctorDiagnosticVer
 import { PatientDiagnosticResults } from './pages/patient/PatientDiagnosticResults';
 import { ChatProvider } from './contexts/ChatContext';
 import { DialogProvider } from './contexts/DialogContext';
-import { MedicalChatWidget } from './components/MedicalChatWidget';
+import { PatientChatBoundary } from './layouts/PatientChatBoundary';
 import { Forbidden } from './pages/Forbidden';
 
 function App() {
@@ -77,7 +77,7 @@ function App() {
                 <ChatProvider>
                     <Router>
                         <ChatRouteHistory>
-                        <MedicalChatWidget />
+                        <PatientChatBoundary />
                         <Routes>
                             {/* Public Website Layout (No Sidebar) */}
                             <Route element={<PublicLayout />}>
@@ -185,9 +185,9 @@ function App() {
                                     <Route element={<RoleRoute roles={['LabSupervisor', 'DiagnosticTechnician', 'Doctor']} />}>
                                         <Route path="/diagnostic-verification/orders/:id/result-print" element={<VerificationResultPrint />} />
                                     </Route>
+                                    <Route element={<RoleRoute roles={['LabSupervisor', 'DiagnosticTechnician']} />}><Route path="/diagnostics/verification" element={<VerificationQueueRoute />} /></Route>
                                     <Route element={<RoleRoute roles={['DiagnosticTechnician']} />}>
                                         <Route path="/diagnostics" element={<TechnicianDashboard />} />
-                                        <Route path="/diagnostics/verification" element={<TechnicianVerificationQueue />} />
                                         <Route path="/diagnostics/orders/:id" element={<TechnicianOrderDetail />} />
                                         <Route path="/diagnostics/orders/:id/labels" element={<SpecimenLabelPrint />} />
                                         <Route path="/diagnostics/orders/:id/result-print" element={<DiagnosticResultPrint />} />

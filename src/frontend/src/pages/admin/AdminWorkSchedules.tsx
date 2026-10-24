@@ -3,8 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { Plus, Clock, Edit, CheckCircle, XCircle, PlayCircle } from 'lucide-react';
-import { Alert, Button, DatePicker, Form, Input, Modal, Select, Space, Tag, Typography } from 'antd';
-import dayjs from 'dayjs';
+import { Alert, Button, Form, Input, Modal, Select, Space, Tag, Typography } from 'antd';
 import { PageHeader, FilterBar, DataTable, EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './AdminWorkSchedules.module.css';
 import { useDialog } from '../../contexts/DialogContext';
@@ -16,7 +15,7 @@ interface WorkSchedule {
     startTime: string;
     endTime: string;
     isActive: boolean;
-    slots?: any[]; // The backend doesn't return slots in WorkScheduleDto currently.
+    slotCount: number;
 }
 
 // Date-only API values represent a local calendar day, not a UTC timestamp.
@@ -203,15 +202,15 @@ export const AdminWorkSchedules: React.FC = () => {
                 : loading ? <LoadingState message="Đang tải lịch làm việc..." />
                 : loadError ? <InlineError message={loadError} onRetry={fetchSchedules} />
                 : schedules.length === 0 ? <EmptyState title="Bác sĩ chưa có lịch làm việc nào." /> : <>
-                    <Alert className={styles.scheduleSlotHint} type="info" title="Cần tạo khung giờ để bệnh nhân có thể đặt lịch." showIcon />
+                    {schedules.some(schedule => (schedule.slotCount ?? 0) === 0) && <Alert className={styles.scheduleSlotHint} type="info" title="Cần tạo khung giờ để bệnh nhân có thể đặt lịch." showIcon />}
                     <div className={styles.scheduleTable}>
                         <DataTable data={schedules} keyExtractor={schedule => schedule.id} columns={[
                             { header: 'Ngày', accessor: schedule => <><Typography.Text strong>{formatDate(schedule.workDate)}</Typography.Text><div className={styles.scheduleDay}>{getDayOfWeek(schedule.workDate)}</div></> },
                             { header: 'Ca làm việc', accessor: schedule => <div className={styles.scheduleTime}><Clock size={16} /><span>{schedule.startTime.substring(0, 5)} - {schedule.endTime.substring(0, 5)}</span></div> },
                             { header: 'Trạng thái', accessor: schedule => <Tag color={schedule.isActive ? 'success' : 'error'}>{schedule.isActive ? 'Đang hoạt động' : 'Đã khóa'}</Tag> },
                             { header: 'Thao tác', align: 'right', accessor: schedule => <Space wrap>
-                                <Button size="small" type="primary" icon={<PlayCircle size={14} />} loading={actionLoading === schedule.id} disabled={actionLoading === schedule.id}
-                                    title="Tự động chia thời gian thành các khung giờ khám" onClick={() => handleGenerateSlots(schedule.id)}>Tạo khung giờ</Button>
+                                {(schedule.slotCount ?? 0) === 0 && <Button size="small" type="primary" icon={<PlayCircle size={14} />} disabled={actionLoading === schedule.id}
+                                    title="Tự động chia thời gian thành các khung giờ khám" onClick={() => handleGenerateSlots(schedule.id)}>{actionLoading === schedule.id ? 'Đang tạo...' : 'Tạo khung giờ'}</Button>}
                                 <Button size="small" icon={<Edit size={14} />} onClick={() => { setFormError(''); setModal({ isOpen: true, isEdit: true, data: { ...schedule } }); }}>Sửa</Button>
                                 <Button size="small" danger={schedule.isActive} icon={schedule.isActive ? <XCircle size={14} /> : <CheckCircle size={14} />}
                                     onClick={() => handleToggleStatus(schedule.id, schedule.isActive)}>{schedule.isActive ? 'Khóa' : 'Mở khóa'}</Button>
@@ -224,8 +223,7 @@ export const AdminWorkSchedules: React.FC = () => {
                 {formError && <Alert className={styles.scheduleFormError} type="error" title={formError} showIcon />}
                 <Form layout="vertical" onFinish={handleFormSubmit}>
                     <Form.Item label="Ngày làm việc (*)" htmlFor="scheduleWorkDate">
-                        <DatePicker id="scheduleWorkDate" className={styles.scheduleDatePicker} format="YYYY-MM-DD" value={modal.data.workDate ? dayjs(modal.data.workDate) : null}
-                            onChange={value => setModal({ ...modal, data: { ...modal.data, workDate: value?.format('YYYY-MM-DD') || '' } })} inputReadOnly />
+                        <Input id="scheduleWorkDate" type="date" className={styles.scheduleDatePicker} value={modal.data.workDate || ''} onChange={event => setModal({ ...modal, data: { ...modal.data, workDate: event.target.value } })} />
                     </Form.Item>
                     <div className={styles.scheduleTimeFields}>
                         <Form.Item label="Từ giờ (*)" htmlFor="scheduleStartTime"><Input id="scheduleStartTime" type="time" required value={modal.data.startTime?.substring(0, 5) || ''}

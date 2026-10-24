@@ -446,7 +446,7 @@ public class ReceptionService : IReceptionService
             AppointmentsToday = appointmentsToday.Count,
             PendingAppointmentsToday = appointmentsToday.Count(a => a.Status == AppointmentStatus.Pending),
             ConfirmedAppointmentsToday = appointmentsToday.Count(a => a.Status == AppointmentStatus.Confirmed),
-            CompletedAppointmentsToday = appointmentsToday.Count(a => a.Status == AppointmentStatus.Completed),
+            CompletedAppointmentsToday = await ReceptionCompletedVisits.CountAsync(_dbContext, apptQuery, today, facilityId, isGlobalAdmin, allowedFacilityIds),
             PendingChangeRequests = pendingChangeRequests,
             UnbilledCount = unbilledCount
         };
