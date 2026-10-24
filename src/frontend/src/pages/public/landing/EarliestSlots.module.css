@@ -2,7 +2,7 @@
 .heading { padding: var(--cc-space-md) var(--cc-space-lg); border-bottom: 1px solid var(--cc-color-border); }
 .heading h2 { margin: 0; color: var(--cc-color-text-dark); font-size: 1.1rem; font-weight: 600; }
 .heading p { margin: var(--cc-space-xxs) 0 0; font-size: .85rem; color: var(--cc-color-text-secondary); }
-.slots { list-style: none; margin: 0; padding: 0 var(--cc-space-lg); max-height: 310px; overflow-y: auto; }
+.slots { list-style: none; margin: 0; padding: 0 var(--cc-space-lg); }
 .slot { display: flex; align-items: center; justify-content: space-between; gap: var(--cc-space-sm); padding: var(--cc-space-sm) 0; }
 .slot + .slot { border-top: 1px solid var(--cc-color-border-light); }
 .slot > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -11,6 +11,7 @@
 .slot time { font-size: .85rem; font-variant-numeric: tabular-nums; color: var(--cc-color-public-accent); }
 .slot a { flex-shrink: 0; border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-sm); padding: var(--cc-space-xs); font-size: .8rem; font-weight: 600; }
 .slot a:hover { border-color: var(--cc-color-public-accent); }
+.more { display: block; padding: var(--cc-space-sm) var(--cc-space-lg); border-top: 1px solid var(--cc-color-border-light); font-size: .85rem; font-weight: 600; }
 .empty, .skeleton { padding: var(--cc-space-lg); }
 .empty p { margin: 0 0 var(--cc-space-md); color: var(--cc-color-text-secondary); }
-@media (max-width: 600px) { .heading { padding: var(--cc-space-md); } .slots { padding: 0 var(--cc-space-md); } }
+@media (max-width: 600px) { .heading { padding: var(--cc-space-md); } .slots { padding: 0 var(--cc-space-md); } .more { padding-inline: var(--cc-space-md); } }

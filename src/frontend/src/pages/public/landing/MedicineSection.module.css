@@ -1,15 +1,16 @@
 .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--cc-space-sm); }
 .card { min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--cc-color-public-surface); border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); color: var(--cc-color-text); }
 .card:hover { border-color: var(--cc-color-public-accent); color: var(--cc-color-text); }
-.imageArea { aspect-ratio: 1; background: var(--cc-color-public-surface); padding: var(--cc-space-md); display: flex; align-items: center; justify-content: center; color: var(--cc-color-text-muted); }
+.imageArea { position: relative; aspect-ratio: 1; background: var(--cc-color-public-surface); padding: var(--cc-space-md); display: flex; align-items: center; justify-content: center; color: var(--cc-color-text-muted); }
 .imageArea img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .body { padding: var(--cc-space-md); padding-top: 0; display: flex; flex: 1; flex-direction: column; gap: var(--cc-space-xs); }
 .body h3 { margin: 0; font-weight: 600; font-size: .95rem; line-height: 1.45; color: var(--cc-color-text-dark); }
+.name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; min-height: calc(2 * 1.45em); }
 .body p { margin: 0; font-size: .8rem; color: var(--cc-color-text-secondary); }
 .price { margin-top: auto; padding-top: var(--cc-space-xs); font-size: .8rem; color: var(--cc-color-text-secondary); font-variant-numeric: tabular-nums; }
 .price strong { font-size: 1rem; color: var(--cc-color-public-accent); font-weight: 650; }
-.labels { display: flex; flex-wrap: wrap; gap: var(--cc-space-xxs); }
-.label, .unavailable { font-size: .7rem; padding: 2px var(--cc-space-xxs); border-radius: var(--cc-radius-sm); border: 1px solid var(--cc-color-border); color: var(--cc-color-text-secondary); }
+.labels { position: absolute; top: var(--cc-space-xs); left: var(--cc-space-xs); right: var(--cc-space-xs); display: flex; flex-wrap: wrap; gap: var(--cc-space-xxs); }
+.label, .unavailable { background: var(--cc-color-public-surface); font-size: .7rem; line-height: 1.4; white-space: nowrap; padding: 2px var(--cc-space-xxs); border-radius: var(--cc-radius-sm); border: 1px solid var(--cc-color-border); color: var(--cc-color-text-secondary); }
 .unavailable { color: var(--cc-color-danger); border-color: var(--cc-color-danger); }
 @media (max-width: 1000px) and (min-width: 601px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 600px) {

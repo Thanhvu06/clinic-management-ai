@@ -6,7 +6,7 @@
 .hero { position: relative; isolation: isolate; padding: calc(var(--cc-space-xl) * 1.5) 0 var(--cc-space-lg); border-bottom: 1px solid var(--cc-color-border); }
 .heroImage, .overlay { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; }
 .heroImage { object-fit: cover; object-position: center 46%; }
-.overlay { background: var(--cc-color-public-surface); opacity: .9; }
+.overlay { background: linear-gradient(90deg, color-mix(in srgb, var(--cc-color-public-surface) 94%, transparent) 0%, color-mix(in srgb, var(--cc-color-public-surface) 86%, transparent) 40%, color-mix(in srgb, var(--cc-color-public-surface) 35%, transparent) 70%, color-mix(in srgb, var(--cc-color-public-surface) 15%, transparent) 100%); }
 .heroGrid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: center; gap: calc(var(--cc-space-xl) * 1.5); }
 .heroCopy { padding: var(--cc-space-lg) 0; min-width: 0; }
 .heroCopy h1 { max-width: 540px; margin: 0; font-size: clamp(1.9rem, 3vw, 2.6rem); letter-spacing: -.035em; line-height: 1.18; font-weight: 650; color: var(--cc-color-text-dark); }
@@ -18,7 +18,10 @@
 .quickLinks > * + * { border-left: 1px solid var(--cc-color-border); }
 .quickLinks button { border: 0; border-left: 1px solid var(--cc-color-border); border-radius: 0; background: transparent; cursor: pointer; font-family: inherit; }
 .quickLinks > *:hover { background: var(--cc-color-public-bg); color: var(--cc-color-public-accent-hover); }
-@media (max-width: 900px) { .heroGrid { grid-template-columns: 1fr; gap: var(--cc-space-lg); } .heroCopy { padding: 0; } .heroCopy h1 { max-width: 620px; } .hero { padding-top: var(--cc-space-xl); } .infoContent { gap: var(--cc-space-md); } }
+@media (max-width: 900px) {
+    .overlay { background: linear-gradient(180deg, color-mix(in srgb, var(--cc-color-public-surface) 72%, transparent) 0%, color-mix(in srgb, var(--cc-color-public-surface) 82%, transparent) 260px, var(--cc-color-public-surface) 420px); }
+    .heroGrid { grid-template-columns: 1fr; gap: var(--cc-space-lg); } .heroCopy { padding: 0; } .heroCopy h1 { max-width: 620px; } .hero { padding-top: var(--cc-space-xl); } .infoContent { gap: var(--cc-space-md); }
+}
 @media (max-width: 600px) {
     .infoContent { justify-content: space-between; flex-wrap: wrap; gap: var(--cc-space-xxs) var(--cc-space-sm); padding-block: var(--cc-space-xs); font-size: .75rem; }
     .infoContent .address { display: none; }

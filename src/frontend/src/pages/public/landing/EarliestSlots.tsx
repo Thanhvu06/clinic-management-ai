@@ -8,6 +8,8 @@ import { slotLabel, slotRange, slotTimestamp } from './slotHelpers';
 import type { DoctorSlot, LandingDoctor, LandingSlot } from './landingTypes';
 import styles from './EarliestSlots.module.css';
 
+const VISIBLE_SLOTS = 4;
+
 export function EarliestSlots({ doctors, loading }: { doctors: LandingDoctor[]; loading: boolean }) {
     const [result, setResult] = useState<{ doctors: LandingDoctor[]; items: DoctorSlot[] }>();
 
@@ -38,7 +40,7 @@ export function EarliestSlots({ doctors, loading }: { doctors: LandingDoctor[]; 
                 <p>Trong 7 ngày tới</p>
             </div>
             {busy ? <div className={styles.skeleton} role="status" aria-label="Đang tải lịch trống"><Skeleton active paragraph={{ rows: 4 }} title={false} /></div>
-                : result?.items.length ? <ul className={styles.slots}>{result.items.map(({ doctor, slot }) => {
+                : result?.items.length ? <><ul className={styles.slots}>{result.items.slice(0, VISIBLE_SLOTS).map(({ doctor, slot }) => {
                     const params = new URLSearchParams({ doctorId: String(doctor.id), date: slot.slotDate });
                     if (doctor.specialtyId) params.set('specialtyId', String(doctor.specialtyId));
                     return <li key={doctor.id} className={styles.slot}>
@@ -48,7 +50,8 @@ export function EarliestSlots({ doctors, loading }: { doctors: LandingDoctor[]; 
                         </div>
                         <Link to={`/patient/book?${params}`}>Đặt giờ này</Link>
                     </li>;
-                })}</ul> : <div className={styles.empty}>
+                })}</ul>
+                {result.items.length > VISIBLE_SLOTS && <Link className={styles.more} to="/patient/book">Xem thêm lịch trống</Link>}</> : <div className={styles.empty}>
                     <p>Hiện chưa có lịch trống trong 7 ngày tới</p>
                     <Link to="/patient/book">Đặt lịch khám</Link>
                 </div>}
