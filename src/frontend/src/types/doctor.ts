@@ -39,8 +39,15 @@ export interface DoctorQueueItemDto {
     chiefComplaint?: string | null;
 }
 
+export interface DoctorDashboardShiftDto {
+    shiftName: string;
+    startTime: string;
+    endTime: string;
+}
+
 export interface DoctorDashboardDto {
     currentShift?: DoctorShiftSummaryDto | null;
+    todayShifts?: DoctorDashboardShiftDto[];
     kpis: DoctorDashboardKpisDto;
     nextPatient?: DoctorQueueItemDto | null;
     todayQueue: DoctorQueueItemDto[];

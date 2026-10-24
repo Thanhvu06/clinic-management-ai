@@ -114,7 +114,7 @@ describe('DoctorDashboard Component', () => {
         });
 
         // KPIs
-        expect(screen.getByText('· 12 ca hôm nay')).toBeInTheDocument(); // Tổng số ca hôm nay
+        expect(screen.queryByText('· 12 ca hôm nay')).not.toBeInTheDocument(); // 12 là số lịch hẹn, không phải số ca trực
         expect(screen.getByText('6')).toBeInTheDocument();  // Đã hoàn tất
 
         // Next patient banner and queue table

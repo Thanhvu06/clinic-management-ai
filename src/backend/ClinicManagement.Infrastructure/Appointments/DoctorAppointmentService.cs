@@ -158,8 +158,8 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             VisitCode = v.VisitCode,
             QueueNumber = v.QueueNumber,
             AppointmentDate = targetDate,
-            StartTime = TimeOnly.FromDateTime(v.CheckedInAtUtc),
-            EndTime = TimeOnly.FromDateTime(v.CheckedInAtUtc).AddMinutes(15),
+            StartTime = TimeOnly.FromDateTime(_dateTimeProvider.ConvertUtcToVietnam(v.CheckedInAtUtc)),
+            EndTime = TimeOnly.FromDateTime(_dateTimeProvider.ConvertUtcToVietnam(v.CheckedInAtUtc)).AddMinutes(15),
             PatientId = v.PatientId,
             PatientName = v.Patient?.FullName ?? "Bệnh nhân",
             PatientPhone = v.Patient?.PhoneNumber ?? string.Empty,
@@ -267,21 +267,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             .OrderBy(ws => ws.StartTime)
             .ToListAsync();
 
-        string currentShift = "Không có ca trực";
-        if (activeSchedules.Count > 0)
-        {
-            var matchingShift = activeSchedules.FirstOrDefault(ws => ws.StartTime <= currentTime && ws.EndTime >= currentTime);
-            if (matchingShift != null)
-            {
-                currentShift = matchingShift.StartTime < new TimeOnly(12, 0)
-                    ? $"Ca sáng ({matchingShift.StartTime:HH\\:mm} - {matchingShift.EndTime:HH\\:mm})"
-                    : $"Ca chiều ({matchingShift.StartTime:HH\\:mm} - {matchingShift.EndTime:HH\\:mm})";
-            }
-            else
-            {
-                currentShift = string.Join(", ", activeSchedules.Select(s => $"{s.StartTime:HH\\:mm} - {s.EndTime:HH\\:mm}"));
-            }
-        }
+        var currentShift = DoctorDashboardShifts.DescribeCurrent(activeSchedules, currentTime);
 
         var nextPatient = queue.FirstOrDefault(q => DoctorQueueStatus.IsConsultationInProgress(q.Status))
                        ?? queue.FirstOrDefault(q => q.Status == nameof(AppointmentStatus.CheckedIn))
@@ -337,6 +323,7 @@ public class DoctorAppointmentService : IDoctorAppointmentService
             CompletedTodayCount = completed,
             NoShowTodayCount = noShow,
             CurrentShift = currentShift,
+            TodayShifts = DoctorDashboardShifts.ToDtos(activeSchedules),
             NextPatient = nextPatient,
             Queue = queue,
             UpcomingAppointments = upcomingList
@@ -1751,8 +1738,8 @@ public class DoctorAppointmentService : IDoctorAppointmentService
                 DoctorId = doctor.Id,
                 SpecialtyId = visit.Department?.SpecialtyId ?? 0,
                 AppointmentDate = visit.VisitDate,
-                StartTime = TimeOnly.FromDateTime(visit.CheckedInAtUtc),
-                EndTime = TimeOnly.FromDateTime(visit.CheckedInAtUtc).AddMinutes(15),
+                StartTime = TimeOnly.FromDateTime(_dateTimeProvider.ConvertUtcToVietnam(visit.CheckedInAtUtc)),
+                EndTime = TimeOnly.FromDateTime(_dateTimeProvider.ConvertUtcToVietnam(visit.CheckedInAtUtc)).AddMinutes(15),
                 Reason = visit.ChiefComplaint,
                 Status = visit.Status.ToString(),
                 PatientName = patientName,

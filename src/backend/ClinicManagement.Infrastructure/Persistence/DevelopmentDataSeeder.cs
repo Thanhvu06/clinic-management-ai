@@ -441,7 +441,7 @@ public static class DevelopmentDataSeeder
                     BalanceAfter = m.StockQuantity,
                     Reason = "Nhập kho ban đầu hệ thống",
                     ActorUserId = pharmacistId,
-                    CreatedAt = seedTime.AddDays(-10)
+                    CreatedAt = seedTime.AddDays(-40)
                 });
             }
             await db.SaveChangesAsync();
@@ -478,11 +478,9 @@ public static class DevelopmentDataSeeder
                     AppointmentId = completedAppts[1].Id,
                     PatientId = completedAppts[1].PatientId,
                     DoctorId = completedAppts[1].DoctorId,
-                    Status = PrescriptionStatus.Dispensed,
+                    Status = PrescriptionStatus.Issued,
                     Notes = "Kiêng đồ cay nóng, bia rượu và chất kích thích.",
-                    CreatedAt = seedTime.AddHours(1),
-                    DispensedAt = seedTime.AddHours(2),
-                    DispensedByUserId = pharmacistId
+                    CreatedAt = seedTime.AddHours(1)
                 };
                 db.Prescriptions.Add(pres2);
                 await db.SaveChangesAsync();
@@ -491,6 +489,8 @@ public static class DevelopmentDataSeeder
                     new PrescriptionItem { PrescriptionId = pres2.Id, MedicineId = med4.Id, Quantity = 14, Dosage = "1 viên / lần", Frequency = "1 lần / ngày trước ăn sáng 30 phút", DurationDays = 14, Instructions = "Uống trước bữa ăn" },
                     new PrescriptionItem { PrescriptionId = pres2.Id, MedicineId = med12.Id, Quantity = 15, Dosage = "1 gói / lần", Frequency = "3 lần / ngày khi đau hoặc sau ăn 1h", DurationDays = 5, Instructions = "Lắc kỹ trước khi dùng" }
                 );
+                await db.SaveChangesAsync();
+                await RealisticDevelopmentSeed.DispenseAsync(db, dateTimeProvider, pres2, pharmacistId, seedTime.AddHours(2));
 
                 await db.SaveChangesAsync();
                 logger.LogInformation("Sample Prescriptions seeded.");
@@ -676,7 +676,7 @@ public static class DevelopmentDataSeeder
 
         await MedicineBatchDevelopmentSeed.SeedAsync(db, dateTimeProvider, pharmacist.Id,
             config?.GetValue<bool>("DemoSeed:Enabled") == true);
-        if (seedAppointments) await RealisticDevelopmentSeed.SeedAsync(db, dateTimeProvider, rec1.Id, technician.Id, labSupervisor.Id);
+        if (seedAppointments) await RealisticDevelopmentSeed.SeedAsync(db, dateTimeProvider, rec1.Id, technician.Id, labSupervisor.Id, pharmacist.Id);
         logger.LogInformation("Development Data Seeding completed.");
     }
 
@@ -746,24 +746,28 @@ public static class DevelopmentDataSeeder
                     morningSchedule.IsActive = true;
                 }
 
-                // Afternoon Shift (13:30 - 17:00)
+                // Afternoon Shift (13:30 - 17:00); Saturday only has the morning shift
+                var hasAfternoonShift = date.DayOfWeek != DayOfWeek.Saturday;
                 var afternoonKey = (doc.Id, date, new TimeOnly(13, 30), new TimeOnly(17, 0));
-                if (!scheduleLookup.TryGetValue(afternoonKey, out var afternoonSchedule))
+                if (hasAfternoonShift)
                 {
-                    afternoonSchedule = new DoctorWorkSchedule
+                    if (!scheduleLookup.TryGetValue(afternoonKey, out var afternoonSchedule))
                     {
-                        DoctorId = doc.Id,
-                        WorkDate = date,
-                        StartTime = new TimeOnly(13, 30),
-                        EndTime = new TimeOnly(17, 0),
-                        IsActive = true
-                    };
-                    db.DoctorWorkSchedules.Add(afternoonSchedule);
-                    scheduleLookup[afternoonKey] = afternoonSchedule;
-                }
-                else if (!afternoonSchedule.IsActive)
-                {
-                    afternoonSchedule.IsActive = true;
+                        afternoonSchedule = new DoctorWorkSchedule
+                        {
+                            DoctorId = doc.Id,
+                            WorkDate = date,
+                            StartTime = new TimeOnly(13, 30),
+                            EndTime = new TimeOnly(17, 0),
+                            IsActive = true
+                        };
+                        db.DoctorWorkSchedules.Add(afternoonSchedule);
+                        scheduleLookup[afternoonKey] = afternoonSchedule;
+                    }
+                    else if (!afternoonSchedule.IsActive)
+                    {
+                        afternoonSchedule.IsActive = true;
+                    }
                 }
 
                 // Morning slots (7 slots: 08:00 to 11:30, 30m each)
@@ -789,7 +793,7 @@ public static class DevelopmentDataSeeder
 
                 // Afternoon slots (7 slots: 13:30 to 17:00, 30m each)
                 var aStart = new TimeOnly(13, 30);
-                for (int s = 0; s < 7; s++)
+                for (int s = 0; hasAfternoonShift && s < 7; s++)
                 {
                     var slotKey = (doc.Id, date, aStart);
                     if (!slotLookup.TryGetValue(slotKey, out var slot))

@@ -15,9 +15,17 @@ public class DoctorDashboardDto
     public int CompletedTodayCount { get; set; }
     public int NoShowTodayCount { get; set; }
     public string CurrentShift { get; set; } = string.Empty;
+    public List<DoctorDashboardShiftDto> TodayShifts { get; set; } = new();
     public DoctorQueueItemDto? NextPatient { get; set; }
     public List<DoctorQueueItemDto> Queue { get; set; } = new();
     public List<DoctorQueueItemDto> UpcomingAppointments { get; set; } = new();
+}
+
+public class DoctorDashboardShiftDto
+{
+    public string ShiftName { get; set; } = string.Empty;
+    public TimeOnly StartTime { get; set; }
+    public TimeOnly EndTime { get; set; }
 }
 
 public class DoctorQueueItemDto
