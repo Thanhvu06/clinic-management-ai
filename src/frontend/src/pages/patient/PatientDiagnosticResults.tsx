@@ -43,7 +43,7 @@ export const PatientDiagnosticResults: React.FC = () => {
         <Collapse defaultActiveKey={[String(orders[0].id)]} items={orders.map(order => {
             const reviewed = !!order.reviewedAtUtc;
             const complete = order.items.length > 0 && order.items.every(item => !!item.result);
-            return { key: String(order.id), label: <div className={styles.orderHeading}><strong>{order.orderCode}</strong><span>Khám: #{order.appointmentCode} • Bác sĩ: {order.orderingDoctorName} ({order.specialtyName || '---'})</span></div>, extra: <div className={styles.orderStatus}><Tag color={reviewed ? 'success' : complete ? 'processing' : 'warning'}>{reviewed ? 'Đã có kết luận bác sĩ' : complete ? 'Đã có kết quả' : 'Đang chờ kết quả'}</Tag><span>{new Date(order.orderedAtUtc).toLocaleDateString('vi-VN')}</span></div>, children: <div className={styles.results}>
+            return { key: String(order.id), label: <div className={styles.orderHeading}><strong>{order.orderCode}</strong><span>Khám: {order.appointmentCode} • Bác sĩ: {order.orderingDoctorName} ({order.specialtyName || '---'})</span></div>, extra: <div className={styles.orderStatus}><Tag color={reviewed ? 'success' : complete ? 'processing' : 'warning'}>{reviewed ? 'Đã có kết luận bác sĩ' : complete ? 'Đã có kết quả' : 'Đang chờ kết quả'}</Tag><span>{new Date(order.orderedAtUtc).toLocaleDateString('vi-VN')}</span></div>, children: <div className={styles.results}>
                 <div className={styles.orderDetails}>
                     {order.clinicalIndication && <div className={styles.resultLine}><strong>Chỉ định:</strong> {order.clinicalIndication}</div>}
                     {order.note && <div className={styles.resultLine}><strong>Ghi chú:</strong> {order.note}</div>}
@@ -70,7 +70,7 @@ export const PatientDiagnosticResults: React.FC = () => {
         })} />;
     const vitalsContent = vitalsLoading ? <LoadingState message="Đang tải dữ liệu y tế..." /> : vitalsError ? <InlineError message={vitalsError} onRetry={fetchVitals} /> : vitals.length === 0 ? <EmptyState title="Chưa có lịch sử sinh hiệu nào" /> :
         <DataTable data={vitals} keyExtractor={v => `${v.recordedAtUtc}-${v.appointmentCode}`} columns={[
-            { header: 'Ngày khám', accessor: v => <div>{new Date(v.recordedAtUtc).toLocaleDateString('vi-VN')}<div className={styles.resultAuthor}>#{v.appointmentCode}</div></div> },
+            { header: 'Ngày khám', accessor: v => <div>{new Date(v.recordedAtUtc).toLocaleDateString('vi-VN')}<div className={styles.resultAuthor}>{v.appointmentCode}</div></div> },
             { header: 'Cân nặng', align: 'center', accessor: v => v.weight ? `${formatDecimalVi(v.weight)} kg` : '---' },
             { header: 'Chiều cao', align: 'center', accessor: v => v.height ? `${formatDecimalVi(v.height)} cm` : '---' },
             { header: 'BMI', align: 'center', accessor: v => formatDecimalVi(v.bmi, '---') },

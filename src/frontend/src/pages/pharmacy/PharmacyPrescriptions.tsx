@@ -1,6 +1,7 @@
+import { formatPrescriptionCode } from '../../utils/prescriptionCode';
 import { getPrescriptionStatusLabel } from '../../utils/prescriptionStatusLabels';
 import { getApiErrorMessage } from '../../utils/apiError';
-import { formatDateOnly } from '../../utils/formatters';
+import { formatDateOnly, formatDateTime } from '../../utils/formatters';
 import type { BatchAllocation } from '../../types/pharmacyBatch';
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
@@ -15,9 +16,10 @@ import { useDialog } from '../../contexts/DialogContext';
 import { PrescriptionSafetyPanel } from '../../components/prescriptions/PrescriptionSafetyPanel';
 import type { PrescriptionSafetyWarningDto } from '../../types/prescriptionSafety';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
-
 interface PrescriptionListItem {
     id: number;
+    code?: string;
+    prescriptionCode?: string;
     appointmentId: number;
     appointmentCode: string;
     appointmentDate: string;
@@ -35,6 +37,8 @@ interface PrescriptionDetail {
     safetyWarnings?: PrescriptionSafetyWarningDto[];
     safetyOverrideReason?: string | null;
     id: number;
+    code?: string;
+    prescriptionCode?: string;
     appointmentId: number;
     appointmentCode: string;
     patientId: number;
@@ -205,17 +209,6 @@ export const PharmacyPrescriptions: React.FC = () => {
 
     useOpenPrescriptionFromQuery(!loading, handleOpenDetail);
 
-    const formatDateTime = (dateStr?: string) => {
-        if (!dateStr) return '-';
-        try {
-            return new Intl.DateTimeFormat('vi-VN', {
-                dateStyle: 'short',
-                timeStyle: 'short'
-            }).format(new Date(dateStr));
-        } catch {
-            return dateStr;
-        }
-    };
 
     // Check if any item lacks sufficient stock or is inactive
     const hasInsufficientStock = selectedPrescription?.items.some(
@@ -238,7 +231,7 @@ export const PharmacyPrescriptions: React.FC = () => {
                 </form>
             </div>
             {loading ? <LoadingState message="Đang tải danh sách đơn thuốc..." /> : prescriptions.length === 0 ? <EmptyState title="Không có đơn thuốc nào phù hợp." /> : <div className={styles.tableScroll}><DataTable data={prescriptions} keyExtractor={p => p.id} columns={[
-                {header:'Mã đơn',accessor:p => <><strong>#{p.id}</strong><div className={styles.secondary}>{p.appointmentCode}</div></>},
+                {header:'Mã đơn',accessor:p => <><strong>{formatPrescriptionCode(p)}</strong><div className={styles.secondary}>{p.appointmentCode}</div></>},
                 {header:'Bệnh nhân',accessor:p => <><strong>{p.patientName}</strong><div className={styles.secondary}>{p.patientPhone}</div></>},
                 {header:'Bác sĩ chỉ định',accessor:'doctorName'},
                 {header:'Thời gian kê đơn',accessor:p => formatDateTime(p.createdAt)},
@@ -247,7 +240,7 @@ export const PharmacyPrescriptions: React.FC = () => {
                 {header:'Thao tác',align:'right',accessor:p => <Button type="primary" onClick={() => handleOpenDetail(p.id)}><Eye size={14} aria-hidden="true" /> Xem & cấp phát</Button>}
             ]} /></div>}
             {!loading && prescriptions.length > 0 && totalItems > 10 && <div className={styles.pagination}><span className={styles.secondary}>Tổng số: {totalItems} đơn thuốc</span><div className={styles.pageControls}><Button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Trang trước</Button><span>Trang {page}</span><Button disabled={page * 10 >= totalItems} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}
-            <Modal open={detailModalOpen} onCancel={() => { if (!dispenseLoading) { setDetailModalOpen(false); setSelectedPrescription(null); } }} title={`Chi tiết đơn thuốc #${selectedPrescription?.id}`} width={740} className={styles.detailModal} mask={{closable:false}} keyboard={false} closable={{disabled:dispenseLoading}} footer={
+            <Modal open={detailModalOpen} onCancel={() => { if (!dispenseLoading) { setDetailModalOpen(false); setSelectedPrescription(null); } }} title={`Chi tiết đơn thuốc ${selectedPrescription ? formatPrescriptionCode(selectedPrescription) : ''}`} width={740} className={styles.detailModal} mask={{closable:false}} keyboard={false} closable={{disabled:dispenseLoading}} footer={
                 <div className={styles.modalFooter}><Button htmlType="button" onClick={() => window.print()}><Printer size={16} aria-hidden="true" /> In đơn thuốc</Button><div className={styles.footerActions}><Button htmlType="button" disabled={dispenseLoading} onClick={() => { setDetailModalOpen(false); setSelectedPrescription(null); }}>Đóng</Button>{selectedPrescription?.status === 'Issued' && <Button type="primary" htmlType="button" disabled={dispenseLoading || !canDispense} onClick={() => handleDispense(selectedPrescription.id)}>{dispenseLoading ? 'Đang xử lý...' : 'Xác nhận cấp thuốc & trừ kho'}</Button>}</div></div>
             }>
                 <div className={styles.appointmentCode}>Mã lịch hẹn: {selectedPrescription?.appointmentCode}</div>

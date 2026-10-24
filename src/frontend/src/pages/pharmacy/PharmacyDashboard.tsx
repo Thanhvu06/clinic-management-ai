@@ -1,3 +1,4 @@
+import { formatPrescriptionCode } from '../../utils/prescriptionCode';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
@@ -9,7 +10,6 @@ import type { DataTableColumn } from '../../components/common';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { formatDateTime } from '../../utils/formatters';
 import styles from './PharmacyDashboard.module.css';
-
 interface PharmacyStats {
     pendingPrescriptionsCount: number;
     dispensedTodayCount: number;
@@ -19,6 +19,8 @@ interface PharmacyStats {
 
 interface PendingPrescription {
     id: number;
+    code?: string;
+    prescriptionCode?: string;
     patientName: string;
     doctorName: string;
     itemCount: number;
@@ -71,6 +73,7 @@ export const PharmacyDashboard: React.FC = () => {
     }, [refresh]);
 
     const pendingColumns: DataTableColumn<PendingPrescription>[] = [
+        { header: 'Mã đơn', accessor: item => formatPrescriptionCode(item) },
         { header: 'Thời gian kê', accessor: item => <span className={styles.numeric}>{formatDateTime(item.createdAt)}</span>, width: 150 },
         { header: 'Người bệnh', accessor: 'patientName' },
         { header: 'Bác sĩ', accessor: 'doctorName' },

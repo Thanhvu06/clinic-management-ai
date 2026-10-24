@@ -21,12 +21,12 @@ internal static class DevelopmentAppointmentSeed
         Description = "Khởi tạo dữ liệu lịch hẹn", CreatedAt = clock.UtcNow
     });
 
-    private static async Task<string> GenerateCodeAsync(AppDbContext db, IDateTimeProvider clock)
+    private static async Task<string> GenerateCodeAsync(AppDbContext db, DateOnly bookingDate)
     {
         string code;
         do
         {
-            code = $"APT-{clock.VietnamNow:yyMMdd}-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+            code = $"APT-{bookingDate:yyMMdd}-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
         } while (db.Appointments.Local.Any(a => a.AppointmentCode == code) || await db.Appointments.AnyAsync(a => a.AppointmentCode == code));
         return code;
     }
@@ -39,7 +39,7 @@ internal static class DevelopmentAppointmentSeed
         foreach (var appointment in legacy)
         {
             var previous = appointment.AppointmentCode;
-            var replacement = await GenerateCodeAsync(db, clock);
+            var replacement = await GenerateCodeAsync(db, appointment.AppointmentDate.AddDays(-2));
             appointment.AppointmentCode = replacement;
             appointment.Reason = appointment.Reason?.Replace(previous, replacement, StringComparison.Ordinal);
             foreach (var history in await db.AppointmentHistories.Where(h => h.AppointmentId == appointment.Id && h.Note != null && h.Note.Contains(previous)).ToListAsync())
@@ -96,8 +96,9 @@ internal static class DevelopmentAppointmentSeed
         var mainDoc = doctors.FirstOrDefault(d => d.UserId == docUsers[0].Id) ?? doctors[0];
         var mainDocSpecId = mainDoc.DoctorSpecialties.FirstOrDefault(ds => ds.IsPrimary)?.SpecialtyId ?? specs[0].Id;
         var initialized = false;
+        var reasonVariants = new Dictionary<long, int>();
 
-        async Task CreateApt(Patient p, Doctor d, AppointmentSlot s, AppointmentStatus status, string reason)
+        async Task CreateApt(Patient p, Doctor d, AppointmentSlot s, AppointmentStatus status)
         {
             if (s.DoctorId != d.Id)
             {
@@ -107,7 +108,12 @@ internal static class DevelopmentAppointmentSeed
             var docSpecId = d.DoctorSpecialties.FirstOrDefault(ds => ds.IsPrimary)?.SpecialtyId
                 ?? d.DoctorSpecialties.FirstOrDefault()?.SpecialtyId
                 ?? specs[0].Id;
-            var code = await GenerateCodeAsync(db, dateTimeProvider);
+            if (specs.Single(spec => spec.Id == docSpecId).SpecialtyCode == "SP03" && p.Gender != Gender.Female)
+                p = patients.Where(patient => patient.Gender == Gender.Female).ElementAt(reasonVariants.GetValueOrDefault(d.Id) % patients.Count(patient => patient.Gender == Gender.Female));
+            var bookingDate = s.SlotDate > today ? today.AddDays(-2) : s.SlotDate.AddDays(-2);
+            var bookedAt = RealisticDevelopmentSeed.At(dateTimeProvider, bookingDate, 9);
+            var seenAt = RealisticDevelopmentSeed.At(dateTimeProvider, s.SlotDate, s.EndTime.Hour, s.EndTime.Minute);
+            var code = await GenerateCodeAsync(db, bookingDate);
             var a = new Appointment
             {
                 AppointmentCode = code,
@@ -118,7 +124,7 @@ internal static class DevelopmentAppointmentSeed
                 AppointmentDate = s.SlotDate,
                 StartTime = s.StartTime,
                 EndTime = s.EndTime,
-                Reason = reason,
+                Reason = RealisticDevelopmentSeed.Reason(specs.Single(spec => spec.Id == docSpecId).SpecialtyCode, reasonVariants.GetValueOrDefault(d.Id)),
                 Status = status
             };
             if (!initialized)
@@ -127,6 +133,7 @@ internal static class DevelopmentAppointmentSeed
                 initialized = true;
             }
             db.Appointments.Add(a);
+            reasonVariants[d.Id] = reasonVariants.GetValueOrDefault(d.Id) + 1;
             if (status != AppointmentStatus.Cancelled)
             {
                 s.IsBooked = true;
@@ -140,7 +147,7 @@ internal static class DevelopmentAppointmentSeed
                 NewStatus = AppointmentStatus.Pending,
                 Note = "Bệnh nhân tự đặt lịch hẹn qua ứng dụng",
                 PerformedByUserId = p.UserId ?? Guid.Empty,
-                CreatedAt = DateTime.UtcNow.AddDays(-10)
+                CreatedAt = bookedAt
             });
 
             if (status != AppointmentStatus.Pending && status != AppointmentStatus.Cancelled)
@@ -153,7 +160,7 @@ internal static class DevelopmentAppointmentSeed
                     NewStatus = AppointmentStatus.Confirmed,
                     Note = "Lễ tân liên hệ và xác nhận lịch hẹn",
                     PerformedByUserId = adminId1.Id,
-                    CreatedAt = DateTime.UtcNow.AddDays(-9)
+                    CreatedAt = bookedAt.AddHours(1)
                 });
             }
 
@@ -167,14 +174,15 @@ internal static class DevelopmentAppointmentSeed
                     NewStatus = AppointmentStatus.Completed,
                     Note = "Bác sĩ hoàn thành phiên khám",
                     PerformedByUserId = d.UserId,
-                    CreatedAt = DateTime.UtcNow.AddDays(-1)
+                    CreatedAt = seenAt
                 });
                 db.VisitSummaries.Add(new VisitSummary
                 {
                     AppointmentId = a.Id,
                     DoctorId = d.Id,
                     Summary = "Sức khỏe bệnh nhân tương đối ổn định. Đã kê đơn thuốc và tư vấn chế độ ăn uống, sinh hoạt lành mạnh.",
-                    FollowUpInstruction = "Uống nhiều nước ấm, tập thể dục nhẹ nhàng 30 phút mỗi ngày. Tái khám sau 2 tuần nếu triệu chứng tái phát."
+                    FollowUpInstruction = "Uống nhiều nước ấm, tập thể dục nhẹ nhàng 30 phút mỗi ngày. Tái khám sau 2 tuần nếu triệu chứng tái phát.",
+                    CreatedAtUtc = seenAt, CompletedAtUtc = seenAt
                 });
             }
             else if (status == AppointmentStatus.NoShow)
@@ -187,7 +195,7 @@ internal static class DevelopmentAppointmentSeed
                     NewStatus = AppointmentStatus.NoShow,
                     Note = "Bệnh nhân không có mặt tại phòng khám vào giờ hẹn",
                     PerformedByUserId = d.UserId,
-                    CreatedAt = DateTime.UtcNow.AddDays(-1)
+                    CreatedAt = seenAt
                 });
             }
             else if (status == AppointmentStatus.Cancelled)
@@ -200,7 +208,7 @@ internal static class DevelopmentAppointmentSeed
                     NewStatus = AppointmentStatus.Cancelled,
                     Note = "Bệnh nhân thông báo bận việc đột xuất xin hủy lịch",
                     PerformedByUserId = p.UserId ?? Guid.Empty,
-                    CreatedAt = DateTime.UtcNow.AddDays(-2)
+                    CreatedAt = bookedAt.AddHours(1)
                 });
             }
             await db.SaveChangesAsync();
@@ -217,7 +225,7 @@ internal static class DevelopmentAppointmentSeed
                 DoctorId = mainDoc.Id,
                 WorkDate = pastDate,
                 StartTime = new TimeOnly(8, 0),
-                EndTime = new TimeOnly(17, 0),
+                EndTime = new TimeOnly(11, 30),
                 IsActive = true
             };
             db.DoctorWorkSchedules.Add(pastSchedule);
@@ -225,11 +233,11 @@ internal static class DevelopmentAppointmentSeed
         }
 
         var pastSlots = await db.AppointmentSlots.Where(s => s.DoctorId == mainDoc.Id && s.SlotDate == pastDate).ToListAsync();
-        if (pastSlots.Count < 15)
+        if (pastSlots.Count < 14)
         {
-            for (int i = pastSlots.Count; i < 15; i++)
+            for (int i = pastSlots.Count; i < 14; i++)
             {
-                var sTime = new TimeOnly(8, 0).AddMinutes(i * 30);
+                var sTime = i < 7 ? new TimeOnly(8, 0).AddMinutes(i * 30) : new TimeOnly(13, 30).AddMinutes((i - 7) * 30);
                 if (!pastSlots.Any(x => x.StartTime == sTime))
                 {
                     var s = new AppointmentSlot
@@ -247,13 +255,16 @@ internal static class DevelopmentAppointmentSeed
             await db.SaveChangesAsync();
         }
 
+        db.DoctorWorkSchedules.Add(new DoctorWorkSchedule { DoctorId = mainDoc.Id, WorkDate = pastDate, StartTime = new TimeOnly(13, 30), EndTime = new TimeOnly(17, 0), IsActive = true });
+        await db.SaveChangesAsync();
+
         for (int i = 0; i < 12; i++)
         {
-            await CreateApt(patients[i % patients.Count], mainDoc, pastSlots[i % pastSlots.Count], AppointmentStatus.Completed, "Khám kiểm tra sức khỏe tổng quát định kỳ");
+            await CreateApt(patients[i % patients.Count], mainDoc, pastSlots[i % pastSlots.Count], AppointmentStatus.Completed);
         }
-        for (int i = 12; i < 15; i++)
+        for (int i = 12; i < 14; i++)
         {
-            await CreateApt(patients[i % patients.Count], mainDoc, pastSlots[i % pastSlots.Count], AppointmentStatus.NoShow, "Tư vấn sức khỏe định kỳ");
+            await CreateApt(patients[i % patients.Count], mainDoc, pastSlots[i % pastSlots.Count], AppointmentStatus.NoShow);
         }
 
         var pastDate2 = today.AddDays(-4);
@@ -265,7 +276,7 @@ internal static class DevelopmentAppointmentSeed
                 DoctorId = mainDoc.Id,
                 WorkDate = pastDate2,
                 StartTime = new TimeOnly(8, 0),
-                EndTime = new TimeOnly(17, 0),
+                EndTime = new TimeOnly(11, 30),
                 IsActive = true
             };
             db.DoctorWorkSchedules.Add(pastSchedule2);
@@ -273,11 +284,11 @@ internal static class DevelopmentAppointmentSeed
         }
 
         var pastSlots2 = await db.AppointmentSlots.Where(s => s.DoctorId == mainDoc.Id && s.SlotDate == pastDate2).ToListAsync();
-        if (pastSlots2.Count < 5)
+        if (pastSlots2.Count < 14)
         {
-            for (int i = pastSlots2.Count; i < 5; i++)
+            for (int i = pastSlots2.Count; i < 14; i++)
             {
-                var sTime = new TimeOnly(8, 0).AddMinutes(i * 30);
+                var sTime = i < 7 ? new TimeOnly(8, 0).AddMinutes(i * 30) : new TimeOnly(13, 30).AddMinutes((i - 7) * 30);
                 if (!pastSlots2.Any(x => x.StartTime == sTime))
                 {
                     var s = new AppointmentSlot
@@ -295,9 +306,12 @@ internal static class DevelopmentAppointmentSeed
             await db.SaveChangesAsync();
         }
 
+        db.DoctorWorkSchedules.Add(new DoctorWorkSchedule { DoctorId = mainDoc.Id, WorkDate = pastDate2, StartTime = new TimeOnly(13, 30), EndTime = new TimeOnly(17, 0), IsActive = true });
+        await db.SaveChangesAsync();
+
         for (int i = 0; i < 5; i++)
         {
-            await CreateApt(patients[i % patients.Count], mainDoc, pastSlots2[i % pastSlots2.Count], AppointmentStatus.Cancelled, "Tái khám theo hẹn của bác sĩ");
+            await CreateApt(patients[i % patients.Count], mainDoc, pastSlots2[i % pastSlots2.Count], AppointmentStatus.Cancelled);
         }
 
         var todaySlots = await db.AppointmentSlots
@@ -307,27 +321,27 @@ internal static class DevelopmentAppointmentSeed
 
         if (todaySlots.Count >= 3)
         {
-            await CreateApt(patients[0], mainDoc, todaySlots[0], AppointmentStatus.Confirmed, "Kiểm tra định kỳ huyết áp và đường huyết sáng nay");
-            await CreateApt(patients[1], mainDoc, todaySlots[1], AppointmentStatus.Confirmed, "Tái khám viêm họng hạt và sốt nhẹ");
-            await CreateApt(patients[2], mainDoc, todaySlots[2], AppointmentStatus.Confirmed, "Tư vấn dinh dưỡng và chăm sóc sức khỏe");
+            await CreateApt(patients[0], mainDoc, todaySlots[0], AppointmentStatus.Confirmed);
+            await CreateApt(patients[1], mainDoc, todaySlots[1], AppointmentStatus.Confirmed);
+            await CreateApt(patients[2], mainDoc, todaySlots[2], AppointmentStatus.Confirmed);
         }
 
         for (int i = 0; i < 6; i++)
         {
             var doc = doctors[i % doctors.Count];
-            var docSlot = futureSlots.FirstOrDefault(s => s.DoctorId == doc.Id && !s.IsBooked);
+            var docSlot = slots.Where(s => s.SlotDate >= today).OrderBy(s => s.SlotDate).ThenBy(s => s.StartTime).FirstOrDefault(s => s.DoctorId == doc.Id && !s.IsBooked);
             if (docSlot != null)
             {
-                await CreateApt(patients[i % patients.Count], doc, docSlot, AppointmentStatus.Pending, "Đau đầu kéo dài kèm mệt mỏi nhẹ");
+                await CreateApt(patients[(i + 3) % patients.Count], doc, docSlot, AppointmentStatus.Pending);
             }
         }
         for (int i = 6; i < 16; i++)
         {
             var doc = doctors[(i + 1) % doctors.Count];
-            var docSlot = futureSlots.FirstOrDefault(s => s.DoctorId == doc.Id && !s.IsBooked);
+            var docSlot = slots.Where(s => s.SlotDate >= today).OrderBy(s => s.SlotDate).ThenBy(s => s.StartTime).FirstOrDefault(s => s.DoctorId == doc.Id && !s.IsBooked);
             if (docSlot != null)
             {
-                await CreateApt(patients[i % patients.Count], doc, docSlot, AppointmentStatus.Confirmed, "Kiểm tra huyết áp và tư vấn lối sống");
+                await CreateApt(patients[i % patients.Count], doc, docSlot, AppointmentStatus.Confirmed);
             }
         }
 
@@ -345,7 +359,7 @@ internal static class DevelopmentAppointmentSeed
                     Reason = "Bận chuyến công tác đột xuất tại Hà Nội",
                     Status = AppointmentChangeRequestStatus.Pending,
                     RequestedByUserId = pendingAppt.Patient.UserId ?? Guid.Empty,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = RealisticDevelopmentSeed.At(dateTimeProvider, today, 9)
                 });
             }
 
@@ -361,7 +375,7 @@ internal static class DevelopmentAppointmentSeed
                     Reason = "Xin dời ngày khám sang tuần sau vì việc gia đình",
                     Status = AppointmentChangeRequestStatus.Pending,
                     RequestedByUserId = confAppt.Patient.UserId ?? Guid.Empty,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = RealisticDevelopmentSeed.At(dateTimeProvider, today, 9)
                 });
             }
             await db.SaveChangesAsync();
@@ -390,16 +404,16 @@ internal static class DevelopmentAppointmentSeed
             db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
             {
                 DoctorId = mainDoc.Id,
-                StartDateTime = dateTimeProvider.VietnamNow.AddDays(2),
-                EndDateTime = dateTimeProvider.VietnamNow.AddDays(3),
+                StartDateTime = today.AddDays(2).ToDateTime(new TimeOnly(8, 0)),
+                EndDateTime = today.AddDays(2).ToDateTime(new TimeOnly(17, 0)),
                 Reason = "Nghỉ phép cá nhân giải quyết việc gia đình",
                 Status = DoctorLeaveRequestStatus.Pending
             });
             db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
             {
                 DoctorId = doctors[1].Id,
-                StartDateTime = dateTimeProvider.VietnamNow.AddDays(5),
-                EndDateTime = dateTimeProvider.VietnamNow.AddDays(6),
+                StartDateTime = today.AddDays(5).ToDateTime(new TimeOnly(8, 0)),
+                EndDateTime = today.AddDays(5).ToDateTime(new TimeOnly(17, 0)),
                 Reason = "Tham gia hội thảo chuyên ngành tại Hà Nội",
                 Status = DoctorLeaveRequestStatus.Approved,
                 AdminNote = "Đã duyệt, yêu cầu chuyển giao ca trực và hỗ trợ bệnh nhân ngày 5."

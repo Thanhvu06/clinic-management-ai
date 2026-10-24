@@ -1,3 +1,4 @@
+import { getGenderLabel } from '../../utils/genderLabels';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Alert, Button, Input, Modal, Tag } from 'antd';
@@ -10,7 +11,6 @@ import { diagnosticNotificationTime, formatDelta, isCriticalDiagnosticFlag } fro
 import styles from './DiagnosticVerificationReview.module.css';
 import { DiagnosticResultPrint } from './DiagnosticResultPrint';
 import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
-
 export const VerificationResultPrint = () => {
     const { id } = useParams<{ id: string }>();
     const { user } = useAuth();
@@ -77,7 +77,7 @@ export const DiagnosticVerificationReview = () => {
         <PageHeader title={`Duyệt kết quả ${order.orderCode}`} actions={<Link to={home}>Quay lại hàng chờ</Link>} />
         {error && <InlineError message={error} onRetry={() => void load()} />}
         {order.hasDeltaFailure && <Alert type="warning" showIcon title="Có chỉ số lệch delta so với lần trước — kiểm tra nhầm mẫu/nhầm bệnh nhân/diễn tiến lâm sàng và ghi chú trước khi duyệt." />}
-        <section className={styles.panel} aria-label="Thông tin phiếu"><h2>{order.patientName}</h2><p>{order.patientGender === 'Female' ? 'Nữ' : order.patientGender === 'Male' ? 'Nam' : '—'} • {order.patientAge ?? '—'} tuổi • {order.patientPhone || '—'}</p><p>Bác sĩ chỉ định: {order.orderingDoctorName}</p><p>Chỉ định lâm sàng: {order.clinicalIndication}</p><p>Người gửi: {order.submittedForVerificationByUserName || '—'} • {order.submittedForVerificationAtUtc ? diagnosticNotificationTime(order.submittedForVerificationAtUtc) : '—'}</p></section>
+        <section className={styles.panel} aria-label="Thông tin phiếu"><h2>{order.patientName}</h2><p>{getGenderLabel(order.patientGender)} • {order.patientAge ?? '—'} tuổi • {order.patientPhone || '—'}</p><p>Bác sĩ chỉ định: {order.orderingDoctorName}</p><p>Chỉ định lâm sàng: {order.clinicalIndication}</p><p>Người gửi: {order.submittedForVerificationByUserName || '—'} • {order.submittedForVerificationAtUtc ? diagnosticNotificationTime(order.submittedForVerificationAtUtc) : '—'}</p></section>
         {order.status === 'Completed' ? <section className={styles.panel}><Alert type="success" showIcon title={`Đã duyệt bởi ${order.verifiedByUserName || '—'} lúc ${order.verifiedAtUtc ? diagnosticNotificationTime(order.verifiedAtUtc) : '—'}`} />{order.verificationNote && <p>{order.verificationNote}</p>}<Link className={styles.link} to={`/diagnostic-verification/orders/${order.id}/result-print`}>In phiếu kết quả</Link></section> : order.verificationStatus === 'Returned' ? <Alert type="warning" showIcon title={`Đã trả lại: ${order.returnReason || '—'}`} /> : null}
         {order.items.filter(item => item.status !== 'Cancelled').map(item => <section key={item.id} className={styles.panel} aria-label={`Kết quả: ${item.serviceName}`}>
             <h2>{item.serviceName} <span className={styles.muted}>({item.serviceCode})</span></h2>

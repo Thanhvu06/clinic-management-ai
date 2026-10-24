@@ -1,3 +1,4 @@
+import { getGenderLabel } from '../../utils/genderLabels';
 import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -17,13 +18,11 @@ import { patientVisitApi } from '../../api/patientVisitApi';
 import type { CheckInTicketDto, ReceptionIntakeRequest, VisitPriority, ApiResponse } from '../../types';
 import { CheckInTicketModal } from '../../components/CheckInTicketModal';
 import { useDialog } from '../../contexts/DialogContext';
-
 interface AllergyItem {
     allergen: string;
     severity?: string;
     reaction?: string;
 }
-
 interface Doctor {
     id: number;
     fullName: string;
@@ -419,7 +418,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                         </div>
                         <Row gutter={[spacing.md, spacing.sm]} className={styles.selectedPatientFacts}>
                             <Col xs={24} md={12}><strong>Ngày sinh:</strong> {selectedPatient.dateOfBirth || '---'}</Col>
-                            <Col xs={24} md={12}><strong>Giới tính:</strong> {selectedPatient.genderName || selectedPatient.gender || '---'}</Col>
+                            <Col xs={24} md={12}><strong>Giới tính:</strong> {getGenderLabel(selectedPatient.gender)}</Col>
                             <Col xs={24} md={12}><strong>Số điện thoại:</strong> {selectedPatient.phoneNumber || '---'}</Col>
                             <Col xs={24} md={12}><strong>Địa chỉ:</strong> {selectedPatient.address || '---'}</Col>
                         </Row>
@@ -427,7 +426,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                     {!selectedPatient && searchResults.length > 0 && <div className={styles.patientLookupResults}>
                         <div className={styles.lookupResultCount}>Tìm thấy {searchResults.length} hồ sơ người bệnh phù hợp:</div>
                         {searchResults.map(p => <div key={p.id} onClick={() => setSelectedPatient(p)} className={styles.patientLookupResult}>
-                            <div className={styles.lookupPatientDetails}><div className={styles.lookupPatientName}>{p.fullName} <span className={styles.lookupMedicalRecord}>({p.medicalRecordNumber || 'Chưa có MRN'})</span></div><div className={styles.lookupPatientIdentifiers}>CCCD: {p.nationalId || '---'} • SĐT: {p.phoneNumber || '---'} • Sinh: {p.dateOfBirth || '---'} ({p.genderName || p.gender})</div></div>
+                            <div className={styles.lookupPatientDetails}><div className={styles.lookupPatientName}>{p.fullName} <span className={styles.lookupMedicalRecord}>({p.medicalRecordNumber || 'Chưa có MRN'})</span></div><div className={styles.lookupPatientIdentifiers}>CCCD: {p.nationalId || '---'} • SĐT: {p.phoneNumber || '---'} • Sinh: {p.dateOfBirth || '---'} ({getGenderLabel(p.gender)})</div></div>
                             <Button htmlType="button" type="primary"><UserCheck size={14} /> Chọn hồ sơ này</Button>
                         </div>)}
                     </div>}

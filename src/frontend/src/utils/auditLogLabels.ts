@@ -24,6 +24,7 @@ export const auditActionLabels: Readonly<Record<string, string>> = {
     SpecimenReceived: 'Nhận mẫu',
     SpecimenRejected: 'Từ chối mẫu',
     InitializeAppointments: 'Khởi tạo dữ liệu lịch hẹn',
+    InitializeStaffDemo: 'Khởi tạo dữ liệu bàn làm việc',
 };
 
 export const auditEntityLabels: Readonly<Record<string, string>> = {

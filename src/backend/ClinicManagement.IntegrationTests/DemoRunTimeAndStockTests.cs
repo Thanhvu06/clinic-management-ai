@@ -119,8 +119,8 @@ public class DemoRunTimeAndStockTests(CustomWebApplicationFactory factory) : Int
         var clock = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var leave = await db.DoctorLeaveRequests.AsNoTracking().SingleAsync(leave => leave.Status == DoctorLeaveRequestStatus.Pending);
-        Assert.InRange(Math.Abs((leave.StartDateTime - clock.VietnamNow.AddDays(2)).TotalSeconds), 0, 60);
-        Assert.InRange(Math.Abs((leave.EndDateTime - clock.VietnamNow.AddDays(3)).TotalSeconds), 0, 60);
+        Assert.Equal(clock.VietnamToday.AddDays(2).ToDateTime(new TimeOnly(8, 0)), leave.StartDateTime);
+        Assert.Equal(clock.VietnamToday.AddDays(2).ToDateTime(new TimeOnly(17, 0)), leave.EndDateTime);
         Assert.Equal(DateTimeKind.Unspecified, leave.StartDateTime.Kind);
         Assert.DoesNotContain("Z", JsonSerializer.Serialize(leave.StartDateTime));
     }

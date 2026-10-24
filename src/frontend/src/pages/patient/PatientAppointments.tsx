@@ -18,7 +18,6 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { LoadingState } from '../../components/common/LoadingState';
 import { InlineError } from '../../components/common/InlineError';
-
 interface Appointment {
     id: number;
     appointmentCode: string;
@@ -415,7 +414,7 @@ export const PatientAppointments: React.FC = () => {
                     return <Card key={app.id} id={`appointment-card-${app.id}`} className={highlightedAppId === app.id ? styles.highlightedCard : styles.appointmentCard}>
                         <div className={styles.cardHeader}>
                             <div>
-                                <div className={styles.identity}><strong>#{app.appointmentCode}</strong>{getStatusBadge(app.status)}</div>
+                                <div className={styles.identity}><strong>{app.appointmentCode}</strong>{getStatusBadge(app.status)}</div>
                                 <div className={styles.schedule}>
                                     <span className={styles.infoLine}><CalendarDays size={16} /><span>Ngày: <strong>{formatDateOnly(app.appointmentDate)}</strong></span></span>
                                     <span className={styles.infoLine}><Clock size={16} /><span>Giờ: <strong>{app.startTime?.substring(0, 5)} - {app.endTime?.substring(0, 5)}</strong></span></span>
@@ -442,7 +441,7 @@ export const PatientAppointments: React.FC = () => {
                     </Card>;
                 })}
             </div>}
-            <Modal getContainer={false} open={cancelModal.isOpen} title={`Hủy lịch hẹn #${cancelModal.app?.appointmentCode}`} onCancel={handleCancelClose} mask={{ closable: !canceling }} closable={!canceling} keyboard={!canceling} footer={<>
+            <Modal getContainer={false} open={cancelModal.isOpen} title={`Hủy lịch hẹn ${cancelModal.app?.appointmentCode}`} onCancel={handleCancelClose} mask={{ closable: !canceling }} closable={!canceling} keyboard={!canceling} footer={<>
                 <Button onClick={handleCancelClose} disabled={canceling}>Đóng</Button>
                 <Button type="primary" danger onClick={submitCancel} disabled={canceling}>{canceling ? 'Đang xử lý...' : 'Xác nhận gửi yêu cầu'}</Button>
             </>}>
@@ -450,7 +449,7 @@ export const PatientAppointments: React.FC = () => {
                 <Form layout="vertical"><Form.Item label="Lý do hủy lịch" htmlFor="cancel-reason" required><Input.TextArea id="cancel-reason" rows={3} placeholder="Vui lòng nhập lý do (ít nhất 5 ký tự)..." value={cancelModal.reason} onChange={event => setCancelModal(p => ({ ...p, reason: event.target.value }))} disabled={canceling} /></Form.Item></Form>
                 {cancelModal.inlineError && <Alert type="error" title={cancelModal.inlineError} showIcon />}
             </Modal>
-            <Modal getContainer={false} open={rescheduleModal.isOpen} title={`Đổi lịch khám #${rescheduleModal.app?.appointmentCode}`} onCancel={closeReschedule} mask={{ closable: !rescheduling }} closable={!rescheduling} keyboard={!rescheduling} footer={<>
+            <Modal getContainer={false} open={rescheduleModal.isOpen} title={`Đổi lịch khám ${rescheduleModal.app?.appointmentCode}`} onCancel={closeReschedule} mask={{ closable: !rescheduling }} closable={!rescheduling} keyboard={!rescheduling} footer={<>
                 <Button onClick={closeReschedule} disabled={rescheduling}>Đóng</Button>
                 <Button type="primary" onClick={submitReschedule} disabled={rescheduling || rescheduleModal.loadingSlots}>{rescheduling ? 'Đang gửi...' : 'Gửi yêu cầu dời lịch'}</Button>
             </>}>

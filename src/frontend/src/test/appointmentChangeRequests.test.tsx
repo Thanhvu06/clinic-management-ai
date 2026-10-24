@@ -128,8 +128,8 @@ describe('Appointment Change Request UI Workflows', () => {
             );
 
             await waitFor(() => {
-                expect(screen.getByText('#APT-101')).toBeInTheDocument();
-                expect(screen.getByText('#APT-102')).toBeInTheDocument();
+                expect(screen.getByText('APT-101')).toBeInTheDocument();
+                expect(screen.getByText('APT-102')).toBeInTheDocument();
             });
 
             // Action buttons for APT-101 (Confirmed)
@@ -161,7 +161,7 @@ describe('Appointment Change Request UI Workflows', () => {
             );
 
             await waitFor(() => {
-                expect(screen.getByText('#APT-101')).toBeInTheDocument();
+                expect(screen.getByText('APT-101')).toBeInTheDocument();
             });
 
             // Click "Đổi lịch"
@@ -169,7 +169,7 @@ describe('Appointment Change Request UI Workflows', () => {
 
             // Modal appears
             await waitFor(() => {
-                expect(screen.getByText('Đổi lịch khám #APT-101')).toBeInTheDocument();
+                expect(screen.getByText('Đổi lịch khám APT-101')).toBeInTheDocument();
             });
 
             // Wait for slots to load
@@ -225,7 +225,7 @@ describe('Appointment Change Request UI Workflows', () => {
             fireEvent.click(retryBtn);
 
             await waitFor(() => {
-                expect(screen.getByText('#APT-101')).toBeInTheDocument();
+                expect(screen.getByText('APT-101')).toBeInTheDocument();
             });
         });
 
@@ -247,14 +247,14 @@ describe('Appointment Change Request UI Workflows', () => {
             );
 
             await waitFor(() => {
-                expect(screen.getByText('#APT-101')).toBeInTheDocument();
+                expect(screen.getByText('APT-101')).toBeInTheDocument();
             });
 
             // Click "Đổi lịch"
             fireEvent.click(screen.getByText('Đổi lịch'));
 
             await waitFor(() => {
-                expect(screen.getByText('Đổi lịch khám #APT-101')).toBeInTheDocument();
+                expect(screen.getByText('Đổi lịch khám APT-101')).toBeInTheDocument();
             });
 
             // Find target date input and select a Sunday (2026-09-13 is Sunday)
@@ -286,8 +286,8 @@ describe('Appointment Change Request UI Workflows', () => {
             );
 
             await waitFor(() => {
-                expect(screen.getByText('#APT-102')).toBeInTheDocument();
-                expect(screen.getByText('#APT-103')).toBeInTheDocument();
+                expect(screen.getByText('APT-102')).toBeInTheDocument();
+                expect(screen.getByText('APT-103')).toBeInTheDocument();
                 expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
             });
 
@@ -322,7 +322,7 @@ describe('Appointment Change Request UI Workflows', () => {
             fireEvent.click(retryBtn);
 
             await waitFor(() => {
-                expect(screen.getByText('#APT-102')).toBeInTheDocument();
+                expect(screen.getByText('APT-102')).toBeInTheDocument();
             });
         });
 
@@ -359,7 +359,7 @@ describe('Appointment Change Request UI Workflows', () => {
             );
 
             await waitFor(() => {
-                expect(screen.getByText('#APT-102')).toBeInTheDocument();
+                expect(screen.getByText('APT-102')).toBeInTheDocument();
             });
 
             // Click "Xử lý" on first item
@@ -404,7 +404,7 @@ describe('Appointment Change Request UI Workflows', () => {
             );
 
             await waitFor(() => {
-                expect(screen.getByText('#APT-102')).toBeInTheDocument();
+                expect(screen.getByText('APT-102')).toBeInTheDocument();
             });
 
             const processButtons = screen.getAllByText('Xử lý');

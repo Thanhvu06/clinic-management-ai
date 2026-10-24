@@ -48,7 +48,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); });
 describe('Patient appointments batch 2', () => {
     it('uses the appointment DTO calendar date, reason and specialty without a specialties request', async () => {
         mountAppointments();
-        await screen.findByText('#APT-001');
+        await screen.findByText('APT-001');
         const card = document.getElementById('appointment-card-1')!;
         expect(within(card).getByText('11/10/2026')).toBeInTheDocument();
         expect(within(card).getByText('Đau đầu kéo dài')).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe('Patient appointments batch 2', () => {
     it('keeps appointments visible when change requests fail and alerts on unavailable withdrawal', async () => {
         mocks.get.mockImplementation((url: string) => url.startsWith('/appointment-change-requests') ? Promise.reject({ message: 'Lỗi API phụ' }) : defaultGet(url));
         mountAppointments();
-        await screen.findByText('#APT-001');
+        await screen.findByText('APT-001');
         expect(screen.queryByText('Lỗi API phụ')).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Thử lại' })).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Rút yêu cầu' }));
@@ -74,11 +74,11 @@ describe('Patient appointments batch 2', () => {
         expect(screen.queryByText('Bạn chưa có lịch hẹn nào')).not.toBeInTheDocument();
         mocks.get.mockImplementation(defaultGet);
         fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-        await screen.findByText('#APT-001');
+        await screen.findByText('APT-001');
     });
     it('does not reopen a handled cancel deep link after withdrawal refreshes the list', async () => {
         mountAppointments('/patient/appointments?appointmentId=1&action=cancel');
-        const dialog = await screen.findByRole('dialog', { name: 'Hủy lịch hẹn #APT-001' });
+        const dialog = await screen.findByRole('dialog', { name: 'Hủy lịch hẹn APT-001' });
         fireEvent.click(within(dialog).getByRole('button', { name: 'Đóng' }));
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
         fireEvent.click(screen.getByRole('button', { name: 'Rút yêu cầu' }));
@@ -121,7 +121,7 @@ describe('Patient appointments batch 2', () => {
     it('shows a retryable history error instead of an empty history', async () => {
         mocks.get.mockImplementation((url: string) => url.endsWith('/history') ? Promise.reject({ message: 'Lỗi lịch sử' }) : defaultGet(url));
         mountAppointments();
-        await screen.findByText('#APT-001');
+        await screen.findByText('APT-001');
         fireEvent.click(screen.getAllByRole('button', { name: 'Lịch sử' })[0]);
         const dialog = screen.getByRole('dialog', { name: 'Lịch sử thay đổi #APT-001' });
         await within(dialog).findByText('Lỗi lịch sử');
@@ -131,7 +131,7 @@ describe('Patient appointments batch 2', () => {
     it('shows a dash for a null history status', async () => {
         mocks.get.mockImplementation((url: string) => url.endsWith('/history') ? Promise.resolve(ok([{ action: 'Created', oldStatus: null, newStatus: 'Pending', createdAt: '2026-10-11T03:00:00Z' }])) : defaultGet(url));
         mountAppointments();
-        await screen.findByText('#APT-001');
+        await screen.findByText('APT-001');
         fireEvent.click(screen.getAllByRole('button', { name: 'Lịch sử' })[0]);
         await screen.findByText('Tạo mới');
         expect(screen.getByText(/Từ/)).toHaveTextContent('Từ — thành Chờ xác nhận');

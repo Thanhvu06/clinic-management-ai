@@ -8,7 +8,6 @@ import { useDialog } from '../../contexts/DialogContext';
 import { PageHeader, DataTable, StatCard, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
 import { toLocalDateString } from '../../utils/formatters';
 import styles from './AdminBilling.module.css';
-
 const recentRange = () => {
     const today = new Date();
     const from = new Date(today); from.setDate(from.getDate() - 30);
@@ -132,7 +131,7 @@ export const AdminBilling: React.FC = () => {
                 <StatCard title="Hóa đơn đã hủy" value={revenueReport.statusBreakdown.cancelledCount + ' HĐ'} subtitle={'(' + formatCurrency(revenueReport.statusBreakdown.cancelledAmount) + ')'} icon={<XCircle size={24} />} color="danger" />
             </div>
             <Card title="Bảng chi tiết doanh thu theo từng ngày">
-                {revenueReport.dailyBreakdown.length === 0 ? <EmptyState title="Không có giao dịch nào phát sinh trong khoảng thời gian đã chọn." /> : <DataTable data={revenueReport.dailyBreakdown} keyExtractor={row => row.date} columns={[
+                {revenueReport.dailyBreakdown.filter(row => row.succeededPaymentsCount > 0 || row.paidInvoicesCount > 0).length === 0 ? <EmptyState title="Không có giao dịch nào phát sinh trong khoảng thời gian đã chọn." /> : <DataTable data={revenueReport.dailyBreakdown.filter(row => row.succeededPaymentsCount > 0 || row.paidInvoicesCount > 0)} keyExtractor={row => row.date} columns={[
                     { header: 'Ngày giao dịch', accessor: row => formatDateOnly(row.date) },
                     { header: 'Số GD thành công', accessor: 'succeededPaymentsCount', align: 'center' },
                     { header: 'Số HĐ đã thu', accessor: 'paidInvoicesCount', align: 'center' },

@@ -147,7 +147,7 @@ describe('PharmacyPrescriptions Component', () => {
         fireEvent.click(screen.getByText('Xem & cấp phát'));
 
         await waitFor(() => {
-            expect(screen.getByText('Chi tiết đơn thuốc #10')).toBeInTheDocument();
+            expect(screen.getByText('Chi tiết đơn thuốc RX-260906-0010')).toBeInTheDocument();
             expect(screen.getByText('Paracetamol 500mg')).toBeInTheDocument();
             expect(screen.getByText('10 Viên')).toBeInTheDocument();
             expect(screen.getByText('100 Viên')).toBeInTheDocument();
@@ -175,7 +175,7 @@ describe('PharmacyPrescriptions Component', () => {
 
         await waitFor(() => expect(screen.getByText('Xem & cấp phát')).toBeInTheDocument());
         fireEvent.click(screen.getByText('Xem & cấp phát'));
-        await waitFor(() => expect(screen.getByText('Chi tiết đơn thuốc #10')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Chi tiết đơn thuốc RX-260906-0010')).toBeInTheDocument());
         await waitFor(() => expect(screen.getByTestId('copilot-selection')).toHaveTextContent('10'));
     });
 

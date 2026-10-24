@@ -1,3 +1,6 @@
+import { getStockTransactionLabel } from '../../utils/stockTransactionLabels';
+import { formatPrescriptionReference } from '../../utils/prescriptionCode';
+import { formatDateTime } from '../../utils/formatters';
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ActiveMedicineDto, ApiResponse } from '../../types';
@@ -7,7 +10,6 @@ import { DataTable, EmptyState, InlineError, LoadingState, PageHeader, StatusBad
 import styles from './PharmacyInventory.module.css';
 import { Plus, Clock, User, RefreshCw, Search } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
-
 interface StockTransaction {
     id: number;
     medicineId: number;
@@ -18,11 +20,11 @@ interface StockTransaction {
     quantityChange: number;
     balanceAfter: number;
     prescriptionId?: number;
+    prescriptionCreatedAt?: string;
     reason?: string;
     actorName: string;
     createdAt: string;
 }
-
 export const PharmacyInventory: React.FC = () => {
     const { showAlert } = useDialog();
     const [transactions, setTransactions] = useState<StockTransaction[]>([]);
@@ -115,23 +117,14 @@ export const PharmacyInventory: React.FC = () => {
         }
     };
 
-    const formatDateTime = (dateStr: string) => {
-        try {
-            return new Intl.DateTimeFormat('vi-VN', {
-                dateStyle: 'short',
-                timeStyle: 'medium'
-            }).format(new Date(dateStr));
-        } catch {
-            return dateStr;
-        }
-    };
 
     const getTypeBadge = (type: string, change: number) => {
         switch (type) {
+            case 'Initial': return <StatusBadge status="completed" label={`Tồn đầu kỳ (+${change})`} />;
             case 'StockIn': return <StatusBadge status="completed" label={`Nhập kho (+${change})`} />;
             case 'Dispense': return <StatusBadge status="cancelled" label={`Xuất đơn (${change})`} />;
             case 'Adjustment': return <StatusBadge status="pending" label={`Kiểm kê (${change > 0 ? `+${change}` : change})`} />;
-            default: return <StatusBadge status="default" label={`— (${change})`} />;
+            default: return <StatusBadge status="default" label={`${getStockTransactionLabel(type)} (${change})`} />;
         }
     };
 
@@ -157,7 +150,7 @@ export const PharmacyInventory: React.FC = () => {
                     {header:'Loại giao dịch',accessor:t => getTypeBadge(t.type,t.quantityChange)},
                     {header:'Số lượng biến động',accessor:t => <strong className={t.quantityChange > 0 ? styles.stockIncrease : styles.stockDecrease}>{t.quantityChange > 0 ? `+${t.quantityChange}` : t.quantityChange} {t.unit}</strong>},
                     {header:'Tổng tồn sau giao dịch (gồm lô hết hạn)',accessor:t => <strong>{t.balanceAfter} {t.unit}</strong>},
-                    {header:'Lý do / căn cứ',accessor:t => t.reason || (t.prescriptionId ? `Đơn thuốc #${t.prescriptionId}` : '-')},
+                    {header:'Lý do / căn cứ',accessor:t => t.prescriptionId ? formatPrescriptionReference({ id: t.prescriptionId, createdAt: t.prescriptionCreatedAt }, t.reason) : t.reason || '-'},
                     {header:'Người thực hiện',accessor:t => <div className={styles.inlineContent}><User size={14} className={styles.actorIcon} /><span>{t.actorName}</span></div>}
                 ]} /></div>}
                 {!loading && filteredTransactions.length > 0 && totalItems > 15 && <div className={styles.pagination}><span className={styles.secondary}>Tổng số: {totalItems} giao dịch</span><div className={styles.pageControls}><Button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Trang trước</Button><span>Trang {page}</span><Button disabled={page * 15 >= totalItems} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}

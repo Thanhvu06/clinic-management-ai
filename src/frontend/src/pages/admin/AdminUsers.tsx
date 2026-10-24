@@ -1,3 +1,4 @@
+import { formatDateOnly } from '../../utils/formatters';
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
@@ -6,7 +7,6 @@ import { Alert, Button, Form, Input, Modal, Select, Tag, Typography } from 'antd
 import { PageHeader, FilterBar, DataTable, Pagination, EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './AdminUsers.module.css';
 import { useDialog } from '../../contexts/DialogContext';
-
 interface UserDto {
     id: string;
     email: string;
@@ -125,13 +125,6 @@ export const AdminUsers: React.FC = () => {
         }
     };
 
-    const formatDate = (dateString: string) => {
-        try {
-            return new Intl.DateTimeFormat('vi-VN').format(new Date(dateString));
-        } catch {
-            return dateString;
-        }
-    };
 
     const roleOptions = ['Admin', 'Doctor', 'Receptionist', 'Patient', 'Pharmacist', 'DiagnosticTechnician', 'LabSupervisor']
         .map(role => ({ value: role, label: translateRole(role) }));
@@ -158,7 +151,7 @@ export const AdminUsers: React.FC = () => {
                 : users.length === 0 ? <EmptyState title="Không tìm thấy tài khoản nào phù hợp." /> : <>
                     <div className={styles.userTable}>
                         <DataTable data={users} keyExtractor={user => user.id} columns={[
-                            { header: 'Họ và tên', accessor: user => <><Typography.Text strong>{user.fullName}</Typography.Text><div className={styles.userJoined}>Tham gia: {formatDate(user.createdAt)}</div></> },
+                            { header: 'Họ và tên', accessor: user => <><Typography.Text strong>{user.fullName}</Typography.Text><div className={styles.userJoined}>Tham gia: {formatDateOnly(user.createdAt)}</div></> },
                             { header: 'Thông tin liên hệ', accessor: user => <div className={styles.userContact}><div>{user.email}</div><Typography.Text type="secondary">{user.phoneNumber}</Typography.Text></div> },
                             { header: 'Vai trò', accessor: user => <div className={styles.userRoles}>{user.roles.map(role => <Tag key={role}>{translateRole(role)}</Tag>)}</div> },
                             { header: 'Trạng thái', accessor: user => <Tag color={user.isActive ? 'success' : 'error'}>{user.isActive ? 'Đang hoạt động' : 'Đã khóa'}</Tag> },

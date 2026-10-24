@@ -521,6 +521,7 @@ public class PharmacyService : IPharmacyService
                 QuantityChange = x.Transaction.QuantityChange,
                 BalanceAfter = x.Transaction.BalanceAfter,
                 PrescriptionId = x.Transaction.PrescriptionId,
+                PrescriptionCreatedAt = x.Transaction.Prescription != null ? x.Transaction.Prescription.CreatedAt : null,
                 Reason = x.Transaction.Reason,
                 ActorName = x.ActorName,
                 CreatedAt = x.Transaction.CreatedAt

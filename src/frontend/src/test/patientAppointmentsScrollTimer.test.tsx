@@ -26,7 +26,7 @@ afterEach(() => {
 it('cancels the deep-link scroll timer when unmounted before 150ms', async () => {
     const view = render(<MemoryRouter initialEntries={['/patient/appointments?tab=upcoming&appointmentId=1']}><PatientAppointments /></MemoryRouter>);
     await act(async () => {});
-    expect(screen.getByText('#LATE')).toBeInTheDocument();
+    expect(screen.getByText('LATE')).toBeInTheDocument();
     const getElementById = vi.spyOn(document, 'getElementById');
     expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
 
@@ -40,7 +40,7 @@ it('cancels the deep-link scroll timer when unmounted before 150ms', async () =>
 it('scrolls to the deep-linked appointment after the delay while mounted', async () => {
     render(<MemoryRouter initialEntries={['/patient/appointments?tab=upcoming&appointmentId=1']}><PatientAppointments /></MemoryRouter>);
     await act(async () => {});
-    expect(screen.getByText('#LATE')).toBeInTheDocument();
+    expect(screen.getByText('LATE')).toBeInTheDocument();
     const getElementById = vi.spyOn(document, 'getElementById');
     expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
 

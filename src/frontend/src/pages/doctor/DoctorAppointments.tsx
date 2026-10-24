@@ -1,6 +1,7 @@
+import { getGenderLabel } from '../../utils/genderLabels';
 import { getPrescriptionStatusLabel } from '../../utils/prescriptionStatusLabels';
 import { getAppointmentHistoryActionLabel } from '../../utils/appointmentHistoryLabels';
-import { toLocalDateString } from '../../utils/formatters';
+import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
@@ -13,7 +14,6 @@ import type { DataTableColumn } from '../../components/common';
 import styles from './DoctorAppointments.module.css';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
-
 interface DoctorAppointment {
     id: number;
     appointmentCode: string;
@@ -191,10 +191,7 @@ export const DoctorAppointments: React.FC = () => {
         });
     };
 
-    const formatDate = (dateString: string) => {
-        try { return new Intl.DateTimeFormat('vi-VN').format(new Date(dateString)); }
-        catch { return dateString; }
-    };
+    const formatDate = formatDateOnly;
 
     const closeModal = () => {
         prescriptionRequest.current += 1;
@@ -208,7 +205,7 @@ export const DoctorAppointments: React.FC = () => {
                 <div>
                     <div className={styles.timeCell}><Clock size={14} className={styles.clockIcon} />{apt.startTime.substring(0, 5)}</div>
                     <div className={styles.dateCell}>{formatDate(apt.appointmentDate)}</div>
-                    <div className={styles.codeCell}>#{apt.appointmentCode}</div>
+                    <div className={styles.codeCell}>{apt.appointmentCode}</div>
                 </div>
             )
         },
@@ -217,7 +214,7 @@ export const DoctorAppointments: React.FC = () => {
             accessor: (apt) => (
                 <div>
                     <div className={styles.mediumText}>{apt.patientName}</div>
-                    <div className={styles.patientMeta}>{apt.patientGender} | {apt.patientDob ? formatDate(apt.patientDob) : 'N/A'}</div>
+                    <div className={styles.patientMeta}>{getGenderLabel(apt.patientGender)} | {apt.patientDob ? formatDate(apt.patientDob) : 'N/A'}</div>
                 </div>
             )
         },
@@ -331,7 +328,7 @@ export const DoctorAppointments: React.FC = () => {
                             <div>
                                 <div className={styles.modalPatientName}>{modal.apt.patientName}</div>
                                 <div className={styles.patientMeta}>
-                                    {modal.apt.patientGender} | Sinh: {modal.apt.patientDob ? formatDate(modal.apt.patientDob) : 'N/A'} | Lịch hẹn: {formatDate(modal.apt.appointmentDate)} ({modal.apt.startTime.substring(0, 5)})
+                                    {getGenderLabel(modal.apt.patientGender)} | Sinh: {modal.apt.patientDob ? formatDate(modal.apt.patientDob) : 'N/A'} | Lịch hẹn: {formatDate(modal.apt.appointmentDate)} ({modal.apt.startTime.substring(0, 5)})
                                 </div>
                             </div>
                         </Flex>

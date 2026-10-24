@@ -1,3 +1,4 @@
+import { getGenderLabel } from '../../utils/genderLabels';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
@@ -40,7 +41,6 @@ interface ActiveMedicine {
     unit: string;
     stockQuantity: number;
 }
-
 export const DoctorExaminationWorkspace: React.FC = () => {
     const { id, visitId } = useParams<{ id?: string; visitId?: string }>();
     const isVisit = Boolean(visitId);
@@ -49,7 +49,6 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const navigate = useNavigate();
     const { showAlert, showToast } = useDialog();
     const { setSelection } = useCopilotResource();
-
     const [context, setContext] = useState<PatientClinicalContextDto | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'encounter' | 'vitals' | 'diagnostics' | 'prescription' | 'history'>('encounter');
@@ -897,14 +896,14 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                 {patient.patientName}
                             </h2>
                             <span className={tabStyles.appointmentCode}>
-                                #{apt.appointmentCode}
+                                {apt.appointmentCode}
                             </span>
                         </div>
 
                         <div className={tabStyles.patientMetadata}>
                             <div className={tabStyles.iconTextRow}>
                                 <User size={16} className={tabStyles.secondaryText} />
-                                <span>{patient.patientGender === 'Male' ? 'Nam' : patient.patientGender === 'Female' ? 'Nữ' : 'Khác'} {patient.patientDob ? `• NS: ${formatDateOnly(patient.patientDob)}` : ''}</span>
+                                <span>{getGenderLabel(patient.patientGender)} {patient.patientDob ? `• NS: ${formatDateOnly(patient.patientDob)}` : ''}</span>
                             </div>
                             <div className={tabStyles.iconTextRow}>
                                 <Phone size={16} className={tabStyles.secondaryText} />
@@ -1924,7 +1923,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                                                         Ngày: {formatDateOnly(visit.date)}
                                                     </span>
                                                     <span className={tabStyles.historyDoctorName}>
-                                                        Mã: #{visit.appointmentCode}
+                                                        Mã: {visit.appointmentCode}
                                                     </span>
                                                 </div>
                                                 <div className={tabStyles.historySpecialtyName}>

@@ -1,3 +1,4 @@
+import { getGenderLabel } from '../../utils/genderLabels';
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Flex } from 'antd';
@@ -6,7 +7,6 @@ import { diagnosticApi } from '../../api/diagnosticApi';
 import type { DiagnosticOrderDto } from '../../types';
 import { LoadingState, InlineError } from '../../components/common';
 import styles from './DiagnosticOrderPrint.module.css';
-
 export const DiagnosticOrderPrint: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const orderId = Number(id);
@@ -75,13 +75,6 @@ export const DiagnosticOrderPrint: React.FC = () => {
         hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric'
     });
 
-    const formatGender = (gender?: string | null) => {
-        if (!gender) return 'Chưa cập nhật';
-        const g = gender.trim().toLowerCase();
-        if (g === 'male' || g === 'nam') return 'Nam';
-        if (g === 'female' || g === 'nữ' || g === 'nu') return 'Nữ';
-        return 'Chưa cập nhật';
-    };
 
     return (
         <div className={styles.surface1}>
@@ -125,7 +118,7 @@ export const DiagnosticOrderPrint: React.FC = () => {
                     </div>
                     <div className={styles.spacing4}>
                         <div className={styles.text3}>MÃ PHIẾU: {order.orderCode}</div>
-                        <div className={styles.text2}>Mã lịch hẹn: #{order.appointmentCode}</div>
+                        <div className={styles.text2}>Mã lịch hẹn: {order.appointmentCode}</div>
                         <div className={styles.text2}>Ngày lập: {formattedDate}</div>
                     </div>
                 </div>
@@ -147,7 +140,7 @@ export const DiagnosticOrderPrint: React.FC = () => {
                             <strong>Họ và tên:</strong> <span className={styles.text6}>{order.patientName}</span>
                         </div>
                         <div>
-                            <strong>Giới tính:</strong> {formatGender(order.patientGender)}
+                            <strong>Giới tính:</strong> {getGenderLabel(order.patientGender)}
                         </div>
                         <div>
                             <strong>Tuổi:</strong> {order.patientAge ? `${order.patientAge} tuổi` : '---'}

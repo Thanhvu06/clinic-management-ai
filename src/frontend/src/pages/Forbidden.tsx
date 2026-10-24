@@ -1,5 +1,5 @@
+import { RoleHomeButton } from '../components/common/RoleHomeButton';
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { ShieldAlert } from 'lucide-react';
 import styles from './Forbidden.module.css';
 
@@ -11,9 +11,9 @@ export const Forbidden: React.FC = () => {
             <p className={styles.paragraph1}>
                 Tài khoản của bạn không được cấp phép để xem nội dung hoặc thực hiện thao tác này.
             </p>
-            <Link to="/" className={["btn-primary", styles.icon2].join(' ')}>
+            <RoleHomeButton className={styles.icon2}>
                 Quay về trang chủ
-            </Link>
+            </RoleHomeButton>
         </div>
     );
 };

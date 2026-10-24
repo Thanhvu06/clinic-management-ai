@@ -1,3 +1,4 @@
+import { getGenderLabel } from '../../utils/genderLabels';
 import { formatVitalSummaryVi } from '../../utils/formatDecimalVi';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { isConsultationInProgress } from '../../utils/doctorQueueStatus';
@@ -16,7 +17,6 @@ import { PageHeader, MetricStrip, StatusBadge, InlineError, EmptyState, DataTabl
 import type { DataTableColumn } from '../../components/common';
 import { toLocalDateString } from '../../utils/formatters';
 import styles from './DoctorDashboard.module.css';
-
 export const DoctorDashboard: React.FC = () => {
     const navigate = useNavigate();
     const { showAlert, showConfirm, showToast } = useDialog();
@@ -152,7 +152,7 @@ export const DoctorDashboard: React.FC = () => {
                 <div>
                     <div className={styles.text1}>{item.patientName}</div>
                     <Typography.Text type="secondary" className={styles.icon1}>
-                        {item.patientPhone} {item.patientGender === 'Male' ? '• Nam' : item.patientGender === 'Female' ? '• Nữ' : ''} {item.patientAge ? `• ${item.patientAge}t` : ''}
+                        {item.patientPhone} {` • ${getGenderLabel(item.patientGender)}`} {item.patientAge ? `• ${item.patientAge}t` : ''}
                     </Typography.Text>
                 </div>
             )
@@ -230,7 +230,7 @@ export const DoctorDashboard: React.FC = () => {
                 <div>
                     <div className={styles.text1}>{item.patientName}</div>
                     <Typography.Text type="secondary" className={styles.icon1}>
-                        {item.patientPhone} {item.patientGender === 'Male' ? '• Nam' : item.patientGender === 'Female' ? '• Nữ' : ''} {item.patientAge ? `• ${item.patientAge}t` : ''}
+                        {item.patientPhone} {` • ${getGenderLabel(item.patientGender)}`} {item.patientAge ? `• ${item.patientAge}t` : ''}
                     </Typography.Text>
                 </div>
             )
@@ -309,7 +309,7 @@ export const DoctorDashboard: React.FC = () => {
                                 <span className={styles.nextPatientName}>
                                     {nextPatient.patientName}
                                     <span className={styles.nextPatientMeta}>
-                                        (#{nextPatient.appointmentCode}) • {nextPatient.patientGender === 'Male' ? 'Nam' : nextPatient.patientGender === 'Female' ? 'Nữ' : 'Khác'} {nextPatient.patientAge ? `• ${nextPatient.patientAge} tuổi` : ''}
+                                        ({nextPatient.appointmentCode}) • {getGenderLabel(nextPatient.patientGender)} {nextPatient.patientAge ? `• ${nextPatient.patientAge} tuổi` : ''}
                                     </span>
                                 </span>
                                 <div className={styles.text2}>
