@@ -111,20 +111,11 @@ describe('Medicine detail', () => {
         expect(screen.queryByText('Query dose')).not.toBeInTheDocument();
     });
 
-    it('falls back to the price list when opened directly without in-app history', async () => {
+    it('relies on the breadcrumb instead of a separate back button', async () => {
         mount();
         await screen.findByRole('heading', { name: medicine.name });
-        fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
-        expect(await screen.findByText('Danh sách đích')).toBeInTheDocument();
-    });
-
-    it('goes back to the previous in-app page', async () => {
-        render(<MemoryRouter initialEntries={['/origin', '/medicines/501']} initialIndex={1}><Routes>
-            <Route path="/origin" element={<p>Trang trước</p>} /><Route path="/medicines/:id" element={<MedicineDetail />} />
-        </Routes></MemoryRouter>);
-        await screen.findByRole('heading', { name: medicine.name });
-        fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
-        expect(await screen.findByText('Trang trước')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Quay lại' })).not.toBeInTheDocument();
+        expect(within(screen.getByRole('navigation', { name: 'Đường dẫn trang' })).getByRole('link', { name: 'Bảng giá thuốc' })).toHaveAttribute('href', '/medicines');
     });
 
     it('uses the shared image URL and replaces failed images', async () => {

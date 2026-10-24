@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Button } from 'antd';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { medicineApi } from '../../api/medicineApi';
 import type { PublicMedicineDto } from '../../types';
 import { EmptyState, InlineError, LoadingState } from '../../components/common';
@@ -17,7 +16,6 @@ type DetailState = { id?: string } & (
 );
 export function MedicineDetail() {
     const { id } = useParams();
-    const navigate = useNavigate();
     const location = useLocation();
     const [state, setState] = useState<DetailState>({ id, kind: 'loading' });
     const [attempt, setAttempt] = useState(0);
@@ -36,13 +34,7 @@ export function MedicineDetail() {
     const visible = !validId ? { kind: 'missing' as const } : state.id === id ? state : { kind: 'loading' as const };
     const prescribed = (location.state as { prescribed?: PrescribedDose } | null)?.prescribed;
     const medicine = visible.kind === 'ready' ? visible.medicine : null;
-    const goBack = () => {
-        // React Router tracks entries created inside the app; a direct visit has index zero.
-        if ((window.history.state?.idx ?? 0) > 0 || location.key !== 'default') navigate(-1);
-        else navigate('/medicines');
-    };
     return <main className={styles.page}>
-        <Button onClick={goBack}>Quay lại</Button>
         {visible.kind === 'loading' ? <LoadingState message="Đang tải thông tin thuốc..." />
             : visible.kind === 'error' ? <InlineError message={visible.message} onRetry={() => { setState({ id, kind: 'loading' }); setAttempt(value => value + 1); }} />
                 : visible.kind === 'missing' ? <EmptyState title="Không tìm thấy thuốc" description="Thuốc không tồn tại hoặc đã ngừng kinh doanh." />

@@ -28,7 +28,7 @@ export function SpecialtyPackages({ name }: { name: string }) {
         <h2 id="specialty-packages-title" className={styles.sectionTitle}>Gói khám liên quan</h2>
         {loading ? <p role="status">Đang tải gói khám liên quan...</p> : error ? <InlineError message={error} onRetry={() => {
             setLoading(true); setError(''); setAttempt(value => value + 1);
-        }} /> : <div className={styles.packageGrid}>{packages.map(pkg => {
+        }} /> : <div className={packages.length === 1 ? `${styles.packageGrid} ${styles.packageSingle}` : styles.packageGrid}>{packages.map(pkg => {
             const image = packageImage(pkg.name, pkg.imageUrl || pkg.ImageUrl);
             return <article key={pkg.id} className={styles.packageCard}>
                 {image && <img src={image} alt={`Minh họa ${pkg.name}`} loading="lazy" width={800} height={600} />}

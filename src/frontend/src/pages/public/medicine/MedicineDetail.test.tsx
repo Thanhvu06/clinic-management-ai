@@ -89,4 +89,13 @@ describe('Medicine article page', () => {
         await screen.findByRole('heading', { name: 'Thuốc liên quan 0' });
         expect(medicineApi.getPublicMedicine).toHaveBeenCalledTimes(1);
     });
+    it('keeps storage guidance in the article only, not in the spec table', async () => {
+        vi.mocked(medicineApi.getPublicMedicine).mockResolvedValue({ success: true, message: '', data: { ...medicine, storageInstructions: 'Nơi khô ráo' } });
+        const { container } = mount();
+        await screen.findByRole('heading', { name: medicine.name });
+        const terms = Array.from(container.querySelectorAll('dl dt')).map(item => item.textContent);
+        expect(terms).toEqual(['Mã thuốc', 'Hoạt chất', 'Hàm lượng', 'Dạng bào chế', 'Đơn vị', 'Nhóm']);
+        expect(screen.getByRole('heading', { name: 'Bảo quản' })).toBeInTheDocument();
+        expect(screen.getAllByText('Nơi khô ráo')).toHaveLength(1);
+    });
 });
