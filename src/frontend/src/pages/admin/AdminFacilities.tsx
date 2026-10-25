@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Alert, Button, Card, Checkbox, Col, Form, Input, InputNumber, Modal, Row, Select, Tabs, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Form, Input, InputNumber, Modal, Select, Tabs, Tag, Typography } from 'antd';
 import { Plus, Building2, Stethoscope, Phone, DoorOpen, Trash2, UserPlus } from 'lucide-react';
 import { organizationApi, type FacilityDto, type DepartmentDto, type RoomDto, type BedDto, type StaffFacilityAssignmentDto } from '../../api/organizationApi';
 import axiosClient from '../../api/axiosClient';
@@ -163,7 +163,7 @@ export const AdminFacilities: React.FC = () => {
     const handleCreateBed = (e: React.FormEvent) => {
         e.preventDefault(); if (!selectedRoom) return;
         const room = selectedRoom;
-        void create('bed', setBedSubmitting, () => organizationApi.createBed({ ...bedForm, roomId: room.id }), () => setBedModalOpen(false), 'Thêm giường bệnh thành công!', 'Không thể tạo giường bệnh.', () => { if (selectedRoomId.current === room.id) void selectRoom(room); });
+        void create('bed', setBedSubmitting, () => organizationApi.createBed({ ...bedForm, roomId: room.id }), () => setBedModalOpen(false), 'Thêm giường bệnh thành công!', 'Không thể tạo giường bệnh.', () => { if (selectedRoomId.current === room.id) if (!isOutpatient) void selectRoom(room); });
     };
     const handleCreateStaffAssignment = (e: React.FormEvent) => {
         e.preventDefault(); if (!selectedFacility || usersLoading || usersError) return;
@@ -184,6 +184,7 @@ export const AdminFacilities: React.FC = () => {
     };
     const modalProps = (busy: boolean) => ({ footer: null, mask: { closable: !busy }, closable: !busy, keyboard: !busy, destroyOnHidden: true });
     const footer = (busy: boolean, close: () => void, label: string, disabled = false) => <div className={styles.formActions}><Button disabled={busy} onClick={close}>Hủy</Button><Button type="primary" htmlType="submit" disabled={busy || disabled}>{busy ? 'Đang lưu...' : label}</Button></div>;
+    const isOutpatient = /phòng khám|ngoại trú/i.test(`${selectedFacility?.hospitalLevel ?? ''} ${selectedFacility?.description ?? ''}`);
     const departmentOptions = departments.map(d => ({ value: d.id, label: d.name + ' (' + d.code + ')' }));
 
     return <div className={styles.page}>
@@ -196,18 +197,18 @@ export const AdminFacilities: React.FC = () => {
             </Card>)}</div>
             {selectedFacility && <Card><Tabs activeKey={facilityTab} onChange={setFacilityTab} items={[
                 { key: 'structure', label: 'Khoa & phòng (' + departments.length + ' khoa, ' + rooms.length + ' phòng)', children: <>
-                    <div className={styles.sectionHeading}><h2>Khoa phòng & giường bệnh</h2><div className={styles.actions}>
+                    <div className={styles.sectionHeading}><h2>{isOutpatient ? 'Khoa & phòng khám' : 'Khoa phòng & giường bệnh'}</h2><div className={styles.actions}>
                         <Button type="primary" icon={<Plus size={16} />} disabled={structureLoading} onClick={() => { setDeptForm(initialDepartment); setDeptModalOpen(true); }}>Thêm khoa phòng</Button>
-                        <Button icon={<DoorOpen size={16} />} disabled={structureLoading} onClick={() => { if (departments.length) { setRoomForm({ ...initialRoom, departmentId: departments[0].id }); setRoomModalOpen(true); } else showAlert('Cần tạo ít nhất 1 khoa phòng trước khi tạo phòng.', 'Thông báo', 'warning'); }}>Thêm phòng bệnh</Button>
+                        <Button icon={<DoorOpen size={16} />} disabled={structureLoading} onClick={() => { if (departments.length) { setRoomForm({ ...initialRoom, roomType: isOutpatient ? 1 : initialRoom.roomType, maxCapacity: isOutpatient ? 1 : initialRoom.maxCapacity, departmentId: departments[0].id }); setRoomModalOpen(true); } else showAlert('Cần tạo ít nhất 1 khoa phòng trước khi tạo phòng.', 'Thông báo', 'warning'); }}>{isOutpatient ? 'Thêm phòng khám' : 'Thêm phòng bệnh'}</Button>
                     </div></div>
-                    {structureLoading ? <LoadingState message="Đang tải cấu trúc khoa phòng..." /> : structureError ? <InlineError message={structureError} onRetry={() => { void selectFacility(selectedFacility); }} /> : <Row className={styles.structureRow}>
-                        <Col xs={24} lg={12} className={styles.structureColumn}><h3 className={styles.blockHeading}>Danh sách khoa & phòng ({departments.length} khoa, {rooms.length} phòng)</h3>
-                            {rooms.length === 0 ? <EmptyState title="Chưa có phòng bệnh nào. Hãy thêm khoa và phòng mới." /> : <div className={styles.roomList}>{rooms.map(room => <button type="button" key={room.id} aria-pressed={selectedRoom?.id === room.id} className={[styles.roomButton, selectedRoom?.id === room.id ? styles.selectedRoom : ''].join(' ')} onClick={() => { void selectRoom(room); }}><span><strong>{room.roomNumber} - {room.name}</strong><span className={styles.secondary}>{room.departmentName} (Tầng {room.floorNumber})</span></span><>{room.bedCount > 0 && <Tag color="processing">{room.availableBedCount}/{room.bedCount} giường trống</Tag>}</></button>)}</div>}
-                        </Col>
-                        <Col xs={24} lg={12} className={styles.structureColumn}><div className={styles.sectionHeading}><h3 className={styles.blockHeading}>{selectedRoom ? 'Giường bệnh phòng ' + selectedRoom.roomNumber : 'Chọn phòng để quản lý giường'}</h3>{selectedRoom && <Button icon={<Plus size={16} />} onClick={() => { setBedForm({ ...initialBed, roomId: selectedRoom.id }); setBedModalOpen(true); }}>Thêm giường</Button>}</div>
+                    {structureLoading ? <LoadingState message="Đang tải cấu trúc khoa phòng..." /> : structureError ? <InlineError message={structureError} onRetry={() => { void selectFacility(selectedFacility); }} /> : <div className={isOutpatient ? styles.outpatientStructure : styles.structureRow}>
+                        <div className={styles.structureColumn}><h3 className={styles.blockHeading}>Danh sách khoa & phòng ({departments.length} khoa, {rooms.length} phòng)</h3>
+                            {rooms.length === 0 ? <EmptyState title={isOutpatient ? 'Chưa có phòng khám nào. Hãy thêm khoa và phòng mới.' : 'Chưa có phòng bệnh nào. Hãy thêm khoa và phòng mới.'} /> : <div className={styles.roomList}>{rooms.map(room => <button type="button" key={room.id} aria-pressed={isOutpatient ? undefined : selectedRoom?.id === room.id} className={[styles.roomButton, selectedRoom?.id === room.id ? styles.selectedRoom : ''].join(' ')} onClick={() => { if (!isOutpatient) void selectRoom(room); }}><span><strong>{room.roomNumber} - {room.name}</strong><span className={styles.secondary}>{room.departmentName} (Tầng {room.floorNumber})</span></span><>{!isOutpatient && room.bedCount > 0 && <Tag color="processing">{room.availableBedCount}/{room.bedCount} giường trống</Tag>}</></button>)}</div>}
+                        </div>
+                        {!isOutpatient && <div className={styles.structureColumn}><div className={styles.sectionHeading}><h3 className={styles.blockHeading}>{selectedRoom ? 'Giường bệnh phòng ' + selectedRoom.roomNumber : 'Chọn phòng để quản lý giường'}</h3>{selectedRoom && <Button icon={<Plus size={16} />} onClick={() => { setBedForm({ ...initialBed, roomId: selectedRoom.id }); setBedModalOpen(true); }}>Thêm giường</Button>}</div>
                             {!selectedRoom ? <EmptyState title="Vui lòng nhấp chọn một phòng bệnh ở cột bên trái để theo dõi và quản lý giường." /> : bedLoading ? <LoadingState message="Đang tải danh sách giường bệnh..." /> : bedError ? <InlineError message={bedError} onRetry={() => { void selectRoom(selectedRoom); }} /> : beds.length === 0 ? <EmptyState title="Chưa có giường bệnh trong phòng này." /> : <div className={styles.bedGrid}>{beds.map(bed => <Card key={bed.id} size="small"><div className={styles.sectionHeading}><strong>{bed.bedNumber}</strong><Tag color={bed.status === 1 ? 'success' : bed.status === 2 ? 'error' : 'warning'}>{bedStatuses[bed.status - 1] || 'Chưa cập nhật'}</Tag></div><div className={styles.secondary}>{bedTypes.find(type => type.value === bed.bedType)?.label || 'Chưa cập nhật'}</div><strong className={styles.bedPrice}>{bed.dailyRate.toLocaleString('vi-VN')} đ/ngày</strong></Card>)}</div>}
-                        </Col>
-                    </Row>}
+                        </div>}
+                    </div>}
                 </> },
                 { key: 'staff', label: 'Phân công nhân sự (' + staffAssignments.length + ')', children: <>
                     <div className={styles.sectionHeading}><h2>{'Nhân viên tại ' + selectedFacility.name}</h2><Button type="primary" icon={<UserPlus size={16} />} onClick={() => { void openStaffModal(); }}>Phân công nhân viên mới</Button></div>
@@ -240,12 +241,12 @@ export const AdminFacilities: React.FC = () => {
                 {footer(deptSubmitting, () => setDeptModalOpen(false), 'Lưu khoa')}
             </Form>
         </Modal>
-        <Modal open={roomModalOpen} title="Thêm phòng bệnh" {...modalProps(roomSubmitting)} onCancel={() => { if (!submitting.current.room) setRoomModalOpen(false); }}>
+        <Modal open={roomModalOpen} title={isOutpatient ? 'Thêm phòng khám' : 'Thêm phòng bệnh'} {...modalProps(roomSubmitting)} onCancel={() => { if (!submitting.current.room) setRoomModalOpen(false); }}>
             <Form layout="vertical" onSubmitCapture={handleCreateRoom}>
                 <Form.Item label="Khoa trực thuộc" htmlFor="roomDepartment"><Select id="roomDepartment" aria-label="Khoa trực thuộc" disabled={roomSubmitting} value={roomForm.departmentId} onChange={value => setRoomForm({ ...roomForm, departmentId: value })} options={departmentOptions} /></Form.Item>
                 <div className={styles.formGrid}><Form.Item label="Số phòng *" htmlFor="roomNumber"><Input id="roomNumber" required disabled={roomSubmitting} value={roomForm.roomNumber} onChange={e => setRoomForm({ ...roomForm, roomNumber: e.target.value })} placeholder="VD: P402" /></Form.Item><Form.Item label="Tầng" htmlFor="roomFloor"><InputNumber id="roomFloor" min={1} disabled={roomSubmitting} value={roomForm.floorNumber} onChange={value => setRoomForm({ ...roomForm, floorNumber: value ?? 1 })} className={styles.numberInput} /></Form.Item></div>
                 <Form.Item label="Tên phòng *" htmlFor="roomName"><Input id="roomName" required disabled={roomSubmitting} value={roomForm.name} onChange={e => setRoomForm({ ...roomForm, name: e.target.value })} placeholder="VD: Phòng Điều Trị Bệnh Tim Mạch 1" /></Form.Item>
-                <Form.Item label="Sức chứa tối đa (giường)" htmlFor="roomCapacity"><InputNumber id="roomCapacity" min={1} precision={0} disabled={roomSubmitting} value={roomForm.maxCapacity} onChange={value => setRoomForm({ ...roomForm, maxCapacity: value ?? 4 })} className={styles.numberInput} /></Form.Item>
+                {!isOutpatient && <Form.Item label="Sức chứa tối đa (giường)" htmlFor="roomCapacity"><InputNumber id="roomCapacity" min={1} precision={0} disabled={roomSubmitting} value={roomForm.maxCapacity} onChange={value => setRoomForm({ ...roomForm, maxCapacity: value ?? 4 })} className={styles.numberInput} /></Form.Item>}
                 {footer(roomSubmitting, () => setRoomModalOpen(false), 'Lưu phòng')}
             </Form>
         </Modal>

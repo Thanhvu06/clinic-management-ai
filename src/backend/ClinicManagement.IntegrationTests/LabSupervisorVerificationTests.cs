@@ -221,11 +221,12 @@ public class LabSupervisorVerificationTests(CustomWebApplicationFactory factory)
     [Fact]
     public async Task DemoSeedTwiceCreatesOneUserAndAssignmentPerNewAccount_WithoutDuplicatingCatalog()
     {
-        await RoleSeeder.SeedRolesAsync(Factory.Services);
-        await DevelopmentDataSeeder.SeedMasterDataAsync(Factory.Services);
-        using var scope = Factory.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        using var seedApp = FixedSeedWebApplicationFactory.WithClock(Factory);
+        await RoleSeeder.SeedRolesAsync(seedApp.Services);
+        await DevelopmentDataSeeder.SeedMasterDataAsync(seedApp.Services);
+        using var scope = seedApp.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var services = await db.DiagnosticServices.CountAsync(); var parameters = await db.DiagnosticServiceParameters.CountAsync();
-        await DevelopmentDataSeeder.SeedMasterDataAsync(Factory.Services);
+        await DevelopmentDataSeeder.SeedMasterDataAsync(seedApp.Services);
         Assert.Equal(services, await db.DiagnosticServices.CountAsync()); Assert.Equal(parameters, await db.DiagnosticServiceParameters.CountAsync());
         foreach (var email in new[] { "labsupervisor@cliniccare.local", "technician.02@cliniccare.local" })
         {

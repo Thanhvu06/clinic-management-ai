@@ -17,7 +17,7 @@ public class DemoBrandSeedTests
     [InlineData(true)]
     public async Task MasterSeed_SynchronizesFreshAndLegacyData_WithoutChangingCodesOrIds(bool legacy)
     {
-        using var factory = new CustomWebApplicationFactory();
+        using var factory = new FixedSeedWebApplicationFactory();
         using var scope = factory.Services.CreateScope();
         var services = scope.ServiceProvider;
         var db = services.GetRequiredService<AppDbContext>();

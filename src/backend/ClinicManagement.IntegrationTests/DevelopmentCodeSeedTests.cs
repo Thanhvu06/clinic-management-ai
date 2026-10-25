@@ -16,10 +16,11 @@ public class DevelopmentCodeSeedTests
     [InlineData(true)]
     public async Task AppointmentSeed_UsesRealFormat_AndRepairsLegacyInPlace_WithoutDuplicates(bool legacy)
     {
-        using var factory = new CustomWebApplicationFactory();
+        using var factory = new FixedSeedWebApplicationFactory();
         using var scope = factory.Services.CreateScope();
         var services = scope.ServiceProvider;
         var db = services.GetRequiredService<AppDbContext>();
+        var clock = services.GetRequiredService<IDateTimeProvider>();
         await DevelopmentDataSeeder.SeedDoctorSchedulesAndSlotsAsync(services, 30, true);
         var appointments = await db.Appointments.OrderBy(a => a.Id).ToListAsync();
         Assert.NotEmpty(appointments);
@@ -31,8 +32,8 @@ public class DevelopmentCodeSeedTests
             first.Reason = "Khám theo lịch DEMO-11111-01";
             first.Status = AppointmentStatus.CheckedIn;
             db.SystemAuditLogs.RemoveRange(await db.SystemAuditLogs.Where(l => l.Action == "InitializeAppointments").ToListAsync());
-            db.Notifications.Add(new Notification { UserId = actor, Type = NotificationType.Appointment, Title = first.AppointmentCode, Message = $"Đã tiếp nhận {first.AppointmentCode}" });
-            db.AppointmentHistories.Add(new AppointmentHistory { AppointmentId = first.Id, Action = AppointmentHistoryAction.CheckedIn, PerformedByUserId = actor, Note = $"Tiếp nhận {first.AppointmentCode}" });
+            db.Notifications.Add(new Notification { UserId = actor, Type = NotificationType.Appointment, Title = first.AppointmentCode, Message = $"Đã tiếp nhận {first.AppointmentCode}", CreatedAtUtc = clock.UtcNow });
+            db.AppointmentHistories.Add(new AppointmentHistory { AppointmentId = first.Id, Action = AppointmentHistoryAction.CheckedIn, PerformedByUserId = actor, Note = $"Tiếp nhận {first.AppointmentCode}", CreatedAt = clock.UtcNow });
         }
         var facility = await db.Facilities.SingleAsync(f => f.Code == "CS01");
         var department = await db.Departments.FirstAsync(d => d.FacilityId == facility.Id);
@@ -41,12 +42,14 @@ public class DevelopmentCodeSeedTests
             PatientId = first.PatientId, AppointmentId = first.Id, FacilityId = facility.Id, DepartmentId = department.Id,
             VisitDate = first.AppointmentDate, VisitCode = "VIS-260101-0001", CreatedByUserId = actor,
             ChiefComplaint = $"Khám theo lịch {first.AppointmentCode}", Status = VisitStatus.CheckedIn,
+            CheckedInAtUtc = clock.UtcNow, CreatedAtUtc = clock.UtcNow,
         };
         db.PatientVisits.Add(visit);
         var invoice = new Invoice
         {
             InvoiceCode = $"INV-{first.AppointmentCode}", AppointmentId = first.Id, PatientVisit = visit,
             PatientId = first.PatientId, CreatedByUserId = actor, SourceType = InvoiceSourceType.Appointment,
+            CreatedAtUtc = clock.UtcNow,
             Items = [new InvoiceItem { ItemCode = "CONSULT", Description = $"Khám theo lịch {first.AppointmentCode}", Quantity = 1 }],
         };
         db.Invoices.Add(invoice);
@@ -84,7 +87,7 @@ public class DevelopmentCodeSeedTests
     [InlineData(true)]
     public async Task BatchSeed_UsesManufacturerFormat_AndPreservesStockLinksAndFefo(bool legacy)
     {
-        using var factory = new CustomWebApplicationFactory();
+        using var factory = new FixedSeedWebApplicationFactory();
         using var scope = factory.Services.CreateScope();
         var services = scope.ServiceProvider;
         var db = services.GetRequiredService<AppDbContext>();

@@ -72,9 +72,9 @@ public class DemoConsistencyTests
             var dates = group.Select(r => r.PreferredDate).Order().ToList();
             for (var i = 1; i < dates.Count; i++) Assert.True(dates[i].DayNumber - dates[i - 1].DayNumber >= 30);
         }
-        Assert.All(await db.HealthPackageRegistrations.ToListAsync(), r => Assert.Matches(@"^REG-\d{6}-[0-9A-F]{7}$", r.RegistrationCode));
+        Assert.All(await db.HealthPackageRegistrations.ToListAsync(), r => Assert.Matches(@"^REG-\d{6}-[0-9A-F]{8}$", r.RegistrationCode));
         var invoices = await db.Invoices.Include(i => i.Payments).Include(i => i.Items).ToListAsync();
-        Assert.All(invoices, i => Assert.Matches(@"^INV-\d{6}-[0-9A-F]{7}$", i.InvoiceCode));
+        Assert.All(invoices, i => Assert.Matches(@"^INV-\d{6}-[0-9A-F]{8}$", i.InvoiceCode));
         Assert.All(invoices.Where(i => i.Status == InvoiceStatus.Paid), i =>
         {
             Assert.Equal(i.TotalAmount, i.Items.Where(item => !item.IsCancelled).Sum(item => item.LineTotal));
@@ -85,10 +85,10 @@ public class DemoConsistencyTests
         var daily = payments.GroupBy(p => DateOnly.FromDateTime(clock.ConvertUtcToVietnam(p.ReceivedAtUtc))).ToDictionary(g => g.Key, g => g.Count());
         for (var i = 0; i < 30; i++)
         {
-            var date = seedToday.AddDays(-i);
+            var date = DemoSeedCalendar.PreviousOpen(clock.VietnamToday).AddDays(-i);
             Assert.InRange(daily.GetValueOrDefault(date), date.DayOfWeek == DayOfWeek.Sunday ? 0 : 2, date.DayOfWeek == DayOfWeek.Sunday ? 0 : 6);
         }
-        var counts = Enumerable.Range(0, 30).Select(i => seedToday.AddDays(-i)).Where(d => d.DayOfWeek != DayOfWeek.Sunday).Select(d => daily[d]).ToList();
+        var counts = Enumerable.Range(0, 30).Select(i => DemoSeedCalendar.PreviousOpen(clock.VietnamToday).AddDays(-i)).Where(d => d.DayOfWeek != DayOfWeek.Sunday).Select(d => daily[d]).ToList();
         Assert.True(counts.Distinct().Count() >= 4);
         Assert.Contains(Enumerable.Range(0, counts.Count - 5), i => counts[i] != counts[i + 5]);
         Assert.DoesNotContain(await db.DoctorWorkSchedules.ToListAsync(), s => s.WorkDate.DayOfWeek == DayOfWeek.Sunday);
@@ -96,7 +96,7 @@ public class DemoConsistencyTests
         var leaves = await db.DoctorLeaveRequests.Where(l => l.Status == DoctorLeaveRequestStatus.Approved).ToListAsync();
         foreach (var doctor in doctors.Values)
         {
-            var upcoming = appointments.Where(a => a.DoctorId == doctor.Id && a.AppointmentDate > seedToday && a.AppointmentDate <= seedToday.AddDays(7)).ToList();
+            var upcoming = appointments.Where(a => a.DoctorId == doctor.Id && a.AppointmentDate > clock.VietnamToday && a.AppointmentDate <= clock.VietnamToday.AddDays(7)).ToList();
             Assert.InRange(upcoming.Count, 2, 4);
             Assert.All(upcoming, a => Assert.DoesNotContain(leaves, leave => leave.DoctorId == doctor.Id && DateOnly.FromDateTime(leave.StartDateTime) == a.AppointmentDate));
         }

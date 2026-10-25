@@ -49,17 +49,18 @@ public class DemoSundayClosedTests
             return;
         }
         Assert.Contains(appointments, a => a.AppointmentDate == seedToday);
-        Assert.Contains(payments, p => DateOnly.FromDateTime(clock.ConvertUtcToVietnam(p.ReceivedAtUtc)) == seedToday);
+        Assert.Contains(payments, p => DateOnly.FromDateTime(clock.ConvertUtcToVietnam(p.ReceivedAtUtc)) == DemoSeedCalendar.PreviousOpen(clock.VietnamToday));
+        Assert.All(payments, p => Assert.True(p.ReceivedAtUtc <= clock.UtcNow));
     }
 
     [Fact]
-    public void SundayResetAnchorsTodayToMondayWithWarning()
+    public void SundayResetKeepsActualClockAndSchedulesMondayWithWarning()
     {
         var sunday = new FixedClock(new DateTime(2026, 10, 25, 2, 0, 0, DateTimeKind.Utc));
         var anchored = DemoSeedCalendar.Anchor(sunday);
 
-        Assert.Equal(new DateOnly(2026, 10, 26), anchored.VietnamToday);
-        Assert.Equal(DayOfWeek.Monday, anchored.VietnamToday.DayOfWeek);
+        Assert.Equal(sunday.VietnamToday, anchored.VietnamToday);
+        Assert.Equal(DayOfWeek.Sunday, anchored.VietnamToday.DayOfWeek);
         Assert.Equal(sunday.VietnamTime, anchored.VietnamTime);
         var notice = DemoSeedCalendar.ClosedDayNotice(sunday);
         Assert.NotNull(notice);

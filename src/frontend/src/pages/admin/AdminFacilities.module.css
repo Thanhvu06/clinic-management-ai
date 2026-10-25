@@ -12,7 +12,8 @@
 .blockHeading { font-size: 16px; margin: 0 0 var(--cc-space-sm); }
 .actions, .formActions { display: flex; flex-wrap: wrap; gap: var(--cc-space-xs); }
 .formActions { justify-content: flex-end; }
-.structureRow { row-gap: var(--cc-space-lg); }
+.structureRow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cc-space-lg); }
+.outpatientStructure { display: block; }
 .structureColumn:first-child { padding-right: var(--cc-space-sm); }
 .structureColumn:last-child { padding-left: var(--cc-space-sm); }
 .roomList { max-height: 480px; overflow-y: auto; border: 1px solid var(--cc-color-border); border-radius: var(--cc-radius-md); }
@@ -23,5 +24,5 @@
 .bedPrice { display: block; color: var(--cc-color-primary); margin-top: var(--cc-space-xxs); }
 .formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--cc-space-sm); }
 .numberInput { width: 100%; }
-@media (max-width: 991px) { .structureColumn:first-child, .structureColumn:last-child { padding: 0; } }
+@media (max-width: 991px) { .structureRow { grid-template-columns: 1fr; } .structureColumn:first-child, .structureColumn:last-child { padding: 0; } }
 @media (max-width: 575px) { .formGrid { grid-template-columns: 1fr; gap: 0; } }

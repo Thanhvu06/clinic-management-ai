@@ -120,7 +120,7 @@ internal static class RealisticDevelopmentSeed
         var packages = await db.HealthPackages.OrderBy(p => p.Code).ToListAsync();
         var packageIndex = 0;
         var packagePurchases = await db.HealthPackageRegistrations.ToListAsync();
-        var today = clock.VietnamToday;
+        var today = DemoSeedTimeline.ActivityDate(clock);
         var taken = (await db.Appointments.Where(a => a.AppointmentDate >= today.AddDays(-30) && a.AppointmentDate <= today)
                 .Select(a => new { a.DoctorId, a.AppointmentDate, a.PatientId }).ToListAsync())
             .Select(a => (a.DoctorId, a.AppointmentDate, a.PatientId)).ToHashSet();
@@ -132,11 +132,11 @@ internal static class RealisticDevelopmentSeed
             var date = today.AddDays(-i);
             if (DemoSeedCalendar.IsClosed(date) && i != 0) continue;
             date = DemoSeedCalendar.PreviousOpen(date);
-            var time = At(clock, date, 9, (i % 4) * 10);
+            var time = DemoSeedTimeline.BeforeNow(clock, date, 9, (i % 4) * 10);
             var status = i is 1 or 7 or 13 ? InvoiceStatus.Unpaid : i is 3 or 8 ? InvoiceStatus.Cancelled : InvoiceStatus.Paid;
             var invoice = new Invoice
             {
-                InvoiceCode = BusinessDisplay.RandomCode("INV", date, 7),
+                InvoiceCode = BusinessDisplay.RandomCode("INV", date, 8),
                 SourceType = InvoiceSourceType.Appointment, CreatedByUserId = receptionist,
                 CreatedAtUtc = time, Status = status,
                 PaidAtUtc = status == InvoiceStatus.Paid ? time.AddMinutes(30) : null,
@@ -152,9 +152,9 @@ internal static class RealisticDevelopmentSeed
                 invoice.SourceType = InvoiceSourceType.HealthPackageRegistration;
                 invoice.HealthPackageRegistration = new HealthPackageRegistration
                 {
-                    RegistrationCode = BusinessDisplay.RandomCode("REG", date.AddDays(-2), 7), PatientId = patient.Id,
+                    RegistrationCode = BusinessDisplay.RandomCode("REG", date.AddDays(-2), 8), PatientId = patient.Id,
                     HealthPackageId = package.Id, PreferredDate = date, ContactPhone = patient.PhoneNumber ?? "0900000004",
-                    Status = HealthPackageRegistrationStatus.Confirmed, CreatedAt = time.AddDays(-2),
+                    Status = status == InvoiceStatus.Cancelled ? HealthPackageRegistrationStatus.Cancelled : HealthPackageRegistrationStatus.Confirmed, CreatedAt = time.AddDays(-2),
                 };
                 db.HealthPackageRegistrations.Add(invoice.HealthPackageRegistration);
                 packagePurchases.Add(invoice.HealthPackageRegistration);
@@ -232,7 +232,7 @@ internal static class RealisticDevelopmentSeed
             await db.SaveChangesAsync();
         }
 
-        var now = clock.UtcNow;
+        var now = DemoSeedTimeline.ActivityNow(clock);
         var specimen = 0;
         for (var i = 0; i < TodayOrders.Length; i++)
         {

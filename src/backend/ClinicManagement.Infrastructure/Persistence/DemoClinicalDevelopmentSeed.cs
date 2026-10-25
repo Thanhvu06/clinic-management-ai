@@ -50,6 +50,12 @@ internal static class DemoClinicalDevelopmentSeed
             }
         }
         await db.SaveChangesAsync();
+        foreach (var revisit in await db.RevisitRequests.Include(r => r.OriginalAppointment).ThenInclude(a => a.VisitSummary).ToListAsync())
+        {
+            var summary = revisit.OriginalAppointment.VisitSummary;
+            if (summary != null)
+                revisit.Note = $"Tái khám sau 1 tuần để theo dõi {summary.Diagnosis?.ToLowerInvariant()}. {summary.TreatmentPlan}.";
+        }
         foreach (var prescription in appointments.Select(a => a.Prescription!).Where(p => p.Status != PrescriptionStatus.Dispensed))
             await RealisticDevelopmentSeed.DispenseAsync(db, clock, prescription, pharmacist, prescription.CreatedAt.AddMinutes(30));
 

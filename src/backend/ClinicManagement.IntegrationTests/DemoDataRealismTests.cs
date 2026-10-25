@@ -11,7 +11,7 @@ public class DemoDataRealismTests
 {
     private static async Task<(CustomWebApplicationFactory Factory, IServiceScope Scope, AppDbContext Db, IDateTimeProvider Clock)> SeedAsync()
     {
-        var factory = new CustomWebApplicationFactory();
+        var factory = new FixedSeedWebApplicationFactory();
         var scope = factory.Services.CreateScope();
         await DevelopmentDataSeeder.SeedDoctorSchedulesAndSlotsAsync(scope.ServiceProvider, 7, true);
         return (factory, scope, scope.ServiceProvider.GetRequiredService<AppDbContext>(), scope.ServiceProvider.GetRequiredService<IDateTimeProvider>());
@@ -66,7 +66,7 @@ public class DemoDataRealismTests
     {
         var (factory, scope, db, clock) = await SeedAsync();
         using var f = factory; using var s = scope;
-        var now = clock.UtcNow;
+        var now = DemoSeedTimeline.ActivityNow(clock);
         var orders = await db.DiagnosticOrders.Include(o => o.Patient).Include(o => o.OrderingDoctor).ThenInclude(d => d.DoctorSpecialties).ThenInclude(ds => ds.Specialty)
             .Include(o => o.Items).ThenInclude(i => i.DiagnosticService).Include(o => o.Items).ThenInclude(i => i.Result)
             .Where(o => o.PatientVisit != null && o.PatientVisit.QueueNumber >= 200 && o.PatientVisit.QueueNumber < 205).ToListAsync();
@@ -100,7 +100,7 @@ public class DemoDataRealismTests
         using var f = factory; using var s = scope;
         var actor = (await db.Users.SingleAsync(u => u.Email == "pharmacist@cliniccare.local")).Id;
         await MedicineBatchDevelopmentSeed.SeedAsync(db, clock, actor, true);
-        var today = clock.VietnamToday;
+        var today = DemoSeedTimeline.ActivityDate(clock);
         var prescriptions = await db.Prescriptions.Include(p => p.Items).ToListAsync();
         DateOnly CreatedOn(DateTime value) => DateOnly.FromDateTime(clock.ConvertUtcToVietnam(value));
 

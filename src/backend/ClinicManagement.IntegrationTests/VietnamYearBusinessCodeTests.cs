@@ -61,7 +61,7 @@ public class VietnamYearBusinessCodeTests(CustomWebApplicationFactory factory) :
 
         Assert.Equal(new DateOnly(2026, 10, 19), clock.VietnamToday);
         Assert.StartsWith("REG-261019-", registration.RegistrationCode);
-        Assert.Matches(@"^REG-261019-[0-9A-F]{7}$", registration.RegistrationCode);
+        Assert.Matches(@"^REG-261019-[0-9A-F]{8}$", registration.RegistrationCode);
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var persisted = await db.HealthPackageRegistrations.AsNoTracking().SingleAsync(item => item.Id == registration.Id);
         Assert.Equal(registration.RegistrationCode, persisted.RegistrationCode);

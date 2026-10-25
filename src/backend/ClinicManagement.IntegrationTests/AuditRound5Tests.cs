@@ -330,7 +330,7 @@ public class AuditRound5Tests : IntegrationTestBase
     [Theory]
     [InlineData(InvoiceStatus.Paid, "PACKAGE_INVOICE_PAID")]
     [InlineData(InvoiceStatus.Unpaid, "PACKAGE_INVOICE_ACTIVE")]
-    public async Task G5_Package_cancellation_is_blocked_by_effective_invoice_then_allowed_after_unpaid_invoice_cancel(InvoiceStatus status, string code)
+    public async Task G5_Package_cancellation_is_blocked_by_effective_invoice_and_follows_unpaid_invoice_cancel(InvoiceStatus status, string code)
     {
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -349,7 +349,8 @@ public class AuditRound5Tests : IntegrationTestBase
         if (status == InvoiceStatus.Unpaid)
         {
             await OkAsync(await rec.PatchAsJsonAsync($"/api/v1/reception/billing/invoices/{invoice.Id}/cancel", new { reason = "Hủy trước R5" }));
-            await OkAsync(await rec.PostAsJsonAsync(route, new { cancellationReason = "R5" }));
+            var repeated = await rec.PostAsJsonAsync(route, new { cancellationReason = "R5" });
+            Assert.Contains("ALREADY_CANCELLED", await repeated.Content.ReadAsStringAsync());
             await db.Entry(registration).ReloadAsync();
             Assert.Equal(HealthPackageRegistrationStatus.Cancelled, registration.Status);
         }
