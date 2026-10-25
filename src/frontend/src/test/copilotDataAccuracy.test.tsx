@@ -14,7 +14,8 @@ describe('copilot data accuracy', () => {
     it.each([
         ['unpaid', 'Chưa thanh toán'],
         ['paid_in_full', 'Đã thanh toán'],
-        ['partially_paid', 'Thanh toán một phần']
+        ['partially_paid', 'Thanh toán một phần'],
+        ['unverifiable', 'Chưa xác minh']
     ])('localizes %s on both prescription and item without exposing a raw tooltip', (status, label) => {
         const { container } = render(<>{renderCopilotCardData(card('pharmacist_prescription_queue', [{
             status: 'Issued', paymentStatus: status,

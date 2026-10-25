@@ -60,7 +60,7 @@ const formatClock = (value: unknown): string | null => {
     return match ? `${match[1].padStart(2, '0')}:${match[2]}` : null;
 };
 
-const paymentLabels: Record<string, string> = { unpaid: 'Chưa thanh toán', paid_in_full: 'Đã thanh toán', partially_paid: 'Thanh toán một phần', unknown: 'Chưa xác minh' };
+const paymentLabels: Record<string, string> = { unpaid: 'Chưa thanh toán', paid_in_full: 'Đã thanh toán', partially_paid: 'Thanh toán một phần', unverifiable: 'Chưa xác minh', unknown: 'Chưa xác minh' };
 
 const revenuePeriodLabels: Record<string, string> = { today: 'Hôm nay', this_month: 'Tháng này' };
 
