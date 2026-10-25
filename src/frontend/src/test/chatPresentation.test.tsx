@@ -58,7 +58,7 @@ describe('chat presentation contracts', () => {
     });
     it('localizes card statuses while preserving the wire value in the tooltip', () => {
         render(<>{renderCopilotCardData({ type: 'appointments', title: 'Lịch hẹn', data: { items: [{ appointmentCode: 'TEST-READ', status: 'Confirmed' }] }, sources: [] })}</>);
-        expect(screen.getByText('Đã xác nhận').closest('[title]')).toHaveAttribute('title', 'Confirmed');
+        expect(screen.getByText('Chờ tiếp nhận').closest('[title]')).toHaveAttribute('title', 'Confirmed');
         expect(screen.queryByText('Confirmed')).not.toBeInTheDocument();
     });
     it('shows one active wizard with progress, collapsed choices and top focus when the step changes', () => {

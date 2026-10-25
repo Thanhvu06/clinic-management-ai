@@ -24,7 +24,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
-var builder = WebApplication.CreateBuilder(args);
+var resetDemo = args.Contains("--reset-demo", StringComparer.Ordinal);
+var builder = WebApplication.CreateBuilder(args.Where(arg => arg != "--reset-demo").ToArray());
 var aiRateLimitOptions = builder.Configuration
     .GetSection(AiRateLimitOptions.SectionName)
     .Get<AiRateLimitOptions>() ?? new AiRateLimitOptions();
@@ -35,6 +36,17 @@ var aiEndpointPermitLimit = Math.Max(1, aiRateLimitOptions.EndpointPermitLimit);
 
 var connectionString = builder.Configuration.GetConnectionString("ClinicManagementDb")
     ?? "Server=(localdb)\\mssqllocaldb;Database=ClinicManagementDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True";
+
+if (resetDemo)
+{
+    try { DemoResetCommand.Validate(builder.Environment.EnvironmentName, connectionString); }
+    catch (InvalidOperationException error)
+    {
+        Console.Error.WriteLine(error.Message);
+        Environment.ExitCode = 1;
+        return;
+    }
+}
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString));
@@ -309,6 +321,11 @@ builder.Services.AddOpenApi();
 builder.Services.AddCors();
 
 var app = builder.Build();
+if (resetDemo)
+{
+    await DemoResetCommand.RunAsync(app, connectionString);
+    return;
+}
 // Validate configuration before database work or accepting any requests.
 JwtConfiguration.Read(app.Configuration, app.Environment);
 // Eager singleton validation: a missing/mismatched artifact disables only the model.

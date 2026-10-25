@@ -1,7 +1,7 @@
+using ClinicManagement.Infrastructure.Common;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
-using ClinicManagement.Infrastructure.HealthPackages;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClinicManagement.Infrastructure.Persistence;
@@ -14,10 +14,10 @@ internal static class DemoActivityDevelopmentSeed
         await SeedPaymentsAsync(db, clock, receptionist);
         var users = await db.Patients.ToDictionaryAsync(p => p.Id, p => p.UserId);
         void Event(Guid actor, string action, string entity, long id, string code, DateTime time,
-            long patientId, NotificationType type, string title, string route)
+            long patientId, NotificationType type, string title, string route, string? description = null)
         {
             db.SystemAuditLogs.Add(new SystemAuditLog { UserId = actor, Action = action, EntityName = entity,
-                EntityId = id.ToString(), Description = $"{title}: {code}", CreatedAt = time });
+                EntityId = id.ToString(), Description = description ?? $"{title}: {code}", CreatedAt = time });
             if (!users.TryGetValue(patientId, out var userId) || userId == null) return;
             var read = (id + (int)type + action.Length) % 2 == 0;
             db.Notifications.Add(new Notification { UserId = userId.Value, Type = type, Title = title,
@@ -67,18 +67,20 @@ internal static class DemoActivityDevelopmentSeed
         foreach (var invoice in await db.Invoices.Include(i => i.Payments).ToListAsync())
         {
             Event(receptionist, "CreateInvoice", nameof(Invoice), invoice.Id, invoice.InvoiceCode, invoice.CreatedAtUtc,
-                invoice.PatientId, NotificationType.Invoice, "Đã lập hóa đơn", "/patient/invoices");
+                invoice.PatientId, NotificationType.Invoice, "Đã lập hóa đơn", "/patient/invoices",
+                $"Lập hóa đơn {invoice.InvoiceCode}: {BusinessDisplay.Money(invoice.TotalAmount)}");
             foreach (var payment in invoice.Payments.Where(p => p.Status == PaymentStatus.Succeeded))
                 Event(receptionist, "ReceivePayment", nameof(Payment), payment.Id, payment.PaymentCode, payment.ReceivedAtUtc,
-                    invoice.PatientId, NotificationType.Payment, "Thanh toán thành công", "/patient/invoices");
+                    invoice.PatientId, NotificationType.Payment, "Thanh toán thành công", "/patient/invoices",
+                    $"Thu tiền hóa đơn {invoice.InvoiceCode}: {BusinessDisplay.Money(payment.Amount)}");
         }
         foreach (var prescription in await db.Prescriptions.Include(p => p.Doctor).ToListAsync())
         {
             Event(prescription.Doctor!.UserId, "IssuePrescription", nameof(Prescription), prescription.Id,
-                $"RX-{clock.ConvertUtcToVietnam(prescription.CreatedAt):yyMMdd}-{prescription.Id:D4}", prescription.CreatedAt,
+                BusinessDisplay.PrescriptionCode(prescription, clock), prescription.CreatedAt,
                 prescription.PatientId, NotificationType.Prescription, "Đã kê đơn thuốc", "/patient/prescriptions");
             if (prescription.DispensedAt.HasValue)
-                Event(pharmacist, "DispensePrescription", nameof(Prescription), prescription.Id, $"Đơn thuốc #{prescription.Id}",
+                Event(pharmacist, "DispensePrescription", nameof(Prescription), prescription.Id, BusinessDisplay.PrescriptionCode(prescription, clock),
                     prescription.DispensedAt.Value, prescription.PatientId, NotificationType.Prescription, "Đã cấp thuốc", "/patient/prescriptions");
         }
         await db.SaveChangesAsync();
@@ -88,6 +90,8 @@ internal static class DemoActivityDevelopmentSeed
     {
         var packages = await db.HealthPackages.OrderBy(p => p.Code).ToListAsync();
         var patients = await db.Patients.OrderBy(p => p.Id).ToListAsync();
+        var purchases = await db.HealthPackageRegistrations.ToListAsync();
+        var random = new Random(261024);
         for (var day = 0; day < 30; day++)
         {
             var date = clock.VietnamToday.AddDays(-day);
@@ -95,27 +99,31 @@ internal static class DemoActivityDevelopmentSeed
             var start = RealisticDevelopmentSeed.At(clock, date, 0);
             var end = start.AddDays(1);
             var paid = await db.Payments.CountAsync(p => p.Status == PaymentStatus.Succeeded && p.ReceivedAtUtc >= start && p.ReceivedAtUtc < end);
-            var desired = 2 + day % 5;
+            var desired = random.Next(2, 7);
             for (var n = paid; n < desired; n++)
             {
-                var package = packages[(day + n) % packages.Count];
-                var eligible = patients.Where(p => HealthPackageEligibility.Allows(package, p.Gender)).ToList();
-                var patient = eligible[(day + n) % eligible.Count];
+                var choices = packages.Select(package => new { Package = package,
+                    Patient = DemoRevenueDevelopmentSeed.FindPatient(patients, package, date, purchases, day + n) })
+                    .Where(choice => choice.Patient != null).ToList();
+                var choice = choices[random.Next(choices.Count)];
+                var package = choice.Package;
+                var patient = choice.Patient!;
                 var time = RealisticDevelopmentSeed.At(clock, date, 8 + n / 2, n % 2 * 25);
                 var invoice = new Invoice
                 {
-                    InvoiceCode = $"INV-{date:yyMMdd}-R{n + 1:D4}", PatientId = patient.Id,
+                    InvoiceCode = BusinessDisplay.RandomCode("INV", date, 7), PatientId = patient.Id,
                     SourceType = InvoiceSourceType.HealthPackageRegistration, Status = InvoiceStatus.Paid,
                     CreatedByUserId = receptionist, CreatedAtUtc = time, PaidAtUtc = time.AddMinutes(10), PaidByUserId = receptionist,
                     Subtotal = package.Price, TotalAmount = package.Price,
-                    HealthPackageRegistration = new HealthPackageRegistration { RegistrationCode = $"REG-{date.AddDays(-2):yyMMdd}-REV{n + 1:D4}",
+                    HealthPackageRegistration = new HealthPackageRegistration { RegistrationCode = BusinessDisplay.RandomCode("REG", date.AddDays(-2), 7),
                         PatientId = patient.Id, HealthPackageId = package.Id, PreferredDate = date, ContactPhone = patient.PhoneNumber!,
                         Status = HealthPackageRegistrationStatus.Confirmed, CreatedAt = time.AddDays(-2), UpdatedAt = time.AddDays(-1) },
-                    Payments = [new Payment { PaymentCode = $"PAY-{date:yyMMdd}-R{n + 1:D4}", Amount = package.Price,
+                    Payments = [new Payment { PaymentCode = BusinessDisplay.RandomCode("PAY", date, 8), Amount = package.Price,
                         Method = n % 2 == 0 ? PaymentMethod.Cash : PaymentMethod.ManualBankTransfer, Status = PaymentStatus.Succeeded,
                         ReceivedAtUtc = time.AddMinutes(10), ReceivedByUserId = receptionist }],
                 };
                 db.HealthPackageRegistrations.Add(invoice.HealthPackageRegistration!);
+                purchases.Add(invoice.HealthPackageRegistration!);
                 await db.SaveChangesAsync();
                 invoice.Items.Add(new InvoiceItem { ItemCode = package.Code, Description = package.Name, Quantity = 1,
                     UnitPrice = package.Price, LineTotal = package.Price, ReferenceType = "HealthPackage", ReferenceId = invoice.HealthPackageRegistration!.Id });

@@ -432,7 +432,7 @@ public class PharmacyService : IPharmacyService
                         UserId = patientUserId.Value,
                         Type = NotificationType.Prescription,
                         Title = "Đơn thuốc đã được phát",
-                        Message = $"Đơn thuốc #{prescription.Id} cho lịch khám {appointmentCode} đã được nhà thuốc cấp phát thành công.",
+                        Message = $"Đơn thuốc {ClinicManagement.Infrastructure.Common.BusinessDisplay.PrescriptionCode(prescription, _dateTimeProvider)} cho lịch khám {appointmentCode} đã được nhà thuốc cấp phát thành công.",
                         Route = "/patient/prescriptions",
                         RelatedEntityType = "Prescription",
                         RelatedEntityId = prescription.Id.ToString(),

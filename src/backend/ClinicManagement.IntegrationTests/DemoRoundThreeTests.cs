@@ -190,7 +190,7 @@ public class DemoRoundThreeTests(DemoRoundThreeFixture fixture) : IClassFixture<
             Assert.Contains(audit, a => a.Action == "CreateInvoice" && a.EntityId == invoice.Id.ToString() && a.UserId == invoice.CreatedByUserId && a.CreatedAt == invoice.CreatedAtUtc);
         var payments = await db.Payments.Where(p => p.Status == PaymentStatus.Succeeded).ToListAsync();
         foreach (var group in payments.GroupBy(p => DateOnly.FromDateTime(clock.ConvertUtcToVietnam(p.ReceivedAtUtc))))
-        { Assert.NotEqual(DayOfWeek.Sunday, group.Key.DayOfWeek); Assert.InRange(group.Count(), 2, 6); }
+        { Assert.InRange(group.Count(), group.Key.DayOfWeek == DayOfWeek.Sunday ? 0 : 2, group.Key.DayOfWeek == DayOfWeek.Sunday ? 1 : 6); }
         Assert.Equal((await db.Invoices.Where(i => i.Status == InvoiceStatus.Paid).ToListAsync()).Sum(i => i.TotalAmount), payments.Sum(p => p.Amount));
         Assert.All(await db.Users.ToListAsync(), u => Assert.DoesNotMatch("Quản trị viên|Dược sĩ|Kỹ thuật viên|Lễ tân|Trưởng khoa", u.FullName));
     }

@@ -115,7 +115,7 @@ public class BillingService : IBillingService
                     Action = "CREATE_INVOICE",
                     EntityName = "Invoice",
                     EntityId = invoice.Id.ToString(),
-                    Description = $"Lập hóa đơn #{invoice.InvoiceCode} cho lịch hẹn #{appointment.AppointmentCode} ({invoice.TotalAmount:N0}đ)",
+                    Description = $"Lập hóa đơn #{invoice.InvoiceCode} cho lịch hẹn #{appointment.AppointmentCode} ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)})",
                     CreatedAt = _dateTimeProvider.UtcNow
                 });
 
@@ -126,7 +126,7 @@ public class BillingService : IBillingService
                         UserId = appointment.Patient.UserId.Value,
                         Type = NotificationType.Invoice,
                         Title = "Hóa đơn mới được tạo",
-                        Message = $"Hóa đơn #{invoice.InvoiceCode} cho lịch khám #{appointment.AppointmentCode} đã được tạo với số tiền {invoice.TotalAmount:N0}đ.",
+                        Message = $"Hóa đơn #{invoice.InvoiceCode} cho lịch khám #{appointment.AppointmentCode} đã được tạo với số tiền {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)}.",
                         Route = "/patient/invoices",
                         RelatedEntityType = "Invoice",
                         RelatedEntityId = invoice.Id.ToString(),
@@ -355,7 +355,7 @@ public class BillingService : IBillingService
                     Action = "CREATE_INVOICE",
                     EntityName = "Invoice",
                     EntityId = invoice.Id.ToString(),
-                    Description = $"Lập hóa đơn tổng hợp #{invoice.InvoiceCode} cho lượt khám #{visit.VisitCode} ({invoice.TotalAmount:N0}đ)",
+                    Description = $"Lập hóa đơn tổng hợp #{invoice.InvoiceCode} cho lượt khám #{visit.VisitCode} ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)})",
                     CreatedAt = _dateTimeProvider.UtcNow
                 });
 
@@ -366,7 +366,7 @@ public class BillingService : IBillingService
                         UserId = visit.Patient.UserId.Value,
                         Type = NotificationType.Invoice,
                         Title = "Hóa đơn viện phí mới",
-                        Message = $"Hóa đơn #{invoice.InvoiceCode} cho lượt khám #{visit.VisitCode} đã được lập với số tiền {invoice.TotalAmount:N0}đ.",
+                        Message = $"Hóa đơn #{invoice.InvoiceCode} cho lượt khám #{visit.VisitCode} đã được lập với số tiền {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)}.",
                         Route = "/patient/invoices",
                         RelatedEntityType = "Invoice",
                         RelatedEntityId = invoice.Id.ToString(),
@@ -647,7 +647,7 @@ public class BillingService : IBillingService
                     Action = "CREATE_INVOICE",
                     EntityName = "Invoice",
                     EntityId = invoice.Id.ToString(),
-                    Description = $"Lập hóa đơn #{invoice.InvoiceCode} cho đăng ký gói #{registration.RegistrationCode} ({invoice.TotalAmount:N0}đ)",
+                    Description = $"Lập hóa đơn #{invoice.InvoiceCode} cho đăng ký gói #{registration.RegistrationCode} ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)})",
                     CreatedAt = _dateTimeProvider.UtcNow
                 });
 
@@ -658,7 +658,7 @@ public class BillingService : IBillingService
                         UserId = registration.Patient.UserId.Value,
                         Type = NotificationType.Invoice,
                         Title = "Hóa đơn mới được tạo",
-                        Message = $"Hóa đơn #{invoice.InvoiceCode} cho gói khám #{registration.RegistrationCode} đã được tạo với số tiền {invoice.TotalAmount:N0}đ.",
+                        Message = $"Hóa đơn #{invoice.InvoiceCode} cho gói khám #{registration.RegistrationCode} đã được tạo với số tiền {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)}.",
                         Route = "/patient/invoices",
                         RelatedEntityType = "Invoice",
                         RelatedEntityId = invoice.Id.ToString(),
@@ -792,7 +792,7 @@ public class BillingService : IBillingService
                     Action = "PROCESS_PAYMENT",
                     EntityName = "Payment",
                     EntityId = paymentCode,
-                    Description = $"Thu tiền hóa đơn #{currentInvoice.InvoiceCode}: {payment.Amount:N0}đ ({(payment.Method == PaymentMethod.Cash ? "Tiền mặt" : "Chuyển khoản")})",
+                    Description = $"Thu tiền hóa đơn #{currentInvoice.InvoiceCode}: {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(payment.Amount)} ({(payment.Method == PaymentMethod.Cash ? "Tiền mặt" : "Chuyển khoản")})",
                     CreatedAt = _dateTimeProvider.UtcNow
                 });
 
@@ -804,7 +804,7 @@ public class BillingService : IBillingService
                         UserId = currentInvoice.Patient.UserId.Value,
                         Type = NotificationType.Payment,
                         Title = "Thanh toán thành công",
-                        Message = $"Hóa đơn #{currentInvoice.InvoiceCode} đã được thanh toán thành công ({payment.Amount:N0}đ qua {methodLabel}).",
+                        Message = $"Hóa đơn #{currentInvoice.InvoiceCode} đã được thanh toán thành công ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(payment.Amount)} qua {methodLabel}).",
                         Route = "/patient/invoices",
                         RelatedEntityType = "Invoice",
                         RelatedEntityId = currentInvoice.Id.ToString(),
@@ -1247,7 +1247,7 @@ public class BillingService : IBillingService
             Action = "UPDATE_SPECIALTY_FEE",
             EntityName = "Specialty",
             EntityId = specialty.Id.ToString(),
-            Description = $"Cập nhật phí {specialty.SpecialtyCode} từ {previousFee:N0}đ thành {fee:N0}đ",
+            Description = $"Cập nhật phí {specialty.SpecialtyCode} từ {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(previousFee)} thành {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(fee)}",
             CreatedAt = _dateTimeProvider.UtcNow
         });
 
@@ -1289,17 +1289,17 @@ public class BillingService : IBillingService
             throw new BusinessException("INVALID_STATUS", "Trạng thái hóa đơn không hợp lệ để thanh toán.");
 
         if (amount <= 0 || amount != invoice.TotalAmount)
-            throw new BusinessException("INVALID_AMOUNT", $"Số tiền thanh toán ({amount:N0}đ) phải chính xác bằng tổng tiền hóa đơn ({invoice.TotalAmount:N0}đ).");
+            throw new BusinessException("INVALID_AMOUNT", $"Số tiền thanh toán ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(amount)}) phải chính xác bằng tổng tiền hóa đơn ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)}).");
     }
 
     private string GenerateInvoiceCode()
     {
-        return $"INV-{_dateTimeProvider.VietnamNow:yyMMdd}-{Guid.NewGuid().ToString("N")[..7].ToUpper()}";
+        return ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("INV", _dateTimeProvider.VietnamToday, 7);
     }
 
     private string GeneratePaymentCode()
     {
-        return $"PAY-{_dateTimeProvider.VietnamNow:yyMMdd}-{Guid.NewGuid().ToString("N")[..7].ToUpper()}";
+        return ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("PAY", _dateTimeProvider.VietnamToday, 8);
     }
 
     private static InvoiceDto MapToDto(Invoice i, Dictionary<Guid, UserInfo> userMap)

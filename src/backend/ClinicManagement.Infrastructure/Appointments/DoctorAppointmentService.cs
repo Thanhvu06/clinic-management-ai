@@ -28,7 +28,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ClinicManagement.Infrastructure.Appointments;
 
-public class DoctorAppointmentService : IDoctorAppointmentService
+public partial class DoctorAppointmentService : IDoctorAppointmentService
 {
     private readonly AppDbContext _dbContext;
     private readonly IDoctorContextService _doctorContextService;
@@ -435,54 +435,6 @@ public class DoctorAppointmentService : IDoctorAppointmentService
         }
 
         return groupedDays;
-    }
-
-    public async Task<PagedResult<DoctorAppointmentDto>> GetMyAppointmentsAsync(DateOnly? date, string? status, string? search, int page, int pageSize)
-    {
-        page = page < 1 ? 1 : page;
-        pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
-
-        var doctor = await GetCurrentDoctorAsync();
-
-        var query = from a in _dbContext.Appointments
-                    join p in _dbContext.Patients on a.PatientId equals p.Id
-                    join pu in _dbContext.Users on p.UserId equals (Guid?)pu.Id into puGroup
-                    from pu in puGroup.DefaultIfEmpty()
-                    where a.DoctorId == doctor.Id
-                    select new
-                    {
-                        Appointment = a,
-                        PatientName = pu != null ? pu.FullName : (p.FullName ?? string.Empty),
-                        PatientPhone = pu != null ? (pu.PhoneNumber ?? string.Empty) : (p.PhoneNumber ?? string.Empty),
-                        PatientGender = p.Gender,
-                        PatientDob = p.DateOfBirth
-                    };
-
-        if (date.HasValue)
-        {
-            query = query.Where(x => x.Appointment.AppointmentDate == date.Value);
-        }
-
-        if (!string.IsNullOrEmpty(status) && Enum.TryParse<AppointmentStatus>(status, true, out var parsedStatus))
-        {
-            query = query.Where(x => x.Appointment.Status == parsedStatus);
-        }
-
-        if (!string.IsNullOrEmpty(search))
-        {
-            query = query.Where(x => x.Appointment.AppointmentCode.Contains(search) 
-                                  || x.PatientName.Contains(search)
-                                  || x.PatientPhone.Contains(search));
-        }
-
-        query = query.OrderByDescending(x => x.Appointment.AppointmentDate).ThenBy(x => x.Appointment.StartTime);
-
-        var totalItems = await query.CountAsync();
-        var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
-
-        var resultItems = items.Select(x => MapToDto(x.Appointment, x.PatientName, x.PatientPhone, x.PatientGender, x.PatientDob)).ToList();
-
-        return new PagedResult<DoctorAppointmentDto>(resultItems, totalItems, page, pageSize);
     }
 
     public async Task<DoctorAppointmentDto> GetAppointmentByIdAsync(long appointmentId)

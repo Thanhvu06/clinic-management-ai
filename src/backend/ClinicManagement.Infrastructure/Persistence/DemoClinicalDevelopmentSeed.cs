@@ -66,7 +66,7 @@ internal static class DemoClinicalDevelopmentSeed
         }
 
         var historicalOrders = await db.DiagnosticOrders.Include(o => o.Items).ThenInclude(i => i.DiagnosticService)
-            .Include(o => o.Items).ThenInclude(i => i.Result).Where(o => o.OrderCode.Contains("-S") && o.Status == DiagnosticOrderStatus.Completed).ToListAsync();
+            .Include(o => o.Items).ThenInclude(i => i.Result).Where(o => o.PatientVisit != null && o.PatientVisit.QueueNumber < 200 && o.Status == DiagnosticOrderStatus.Completed).ToListAsync();
         foreach (var order in historicalOrders)
         {
             order.StartedAtUtc = order.OrderedAtUtc.AddMinutes(2);

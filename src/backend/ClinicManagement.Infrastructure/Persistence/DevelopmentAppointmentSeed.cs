@@ -111,7 +111,7 @@ internal static class DevelopmentAppointmentSeed
                 ?? d.DoctorSpecialties.FirstOrDefault()?.SpecialtyId
                 ?? specs[0].Id;
             p = RealisticDevelopmentSeed.PickPatient(patients, bookedPatients, d.Id, s.SlotDate, patients.IndexOf(p),
-                specs.Single(spec => spec.Id == docSpecId).SpecialtyCode == "SP03");
+                specs.Single(spec => spec.Id == docSpecId).SpecialtyCode);
             var patientAppointments = await db.Appointments.Where(a => a.PatientId == p.Id && a.AppointmentDate == s.SlotDate && a.Status != AppointmentStatus.Cancelled).ToListAsync();
             var available = await db.AppointmentSlots.Where(slot => slot.DoctorId == d.Id && slot.SlotDate == s.SlotDate && !slot.IsBooked).OrderBy(slot => slot.StartTime).ToListAsync();
             if (status != AppointmentStatus.Cancelled && available.Count > 0)
@@ -154,8 +154,8 @@ internal static class DevelopmentAppointmentSeed
                 AppointmentId = a.Id,
                 Action = AppointmentHistoryAction.Created,
                 NewStatus = AppointmentStatus.Pending,
-                Note = "Bệnh nhân tự đặt lịch hẹn qua ứng dụng",
-                PerformedByUserId = p.UserId ?? Guid.Empty,
+                Note = p.UserId.HasValue ? "Bệnh nhân tự đặt lịch hẹn qua ứng dụng" : "Nhân viên đặt lịch cho bệnh nhân tại phòng khám",
+                PerformedByUserId = p.UserId ?? adminId1.Id,
                 CreatedAt = bookedAt
             });
 
@@ -216,7 +216,7 @@ internal static class DevelopmentAppointmentSeed
                     OldStatus = AppointmentStatus.Pending,
                     NewStatus = AppointmentStatus.Cancelled,
                     Note = "Bệnh nhân thông báo bận việc đột xuất xin hủy lịch",
-                    PerformedByUserId = p.UserId ?? Guid.Empty,
+                    PerformedByUserId = p.UserId ?? adminId1.Id,
                     CreatedAt = bookedAt.AddHours(1)
                 });
             }
@@ -362,7 +362,8 @@ internal static class DevelopmentAppointmentSeed
                     && !(doc.Id == doctors[1 % doctors.Count].Id && s.SlotDate == approvedLeaveDate))
                 .GroupBy(s => s.SlotDate).OrderBy(g => g.Key).ToList();
             var alreadyUpcoming = db.Appointments.Local.Count(a => a.DoctorId == doc.Id && a.AppointmentDate > today && a.AppointmentDate <= today.AddDays(7));
-            var count = Math.Min(Math.Max(0, 2 + index % 3 - alreadyUpcoming), openDays.Count);
+            var sundayAppointment = openDays.Any(g => g.Key.DayOfWeek == DayOfWeek.Sunday) ? 1 : 0;
+            var count = Math.Min(Math.Max(0, 2 + index % 3 - alreadyUpcoming - sundayAppointment), openDays.Count);
             for (var n = 0; n < count; n++)
             {
                 var daySlots = openDays[n].Where(s => !s.IsBooked).OrderBy(s => s.StartTime).ToList();
@@ -370,6 +371,16 @@ internal static class DevelopmentAppointmentSeed
                 var status = (index + n) % 2 == 0 ? AppointmentStatus.Pending : AppointmentStatus.Confirmed;
                 await CreateApt(patients[(index * 3 + n * 5 + 2) % patients.Count], doc, slot, status);
             }
+        }
+
+        foreach (var sunday in slots.Where(s => s.SlotDate >= today && s.SlotDate.DayOfWeek == DayOfWeek.Sunday)
+                     .GroupBy(s => (s.DoctorId, s.SlotDate)))
+        {
+            if (sunday.Key.DoctorId == doctors[1 % doctors.Count].Id && sunday.Key.SlotDate == approvedLeaveDate) continue;
+            if (await db.Appointments.AnyAsync(a => a.DoctorId == sunday.Key.DoctorId && a.AppointmentDate == sunday.Key.SlotDate)) continue;
+            var slot = sunday.OrderBy(s => s.StartTime).FirstOrDefault(s => !s.IsBooked);
+            if (slot != null)
+                await CreateApt(patients[(int)(sunday.Key.DoctorId % patients.Count)], doctors.Single(d => d.Id == sunday.Key.DoctorId), slot, AppointmentStatus.Confirmed);
         }
 
         logger.LogInformation("Appointments seeded.");
@@ -385,7 +396,7 @@ internal static class DevelopmentAppointmentSeed
                     RequestType = AppointmentChangeRequestType.Cancellation,
                     Reason = "Bận chuyến công tác đột xuất tại Hà Nội",
                     Status = AppointmentChangeRequestStatus.Pending,
-                    RequestedByUserId = pendingAppt.Patient.UserId ?? Guid.Empty,
+                    RequestedByUserId = pendingAppt.Patient.UserId ?? adminId1.Id,
                     CreatedAt = RealisticDevelopmentSeed.At(dateTimeProvider, today, 9)
                 });
             }
@@ -401,7 +412,7 @@ internal static class DevelopmentAppointmentSeed
                     RequestedSlotId = rescheduleSlot?.Id ?? confAppt.AppointmentSlotId,
                     Reason = "Xin dời ngày khám sang tuần sau vì việc gia đình",
                     Status = AppointmentChangeRequestStatus.Pending,
-                    RequestedByUserId = confAppt.Patient.UserId ?? Guid.Empty,
+                    RequestedByUserId = confAppt.Patient.UserId ?? adminId1.Id,
                     CreatedAt = RealisticDevelopmentSeed.At(dateTimeProvider, today, 9)
                 });
             }

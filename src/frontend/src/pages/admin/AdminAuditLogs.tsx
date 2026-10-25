@@ -15,6 +15,7 @@ interface AuditLog {
     action: string;
     entityName: string;
     entityId: string;
+    referenceCode: string;
     description: string;
     createdAt: string;
 }
@@ -97,7 +98,7 @@ export const AdminAuditLogs: React.FC = () => {
                             { header: 'Người thực hiện', accessor: log => <div className={styles.auditActor}><User size={14} /><span>{log.userFullName}</span></div> },
                             { header: 'Hành động', accessor: log => getActionBadge(log.action) },
                             { header: 'Thực thể', accessor: log => <Tag>{getAuditEntityLabel(log.entityName)}</Tag> },
-                            { header: 'Mã tham chiếu', accessor: log => <Typography.Text code>{log.entityId || '-'}</Typography.Text> },
+                            { header: 'Mã tham chiếu', accessor: log => <Typography.Text code>{log.referenceCode || '-'}</Typography.Text> },
                             { header: 'Mô tả chi tiết', accessor: 'description' }
                         ]} />
                     </div>

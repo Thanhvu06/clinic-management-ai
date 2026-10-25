@@ -52,7 +52,7 @@ public class RealisticDevelopmentSeedTests
         Assert.Contains(invoices.SelectMany(i => i.Items), i => i.ReferenceType == "PrescriptionItem:v2");
         Assert.Contains(invoices, i => i.SourceType == InvoiceSourceType.HealthPackageRegistration);
 
-        var orders = await db.DiagnosticOrders.Include(o => o.OrderingDoctor).Include(o => o.Items).ThenInclude(i => i.Result).Where(o => o.OrderCode.Contains("-D")).ToListAsync();
+        var orders = await db.DiagnosticOrders.Include(o => o.OrderingDoctor).Include(o => o.Items).ThenInclude(i => i.Result).Where(o => o.PatientVisit != null && o.PatientVisit.QueueNumber >= 200 && o.PatientVisit.QueueNumber < 205).ToListAsync();
         Assert.Equal(2, orders.Count(o => o.Status == DiagnosticOrderStatus.Ordered));
         Assert.Single(orders, o => o.Status == DiagnosticOrderStatus.InProgress && o.VerificationStatus == DiagnosticVerificationStatus.NotRequired);
         Assert.Single(orders, o => o.VerificationStatus == DiagnosticVerificationStatus.Pending);

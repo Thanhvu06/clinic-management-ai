@@ -69,7 +69,7 @@ public class DemoDataRealismTests
         var now = clock.UtcNow;
         var orders = await db.DiagnosticOrders.Include(o => o.Patient).Include(o => o.OrderingDoctor).ThenInclude(d => d.DoctorSpecialties).ThenInclude(ds => ds.Specialty)
             .Include(o => o.Items).ThenInclude(i => i.DiagnosticService).Include(o => o.Items).ThenInclude(i => i.Result)
-            .Where(o => o.OrderCode.Contains("-D")).ToListAsync();
+            .Where(o => o.PatientVisit != null && o.PatientVisit.QueueNumber >= 200 && o.PatientVisit.QueueNumber < 205).ToListAsync();
 
         Assert.Equal(5, orders.Count);
         Assert.Equal(5, orders.Select(o => o.OrderingDoctorId).Distinct().Count());

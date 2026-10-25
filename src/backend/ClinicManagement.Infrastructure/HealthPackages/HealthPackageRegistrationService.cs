@@ -55,7 +55,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
         if (string.IsNullOrWhiteSpace(phone))
             throw new BusinessException("INVALID_PHONE", "Số điện thoại liên hệ không được để trống.");
 
-        var registrationCode = $"REG-{_dateTimeProvider.VietnamNow:yyMMdd}-{Guid.NewGuid():N}"[..18].ToUpper();
+        var registrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", _dateTimeProvider.VietnamToday, 7);
 
         var registration = new HealthPackageRegistration
         {

@@ -15,7 +15,7 @@ describe('getVisitStatusLabel', () => {
             InBilling: 'Đang thanh toán',
             Completed: 'Đã khám xong',
             Cancelled: 'Đã hủy',
-            NoShow: 'Không đến',
+            NoShow: 'Vắng mặt',
             Transferred: 'Đã chuyển',
             ConsultationCompleted: 'Đã kết thúc khám',
         };
