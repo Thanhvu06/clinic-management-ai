@@ -19,7 +19,7 @@ namespace ClinicManagement.Infrastructure.AI.Tools;
 /// Read-only dispatchers for professional workspaces. Every query derives
 /// actor, role and facility scope from the authenticated server context.
 /// </summary>
-public sealed class RoleCopilotToolHandler : IAiToolHandler
+public sealed partial class RoleCopilotToolHandler : IAiToolHandler
 {
     private const int CatalogDefaultResultLimit = 10;
     private const int CatalogMaxResultLimit = 20;
@@ -92,7 +92,8 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         IDateTimeProvider clock,
         IPharmacyService pharmacy,
         IAiProviderHealth? providerHealth = null,
-        IAiProviderConfigurationInspector? providerConfiguration = null)
+        IAiProviderConfigurationInspector? providerConfiguration = null,
+        ClinicManagement.Application.Appointments.Interfaces.IDoctorAppointmentService? doctorAppointments = null)
     {
         _db = db;
         _currentUser = currentUser;
@@ -100,6 +101,7 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         _pharmacy = pharmacy;
         _providerHealth = providerHealth;
         _providerConfiguration = providerConfiguration;
+        _doctorAppointments = doctorAppointments;
     }
 
     public AiToolDefinition Definition { get; } = new() { Name = "role.copilot.dispatch", Version = "1.0" };
@@ -795,19 +797,6 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         return appointment is null ? AiToolExecutionResult.Failed("NOT_FOUND", "Không tìm thấy lịch hẹn trong phạm vi cơ sở được phân quyền.") : Completed(appointment, "appointment_lookup", "Đã tra cứu lịch hẹn từ hệ thống.");
     }
 
-    private async Task<AiToolExecutionResult> GetDoctorQueueAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
-    {
-        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Doctor), cancellationToken);
-        if (facilities.Count == 0) return ScopeDenied();
-        var doctorId = await _db.Doctors.AsNoTracking().Where(d => d.UserId == context.ActorId).Select(d => (long?)d.Id).SingleOrDefaultAsync(cancellationToken);
-        if (!doctorId.HasValue) return ScopeDenied();
-        var items = await _db.PatientVisits.AsNoTracking()
-            .Where(v => v.AssignedDoctorId == doctorId && facilities.Contains(v.FacilityId) && v.VisitDate == _clock.VietnamToday && v.Status != VisitStatus.Cancelled && v.Status != VisitStatus.Completed)
-            .OrderBy(v => v.QueueNumber).Take(100)
-            .Select(v => new { v.Id, v.VisitCode, v.QueueNumber, status = v.Status.ToString(), patientName = v.Patient.FullName, v.ChiefComplaint, v.AppointmentId })
-            .ToListAsync(cancellationToken);
-        return Completed(items, "doctor_queue", $"Hàng đợi của bạn có {items.Count} lượt.");
-    }
 
     private async Task<AiToolExecutionResult> GetDoctorPatientSummaryAsync(AiToolExecutionContext context, string json, CancellationToken cancellationToken)
     {
@@ -937,39 +926,6 @@ public sealed class RoleCopilotToolHandler : IAiToolHandler
         return Completed(items, "technician_worklist", $"Có {items.Count} chỉ định đang chờ xử lý.");
     }
 
-    private async Task<AiToolExecutionResult> GetPharmacyQueueAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
-    {
-        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Pharmacist), cancellationToken);
-        if (facilities.Count == 0) return ScopeDenied();
-        var prescriptions = await _db.Prescriptions.AsNoTracking()
-            .Where(p => (p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.ReservedForPurchase) &&
-                        ((p.PatientVisit != null && facilities.Contains(p.PatientVisit.FacilityId)) ||
-                         (p.PatientVisit == null && p.Appointment != null && p.Appointment.FacilityId.HasValue && facilities.Contains(p.Appointment.FacilityId.Value))))
-            .OrderBy(p => p.CreatedAt).Take(100)
-            .Select(p => new { p.Id, status = p.Status.ToString(), p.CreatedAt, p.PatientVisitId })
-            .ToListAsync(cancellationToken);
-        var items = new List<object>(prescriptions.Count);
-        foreach (var prescription in prescriptions)
-        {
-            var payment = await _pharmacy.EvaluatePrescriptionPaymentAsync(prescription.Id, cancellationToken);
-            items.Add(new
-            {
-                prescription.Id,
-                prescription.status,
-                prescription.CreatedAt,
-                prescription.PatientVisitId,
-                paymentStatus = payment.PaymentStatus,
-                paymentItems = payment.Items.Select(item => new
-                {
-                    medicine = item.MedicineName,
-                    requiredQuantity = item.RequiredQuantity,
-                    paidQuantity = item.PaidQuantity,
-                    itemPaymentStatus = item.IsPaidInFull ? "paid_in_full" : item.PaidQuantity > 0 ? "partially_paid" : "unpaid"
-                }).ToList()
-            });
-        }
-        return Completed(items, "pharmacist_prescription_queue", $"Có {items.Count} đơn thuốc trong hàng đợi.");
-    }
 
     private async Task<AiToolExecutionResult> GetPrescriptionPaymentStatusAsync(AiToolExecutionContext context, string json, CancellationToken cancellationToken)
     {

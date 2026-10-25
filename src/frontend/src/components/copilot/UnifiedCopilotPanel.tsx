@@ -1,3 +1,4 @@
+import { formatCopilotDateTime } from './displayFormatters';
 import React, { useEffect, useRef, useState } from 'react';
 import { Bot, CheckCircle2, ExternalLink, RotateCcw, Send, ShieldCheck, Square, X } from 'lucide-react';
 import { useUnifiedCopilot, type UnifiedCopilotMessage } from './useUnifiedCopilot';
@@ -46,7 +47,7 @@ const MessageBubble: React.FC<{
                         <article className={styles.card} key={`${card.type}-${index}`}>
                             <div className={styles.cardTitle}><span>{card.title}</span></div>
                             {card.description && normalizeText(card.description) !== normalizeText(item.content) && <p className={styles.cardDescription}>{card.description}</p>}
-                            {card.retrievedAtUtc && <p className={styles.cardDescription}>Dữ liệu đọc lúc: {new Date(card.retrievedAtUtc).toLocaleString('vi-VN')}</p>}
+                            {card.retrievedAtUtc && <p className={styles.cardDescription}>Dữ liệu đọc lúc: {formatCopilotDateTime(card.retrievedAtUtc)}</p>}
                             {renderCopilotCardData(card)}
                             {sources.length > 0 && <div className={styles.sources} aria-label="Nguồn dữ liệu">
                                 {sources.slice(0, 5).map((source, sourceIndex) => <span className={styles.source} title={`${source.name} · ${source.kind ?? ''} · ${source.status ?? ''}`} key={`${source.name}-${sourceIndex}`}>{import.meta.env.DEV ? `${source.name}${source.kind ? ` · ${source.kind}` : ''}${source.status ? ` · ${source.status}` : ''}` : source.kind === 'database' ? 'Dữ liệu phòng khám' : 'Danh mục phòng khám'}</span>)}
@@ -155,9 +156,9 @@ export const UnifiedCopilotPanel: React.FC = () => {
                         {copilot.pendingAction.preview.changes.map(change => <div className={styles.previewLine} key={change.kind}><strong>{change.summary}</strong>{change.items.map(item => <div key={`${change.kind}-${item.label}-${item.value}`}>&nbsp;{item.label}: {item.value}{item.quantity !== null && item.quantity !== undefined ? ` · SL ${item.quantity}${item.unit ? ` ${item.unit}` : ''}` : ''}</div>)}</div>)}
                         <div className={styles.previewLine}><strong>Hậu quả:</strong> {copilot.pendingAction.preview.consequence}</div>
                         <div className={styles.previewLine}><strong>Kiểm tra hệ thống:</strong> {copilot.pendingAction.preview.confirmationSummary}</div>
-                        <div className={styles.previewLine}><strong>Dữ liệu kiểm tra lúc:</strong> {new Date(copilot.pendingAction.preview.validatedAtUtc).toLocaleString('vi-VN')}</div>
+                        <div className={styles.previewLine}><strong>Dữ liệu kiểm tra lúc:</strong> {formatCopilotDateTime(copilot.pendingAction.preview.validatedAtUtc)}</div>
                         <div className={styles.previewLine}><strong>Nguồn kiểm tra:</strong> {copilot.pendingAction.preview.sources.map(source => `${source.name} · ${source.kind}${source.status ? ` · ${source.status}` : ''}`).join('; ')}</div>
-                        <div className={styles.previewLine}><strong>Hết hạn:</strong> {new Date(copilot.pendingAction.preview.expiresAtUtc).toLocaleString('vi-VN')}</div>
+                        <div className={styles.previewLine}><strong>Hết hạn:</strong> {formatCopilotDateTime(copilot.pendingAction.preview.expiresAtUtc)}</div>
                         {copilot.pendingActionExpired && <p className={styles.actionError} role="alert">Thông tin xem trước đã hết hạn. Hãy chuẩn bị lại để nhận dữ liệu kiểm tra mới.</p>}
                         <button type="button" className={styles.confirmButton} disabled={Boolean(copilot.actionLoading) || copilot.pendingActionExpired} onClick={() => void copilot.confirmAction()}><CheckCircle2 size={14} /> Xác nhận thao tác</button>
                         <button type="button" className={styles.actionButton} disabled={Boolean(copilot.actionLoading)} onClick={() => void copilot.cancelAction()}>Hủy thao tác</button>

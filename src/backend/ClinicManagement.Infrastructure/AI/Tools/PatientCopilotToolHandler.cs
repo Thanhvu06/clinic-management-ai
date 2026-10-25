@@ -20,7 +20,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ClinicManagement.Infrastructure.AI.Tools;
 
-public sealed class PatientCopilotToolHandler : IAiToolHandler
+public sealed partial class PatientCopilotToolHandler : IAiToolHandler
 {
     private static readonly IReadOnlySet<AiActorRole> PatientOnly = new HashSet<AiActorRole> { AiActorRole.Patient };
 
@@ -284,6 +284,8 @@ public sealed class PatientCopilotToolHandler : IAiToolHandler
         var args = Parse(invocation.ArgumentsJson);
         var page = Math.Clamp(GetInt(args, "page") ?? 1, 1, 100);
         var pageSize = Math.Clamp(GetInt(args, "pageSize") ?? 20, 1, 50);
+        if (string.Equals(GetString(args, "status"), "Upcoming", StringComparison.OrdinalIgnoreCase))
+            return await GetUpcomingAppointmentsAsync(page, pageSize, cancellationToken);
         var result = await _appointments.GetPatientAppointmentsAsync(GetString(args, "status"), page, pageSize);
         return Completed(result, "appointments", result.Items.Count == 0 ? "Bạn hiện chưa có lịch hẹn phù hợp." : $"Tìm thấy {result.TotalItems} lịch hẹn của bạn.");
     }

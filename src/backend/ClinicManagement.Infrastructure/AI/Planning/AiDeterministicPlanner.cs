@@ -272,7 +272,7 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             };
         }
 
-        if (Regex.IsMatch(text, @"\b(?:hang doi|benh nhan tiep theo|ca tiep theo|danh sach cho|queue cua toi|ca benh .*\b(?:cho|dang cho)\b|danh sach .*\b(?:benh nhan|nguoi benh)\b.*\b(?:hom nay|tiep theo)\b|(?:benh nhan|nguoi benh)\b.*\bdanh sach\b.*\b(?:hom nay|tiep theo)\b)", RegexOptions.CultureInvariant))
+        if (Regex.IsMatch(text, @"\b(?:kham ai|hang doi|benh nhan tiep theo|ca tiep theo|danh sach cho|queue cua toi|ca benh .*\b(?:cho|dang cho)\b|danh sach .*\b(?:benh nhan|nguoi benh)\b.*\b(?:hom nay|tiep theo)\b|(?:benh nhan|nguoi benh)\b.*\bdanh sach\b.*\b(?:hom nay|tiep theo)\b)", RegexOptions.CultureInvariant))
             return ReadTool("doctor.get_my_queue", new { });
 
         if (Regex.IsMatch(text, @"\b(?:benh nhan|ca kham|luot kham|trieu chung|sinh hieu|chan doan|chi tiet ho so|don thuoc|chi dinh|ket qua)\b", RegexOptions.CultureInvariant))
@@ -333,7 +333,9 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         if (Regex.IsMatch(text, @"\b(?:luot kham|lan kham|lich su kham|tom tat ca kham|chan doan cua toi|trieu chung cua toi)\b", RegexOptions.CultureInvariant))
             return ReadTool("patient.get_my_visits", new { page = 1, pageSize = 20 });
         if (Regex.IsMatch(text, @"\b(?:lich(?:\s+(?:hen|cu|cuoc hen|da dat|truoc|sap toi|cua toi|kham cua toi))|cuoc hen|hen sap toi)\b", RegexOptions.CultureInvariant))
-            return ReadTool("patient.get_my_appointments", new { page = 1, pageSize = 20 });
+            return text.Contains("sap toi", StringComparison.Ordinal)
+                ? ReadTool("patient.get_my_appointments", new { page = 1, pageSize = 20, status = "Upcoming" })
+                : ReadTool("patient.get_my_appointments", new { page = 1, pageSize = 20 });
         if (Regex.IsMatch(text, @"\b(?:benh an|ho so|luot kham|chan doan|trieu chung|ket qua|don thuoc|hoa don)\b", RegexOptions.CultureInvariant))
             return Clarify("Bạn hãy nêu rõ muốn xem lịch hẹn, lượt khám, kết quả, đơn thuốc hay hóa đơn của chính tài khoản này.", "AmbiguousPatientRead", AiChatIntentTypes.ClarificationRequired, "/patient");
         return ProviderRequired(AiChatIntentTypes.UnclearOrOutOfScope);
