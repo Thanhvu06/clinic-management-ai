@@ -1,3 +1,4 @@
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Infrastructure.Authentication;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
@@ -23,10 +24,12 @@ public static class DemoResetCommand
         using var scope = app.Services.CreateScope();
         var services = scope.ServiceProvider;
         var db = services.GetRequiredService<AppDbContext>();
+        if (DemoSeedCalendar.ClosedDayNotice(services.GetRequiredService<IDateTimeProvider>()) is { } notice)
+            Console.WriteLine($"CẢNH BÁO: {notice}");
         await db.Database.EnsureDeletedAsync();
         await db.Database.MigrateAsync();
         await RoleSeeder.SeedRolesAsync(services);
-        await DevelopmentDataSeeder.SeedDoctorSchedulesAndSlotsAsync(services, 30, true);
+        await DevelopmentDataSeeder.SeedDoctorSchedulesAndSlotsAsync(DemoSeedCalendar.WithAnchoredClock(services), 30, true);
         await MedicineImageSeeder.SeedAsync(db, services.GetRequiredService<MedicineImageStorage>(),
             services.GetRequiredService<IWebHostEnvironment>(), services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(MedicineImageSeeder)),
             app.Lifetime.ApplicationStopping);

@@ -46,7 +46,7 @@ describe('U8 open a prescription from the pharmacist dashboard', () => {
     it('opens the requested prescription after the list loads, with a primary dispense button', async () => {
         mount('/pharmacy/prescriptions?id=42');
         const dialog = await screen.findByRole('dialog');
-        expect(within(dialog).getByText('Chi tiết đơn thuốc RX-261022-0042')).toBeInTheDocument();
+        expect(await within(dialog).findByText('Chi tiết đơn thuốc RX-261022-0042')).toBeInTheDocument();
         expect(axiosClient.get).toHaveBeenCalledWith('/pharmacy/prescriptions/42');
         const dispense = await within(dialog).findByRole('button', { name: 'Xác nhận cấp thuốc & trừ kho' });
         expect(dispense).toHaveClass('ant-btn-primary');

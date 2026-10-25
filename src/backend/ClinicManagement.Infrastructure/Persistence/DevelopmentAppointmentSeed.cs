@@ -98,7 +98,7 @@ internal static class DevelopmentAppointmentSeed
         var initialized = false;
         var reasonVariants = new Dictionary<long, int>();
         var bookedPatients = new HashSet<(long DoctorId, DateOnly Date, long PatientId)>();
-        var approvedLeaveDate = today.AddDays(5);
+        var approvedLeaveDate = DemoSeedCalendar.NextOpen(today.AddDays(5));
 
         async Task CreateApt(Patient p, Doctor d, AppointmentSlot s, AppointmentStatus status)
         {
@@ -225,7 +225,7 @@ internal static class DevelopmentAppointmentSeed
 
         var futureSlots = slots.Where(x => x.SlotDate > today).ToList();
 
-        var pastDate = today.AddDays(-5);
+        var pastDate = DemoSeedCalendar.PreviousOpen(today.AddDays(-5));
         var pastSchedule = await db.DoctorWorkSchedules.FirstOrDefaultAsync(s => s.DoctorId == mainDoc.Id && s.WorkDate == pastDate);
         if (pastSchedule == null)
         {
@@ -276,7 +276,7 @@ internal static class DevelopmentAppointmentSeed
             await CreateApt(patients[i % patients.Count], mainDoc, pastSlots[i % pastSlots.Count], AppointmentStatus.NoShow);
         }
 
-        var pastDate2 = today.AddDays(-4);
+        var pastDate2 = DemoSeedCalendar.NextOpen(today.AddDays(-4));
         var pastSchedule2 = await db.DoctorWorkSchedules.FirstOrDefaultAsync(s => s.DoctorId == mainDoc.Id && s.WorkDate == pastDate2);
         if (pastSchedule2 == null)
         {
@@ -362,8 +362,7 @@ internal static class DevelopmentAppointmentSeed
                     && !(doc.Id == doctors[1 % doctors.Count].Id && s.SlotDate == approvedLeaveDate))
                 .GroupBy(s => s.SlotDate).OrderBy(g => g.Key).ToList();
             var alreadyUpcoming = db.Appointments.Local.Count(a => a.DoctorId == doc.Id && a.AppointmentDate > today && a.AppointmentDate <= today.AddDays(7));
-            var sundayAppointment = openDays.Any(g => g.Key.DayOfWeek == DayOfWeek.Sunday) ? 1 : 0;
-            var count = Math.Min(Math.Max(0, 2 + index % 3 - alreadyUpcoming - sundayAppointment), openDays.Count);
+            var count = Math.Min(Math.Max(0, 2 + index % 3 - alreadyUpcoming), openDays.Count);
             for (var n = 0; n < count; n++)
             {
                 var daySlots = openDays[n].Where(s => !s.IsBooked).OrderBy(s => s.StartTime).ToList();
@@ -371,16 +370,6 @@ internal static class DevelopmentAppointmentSeed
                 var status = (index + n) % 2 == 0 ? AppointmentStatus.Pending : AppointmentStatus.Confirmed;
                 await CreateApt(patients[(index * 3 + n * 5 + 2) % patients.Count], doc, slot, status);
             }
-        }
-
-        foreach (var sunday in slots.Where(s => s.SlotDate >= today && s.SlotDate.DayOfWeek == DayOfWeek.Sunday)
-                     .GroupBy(s => (s.DoctorId, s.SlotDate)))
-        {
-            if (sunday.Key.DoctorId == doctors[1 % doctors.Count].Id && sunday.Key.SlotDate == approvedLeaveDate) continue;
-            if (await db.Appointments.AnyAsync(a => a.DoctorId == sunday.Key.DoctorId && a.AppointmentDate == sunday.Key.SlotDate)) continue;
-            var slot = sunday.OrderBy(s => s.StartTime).FirstOrDefault(s => !s.IsBooked);
-            if (slot != null)
-                await CreateApt(patients[(int)(sunday.Key.DoctorId % patients.Count)], doctors.Single(d => d.Id == sunday.Key.DoctorId), slot, AppointmentStatus.Confirmed);
         }
 
         logger.LogInformation("Appointments seeded.");
@@ -442,8 +431,8 @@ internal static class DevelopmentAppointmentSeed
             db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
             {
                 DoctorId = mainDoc.Id,
-                StartDateTime = today.AddDays(2).ToDateTime(new TimeOnly(8, 0)),
-                EndDateTime = today.AddDays(2).ToDateTime(new TimeOnly(17, 0)),
+                StartDateTime = DemoSeedCalendar.NextOpen(today.AddDays(2)).ToDateTime(new TimeOnly(8, 0)),
+                EndDateTime = DemoSeedCalendar.NextOpen(today.AddDays(2)).ToDateTime(new TimeOnly(17, 0)),
                 Reason = "Nghỉ phép cá nhân giải quyết việc gia đình",
                 Status = DoctorLeaveRequestStatus.Pending
             });

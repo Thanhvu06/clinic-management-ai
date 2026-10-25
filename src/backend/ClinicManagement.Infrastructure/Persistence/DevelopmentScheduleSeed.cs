@@ -22,15 +22,13 @@ internal static class DevelopmentScheduleSeed
             .ToDictionary(g => g.Key, g => g.First());
 
         var days = Math.Clamp(scheduleDays, 1, 30);
-        var sundayDoctors = doctors.Where(d => d.DoctorSpecialties.Any(ds => ds.IsPrimary && new[] { "SP01", "SP02", "SP03", "SP05" }.Contains(ds.Specialty.SpecialtyCode))).Take(4).Select(d => d.Id).ToHashSet();
         foreach (var doc in doctors)
         {
             for (int i = 0; i < days; i++)
             {
                 var date = today.AddDays(i);
-                var sunday = date.DayOfWeek == DayOfWeek.Sunday;
-                if (sunday && !sundayDoctors.Contains(doc.Id)) continue;
-                var morningStart = sunday ? new TimeOnly(7, 0) : new TimeOnly(8, 0);
+                if (DemoSeedCalendar.IsClosed(date)) continue;
+                var morningStart = new TimeOnly(8, 0);
 
                 var morningKey = (doc.Id, date, morningStart, new TimeOnly(11, 30));
                 if (!scheduleLookup.TryGetValue(morningKey, out var morningSchedule))
@@ -51,7 +49,7 @@ internal static class DevelopmentScheduleSeed
                     morningSchedule.IsActive = true;
                 }
 
-                var hasAfternoonShift = !sunday && date.DayOfWeek != DayOfWeek.Saturday;
+                var hasAfternoonShift = date.DayOfWeek != DayOfWeek.Saturday;
                 var afternoonKey = (doc.Id, date, new TimeOnly(13, 30), new TimeOnly(17, 0));
                 if (hasAfternoonShift)
                 {
@@ -75,7 +73,7 @@ internal static class DevelopmentScheduleSeed
                 }
 
                 var mStart = morningStart;
-                for (int s = 0; s < (sunday ? 9 : 7); s++)
+                for (int s = 0; s < 7; s++)
                 {
                     var slotKey = (doc.Id, date, mStart);
                     if (!slotLookup.TryGetValue(slotKey, out var slot))
@@ -95,7 +93,7 @@ internal static class DevelopmentScheduleSeed
                 }
 
                 var aStart = new TimeOnly(13, 30);
-                for (int s = 0; hasAfternoonShift && s < (sunday ? 9 : 7); s++)
+                for (int s = 0; hasAfternoonShift && s < 7; s++)
                 {
                     var slotKey = (doc.Id, date, aStart);
                     if (!slotLookup.TryGetValue(slotKey, out var slot))
