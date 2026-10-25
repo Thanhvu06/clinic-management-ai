@@ -209,7 +209,7 @@ public sealed class AiBookingReviewIssuer
             Id = $"act-confirm-booking-{draft.SlotId}",
             Type = AiActionTypes.ConfirmBooking,
             Label = "Xác nhận đặt lịch",
-            Description = $"Xác nhận khám với {draft.DoctorName} vào ngày {draft.SlotDate} ({draft.StartTime} - {draft.EndTime})",
+            Description = $"Xác nhận khám với {draft.DoctorName} vào ngày {AiDisplayText.Date(draft.SlotDate)} ({AiDisplayText.Time(draft.StartTime)} - {AiDisplayText.Time(draft.EndTime)})",
             Style = "primary",
             RequiresAuthentication = true,
             RequiresConfirmation = true,

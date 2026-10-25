@@ -1,5 +1,8 @@
 import React from 'react';
 import type { AiCopilotCard } from '../../api/aiCopilotApi';
+import { formatDateOnly } from '../../utils/formatters';
+import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
+import { formatCopilotDateTime } from './displayFormatters';
 import { statusLabels } from '../../utils/visitStatusLabels';
 import styles from './UnifiedCopilotPanel.module.css';
 
@@ -25,10 +28,7 @@ const numberValue = (value: unknown): number | null =>
 const formatDateTime = (value: unknown): string | null => {
     const raw = text(value);
     if (!raw) return null;
-    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
-    if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
-    const date = new Date(raw);
-    return Number.isNaN(date.valueOf()) ? raw : date.toLocaleString('vi-VN');
+    return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? formatDateOnly(raw) : formatCopilotDateTime(raw);
 };
 
 const formatMoney = (value: unknown, currency = 'VND'): string | null => {
@@ -60,6 +60,8 @@ const formatClock = (value: unknown): string | null => {
     return match ? `${match[1].padStart(2, '0')}:${match[2]}` : null;
 };
 
+const paymentLabels: Record<string, string> = { unpaid: 'Chưa thanh toán', paid_in_full: 'Đã thanh toán', partially_paid: 'Thanh toán một phần', unverifiable: 'Chưa xác minh', unknown: 'Chưa xác minh' };
+
 const revenuePeriodLabels: Record<string, string> = { today: 'Hôm nay', this_month: 'Tháng này' };
 
 const valueLabel = (value: unknown): string | null => {
@@ -69,8 +71,8 @@ const valueLabel = (value: unknown): string | null => {
 
 const StatusLine: React.FC<{ label: string; value: unknown; date?: boolean }> = ({ label, value, date = false }) => {
     const rendered = date ? formatDateTime(value) : valueLabel(value);
-    const localized = rendered && /trạng thái|thanh toán/i.test(label) ? statusLabels[rendered] : undefined;
-    return rendered ? <div className={styles.typedLine} title={localized ? rendered : undefined}><strong>{label}:</strong> {localized ?? rendered}</div> : null;
+    const localized = rendered && /trạng thái|thanh toán/i.test(label) ? paymentLabels[rendered] ?? statusLabels[rendered] : undefined;
+    return rendered ? <div className={styles.typedLine}><strong>{label}:</strong> {localized ?? rendered}</div> : null;
 };
 
 const EmptyData: React.FC<{ message: string }> = ({ message }) => <p className={styles.typedNotice} role="status">{message}</p>;
@@ -171,7 +173,7 @@ const SlotCard: React.FC<{ data: unknown }> = ({ data }) => {
     if (!items.length) return <EmptyData message="Không có khung giờ trống phù hợp." />;
     return <List>{items.slice(0, 20).map((item, index) => <article className={styles.typedItem} key={index}>
         <StatusLine label="Ngày" value={item.slotDate ?? item.date} date />
-        <StatusLine label="Giờ" value={item.startTime && item.endTime ? `${valueLabel(item.startTime)} – ${valueLabel(item.endTime)}` : item.startTime} />
+        <StatusLine label="Giờ" value={item.startTime && item.endTime ? `${formatClock(item.startTime)} – ${formatClock(item.endTime)}` : formatClock(item.startTime)} />
         <StatusLine label="Bác sĩ" value={item.doctorName} />
         <StatusLine label="Chuyên khoa" value={item.specialtyName} />
         <StatusLine label="Cơ sở" value={item.facilityName} />
@@ -206,9 +208,9 @@ const AppointmentCard: React.FC<{ data: unknown; detail?: boolean }> = ({ data, 
     if (!source.length) return <EmptyData message="Bạn chưa có lịch hẹn phù hợp." />;
     return <List>{source.slice(0, 20).map((item, index) => <article className={styles.typedItem} key={index}>
         <strong>{text(item.appointmentCode) ?? 'Lịch hẹn'}</strong>
-        <StatusLine label="Trạng thái" value={item.status} />
+        <StatusLine label="Trạng thái" value={text(item.status) ? getAppointmentStatusLabel(String(item.status), 'patient') : null} />
         <StatusLine label="Ngày" value={item.appointmentDate ?? item.slotDate} date />
-        <StatusLine label="Giờ" value={item.startTime && item.endTime ? `${valueLabel(item.startTime)} – ${valueLabel(item.endTime)}` : item.startTime} />
+        <StatusLine label="Giờ" value={item.startTime && item.endTime ? `${formatClock(item.startTime)} – ${formatClock(item.endTime)}` : formatClock(item.startTime)} />
         <StatusLine label="Bác sĩ" value={item.doctorName} />
         <StatusLine label="Chuyên khoa" value={item.specialtyName} />
         <StatusLine label="Cơ sở" value={item.facilityName} />
@@ -310,7 +312,7 @@ const ReceptionAppointmentLookupCard: React.FC<{ data: unknown }> = ({ data }) =
         <StatusLine label="Người bệnh" value={item.patientName} />
         <StatusLine label="Trạng thái" value={item.status} />
         <StatusLine label="Ngày" value={item.appointmentDate} date />
-        <StatusLine label="Giờ" value={item.startTime && item.endTime ? `${valueLabel(item.startTime)} – ${valueLabel(item.endTime)}` : item.startTime} />
+        <StatusLine label="Giờ" value={item.startTime && item.endTime ? `${formatClock(item.startTime)} – ${formatClock(item.endTime)}` : formatClock(item.startTime)} />
     </article></List>;
 };
 
@@ -334,7 +336,7 @@ const DoctorSummaryCard: React.FC<{ data: unknown }> = ({ data }) => {
 const DoctorQueueCard: React.FC<{ data: unknown }> = ({ data }) => {
     const items = asRecords(data);
     if (!items.length) return <EmptyData message="Hàng đợi bác sĩ hiện không có dữ liệu phù hợp." />;
-    return <List>{items.slice(0, 20).map((item, index) => <article className={styles.typedItem} key={index}><strong>{text(item.visitCode) ?? 'Lượt khám'}</strong><StatusLine label="Số thứ tự" value={item.queueNumber} /><StatusLine label="Người bệnh" value={item.patientName} /><StatusLine label="Trạng thái" value={item.status} /><StatusLine label="Lý do khám" value={item.chiefComplaint} /></article>)}</List>;
+    return <List>{items.slice(0, 20).map((item, index) => <article className={styles.typedItem} key={index}><strong>{text(item.visitCode) ?? text(item.appointmentCode) ?? 'Lượt khám'}</strong><StatusLine label="Tiếp nhận" value={item.intakeStatus} /><StatusLine label="Ngày" value={item.appointmentDate} date /><StatusLine label="Giờ" value={formatClock(item.startTime)} /><StatusLine label="Số thứ tự" value={item.queueNumber} /><StatusLine label="Người bệnh" value={item.patientName} /><StatusLine label="Trạng thái" value={item.status} /><StatusLine label="Lý do khám" value={item.chiefComplaint} /></article>)}</List>;
 };
 
 const LegacyDoctorSummaryCard: React.FC<{ data: unknown }> = ({ data }) => {
@@ -480,7 +482,7 @@ const AdminRevenueCard: React.FC<{ data: unknown }> = ({ data }) => {
 const ActionResultCard: React.FC<{ type: string; data: unknown }> = ({ type, data }) => {
     const item = asRecord(data);
     if (type === 'booking_preview') {
-        return <List><article className={styles.typedItem}><strong>Xem trước đặt lịch</strong><StatusLine label="Thao tác" value={item?.operation === 'booking' ? 'Đặt lịch khám' : item?.operation} /><StatusLine label="Ngày" value={item?.appointmentDate ?? item?.slotDate} date /><StatusLine label="Giờ" value={item?.startTime && item?.endTime ? `${valueLabel(item.startTime)} – ${valueLabel(item.endTime)}` : item?.startTime} /><StatusLine label="Trạng thái" value="Chờ người dùng xác nhận rõ ràng" /></article></List>;
+        return <List><article className={styles.typedItem}><strong>Xem trước đặt lịch</strong><StatusLine label="Thao tác" value={item?.operation === 'booking' ? 'Đặt lịch khám' : item?.operation} /><StatusLine label="Ngày" value={item?.appointmentDate ?? item?.slotDate} date /><StatusLine label="Giờ" value={item?.startTime && item?.endTime ? `${formatClock(item.startTime)} – ${formatClock(item.endTime)}` : formatClock(item?.startTime)} /><StatusLine label="Trạng thái" value="Chờ người dùng xác nhận rõ ràng" /></article></List>;
     }
     if (type === 'pending_action') return <List><article className={styles.typedItem}><strong>Thao tác đang chờ xác nhận</strong><StatusLine label="Lịch hẹn" value={item?.appointmentCode} /><StatusLine label="Hết hạn" value={item?.expiresAtUtc} date /><StatusLine label="Trạng thái" value="Chờ người dùng xác nhận rõ ràng" /></article></List>;
     if (type === 'change_request') return <List><article className={styles.typedItem}><strong>Yêu cầu thay đổi đã được tạo</strong><StatusLine label="Thao tác" value={item?.operation === 'cancel' ? 'Hủy lịch' : item?.operation === 'reschedule' ? 'Đổi lịch' : item?.operation} /><StatusLine label="Trạng thái" value="Đã tiếp nhận" /></article></List>;

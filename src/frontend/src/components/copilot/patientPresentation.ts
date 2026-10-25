@@ -11,6 +11,7 @@ export const isLocalHelpPhrase = (value: string): boolean => /^(?:ban lam duoc g
 export const isPatientReadAlias = (value: string): boolean => [
     'lich hen cua toi', 'luot kham cua toi', 'don thuoc cua toi', 'ket qua xet nghiem cua toi', 'hoa don cua toi',
     'lich hen cua minh', 'lich cua toi', 'cac luot kham cua toi', 'lich su kham cua minh',
+    'lich hen sap toi', 'lich kham sap toi', 'lich sap toi',
     'ket qua xet nghiem cua minh', 'xem ket qua cua toi', 'toa thuoc cua minh', 'xem don thuoc cua toi',
     'bien lai cua toi', 'hoa don cua minh'
 ].includes(value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().replace(/\s+/g, ' ').trim().replace(/[!.?]+$/, ''));

@@ -1,3 +1,6 @@
+import { formatDateOnly } from '../utils/formatters';
+import { formatCopilotClock } from './copilot/displayFormatters';
+import { getAppointmentStatusLabel } from '../utils/appointmentStatusLabels';
 import { BookingSuccessCard } from "./BookingSuccessCard";
 import { providerStateTone } from "./copilot/copilotConfig";
 import { ChatProvider, useOptionalChatContext, DEFAULT_AI_MESSAGE } from "../contexts/ChatContext";
@@ -58,7 +61,7 @@ const GroundedToolData: React.FC<{ result: AiToolExecutionResult }> = ({ result 
             rows = asRecords(result.data).map(item => ({ key: String(item.id), text: `${String(item.academicTitle ?? "")} ${String(item.name ?? "")}`.trim() }));
             break;
         case "available_slots":
-            rows = asRecords(result.data).map((item, index) => ({ key: String(item.slotId ?? index), text: `${String(item.slotDate ?? "")} · ${String(item.startTime ?? "")} - ${String(item.endTime ?? "")}` }));
+            rows = asRecords(result.data).map((item, index) => ({ key: String(item.slotId ?? index), text: `${formatDateOnly(String(item.slotDate ?? ""))} · ${formatCopilotClock(item.startTime)} - ${formatCopilotClock(item.endTime)}` }));
             break;
         case "facilities":
             rows = asRecords(result.data).map(item => ({ key: String(item.id), text: `${String(item.name ?? "")} · ${String(item.address ?? item.city ?? "")}` }));
@@ -70,10 +73,10 @@ const GroundedToolData: React.FC<{ result: AiToolExecutionResult }> = ({ result 
             ];
             break;
         case "appointments":
-            rows = asRecords(data.items).map(item => ({ key: String(item.id ?? item.appointmentId), text: `${String(item.appointmentCode ?? item.id ?? "Lịch hẹn")} · ${String(item.slotDate ?? item.appointmentDate ?? "")}` }));
+            rows = asRecords(data.items).map(item => ({ key: String(item.id ?? item.appointmentId), text: `${String(item.appointmentCode ?? item.id ?? "Lịch hẹn")} · ${formatDateOnly(String(item.slotDate ?? item.appointmentDate ?? ""))}` }));
             break;
         case "appointment_detail":
-            rows = [{ key: "detail", text: `${String(data.appointmentCode ?? data.id ?? "Lịch hẹn")} · ${String(data.status ?? "")}` }];
+            rows = [{ key: "detail", text: `${String(data.appointmentCode ?? data.id ?? "Lịch hẹn")} · ${getAppointmentStatusLabel(String(data.status ?? ""), "patient")}` }];
             break;
         case "pending_action":
             rows = [{ key: "pending", text: `Lịch hẹn ${String(data.appointmentCode ?? data.appointmentId ?? "")} · chờ xác nhận` }];

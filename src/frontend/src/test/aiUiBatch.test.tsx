@@ -17,7 +17,8 @@ describe('date-only visit display', () => {
     it('retains the time for a real timestamp', () => {
         const timestamp = '2026-09-28T08:30:00+07:00';
         render(<>{renderCopilotCardData({ type: 'patient_visits', title: 'Lượt khám của tôi', data: [{ visitCode: 'V-2', visitDate: timestamp }] })}</>);
-        expect(screen.getByText('Ngày khám:').parentElement).toHaveTextContent(new Date(timestamp).toLocaleString('vi-VN'));
+        expect(screen.getByText('Ngày khám:').parentElement).toHaveTextContent('08:30 28/09/2026');
+        expect(screen.getByText('Ngày khám:').parentElement).not.toHaveTextContent('08:30:00');
     });
     it('renders DateOnly without a time or timezone conversion', () => {
         render(<>{renderCopilotCardData({ type: 'patient_visits', title: 'Lượt khám của tôi', data: [{ visitCode: 'V-1', visitDate: '2026-09-28' }] })}</>);

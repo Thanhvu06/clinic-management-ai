@@ -20,7 +20,7 @@ using Microsoft.Extensions.Logging;
 
 namespace ClinicManagement.Infrastructure.AI;
 
-public class AiSpecialtyService : IAiSpecialtyService
+public partial class AiSpecialtyService : IAiSpecialtyService
 {
     private const int EarliestSlotSearchHorizonDays = 7;
     private const string GroundedReplyFallback = "Thông tin tư vấn định hướng đã được đối soát an toàn với hệ thống phòng khám. Vui lòng tham khảo các gợi ý chuyên khoa và thao tác hỗ trợ bên dưới.";
@@ -1140,7 +1140,7 @@ public class AiSpecialtyService : IAiSpecialtyService
             {
                 Id = $"act-select-slot-{slot.SlotId}",
                 Type = AiActionTypes.SelectSlot,
-                Label = $"{slot.StartTime:HH\\:mm} - {slot.SlotDate:dd/MM} · {doctorName}",
+                Label = $"{slot.StartTime:HH\\:mm} - {slot.SlotDate:dd/MM/yyyy} · {doctorName}",
                 Description = $"Chọn lịch trống của {doctorName} thuộc chuyên khoa {specialty.Name}",
                 Style = "primary",
                 RequiresAuthentication = false,
@@ -1818,7 +1818,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 {
                     Id = $"act-change-date-{nextMonday:yyyyMMdd}",
                     Type = AiActionTypes.ChangePreferredDate,
-                    Label = $"Đổi sang Thứ Hai ({nextMonday:dd/MM})",
+                    Label = $"Đổi sang Thứ Hai ({nextMonday:dd/MM/yyyy})",
                     Description = $"Chọn ngày làm việc kế tiếp: {nextMonday:dd/MM/yyyy}",
                     Style = "primary",
                     RequiresAuthentication = false,
@@ -2058,7 +2058,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                         {
                             Id = $"act-select-slot-{slot.Id}",
                             Type = AiActionTypes.SelectSlot,
-                            Label = $"{slot.StartTime:HH\\:mm} - {slot.SlotDate:dd/MM}",
+                            Label = $"{slot.StartTime:HH\\:mm} - {slot.SlotDate:dd/MM/yyyy}",
                             Style = "secondary",
                             RequiresAuthentication = false,
                             RequiresConfirmation = false,
@@ -2603,60 +2603,6 @@ public class AiSpecialtyService : IAiSpecialtyService
         return WithDraftVersionSync(response, nextDraftVersion);
     }
 
-    private async Task<AiChatResponseDto> HandleFacilityInquiryAsync(
-        AiChatRequestDto request,
-        string cleanMessage,
-        int nextDraftVersion,
-        CancellationToken cancellationToken)
-    {
-        var facility = await _dbContext.Facilities
-            .AsNoTracking()
-            .Where(f => f.IsActive)
-            .OrderBy(f => f.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        var response = new AiChatResponseDto
-        {
-            Urgency = "ROUTINE",
-            PromptVersion = GeminiAiProvider.CurrentPromptVersion,
-            DialogueOutcome = "FacilityInquiryResolved",
-            PrimaryIntent = AiChatIntentTypes.FacilityInquiry,
-            AssistantStatus = "Online",
-            ProviderStatus = "NotCalled"
-        };
-
-        var facilityName = facility?.Name ?? "Phòng khám ClinicCare";
-        var address = !string.IsNullOrWhiteSpace(facility?.Address)
-            ? (!string.IsNullOrWhiteSpace(facility.City) ? $"{facility.Address.Trim()}, {facility.City.Trim()}" : facility.Address.Trim())
-            : "Chưa cập nhật";
-        var phone = !string.IsNullOrWhiteSpace(facility?.Phone) ? facility.Phone.Trim() : "Chưa cập nhật";
-        var email = !string.IsNullOrWhiteSpace(facility?.Email) ? facility.Email.Trim() : "Chưa cập nhật";
-
-        var sb = new StringBuilder();
-        sb.AppendLine($"Thông tin liên hệ và cơ sở của **{facilityName}**:");
-        sb.AppendLine($"- **Địa chỉ**: {address}");
-        sb.AppendLine($"- **Hotline/SĐT**: {phone}");
-        sb.AppendLine($"- **Email**: {email}");
-        sb.AppendLine("- **Thời gian làm việc**: Thứ Hai - Thứ Bảy (07:30 - 17:00), Chủ nhật nghỉ.");
-        response.Message = sb.ToString();
-
-        var contactAction = await CreateContactReceptionActionAsync(cancellationToken);
-        response.Actions.Add(contactAction);
-
-        response.Actions.Add(new AiActionDto
-        {
-            Id = "act-start-booking",
-            Type = AiActionTypes.StartBooking,
-            Label = "Đặt lịch khám ngay",
-            Style = "primary",
-            RequiresAuthentication = false,
-            RequiresConfirmation = false,
-            Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.BookAppointment }
-        });
-
-        await PreserveExistingDraftAsync(request, response, cancellationToken);
-        return WithDraftVersionSync(response, nextDraftVersion);
-    }
 
     private async Task<AiChatResponseDto> HandleViewAppointmentsAsync(
         AiChatRequestDto request,
@@ -2693,7 +2639,7 @@ public class AiSpecialtyService : IAiSpecialtyService
                 {
                     verifiedAppointmentId = apt.Id;
                     verifiedAppointmentCode = apt.AppointmentCode;
-                    response.Message = $"Lịch khám gần nhất của bạn là mã **{apt.AppointmentCode}** vào ngày **{apt.AppointmentDate:dd/MM/yyyy}** ({apt.StartTime:hh\\:mm}). Bạn có thể mở chi tiết hoặc vào danh sách lịch hẹn để quản lý:";
+                    response.Message = $"Lịch khám gần nhất của bạn là mã **{apt.AppointmentCode}** vào ngày **{apt.AppointmentDate:dd/MM/yyyy}** ({apt.StartTime:HH\\:mm}). Bạn có thể mở chi tiết hoặc vào danh sách lịch hẹn để quản lý:";
                 }
             }
         }
@@ -2924,8 +2870,8 @@ public class AiSpecialtyService : IAiSpecialtyService
             sb.AppendLine("Thông tin tóm tắt lịch khám hiện tại của bạn:");
             if (draft.SpecialtyName != null) sb.AppendLine($"- **Chuyên khoa**: {draft.SpecialtyName}");
             if (draft.DoctorName != null) sb.AppendLine($"- **Bác sĩ**: {draft.DoctorName}");
-            if (draft.SlotDate != null) sb.AppendLine($"- **Ngày khám**: {draft.SlotDate}");
-            if (draft.StartTime != null && draft.EndTime != null) sb.AppendLine($"- **Khung giờ**: {draft.StartTime} - {draft.EndTime}");
+            if (draft.SlotDate != null) sb.AppendLine($"- **Ngày khám**: {AiDisplayText.Date(draft.SlotDate)}");
+            if (draft.StartTime != null && draft.EndTime != null) sb.AppendLine($"- **Khung giờ**: {AiDisplayText.Time(draft.StartTime)} - {AiDisplayText.Time(draft.EndTime)}");
             if (draft.Reason != null) sb.AppendLine($"- **Lý do khám**: {draft.Reason}");
 
             response.Message = sb.ToString();
@@ -3157,39 +3103,6 @@ public class AiSpecialtyService : IAiSpecialtyService
         return WithDraftVersionSync(response, nextDraftVersion);
     }
 
-    private async Task<AiActionDto> CreateContactReceptionActionAsync(CancellationToken cancellationToken)
-    {
-        var facility = await _dbContext.Facilities
-            .AsNoTracking()
-            .Where(f => f.IsActive)
-            .OrderBy(f => f.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        string? phone = !string.IsNullOrWhiteSpace(facility?.Phone) ? facility.Phone.Trim() : null;
-        string? address = !string.IsNullOrWhiteSpace(facility?.Address)
-            ? (!string.IsNullOrWhiteSpace(facility.City) ? $"{facility.Address.Trim()}, {facility.City.Trim()}" : facility.Address.Trim())
-            : null;
-
-        return new AiActionDto
-        {
-            Id = "act-contact-reception",
-            Type = AiActionTypes.ContactReception,
-            Label = "Liên hệ bàn tiếp đón lễ tân",
-            Description = "Thông tin liên hệ quầy tiếp đón của phòng khám",
-            Style = "secondary",
-            RequiresAuthentication = false,
-            RequiresConfirmation = false,
-            Payload = new AiActionPayloadDto
-            {
-                PhoneNumber = phone,
-                Address = address,
-                FacilityName = facility?.Name,
-                Reason = phone != null
-                    ? $"Bàn tiếp đón tại: {address ?? "Phòng khám"}. Giờ làm việc: Thứ Hai - Thứ Bảy (07:30 - 17:00)."
-                    : "Thông tin liên hệ lễ tân chưa được cấu hình trong hệ thống."
-            }
-        };
-    }
 
     private async Task<List<WhitelistItemDto>> GetActiveWhitelistAsync(CancellationToken cancellationToken)
     {
