@@ -13,7 +13,7 @@ internal static class DemoActivityDevelopmentSeed
     {
         await SeedPaymentsAsync(db, clock, receptionist);
         var users = await db.Patients.ToDictionaryAsync(p => p.Id, p => p.UserId);
-        void Event(Guid actor, string action, string entity, long id, string code, DateTime time,
+        void Event(Guid? actor, string action, string entity, long id, string code, DateTime time,
             long patientId, NotificationType type, string title, string route, string? description = null)
         {
             db.SystemAuditLogs.Add(new SystemAuditLog { UserId = actor, Action = action, EntityName = entity,

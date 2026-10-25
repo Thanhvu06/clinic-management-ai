@@ -193,7 +193,7 @@ export const ReceptionChangeRequests: React.FC = () => {
     };
 
     const translateType = (type: string) => <StatusBadge status={type === 'Cancellation' ? 'Cancelled' : 'Confirmed'} label={type === 'Reschedule' ? 'Đổi lịch' : type === 'Cancellation' ? 'Hủy lịch' : '—'} />;
-    const translateStatus = (status: string) => <StatusBadge status={status} label={({Pending:'Chờ xử lý',Approved:'Đã duyệt',Rejected:'Đã từ chối',Withdrawn:'Đã rút'} as Record<string,string>)[status] || '—'} />;
+    const translateStatus = (status: string) => <StatusBadge status={status} label={({Pending:'Chờ xử lý',Approved:'Đã duyệt',Rejected:'Đã từ chối',Withdrawn:'Đã rút',Expired:'Hết hạn xử lý'} as Record<string,string>)[status] || '—'} />;
     const totalPages = Math.max(1, Math.ceil(totalItems / 10));
     const columns: DataTableColumn<ChangeRequest>[] = [
         {header:'Lịch gốc',accessor:req => <><div className={styles.appointmentCode}>{req.appointmentCode ? `${req.appointmentCode}` : `ID: #${req.appointmentId}`}</div>{req.patientName && <div>BN: <strong>{req.patientName}</strong></div>}{req.doctorName && <div className={styles.secondaryText}>BS: {req.doctorName}</div>}</>},

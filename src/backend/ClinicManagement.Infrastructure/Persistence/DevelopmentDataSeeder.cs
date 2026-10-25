@@ -681,6 +681,11 @@ public static class DevelopmentDataSeeder
         {
             await RealisticDevelopmentSeed.SeedAsync(db, dateTimeProvider, rec1.Id, technician.Id, labSupervisor.Id, pharmacist.Id);
             await DemoClinicalDevelopmentSeed.SeedAsync(db, dateTimeProvider, rec1.Id, technician.Id, labSupervisor.Id, pharmacist.Id);
+            await ExpiryDemoSeed.SeedAsync(db, dateTimeProvider, rec1.Id);
+            var changed = await serviceProvider.GetRequiredService<ClinicManagement.Infrastructure.Expiry.ExpiryWorker>()
+                .RunOnceAsync(throwOnFailure: true);
+            db.ChangeTracker.Clear();
+            logger.LogInformation("Expiry completed after seed: changed={Changed}", changed);
         }
         logger.LogInformation("Development Data Seeding completed.");
     }

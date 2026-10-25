@@ -226,7 +226,7 @@ export const PharmacyPrescriptions: React.FC = () => {
             <div className={styles.filters}>
                 <form onSubmit={handleSearchSubmit} className={styles.filterForm}>
                     <Input type="text" className={styles.searchInput} placeholder="Tìm theo tên BN, SĐT hoặc mã lịch..." prefix={<Search size={16} aria-hidden="true" />} value={search} onChange={e => setSearch(e.target.value)} />
-                    <Select className={styles.statusFilter} aria-label="Trạng thái" value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả trạng thái'},{value:'Issued',label:'Đang chờ cấp thuốc'},{value:'Dispensed',label:'Đã hoàn thành cấp phát'}]} />
+                    <Select className={styles.statusFilter} aria-label="Trạng thái" value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả trạng thái'},{value:'Issued',label:'Đang chờ cấp thuốc'},{value:'Dispensed',label:'Đã hoàn thành cấp phát'},{value:'Expired',label:'Hết hạn lĩnh thuốc'}]} />
                     <Button htmlType="submit">Tìm</Button>
                 </form>
             </div>

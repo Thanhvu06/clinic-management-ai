@@ -48,6 +48,7 @@ public class CreateAppointmentRequest
 
 public class AppointmentDto
 {
+    public bool IsCompletionOverdue { get; set; }
     public long Id { get; set; }
     public string AppointmentCode { get; set; } = string.Empty;
     public long PatientId { get; set; }
@@ -72,6 +73,6 @@ public class AppointmentHistoryDto
     public string? OldStatus { get; set; }
     public string? NewStatus { get; set; }
     public string? Note { get; set; }
-    public Guid PerformedByUserId { get; set; }
+    public Guid? PerformedByUserId { get; set; }
     public DateTime CreatedAt { get; set; }
 }

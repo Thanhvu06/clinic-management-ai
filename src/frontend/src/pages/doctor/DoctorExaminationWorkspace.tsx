@@ -851,7 +851,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
     return (
         <div className={tabStyles.workspace}>
-            <DoctorExaminationSyncAction onSync={loadContext} />
+            <DoctorExaminationSyncAction onSync={loadContext} isCompletionOverdue={apt.isCompletionOverdue} />
 
             {/* Read-only Banner if Completed */}
             {isCompleted && (

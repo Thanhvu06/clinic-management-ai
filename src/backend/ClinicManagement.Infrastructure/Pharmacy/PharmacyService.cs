@@ -1,3 +1,6 @@
+using ClinicManagement.Application.Common.Expiry;
+using ClinicManagement.Infrastructure.Expiry;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,6 +26,7 @@ namespace ClinicManagement.Infrastructure.Pharmacy;
 
 public class PharmacyService : IPharmacyService
 {
+    private readonly ExpiryRulesOptions _expiryOptions;
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly IPrescriptionPaymentEligibilityService _paymentEligibility;
@@ -35,8 +39,9 @@ public class PharmacyService : IPharmacyService
         ICurrentUserService currentUserService,
         IPrescriptionPaymentEligibilityService paymentEligibility,
         IFacilityAuthorizationService facilityAuthService,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider, IOptions<ExpiryRulesOptions>? expiryOptions = null)
     {
+        _expiryOptions = expiryOptions?.Value ?? new ExpiryRulesOptions();
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _paymentEligibility = paymentEligibility;
@@ -241,6 +246,9 @@ public class PharmacyService : IPharmacyService
             if (prescription == null)
                 throw new NotFoundException("Đơn thuốc không tồn tại.");
 
+            if (PrescriptionExpiryRule.IsExpired(prescription, _dateTimeProvider, _expiryOptions))
+                throw new BusinessException("PRESCRIPTION_EXPIRED", "Hết hạn lĩnh thuốc. Đơn thuốc hết hạn, cần kê lại.");
+
             if (prescription.Status == PrescriptionStatus.ReservedForPurchase)
             {
                 return await GetPrescriptionByIdAsync(prescriptionId);
@@ -326,6 +334,9 @@ public class PharmacyService : IPharmacyService
 
                 if (prescription == null)
                     throw new NotFoundException("Đơn thuốc không tồn tại.");
+
+                if (PrescriptionExpiryRule.IsExpired(prescription, _dateTimeProvider, _expiryOptions))
+                    throw new BusinessException("PRESCRIPTION_EXPIRED", "Hết hạn lĩnh thuốc. Đơn thuốc hết hạn, cần kê lại.");
 
                 if (prescription.Status == PrescriptionStatus.Dispensed)
                     throw new ConflictException("PRESCRIPTION_ALREADY_DISPENSED", "Đơn thuốc này đã được cấp phát trước đó.");

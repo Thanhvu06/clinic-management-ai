@@ -30,6 +30,7 @@ public class DoctorDashboardShiftDto
 
 public class DoctorQueueItemDto
 {
+    public bool IsCompletionOverdue { get; set; }
     public long? AppointmentId { get; set; }
     public string AppointmentCode { get; set; } = string.Empty;
     public long? PatientVisitId { get; set; }

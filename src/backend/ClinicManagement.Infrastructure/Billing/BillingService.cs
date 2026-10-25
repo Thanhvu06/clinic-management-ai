@@ -23,7 +23,7 @@ using Microsoft.Extensions.Logging;
 
 namespace ClinicManagement.Infrastructure.Billing;
 
-public class BillingService : IBillingService
+public partial class BillingService : IBillingService
 {
     private readonly AppDbContext _dbContext;
     private readonly INotificationService _notificationService;
@@ -31,22 +31,6 @@ public class BillingService : IBillingService
     private readonly ILogger<BillingService> _logger;
     private readonly IFacilityAuthorizationService _facilityAuthService;
     private readonly ICurrentUserService _currentUserService;
-
-    public BillingService(
-        AppDbContext dbContext,
-        INotificationService notificationService,
-        IDateTimeProvider dateTimeProvider,
-        ILogger<BillingService> logger,
-        IFacilityAuthorizationService facilityAuthService,
-        ICurrentUserService currentUserService)
-    {
-        _dbContext = dbContext;
-        _notificationService = notificationService;
-        _dateTimeProvider = dateTimeProvider;
-        _logger = logger;
-        _facilityAuthService = facilityAuthService;
-        _currentUserService = currentUserService;
-    }
 
     public async Task<InvoiceDetailDto> CreateInvoiceFromAppointmentAsync(long appointmentId, Guid createdByUserId, CancellationToken cancellationToken = default)
     {
@@ -1300,114 +1284,6 @@ public class BillingService : IBillingService
     private string GeneratePaymentCode()
     {
         return ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("PAY", _dateTimeProvider.VietnamToday, 8);
-    }
-
-    private static InvoiceDto MapToDto(Invoice i, Dictionary<Guid, UserInfo> userMap)
-    {
-        UserInfo? patUser = null;
-        if (i.Patient.UserId.HasValue)
-        {
-            userMap.TryGetValue(i.Patient.UserId.Value, out patUser);
-        }
-        userMap.TryGetValue(i.CreatedByUserId, out var creatorUser);
-        UserInfo? payerUser = null;
-        if (i.PaidByUserId.HasValue) userMap.TryGetValue(i.PaidByUserId.Value, out payerUser);
-
-        return new InvoiceDto
-        {
-            Id = i.Id,
-            InvoiceCode = i.InvoiceCode,
-            PatientId = i.PatientId,
-            PatientName = patUser?.FullName ?? i.Patient.FullName ?? string.Empty,
-            PatientPhone = patUser?.PhoneNumber ?? i.Patient.PhoneNumber ?? (i.HealthPackageRegistration?.ContactPhone ?? string.Empty),
-            SourceType = i.SourceType,
-            SourceTypeName = i.SourceType == InvoiceSourceType.Appointment ? "Khám bệnh" : "Gói khám sức khỏe",
-            AppointmentId = i.AppointmentId,
-            AppointmentCode = i.Appointment?.AppointmentCode ?? (i.PatientVisit != null ? i.PatientVisit.VisitCode : null),
-            PatientVisitId = i.PatientVisitId,
-            VisitCode = i.PatientVisit?.VisitCode,
-            HealthPackageRegistrationId = i.HealthPackageRegistrationId,
-            RegistrationCode = i.HealthPackageRegistration?.RegistrationCode,
-            Status = i.Status,
-            StatusName = FormatStatus(i.Status),
-            Subtotal = i.Subtotal,
-            TotalAmount = i.TotalAmount,
-            CreatedAtUtc = i.CreatedAtUtc,
-            PaidAtUtc = i.PaidAtUtc,
-            CancelledAtUtc = i.CancelledAtUtc,
-            CancellationReason = i.CancellationReason,
-            CreatedByUserName = creatorUser?.FullName,
-            PaidByUserName = payerUser?.FullName
-        };
-    }
-
-    private static InvoiceDetailDto MapToDetailDto(Invoice i, Dictionary<Guid, UserInfo> userMap)
-    {
-        var baseDto = MapToDto(i, userMap);
-
-        var items = i.Items.Select(item => new InvoiceItemDto
-        {
-            Id = item.Id,
-            InvoiceId = item.InvoiceId,
-            ItemCode = item.ItemCode,
-            Description = item.Description,
-            Quantity = item.Quantity,
-            UnitPrice = item.UnitPrice,
-            LineTotal = item.LineTotal,
-            ReferenceType = item.ReferenceType.StartsWith("PrescriptionItem") ? "PrescriptionItem" : item.ReferenceType,
-            ReferenceId = item.ReferenceId
-        }).ToList();
-
-        var payments = i.Payments.Select(p =>
-        {
-            userMap.TryGetValue(p.ReceivedByUserId, out var receiver);
-            return new PaymentDto
-            {
-                Id = p.Id,
-                PaymentCode = p.PaymentCode,
-                InvoiceId = p.InvoiceId,
-                InvoiceCode = i.InvoiceCode,
-                Amount = p.Amount,
-                Method = p.Method,
-                MethodName = p.Method == PaymentMethod.Cash ? "Tiền mặt" : "Chuyển khoản",
-                ReferenceCode = p.ReferenceCode,
-                Note = p.Note,
-                ReceivedByUserId = p.ReceivedByUserId,
-                ReceivedByUserName = receiver?.FullName,
-                ReceivedAtUtc = p.ReceivedAtUtc,
-                Status = p.Status,
-                StatusName = p.Status == PaymentStatus.Succeeded ? "Thành công" : "Đã hủy"
-            };
-        }).ToList();
-
-        return new InvoiceDetailDto
-        {
-            Id = baseDto.Id,
-            InvoiceCode = baseDto.InvoiceCode,
-            PatientId = baseDto.PatientId,
-            PatientName = baseDto.PatientName,
-            PatientPhone = baseDto.PatientPhone,
-            SourceType = baseDto.SourceType,
-            SourceTypeName = baseDto.SourceTypeName,
-            AppointmentId = baseDto.AppointmentId,
-            AppointmentCode = baseDto.AppointmentCode,
-            PatientVisitId = baseDto.PatientVisitId,
-            VisitCode = baseDto.VisitCode,
-            HealthPackageRegistrationId = baseDto.HealthPackageRegistrationId,
-            RegistrationCode = baseDto.RegistrationCode,
-            Status = baseDto.Status,
-            StatusName = baseDto.StatusName,
-            Subtotal = baseDto.Subtotal,
-            TotalAmount = baseDto.TotalAmount,
-            CreatedAtUtc = baseDto.CreatedAtUtc,
-            PaidAtUtc = baseDto.PaidAtUtc,
-            CancelledAtUtc = baseDto.CancelledAtUtc,
-            CancellationReason = baseDto.CancellationReason,
-            CreatedByUserName = baseDto.CreatedByUserName,
-            PaidByUserName = baseDto.PaidByUserName,
-            Items = items,
-            Payments = payments
-        };
     }
 
     private static string FormatStatus(InvoiceStatus status) => status switch

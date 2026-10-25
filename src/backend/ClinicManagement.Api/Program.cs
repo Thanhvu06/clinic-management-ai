@@ -231,6 +231,12 @@ builder.Services.AddScoped<ClinicManagement.Application.Mpi.Interfaces.IMpiPatie
 builder.Services.AddScoped<ClinicManagement.Application.Mpi.Interfaces.IMrnGenerator, ClinicManagement.Infrastructure.Mpi.MrnGenerator>();
 builder.Services.AddScoped<ClinicManagement.Application.Common.Interfaces.IFacilityAuthorizationService, ClinicManagement.Infrastructure.Common.FacilityAuthorizationService>();
 builder.Services.AddScoped<ClinicManagement.Application.Visits.Interfaces.IPatientVisitService, ClinicManagement.Infrastructure.Visits.PatientVisitService>();
+builder.Services.AddOptions<ClinicManagement.Application.Common.Expiry.ExpiryRulesOptions>()
+    .Bind(builder.Configuration.GetSection("ExpiryRules")).ValidateDataAnnotations().ValidateOnStart();
+foreach (var ruleType in ClinicManagement.Infrastructure.Expiry.ExpiryWorker.RuleTypes)
+    builder.Services.AddScoped(ruleType);
+builder.Services.AddSingleton<ClinicManagement.Infrastructure.Expiry.ExpiryWorker>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ClinicManagement.Infrastructure.Expiry.ExpiryWorker>());
 builder.Services.AddHostedService<ClinicManagement.Infrastructure.AI.AiSessionCleanupWorker>();
 
 builder.Services.AddRateLimiter(options =>

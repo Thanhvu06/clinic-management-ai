@@ -129,6 +129,7 @@ export const AdminLeaves: React.FC = () => {
 
     const getStatusBadge = (status: string) => {
         switch(status) {
+            case 'Expired': return <StatusBadge status="Cancelled" label="Hết hạn" />;
             case 'Pending': return <StatusBadge status={status} label="Chờ xử lý" />;
             case 'Approved': return <StatusBadge status={status} label="Đã duyệt" />;
             case 'Rejected': return <StatusBadge status={status} label="Đã từ chối" />;

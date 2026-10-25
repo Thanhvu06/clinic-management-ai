@@ -31,6 +31,7 @@ import { useDialog } from '../../contexts/DialogContext';
 import { InvoiceReceiptModal } from '../../components/billing/InvoiceReceiptModal';
 import { DataTable, LoadingState, StatusBadge, PageHeader, StatCard, InlineError } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
+import { ExpiryBadge } from '../../components/common/ExpiryBadge';
 import { getVisitStatusLabel } from '../../utils/visitStatusLabels';
 import styles from './ReceptionBilling.module.css';
 
@@ -463,7 +464,7 @@ export const ReceptionBilling: React.FC = () => {
             align: 'right',
             accessor: (inv) => <span className={styles.amount}>{formatCurrency(inv.totalAmount)}</span>,
         },
-        { header: 'Trạng thái', accessor: (inv) => renderStatusBadge(inv.status) },
+        { header: 'Trạng thái', accessor: (inv) => <>{renderStatusBadge(inv.status)}<ExpiryBadge overdue={inv.isOverdue} /></> },
         { header: 'Ngày lập', accessor: (inv) => formatDateTime(inv.createdAtUtc) },
         {
             header: 'Thao tác',

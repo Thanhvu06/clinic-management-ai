@@ -126,7 +126,8 @@ public class DemoConsistencyTests
 
         var pharmacist = await db.Users.SingleAsync(u => u.Email == "pharmacist@cliniccare.local");
         current.SetupGet(c => c.UserId).Returns(pharmacist.Id);
-        var rx = await db.Prescriptions.Include(p => p.Items).FirstAsync(p => p.AppointmentId != null && p.Status == PrescriptionStatus.Dispensed);
+        var rx = await db.Prescriptions.Include(p => p.Items).OrderByDescending(p => p.CreatedAt)
+            .FirstAsync(p => p.AppointmentId != null && p.Status == PrescriptionStatus.Dispensed && p.CreatedAt > clock.UtcNow.AddDays(-5));
         rx.Status = PrescriptionStatus.Issued;
         db.Invoices.Add(new Invoice { InvoiceCode = BusinessDisplay.RandomCode("INV", clock.VietnamToday, 7), PatientId = rx.PatientId,
             AppointmentId = rx.AppointmentId, Status = InvoiceStatus.Paid, CreatedByUserId = pharmacist.Id,

@@ -1,3 +1,4 @@
+import { ExpiryBadge } from '../../components/common/ExpiryBadge';
 import { getGenderLabel } from '../../utils/genderLabels';
 import { getPrescriptionStatusLabel } from '../../utils/prescriptionStatusLabels';
 import { getAppointmentHistoryActionLabel } from '../../utils/appointmentHistoryLabels';
@@ -27,6 +28,7 @@ interface DoctorAppointment {
     startTime: string;
     endTime: string;
     reason: string | null;
+    isCompletionOverdue?: boolean;
     status: string;
 }
 
@@ -216,7 +218,7 @@ export const DoctorAppointments: React.FC = () => {
             header: 'Lý do khám',
             accessor: (apt) => <div className={styles.reasonCell}>{apt.reason || <Typography.Text type="secondary">Không có ghi chú</Typography.Text>}</div>
         },
-        { header: 'Trạng thái', accessor: (apt) => <StatusBadge status={apt.status} label={getAppointmentStatusLabel(apt.status)} /> },
+        { header: 'Trạng thái', accessor: (apt) => <><StatusBadge status={apt.status} label={getAppointmentStatusLabel(apt.status)} /><ExpiryBadge overdue={apt.isCompletionOverdue} completion /></> },
         {
             header: 'Thao tác',
             align: 'right',

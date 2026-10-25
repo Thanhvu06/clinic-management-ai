@@ -7,6 +7,7 @@ export const statusLabels: Record<string, string> & Record<VisitStatus, string> 
     WaitingForDoctor: 'Chờ bác sĩ', WaitingDoctor: 'Chờ bác sĩ', InConsultation: 'Đang khám',
     WaitingForDiagnostics: 'Chờ cận lâm sàng', InDiagnostics: 'Đang làm cận lâm sàng', ResultsReady: 'Đã có kết quả',
     Transferred: 'Đã chuyển', ConsultationCompleted: 'Đã kết thúc khám', InPharmacy: 'Đang tại quầy thuốc', InBilling: 'Đang thanh toán',
+    Expired: 'Hết hạn',
     Draft: 'Bản nháp', Issued: 'Đã phát hành', Dispensed: 'Đã cấp phát', ReservedForPurchase: 'Đã giữ thuốc',
     Ordered: 'Đã chỉ định', InProgress: 'Đang thực hiện', Unpaid: 'Chưa thanh toán', Paid: 'Đã thanh toán',
     PartiallyPaid: 'Thanh toán một phần', Succeeded: 'Thành công', Voided: 'Đã hủy giao dịch'

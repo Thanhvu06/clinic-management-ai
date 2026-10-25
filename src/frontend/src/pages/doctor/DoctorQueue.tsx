@@ -1,3 +1,4 @@
+import { ExpiryBadge } from '../../components/common/ExpiryBadge';
 import { getGenderLabel } from '../../utils/genderLabels';
 import { formatVitalSummaryVi } from '../../utils/formatDecimalVi';
 import { toLocalDateString } from '../../utils/formatters';
@@ -212,7 +213,7 @@ export const DoctorQueue: React.FC = () => {
                 <span className={styles.vitalsPending}>Chưa ghi nhận</span>
             )
         },
-        { header: 'Trạng thái', width: 130, accessor: (item) => <StatusBadge status={item.status} label={getVisitStatusLabel(item.status)} /> },
+        { header: 'Trạng thái', width: 130, accessor: (item) => <><StatusBadge status={item.status} label={getVisitStatusLabel(item.status)} /><ExpiryBadge overdue={item.isCompletionOverdue} completion /></> },
         {
             header: 'Thao tác',
             align: 'right',

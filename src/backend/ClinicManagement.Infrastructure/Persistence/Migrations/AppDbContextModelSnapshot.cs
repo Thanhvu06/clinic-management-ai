@@ -703,7 +703,7 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.Property<string>("OldStatus")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<Guid>("PerformedByUserId")
+                    b.Property<Guid?>("PerformedByUserId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
@@ -4908,7 +4908,7 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<Guid>("UserId")
+                    b.Property<Guid?>("UserId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
@@ -5313,8 +5313,7 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.HasOne("ClinicManagement.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("PerformedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("Appointment");
                 });
@@ -5919,8 +5918,7 @@ namespace ClinicManagement.Infrastructure.Persistence.Migrations
                     b.HasOne("ClinicManagement.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.NoAction);
                 });
 
             modelBuilder.Entity("ClinicManagement.Domain.Entities.VisitSummary", b =>

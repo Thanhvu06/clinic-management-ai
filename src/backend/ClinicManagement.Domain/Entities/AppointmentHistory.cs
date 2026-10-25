@@ -11,7 +11,7 @@ public class AppointmentHistory
     public AppointmentStatus? OldStatus { get; set; }
     public AppointmentStatus? NewStatus { get; set; }
     public string? Note { get; set; }
-    public Guid PerformedByUserId { get; set; }
+    public Guid? PerformedByUserId { get; set; }
     public DateTime CreatedAt { get; set; }
 
     public Appointment Appointment { get; set; } = null!;

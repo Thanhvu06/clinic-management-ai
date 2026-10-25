@@ -7,6 +7,7 @@ namespace ClinicManagement.Application.Billing.DTOs;
 
 public class InvoiceDto
 {
+    public bool IsOverdue { get; set; }
     public long Id { get; set; }
     public string InvoiceCode { get; set; } = string.Empty;
     public long PatientId { get; set; }

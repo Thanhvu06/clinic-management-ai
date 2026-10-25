@@ -1,4 +1,6 @@
 export const auditActionLabels: Readonly<Record<string, string>> = {
+    AutomaticExpiry: 'Tự động xử lý hết hạn',
+    InitializeExpiryDemo: 'Khởi tạo dữ liệu hết hạn',
     CreateAppointment: 'Đặt lịch hẹn',
     ConfirmAppointment: 'Xác nhận lịch hẹn',
     CompleteConsultation: 'Hoàn tất khám',
@@ -41,6 +43,9 @@ export const auditActionLabels: Readonly<Record<string, string>> = {
 
 export const auditEntityLabels: Readonly<Record<string, string>> = {
     Appointment: 'Lịch hẹn',
+    AppointmentChangeRequest: 'Yêu cầu đổi/hủy lịch',
+    RevisitRequest: 'Đề xuất tái khám',
+    DoctorLeaveRequest: 'Đơn nghỉ phép',
     PatientVisit: 'Lượt khám',
     Payment: 'Thanh toán',
     Invoice: 'Hóa đơn',

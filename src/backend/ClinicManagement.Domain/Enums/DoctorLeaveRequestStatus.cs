@@ -6,5 +6,6 @@ public enum DoctorLeaveRequestStatus
     PendingAppointmentResolution,
     Approved,
     Rejected,
-    Cancelled
+    Cancelled,
+    Expired
 }
