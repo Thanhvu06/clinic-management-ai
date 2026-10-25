@@ -200,6 +200,15 @@
 - Entity / bảng chính: ApplicationUser / AspNetUsers; Facility / Facilities; Department / Departments; Room / Rooms; StaffFacilityAssignment / StaffFacilityAssignments; SystemAuditLog / SystemAuditLogs.
 - Test chính: [AdminTests.cs](../src/backend/ClinicManagement.IntegrationTests/AdminTests.cs), [OrganizationHierarchyTests.cs](../src/backend/ClinicManagement.IntegrationTests/OrganizationHierarchyTests.cs), [AuditAuthorizationTests.cs](../src/backend/ClinicManagement.IntegrationTests/AuditAuthorizationTests.cs).
 
+## Xử lý hết hạn nghiệp vụ
+
+- Worker và các quy tắc: [Expiry](../src/backend/ClinicManagement.Infrastructure/Expiry).
+- Cấu hình: [ExpiryRulesOptions.cs](../src/backend/ClinicManagement.Application/Common/Expiry/ExpiryRulesOptions.cs); mục `ExpiryRules` trong appsettings.
+- API điều kiện đặt online: [OnlineBookingEligibilityController.cs](../src/backend/ClinicManagement.Api/Controllers/OnlineBookingEligibilityController.cs).
+- Seed: [ExpiryDemoSeed.cs](../src/backend/ClinicManagement.Infrastructure/Persistence/ExpiryDemoSeed.cs).
+- Test: [ExpiryRuleTests.cs](../src/backend/ClinicManagement.IntegrationTests/ExpiryRuleTests.cs), [ExpiryApiTests.cs](../src/backend/ClinicManagement.IntegrationTests/ExpiryApiTests.cs), [ExpiryWorkerTests.cs](../src/backend/ClinicManagement.IntegrationTests/ExpiryWorkerTests.cs), [expiryRules.test.tsx](../src/frontend/src/test/expiryRules.test.tsx).
+- Mốc, trạng thái và cách vận hành: [Quy tắc hết hạn](expiry-rules.md).
+
 ## Trợ lý AI đặt lịch
 
 **Vùng cấm, cần mở khóa.**

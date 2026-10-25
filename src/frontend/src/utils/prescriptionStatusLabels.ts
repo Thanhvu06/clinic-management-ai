@@ -3,6 +3,7 @@ const labels: Readonly<Record<string, string>> = {
     Issued: 'Đã phát hành',
     Dispensed: 'Đã cấp phát',
     Cancelled: 'Đã hủy',
+    Expired: 'Hết hạn, cần kê lại',
     ReservedForPurchase: 'Giữ thuốc chờ mua'
 };
 

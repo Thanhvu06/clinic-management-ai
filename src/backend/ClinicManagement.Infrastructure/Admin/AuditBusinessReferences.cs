@@ -30,6 +30,12 @@ public static class AuditBusinessReferences
             references[("Patient", item.Id)] = item.Code;
         foreach (var item in await db.Specialties.Where(x => ids.Contains(x.Id)).Select(x => new { x.Id, Code = x.SpecialtyCode }).ToListAsync())
             references[("Specialty", item.Id)] = item.Code;
+        foreach (var item in await db.AppointmentChangeRequests.Where(x => ids.Contains(x.Id)).Select(x => new { x.Id, Code = x.Appointment.AppointmentCode }).ToListAsync())
+            references[("AppointmentChangeRequest", item.Id)] = $"YC{item.Id} / {item.Code}";
+        foreach (var item in await db.RevisitRequests.Where(x => ids.Contains(x.Id)).Select(x => new { x.Id, Code = x.OriginalAppointment.AppointmentCode }).ToListAsync())
+            references[("RevisitRequest", item.Id)] = $"TK{item.Id} / {item.Code}";
+        foreach (var item in await db.DoctorLeaveRequests.Where(x => ids.Contains(x.Id)).Select(x => x.Id).ToListAsync())
+            references[("DoctorLeaveRequest", item)] = $"NP{item}";
         foreach (var log in logs)
             log.ReferenceCode = long.TryParse(log.EntityId, out var id)
                 ? references.GetValueOrDefault((log.EntityName, id), "")

@@ -1,3 +1,4 @@
+import { ExpiryBadge } from '../../components/common/ExpiryBadge';
 import { getGenderLabel } from '../../utils/genderLabels';
 import { formatVitalSummaryVi } from '../../utils/formatDecimalVi';
 import { getApiErrorMessage } from '../../utils/apiError';
@@ -164,7 +165,7 @@ export const DoctorDashboard: React.FC = () => {
                 ? <span className={styles.vitalsOk}><CheckCircle size={14} /><span>Đã đo</span></span>
                 : <span className={styles.vitalsPending}>Chưa đo</span>
         },
-        { header: 'Trạng thái', accessor: (item) => <StatusBadge status={item.status} label={getVisitStatusLabel(item.status)} size="sm" /> },
+        { header: 'Trạng thái', accessor: (item) => <><StatusBadge status={item.status} label={getVisitStatusLabel(item.status)} size="sm" /><ExpiryBadge overdue={item.isCompletionOverdue} completion /></> },
         {
             header: 'Thao tác',
             align: 'right',
@@ -236,7 +237,7 @@ export const DoctorDashboard: React.FC = () => {
             )
         },
         { header: 'Lý do khám', accessor: (item) => item.reason || 'Khám theo lịch hẹn' },
-        { header: 'Trạng thái', accessor: (item) => <StatusBadge status={item.status} label={getVisitStatusLabel(item.status)} size="sm" /> },
+        { header: 'Trạng thái', accessor: (item) => <><StatusBadge status={item.status} label={getVisitStatusLabel(item.status)} size="sm" /><ExpiryBadge overdue={item.isCompletionOverdue} completion /></> },
         {
             header: 'Thao tác',
             align: 'right',

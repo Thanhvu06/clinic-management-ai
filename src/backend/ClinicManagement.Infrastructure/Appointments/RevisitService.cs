@@ -1,3 +1,6 @@
+using ClinicManagement.Application.Common.Expiry;
+using ClinicManagement.Infrastructure.Expiry;
+using Microsoft.Extensions.Options;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,6 +20,7 @@ namespace ClinicManagement.Infrastructure.Appointments;
 
 public class RevisitService : IRevisitService
 {
+    private readonly ExpiryRulesOptions _expiryOptions;
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -24,8 +28,9 @@ public class RevisitService : IRevisitService
     public RevisitService(
         AppDbContext dbContext,
         ICurrentUserService currentUserService,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider, IOptions<ExpiryRulesOptions>? expiryOptions = null)
     {
+        _expiryOptions = expiryOptions?.Value ?? new ExpiryRulesOptions();
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _dateTimeProvider = dateTimeProvider;
@@ -127,6 +132,10 @@ public class RevisitService : IRevisitService
 
             if (revisitReq == null)
                 throw new NotFoundException("Đề xuất tái khám không tồn tại.");
+
+            await NoShowRestrictionRule.EnsureOnlineBookingAllowedAsync(_dbContext, _dateTimeProvider, _expiryOptions, revisitReq.PatientId);
+            if (revisitReq.SuggestedDate <= _dateTimeProvider.VietnamToday.AddDays(-_expiryOptions.RevisitDays))
+                throw new BusinessException("REVISIT_EXPIRED", "Đề xuất tái khám đã hết hạn.");
 
             if (revisitReq.Status != RevisitRequestStatus.PendingPatientResponse)
                 throw new BusinessException("INVALID_STATE", "Chỉ có thể chấp nhận đề xuất đang chờ phản hồi.");

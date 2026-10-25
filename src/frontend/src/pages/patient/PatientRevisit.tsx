@@ -21,6 +21,7 @@ interface RevisitRequestView {
 const statuses: Record<string, { status: string; label: string }> = {
     PendingPatientResponse: { status: 'Pending', label: 'Chờ phản hồi' },
     Accepted: { status: 'Approved', label: 'Đã chấp nhận' },
+    Expired: { status: 'Cancelled', label: 'Hết hạn' },
     Rejected: { status: 'Rejected', label: 'Đã từ chối' },
     ConvertedToAppointment: { status: 'Confirmed', label: 'Đã đặt lịch' }
 };

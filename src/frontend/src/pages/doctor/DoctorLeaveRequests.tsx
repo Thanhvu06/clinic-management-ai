@@ -22,6 +22,7 @@ interface LeaveRequest {
 
 const statusLabels: Record<string, string> = {
     Pending: 'Chờ duyệt',
+    Expired: 'Hết hạn',
     Approved: 'Đã duyệt',
     Rejected: 'Đã từ chối',
     Cancelled: 'Đã rút'

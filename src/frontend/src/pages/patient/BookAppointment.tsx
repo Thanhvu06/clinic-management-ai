@@ -2,6 +2,7 @@ import { ChatConsultationLink } from '../../components/chat/ChatConsultationLink
 import { getApiErrorMessage } from '../../utils/apiError';
 import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import React, { useState, useEffect, useRef } from "react";
+import { BookingExpiryHeader } from './BookingExpiryHeader';
 import { Alert, Avatar, Button, Card, Descriptions, Empty, Form, Input, Result, Spin, Steps, Tag } from 'antd';
 import '../../theme/browserCompat';
 import { useLocation, useNavigate } from "react-router-dom";
@@ -877,10 +878,7 @@ export const BookAppointment: React.FC = () => {
     return (
         <div className={styles.pageWrapper}>
             <Breadcrumb items={[{ label: 'Trang chủ', path: '/' }, { label: 'Đặt lịch khám' }]} />
-            {revisitRequestId && <Alert className={styles.notice} role="status" type="info" showIcon title="Bạn đang chọn khung giờ cho một đề xuất tái khám. Lịch mới chỉ được tạo sau khi xác nhận ở bước cuối." />}
-            <div className={styles.pageHeader}>
-                <h1 className={styles.pageTitle}>Đặt lịch khám</h1>
-            </div>
+            <BookingExpiryHeader revisitRequestId={revisitRequestId} />
             <div className={styles.stepperContainer} role="progressbar" aria-valuenow={displayStep} aria-valuemin={1} aria-valuemax={4}>
                 <Steps current={displayStep - 1} items={[
                     { title: '1. Chuyên khoa' }, { title: '2. Bác sĩ' }, { title: '3. Thời gian' }, { title: '4. Xác nhận' }

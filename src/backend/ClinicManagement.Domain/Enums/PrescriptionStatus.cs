@@ -6,5 +6,6 @@ public enum PrescriptionStatus
     Issued = 1,
     Dispensed = 2,
     Cancelled = 3,
-    ReservedForPurchase = 4
+    ReservedForPurchase = 4,
+    Expired
 }

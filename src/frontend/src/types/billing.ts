@@ -24,6 +24,7 @@ export const PaymentStatus = {
 export type PaymentStatus = typeof PaymentStatus[keyof typeof PaymentStatus];
 
 export interface InvoiceDto {
+    isOverdue?: boolean;
     id: number;
     invoiceCode: string;
     patientId: number;

@@ -3,6 +3,7 @@ import { Alert, Button, Segmented } from 'antd';
 import { Eye, RefreshCw } from 'lucide-react';
 import { billingApi } from '../../api/billingApi';
 import type { InvoiceDto, InvoiceDetailDto } from '../../types';
+import { ExpiryBadge } from '../../components/common/ExpiryBadge';
 import { InvoiceStatus } from '../../types';
 import { InvoiceReceiptModal } from '../../components/billing/InvoiceReceiptModal';
 import { useDialog } from '../../contexts/DialogContext';
@@ -56,7 +57,7 @@ export const PatientInvoices: React.FC = () => {
                 { header: 'Mã hóa đơn', accessor: invoice => <strong>{invoice.invoiceCode}</strong> },
                 { header: 'Nguồn dịch vụ', accessor: invoice => <div>{invoice.sourceTypeName}<div className={styles.reference}>Mã tham chiếu: {invoice.appointmentCode || invoice.registrationCode || 'N/A'}</div></div> },
                 { header: 'Số tiền', accessor: invoice => formatVndCurrency(invoice.totalAmount) },
-                { header: 'Trạng thái', accessor: invoice => statusBadge(invoice.status) },
+                { header: 'Trạng thái', accessor: invoice => <>{statusBadge(invoice.status)}<ExpiryBadge overdue={invoice.isOverdue} /></> },
                 { header: 'Thời gian lập', accessor: invoice => invoice.createdAtUtc ? new Date(invoice.createdAtUtc).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '---' },
                 { header: 'Chi tiết', accessor: invoice => <Button icon={<Eye size={16} />} onClick={() => handleViewDetail(invoice.id)}>Xem phiếu</Button> }
             ]} />

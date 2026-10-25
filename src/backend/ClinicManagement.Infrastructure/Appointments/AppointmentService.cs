@@ -1,3 +1,6 @@
+using ClinicManagement.Application.Common.Expiry;
+using ClinicManagement.Infrastructure.Expiry;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,6 +27,7 @@ namespace ClinicManagement.Infrastructure.Appointments;
 
 public class AppointmentService : IAppointmentService
 {
+    private readonly ExpiryRulesOptions _expiryOptions;
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -35,8 +39,9 @@ public class AppointmentService : IAppointmentService
         ICurrentUserService currentUserService,
         IDateTimeProvider dateTimeProvider,
         IAppointmentAvailabilityPolicy availabilityPolicy,
-        IAiBookingConfirmationStore confirmationStore)
+        IAiBookingConfirmationStore confirmationStore, IOptions<ExpiryRulesOptions>? expiryOptions = null)
     {
+        _expiryOptions = expiryOptions?.Value ?? new ExpiryRulesOptions();
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _dateTimeProvider = dateTimeProvider;
@@ -98,6 +103,8 @@ public class AppointmentService : IAppointmentService
             
         if (patient == null)
             throw new NotFoundException("Hồ sơ bệnh nhân không tồn tại.");
+
+        await NoShowRestrictionRule.EnsureOnlineBookingAllowedAsync(_dbContext, _dateTimeProvider, _expiryOptions, patient.Id);
 
         var user = await _dbContext.Users.FindAsync(currentUserId.Value);
         if (user == null || !user.IsActive)

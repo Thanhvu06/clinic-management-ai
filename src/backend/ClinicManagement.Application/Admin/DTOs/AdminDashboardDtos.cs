@@ -5,7 +5,7 @@ namespace ClinicManagement.Application.Admin.DTOs;
 public class SystemAuditLogDto
 {
     public long Id { get; set; }
-    public Guid UserId { get; set; }
+    public Guid? UserId { get; set; }
     public string UserFullName { get; set; } = string.Empty;
     public string Action { get; set; } = string.Empty;
     public string EntityName { get; set; } = string.Empty;

@@ -17,6 +17,7 @@ export interface DoctorDashboardKpisDto {
 }
 
 export interface DoctorQueueItemDto {
+    isCompletionOverdue?: boolean;
     appointmentId?: number | null;
     appointmentCode: string;
     patientVisitId?: number | null;
@@ -168,6 +169,7 @@ export interface PatientClinicalContextDto {
     totalPastVisits: number;
     pastVisits: PastVisitSummaryDto[];
     currentAppointment: {
+        isCompletionOverdue?: boolean;
         id: number;
         appointmentCode: string;
         patientId: number;

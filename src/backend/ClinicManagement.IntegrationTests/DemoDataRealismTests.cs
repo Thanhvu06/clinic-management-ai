@@ -107,10 +107,17 @@ public class DemoDataRealismTests
         var waiting = prescriptions.Where(p => p.Status == PrescriptionStatus.Issued).ToList();
         Assert.InRange(waiting.Count, 2, 3);
         Assert.All(waiting, p => Assert.True(CreatedOn(p.CreatedAt) >= today.AddDays(-1)));
-        Assert.All(prescriptions.Where(p => CreatedOn(p.CreatedAt) < today.AddDays(-1)), p => Assert.Equal(PrescriptionStatus.Dispensed, p.Status));
+        Assert.All(prescriptions.Where(p => CreatedOn(p.CreatedAt) < today.AddDays(-1)), p =>
+            Assert.Contains(p.Status, new[] { PrescriptionStatus.Dispensed, PrescriptionStatus.Expired }));
         Assert.True(prescriptions.Select(p => p.DoctorId).Distinct().Count() >= 3);
 
         var transactions = await db.MedicineStockTransactions.ToListAsync();
+        Assert.All(prescriptions.Where(p => p.Status == PrescriptionStatus.Expired), p =>
+        {
+            Assert.True(p.CreatedAt <= clock.UtcNow.AddDays(-5));
+            Assert.Null(p.DispensedAt);
+            Assert.DoesNotContain(transactions, t => t.PrescriptionId == p.Id);
+        });
         foreach (var dispensed in prescriptions.Where(p => p.Status == PrescriptionStatus.Dispensed))
         {
             Assert.NotNull(dispensed.DispensedAt);

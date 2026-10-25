@@ -5,5 +5,6 @@ public enum AppointmentChangeRequestStatus
     Pending,
     Approved,
     Rejected,
-    Withdrawn
+    Withdrawn,
+    Expired
 }

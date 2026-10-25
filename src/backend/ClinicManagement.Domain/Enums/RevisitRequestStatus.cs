@@ -5,5 +5,6 @@ public enum RevisitRequestStatus
     PendingPatientResponse,
     Accepted,
     Rejected,
-    ConvertedToAppointment
+    ConvertedToAppointment,
+    Expired
 }

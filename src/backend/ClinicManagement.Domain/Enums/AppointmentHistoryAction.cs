@@ -12,5 +12,6 @@ public enum AppointmentHistoryAction
     Cancelled,
     Completed,
     NoShow,
-    RevisitCreated
+    RevisitCreated,
+    RequestExpired
 }
