@@ -61,6 +61,7 @@ public class AdminController : ControllerBase
     [HttpGet("audit-logs")]
     public async Task<IActionResult> GetAuditLogs(
         [FromServices] AppDbContext dbContext,
+        [FromServices] IDateTimeProvider clock,
         [FromQuery] string? action,
         [FromQuery] string? entityName,
         [FromQuery] int page = 1,
@@ -68,13 +69,13 @@ public class AdminController : ControllerBase
     {
         page = Math.Max(1, page);
         pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
-        var query = from l in dbContext.SystemAuditLogs.AsNoTracking()
+        var query = from l in dbContext.SystemAuditLogs.AsNoTracking().Where(l => l.EntityName != "DevelopmentData")
                     join u in dbContext.Users.AsNoTracking() on l.UserId equals u.Id into uJoin
                     from user in uJoin.DefaultIfEmpty()
                     select new
                     {
                         Log = l,
-                        UserName = user != null ? user.FullName : "System"
+                        UserName = user != null ? user.FullName : "Hệ thống"
                     };
 
         if (!string.IsNullOrWhiteSpace(action))
@@ -106,6 +107,7 @@ public class AdminController : ControllerBase
             })
             .ToListAsync();
 
+        await ClinicManagement.Infrastructure.Admin.AuditBusinessReferences.PopulateAsync(dbContext, clock, items);
         return Ok(ApiResponse<PagedResult<SystemAuditLogDto>>.Ok(new PagedResult<SystemAuditLogDto>(items, totalItems, page, pageSize)));
     }
 

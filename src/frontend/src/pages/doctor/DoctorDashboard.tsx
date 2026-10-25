@@ -306,7 +306,7 @@ export const DoctorDashboard: React.FC = () => {
                     <div className={styles.spacing1}>
                         <Flex align="center" gap="small" className={styles.spacing2}>
                             <h2 className={styles.nextPatientTag}>Bệnh nhân tiếp theo</h2>
-                            {nextPatient && <StatusBadge status={nextPatient.status} />}
+                            {nextPatient && <StatusBadge status={nextPatient.status} label={getVisitStatusLabel(nextPatient.status)} />}
                         </Flex>
 
                         {nextPatient ? (

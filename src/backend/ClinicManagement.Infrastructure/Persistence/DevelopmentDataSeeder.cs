@@ -339,6 +339,7 @@ public static class DevelopmentDataSeeder
         }
         await db.SaveChangesAsync();
         logger.LogInformation("Patients seeded.");
+        await DemoPatientDevelopmentSeed.SeedAsync(db, dateTimeProvider, mrnGenerator, userManager, password);
         var patients = await db.Patients.ToListAsync();
 
         // 5. Clinic Locations
@@ -376,7 +377,7 @@ public static class DevelopmentDataSeeder
             db.HealthPackageRegistrations.AddRange(
                 new HealthPackageRegistration
                 {
-                    RegistrationCode = $"REG-{today.AddDays(-2):yyMMdd}-SEED0001",
+                    RegistrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", today.AddDays(-2), 7),
                     PatientId = patients[0].Id,
                     HealthPackageId = packages[0].Id,
                     PreferredDate = today.AddDays(3),
@@ -387,7 +388,7 @@ public static class DevelopmentDataSeeder
                 },
                 new HealthPackageRegistration
                 {
-                    RegistrationCode = $"REG-{today.AddDays(-3):yyMMdd}-SEED0002",
+                    RegistrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", today.AddDays(-3), 7),
                     PatientId = patients[1 % patients.Count].Id,
                     HealthPackageId = packages[1 % packages.Count].Id,
                     PreferredDate = today.AddDays(5),
@@ -400,7 +401,7 @@ public static class DevelopmentDataSeeder
                 },
                 new HealthPackageRegistration
                 {
-                    RegistrationCode = $"REG-{today.AddDays(-4):yyMMdd}-SEED0003",
+                    RegistrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", today.AddDays(-4), 7),
                     PatientId = patients.First(p => p.Gender == Gender.Female).Id,
                     HealthPackageId = packages[3 % packages.Count].Id,
                     PreferredDate = today.AddDays(2),
@@ -710,134 +711,7 @@ public static class DevelopmentDataSeeder
         ILogger logger,
         int scheduleDays = 7)
     {
-        var today = dateTimeProvider.VietnamToday;
-        var existingSchedules = await db.DoctorWorkSchedules.ToListAsync();
-        var scheduleLookup = existingSchedules
-            .GroupBy(s => (s.DoctorId, s.WorkDate, s.StartTime, s.EndTime))
-            .ToDictionary(g => g.Key, g => g.First());
-
-        var existingSlots = await db.AppointmentSlots.ToListAsync();
-        var slotLookup = existingSlots
-            .GroupBy(s => (s.DoctorId, s.SlotDate, s.StartTime))
-            .ToDictionary(g => g.Key, g => g.First());
-
-        var days = Math.Clamp(scheduleDays, 1, 30);
-        foreach (var doc in doctors)
-        {
-            for (int i = 0; i < days; i++)
-            {
-                var date = today.AddDays(i);
-                // Skip Sundays
-                if (date.DayOfWeek == DayOfWeek.Sunday) continue;
-
-                // Morning Shift (08:00 - 11:30)
-                var morningKey = (doc.Id, date, new TimeOnly(8, 0), new TimeOnly(11, 30));
-                if (!scheduleLookup.TryGetValue(morningKey, out var morningSchedule))
-                {
-                    morningSchedule = new DoctorWorkSchedule
-                    {
-                        DoctorId = doc.Id,
-                        WorkDate = date,
-                        StartTime = new TimeOnly(8, 0),
-                        EndTime = new TimeOnly(11, 30),
-                        IsActive = true
-                    };
-                    db.DoctorWorkSchedules.Add(morningSchedule);
-                    scheduleLookup[morningKey] = morningSchedule;
-                }
-                else if (!morningSchedule.IsActive)
-                {
-                    morningSchedule.IsActive = true;
-                }
-
-                // Afternoon Shift (13:30 - 17:00); Saturday only has the morning shift
-                var hasAfternoonShift = date.DayOfWeek != DayOfWeek.Saturday;
-                var afternoonKey = (doc.Id, date, new TimeOnly(13, 30), new TimeOnly(17, 0));
-                if (hasAfternoonShift)
-                {
-                    if (!scheduleLookup.TryGetValue(afternoonKey, out var afternoonSchedule))
-                    {
-                        afternoonSchedule = new DoctorWorkSchedule
-                        {
-                            DoctorId = doc.Id,
-                            WorkDate = date,
-                            StartTime = new TimeOnly(13, 30),
-                            EndTime = new TimeOnly(17, 0),
-                            IsActive = true
-                        };
-                        db.DoctorWorkSchedules.Add(afternoonSchedule);
-                        scheduleLookup[afternoonKey] = afternoonSchedule;
-                    }
-                    else if (!afternoonSchedule.IsActive)
-                    {
-                        afternoonSchedule.IsActive = true;
-                    }
-                }
-
-                // Morning slots (7 slots: 08:00 to 11:30, 30m each)
-                var mStart = new TimeOnly(8, 0);
-                for (int s = 0; s < 7; s++)
-                {
-                    var slotKey = (doc.Id, date, mStart);
-                    if (!slotLookup.TryGetValue(slotKey, out var slot))
-                    {
-                        slot = new AppointmentSlot
-                        {
-                            DoctorId = doc.Id,
-                            SlotDate = date,
-                            StartTime = mStart,
-                            EndTime = mStart.AddMinutes(30),
-                            IsBooked = false
-                        };
-                        db.AppointmentSlots.Add(slot);
-                        slotLookup[slotKey] = slot;
-                    }
-                    mStart = mStart.AddMinutes(30);
-                }
-
-                // Afternoon slots (7 slots: 13:30 to 17:00, 30m each)
-                var aStart = new TimeOnly(13, 30);
-                for (int s = 0; hasAfternoonShift && s < 7; s++)
-                {
-                    var slotKey = (doc.Id, date, aStart);
-                    if (!slotLookup.TryGetValue(slotKey, out var slot))
-                    {
-                        slot = new AppointmentSlot
-                        {
-                            DoctorId = doc.Id,
-                            SlotDate = date,
-                            StartTime = aStart,
-                            EndTime = aStart.AddMinutes(30),
-                            IsBooked = false
-                        };
-                        db.AppointmentSlots.Add(slot);
-                        slotLookup[slotKey] = slot;
-                    }
-                    aStart = aStart.AddMinutes(30);
-                }
-            }
-        }
-        await db.SaveChangesAsync();
-
-        // Synchronize IsBooked on all slots based on active appointments holding slots
-        var activeApptSlotIds = await db.Appointments
-            .Where(a => AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
-            .Select(a => a.AppointmentSlotId)
-            .Distinct()
-            .ToListAsync();
-        var activeSlotIdSet = new HashSet<long>(activeApptSlotIds);
-
-        var allDoctorSlots = await db.AppointmentSlots.ToListAsync();
-        foreach (var slot in allDoctorSlots)
-        {
-            var shouldBeBooked = activeSlotIdSet.Contains(slot.Id);
-            if (slot.IsBooked != shouldBeBooked)
-            {
-                slot.IsBooked = shouldBeBooked;
-            }
-        }
-        await db.SaveChangesAsync();
-        logger.LogInformation("Work schedules ({Days} days [VietnamToday..+{DaysMinusOne}], 2 shifts) and slots (14 slots/day) seeded and synchronized.", days, days - 1);
+        await DevelopmentScheduleSeed.SeedAsync(db, doctors, dateTimeProvider, logger, scheduleDays);
     }
 
     private static async Task<ApplicationUser> SeedUserAsync(UserManager<ApplicationUser> userManager, string email, string name, string phone, string role, string password, ClinicManagement.Application.Common.Interfaces.IDateTimeProvider clock)

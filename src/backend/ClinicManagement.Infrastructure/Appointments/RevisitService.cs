@@ -218,7 +218,7 @@ public class RevisitService : IRevisitService
 
             var newAppointment = new Appointment
             {
-                AppointmentCode = $"APT-{_dateTimeProvider.VietnamNow:yyMMdd}-{Guid.NewGuid():N}"[..18].ToUpper(),
+                AppointmentCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("APT", _dateTimeProvider.VietnamToday, 8),
                 PatientId = patient.Id,
                 DoctorId = doctor.Id,
                 SpecialtyId = specialtyId,

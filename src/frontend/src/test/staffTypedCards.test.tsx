@@ -33,7 +33,7 @@ describe('typed-suggestion staff cards', () => {
         expect(view.textContent).toContain('APT-9');
         expect(view.textContent).toContain('08:00 – 08:30');
         expect(view.textContent).toContain('Trần C');
-        expect(view.textContent).toContain('Đã xác nhận');
+        expect(view.textContent).toContain('Chờ tiếp nhận');
         expect(view.textContent).toContain('Đau lưng kéo dài');
         expect(view.textContent).toContain('Đã tiếp nhận');
         expect(screen.getAllByText('Lý do khám:')).toHaveLength(1);

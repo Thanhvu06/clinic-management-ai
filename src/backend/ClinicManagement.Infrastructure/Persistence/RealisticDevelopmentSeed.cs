@@ -1,3 +1,4 @@
+using ClinicManagement.Infrastructure.Common;
 using ClinicManagement.Infrastructure.HealthPackages;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Domain.Entities;
@@ -74,12 +75,12 @@ internal static class RealisticDevelopmentSeed
     }
 
     internal static Patient PickPatient(IReadOnlyList<Patient> patients, ISet<(long DoctorId, DateOnly Date, long PatientId)> taken,
-        long doctorId, DateOnly date, int start, bool femaleOnly)
+        long doctorId, DateOnly date, int start, string specialtyCode)
     {
         for (var offset = 0; offset < patients.Count; offset++)
         {
             var patient = patients[(Math.Abs(start) + offset) % patients.Count];
-            if (femaleOnly && patient.Gender != Gender.Female) continue;
+            if (!DemoPatientDevelopmentSeed.Allows(patient, specialtyCode, date)) continue;
             if (taken.Add((doctorId, date, patient.Id))) return patient;
         }
         throw new InvalidOperationException($"Không còn bệnh nhân phù hợp cho bác sĩ #{doctorId} ngày {date:dd/MM/yyyy}.");
@@ -118,6 +119,7 @@ internal static class RealisticDevelopmentSeed
         var medicines = await db.Medicines.ToDictionaryAsync(m => m.Code);
         var packages = await db.HealthPackages.OrderBy(p => p.Code).ToListAsync();
         var packageIndex = 0;
+        var packagePurchases = await db.HealthPackageRegistrations.ToListAsync();
         var today = clock.VietnamToday;
         var taken = (await db.Appointments.Where(a => a.AppointmentDate >= today.AddDays(-30) && a.AppointmentDate <= today)
                 .Select(a => new { a.DoctorId, a.AppointmentDate, a.PatientId }).ToListAsync())
@@ -128,12 +130,12 @@ internal static class RealisticDevelopmentSeed
         for (var i = 0; i < 30; i++)
         {
             var date = today.AddDays(-i);
-            if (date.DayOfWeek == DayOfWeek.Sunday) continue;
+            if (date.DayOfWeek == DayOfWeek.Sunday && i != 0) continue;
             var time = At(clock, date, 9, (i % 4) * 10);
             var status = i is 1 or 7 or 13 ? InvoiceStatus.Unpaid : i is 3 or 8 ? InvoiceStatus.Cancelled : InvoiceStatus.Paid;
             var invoice = new Invoice
             {
-                InvoiceCode = $"INV-{date:yyMMdd}-S{i + 1:D4}",
+                InvoiceCode = BusinessDisplay.RandomCode("INV", date, 7),
                 SourceType = InvoiceSourceType.Appointment, CreatedByUserId = receptionist,
                 CreatedAtUtc = time, Status = status,
                 PaidAtUtc = status == InvoiceStatus.Paid ? time.AddMinutes(30) : null,
@@ -144,16 +146,17 @@ internal static class RealisticDevelopmentSeed
             if (i % 4 == 3)
             {
                 var package = packages[packageIndex++ % packages.Count];
-                var patient = patients.Where(p => HealthPackageEligibility.Allows(package, p.Gender)).ElementAt(i % patients.Count(p => HealthPackageEligibility.Allows(package, p.Gender)));
+                var patient = DemoRevenueDevelopmentSeed.PickPatient(patients, package, date, packagePurchases, i);
                 invoice.PatientId = patient.Id;
                 invoice.SourceType = InvoiceSourceType.HealthPackageRegistration;
                 invoice.HealthPackageRegistration = new HealthPackageRegistration
                 {
-                    RegistrationCode = $"REG-{date.AddDays(-2):yyMMdd}-SEED{i + 1:D4}", PatientId = patient.Id,
+                    RegistrationCode = BusinessDisplay.RandomCode("REG", date.AddDays(-2), 7), PatientId = patient.Id,
                     HealthPackageId = package.Id, PreferredDate = date, ContactPhone = patient.PhoneNumber ?? "0900000004",
                     Status = HealthPackageRegistrationStatus.Confirmed, CreatedAt = time.AddDays(-2),
                 };
                 db.HealthPackageRegistrations.Add(invoice.HealthPackageRegistration);
+                packagePurchases.Add(invoice.HealthPackageRegistration);
                 await db.SaveChangesAsync();
                 invoice.Items.Add(Item(package.Code, package.Name, package.Price, 1, "HealthPackage", invoice.HealthPackageRegistration.Id));
             }
@@ -162,11 +165,11 @@ internal static class RealisticDevelopmentSeed
                 var doctor = doctors[i % doctors.Count];
                 var specialty = SpecialtyOf(doctor);
                 var profile = Profiles[specialty.SpecialtyCode];
-                var patient = PickPatient(patients, taken, doctor.Id, date, i, specialty.SpecialtyCode == "SP03");
+                var patient = PickPatient(patients, taken, doctor.Id, date, i, specialty.SpecialtyCode);
                 invoice.PatientId = patient.Id;
                 var visit = new PatientVisit
                 {
-                    VisitCode = $"VIS-{date:yyMMdd}-S{i + 1:D4}", PatientId = patient.Id, FacilityId = facility.Id,
+                    VisitCode = $"VIS-{date:yyyyMMdd}-{100 + i:D4}", PatientId = patient.Id, FacilityId = facility.Id,
                     DepartmentId = DepartmentOf(specialty).Id, AssignedDoctorId = doctor.Id, VisitDate = date,
                     QueueNumber = 100 + i, ChiefComplaint = Reason(specialty.SpecialtyCode, i), Status = VisitStatus.Completed,
                     CreatedByUserId = receptionist, CreatedAtUtc = time.AddHours(-1), CheckedInAtUtc = time.AddHours(-1),
@@ -181,7 +184,7 @@ internal static class RealisticDevelopmentSeed
                     var service = services[profile.ServiceCode];
                     var order = new DiagnosticOrder
                     {
-                        OrderCode = $"CLS-{date:yyMMdd}-S{i + 1:D4}", PatientVisit = visit, PatientId = patient.Id,
+                        OrderCode = $"DX-{date:yyyyMMdd}-{1000 + i:D4}", PatientVisit = visit, PatientId = patient.Id,
                         OrderingDoctorId = doctor.Id, FacilityId = facility.Id, ClinicalIndication = profile.Indication,
                         Status = DiagnosticOrderStatus.Completed, OrderedAtUtc = time.AddMinutes(-40), StartedAtUtc = time.AddMinutes(-35),
                         CompletedAtUtc = time.AddMinutes(-20), StartedByUserId = technician, CompletedByUserId = technician,
@@ -220,7 +223,7 @@ internal static class RealisticDevelopmentSeed
             if (status == InvoiceStatus.Paid)
                 invoice.Payments.Add(new Payment
                 {
-                    PaymentCode = $"PAY-{date:yyMMdd}-S{i + 1:D4}", Amount = invoice.TotalAmount,
+                    PaymentCode = BusinessDisplay.RandomCode("PAY", date, 8), Amount = invoice.TotalAmount,
                     Method = i % 2 == 0 ? PaymentMethod.Cash : PaymentMethod.ManualBankTransfer,
                     ReceivedAtUtc = invoice.PaidAtUtc!.Value, ReceivedByUserId = receptionist, Status = PaymentStatus.Succeeded,
                 });
@@ -235,12 +238,12 @@ internal static class RealisticDevelopmentSeed
             var definition = TodayOrders[i];
             var doctor = doctors.First(d => SpecialtyOf(d).SpecialtyCode == definition.SpecialtyCode);
             var specialty = SpecialtyOf(doctor);
-            var patient = PickPatient(patients, taken, doctor.Id, today, i + 5, definition.SpecialtyCode == "SP03");
+            var patient = PickPatient(patients, taken, doctor.Id, today, i + 5, definition.SpecialtyCode);
             var orderedAt = now.AddMinutes(-definition.MinutesAgo);
             var checkedInAt = orderedAt.AddMinutes(-12);
             var visit = new PatientVisit
             {
-                VisitCode = $"VIS-{today:yyMMdd}-D{i + 1:D4}", PatientId = patient.Id, FacilityId = facility.Id,
+                VisitCode = $"VIS-{today:yyyyMMdd}-{200 + i:D4}", PatientId = patient.Id, FacilityId = facility.Id,
                 DepartmentId = DepartmentOf(specialty).Id, AssignedDoctorId = doctor.Id, VisitDate = today, QueueNumber = 200 + i,
                 ChiefComplaint = Reason(definition.SpecialtyCode, i + 1), Status = i == 4 ? VisitStatus.ResultsReady : VisitStatus.WaitingForDiagnostics,
                 CreatedByUserId = receptionist, CreatedAtUtc = checkedInAt, CheckedInAtUtc = checkedInAt, ConsultationStartedAtUtc = checkedInAt.AddMinutes(4),
@@ -249,7 +252,7 @@ internal static class RealisticDevelopmentSeed
             var resulted = i >= 3;
             var order = new DiagnosticOrder
             {
-                OrderCode = $"CLS-{today:yyMMdd}-D{i + 1:D4}", PatientVisit = visit, PatientId = patient.Id,
+                OrderCode = $"DX-{today:yyyyMMdd}-{2000 + i:D4}", PatientVisit = visit, PatientId = patient.Id,
                 OrderingDoctorId = doctor.Id, FacilityId = facility.Id, ClinicalIndication = definition.Indication,
                 OrderedAtUtc = orderedAt, Status = i == 4 ? DiagnosticOrderStatus.Completed : started ? DiagnosticOrderStatus.InProgress : DiagnosticOrderStatus.Ordered,
                 StartedAtUtc = started ? orderedAt.AddMinutes(2) : null, StartedByUserId = started ? technician : null,
@@ -300,11 +303,11 @@ internal static class RealisticDevelopmentSeed
             }
         }
         var orders = await db.DiagnosticOrders.Include(o => o.PatientVisit)
-            .Where(o => o.OrderCode.StartsWith("CLS-") && o.OrderCode.Contains("-D"))
+            .Where(o => o.PatientVisit != null && o.PatientVisit.QueueNumber >= 200 && o.PatientVisit.QueueNumber < 205)
             .ToListAsync();
         foreach (var order in orders)
         {
-            if (order.OrderCode.EndsWith("-D0004", StringComparison.Ordinal) &&
+            if (order.PatientVisit?.QueueNumber == 203 &&
                 order.VerificationStatus == DiagnosticVerificationStatus.Pending && order.Status == DiagnosticOrderStatus.Completed)
             {
                 order.Status = DiagnosticOrderStatus.InProgress;

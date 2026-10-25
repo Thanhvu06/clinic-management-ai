@@ -378,7 +378,7 @@ public class AppointmentService : IAppointmentService
                 throw new BusinessException("PATIENT_TIME_CONFLICT", "Bạn đã có lịch khám khác trùng hoặc giao lấp thời gian với slot này.");
 
             // Create Appointment
-            var appointmentCode = $"APT-{_dateTimeProvider.VietnamNow:yyMMdd}-{Guid.NewGuid():N}"[..18].ToUpper();
+            var appointmentCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("APT", _dateTimeProvider.VietnamToday, 8);
 
             var appointment = new Appointment
             {
