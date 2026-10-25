@@ -13,6 +13,39 @@ namespace ClinicManagement.IntegrationTests;
 
 public class DemoPolishRound4SeedTests
 {
+    [Fact]
+    public async Task SundayAfternoonResetMovesDiagnosticsToSaturdayAndCancelsOnlyUnstartedOrdersOlderThan24Hours()
+    {
+        using var factory = new FixedSeedWebApplicationFactory(new DateTime(2026, 10, 25, 9, 30, 0, DateTimeKind.Utc));
+        using var scope = factory.Services.CreateScope();
+        var services = scope.ServiceProvider;
+        var clock = services.GetRequiredService<IDateTimeProvider>();
+        Assert.Equal(DayOfWeek.Sunday, clock.VietnamToday.DayOfWeek);
+        Assert.Equal(new TimeOnly(16, 30), clock.VietnamTime);
+        await DevelopmentDataSeeder.SeedDoctorSchedulesAndSlotsAsync(DemoSeedCalendar.WithAnchoredClock(services), 30, true);
+        var db = services.GetRequiredService<AppDbContext>();
+        var orders = await db.DiagnosticOrders.Include(o => o.PatientVisit).Include(o => o.Items)
+            .Where(o => o.PatientVisit != null && o.PatientVisit.QueueNumber >= 200 && o.PatientVisit.QueueNumber < 205).ToListAsync();
+        Assert.Equal(5, orders.Count);
+        Assert.All(orders, order =>
+        {
+            Assert.Equal(new DateOnly(2026, 10, 24), order.PatientVisit!.VisitDate);
+            Assert.Equal(new DateOnly(2026, 10, 24), DateOnly.FromDateTime(clock.ConvertUtcToVietnam(order.OrderedAtUtc)));
+        });
+        var expired = Assert.Single(orders, order => order.PatientVisit!.QueueNumber == 200);
+        Assert.True(clock.UtcNow - expired.OrderedAtUtc > TimeSpan.FromHours(24));
+        Assert.Null(expired.StartedAtUtc);
+        Assert.Equal(DiagnosticOrderStatus.Cancelled, expired.Status);
+        Assert.Equal(clock.UtcNow, expired.CancelledAtUtc);
+        Assert.Contains("Quá hạn thực hiện", expired.Note);
+        Assert.All(expired.Items, item => Assert.Equal(DiagnosticItemStatus.Cancelled, item.Status));
+        var pending = Assert.Single(orders, order => order.PatientVisit!.QueueNumber == 201);
+        Assert.True(clock.UtcNow - pending.OrderedAtUtc < TimeSpan.FromHours(24));
+        Assert.Equal(DiagnosticOrderStatus.Ordered, pending.Status);
+        Assert.Null(pending.CancelledAtUtc);
+        Assert.All(orders.Where(order => order.StartedAtUtc != null), order => Assert.NotEqual(DiagnosticOrderStatus.Cancelled, order.Status));
+    }
+
     [Theory]
     [InlineData("2026-10-27T00:30:00Z")]
     [InlineData("2026-10-27T08:00:00Z")]

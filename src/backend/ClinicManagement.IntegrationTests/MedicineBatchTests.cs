@@ -260,7 +260,7 @@ public class MedicineBatchTests(CustomWebApplicationFactory factory) : Integrati
     [Fact]
     public async Task Demo_seed_is_gated_idempotent_and_preserves_stock_invariant()
     {
-        using var isolated = new CustomWebApplicationFactory();
+        using var isolated = new FixedSeedWebApplicationFactory();
         using var scope = isolated.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.EnsureCreatedAsync();

@@ -20,7 +20,8 @@ public class SeedDataIntegrityTests : IntegrationTestBase
     [Fact]
     public async Task SeedAsync_PopulatesConsistentAndCleanData()
     {
-        using var scope = Factory.Services.CreateScope();
+        using var seedApp = FixedSeedWebApplicationFactory.WithClock(Factory);
+        using var scope = seedApp.Services.CreateScope();
         var sp = scope.ServiceProvider;
         var db = sp.GetRequiredService<AppDbContext>();
 
@@ -209,7 +210,8 @@ public class SeedDataIntegrityTests : IntegrationTestBase
     [Fact]
     public async Task SeedMasterDataAsync_DoesNotGenerateSlots_WhenNotConfigured()
     {
-        using var scope = Factory.Services.CreateScope();
+        using var seedApp = FixedSeedWebApplicationFactory.WithClock(Factory);
+        using var scope = seedApp.Services.CreateScope();
         var sp = scope.ServiceProvider;
         var db = sp.GetRequiredService<AppDbContext>();
 

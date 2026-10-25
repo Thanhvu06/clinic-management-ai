@@ -17,11 +17,13 @@ public class RealisticDevelopmentSeedTests
     [Fact]
     public async Task StaffDemo_IsRealistic_AndIdempotent()
     {
-        using var factory = new CustomWebApplicationFactory();
+        using var factory = new FixedSeedWebApplicationFactory();
         using var scope = factory.Services.CreateScope();
         var services = scope.ServiceProvider;
         var db = services.GetRequiredService<AppDbContext>();
         var clock = services.GetRequiredService<IDateTimeProvider>();
+        Assert.Equal(DayOfWeek.Tuesday, clock.VietnamToday.DayOfWeek);
+        Assert.Equal(new TimeOnly(10, 0), clock.VietnamTime);
         await DevelopmentDataSeeder.SeedDoctorSchedulesAndSlotsAsync(services, 30, true);
         var appointments = await db.Appointments.Include(a => a.Specialty).Include(a => a.Histories).ToListAsync();
         Assert.Contains(appointments, a => a.Specialty.SpecialtyCode == "SP03" && (a.Reason!.Contains("kinh nguyệt") || a.Reason.Contains("Khám thai")));
@@ -97,7 +99,7 @@ public class RealisticDevelopmentSeedTests
     [Fact]
     public async Task InventoryTransactions_IncludePrescriptionDate_ForConsistentDisplayCode()
     {
-        using var factory = new CustomWebApplicationFactory();
+        using var factory = new FixedSeedWebApplicationFactory();
         using var scope = factory.Services.CreateScope();
         var services = scope.ServiceProvider;
         var db = services.GetRequiredService<AppDbContext>();
@@ -120,7 +122,7 @@ public class RealisticDevelopmentSeedTests
     [Fact]
     public async Task SeededPendingOrder_RequiresAnIndependentReviewer_AndCanBeVerified()
     {
-        using var factory = new CustomWebApplicationFactory();
+        using var factory = new FixedSeedWebApplicationFactory();
         using var scope = factory.Services.CreateScope();
         var services = scope.ServiceProvider;
         await DevelopmentDataSeeder.SeedDoctorSchedulesAndSlotsAsync(services, 7, true);

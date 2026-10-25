@@ -113,7 +113,7 @@ public class DemoRunTimeAndStockTests(CustomWebApplicationFactory factory) : Int
     [Fact]
     public async Task Seeded_leave_intervals_use_Vietnam_clock_without_UTC_suffix()
     {
-        using var seedFactory = new CustomWebApplicationFactory();
+        using var seedFactory = new FixedSeedWebApplicationFactory();
         await DevelopmentDataSeeder.SeedDoctorSchedulesAndSlotsAsync(seedFactory.Services, 30, true);
         using var scope = seedFactory.Services.CreateScope();
         var clock = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>();

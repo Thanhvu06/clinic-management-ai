@@ -11,7 +11,7 @@ public class DemoDataRealismTests
 {
     private static async Task<(CustomWebApplicationFactory Factory, IServiceScope Scope, AppDbContext Db, IDateTimeProvider Clock)> SeedAsync()
     {
-        var factory = new CustomWebApplicationFactory();
+        var factory = new FixedSeedWebApplicationFactory();
         var scope = factory.Services.CreateScope();
         await DevelopmentDataSeeder.SeedDoctorSchedulesAndSlotsAsync(scope.ServiceProvider, 7, true);
         return (factory, scope, scope.ServiceProvider.GetRequiredService<AppDbContext>(), scope.ServiceProvider.GetRequiredService<IDateTimeProvider>());

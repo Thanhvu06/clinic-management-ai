@@ -14,7 +14,7 @@ namespace ClinicManagement.IntegrationTests;
 
 public sealed class DemoRoundThreeFixture : IAsyncLifetime
 {
-    public CustomWebApplicationFactory Factory { get; } = new();
+    public CustomWebApplicationFactory Factory { get; } = new FixedSeedWebApplicationFactory();
     public async Task InitializeAsync()
     {
         using var scope = Factory.Services.CreateScope();
