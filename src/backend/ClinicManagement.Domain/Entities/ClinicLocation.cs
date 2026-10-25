@@ -29,7 +29,7 @@ public class ClinicLocation
 
     [Required]
     [StringLength(100)]
-    public string OpeningHours { get; set; } = "07:00 - 19:00 (Thứ 2 - Chủ Nhật)";
+    public string OpeningHours { get; set; } = "07:00–17:00 (thứ 2 – thứ 7) · Chủ nhật nghỉ";
 
     [StringLength(1000)]
     public string? Description { get; set; }

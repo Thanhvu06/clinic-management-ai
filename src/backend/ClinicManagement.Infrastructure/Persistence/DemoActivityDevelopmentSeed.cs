@@ -95,7 +95,7 @@ internal static class DemoActivityDevelopmentSeed
         for (var day = 0; day < 30; day++)
         {
             var date = clock.VietnamToday.AddDays(-day);
-            if (date.DayOfWeek == DayOfWeek.Sunday) continue;
+            if (DemoSeedCalendar.IsClosed(date)) continue;
             var start = RealisticDevelopmentSeed.At(clock, date, 0);
             var end = start.AddDays(1);
             var paid = await db.Payments.CountAsync(p => p.Status == PaymentStatus.Succeeded && p.ReceivedAtUtc >= start && p.ReceivedAtUtc < end);

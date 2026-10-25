@@ -130,7 +130,8 @@ internal static class RealisticDevelopmentSeed
         for (var i = 0; i < 30; i++)
         {
             var date = today.AddDays(-i);
-            if (date.DayOfWeek == DayOfWeek.Sunday && i != 0) continue;
+            if (DemoSeedCalendar.IsClosed(date) && i != 0) continue;
+            date = DemoSeedCalendar.PreviousOpen(date);
             var time = At(clock, date, 9, (i % 4) * 10);
             var status = i is 1 or 7 or 13 ? InvoiceStatus.Unpaid : i is 3 or 8 ? InvoiceStatus.Cancelled : InvoiceStatus.Paid;
             var invoice = new Invoice
