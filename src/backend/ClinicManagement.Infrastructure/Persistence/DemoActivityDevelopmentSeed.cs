@@ -94,7 +94,7 @@ internal static class DemoActivityDevelopmentSeed
         var random = new Random(261024);
         for (var day = 0; day < 30; day++)
         {
-            var date = clock.VietnamToday.AddDays(-day);
+            var date = DemoSeedTimeline.ActivityDate(clock).AddDays(-day);
             if (DemoSeedCalendar.IsClosed(date)) continue;
             var start = RealisticDevelopmentSeed.At(clock, date, 0);
             var end = start.AddDays(1);
@@ -108,14 +108,14 @@ internal static class DemoActivityDevelopmentSeed
                 var choice = choices[random.Next(choices.Count)];
                 var package = choice.Package;
                 var patient = choice.Patient!;
-                var time = RealisticDevelopmentSeed.At(clock, date, 8 + n / 2, n % 2 * 25);
+                var time = DemoSeedTimeline.BeforeNow(clock, date, 8 + n / 2, n % 2 * 25).AddMinutes(-n * 2);
                 var invoice = new Invoice
                 {
-                    InvoiceCode = BusinessDisplay.RandomCode("INV", date, 7), PatientId = patient.Id,
+                    InvoiceCode = BusinessDisplay.RandomCode("INV", date, 8), PatientId = patient.Id,
                     SourceType = InvoiceSourceType.HealthPackageRegistration, Status = InvoiceStatus.Paid,
                     CreatedByUserId = receptionist, CreatedAtUtc = time, PaidAtUtc = time.AddMinutes(10), PaidByUserId = receptionist,
                     Subtotal = package.Price, TotalAmount = package.Price,
-                    HealthPackageRegistration = new HealthPackageRegistration { RegistrationCode = BusinessDisplay.RandomCode("REG", date.AddDays(-2), 7),
+                    HealthPackageRegistration = new HealthPackageRegistration { RegistrationCode = BusinessDisplay.RandomCode("REG", date.AddDays(-2), 8),
                         PatientId = patient.Id, HealthPackageId = package.Id, PreferredDate = date, ContactPhone = patient.PhoneNumber!,
                         Status = HealthPackageRegistrationStatus.Confirmed, CreatedAt = time.AddDays(-2), UpdatedAt = time.AddDays(-1) },
                     Payments = [new Payment { PaymentCode = BusinessDisplay.RandomCode("PAY", date, 8), Amount = package.Price,

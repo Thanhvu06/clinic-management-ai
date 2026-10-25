@@ -386,7 +386,7 @@ internal static class DevelopmentAppointmentSeed
                     Reason = "Bận chuyến công tác đột xuất tại Hà Nội",
                     Status = AppointmentChangeRequestStatus.Pending,
                     RequestedByUserId = pendingAppt.Patient.UserId ?? adminId1.Id,
-                    CreatedAt = RealisticDevelopmentSeed.At(dateTimeProvider, today, 9)
+                    CreatedAt = (await db.AppointmentHistories.SingleAsync(h => h.AppointmentId == pendingAppt.Id && h.Action == AppointmentHistoryAction.Created)).CreatedAt.AddMinutes(30)
                 });
             }
 
@@ -402,7 +402,7 @@ internal static class DevelopmentAppointmentSeed
                     Reason = "Xin dời ngày khám sang tuần sau vì việc gia đình",
                     Status = AppointmentChangeRequestStatus.Pending,
                     RequestedByUserId = confAppt.Patient.UserId ?? adminId1.Id,
-                    CreatedAt = RealisticDevelopmentSeed.At(dateTimeProvider, today, 9)
+                    CreatedAt = (await db.AppointmentHistories.SingleAsync(h => h.AppointmentId == confAppt.Id && h.Action == AppointmentHistoryAction.Created)).CreatedAt.AddMinutes(30)
                 });
             }
             await db.SaveChangesAsync();
@@ -419,7 +419,7 @@ internal static class DevelopmentAppointmentSeed
                     PatientId = compAppt.PatientId,
                     DoctorId = compAppt.DoctorId,
                     SuggestedDate = today.AddDays(7),
-                    Note = "Tái khám sau 1 tuần để kiểm tra lại đường huyết và men gan",
+                    Note = "Tái khám sau 1 tuần để đánh giá lại triệu chứng và đáp ứng điều trị theo hướng dẫn của bác sĩ",
                     Status = RevisitRequestStatus.PendingPatientResponse
                 });
                 await db.SaveChangesAsync();

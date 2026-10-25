@@ -86,7 +86,7 @@ public static class DevelopmentDataSeeder
         var dateTimeProvider = serviceProvider.GetService<ClinicManagement.Application.Common.Interfaces.IDateTimeProvider>()
             ?? new ClinicManagement.Infrastructure.Services.DateTimeProvider();
 
-        var seedTime = RealisticDevelopmentSeed.At(dateTimeProvider, dateTimeProvider.VietnamToday, 9);
+        var seedTime = DemoSeedTimeline.BeforeNow(dateTimeProvider, DemoSeedTimeline.ActivityDate(dateTimeProvider), 9);
         var config = serviceProvider.GetService<IConfiguration>();
         var seedSchedules = options?.SeedDoctorSchedulesAndSlots
             ?? config?.GetValue<bool>("DemoSeed:GenerateSlots", false)
@@ -377,22 +377,22 @@ public static class DevelopmentDataSeeder
             db.HealthPackageRegistrations.AddRange(
                 new HealthPackageRegistration
                 {
-                    RegistrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", today.AddDays(-2), 7),
+                    RegistrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", today.AddDays(-2), 8),
                     PatientId = patients[0].Id,
                     HealthPackageId = packages[0].Id,
                     PreferredDate = DemoSeedCalendar.NextOpen(today.AddDays(3)),
-                    ContactPhone = "0900000004",
+                    ContactPhone = patients[0].PhoneNumber!,
                     Note = "Ưu tiên khám buổi sáng sớm trước 9h",
                     Status = HealthPackageRegistrationStatus.Pending,
                     CreatedAt = seedTime.AddDays(-2)
                 },
                 new HealthPackageRegistration
                 {
-                    RegistrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", today.AddDays(-3), 7),
+                    RegistrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", today.AddDays(-3), 8),
                     PatientId = patients[1 % patients.Count].Id,
                     HealthPackageId = packages[1 % packages.Count].Id,
                     PreferredDate = DemoSeedCalendar.NextOpen(today.AddDays(5)),
-                    ContactPhone = "0983000001",
+                    ContactPhone = patients[1 % patients.Count].PhoneNumber!,
                     Note = "Có tiền sử tăng huyết áp gia đình",
                     AdminNotes = "Đã liên hệ xác nhận hẹn lịch vào 8h30 ngày hẹn",
                     Status = HealthPackageRegistrationStatus.Confirmed,
@@ -401,11 +401,11 @@ public static class DevelopmentDataSeeder
                 },
                 new HealthPackageRegistration
                 {
-                    RegistrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", today.AddDays(-4), 7),
+                    RegistrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", today.AddDays(-4), 8),
                     PatientId = patients.First(p => p.Gender == Gender.Female).Id,
                     HealthPackageId = packages[3 % packages.Count].Id,
                     PreferredDate = DemoSeedCalendar.NextOpen(today.AddDays(2)),
-                    ContactPhone = "0983000002",
+                    ContactPhone = patients.First(p => p.Gender == Gender.Female).PhoneNumber!,
                     Note = "Khám tư vấn định kỳ",
                     CancellationReason = "Khách hàng bận lịch công tác không đến được",
                     Status = HealthPackageRegistrationStatus.Cancelled,
@@ -502,7 +502,7 @@ public static class DevelopmentDataSeeder
         var diagnosticServiceDefs = new[]
         {
             new DiagnosticService { Code = "LAB-CBC", Name = "Tổng phân tích tế bào máu ngoại vi", Category = DiagnosticCategory.Laboratory, Price = 120000m, PreparationInstructions = "Không cần nhịn ăn đặc biệt.", IsActive = true },
-            new DiagnosticService { Code = "LAB-GLU", Name = "Định lượng Glucose máu", Category = DiagnosticCategory.Laboratory, Price = 80000m, PreparationInstructions = "Nhịn đói ít nhất 8 tiếng trước khi lấy mẫu.", IsActive = true },
+            new DiagnosticService { Code = "LAB-GLU", Name = "Định lượng Glucose máu", Category = DiagnosticCategory.Laboratory, Price = 80000m, PreparationInstructions = "Nhịn đói ít nhất 8 tiếng trước khi lấy máu.", IsActive = true },
             new DiagnosticService { Code = "LAB-LIPID", Name = "Bộ mỡ máu toàn phần (Lipid panel)", Category = DiagnosticCategory.Laboratory, Price = 150000m, PreparationInstructions = "Nhịn ăn 10-12 tiếng trước khi lấy máu.", IsActive = true },
             new DiagnosticService { Code = "LAB-LFT", Name = "Đánh giá chức năng gan (AST, ALT)", Category = DiagnosticCategory.Laboratory, Price = 140000m, PreparationInstructions = "Tránh uống rượu bia 24 giờ trước khi xét nghiệm.", IsActive = true },
             new DiagnosticService { Code = "LAB-RFT", Name = "Đánh giá chức năng thận (Ure, Creatinin)", Category = DiagnosticCategory.Laboratory, Price = 130000m, PreparationInstructions = "Uống đủ nước, sinh hoạt bình thường.", IsActive = true },
@@ -570,7 +570,13 @@ public static class DevelopmentDataSeeder
             new { Code = "KNHI", Name = "Khoa Nhi", SpecialtyCode = "SP02", Type = DepartmentType.Clinical },
             new { Code = "KPS", Name = "Khoa Sản phụ khoa", SpecialtyCode = "SP03", Type = DepartmentType.Clinical },
             new { Code = "KTMH", Name = "Khoa Tai Mũi Họng", SpecialtyCode = "SP05", Type = DepartmentType.Clinical },
-            new { Code = "KTM", Name = "Khoa Tim mạch", SpecialtyCode = "SP06", Type = DepartmentType.Clinical }
+            new { Code = "KTM", Name = "Khoa Tim mạch", SpecialtyCode = "SP06", Type = DepartmentType.Clinical },
+            new { Code = "KDL", Name = "Khoa Da liễu", SpecialtyCode = "SP04", Type = DepartmentType.Clinical },
+            new { Code = "KCXK", Name = "Khoa Cơ xương khớp", SpecialtyCode = "SP07", Type = DepartmentType.Clinical },
+            new { Code = "KTK", Name = "Khoa Thần kinh", SpecialtyCode = "SP08", Type = DepartmentType.Clinical },
+            new { Code = "KNT", Name = "Khoa Nội tiết", SpecialtyCode = "SP09", Type = DepartmentType.Clinical },
+            new { Code = "KMAT", Name = "Khoa Nhãn khoa", SpecialtyCode = "SP10", Type = DepartmentType.Clinical },
+            new { Code = "KTH", Name = "Khoa Tiêu hóa", SpecialtyCode = "SP11", Type = DepartmentType.Clinical }
         };
 
         var deptEntities = new List<Department>();
@@ -608,7 +614,13 @@ public static class DevelopmentDataSeeder
             new { DeptCode = "KNHI", RoomNumber = "P201", Name = "Phòng khám Nhi 201", Floor = 2 },
             new { DeptCode = "KPS", RoomNumber = "P202", Name = "Phòng khám Sản 202", Floor = 2 },
             new { DeptCode = "KTMH", RoomNumber = "P301", Name = "Phòng khám TMH 301", Floor = 3 },
-            new { DeptCode = "KTM", RoomNumber = "P302", Name = "Phòng khám Tim mạch 302", Floor = 3 }
+            new { DeptCode = "KTM", RoomNumber = "P302", Name = "Phòng khám Tim mạch 302", Floor = 3 },
+            new { DeptCode = "KDL", RoomNumber = "P203", Name = "Phòng khám Da liễu 203", Floor = 2 },
+            new { DeptCode = "KCXK", RoomNumber = "P303", Name = "Phòng khám Cơ xương khớp 303", Floor = 3 },
+            new { DeptCode = "KTK", RoomNumber = "P401", Name = "Phòng khám Thần kinh 401", Floor = 4 },
+            new { DeptCode = "KNT", RoomNumber = "P402", Name = "Phòng khám Nội tiết 402", Floor = 4 },
+            new { DeptCode = "KMAT", RoomNumber = "P501", Name = "Phòng khám Nhãn khoa 501", Floor = 5 },
+            new { DeptCode = "KTH", RoomNumber = "P502", Name = "Phòng khám Tiêu hóa 502", Floor = 5 }
         };
 
         foreach (var rd in roomDefs)
@@ -679,9 +691,11 @@ public static class DevelopmentDataSeeder
             config?.GetValue<bool>("DemoSeed:Enabled") == true);
         if (seedAppointments)
         {
+            var freshEvents = !await db.SystemAuditLogs.AnyAsync(l => l.Action == "InitializeClinicalDemo");
             await RealisticDevelopmentSeed.SeedAsync(db, dateTimeProvider, rec1.Id, technician.Id, labSupervisor.Id, pharmacist.Id);
             await DemoClinicalDevelopmentSeed.SeedAsync(db, dateTimeProvider, rec1.Id, technician.Id, labSupervisor.Id, pharmacist.Id);
             await ExpiryDemoSeed.SeedAsync(db, dateTimeProvider, rec1.Id);
+            if (freshEvents) await DemoSeedTimeline.BoundEventsAsync(db, dateTimeProvider);
             var changed = await serviceProvider.GetRequiredService<ClinicManagement.Infrastructure.Expiry.ExpiryWorker>()
                 .RunOnceAsync(throwOnFailure: true);
             db.ChangeTracker.Clear();

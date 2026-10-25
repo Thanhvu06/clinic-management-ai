@@ -118,13 +118,13 @@ export const PharmacyInventory: React.FC = () => {
     };
 
 
-    const getTypeBadge = (type: string, change: number) => {
+    const getTypeBadge = (type: string) => {
         switch (type) {
-            case 'Initial': return <StatusBadge status="completed" label={`Tồn đầu kỳ (+${change})`} />;
-            case 'StockIn': return <StatusBadge status="completed" label={`Nhập kho (+${change})`} />;
-            case 'Dispense': return <StatusBadge status="cancelled" label={`Xuất đơn (${change})`} />;
-            case 'Adjustment': return <StatusBadge status="pending" label={`Kiểm kê (${change > 0 ? `+${change}` : change})`} />;
-            default: return <StatusBadge status="default" label={`${getStockTransactionLabel(type)} (${change})`} />;
+            case 'Initial': return <StatusBadge status="completed" label="Tồn đầu kỳ" />;
+            case 'StockIn': return <StatusBadge status="completed" label="Nhập kho" />;
+            case 'Dispense': return <StatusBadge status="cancelled" label="Xuất đơn" />;
+            case 'Adjustment': return <StatusBadge status="pending" label="Kiểm kê" />;
+            default: return <StatusBadge status="default" label={getStockTransactionLabel(type)} />;
         }
     };
 
@@ -147,7 +147,7 @@ export const PharmacyInventory: React.FC = () => {
                 {loading ? <LoadingState message="Đang tải lịch sử giao dịch kho..." /> : filteredTransactions.length === 0 ? <EmptyState title="Chưa có giao dịch biến động tồn kho nào." /> : <div className={styles.tableScroll}><DataTable data={filteredTransactions} keyExtractor={t => t.id} columns={[
                     {header:'Thời gian',className:styles.transactionTime,accessor:t => <div className={styles.inlineContent}><Clock size={14} /><span>{formatDateTime(t.createdAt)}</span></div>},
                     {header:'Mặt hàng thuốc',accessor:t => <><strong>{t.medicineName}</strong><div className={styles.secondary}>{t.medicineCode}</div></>},
-                    {header:'Loại giao dịch',accessor:t => getTypeBadge(t.type,t.quantityChange)},
+                    {header:'Loại giao dịch',accessor:t => getTypeBadge(t.type)},
                     {header:'Số lượng biến động',accessor:t => <strong className={t.quantityChange > 0 ? styles.stockIncrease : styles.stockDecrease}>{t.quantityChange > 0 ? `+${t.quantityChange}` : t.quantityChange} {t.unit}</strong>},
                     {header:'Tổng tồn sau giao dịch (gồm lô hết hạn)',accessor:t => <strong>{t.balanceAfter} {t.unit}</strong>},
                     {header:'Lý do / căn cứ',accessor:t => t.prescriptionId ? formatPrescriptionReference({ id: t.prescriptionId, createdAt: t.prescriptionCreatedAt }, t.reason) : t.reason || '-'},

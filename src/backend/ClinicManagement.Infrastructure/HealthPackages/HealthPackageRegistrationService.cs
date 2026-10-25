@@ -48,6 +48,9 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
             throw new BusinessException("PACKAGE_GENDER_MISMATCH", "Gói khám không phù hợp với giới tính trong hồ sơ bệnh nhân.");
 
         var today = _dateTimeProvider.VietnamToday;
+        if (!HealthPackageEligibility.AllowsAge(package, patient.DateOfBirth, today))
+            throw new BusinessException("PACKAGE_AGE_MISMATCH", "Gói khám không phù hợp với độ tuổi trong hồ sơ bệnh nhân.");
+
         if (request.PreferredDate < today)
             throw new BusinessException("INVALID_DATE", "Ngày mong muốn khám không được nằm trong quá khứ.");
 
@@ -55,7 +58,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
         if (string.IsNullOrWhiteSpace(phone))
             throw new BusinessException("INVALID_PHONE", "Số điện thoại liên hệ không được để trống.");
 
-        var registrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", _dateTimeProvider.VietnamToday, 7);
+        var registrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", _dateTimeProvider.VietnamToday, 8);
 
         var registration = new HealthPackageRegistration
         {

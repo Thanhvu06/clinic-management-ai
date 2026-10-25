@@ -42,7 +42,7 @@ public class RealisticDevelopmentSeedTests
         Assert.True(paid.Select(i => i.PaidAtUtc!.Value.Date).Distinct().Count() >= 15);
         Assert.All(paid, i =>
         {
-            Assert.InRange(i.PaidAtUtc!.Value, clock.ConvertVietnamToUtc(clock.VietnamToday.AddDays(-29).ToDateTime(TimeOnly.MinValue)), clock.ConvertVietnamToUtc(clock.VietnamToday.ToDateTime(new TimeOnly(17, 0))));
+            Assert.InRange(i.PaidAtUtc!.Value, clock.ConvertVietnamToUtc(DemoSeedTimeline.ActivityDate(clock).AddDays(-29).ToDateTime(TimeOnly.MinValue)), clock.UtcNow);
             Assert.Equal(i.TotalAmount, i.Items.Sum(item => item.Quantity * item.UnitPrice));
             Assert.Equal(i.TotalAmount, i.Payments.Sum(p => p.Amount));
         });
@@ -61,7 +61,7 @@ public class RealisticDevelopmentSeedTests
         var primaryDoctor = await db.Doctors.SingleAsync(d => d.UserId == primaryUser.Id);
         Assert.All(orders, o =>
         {
-            Assert.Equal(clock.VietnamToday, DateOnly.FromDateTime(clock.ConvertUtcToVietnam(o.OrderedAtUtc)));
+            Assert.Equal(DemoSeedTimeline.ActivityDate(clock), DateOnly.FromDateTime(clock.ConvertUtcToVietnam(o.OrderedAtUtc)));
             Assert.NotEqual(primaryDoctor.Id, o.OrderingDoctorId);
             if (o.VerifiedByUserId.HasValue)
             {
