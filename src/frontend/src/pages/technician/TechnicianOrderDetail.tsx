@@ -16,10 +16,16 @@ import { diagnosticApi } from '../../api/diagnosticApi';
 import type { DiagnosticOrderDto, RecordDiagnosticResultRequest } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
+import { ClinicalPageErrorBoundary } from '../../components/diagnostics/ClinicalPageErrorBoundary';
 const categoryIcons = { Laboratory: FlaskConical, Ultrasound: Waves, Imaging: Scan, Other: Stethoscope };
 const quickConclusions = ['Bình thường', 'Bất thường — đề nghị bác sĩ xem', 'Cần làm lại'];
 
 export const TechnicianOrderDetail: React.FC = () => {
+    const { id } = useParams();
+    return <ClinicalPageErrorBoundary key={id}><TechnicianOrderContent /></ClinicalPageErrorBoundary>;
+};
+
+const TechnicianOrderContent: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const orderId = Number(id);
     const navigate = useNavigate();
@@ -352,11 +358,11 @@ export const TechnicianOrderDetail: React.FC = () => {
 
     return (
         <div className={styles.detail}>
-            <Modal title="Trả lại kết quả" open={returnOpen} getContainer={false} onCancel={() => { if (!verificationBusy) setReturnOpen(false); }} footer={<><Button disabled={verificationBusy} onClick={() => setReturnOpen(false)}>Hủy</Button><Button danger type="primary" disabled={verificationBusy} onClick={() => void handleVerification('return')}>{verificationBusy ? 'Đang trả lại...' : 'Xác nhận trả lại'}</Button></>}>
+            {returnOpen && <Modal title="Trả lại kết quả" open={true} getContainer={false} onCancel={() => { if (!verificationBusy) setReturnOpen(false); }} footer={<><Button disabled={verificationBusy} onClick={() => setReturnOpen(false)}>Hủy</Button><Button danger type="primary" disabled={verificationBusy} onClick={() => void handleVerification('return')}>{verificationBusy ? 'Đang trả lại...' : 'Xác nhận trả lại'}</Button></>}>
                 {verificationError && <Alert type="error" showIcon title={verificationError} />}
                 <label htmlFor="verification-return-reason" className={styles.fieldLabel}>Lý do trả lại (bắt buộc, ít nhất 5 ký tự)</label><Input.TextArea id="verification-return-reason" rows={3} maxLength={500} value={returnReason} disabled={verificationBusy} onChange={event => { setReturnReason(event.target.value); setVerificationError(''); }} />
-            </Modal>
-            <Modal title="Từ chối mẫu" open={rejectItemId !== null} getContainer={false} onCancel={() => { if (specimenBusy === null) setRejectItemId(null); }}
+            </Modal>}
+            {rejectItemId !== null && <Modal title="Từ chối mẫu" open={true} getContainer={false} onCancel={() => { if (specimenBusy === null) setRejectItemId(null); }}
                 footer={<><Button disabled={specimenBusy !== null || verificationPending} onClick={() => setRejectItemId(null)}>Hủy</Button><Button danger type="primary" disabled={specimenBusy !== null || verificationPending} onClick={() => { if (rejectItemId !== null) void handleSpecimen(rejectItemId, 'reject'); }}>{specimenBusy !== null ? 'Đang từ chối...' : 'Xác nhận từ chối'}</Button></>}>
                 <div className={styles.rejectionForm}>
                     {rejectionError && <Alert type="error" showIcon title={rejectionError} />}
@@ -366,7 +372,7 @@ export const TechnicianOrderDetail: React.FC = () => {
                     <label htmlFor="specimen-rejection-note" className={styles.fieldLabel}>Ghi chú {rejectionReason === 'Other' ? '(bắt buộc, ít nhất 5 ký tự)' : '(không bắt buộc)'}</label>
                     <Input.TextArea id="specimen-rejection-note" aria-label="Ghi chú từ chối" rows={3} maxLength={500} disabled={specimenBusy !== null || verificationPending} value={rejectionNote} onChange={event => { setRejectionNote(event.target.value); setRejectionError(''); }} />
                 </div>
-            </Modal>
+            </Modal>}
             <Link to="/diagnostics" className={styles.backLink}><ArrowLeft size={14} aria-hidden="true" /> Quay lại danh sách</Link>
             <PageHeader title="Thực hiện phiếu chỉ định CLS" />
             <div className={styles.navigation}>
