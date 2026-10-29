@@ -35,6 +35,11 @@ import { DoctorExaminationSyncAction } from './DoctorExaminationHeader';
 import tabStyles from './DoctorExaminationWorkspace.module.css';
 import { formatVitalBodyMeasures } from './vitalHistoryFormat';
 import { formatDecimalVi } from '../../utils/formatDecimalVi';
+import { ClinicalPageErrorBoundary } from '../../components/diagnostics/ClinicalPageErrorBoundary';
+import { DiagnosticServiceOption } from './DiagnosticServiceOption';
+import { createPrescriptionItem, updatePrescriptionItem, type PrescriptionEditorItem } from './prescriptionQuantity';
+import diagnosticStyles from './DiagnosticServiceOption.module.css';
+import { isDiagnosticServiceOrdered, useDiagnosticSelection } from './useDiagnosticSelection';
 interface ActiveMedicine {
     id: number;
     code: string;
@@ -43,6 +48,11 @@ interface ActiveMedicine {
     stockQuantity: number;
 }
 export const DoctorExaminationWorkspace: React.FC = () => {
+    const { id, visitId } = useParams();
+    return <ClinicalPageErrorBoundary key={visitId || id}><DoctorExaminationContent /></ClinicalPageErrorBoundary>;
+};
+
+const DoctorExaminationContent: React.FC = () => {
     const { id, visitId } = useParams<{ id?: string; visitId?: string }>();
     const isVisit = Boolean(visitId);
     const currentId = Number(visitId || id);
@@ -82,10 +92,10 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
     // Tab 3: Diagnostic Orders Form & State
     const [diagnosticCatalog, setDiagnosticCatalog] = useState<DiagnosticServiceDto[]>([]);
-    const [selectedServiceIds, setSelectedServiceIds] = useState<number[]>([]);
     const [clinicalIndication, setClinicalIndication] = useState('');
     const [orderNotes, setOrderNotes] = useState('');
     const [diagnosticOrders, setDiagnosticOrders] = useState<DiagnosticOrderDto[]>([]);
+    const [selectedServiceIds, setSelectedServiceIds] = useDiagnosticSelection(diagnosticOrders);
     const [loadingOrders, setLoadingOrders] = useState(false);
     const [ordersLoadedOnce, setOrdersLoadedOnce] = useState(false);
     const [creatingOrder, setCreatingOrder] = useState(false);
@@ -112,18 +122,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
     // Tab 4: Prescription Form
     const [prescriptionNotes, setPrescriptionNotes] = useState('');
-    const [prescriptionItems, setPrescriptionItems] = useState<Array<{
-        medicineId: number;
-        medicineCode: string;
-        medicineName: string;
-        unit: string;
-        availableStock: number;
-        quantity: number;
-        dosage: string;
-        frequency: string;
-        durationDays: number;
-        instructions: string;
-    }>>([]);
+    const [prescriptionItems, setPrescriptionItems] = useState<PrescriptionEditorItem[]>([]);
     const [prescriptionRowVersion, setPrescriptionRowVersion] = useState<string | null>(null);
     const [savingPrescription, setSavingPrescription] = useState(false);
     const safety = usePrescriptionSafety(currentId, isVisit, prescriptionItems.map(item => item.medicineId), !loading && !!context);
@@ -598,18 +597,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
         setPrescriptionItems(prev => [
             ...prev,
-            {
-                medicineId: med.id,
-                medicineCode: med.code,
-                medicineName: med.name,
-                unit: med.unit,
-                availableStock: med.stockQuantity,
-                quantity: 1,
-                dosage: '1 viên',
-                frequency: 'Ngày 2 lần',
-                durationDays: 5,
-                instructions: 'Uống sau bữa ăn'
-            }
+            createPrescriptionItem(med)
         ]);
         setMedicineSearch('');
     };
@@ -621,7 +609,7 @@ export const DoctorExaminationWorkspace: React.FC = () => {
     const handleItemChange = (index: number, field: string, value: any) => {
         setPrescriptionItems(prev => {
             const updated = [...prev];
-            updated[index] = { ...updated[index], [field]: value };
+            updated[index] = updatePrescriptionItem(updated[index], field, value);
             return updated;
         });
     };
@@ -1441,40 +1429,18 @@ export const DoctorExaminationWorkspace: React.FC = () => {
                             </div>
 
                             {/* Services Catalog Selection Grid */}
-                            <Row className={[tabStyles.responsiveFormRow, tabStyles.diagnosticServiceList].join(' ')}>
+                            <div className={[diagnosticStyles.catalog, tabStyles.responsiveFormRow, tabStyles.diagnosticServiceList].join(' ')}>
                                 {filteredCatalog.map(srv => {
-                                    const isSelected = selectedServiceIds.includes(srv.id);
                                     return (
-                                        <Col key={srv.id} xs={24} md={12} xl={8} className={tabStyles.responsiveColumn}><div
-                                            key={srv.id}
-                                            onClick={() => handleToggleSelectService(srv.id)}
-                                            className={[tabStyles.serviceOption, (isSelected ? tabStyles.selectedOptionBorder : tabStyles.defaultOptionBorder), (isSelected ? tabStyles.selectedSurface : tabStyles.optionSurface)].join(' ')}
-                                        >
-                                            <div className={tabStyles.iconTextRow}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isSelected}
-                                                    onChange={() => { }}
-                                                    className={tabStyles.serviceCheckbox}
-                                                />
-                                                <div>
-                                                    <div className={tabStyles.serviceName}>
-                                                        {srv.name}
-                                                    </div>
-                                                    <div className={tabStyles.secondaryCaption}>
-                                                        <code>{srv.code}</code> • {categoryMap[srv.category] || srv.category}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            {srv.preparationInstructions && (
-                                                <div className={tabStyles.preparationInstructions}>
-                                                    {srv.preparationInstructions}
-                                                </div>
-                                            )}
-                                        </div></Col>
+                                        <div key={srv.id} className={tabStyles.responsiveColumn}><DiagnosticServiceOption
+                                            service={srv} selected={selectedServiceIds.includes(srv.id)}
+                                            alreadyOrdered={isDiagnosticServiceOrdered(diagnosticOrders, srv.id)}
+                                            categoryLabel={categoryMap[srv.category] || srv.category}
+                                            onToggle={() => handleToggleSelectService(srv.id)}
+                                        /></div>
                                     );
                                 })}
-                            </Row>
+                            </div>
 
                             {/* Indication and Notes */}
                             <Row className={[tabStyles.responsiveFormRow, tabStyles.formRowSpacing].join(' ')}>
@@ -2145,13 +2111,13 @@ export const DoctorExaminationWorkspace: React.FC = () => {
 
                 </Modal>
             )}
-            <Modal open={safetyModalOpen} title="Xác nhận kê đơn có cảnh báo nguy hiểm" onCancel={() => { if (!completing) setSafetyModalOpen(false); }}
+            {safetyModalOpen && <Modal open={true} title="Xác nhận kê đơn có cảnh báo nguy hiểm" onCancel={() => { if (!completing) setSafetyModalOpen(false); }}
                 footer={<div className={tabStyles.modalFooterActions}><Button disabled={completing} onClick={() => setSafetyModalOpen(false)}>Quay lại chỉnh sửa</Button><Button type="primary" danger disabled={completing || safetyOverrideReason.trim().length < 10} onClick={() => void handleCompleteConsultation(safetyOverrideReason.trim())}>{completing ? 'Đang hoàn tất...' : 'Vẫn kê và hoàn tất'}</Button></div>}>
                 {safetyOverrideError && <Alert type="error" showIcon title={safetyOverrideError} />}
                 <p>Đơn thuốc có cảnh báo nguy hiểm. Vui lòng ghi rõ lý do vẫn kê (ít nhất 10 ký tự).</p>
                 <label htmlFor="prescription-safety-override">Lý do vẫn kê</label>
                 <Input.TextArea id="prescription-safety-override" maxLength={500} value={safetyOverrideReason} disabled={completing} onChange={event => setSafetyOverrideReason(event.target.value)} />
-            </Modal>
+            </Modal>}
         </div>
     );
 };

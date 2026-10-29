@@ -1681,7 +1681,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
 
         if (visit.Status != VisitStatus.InConsultation &&
             visit.Status != VisitStatus.WaitingDoctor &&
-            visit.Status != VisitStatus.ResultsReady)
+            visit.Status != VisitStatus.ResultsReady && visit.Status != VisitStatus.WaitingForDiagnostics)
         {
             throw new BusinessException("INVALID_STATE", "Chỉ có thể ghi nhận diễn tiến khám khi đang trong phiên khám.");
         }
@@ -1899,7 +1899,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
 
         if (visit.Status != VisitStatus.InConsultation &&
             visit.Status != VisitStatus.WaitingDoctor &&
-            visit.Status != VisitStatus.ResultsReady)
+            visit.Status != VisitStatus.ResultsReady && visit.Status != VisitStatus.WaitingForDiagnostics)
         {
             throw new BusinessException("INVALID_STATE", "Chỉ có thể soạn đơn thuốc trong phiên khám.");
         }

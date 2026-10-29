@@ -56,6 +56,8 @@ public partial class DiagnosticWorkflowService
         if (services.Count != cleanServiceIds.Count)
             throw new BusinessException("INVALID_SERVICE", "Một hoặc nhiều dịch vụ chỉ định không tồn tại hoặc đã ngừng hoạt động.");
 
+        var visitId = await FindActiveAppointmentVisitIdAsync(appointment.Id);
+        await EnsureNoDuplicateServicesAsync(visitId, appointment.Id, cleanServiceIds);
         const int maxRetries = 3;
         for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
@@ -68,7 +70,7 @@ public partial class DiagnosticWorkflowService
                 {
                     OrderCode = orderCode,
                     AppointmentId = appointment.Id,
-                    PatientVisitId = await FindActiveAppointmentVisitIdAsync(appointment.Id),
+                    PatientVisitId = visitId,
                     FacilityId = resolvedFacilityId,
                     SourceAiActionId = sourceAiActionId,
                     PatientId = appointment.PatientId,
