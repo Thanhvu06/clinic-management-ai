@@ -61,11 +61,11 @@ it.each([
     expect(screen.queryByText('Chỉ định cận lâm sàng', { exact: true })).not.toBeInTheDocument();
 });
 
-it('asks the technician to send specimen results to a doctor', async () => {
+it('tells the technician that completing a specimen order sends results to the doctor', async () => {
     render(<CopilotResourceProvider><MemoryRouter initialEntries={['/diagnostics/orders/1']}><Routes>
         <Route path="/diagnostics/orders/:id" element={<TechnicianOrderDetail />} />
     </Routes></MemoryRouter></CopilotResourceProvider>);
-    expect(await screen.findByText('Tất cả dịch vụ đã có kết quả. Gửi bác sĩ duyệt.')).toBeInTheDocument();
+    expect(await screen.findByText('Tất cả các dịch vụ đã có kết quả. Bạn có thể chốt phiếu.')).toBeInTheDocument();
 });
 
 it('shows usable stock separately from total stock on pharmacy cards', () => {

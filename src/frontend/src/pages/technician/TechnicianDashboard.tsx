@@ -95,25 +95,10 @@ export const TechnicianDashboard: React.FC = () => {
         setDateFilter(status === 'Completed' ? toLocalDateString(new Date()) : '');
         setPage(1);
     };
-    const selectVerification = (status: DiagnosticVerificationStatus) => {
-        if (verificationFilter === status) {
-            setVerificationFilter('');
-        } else {
-            // Mirrors the stats query: verification counts only include in-progress orders.
-            setVerificationFilter(status);
-            setStatusFilter('InProgress');
-            setDateFilter('');
-        }
-        setPage(1);
-    };
     const statFilters = [
         { status: 'Ordered' as const, title: 'Chờ thực hiện', value: stats?.orderedCount ?? 0, tone: 'attention' as const },
         { status: 'InProgress' as const, title: 'Đang thực hiện', value: stats?.inProgressCount ?? 0 },
         { status: 'Completed' as const, title: 'Hoàn tất hôm nay', value: stats?.completedTodayCount ?? 0 },
-    ];
-    const verificationFilters = [
-        { status: 'Pending' as const, title: 'Chờ trưởng khoa duyệt', value: stats?.pendingVerificationCount ?? 0 },
-        { status: 'Returned' as const, title: 'Bị trả lại cần sửa', value: stats?.returnedCount ?? 0 },
     ];
     // The API has no category or verification parameter: these filters apply only to the current page.
     const visibleOrders = orders.filter(order =>
@@ -161,14 +146,6 @@ export const TechnicianDashboard: React.FC = () => {
                     </div>
                 </div>
             </Card>
-            <div className={styles.verificationFilters} role="group" aria-label="Lọc theo duyệt kết quả">
-                {verificationFilters.map(filter => {
-                    const active = verificationFilter === filter.status;
-                    return <Button key={filter.status} color={active ? 'primary' : 'default'} variant={active ? 'filled' : 'outlined'} aria-pressed={active} onClick={() => selectVerification(filter.status)}>
-                        <span>{filter.title} <span className={styles.filterCount}>{filter.value}</span></span>
-                    </Button>;
-                })}
-            </div>
             {loading ? <LoadingState message="Đang tải danh sách chỉ định..." /> : error ? <InlineError message={error} onRetry={() => { void loadData(); }} /> : visibleOrders.length === 0 ? <EmptyState icon={<FileText size={40} />} title="Không tìm thấy phiếu chỉ định nào" description="Thử thay đổi bộ lọc hoặc tìm kiếm lại." /> : (
                 <div className={styles.tableScroll}>
                     <DataTable data={visibleOrders} keyExtractor={order => order.id} columns={[

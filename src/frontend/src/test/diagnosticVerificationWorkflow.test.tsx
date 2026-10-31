@@ -45,12 +45,14 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('Two-technician result verification', () => {
-    it('submits declared specimens for verification through the existing complete endpoint', async () => {
+    it('completes declared specimens through the complete endpoint without a verification step', async () => {
+        mocks.complete.mockResolvedValue(ok({ ...order, status: 'Completed' }));
         mount();
-        fireEvent.click(await screen.findByRole('button', { name: 'Gửi duyệt kết quả' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Hoàn tất phiếu' }));
         await waitFor(() => expect(mocks.complete).toHaveBeenCalledWith(1, { rowVersion: 'order-v1' }));
-        expect(mocks.confirm).toHaveBeenCalledWith('Xác nhận gửi duyệt kết quả cho kỹ thuật viên khác?', expect.any(Function));
-        expect(await screen.findByText('Bạn là người nhập kết quả nên không thể tự duyệt.')).toBeInTheDocument();
+        expect(mocks.confirm).toHaveBeenCalledWith('Xác nhận hoàn tất phiếu chỉ định và gửi kết quả về cho Bác sĩ?', expect.any(Function));
+        await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith('Đã hoàn tất, bác sĩ đã nhận kết quả.', 'success'));
+        expect(screen.queryByText('Bạn là người nhập kết quả nên không thể tự duyệt.')).not.toBeInTheDocument();
     }, 15000);
 
     it('locks result entry and prevents self verification while pending', async () => {
@@ -60,7 +62,6 @@ describe('Two-technician result verification', () => {
         expect(screen.getByLabelText('Nhận xét (không bắt buộc)')).toBeDisabled();
         expect(screen.getByRole('button', { name: 'Lưu kết quả dịch vụ' })).toBeDisabled();
         expect(screen.queryByRole('button', { name: 'Duyệt kết quả' })).not.toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: 'Gửi duyệt kết quả' })).not.toBeInTheDocument();
         expect(screen.getByText('Bạn là người nhập kết quả nên không thể tự duyệt.')).toBeInTheDocument();
     }, 15000);
 
@@ -89,7 +90,7 @@ describe('Two-technician result verification', () => {
         fireEvent.change(within(dialog).getByLabelText('Lý do trả lại (bắt buộc, ít nhất 5 ký tự)'), { target: { value: ' Cần đối chiếu lại WBC ' } });
         fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận trả lại' }));
         await waitFor(() => expect(mocks.returnOrder).toHaveBeenCalledWith(1, { reason: 'Cần đối chiếu lại WBC', rowVersion: 'order-v1' }));
-        expect(await screen.findByRole('button', { name: 'Gửi duyệt kết quả' })).toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: 'Hoàn tất phiếu' })).toBeInTheDocument();
     }, 15000);
 
     it('disables verification actions and changes submit text during the request', async () => {
@@ -105,25 +106,24 @@ describe('Two-technician result verification', () => {
         expect(await screen.findByRole('alert')).toHaveTextContent('Bị trả lại bởi KTV 2 lúc 08:40 13/10: Cần đối chiếu lại WBC');
         fireEvent.click(screen.getByRole('button', { name: 'Xem/Sửa kết quả' }));
         expect(screen.getByRole('spinbutton', { name: 'Kết quả Bạch cầu (WBC)' })).toBeEnabled();
-        expect(screen.getByRole('button', { name: 'Gửi duyệt kết quả' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Hoàn tất phiếu' })).toBeEnabled();
     }, 15000);
 
     it.each([undefined, 'NotRequired'] as const)('preserves the original complete action for undeclared services with verificationStatus %s', async status => {
         mocks.detail.mockResolvedValue(ok({ ...order, verificationStatus: status, items: [{ ...order.items[0], specimenType: undefined, specimenStatus: 'NotRequired' }] })); mount();
-        expect(await screen.findByRole('button', { name: 'Hoàn tất và gửi kết quả' })).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: 'Gửi duyệt kết quả' })).not.toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: 'Hoàn tất phiếu' })).toBeInTheDocument();
     }, 15000);
 
     it('keeps old specimen mocks without verification metadata compatible', async () => {
         mocks.detail.mockResolvedValue(ok({ ...order, verificationStatus: undefined })); mount();
-        expect(await screen.findByRole('button', { name: 'Hoàn tất và gửi kết quả' })).toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: 'Hoàn tất phiếu' })).toBeInTheDocument();
     }, 15000);
 
     it('reloads the order when verification hits a row version conflict', async () => {
         mocks.detail.mockResolvedValueOnce(ok({ ...pending, canCurrentUserVerify: true })).mockResolvedValue(ok(returned));
         mocks.verify.mockRejectedValue({ errorCode: 'STATE_CONFLICT', message: 'Đã thay đổi' }); mount();
         fireEvent.click(await screen.findByRole('button', { name: 'Duyệt kết quả' }));
-        await screen.findByRole('button', { name: 'Gửi duyệt kết quả' });
+        await screen.findByRole('button', { name: 'Hoàn tất phiếu' });
         expect(screen.getByText('Dữ liệu đã thay đổi. Phiếu đã được tải lại.')).toBeInTheDocument(); expect(mocks.detail).toHaveBeenCalledTimes(2);
     }, 15000);
 });

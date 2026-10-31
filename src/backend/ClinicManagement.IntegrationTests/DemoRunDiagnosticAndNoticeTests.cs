@@ -51,9 +51,7 @@ public class DemoRunDiagnosticAndNoticeTests(CustomWebApplicationFactory factory
         order = await DataAsync(await Client.PutAsJsonAsync($"/api/v1/diagnostics/orders/{orderId}/items/{itemId}/result",
             new { resultText = "Bình thường", rowVersion = item.GetProperty("rowVersion").GetString() }));
         order = await DataAsync(await Client.PostAsJsonAsync($"/api/v1/diagnostics/orders/{orderId}/complete", new { rowVersion = order.GetProperty("rowVersion").GetString() }));
-        await AuthenticateAsync("doc2@test.com");
-        order = await DataAsync(await Client.PostAsJsonAsync($"/api/v1/diagnostic-verification/orders/{orderId}/verify", new { note = "Đã kiểm tra", rowVersion = order.GetProperty("rowVersion").GetString() }));
-        Assert.Equal("Doctor", order.GetProperty("verifiedByRole").GetString());
+        Assert.Equal("Completed", order.GetProperty("status").GetString());
         await AssertActiveKpiAsync(visit);
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

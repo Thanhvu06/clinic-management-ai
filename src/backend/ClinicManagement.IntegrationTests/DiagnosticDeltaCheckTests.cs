@@ -166,6 +166,20 @@ public class DiagnosticDeltaCheckTests(CustomWebApplicationFactory factory) : In
                 }
             }));
 
+    // Complete no longer submits for verification; this recreates an order that was already waiting for review before the step was removed.
+    private async Task<DiagnosticOrderDto> SubmitLegacyAsync(Fixture fixture, long orderId)
+    {
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var order = await db.DiagnosticOrders.FindAsync(orderId);
+            order!.VerificationStatus = DiagnosticVerificationStatus.Pending; order.SubmittedForVerificationAtUtc = Now;
+            order.SubmittedForVerificationByUserId = fixture.TechnicianId; order.RowVersion = Guid.NewGuid().ToByteArray();
+            await db.SaveChangesAsync();
+        }
+        return await RunAsync(fixture.TechnicianId, RoleNames.DiagnosticTechnician, service => service.GetTechnicianOrderByIdAsync(orderId));
+    }
+
     private static DiagnosticResultValueDto Value(DiagnosticOrderDto order, string code) =>
         order.Items.Single().Result!.Values.Single(v => v.ParameterCode == code);
 
@@ -349,8 +363,7 @@ public class DiagnosticDeltaCheckTests(CustomWebApplicationFactory factory) : In
         await AddPreviousAsync(fixture, Now.AddDays(-5), new[] { (PercentCode, 100m) });
         var (orderId, itemId) = await AddCurrentOrderAsync(fixture);
         await RecordAsync(fixture, orderId, itemId, 160m, 1m, 1m);
-        var submitted = await RunAsync(fixture.TechnicianId, RoleNames.DiagnosticTechnician,
-            service => service.CompleteOrderAsync(orderId, null));
+        var submitted = await SubmitLegacyAsync(fixture, orderId);
         Assert.Equal("Pending", submitted.VerificationStatus);
         Assert.True(submitted.HasDeltaFailure);
 
@@ -373,8 +386,7 @@ public class DiagnosticDeltaCheckTests(CustomWebApplicationFactory factory) : In
         var fixture = await SeedAsync();
         var (orderId, itemId) = await AddCurrentOrderAsync(fixture);
         await RecordAsync(fixture, orderId, itemId, 160m, 1m, 1m);
-        var submitted = await RunAsync(fixture.TechnicianId, RoleNames.DiagnosticTechnician,
-            service => service.CompleteOrderAsync(orderId, null));
+        var submitted = await SubmitLegacyAsync(fixture, orderId);
 
         var verified = await RunAsync(fixture.SupervisorId, RoleNames.LabSupervisor,
             service => service.VerifyOrderAsync(orderId, new VerifyDiagnosticOrderRequest { RowVersion = submitted.RowVersion }));
@@ -388,8 +400,7 @@ public class DiagnosticDeltaCheckTests(CustomWebApplicationFactory factory) : In
         await AddPreviousAsync(fixture, Now.AddDays(-5), new[] { (PercentCode, 100m), (AbsoluteCode, 100m), (NoLimitCode, 1m) });
         var (orderId, itemId) = await AddCurrentOrderAsync(fixture);
         await RecordAsync(fixture, orderId, itemId, 160m, 150m, 5m);
-        var submitted = await RunAsync(fixture.TechnicianId, RoleNames.DiagnosticTechnician,
-            service => service.CompleteOrderAsync(orderId, null));
+        var submitted = await SubmitLegacyAsync(fixture, orderId);
         var verified = await RunAsync(fixture.SupervisorId, RoleNames.LabSupervisor,
             service => service.VerifyOrderAsync(orderId, new VerifyDiagnosticOrderRequest { Note = "Đã kiểm tra mẫu", RowVersion = submitted.RowVersion }));
         Assert.True(verified.HasDeltaFailure);

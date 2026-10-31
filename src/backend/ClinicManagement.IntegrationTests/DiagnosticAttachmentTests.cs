@@ -250,15 +250,13 @@ public class DiagnosticAttachmentTests(DiagnosticAttachmentFactory factory) : IC
     [Theory]
     [InlineData("Ordered", "INVALID_STATE")]
     [InlineData("Completed", "INVALID_STATE")]
-    [InlineData("Pending", "RESULTS_LOCKED_PENDING_VERIFICATION")]
     [InlineData("CancelledItem", "ITEM_CANCELLED")]
     public async Task StateGuardsRejectBothUploadAndDelete(string state, string code)
     {
         var f = await SeedAsync();
         var attachment = Assert.Single((await ReadAsync(await UploadAsync(f))).Items.Single().Attachments);
         await MutateAsync(f, (order, item) => {
-            if (state == "Pending") order.VerificationStatus = DiagnosticVerificationStatus.Pending;
-            else if (state == "CancelledItem") item.Status = DiagnosticItemStatus.Cancelled;
+            if (state == "CancelledItem") item.Status = DiagnosticItemStatus.Cancelled;
             else order.Status = Enum.Parse<DiagnosticOrderStatus>(state);
         });
         await ErrorAsync(await UploadAsync(f), code);

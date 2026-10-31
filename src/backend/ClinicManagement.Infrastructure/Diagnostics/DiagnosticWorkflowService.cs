@@ -427,7 +427,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
 
     private static DiagnosticOrderDto RedactUnverifiedResultsForDoctor(DiagnosticOrderDto order)
     {
-        if (!(order.Status == nameof(DiagnosticOrderStatus.Completed) && order.VerificationStatus == nameof(DiagnosticVerificationStatus.NotRequired)) &&
+        if (order.Status != nameof(DiagnosticOrderStatus.Completed) &&
             order.VerificationStatus != nameof(DiagnosticVerificationStatus.Verified) &&
             order.Items.Any(item => item.Status != nameof(DiagnosticItemStatus.Cancelled) && item.SpecimenType != null))
         {
@@ -777,7 +777,6 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
             ?? throw new NotFoundException("Phiếu chỉ định không tồn tại.");
         await LoadLinkedVisitAppointmentAsync(order);
         await EnsureTechnicianFacilityScopeAsync(order);
-        EnsureResultsEditable(order);
         if (order.Status != DiagnosticOrderStatus.InProgress)
             throw new BusinessException("INVALID_STATE", "Chỉ đính kèm tệp khi phiếu đang thực hiện.");
         var item = order.Items.SingleOrDefault(i => i.Id == itemId)
@@ -887,7 +886,6 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
         await LoadLinkedVisitAppointmentAsync(order);
         await EnsureTechnicianFacilityScopeAsync(order);
 
-        EnsureResultsEditable(order);
 
         if (order.Status != DiagnosticOrderStatus.InProgress)
             throw new BusinessException("INVALID_STATE", "Chỉ có thể nhập kết quả khi phiếu chỉ định đang trong trạng thái InProgress.");
@@ -1093,7 +1091,6 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
         if (order == null) throw new NotFoundException("Phiếu chỉ định không tồn tại.");
         await LoadLinkedVisitAppointmentAsync(order);
         await EnsureTechnicianFacilityScopeAsync(order);
-        EnsureResultsEditable(order);
         var item = order.Items.FirstOrDefault(i => i.Id == itemId);
         if (item == null) throw new NotFoundException("Dịch vụ chỉ định không tồn tại trong phiếu này.");
         if (rowVersion != null) ValidateRowVersion(item.RowVersion, rowVersion);
@@ -1252,26 +1249,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
         if (incomplete.Count > 0)
             throw new BusinessException("ITEMS_INCOMPLETE", "Tất cả các dịch vụ chỉ định cần có kết quả trước khi hoàn tất phiếu.");
 
-        if (order.VerificationStatus == DiagnosticVerificationStatus.Pending)
-            throw new BusinessException("INVALID_STATE", "Phiếu đang chờ duyệt.");
-
-        if (RequiresVerification(order) && order.VerificationStatus is DiagnosticVerificationStatus.NotRequired or DiagnosticVerificationStatus.Returned)
-        {
-            order.VerificationStatus = DiagnosticVerificationStatus.Pending;
-            order.SubmittedForVerificationAtUtc = DateTime.UtcNow;
-            order.SubmittedForVerificationByUserId = userId;
-            order.RowVersion = Guid.NewGuid().ToByteArray();
-            _dbContext.SystemAuditLogs.Add(new SystemAuditLog
-            {
-                UserId = userId, Action = "DiagnosticResultsSubmittedForVerification", EntityName = "DiagnosticOrder",
-                EntityId = order.Id.ToString(), Description = $"Gửi duyệt kết quả phiếu #{order.OrderCode}.", CreatedAt = DateTime.UtcNow
-            });
-            await NotifyLabSupervisorsAsync(order);
-        }
-        else
-        {
-            await FinalizeOrderAsync(order, userId);
-        }
+        await FinalizeOrderAsync(order, userId);
 
         try { await _dbContext.SaveChangesAsync(); }
         catch (DbUpdateConcurrencyException)
@@ -1684,15 +1662,6 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
     }
 
     private static DateTime? AsUtc(DateTime? value) => value.HasValue ? DateTime.SpecifyKind(value.Value, DateTimeKind.Utc) : null;
-
-    private static bool RequiresVerification(DiagnosticOrder order) => order.Items.Any(item =>
-        item.Status != DiagnosticItemStatus.Cancelled && item.DiagnosticService.SpecimenType != null);
-
-    private static void EnsureResultsEditable(DiagnosticOrder order)
-    {
-        if (order.VerificationStatus == DiagnosticVerificationStatus.Pending)
-            throw new BusinessException("RESULTS_LOCKED_PENDING_VERIFICATION", "Kết quả đang chờ duyệt, không thể chỉnh sửa.");
-    }
 
     private async Task FinalizeOrderAsync(DiagnosticOrder order, Guid completedByUserId)
     {

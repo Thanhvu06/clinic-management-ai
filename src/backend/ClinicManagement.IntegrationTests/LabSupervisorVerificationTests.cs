@@ -66,7 +66,12 @@ public class LabSupervisorVerificationTests(CustomWebApplicationFactory factory)
         db.DiagnosticOrders.Add(order); await db.SaveChangesAsync();
         await AuthenticateAsync("tech@test.com");
         var dto = await ReadAsync(await Client.GetAsync($"/api/v1/diagnostics/orders/{order.Id}"));
-        return submit ? await ReadAsync(await Client.PostAsJsonAsync($"/api/v1/diagnostics/orders/{order.Id}/complete", new { rowVersion = dto.RowVersion })) : dto;
+        if (!submit) return dto;
+        // Complete no longer submits for verification; this recreates an order that was already waiting for review before the step was removed.
+        order.VerificationStatus = DiagnosticVerificationStatus.Pending; order.SubmittedForVerificationAtUtc = DateTime.UtcNow;
+        order.SubmittedForVerificationByUserId = TechnicianId; order.RowVersion = Guid.NewGuid().ToByteArray();
+        await db.SaveChangesAsync();
+        return await ReadAsync(await Client.GetAsync($"/api/v1/diagnostics/orders/{order.Id}"));
     }
 
     private static async Task<DiagnosticOrderDto> ReadAsync(HttpResponseMessage response)
@@ -164,20 +169,15 @@ public class LabSupervisorVerificationTests(CustomWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task SubmitNotifiesOnlySupervisorInFacility_ResubmitUsesNewDedupeKey()
+    public async Task CompleteDoesNotNotifyLabSupervisors_AndNotifiesOrderingDoctor()
     {
-        var order = await ReadyAsync(); var supervisorId = await EnsureStaffAsync(SupervisorEmail, RoleNames.LabSupervisor);
-        var outsiderId = await EnsureStaffAsync(OtherSupervisorEmail, RoleNames.LabSupervisor, false);
+        var order = await ReadyAsync(false); var supervisorId = await EnsureStaffAsync(SupervisorEmail, RoleNames.LabSupervisor);
+        var completed = await ReadAsync(await Client.PostAsJsonAsync($"/api/v1/diagnostics/orders/{order.Id}/complete", new { rowVersion = order.RowVersion }));
+        Assert.Equal("Completed", completed.Status); Assert.Equal("NotRequired", completed.VerificationStatus);
         using var scope = Factory.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var notice = await db.Notifications.SingleAsync(n => n.DedupeKey == $"diag_pending_{order.Id}_{supervisorId}_0");
-        Assert.Equal("Có phiếu kết quả chờ duyệt", notice.Title); Assert.Equal(NotificationType.Diagnostic, notice.Type); Assert.Equal($"/lab/orders/{order.Id}", notice.Route);
-        Assert.False(await db.Notifications.AnyAsync(n => n.UserId == outsiderId && n.RelatedEntityId == order.Id.ToString()));
-        await AuthenticateAsync(SupervisorEmail);
-        var returned = await ReadAsync(await Client.PostAsJsonAsync($"{Shared}/orders/{order.Id}/return", new { reason = "Cần đối chiếu", rowVersion = order.RowVersion }));
-        Assert.Equal("Returned", returned.VerificationStatus);
-        await AuthenticateAsync("tech@test.com");
-        await ReadAsync(await Client.PostAsJsonAsync($"/api/v1/diagnostics/orders/{order.Id}/complete", new { rowVersion = returned.RowVersion }));
-        Assert.Equal(2, await db.Notifications.CountAsync(n => n.UserId == supervisorId && n.DedupeKey!.StartsWith($"diag_pending_{order.Id}_")));
+        Assert.False(await db.Notifications.AnyAsync(n => n.UserId == supervisorId && n.RelatedEntityId == order.Id.ToString()));
+        var notice = await db.Notifications.SingleAsync(n => n.DedupeKey == $"diag_completed_doc_{order.Id}_{DoctorId}");
+        Assert.Equal("Có kết quả cận lâm sàng", notice.Title);
     }
 
     [Fact]

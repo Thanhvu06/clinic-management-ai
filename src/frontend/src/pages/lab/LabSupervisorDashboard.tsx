@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button, Tag } from 'antd';
-import { AlertTriangle, ClipboardCheck, Clock, RefreshCw, Undo2 } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { diagnosticApi } from '../../api/diagnosticApi';
-import { DataTable, EmptyState, InlineError, LoadingState, PageHeader, Pagination, StatCard } from '../../components/common';
+import { DataTable, EmptyState, InlineError, LoadingState, PageHeader, Pagination } from '../../components/common';
 import type { DiagnosticOrderDto } from '../../types';
-import type { VerificationStatsDto } from '../../types/diagnostic';
 import { diagnosticNotificationTime } from '../../utils/diagnosticLabels';
 import styles from './LabSupervisorDashboard.module.css';
 
@@ -16,9 +15,6 @@ export const VerificationQueue = ({ dashboard = false }: { dashboard?: boolean }
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [loadedAt, setLoadedAt] = useState(0);
-    const [stats, setStats] = useState<VerificationStatsDto | null>(null);
-    const [statsLoading, setStatsLoading] = useState(dashboard);
-    const [statsError, setStatsError] = useState(false);
     const load = useCallback(async (signal?: AbortSignal) => {
         setLoading(true); setError('');
         const queueTask = async () => {
@@ -31,20 +27,8 @@ export const VerificationQueue = ({ dashboard = false }: { dashboard?: boolean }
                 if (!signal?.aborted) setError((failure as { message?: string })?.message || 'Không thể tải hàng chờ duyệt.');
             } finally { if (!signal?.aborted) setLoading(false); }
         };
-        const statsTask = async () => {
-            if (!dashboard) return;
-            setStatsLoading(true); setStatsError(false);
-            try {
-                const response = await diagnosticApi.getVerificationStats();
-                if (signal?.aborted) return;
-                if (!response.success || !response.data) throw new Error('Không tải được số liệu');
-                setStats(response.data);
-            } catch {
-                if (!signal?.aborted) { setStats(null); setStatsError(true); }
-            } finally { if (!signal?.aborted) setStatsLoading(false); }
-        };
-        await Promise.allSettled([queueTask(), statsTask()]);
-    }, [page, dashboard]);
+        await queueTask();
+    }, [page]);
     useEffect(() => {
         const controller = new AbortController();
         void Promise.resolve().then(() => { if (!controller.signal.aborted) void load(controller.signal); });
@@ -55,19 +39,9 @@ export const VerificationQueue = ({ dashboard = false }: { dashboard?: boolean }
         return () => window.clearInterval(timer);
     }, []);
     const minutes = (order: DiagnosticOrderDto) => order.submittedForVerificationAtUtc ? Math.max(0, Math.floor((loadedAt - new Date(order.submittedForVerificationAtUtc).getTime()) / 60000)) : 0;
-    const statsSubtitle = statsError ? 'Không tải được số liệu' : statsLoading ? 'Đang tải số liệu...' : undefined;
-    const statValue = (key: keyof VerificationStatsDto) => statsError || !stats ? '—' : stats[key];
     return <div className={styles.page}>
-        <PageHeader title={dashboard ? 'Tổng quan xét nghiệm' : 'Duyệt kết quả CLS'} subtitle={dashboard ? 'Đối chiếu kết quả trong cơ sở được phân công' : 'Duyệt kết quả do bác sĩ khác chỉ định'} actions={<Button disabled={loading || statsLoading} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{loading || statsLoading ? 'Đang tải...' : 'Làm mới'}</Button>} />
+        <PageHeader title={dashboard ? 'Tổng quan xét nghiệm' : 'Duyệt kết quả CLS'} subtitle={dashboard ? 'Đối chiếu kết quả trong cơ sở được phân công' : 'Duyệt kết quả do bác sĩ khác chỉ định'} actions={<Button disabled={loading} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{loading ? 'Đang tải...' : 'Làm mới'}</Button>} />
         {loading ? <LoadingState message="Đang tải hàng chờ duyệt..." /> : error ? <InlineError message={error} onRetry={() => void load()} /> : <>
-            {dashboard && <div className={styles.stats}>
-                <StatCard title="Chờ duyệt" value={statValue('pendingCount')} subtitle={statsSubtitle} icon={<ClipboardCheck size={24} />} />
-                <StatCard title="Có giá trị nguy hiểm" value={statValue('criticalPendingCount')} subtitle={statsSubtitle} icon={<AlertTriangle size={24} />} color="danger" />
-                <StatCard title="Chờ lâu nhất (phút)" value={statValue('oldestPendingMinutes')} subtitle={statsSubtitle} icon={<Clock size={24} />} color="warning" />
-                <StatCard title="Bị trả lại hôm nay" value={statValue('returnedTodayCount')} subtitle={statsSubtitle} icon={<Undo2 size={24} />} color="info" />
-                <StatCard title="Đã duyệt hôm nay" value={statValue('verifiedTodayCount')} subtitle={statsSubtitle} icon={<ClipboardCheck size={24} />} color="success" />
-                <StatCard title="Quá 30 phút chưa duyệt" value={statValue('overduePendingCount')} subtitle={statsSubtitle} icon={<Clock size={24} />} color="warning" />
-            </div>}
             {items.length === 0 ? <EmptyState title="Không có phiếu chờ duyệt" /> : <div className={styles.table}>
                 <DataTable ariaLabel="Phiếu chờ duyệt" data={items} keyExtractor={order => order.id} columns={[
                     { header: 'Mã phiếu', accessor: 'orderCode' }, { header: 'Bệnh nhân', accessor: 'patientName' },

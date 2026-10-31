@@ -246,7 +246,7 @@ internal static class RealisticDevelopmentSeed
             {
                 VisitCode = $"VIS-{today:yyyyMMdd}-{200 + i:D4}", PatientId = patient.Id, FacilityId = facility.Id,
                 DepartmentId = DepartmentOf(specialty).Id, AssignedDoctorId = doctor.Id, VisitDate = today, QueueNumber = 200 + i,
-                ChiefComplaint = Reason(definition.SpecialtyCode, i + 1), Status = i == 4 ? VisitStatus.ResultsReady : VisitStatus.WaitingForDiagnostics,
+                ChiefComplaint = Reason(definition.SpecialtyCode, i + 1), Status = i >= 3 ?VisitStatus.ResultsReady : VisitStatus.WaitingForDiagnostics,
                 CreatedByUserId = receptionist, CreatedAtUtc = checkedInAt, CheckedInAtUtc = checkedInAt, ConsultationStartedAtUtc = checkedInAt.AddMinutes(4),
             };
             var started = i >= 2;
@@ -255,11 +255,11 @@ internal static class RealisticDevelopmentSeed
             {
                 OrderCode = $"DX-{today:yyyyMMdd}-{2000 + i:D4}", PatientVisit = visit, PatientId = patient.Id,
                 OrderingDoctorId = doctor.Id, FacilityId = facility.Id, ClinicalIndication = definition.Indication,
-                OrderedAtUtc = orderedAt, Status = i == 4 ? DiagnosticOrderStatus.Completed : started ? DiagnosticOrderStatus.InProgress : DiagnosticOrderStatus.Ordered,
+                OrderedAtUtc = orderedAt, Status = resulted ? DiagnosticOrderStatus.Completed : started ? DiagnosticOrderStatus.InProgress : DiagnosticOrderStatus.Ordered,
                 StartedAtUtc = started ? orderedAt.AddMinutes(2) : null, StartedByUserId = started ? technician : null,
-                CompletedAtUtc = i == 4 ? orderedAt.AddMinutes(22) : null, CompletedByUserId = i == 4 ? technician : null,
-                VerificationStatus = i == 3 ? DiagnosticVerificationStatus.Pending : i == 4 ? DiagnosticVerificationStatus.Verified : DiagnosticVerificationStatus.NotRequired,
-                SubmittedForVerificationAtUtc = resulted ? orderedAt.AddMinutes(18) : null, SubmittedForVerificationByUserId = resulted ? technician : null,
+                CompletedAtUtc = resulted ? orderedAt.AddMinutes(i == 4 ? 22 : 20) : null, CompletedByUserId = resulted ? technician : null,
+                VerificationStatus = i == 4 ? DiagnosticVerificationStatus.Verified : DiagnosticVerificationStatus.NotRequired,
+                SubmittedForVerificationAtUtc = i == 4 ? orderedAt.AddMinutes(18) : null, SubmittedForVerificationByUserId = i == 4 ? technician : null,
                 VerifiedAtUtc = i == 4 ? orderedAt.AddMinutes(22) : null, VerifiedByUserId = i == 4 ? supervisor : null,
             };
             foreach (var service in definition.ServiceCodes.Select(code => services[code]))
