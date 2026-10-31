@@ -42,7 +42,7 @@ export const VerificationQueue = ({ dashboard = false }: { dashboard?: boolean }
     return <div className={styles.page}>
         <PageHeader title={dashboard ? 'Tổng quan xét nghiệm' : 'Duyệt kết quả CLS'} subtitle={dashboard ? 'Đối chiếu kết quả trong cơ sở được phân công' : 'Duyệt kết quả do bác sĩ khác chỉ định'} actions={<Button disabled={loading} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{loading ? 'Đang tải...' : 'Làm mới'}</Button>} />
         {loading ? <LoadingState message="Đang tải hàng chờ duyệt..." /> : error ? <InlineError message={error} onRetry={() => void load()} /> : <>
-            {items.length === 0 ? <EmptyState title="Không có phiếu chờ duyệt" /> : <div className={styles.table}>
+            {items.length === 0 ? <EmptyState title="Không có phiếu đang xử lý" /> : <div className={styles.table}>
                 <DataTable ariaLabel="Phiếu chờ duyệt" data={items} keyExtractor={order => order.id} columns={[
                     { header: 'Mã phiếu', accessor: 'orderCode' }, { header: 'Bệnh nhân', accessor: 'patientName' },
                     { header: 'Dịch vụ', accessor: order => <>{order.items.filter(item => item.status !== 'Cancelled').map(item => <div key={item.id}>{item.serviceName}</div>)}{order.items.some(item => item.status !== 'Cancelled' && item.result?.hasCriticalValue) && <Tag className={styles.danger}>Có giá trị nguy hiểm</Tag>}{order.hasDeltaFailure && <Tag color="warning">Lệch delta</Tag>}</> },

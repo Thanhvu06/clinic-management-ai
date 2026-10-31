@@ -142,11 +142,6 @@ export const ReceptionAppointments: React.FC = () => {
         setDepartments([]);
         setDepartmentsError(facilityId ? '' : 'Không xác định được cơ sở của lịch hẹn nên trợ lý chưa thể chuẩn bị thao tác.');
         setDepartmentsLoading(Boolean(facilityId));
-        setSelection({
-            context: { appointmentId: apt.id },
-            source: 'reception-appointments',
-            label: `Lịch hẹn ${apt.appointmentCode}`
-        });
         setModal({ isOpen: true, apt });
         fetchHistory(apt.id);
         if (facilityId) {
@@ -182,7 +177,6 @@ export const ReceptionAppointments: React.FC = () => {
 
     const closeDetail = () => {
         cancelDepartmentRequest();
-        setSelection(null);
         setSelectedDepartmentId(null);
         setDepartments([]);
         setDepartmentsError('');

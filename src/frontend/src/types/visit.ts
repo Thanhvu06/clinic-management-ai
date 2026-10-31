@@ -75,7 +75,7 @@ export interface ReceptionIntakeRequest {
     assignedDoctorId?: number;
     healthPackageRegistrationId?: number;
     chiefComplaint?: string;
-    priority?: VisitPriority;
+    priority?: VisitPriority | 1 | 2 | 3 | 4;
     idempotencyKey?: string;
 }
 

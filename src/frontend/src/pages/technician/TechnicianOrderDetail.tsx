@@ -240,6 +240,7 @@ const TechnicianOrderContent: React.FC = () => {
             if (res.success && res.data) {
                 setOrder(res.data);
                 showToast('Đã lưu kết quả dịch vụ thành công!', 'success');
+                return res.data;
             }
         } catch (err: any) {
             if (err.message?.includes('phiên làm việc khác') || err.errorCode === 'CONCURRENCY_CONFLICT') {
@@ -326,7 +327,14 @@ const TechnicianOrderContent: React.FC = () => {
         showConfirm('Xác nhận hoàn tất phiếu chỉ định và gửi kết quả về cho Bác sĩ?', async () => {
             setActionLoading(true);
             try {
-                const res = await diagnosticApi.completeTechnicianOrder(order.id, { rowVersion: order.rowVersion });
+                let currentOrder = order;
+                for (const item of order.items.filter(item => item.status !== 'Cancelled')) {
+                    if ((itemResults[item.id]?.conclusion.trim() || '') === (item.result?.conclusion?.trim() || '')) continue;
+                    const saved = await handleSaveItemResult(item.id);
+                    if (!saved) return;
+                    currentOrder = saved;
+                }
+                const res = await diagnosticApi.completeTechnicianOrder(order.id, { rowVersion: currentOrder.rowVersion });
                 if (res.success && res.data) {
                     setOrder(res.data);
                     showToast('Đã hoàn tất, bác sĩ đã nhận kết quả.', 'success');

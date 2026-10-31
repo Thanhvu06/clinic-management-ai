@@ -28,6 +28,7 @@ interface Doctor {
     id: number;
     fullName: string;
     specialtyName?: string;
+    specialtyId?: number;
 }
 
 export const WalkInPatientRegistration: React.FC = () => {
@@ -77,6 +78,10 @@ export const WalkInPatientRegistration: React.FC = () => {
     const [doctorId, setDoctorId] = useState<number | undefined>(undefined);
     const [priority, setPriority] = useState<VisitPriority>('Normal');
     const [chiefComplaint, setChiefComplaint] = useState('');
+    const selectedSpecialtyId = departments.find(department => department.id === departmentId)?.specialtyId;
+    const availableDoctors = doctors.filter(doctor => !selectedSpecialtyId || doctor.specialtyId === selectedSpecialtyId);
+
+    useEffect(() => { setDoctorId(undefined); }, [departmentId]);
 
     // Submission & Ticket Modal
     const [submitting, setSubmitting] = useState(false);
@@ -320,7 +325,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                 departmentId,
                 roomId: roomId || undefined,
                 assignedDoctorId: doctorId || undefined,
-                priority,
+                priority: { Normal: 1, Priority: 2, Urgent: 3, Emergency: 4 }[priority] as 1 | 2 | 3 | 4,
                 chiefComplaint: chiefComplaint.trim(),
                 idempotencyKey
             };
@@ -472,7 +477,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                 </Row>
                 <Row gutter={[spacing.md, spacing.md]} className={styles.visitFormRow}>
                     <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Phòng bệnh / buồng khám</label><Select aria-label="Phòng bệnh / buồng khám" disabled={roomsLoading} status={roomsError ? 'error' : undefined} className={styles.formSelect} value={roomId || ''} onChange={(value) => setRoomId(value ? Number(value) : undefined)} options={[{value:'',label:'-- Tự động xếp phòng trống --'},...rooms.map(r => ({value:r.id,label:`${r.roomNumber} - ${r.name}`}))]} />{roomsLoading && <small className={styles.loadHint}>Đang tải...</small>}{roomsError && <div className={styles.loadError}><InlineError message={roomsError} onRetry={() => setRoomsReload(value => value + 1)} /></div>}</div></Col>
-                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Bác sĩ phụ trách</label><select aria-label="Bác sĩ phụ trách" disabled={doctorsLoading} aria-invalid={!!doctorsError} className={styles.nativeSelect} value={doctorId || ''} onChange={(e) => setDoctorId(e.target.value ? Number(e.target.value) : undefined)}><option value="">-- Tự động phân công theo ca trực --</option>{doctors.map(doc => <option key={doc.id} value={doc.id}>{doc.fullName} ({doc.specialtyName || 'Đa khoa'})</option>)}</select>{doctorsLoading && <small className={styles.loadHint}>Đang tải...</small>}{doctorsError && <div className={styles.loadError}><InlineError message={doctorsError} onRetry={() => setDoctorsReload(value => value + 1)} /></div>}</div></Col>
+                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Bác sĩ phụ trách</label><select aria-label="Bác sĩ phụ trách" disabled={doctorsLoading} aria-invalid={!!doctorsError} className={styles.nativeSelect} value={doctorId || ''} onChange={(e) => setDoctorId(e.target.value ? Number(e.target.value) : undefined)}><option value="">-- Tự động phân công theo ca trực --</option>{availableDoctors.map(doc => <option key={doc.id} value={doc.id}>{doc.fullName} ({doc.specialtyName || 'Đa khoa'})</option>)}</select>{doctorsLoading && <small className={styles.loadHint}>Đang tải...</small>}{doctorsError && <div className={styles.loadError}><InlineError message={doctorsError} onRetry={() => setDoctorsReload(value => value + 1)} /></div>}</div></Col>
                 </Row>
                 <Row gutter={[spacing.md, spacing.md]} className={styles.visitFormRow}>
                     <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Mức độ ưu tiên khám *</label><Select className={styles.formSelect} value={priority} onChange={(value) => setPriority(value as VisitPriority)} options={[{value:'Normal',label:'Khám thường (theo thứ tự hàng đợi)'},{value:'Priority',label:'Ưu tiên (trẻ < 6T, người già ≥ 75T, phụ nữ mang thai)'},{value:'Urgent',label:'Khẩn cấp'},{value:'Emergency',label:'Cấp cứu'}]} /></div></Col>
@@ -495,6 +500,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                         <Col xs={24} md={12}><strong>Cơ sở:</strong>{' '}{facilities.find(f => f.id === facilityId)?.name}</Col>
                         <Col xs={24} md={12}><strong>Khoa phòng:</strong>{' '}{departments.find(d => d.id === departmentId)?.name}</Col>
                         <Col xs={24} md={12}><strong>Buồng khám:</strong>{' '}{rooms.find(r => r.id === roomId)?.name || 'Tự động điều phối'}</Col>
+                        <div><strong>Bác sĩ:</strong>{' '}{availableDoctors.find(doctor => doctor.id === doctorId)?.fullName || 'Tự động phân công theo ca trực'}</div>
                         <Col xs={24} md={12}><strong>Mức độ ưu tiên:</strong>{' '}<StatusBadge status={priority === 'Priority' ? 'pending' : priority === 'Emergency' ? 'cancelled' : 'confirmed'} label={priority === 'Priority' ? 'Ưu tiên' : priority === 'Emergency' ? 'Cấp cứu' : 'Thường'} /></Col>
                         <Col span={24}><strong>Lý do khám:</strong> {chiefComplaint}</Col>
                     </Row>

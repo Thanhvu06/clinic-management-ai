@@ -414,6 +414,12 @@ public class PharmacyService : IPharmacyService
                 prescription.Status = PrescriptionStatus.Dispensed;
                 prescription.DispensedAt = DateTime.UtcNow;
                 prescription.DispensedByUserId = actorUserId;
+                _dbContext.SystemAuditLogs.Add(new SystemAuditLog
+                {
+                    UserId = actorUserId, Action = "DISPENSE_PRESCRIPTION", EntityName = "Prescription",
+                    EntityId = prescription.Id.ToString(), CreatedAt = _dateTimeProvider.UtcNow,
+                    Description = $"Cấp phát thuốc {BusinessDisplay.PrescriptionCode(prescription, _dateTimeProvider)}"
+                });
 
                 // Update PatientVisit status
                 var visit = prescription.PatientVisitId.HasValue

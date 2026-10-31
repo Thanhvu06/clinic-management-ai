@@ -75,7 +75,7 @@ describe('Lab turnaround report', () => {
         const stageRow = (label: string) => within(stages.getByText(label).closest('tr')!);
         expect(stageRow('Chỉ định → nhận mẫu').getByText('12,5')).toBeInTheDocument();
         expect(stageRow('Nhận mẫu → có kết quả').getByText('48')).toBeInTheDocument();
-        expect(stageRow('Gửi duyệt → đã duyệt').getAllByText('—')).toHaveLength(2);
+        expect(screen.queryByText('Gửi duyệt → đã duyệt')).not.toBeInTheDocument();
         expect(stageRow('Tổng (chỉ định → trả kết quả)').getByText('41,5')).toBeInTheDocument();
 
         const services = within(table('Theo dịch vụ'));
