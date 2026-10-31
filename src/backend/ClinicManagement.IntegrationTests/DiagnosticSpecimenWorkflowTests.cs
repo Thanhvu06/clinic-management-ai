@@ -123,8 +123,8 @@ public class DiagnosticSpecimenWorkflowTests : IntegrationTestBase
         Assert.Equal(new[] { "SpecimenCollected", "SpecimenReceived" }, audit.OrderBy(a => a.Id).Select(a => a.Action));
         Assert.All(audit, a => Assert.Contains(collected.Items[0].SpecimenBarcode!, a.Description));
         var submitted = await ReadOrderAsync(await Client.PostAsJsonAsync($"/api/v1/diagnostics/orders/{order.Id}/complete", new { rowVersion = saved.RowVersion }));
-        Assert.Equal("InProgress", submitted.Status);
-        Assert.Equal("Pending", submitted.VerificationStatus);
+        Assert.Equal("Completed", submitted.Status);
+        Assert.Equal("NotRequired", submitted.VerificationStatus);
     }
 
     [Theory]

@@ -104,7 +104,7 @@ describe('Delta check UI', () => {
         expect(within(table).getByText(/Trước: 6 \(03\/10\) → Δ \+6 \(\+100%\)/)).toBeInTheDocument();
         expect(within(table).getByText(/Trước: 130 \(03\/10\) → Δ -5 \(-3,85%\)/)).toBeInTheDocument();
         expect(within(table).getAllByText('Lệch delta')).toHaveLength(1);
-        expect(screen.getByText('Có chỉ số lệch delta so với lần trước, kiểm tra mẫu/nhãn trước khi gửi duyệt.')).toBeInTheDocument();
+        expect(screen.getByText('Có chỉ số lệch delta so với lần trước, kiểm tra mẫu/nhãn trước khi hoàn tất phiếu.')).toBeInTheDocument();
     }, 15000);
 
     it('hides the technician alert when no value fails', async () => {
@@ -112,7 +112,7 @@ describe('Delta check UI', () => {
         mount('/diagnostics/orders/1');
         const table = await screen.findByRole('table', { name: 'Chỉ số đã lưu: Tổng phân tích tế bào máu' });
         expect(within(table).queryByText('Lệch delta')).not.toBeInTheDocument();
-        expect(screen.queryByText('Có chỉ số lệch delta so với lần trước, kiểm tra mẫu/nhãn trước khi gửi duyệt.')).not.toBeInTheDocument();
+        expect(screen.queryByText('Có chỉ số lệch delta so với lần trước, kiểm tra mẫu/nhãn trước khi hoàn tất phiếu.')).not.toBeInTheDocument();
     }, 15000);
 
     it('keeps verification locked until the delta note has at least 5 characters', async () => {

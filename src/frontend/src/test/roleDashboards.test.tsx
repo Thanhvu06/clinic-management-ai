@@ -188,40 +188,23 @@ describe('Technician dashboard', () => {
         mocks.technicianStats.mockResolvedValue(ok({ orderedCount: 1, inProgressCount: 2, completedTodayCount: 3, pendingVerificationCount: 7, returnedCount: 8, overdueCount: 9 }));
     });
 
-    it('shows four metrics and filters the table by verification state', async () => {
+    it('shows four metrics and no verification filters', async () => {
         mount(<TechnicianDashboard />, '/diagnostics');
         await screen.findByText('DX-RETURNED');
         expect(strip('Số liệu cận lâm sàng').children).toHaveLength(4);
         expect(within(cell('Chờ thực hiện')).getByText('1')).toHaveAttribute('data-tone', 'attention');
         expect(within(cell('Chờ quá 30 phút')).getByText('9')).toHaveAttribute('data-tone', 'attention');
 
-        const pending = screen.getByRole('button', { name: 'Chờ trưởng khoa duyệt 7' });
-        fireEvent.click(pending);
-        await waitFor(() => expect(mocks.orders).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'InProgress', page: 1 })));
-        expect(await screen.findByText('DX-PENDING')).toBeInTheDocument();
-        expect(screen.queryByText('DX-RETURNED')).not.toBeInTheDocument();
-        expect(pending).toHaveAttribute('aria-pressed', 'true');
-
-        const returned = screen.getByRole('button', { name: 'Bị trả lại cần sửa 8' });
-        fireEvent.click(returned);
-        expect(await screen.findByText('DX-RETURNED')).toBeInTheDocument();
-        expect(screen.queryByText('DX-PENDING')).not.toBeInTheDocument();
-        expect(returned).toHaveAttribute('aria-pressed', 'true');
-        expect(pending).toHaveAttribute('aria-pressed', 'false');
-
-        fireEvent.click(returned);
-        expect(await screen.findByText('DX-PENDING')).toBeInTheDocument();
-        expect(screen.getByText('DX-RETURNED')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Chờ trưởng khoa duyệt/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Bị trả lại cần sửa/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('group', { name: 'Lọc theo duyệt kết quả' })).not.toBeInTheDocument();
     });
 
-    it('clears the verification filter when a status metric is chosen', async () => {
+    it('filters by status when a status metric is chosen', async () => {
         mount(<TechnicianDashboard />, '/diagnostics');
         await screen.findByText('DX-RETURNED');
-        fireEvent.click(screen.getByRole('button', { name: 'Bị trả lại cần sửa 8' }));
-        await waitFor(() => expect(screen.queryByText('DX-PENDING')).not.toBeInTheDocument());
         fireEvent.click(screen.getByRole('button', { name: 'Lọc: Đang thực hiện' }));
-        expect(await screen.findByText('DX-PENDING')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Bị trả lại cần sửa 8' })).toHaveAttribute('aria-pressed', 'false');
+        await waitFor(() => expect(mocks.orders).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'InProgress', page: 1 })));
     });
 });
 

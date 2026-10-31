@@ -89,7 +89,8 @@ public class DemoDataRealismTests
         Assert.Single(orders, o => (now - o.OrderedAtUtc).TotalMinutes > 30);
         Assert.Contains(orders, o => o.Status == DiagnosticOrderStatus.Ordered);
         Assert.Contains(orders, o => o.Status == DiagnosticOrderStatus.InProgress && o.VerificationStatus == DiagnosticVerificationStatus.NotRequired);
-        Assert.Contains(orders, o => o.VerificationStatus == DiagnosticVerificationStatus.Pending);
+        Assert.DoesNotContain(orders, o => o.VerificationStatus is DiagnosticVerificationStatus.Pending or DiagnosticVerificationStatus.Returned);
+        Assert.Contains(orders, o => o.Status == DiagnosticOrderStatus.Completed && o.VerificationStatus == DiagnosticVerificationStatus.NotRequired && o.CompletedAtUtc.HasValue && !o.ReviewedAtUtc.HasValue);
         Assert.Contains(orders, o => o.Status == DiagnosticOrderStatus.Completed && o.VerificationStatus == DiagnosticVerificationStatus.Verified);
     }
 

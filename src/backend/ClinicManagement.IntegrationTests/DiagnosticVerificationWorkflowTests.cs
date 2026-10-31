@@ -41,15 +41,16 @@ public class DiagnosticVerificationWorkflowTests : IntegrationTestBase
         return user.Id;
     }
 
-    private async Task<DiagnosticOrderDto> ReadyAsync(bool required = true, bool numeric = false)
+    private async Task<DiagnosticOrderDto> ReadyAsync(bool required = true, bool numeric = false, string? serviceCode = null)
     {
         await EnsureReviewerAsync();
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var facility = await db.StaffFacilityAssignments.Where(a => a.UserId == TechnicianId && a.IsActive).OrderBy(a => a.FacilityId).Select(a => a.FacilityId).FirstAsync();
         var department = await db.Departments.Where(d => d.FacilityId == facility).Select(d => d.Id).FirstAsync();
-        var service = new DiagnosticService { Code = $"VR-{Guid.NewGuid():N}", Name = "Xét nghiệm duyệt kiểm thử", Category = DiagnosticCategory.Laboratory, SpecimenType = required ? "Máu toàn phần" : null, ContainerType = required ? "Ống EDTA" : null };
-        if (numeric) service.Parameters.Add(new DiagnosticServiceParameter { Code = "WBC", Name = "Bạch cầu", Unit = "10^9/L", RefLow = 4, RefHigh = 10, CriticalLow = 2, CriticalHigh = 30 });
+        var service = serviceCode != null ? await db.DiagnosticServices.FirstOrDefaultAsync(s => s.Code == serviceCode) : null;
+        service ??= new DiagnosticService { Code = serviceCode ?? $"VR-{Guid.NewGuid():N}", Name = "Xét nghiệm duyệt kiểm thử", Category = DiagnosticCategory.Laboratory, SpecimenType = required ? "Máu toàn phần" : null, ContainerType = required ? "Ống EDTA" : null };
+        if (numeric && service.Parameters.Count == 0) service.Parameters.Add(new DiagnosticServiceParameter { Code = "WBC", Name = "Bạch cầu", Unit = "10^9/L", RefLow = 4, RefHigh = 10, CriticalLow = 2, CriticalHigh = 30 });
         var sequence = Interlocked.Increment(ref _sequence);
         var visit = new PatientVisit { VisitCode = $"VR-{Guid.NewGuid():N}"[..22], PatientId = Patient1EntityId, FacilityId = facility, DepartmentId = department, AssignedDoctorId = DoctorEntityId,
             VisitDate = GetFutureWorkingDate(sequence), QueueNumber = sequence, Status = VisitStatus.WaitingForDiagnostics, CreatedByUserId = ReceptionistId };
@@ -72,7 +73,24 @@ public class DiagnosticVerificationWorkflowTests : IntegrationTestBase
         return JsonSerializer.Deserialize<DiagnosticOrderDto>(json.RootElement.GetProperty("data").GetRawText(), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
     }
     private Task<HttpResponseMessage> ActionAsync(DiagnosticOrderDto order, string action, object body) => Client.PostAsJsonAsync($"/api/v1/diagnostics/orders/{order.Id}/{action}", body);
-    private async Task<DiagnosticOrderDto> SubmitAsync(DiagnosticOrderDto order) => await ReadAsync(await ActionAsync(order, "complete", new { rowVersion = order.RowVersion }));
+    private async Task<DiagnosticOrderDto> CompleteAsync(DiagnosticOrderDto order) => await ReadAsync(await ActionAsync(order, "complete", new { rowVersion = order.RowVersion }));
+
+    // Complete no longer submits for verification; this recreates an order that was already waiting for review before the step was removed.
+    private async Task<DiagnosticOrderDto> SubmitAsync(DiagnosticOrderDto order, Guid? submitterId = null)
+    {
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var entity = await db.DiagnosticOrders.FindAsync(order.Id);
+            var submitter = submitterId ?? TechnicianId;
+            entity.VerificationStatus = DiagnosticVerificationStatus.Pending;
+            entity.SubmittedForVerificationAtUtc = DateTime.UtcNow;
+            entity.SubmittedForVerificationByUserId = submitter;
+            entity.RowVersion = Guid.NewGuid().ToByteArray();
+            await db.SaveChangesAsync();
+        }
+        return await ReadAsync(await Client.GetAsync($"/api/v1/diagnostics/orders/{order.Id}"));
+    }
     private static async Task ErrorAsync(HttpResponseMessage response, string code)
     {
         Assert.False(response.IsSuccessStatusCode);
@@ -80,17 +98,48 @@ public class DiagnosticVerificationWorkflowTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task SubmitKeepsOrderAndVisitWaiting_AndDoesNotSendCompletionNotification()
+    public async Task CompleteWithSpecimenFinalizesImmediately_AndNotifiesDoctor()
     {
-        var order = await SubmitAsync(await ReadyAsync());
-        Assert.Equal("InProgress", order.Status); Assert.Equal("Pending", order.VerificationStatus);
-        Assert.NotNull(order.SubmittedForVerificationAtUtc); Assert.Equal("Technician", order.SubmittedForVerificationByUserName);
-        Assert.Null(order.CompletedAtUtc); Assert.Null(order.CompletedByUserName); Assert.False(order.CanCurrentUserVerify);
+        var order = await CompleteAsync(await ReadyAsync());
+        Assert.Equal("Completed", order.Status); Assert.Equal("NotRequired", order.VerificationStatus);
+        Assert.NotNull(order.CompletedAtUtc); Assert.Null(order.SubmittedForVerificationAtUtc);
         using var scope = Factory.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        Assert.Equal(VisitStatus.WaitingForDiagnostics, (await db.PatientVisits.FindAsync(order.PatientVisitId))!.Status);
-        Assert.False(await db.Notifications.AnyAsync(n => n.DedupeKey == $"diag_completed_doc_{order.Id}_{DoctorId}"));
-        Assert.True(await db.SystemAuditLogs.AnyAsync(a => a.Action == "DiagnosticResultsSubmittedForVerification" && a.EntityId == order.Id.ToString()));
-        await ErrorAsync(await ActionAsync(order, "complete", new { rowVersion = order.RowVersion }), "INVALID_STATE");
+        Assert.Equal(VisitStatus.ResultsReady, (await db.PatientVisits.FindAsync(order.PatientVisitId))!.Status);
+        Assert.True(await db.Notifications.AnyAsync(n => n.DedupeKey == $"diag_completed_doc_{order.Id}_{DoctorId}"));
+        Assert.False(await db.SystemAuditLogs.AnyAsync(a => a.Action == "DiagnosticResultsSubmittedForVerification" && a.EntityId == order.Id.ToString()));
+    }
+
+    [Fact]
+    public async Task TechnicianCompletingSpecimenOrder_LetsDoctorSeeResultAndNotifiesThem()
+    {
+        var order = await CompleteAsync(await ReadyAsync(serviceCode: "LAB-GLU"));
+        Assert.Equal("Completed", order.Status);
+        await AuthenticateAsync("doc@test.com");
+        var visitOrders = JsonDocument.Parse(await (await Client.GetAsync($"/api/v1/doctor/visits/{order.PatientVisitId}/diagnostic-orders")).Content.ReadAsStringAsync());
+        var item = visitOrders.RootElement.GetProperty("data").EnumerateArray().Single(o => o.GetProperty("id").GetInt64() == order.Id).GetProperty("items")[0];
+        Assert.NotEqual(JsonValueKind.Null, item.GetProperty("result").ValueKind);
+        Assert.NotNull((await ReadAsync(await Client.GetAsync($"/api/v1/doctor/diagnostic-orders/{order.Id}"))).Items[0].Result);
+        using var scope = Factory.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var notice = await db.Notifications.SingleAsync(n => n.DedupeKey == $"diag_completed_doc_{order.Id}_{DoctorId}");
+        Assert.Equal("Có kết quả cận lâm sàng", notice.Title);
+    }
+
+    [Theory]
+    [InlineData("Pending")]
+    [InlineData("Returned")]
+    public async Task CompleteFinalizesLegacyPendingOrReturnedOrder(string legacyStatus)
+    {
+        var order = await ReadyAsync();
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var entity = await db.DiagnosticOrders.FindAsync(order.Id);
+            entity!.VerificationStatus = Enum.Parse<DiagnosticVerificationStatus>(legacyStatus); entity.RowVersion = Guid.NewGuid().ToByteArray();
+            await db.SaveChangesAsync();
+        }
+        var current = await ReadAsync(await Client.GetAsync($"/api/v1/diagnostics/orders/{order.Id}"));
+        var completed = await CompleteAsync(current);
+        Assert.Equal("Completed", completed.Status);
     }
 
     [Theory]
@@ -153,18 +202,12 @@ public class DiagnosticVerificationWorkflowTests : IntegrationTestBase
         Assert.Equal(1, await db.Notifications.CountAsync(n => n.DedupeKey == $"diag_returned_{order.Id}_1"));
     }
 
-    [Theory]
-    [InlineData("result")]
-    [InlineData("collect")]
-    [InlineData("receive")]
-    [InlineData("reject")]
-    public async Task PendingLocksResultAndAllSpecimenMutations(string operation)
+    [Fact]
+    public async Task LegacyPendingOrderNoLongerLocksResultEditing()
     {
         var order = await SubmitAsync(await ReadyAsync()); var item = order.Items[0];
-        var url = $"/api/v1/diagnostics/orders/{order.Id}/items/{item.Id}";
-        var response = operation == "result" ? await Client.PutAsJsonAsync(url + "/result", new { resultText = "Sửa khi chờ duyệt", rowVersion = item.RowVersion })
-            : await Client.PostAsJsonAsync(url + "/specimen/" + operation, new { reason = 1, rowVersion = item.RowVersion });
-        await ErrorAsync(response, "RESULTS_LOCKED_PENDING_VERIFICATION");
+        var edited = await ReadAsync(await Client.PutAsJsonAsync($"/api/v1/diagnostics/orders/{order.Id}/items/{item.Id}/result", new { resultText = "Sửa khi phiếu cũ còn chờ duyệt", rowVersion = item.RowVersion }));
+        Assert.Equal("Sửa khi phiếu cũ còn chờ duyệt", edited.Items[0].Result!.ResultText);
     }
 
     [Fact]
@@ -210,7 +253,7 @@ public class DiagnosticVerificationWorkflowTests : IntegrationTestBase
                 DiagnosticService = new DiagnosticService { Code = $"C-VR-{Guid.NewGuid():N}", Name = "Mẫu hủy", SpecimenType = "Máu" } });
             await db.SaveChangesAsync();
         }
-        var completed = await SubmitAsync(order); Assert.Equal("Completed", completed.Status); Assert.Equal("NotRequired", completed.VerificationStatus);
+        var completed = await CompleteAsync(order); Assert.Equal("Completed", completed.Status); Assert.Equal("NotRequired", completed.VerificationStatus);
     }
 
     [Theory]
@@ -253,7 +296,7 @@ public class DiagnosticVerificationWorkflowTests : IntegrationTestBase
     [Fact]
     public async Task AResultWriterCannotVerifyWhenAnotherTechnicianSubmitted()
     {
-        var ready = await ReadyAsync(); await AuthenticateAsync(ReviewerEmail); var order = await SubmitAsync(ready);
+        var ready = await ReadyAsync(); var reviewerId = await EnsureReviewerAsync(); await AuthenticateAsync(ReviewerEmail); var order = await SubmitAsync(ready, reviewerId);
         await AuthenticateAsync("tech@test.com");
         var single = await ReadAsync(await Client.GetAsync($"/api/v1/diagnostics/orders/{order.Id}")); Assert.False(single.CanCurrentUserVerify);
         await ErrorAsync(await ActionAsync(single, "verify", new { rowVersion = single.RowVersion }), "SELF_VERIFICATION_NOT_ALLOWED");

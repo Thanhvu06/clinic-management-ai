@@ -323,13 +323,13 @@ const TechnicianOrderContent: React.FC = () => {
             return;
         }
 
-        showConfirm(needsVerification ? 'Xác nhận gửi duyệt kết quả cho kỹ thuật viên khác?' : 'Xác nhận hoàn tất phiếu chỉ định và gửi kết quả về cho Bác sĩ?', async () => {
+        showConfirm('Xác nhận hoàn tất phiếu chỉ định và gửi kết quả về cho Bác sĩ?', async () => {
             setActionLoading(true);
             try {
                 const res = await diagnosticApi.completeTechnicianOrder(order.id, { rowVersion: order.rowVersion });
                 if (res.success && res.data) {
                     setOrder(res.data);
-                    showToast(res.data.verificationStatus === 'Pending' ? 'Đã gửi duyệt kết quả.' : 'Đã hoàn tất phiếu chỉ định cận lâm sàng!', 'success');
+                    showToast('Đã hoàn tất, bác sĩ đã nhận kết quả.', 'success');
                 }
             } catch (err: any) {
                 showAlert(err.message || 'Không thể hoàn tất phiếu chỉ định.', 'Lỗi', 'error');
@@ -348,7 +348,6 @@ const TechnicianOrderContent: React.FC = () => {
     const resultedItems = activeItems.filter(item => item.result).length;
     const specimenItems = activeItems.filter(item => item.specimenStatus && item.specimenStatus !== 'NotRequired');
     const verificationPending = order.verificationStatus === 'Pending';
-    const needsVerification = order.verificationStatus != null && (order.verificationStatus !== 'NotRequired' || activeItems.some(item => item.specimenType != null));
     const milestones = [
         { label: 'Chỉ định', time: order.orderedAtUtc, actor: order.orderingDoctorName },
         { label: 'Tiếp nhận', time: order.startedAtUtc, actor: order.startedByUserName },
@@ -401,7 +400,7 @@ const TechnicianOrderContent: React.FC = () => {
                     <strong>{milestone.label}</strong><span>{milestone.time ? formatDateTime(milestone.time) : 'Chưa thực hiện'}</span>{milestone.time && milestone.actor && <span>{milestone.actor}</span>}
                 </li>)}</ol>
             </Card>
-            {order.status === 'InProgress' && !verificationPending && <Card className={styles.completionBar}><div className={styles.completionActions}><div><strong>{needsVerification ? 'Gửi duyệt kết quả cận lâm sàng' : 'Hoàn tất phiếu chỉ định cận lâm sàng'}</strong><div className={styles.secondary}>{allItemsCompleted ? needsVerification ? 'Tất cả dịch vụ đã có kết quả. Gửi bác sĩ duyệt.' : 'Tất cả các dịch vụ đã có kết quả. Bạn có thể chốt phiếu.' : 'Vui lòng lưu kết quả cho từng dịch vụ trước khi hoàn tất.'}</div></div><Button type="primary" className={styles.completeButton} onClick={handleCompleteOrder} disabled={!allItemsCompleted || actionLoading}><Check size={18} aria-hidden="true" /> {actionLoading ? 'Đang gửi kết quả...' : needsVerification ? 'Gửi duyệt kết quả' : 'Hoàn tất và gửi kết quả'}</Button></div></Card>}
+            {order.status === 'InProgress' && <Card className={styles.completionBar}><div className={styles.completionActions}><div><strong>Hoàn tất phiếu chỉ định cận lâm sàng</strong><div className={styles.secondary}>{allItemsCompleted ? 'Tất cả các dịch vụ đã có kết quả. Bạn có thể chốt phiếu.' : 'Vui lòng lưu kết quả cho từng dịch vụ trước khi hoàn tất.'}</div></div><Button type="primary" className={styles.completeButton} onClick={handleCompleteOrder} disabled={!allItemsCompleted || actionLoading}><Check size={18} aria-hidden="true" /> {actionLoading ? 'Đang hoàn tất...' : 'Hoàn tất phiếu'}</Button></div></Card>}
             <section className={styles.services}>
                 {!returnOpen && verificationError && <Alert type="error" showIcon title={verificationError} />}
                 {order.verificationStatus === 'Returned' && <Alert type="error" showIcon title={`Bị trả lại bởi ${order.returnedByUserName || '—'} lúc ${order.returnedAtUtc ? diagnosticNotificationTime(order.returnedAtUtc) : '—'}: ${order.returnReason || '—'}`} />}
@@ -475,7 +474,7 @@ const TechnicianOrderContent: React.FC = () => {
                                     {item.specimenStatus === 'Collected' && <Link className={styles.specimenPrintLink} to={`/diagnostics/orders/${order.id}/labels`}>In nhãn</Link>}
                                 </section>}
                                 {!!item.result?.values?.length && <div className={styles.parameterTable}>
-                                    {item.result.values.some(value => value.isDeltaFailure) && <Alert type="warning" showIcon title="Có chỉ số lệch delta so với lần trước, kiểm tra mẫu/nhãn trước khi gửi duyệt." />}
+                                    {item.result.values.some(value => value.isDeltaFailure) && <Alert type="warning" showIcon title="Có chỉ số lệch delta so với lần trước, kiểm tra mẫu/nhãn trước khi hoàn tất phiếu." />}
                                     <DataTable ariaLabel={`Chỉ số đã lưu: ${item.serviceName}`} data={item.result.values} keyExtractor={value => value.parameterId} columns={[
                                         { header: 'Chỉ số', accessor: value => `${value.parameterName} (${value.parameterCode})` },
                                         { header: 'Kết quả', accessor: value => value.value },

@@ -8,7 +8,7 @@ import {
     LayoutDashboard, CalendarDays, CalendarCheck,
     History, Users, Stethoscope,
     ShieldPlus, LogOut, Menu as MenuIcon, X, ShieldAlert, Pill, Package, Calendar,
-    Receipt, TrendingUp, FlaskConical, Building2, UserPlus, ClipboardCheck, Timer
+    Receipt, TrendingUp, FlaskConical, Building2, UserPlus, Timer
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { NotificationBell } from '../components/common/NotificationBell';
@@ -31,7 +31,6 @@ const NAV_BY_ROLE: Record<string, NavEntry[]> = {
         { to: '/doctor/schedule', icon: CalendarCheck, label: 'Lịch trực & ca khám' },
         { to: '/doctor/appointments', icon: CalendarDays, label: 'Danh sách lịch khám' },
         { to: '/doctor/leave-requests', icon: History, label: 'Yêu cầu nghỉ phép' },
-        { to: '/doctor/diagnostic-verification', icon: ClipboardCheck, label: 'Duyệt kết quả CLS' },
     ],
     Receptionist: [
         { to: '/reception', icon: LayoutDashboard, label: 'Bàn làm việc' },
@@ -63,7 +62,6 @@ const NAV_BY_ROLE: Record<string, NavEntry[]> = {
     ],
     DiagnosticTechnician: [
         { to: '/diagnostics', icon: FlaskConical, label: 'Hàng đợi chỉ định' },
-        { to: '/diagnostics/verification', icon: ClipboardCheck, label: 'Chờ duyệt kết quả' },
     ],
     LabSupervisor: [
         { to: '/lab', icon: FlaskConical, label: 'Tổng quan xét nghiệm' },

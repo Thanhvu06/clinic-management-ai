@@ -62,25 +62,30 @@ describe('Lab supervisor and doctor verification', () => {
         expect(screen.getByText('Thông báo')).toBeInTheDocument();
         expect(mocks.copilot).not.toHaveBeenCalled();
     }, 15000);
-    it('retains Copilot for an existing role and adds the doctor verification menu', async () => {
+    it('retains Copilot for an existing role and hides the doctor verification menu', async () => {
         mocks.role = 'Doctor'; mount('layout');
-        expect(await screen.findByRole('link', { name: 'Duyệt kết quả CLS' })).toHaveAttribute('href', '/doctor/diagnostic-verification');
+        expect(await screen.findByRole('link', { name: 'Bàn làm việc' })).toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Duyệt kết quả CLS' })).not.toBeInTheDocument();
         expect(mocks.copilot).toHaveBeenCalled();
     }, 15000);
-    it('shows four StatCards, critical flag and review link on supervisor dashboard', async () => {
+    it('hides the verification menu entry for technicians', async () => {
+        mocks.role = 'DiagnosticTechnician'; mount('layout');
+        expect(await screen.findByRole('link', { name: 'Hàng đợi chỉ định' })).toHaveAttribute('href', '/diagnostics');
+        expect(screen.queryByRole('link', { name: 'Chờ duyệt kết quả' })).not.toBeInTheDocument();
+    }, 15000);
+    it('shows critical flag and review link on supervisor dashboard without StatCards', async () => {
         mount('dashboard');
-        expect(await screen.findByText('Chờ duyệt')).toBeInTheDocument();
-        expect(screen.getByText('Chờ lâu nhất (phút)')).toBeInTheDocument();
-        expect(screen.getByText('Bị trả lại hôm nay')).toBeInTheDocument();
-        const table = screen.getByRole('table', { name: 'Phiếu chờ duyệt' });
+        const table = await screen.findByRole('table', { name: 'Phiếu chờ duyệt' });
+        expect(screen.queryByText('Chờ lâu nhất (phút)')).not.toBeInTheDocument();
+        expect(screen.queryByText('Bị trả lại hôm nay')).not.toBeInTheDocument();
         expect(within(table).getByText('Có giá trị nguy hiểm')).toBeInTheDocument();
         expect(within(table).getByText('Trần Thị An')).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Mở để duyệt' })).toHaveAttribute('href', '/lab/orders/1');
     }, 15000);
-    it('shows empty supervisor queue while retaining StatCards', async () => {
+    it('shows empty supervisor queue without StatCards', async () => {
         mocks.queue.mockResolvedValue(ok({ items: [], totalItems: 0, page: 1, pageSize: 15 })); mount('dashboard');
         expect(await screen.findByText('Không có phiếu chờ duyệt')).toBeInTheDocument();
-        expect(screen.getByText('Bị trả lại hôm nay')).toBeInTheDocument();
+        expect(screen.queryByText('Bị trả lại hôm nay')).not.toBeInTheDocument();
     }, 15000);
     it('allows retry after queue loading fails', async () => {
         mocks.queue.mockRejectedValueOnce({ message: 'Không kết nối được' }); mount('dashboard');

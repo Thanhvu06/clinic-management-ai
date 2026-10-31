@@ -57,7 +57,8 @@ public class RealisticDevelopmentSeedTests
         var orders = await db.DiagnosticOrders.Include(o => o.OrderingDoctor).Include(o => o.Items).ThenInclude(i => i.Result).Where(o => o.PatientVisit != null && o.PatientVisit.QueueNumber >= 200 && o.PatientVisit.QueueNumber < 205).ToListAsync();
         Assert.Equal(2, orders.Count(o => o.Status == DiagnosticOrderStatus.Ordered));
         Assert.Single(orders, o => o.Status == DiagnosticOrderStatus.InProgress && o.VerificationStatus == DiagnosticVerificationStatus.NotRequired);
-        Assert.Single(orders, o => o.VerificationStatus == DiagnosticVerificationStatus.Pending);
+        Assert.DoesNotContain(orders, o => o.VerificationStatus is DiagnosticVerificationStatus.Pending or DiagnosticVerificationStatus.Returned);
+        Assert.Single(orders, o => o.Status == DiagnosticOrderStatus.Completed && o.VerificationStatus == DiagnosticVerificationStatus.NotRequired);
         Assert.Single(orders, o => o.VerificationStatus == DiagnosticVerificationStatus.Verified);
         var primaryUser = await db.Users.SingleAsync(u => u.Email == "doctor@cliniccare.local");
         var primaryDoctor = await db.Doctors.SingleAsync(d => d.UserId == primaryUser.Id);
@@ -85,14 +86,8 @@ public class RealisticDevelopmentSeedTests
             Assert.Equal(leave.StartDateTime.Date, leave.EndDateTime.Date);
         });
         var counts = (await db.Invoices.CountAsync(), await db.DiagnosticOrders.CountAsync(), await db.Prescriptions.CountAsync(), await db.Appointments.CountAsync(), batches.Count);
-        var pendingOrder = Assert.Single(orders, order => order.VerificationStatus == DiagnosticVerificationStatus.Pending);
-        pendingOrder.Status = DiagnosticOrderStatus.Completed;
-        pendingOrder.CompletedAtUtc = clock.UtcNow;
-        await db.SaveChangesAsync();
         await DevelopmentDataSeeder.SeedDoctorSchedulesAndSlotsAsync(services, 30, true);
         await MedicineBatchDevelopmentSeed.SeedAsync(db, clock, actor, true);
-        Assert.Equal(DiagnosticOrderStatus.InProgress, pendingOrder.Status);
-        Assert.Null(pendingOrder.CompletedAtUtc);
         Assert.Equal(counts, (await db.Invoices.CountAsync(), await db.DiagnosticOrders.CountAsync(), await db.Prescriptions.CountAsync(), await db.Appointments.CountAsync(), await db.MedicineBatches.CountAsync()));
     }
 
@@ -120,14 +115,18 @@ public class RealisticDevelopmentSeedTests
     }
 
     [Fact]
-    public async Task SeededPendingOrder_RequiresAnIndependentReviewer_AndCanBeVerified()
+    public async Task SeededResultedOrder_IsCompletedWithoutVerification_AndPatientSeesPrescriptions()
     {
         using var factory = new FixedSeedWebApplicationFactory();
         using var scope = factory.Services.CreateScope();
         var services = scope.ServiceProvider;
         await DevelopmentDataSeeder.SeedDoctorSchedulesAndSlotsAsync(services, 7, true);
         var db = services.GetRequiredService<AppDbContext>();
-        var pending = await db.DiagnosticOrders.SingleAsync(o => o.VerificationStatus == DiagnosticVerificationStatus.Pending);
+        var seeded = await db.DiagnosticOrders.Where(o => o.PatientVisit != null && o.PatientVisit.QueueNumber == 203).SingleAsync();
+        Assert.Equal(DiagnosticOrderStatus.Completed, seeded.Status);
+        Assert.Equal(DiagnosticVerificationStatus.NotRequired, seeded.VerificationStatus);
+        Assert.NotNull(seeded.CompletedAtUtc);
+        Assert.Null(seeded.ReviewedAtUtc);
         using var client = factory.CreateClient();
         async Task Login(string email)
         {
@@ -136,21 +135,6 @@ public class RealisticDevelopmentSeedTests
             using var login = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.RootElement.GetProperty("data").GetProperty("accessToken").GetString());
         }
-        await Login("technician@cliniccare.local");
-        var rejected = await client.PostAsJsonAsync($"/api/v1/diagnostic-verification/orders/{pending.Id}/verify", new { note = "Kiểm tra độc lập" });
-        Assert.False(rejected.IsSuccessStatusCode);
-        Assert.Contains("SELF_VERIFICATION_NOT_ALLOWED", await rejected.Content.ReadAsStringAsync());
-
-        await Login("doctor@cliniccare.local");
-        using var queue = JsonDocument.Parse(await client.GetStringAsync("/api/v1/diagnostic-verification/queue"));
-        Assert.Contains(queue.RootElement.GetProperty("data").GetProperty("items").EnumerateArray(), item => item.GetProperty("id").GetInt64() == pending.Id);
-        var verified = await client.PostAsJsonAsync($"/api/v1/diagnostic-verification/orders/{pending.Id}/verify", new { note = "Đã kiểm tra kết quả độc lập" });
-        Assert.True(verified.IsSuccessStatusCode, await verified.Content.ReadAsStringAsync());
-        db.ChangeTracker.Clear();
-        var order = await db.DiagnosticOrders.SingleAsync(o => o.Id == pending.Id);
-        Assert.Equal(DiagnosticVerificationStatus.Verified, order.VerificationStatus);
-        Assert.Equal(DiagnosticOrderStatus.Completed, order.Status);
-
         await Login("patient@cliniccare.local");
         using var prescriptions = JsonDocument.Parse(await client.GetStringAsync("/api/v1/patients/me/prescriptions"));
         var items = prescriptions.RootElement.GetProperty("data").EnumerateArray().ToList();
