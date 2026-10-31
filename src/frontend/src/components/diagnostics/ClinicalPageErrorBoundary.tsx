@@ -1,4 +1,4 @@
-import { Component, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button } from 'antd';
 import { InlineError } from '../common/InlineError';
 
@@ -7,6 +7,10 @@ export class ClinicalPageErrorBoundary extends Component<{ children: ReactNode }
 
     static getDerivedStateFromError() {
         return { failed: true };
+    }
+
+    componentDidCatch(error: Error, info: ErrorInfo) {
+        console.error(error, info);
     }
 
     render() {
