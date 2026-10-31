@@ -21,7 +21,11 @@ export function calculatePrescriptionQuantity(item: PrescriptionQuantity): numbe
         const match = text.match(/\d+(?:[.,]\d+)?/);
         return match ? Number(match[0].replace(',', '.')) : NaN;
     };
-    const quantity = parseFirst(item.dosage) * parseFirst(item.frequency) * item.durationDays;
+    const parseFrequency = (text: string) => {
+        const matches = text.match(/\d+(?:[.,]\d+)?/g);
+        return matches ? matches.reduce((sum, raw) => sum + Number(raw.replace(',', '.')), 0) : NaN;
+    };
+    const quantity = Math.ceil(parseFirst(item.dosage) * parseFrequency(item.frequency) * item.durationDays);
     return Number.isFinite(quantity) && quantity > 0 ? quantity : item.quantity;
 }
 

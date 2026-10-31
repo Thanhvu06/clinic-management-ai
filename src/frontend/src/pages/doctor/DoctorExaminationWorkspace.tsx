@@ -1987,7 +1987,7 @@ const DoctorExaminationContent: React.FC = () => {
             {/* Revisit Modal */}
             {isRevisitModalOpen && (
                 <Modal
-                    open={isRevisitModalOpen}
+                    open={true}
                     onCancel={() => setIsRevisitModalOpen(false)}
                     width={440}
                     title={
@@ -2039,7 +2039,7 @@ const DoctorExaminationContent: React.FC = () => {
             {/* Complete Consultation Confirmation Modal */}
             {isCompleteModalOpen && (
                 <Modal
-                    open={isCompleteModalOpen}
+                    open={true}
                     onCancel={() => setIsCompleteModalOpen(false)}
                     width={520}
                     title={
