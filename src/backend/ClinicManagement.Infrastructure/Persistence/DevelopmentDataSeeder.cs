@@ -345,6 +345,147 @@ public static class DevelopmentDataSeeder
         // 5. Clinic Locations
         await ClinicBrandDevelopmentSeed.SeedLocationAsync(db);
 
+        // 11. Facility BV-TW-01, Departments, Rooms & Staff Facility Assignments
+        var fac = await ClinicBrandDevelopmentSeed.SeedFacilityAsync(db);
+
+        var building = await db.Buildings.FirstOrDefaultAsync(b => b.FacilityId == fac.Id && b.Code == "TN-A");
+        if (building == null)
+        {
+            building = new Building
+            {
+                FacilityId = fac.Id,
+                Code = "TN-A",
+                Name = "Tòa nhà A - Khám bệnh Đa khoa",
+                NumberOfFloors = 5,
+                IsActive = true
+            };
+            db.Buildings.Add(building);
+            await db.SaveChangesAsync();
+        }
+
+        var deptDefs = new[]
+        {
+            new { Code = "KKB", Name = "Khoa Khám bệnh Ngoại trú", SpecialtyCode = "SP01", Type = DepartmentType.Clinical },
+            new { Code = "KNHI", Name = "Khoa Nhi", SpecialtyCode = "SP02", Type = DepartmentType.Clinical },
+            new { Code = "KPS", Name = "Khoa Sản phụ khoa", SpecialtyCode = "SP03", Type = DepartmentType.Clinical },
+            new { Code = "KTMH", Name = "Khoa Tai Mũi Họng", SpecialtyCode = "SP05", Type = DepartmentType.Clinical },
+            new { Code = "KTM", Name = "Khoa Tim mạch", SpecialtyCode = "SP06", Type = DepartmentType.Clinical },
+            new { Code = "KDL", Name = "Khoa Da liễu", SpecialtyCode = "SP04", Type = DepartmentType.Clinical },
+            new { Code = "KCXK", Name = "Khoa Cơ xương khớp", SpecialtyCode = "SP07", Type = DepartmentType.Clinical },
+            new { Code = "KTK", Name = "Khoa Thần kinh", SpecialtyCode = "SP08", Type = DepartmentType.Clinical },
+            new { Code = "KNT", Name = "Khoa Nội tiết", SpecialtyCode = "SP09", Type = DepartmentType.Clinical },
+            new { Code = "KMAT", Name = "Khoa Nhãn khoa", SpecialtyCode = "SP10", Type = DepartmentType.Clinical },
+            new { Code = "KTH", Name = "Khoa Tiêu hóa", SpecialtyCode = "SP11", Type = DepartmentType.Clinical }
+        };
+
+        var deptEntities = new List<Department>();
+        foreach (var dd in deptDefs)
+        {
+            var d = await db.Departments.FirstOrDefaultAsync(x => x.FacilityId == fac.Id && x.Code == dd.Code);
+            var spec = await db.Specialties.FirstOrDefaultAsync(s => s.SpecialtyCode == dd.SpecialtyCode);
+            if (d == null)
+            {
+                d = new Department
+                {
+                    FacilityId = fac.Id,
+                    BuildingId = building.Id,
+                    Code = dd.Code,
+                    Name = dd.Name,
+                    DepartmentType = dd.Type,
+                    SpecialtyId = spec?.Id,
+                    IsActive = true
+                };
+                db.Departments.Add(d);
+                await db.SaveChangesAsync();
+            }
+            else if (d.SpecialtyId == null && spec != null)
+            {
+                d.SpecialtyId = spec.Id;
+                await db.SaveChangesAsync();
+            }
+            deptEntities.Add(d);
+        }
+
+        var roomDefs = new[]
+        {
+            new { DeptCode = "KKB", RoomNumber = "P101", Name = "Phòng khám Nội 101", Floor = 1 },
+            new { DeptCode = "KKB", RoomNumber = "P102", Name = "Phòng khám Nội 102", Floor = 1 },
+            new { DeptCode = "KNHI", RoomNumber = "P201", Name = "Phòng khám Nhi 201", Floor = 2 },
+            new { DeptCode = "KPS", RoomNumber = "P202", Name = "Phòng khám Sản 202", Floor = 2 },
+            new { DeptCode = "KTMH", RoomNumber = "P301", Name = "Phòng khám TMH 301", Floor = 3 },
+            new { DeptCode = "KTM", RoomNumber = "P302", Name = "Phòng khám Tim mạch 302", Floor = 3 },
+            new { DeptCode = "KDL", RoomNumber = "P203", Name = "Phòng khám Da liễu 203", Floor = 2 },
+            new { DeptCode = "KCXK", RoomNumber = "P303", Name = "Phòng khám Cơ xương khớp 303", Floor = 3 },
+            new { DeptCode = "KTK", RoomNumber = "P401", Name = "Phòng khám Thần kinh 401", Floor = 4 },
+            new { DeptCode = "KNT", RoomNumber = "P402", Name = "Phòng khám Nội tiết 402", Floor = 4 },
+            new { DeptCode = "KMAT", RoomNumber = "P501", Name = "Phòng khám Nhãn khoa 501", Floor = 5 },
+            new { DeptCode = "KTH", RoomNumber = "P502", Name = "Phòng khám Tiêu hóa 502", Floor = 5 }
+        };
+
+        foreach (var rd in roomDefs)
+        {
+            var dept = deptEntities.FirstOrDefault(d => d.Code == rd.DeptCode);
+            if (dept != null)
+            {
+                var r = await db.Rooms.FirstOrDefaultAsync(x => x.DepartmentId == dept.Id && x.RoomNumber == rd.RoomNumber);
+                if (r == null)
+                {
+                    r = new Room
+                    {
+                        DepartmentId = dept.Id,
+                        BuildingId = building.Id,
+                        RoomNumber = rd.RoomNumber,
+                        Name = rd.Name,
+                        FloorNumber = rd.Floor,
+                        RoomType = RoomType.Consultation,
+                        IsActive = true
+                    };
+                    db.Rooms.Add(r);
+                    await db.SaveChangesAsync();
+                }
+            }
+        }
+
+        var staffUsers = new List<(ApplicationUser User, string Role)>
+        {
+            (adminId1, "Admin"),
+            (adminId2, "Admin"),
+            (rec1, "Receptionist"),
+            (rec2, "Receptionist"),
+            (rec3, "Receptionist"),
+            (pharmacist, "Pharmacist"),
+            (technician, ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician),
+            (labSupervisor, ClinicManagement.Application.Common.Constants.RoleNames.LabSupervisor),
+            (technician02, ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician)
+        };
+
+        foreach (var du in docUsers)
+        {
+            staffUsers.Add((du, "Doctor"));
+        }
+
+        foreach (var (stUser, role) in staffUsers)
+        {
+            var existingAssignment = await db.StaffFacilityAssignments
+                .FirstOrDefaultAsync(a => a.UserId == stUser.Id && a.FacilityId == fac.Id);
+            if (existingAssignment == null)
+            {
+                var assignedDept = deptEntities.FirstOrDefault();
+                db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
+                {
+                    UserId = stUser.Id,
+                    FacilityId = fac.Id,
+                    DepartmentId = assignedDept?.Id,
+                    Role = role,
+                    IsPrimary = true,
+                    IsActive = true,
+                    AssignedAtUtc = seedTime
+                });
+            }
+        }
+        await db.SaveChangesAsync();
+        logger.LogInformation("Facility BV-TW-01, departments, rooms, and staff assignments seeded.");
+
         await DevelopmentAppointmentSeed.NormalizeLegacyCodesAsync(db, dateTimeProvider, adminId1.Id);
         var today = dateTimeProvider.VietnamToday;
 
@@ -545,147 +686,6 @@ public static class DevelopmentDataSeeder
         await db.SaveChangesAsync();
         logger.LogInformation("Diagnostic Services catalog seeded.");
         await SeedDiagnosticParametersAsync(db);
-
-        // 11. Facility BV-TW-01, Departments, Rooms & Staff Facility Assignments
-        var fac = await ClinicBrandDevelopmentSeed.SeedFacilityAsync(db);
-
-        var building = await db.Buildings.FirstOrDefaultAsync(b => b.FacilityId == fac.Id && b.Code == "TN-A");
-        if (building == null)
-        {
-            building = new Building
-            {
-                FacilityId = fac.Id,
-                Code = "TN-A",
-                Name = "Tòa nhà A - Khám bệnh Đa khoa",
-                NumberOfFloors = 5,
-                IsActive = true
-            };
-            db.Buildings.Add(building);
-            await db.SaveChangesAsync();
-        }
-
-        var deptDefs = new[]
-        {
-            new { Code = "KKB", Name = "Khoa Khám bệnh Ngoại trú", SpecialtyCode = "SP01", Type = DepartmentType.Clinical },
-            new { Code = "KNHI", Name = "Khoa Nhi", SpecialtyCode = "SP02", Type = DepartmentType.Clinical },
-            new { Code = "KPS", Name = "Khoa Sản phụ khoa", SpecialtyCode = "SP03", Type = DepartmentType.Clinical },
-            new { Code = "KTMH", Name = "Khoa Tai Mũi Họng", SpecialtyCode = "SP05", Type = DepartmentType.Clinical },
-            new { Code = "KTM", Name = "Khoa Tim mạch", SpecialtyCode = "SP06", Type = DepartmentType.Clinical },
-            new { Code = "KDL", Name = "Khoa Da liễu", SpecialtyCode = "SP04", Type = DepartmentType.Clinical },
-            new { Code = "KCXK", Name = "Khoa Cơ xương khớp", SpecialtyCode = "SP07", Type = DepartmentType.Clinical },
-            new { Code = "KTK", Name = "Khoa Thần kinh", SpecialtyCode = "SP08", Type = DepartmentType.Clinical },
-            new { Code = "KNT", Name = "Khoa Nội tiết", SpecialtyCode = "SP09", Type = DepartmentType.Clinical },
-            new { Code = "KMAT", Name = "Khoa Nhãn khoa", SpecialtyCode = "SP10", Type = DepartmentType.Clinical },
-            new { Code = "KTH", Name = "Khoa Tiêu hóa", SpecialtyCode = "SP11", Type = DepartmentType.Clinical }
-        };
-
-        var deptEntities = new List<Department>();
-        foreach (var dd in deptDefs)
-        {
-            var d = await db.Departments.FirstOrDefaultAsync(x => x.FacilityId == fac.Id && x.Code == dd.Code);
-            var spec = await db.Specialties.FirstOrDefaultAsync(s => s.SpecialtyCode == dd.SpecialtyCode);
-            if (d == null)
-            {
-                d = new Department
-                {
-                    FacilityId = fac.Id,
-                    BuildingId = building.Id,
-                    Code = dd.Code,
-                    Name = dd.Name,
-                    DepartmentType = dd.Type,
-                    SpecialtyId = spec?.Id,
-                    IsActive = true
-                };
-                db.Departments.Add(d);
-                await db.SaveChangesAsync();
-            }
-            else if (d.SpecialtyId == null && spec != null)
-            {
-                d.SpecialtyId = spec.Id;
-                await db.SaveChangesAsync();
-            }
-            deptEntities.Add(d);
-        }
-
-        var roomDefs = new[]
-        {
-            new { DeptCode = "KKB", RoomNumber = "P101", Name = "Phòng khám Nội 101", Floor = 1 },
-            new { DeptCode = "KKB", RoomNumber = "P102", Name = "Phòng khám Nội 102", Floor = 1 },
-            new { DeptCode = "KNHI", RoomNumber = "P201", Name = "Phòng khám Nhi 201", Floor = 2 },
-            new { DeptCode = "KPS", RoomNumber = "P202", Name = "Phòng khám Sản 202", Floor = 2 },
-            new { DeptCode = "KTMH", RoomNumber = "P301", Name = "Phòng khám TMH 301", Floor = 3 },
-            new { DeptCode = "KTM", RoomNumber = "P302", Name = "Phòng khám Tim mạch 302", Floor = 3 },
-            new { DeptCode = "KDL", RoomNumber = "P203", Name = "Phòng khám Da liễu 203", Floor = 2 },
-            new { DeptCode = "KCXK", RoomNumber = "P303", Name = "Phòng khám Cơ xương khớp 303", Floor = 3 },
-            new { DeptCode = "KTK", RoomNumber = "P401", Name = "Phòng khám Thần kinh 401", Floor = 4 },
-            new { DeptCode = "KNT", RoomNumber = "P402", Name = "Phòng khám Nội tiết 402", Floor = 4 },
-            new { DeptCode = "KMAT", RoomNumber = "P501", Name = "Phòng khám Nhãn khoa 501", Floor = 5 },
-            new { DeptCode = "KTH", RoomNumber = "P502", Name = "Phòng khám Tiêu hóa 502", Floor = 5 }
-        };
-
-        foreach (var rd in roomDefs)
-        {
-            var dept = deptEntities.FirstOrDefault(d => d.Code == rd.DeptCode);
-            if (dept != null)
-            {
-                var r = await db.Rooms.FirstOrDefaultAsync(x => x.DepartmentId == dept.Id && x.RoomNumber == rd.RoomNumber);
-                if (r == null)
-                {
-                    r = new Room
-                    {
-                        DepartmentId = dept.Id,
-                        BuildingId = building.Id,
-                        RoomNumber = rd.RoomNumber,
-                        Name = rd.Name,
-                        FloorNumber = rd.Floor,
-                        RoomType = RoomType.Consultation,
-                        IsActive = true
-                    };
-                    db.Rooms.Add(r);
-                    await db.SaveChangesAsync();
-                }
-            }
-        }
-
-        var staffUsers = new List<(ApplicationUser User, string Role)>
-        {
-            (adminId1, "Admin"),
-            (adminId2, "Admin"),
-            (rec1, "Receptionist"),
-            (rec2, "Receptionist"),
-            (rec3, "Receptionist"),
-            (pharmacist, "Pharmacist"),
-            (technician, ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician),
-            (labSupervisor, ClinicManagement.Application.Common.Constants.RoleNames.LabSupervisor),
-            (technician02, ClinicManagement.Application.Common.Constants.RoleNames.DiagnosticTechnician)
-        };
-
-        foreach (var du in docUsers)
-        {
-            staffUsers.Add((du, "Doctor"));
-        }
-
-        foreach (var (stUser, role) in staffUsers)
-        {
-            var existingAssignment = await db.StaffFacilityAssignments
-                .FirstOrDefaultAsync(a => a.UserId == stUser.Id && a.FacilityId == fac.Id);
-            if (existingAssignment == null)
-            {
-                var assignedDept = deptEntities.FirstOrDefault();
-                db.StaffFacilityAssignments.Add(new StaffFacilityAssignment
-                {
-                    UserId = stUser.Id,
-                    FacilityId = fac.Id,
-                    DepartmentId = assignedDept?.Id,
-                    Role = role,
-                    IsPrimary = true,
-                    IsActive = true,
-                    AssignedAtUtc = seedTime
-                });
-            }
-        }
-        await db.SaveChangesAsync();
-        logger.LogInformation("Facility BV-TW-01, departments, rooms, and staff assignments seeded.");
 
         await MedicineBatchDevelopmentSeed.SeedAsync(db, dateTimeProvider, pharmacist.Id,
             config?.GetValue<bool>("DemoSeed:Enabled") == true);

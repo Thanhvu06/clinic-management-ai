@@ -20,11 +20,10 @@ const DEFAULT_RANGE_DAYS = 7;
 const ALL_CATEGORIES = 'All';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const SEGMENT_ORDER: DiagnosticTurnaroundSegmentKey[] = ['OrderToReceive', 'ReceiveToResult', 'ResultToVerify', 'Total'];
-const SEGMENT_LABELS: Record<DiagnosticTurnaroundSegmentKey, string> = {
+const SEGMENT_ORDER: DiagnosticTurnaroundSegmentKey[] = ['OrderToReceive', 'ReceiveToResult', 'Total'];
+const SEGMENT_LABELS: Partial<Record<DiagnosticTurnaroundSegmentKey, string>> = {
     OrderToReceive: 'Chỉ định → nhận mẫu',
     ReceiveToResult: 'Nhận mẫu → có kết quả',
-    ResultToVerify: 'Gửi duyệt → đã duyệt',
     Total: 'Tổng (chỉ định → trả kết quả)',
 };
 

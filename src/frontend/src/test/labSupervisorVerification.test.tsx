@@ -84,7 +84,8 @@ describe('Lab supervisor and doctor verification', () => {
     }, 15000);
     it('shows empty supervisor queue without StatCards', async () => {
         mocks.queue.mockResolvedValue(ok({ items: [], totalItems: 0, page: 1, pageSize: 15 })); mount('dashboard');
-        expect(await screen.findByText('Không có phiếu chờ duyệt')).toBeInTheDocument();
+        expect(await screen.findByText('Không có phiếu đang xử lý')).toBeInTheDocument();
+        expect(screen.queryByText('Không có phiếu chờ duyệt')).not.toBeInTheDocument();
         expect(screen.queryByText('Bị trả lại hôm nay')).not.toBeInTheDocument();
     }, 15000);
     it('allows retry after queue loading fails', async () => {

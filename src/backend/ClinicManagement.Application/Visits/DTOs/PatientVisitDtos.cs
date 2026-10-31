@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using ClinicManagement.Domain.Enums;
 
 namespace ClinicManagement.Application.Visits.DTOs;
@@ -28,6 +29,7 @@ public class ReceptionIntakeRequest
     [MaxLength(1000)]
     public string ChiefComplaint { get; set; } = string.Empty;
 
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public VisitPriority Priority { get; set; } = VisitPriority.Normal;
 }
 

@@ -116,14 +116,18 @@ public class DemoPolishRound4SeedTests
         foreach (var visit in visits)
             if (patients[visit.PatientId].DateOfBirth > visit.VisitDate.AddYears(-16))
                 Assert.Equal("SP02", visit.AssignedDoctor!.DoctorSpecialties.Single(s => s.IsPrimary).Specialty.SpecialtyCode);
-        var overdue = visits.Where(v => v.VisitDate < clock.VietnamToday && v.Status == VisitStatus.InConsultation).ToList();
-        Assert.NotEmpty(overdue);
-        Assert.All(overdue, v =>
+        // Queue 200–204 giữ kịch bản hết hạn CLS nên có thể chờ kết quả từ ngày trước.
+        Assert.DoesNotContain(visits, v => v.VisitDate < clock.VietnamToday && (v.QueueNumber < 200 || v.QueueNumber > 204)
+            && v.Status is VisitStatus.InConsultation or VisitStatus.WaitingForDiagnostics);
+        var billing = services.GetRequiredService<ClinicManagement.Application.Billing.Interfaces.IBillingService>();
+        var adminId = await db.StaffFacilityAssignments.Where(a => a.IsActive && a.Role == "Admin")
+            .Select(a => a.UserId).FirstAsync();
+        for (var page = 1; ; page++)
         {
-            Assert.Equal(DemoSeedCalendar.PreviousOpen(clock.VietnamToday.AddDays(-1)), v.VisitDate);
-            Assert.InRange(v.QueueNumber, 1, 899);
-            Assert.NotNull(v.AppointmentId);
-        });
+            var queue = await billing.GetUnbilledVisitsAsync(null, adminId, page, 100);
+            Assert.DoesNotContain(queue.Items, visit => visit.Status == nameof(VisitStatus.NoShow));
+            if (page >= queue.TotalPages) break;
+        }
         if (clock.VietnamTime < new TimeOnly(7, 0))
         {
             Assert.DoesNotContain(visits, v => v.VisitDate == clock.VietnamToday);

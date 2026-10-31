@@ -75,12 +75,13 @@ internal static class RealisticDevelopmentSeed
     }
 
     internal static Patient PickPatient(IReadOnlyList<Patient> patients, ISet<(long DoctorId, DateOnly Date, long PatientId)> taken,
-        long doctorId, DateOnly date, int start, string specialtyCode)
+        long doctorId, DateOnly date, int start, string specialtyCode, bool onePerDay = false)
     {
         for (var offset = 0; offset < patients.Count; offset++)
         {
             var patient = patients[(Math.Abs(start) + offset) % patients.Count];
             if (!DemoPatientDevelopmentSeed.Allows(patient, specialtyCode, date)) continue;
+            if (onePerDay && taken.Any(booking => booking.Date == date && booking.PatientId == patient.Id)) continue;
             if (taken.Add((doctorId, date, patient.Id))) return patient;
         }
         throw new InvalidOperationException($"Không còn bệnh nhân phù hợp cho bác sĩ #{doctorId} ngày {date:dd/MM/yyyy}.");
@@ -322,7 +323,7 @@ internal static class RealisticDevelopmentSeed
         await db.SaveChangesAsync();
     }
 
-    private static DiagnosticResult Result(DiagnosticService service, Guid technician, DateTime time)
+    internal static DiagnosticResult Result(DiagnosticService service, Guid technician, DateTime time)
     {
         var imaging = ImagingResults.GetValueOrDefault(service.Code);
         return new()

@@ -16,7 +16,7 @@ namespace ClinicManagement.Infrastructure.Visits;
 /// Ensures that visits only transition to Completed when all clinical, diagnostic, pharmacy,
 /// and billing requirements are genuinely fulfilled for both walk-in and appointment visits.
 /// </summary>
-public static class VisitCompletionCoordinator
+public static partial class VisitCompletionCoordinator
 {
     /// <summary>
     /// Checks whether a patient visit satisfies all criteria to be marked as Completed.

@@ -44,7 +44,7 @@ internal static class ExpiryDemoSeed
             }
             slot.IsBooked = AppointmentStatusExtensions.HoldingSlotStatuses.Contains(status);
             var candidates = await db.Patients.Where(p => p.UserId != null && p.DateOfBirth <= adultBornBy).OrderByDescending(p => p.Id).ToListAsync();
-            var booked = await db.Appointments.Where(a => a.DoctorId == doctor.Id && a.AppointmentDate == day).Select(a => a.PatientId).ToListAsync();
+            var booked = await db.Appointments.Where(a => a.AppointmentDate == day).Select(a => a.PatientId).ToListAsync();
             var walkIns = await db.PatientVisits.Where(v => v.AssignedDoctorId == doctor.Id && v.VisitDate == day && v.AppointmentId == null).Select(v => v.PatientId).ToListAsync();
             var selected = candidates.First(p => !booked.Contains(p.Id) && !walkIns.Contains(p.Id));
             var a = new Appointment
@@ -89,10 +89,10 @@ internal static class ExpiryDemoSeed
             SuggestedDate = date, Note = "Tái khám để đánh giá tình trạng đau đầu và đáp ứng điều trị"
         });
         var visits = new List<PatientVisit>();
-        foreach (var status in new[] { VisitStatus.WaitingForDoctor, VisitStatus.InConsultation })
+        foreach (var status in new[] { VisitStatus.NoShow, VisitStatus.Completed })
         {
             var visitDate = DemoSeedCalendar.PreviousOpen(clock.VietnamToday.AddDays(-1));
-            var appointment = await AppointmentAsync(AppointmentStatus.CheckedIn, visits.Count, visitDate);
+            var appointment = await AppointmentAsync(status == VisitStatus.NoShow ? AppointmentStatus.NoShow : AppointmentStatus.Completed, visits.Count, visitDate);
             var checkedInAt = clock.ConvertVietnamToUtc(visitDate.ToDateTime(appointment.StartTime));
             var floor = await db.PatientVisits.Where(v => v.FacilityId == department.FacilityId && v.DepartmentId == department.Id && v.VisitDate == visitDate)
                 .MaxAsync(v => (int?)v.QueueNumber) ?? 0;
@@ -109,21 +109,53 @@ internal static class ExpiryDemoSeed
                 VisitCode = $"VIS-{visitDate:yyyyMMdd}-{queue:D4}", AppointmentId = appointment.Id, PatientId = appointment.PatientId, FacilityId = department.FacilityId,
                 DepartmentId = department.Id, AssignedDoctorId = doctor.Id, VisitDate = visitDate, QueueNumber = queue,
                 Status = status, CreatedByUserId = actor, CheckedInAtUtc = checkedInAt, CreatedAtUtc = checkedInAt,
-                ConsultationStartedAtUtc = status == VisitStatus.InConsultation ? checkedInAt.AddMinutes(10) : null,
+                ConsultationStartedAtUtc = status == VisitStatus.Completed ? checkedInAt.AddMinutes(5) : null,
+                CompletedAtUtc = status == VisitStatus.Completed ? checkedInAt.AddMinutes(25) : null,
                 ChiefComplaint = appointment.Reason
             };
+            if (status == VisitStatus.Completed)
+            {
+                visit.VisitSummary = new VisitSummary
+                {
+                    AppointmentId = appointment.Id, DoctorId = doctor.Id, ChiefComplaint = appointment.Reason,
+                    DiagnosisCode = "R51", Diagnosis = "Đau đầu", Summary = "Đã khám và đánh giá kết quả cận lâm sàng.",
+                    TreatmentPlan = "Nghỉ ngơi, theo dõi triệu chứng và tái khám theo hẹn.",
+                    CreatedAtUtc = checkedInAt.AddMinutes(5), CompletedAtUtc = visit.CompletedAtUtc
+                };
+                visit.VitalSigns = new AppointmentVitalSigns
+                {
+                    AppointmentId = appointment.Id, Temperature = 36.7m, BloodPressureSystolic = 120, BloodPressureDiastolic = 80,
+                    HeartRate = 76, RespiratoryRate = 18, Weight = 58, Height = 163, Bmi = AppointmentVitalSigns.CalculateBmi(58, 163), SpO2 = 98,
+                    RecordedAtUtc = checkedInAt.AddMinutes(3), RecordedByUserId = doctor.UserId
+                };
+            }
             visits.Add(visit);
             db.PatientVisits.Add(visit);
             await db.SaveChangesAsync();
         }
-        var service = await db.DiagnosticServices.Where(s => s.IsActive).OrderBy(s => s.Id).FirstAsync();
-        db.DiagnosticOrders.Add(new DiagnosticOrder
+        var service = await db.DiagnosticServices.Include(s => s.Parameters).Where(s => s.IsActive).OrderBy(s => s.Id).FirstAsync();
+        var technician = await db.StaffFacilityAssignments.Where(a => a.IsActive && a.FacilityId == department.FacilityId && a.Role == "DiagnosticTechnician")
+            .OrderBy(a => a.Id).Select(a => a.UserId).FirstAsync();
+        var order = new DiagnosticOrder
         {
-            OrderCode = $"DX-{date:yyyyMMdd}-0900", PatientVisit = visits[1], PatientId = visits[1].PatientId,
-            OrderingDoctorId = doctor.Id, FacilityId = department.FacilityId, OrderedAtUtc = at,
+            OrderCode = $"DX-{visits[1].VisitDate:yyyyMMdd}-0900", PatientVisit = visits[1], PatientId = visits[1].PatientId,
+            OrderingDoctorId = doctor.Id, FacilityId = department.FacilityId, OrderedAtUtc = visits[1].CheckedInAtUtc,
+            Status = DiagnosticOrderStatus.Completed, StartedAtUtc = visits[1].CheckedInAtUtc.AddMinutes(2), StartedByUserId = technician,
+            CompletedAtUtc = visits[1].CheckedInAtUtc.AddMinutes(20), CompletedByUserId = technician,
+            ReviewedAtUtc = visits[1].CheckedInAtUtc.AddMinutes(21), ReviewedByDoctorId = doctor.Id,
             ClinicalIndication = "Đánh giá công thức máu khi mệt mỏi kéo dài",
-            Items = [new DiagnosticOrderItem { DiagnosticServiceId = service.Id }]
-        });
+            Items = [new DiagnosticOrderItem
+            {
+                DiagnosticServiceId = service.Id, Status = DiagnosticItemStatus.Completed,
+                SpecimenStatus = service.SpecimenType == null ? SpecimenStatus.NotRequired : SpecimenStatus.Received,
+                CollectedAtUtc = service.SpecimenType == null ? null : visits[1].CheckedInAtUtc.AddMinutes(3),
+                ReceivedAtUtc = service.SpecimenType == null ? null : visits[1].CheckedInAtUtc.AddMinutes(5),
+                CollectedByUserId = service.SpecimenType == null ? null : technician,
+                ReceivedByUserId = service.SpecimenType == null ? null : technician,
+                Result = RealisticDevelopmentSeed.Result(service, technician, visits[1].CheckedInAtUtc.AddMinutes(19))
+            }]
+        };
+        db.DiagnosticOrders.Add(order);
         var medicine = await db.Medicines.Where(m => m.IsActive).OrderBy(m => m.Id).FirstAsync();
         completed.Prescription = new Prescription
         {
@@ -132,18 +164,27 @@ internal static class ExpiryDemoSeed
         };
         db.Prescriptions.Add(new Prescription
         {
-            PatientVisit = visits[1], PatientId = visits[1].PatientId, DoctorId = doctor.Id, Status = PrescriptionStatus.Issued,
+            PatientVisit = visits[1], AppointmentId = visits[1].AppointmentId, PatientId = visits[1].PatientId, DoctorId = doctor.Id, Status = PrescriptionStatus.Cancelled,
             CreatedAt = visits[1].CheckedInAtUtc.AddMinutes(20), Notes = "Uống sau ăn, theo dõi triệu chứng và tái khám theo hẹn",
             Items = [new PrescriptionItem { MedicineId = medicine.Id, Quantity = 1, Dosage = "1 viên", Frequency = "1 lần/ngày", DurationDays = 1 }]
         });
         await db.SaveChangesAsync();
+        if (service.SpecimenType != null)
+            order.Items.Single().SpecimenBarcode = $"SP-{visits[1].VisitDate:yyMMdd}-H{order.Items.Single().Id:D4}";
+        var consultation = await db.Specialties.SingleAsync(s => s.Id == specialty);
         var invoice = new Invoice
         {
-            InvoiceCode = BusinessDisplay.RandomCode("INV", date, 8), PatientVisit = visits[1], PatientId = visits[1].PatientId,
-            SourceType = InvoiceSourceType.Appointment, CreatedByUserId = actor, CreatedAtUtc = at,
-            Subtotal = 150000, TotalAmount = 150000,
-            Items = [new InvoiceItem { ItemCode = "EXAM", Description = "Phí khám", Quantity = 1, UnitPrice = 150000, LineTotal = 150000, ReferenceType = "Consultation", ReferenceId = visits[1].Id }]
+            InvoiceCode = BusinessDisplay.RandomCode("INV", visits[1].VisitDate, 8), PatientVisitId = visits[1].Id,
+            AppointmentId = visits[1].AppointmentId, PatientId = visits[1].PatientId,
+            SourceType = InvoiceSourceType.Appointment, CreatedByUserId = actor, CreatedAtUtc = visits[1].CompletedAtUtc!.Value,
+            Items = [
+                new InvoiceItem { ItemCode = consultation.SpecialtyCode, Description = "Phí khám", Quantity = 1, UnitPrice = consultation.ConsultationFee,
+                    LineTotal = consultation.ConsultationFee, ReferenceType = "Consultation", ReferenceId = visits[1].Id },
+                new InvoiceItem { ItemCode = service.Code, Description = service.Name, Quantity = 1, UnitPrice = service.Price!.Value,
+                    LineTotal = service.Price.Value, ReferenceType = "DiagnosticItem", ReferenceId = order.Items.Single().Id }
+            ]
         };
+        invoice.Subtotal = invoice.TotalAmount = invoice.Items.Sum(item => item.LineTotal);
         db.Invoices.Add(invoice);
         var packages = await db.HealthPackages.Where(p => p.IsActive).OrderBy(p => p.Id).ToListAsync();
         var patients = await db.Patients.OrderBy(p => p.Id).ToListAsync();

@@ -86,7 +86,11 @@ internal static class DevelopmentAppointmentSeed
         }
 
         var today = dateTimeProvider.VietnamToday;
-        var slots = await db.AppointmentSlots.ToListAsync();
+        var earliest = dateTimeProvider.VietnamNow.AddMinutes(30);
+        var slots = (await db.AppointmentSlots.ToListAsync())
+            .Where(s => s.SlotDate < today || s.SlotDate.ToDateTime(s.StartTime) >= earliest).ToList();
+        var assignments = await db.StaffFacilityAssignments.Where(a => a.IsActive && a.Role == "Doctor")
+            .Include(a => a.Department).OrderByDescending(a => a.IsPrimary).ThenBy(a => a.Id).ToListAsync();
         if (slots.Count == 0)
         {
             logger.LogWarning("No appointment slots found to link demo appointments.");
@@ -110,10 +114,16 @@ internal static class DevelopmentAppointmentSeed
             var docSpecId = d.DoctorSpecialties.FirstOrDefault(ds => ds.IsPrimary)?.SpecialtyId
                 ?? d.DoctorSpecialties.FirstOrDefault()?.SpecialtyId
                 ?? specs[0].Id;
-            p = RealisticDevelopmentSeed.PickPatient(patients, bookedPatients, d.Id, s.SlotDate, patients.IndexOf(p),
-                specs.Single(spec => spec.Id == docSpecId).SpecialtyCode);
+            var specialtyCode = specs.Single(spec => spec.Id == docSpecId).SpecialtyCode;
+            bool HasPatient(DateOnly date) => patients.Any(patient => DemoPatientDevelopmentSeed.Allows(patient, specialtyCode, date)
+                && !bookedPatients.Any(booking => booking.Date == date && booking.PatientId == patient.Id));
+            if (!HasPatient(s.SlotDate))
+                s = slots.Where(slot => slot.DoctorId == d.Id && !slot.IsBooked && slot.SlotDate > s.SlotDate
+                    && !(d.Id == doctors[1 % doctors.Count].Id && slot.SlotDate == approvedLeaveDate))
+                    .OrderBy(slot => slot.SlotDate).ThenBy(slot => slot.StartTime).First(slot => HasPatient(slot.SlotDate));
+            p = RealisticDevelopmentSeed.PickPatient(patients, bookedPatients, d.Id, s.SlotDate, patients.IndexOf(p), specialtyCode, onePerDay: true);
             var patientAppointments = await db.Appointments.Where(a => a.PatientId == p.Id && a.AppointmentDate == s.SlotDate && a.Status != AppointmentStatus.Cancelled).ToListAsync();
-            var available = await db.AppointmentSlots.Where(slot => slot.DoctorId == d.Id && slot.SlotDate == s.SlotDate && !slot.IsBooked).OrderBy(slot => slot.StartTime).ToListAsync();
+            var available = slots.Where(slot => slot.DoctorId == d.Id && slot.SlotDate == s.SlotDate && !slot.IsBooked).OrderBy(slot => slot.StartTime).ToList();
             if (status != AppointmentStatus.Cancelled && available.Count > 0)
             {
                 var stagger = (int)d.Id % available.Count;
@@ -128,6 +138,9 @@ internal static class DevelopmentAppointmentSeed
                 AppointmentCode = code,
                 PatientId = p.Id,
                 DoctorId = d.Id,
+                FacilityId = assignments.Where(assignment => assignment.UserId == d.UserId)
+                    .OrderByDescending(assignment => assignment.Department?.SpecialtyId == docSpecId)
+                    .Select(assignment => assignment.FacilityId).First(),
                 SpecialtyId = docSpecId,
                 AppointmentSlotId = s.Id,
                 AppointmentDate = s.SlotDate,
@@ -323,17 +336,12 @@ internal static class DevelopmentAppointmentSeed
             await CreateApt(patients[i % patients.Count], mainDoc, pastSlots2[i % pastSlots2.Count], AppointmentStatus.Cancelled);
         }
 
-        var todaySlots = await db.AppointmentSlots
-            .Where(s => s.DoctorId == mainDoc.Id && s.SlotDate == today && !s.IsBooked)
-            .OrderBy(s => s.StartTime)
-            .ToListAsync();
-
-        if (todaySlots.Count >= 3)
-        {
-            await CreateApt(patients[0], mainDoc, todaySlots[0], AppointmentStatus.Confirmed);
-            await CreateApt(patients[1], mainDoc, todaySlots[1], AppointmentStatus.Confirmed);
-            await CreateApt(patients[2], mainDoc, todaySlots[2], AppointmentStatus.Confirmed);
-        }
+        var checkInDate = slots.Where(s => s.SlotDate >= today && !s.IsBooked)
+            .OrderBy(s => s.SlotDate).First().SlotDate;
+        var checkInSlots = slots.Where(s => s.SlotDate == checkInDate && !s.IsBooked)
+            .OrderBy(s => s.StartTime).ThenBy(s => s.DoctorId).Take(3).ToList();
+        for (var i = 0; i < checkInSlots.Count; i++)
+            await CreateApt(patients[i], doctors.Single(d => d.Id == checkInSlots[i].DoctorId), checkInSlots[i], AppointmentStatus.Confirmed);
 
         for (int i = 0; i < 6; i++)
         {
