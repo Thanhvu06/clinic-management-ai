@@ -391,6 +391,7 @@ internal static class DevelopmentAppointmentSeed
                 {
                     AppointmentId = pendingAppt.Id,
                     RequestType = AppointmentChangeRequestType.Cancellation,
+                    OriginalAppointmentStatus = pendingAppt.Status,
                     Reason = "Bận chuyến công tác đột xuất tại Hà Nội",
                     Status = AppointmentChangeRequestStatus.Pending,
                     RequestedByUserId = pendingAppt.Patient.UserId ?? adminId1.Id,
@@ -401,12 +402,18 @@ internal static class DevelopmentAppointmentSeed
             var confAppt = await db.Appointments.Include(a => a.Patient).Skip(1).FirstOrDefaultAsync(a => a.Status == AppointmentStatus.Confirmed);
             if (confAppt != null)
             {
-                var rescheduleSlot = futureSlots.FirstOrDefault(s => s.DoctorId == confAppt.DoctorId && !s.IsBooked);
+                var nextWeekStart = confAppt.AppointmentDate.AddDays(7 - ((int)confAppt.AppointmentDate.DayOfWeek + 6) % 7);
+                await DevelopmentScheduleSeed.SeedAsync(db, doctors.Where(d => d.Id == confAppt.DoctorId).ToList(),
+                    dateTimeProvider, logger, nextWeekStart.AddDays(6).DayNumber - today.DayNumber + 1);
+                var rescheduleSlot = await db.AppointmentSlots.Where(s => s.DoctorId == confAppt.DoctorId && !s.IsBooked
+                    && s.SlotDate >= nextWeekStart && s.SlotDate < nextWeekStart.AddDays(7))
+                    .OrderBy(s => s.SlotDate).ThenBy(s => s.StartTime).FirstAsync();
                 db.AppointmentChangeRequests.Add(new AppointmentChangeRequest
                 {
                     AppointmentId = confAppt.Id,
                     RequestType = AppointmentChangeRequestType.Reschedule,
-                    RequestedSlotId = rescheduleSlot?.Id ?? confAppt.AppointmentSlotId,
+                    RequestedSlotId = rescheduleSlot.Id,
+                    OriginalAppointmentStatus = confAppt.Status,
                     Reason = "Xin dời ngày khám sang tuần sau vì việc gia đình",
                     Status = AppointmentChangeRequestStatus.Pending,
                     RequestedByUserId = confAppt.Patient.UserId ?? adminId1.Id,

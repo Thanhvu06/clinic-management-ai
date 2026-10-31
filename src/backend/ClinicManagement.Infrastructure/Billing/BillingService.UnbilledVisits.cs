@@ -176,6 +176,7 @@ public partial class BillingService
 
             result.Add(new UnbilledVisitDto
             {
+                HasPendingPayment = unbilledCount > 0 || unpaidInfo != null,
                 VisitId = v.Id,
                 VisitCode = v.VisitCode,
                 PatientId = v.PatientId,

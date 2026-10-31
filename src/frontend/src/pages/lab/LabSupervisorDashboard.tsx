@@ -6,6 +6,7 @@ import { diagnosticApi } from '../../api/diagnosticApi';
 import { DataTable, EmptyState, InlineError, LoadingState, PageHeader, Pagination } from '../../components/common';
 import type { DiagnosticOrderDto } from '../../types';
 import { diagnosticNotificationTime } from '../../utils/diagnosticLabels';
+import { getApiErrorMessage } from '../../utils/apiError';
 import styles from './LabSupervisorDashboard.module.css';
 
 export const VerificationQueue = ({ dashboard = false }: { dashboard?: boolean }) => {
@@ -19,16 +20,16 @@ export const VerificationQueue = ({ dashboard = false }: { dashboard?: boolean }
         setLoading(true); setError('');
         const queueTask = async () => {
             try {
-                const response = await diagnosticApi.getSharedVerificationQueue({ page, pageSize: 15 });
+                const response = await diagnosticApi.getSharedVerificationQueue({ page, pageSize: 15, ...(dashboard ? { active: true } : {}) });
                 if (signal?.aborted) return;
                 if (!response.success || !response.data) throw new Error(response.message || 'Không thể tải hàng chờ duyệt.');
                 setItems(response.data.items); setTotal(response.data.totalItems); setLoadedAt(Date.now());
             } catch (failure: unknown) {
-                if (!signal?.aborted) setError((failure as { message?: string })?.message || 'Không thể tải hàng chờ duyệt.');
+                if (!signal?.aborted) setError(getApiErrorMessage(failure, (failure as Error)?.message || 'Không thể tải phiếu xét nghiệm.'));
             } finally { if (!signal?.aborted) setLoading(false); }
         };
         await queueTask();
-    }, [page]);
+    }, [page, dashboard]);
     useEffect(() => {
         const controller = new AbortController();
         void Promise.resolve().then(() => { if (!controller.signal.aborted) void load(controller.signal); });
@@ -38,7 +39,8 @@ export const VerificationQueue = ({ dashboard = false }: { dashboard?: boolean }
         const timer = window.setInterval(() => setLoadedAt(Date.now()), 60000);
         return () => window.clearInterval(timer);
     }, []);
-    const minutes = (order: DiagnosticOrderDto) => order.submittedForVerificationAtUtc ? Math.max(0, Math.floor((loadedAt - new Date(order.submittedForVerificationAtUtc).getTime()) / 60000)) : 0;
+    const waitingSince = (order: DiagnosticOrderDto) => order.submittedForVerificationAtUtc || order.orderedAtUtc;
+    const minutes = (order: DiagnosticOrderDto) => waitingSince(order) ? Math.max(0, Math.floor((loadedAt - new Date(waitingSince(order)).getTime()) / 60000)) : 0;
     return <div className={styles.page}>
         <PageHeader title={dashboard ? 'Tổng quan xét nghiệm' : 'Duyệt kết quả CLS'} subtitle={dashboard ? 'Đối chiếu kết quả trong cơ sở được phân công' : 'Duyệt kết quả do bác sĩ khác chỉ định'} actions={<Button disabled={loading} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />{loading ? 'Đang tải...' : 'Làm mới'}</Button>} />
         {loading ? <LoadingState message="Đang tải hàng chờ duyệt..." /> : error ? <InlineError message={error} onRetry={() => void load()} /> : <>
@@ -46,9 +48,9 @@ export const VerificationQueue = ({ dashboard = false }: { dashboard?: boolean }
                 <DataTable ariaLabel="Phiếu chờ duyệt" data={items} keyExtractor={order => order.id} columns={[
                     { header: 'Mã phiếu', accessor: 'orderCode' }, { header: 'Bệnh nhân', accessor: 'patientName' },
                     { header: 'Dịch vụ', accessor: order => <>{order.items.filter(item => item.status !== 'Cancelled').map(item => <div key={item.id}>{item.serviceName}</div>)}{order.items.some(item => item.status !== 'Cancelled' && item.result?.hasCriticalValue) && <Tag className={styles.danger}>Có giá trị nguy hiểm</Tag>}{order.hasDeltaFailure && <Tag color="warning">Lệch delta</Tag>}</> },
-                    { header: 'Người gửi', accessor: order => order.submittedForVerificationByUserName || '—' },
-                    { header: 'Thời gian chờ', accessor: order => <div className={minutes(order) > 60 ? styles.danger : minutes(order) > 30 ? styles.warning : undefined}><div>{order.submittedForVerificationAtUtc ? diagnosticNotificationTime(order.submittedForVerificationAtUtc) : '—'}</div><strong>{minutes(order)} phút</strong>{minutes(order) > 60 ? <div>Chờ quá 60 phút</div> : minutes(order) > 30 ? <div>Chờ quá 30 phút</div> : null}</div> },
-                    { header: 'Thao tác', accessor: order => <Link className={styles.link} to={dashboard ? `/lab/orders/${order.id}` : `/doctor/diagnostic-verification/${order.id}`}>Mở để duyệt</Link> },
+                    { header: 'Trạng thái', accessor: order => order.status === 'Ordered' ? 'Chờ thực hiện' : 'Đang xử lý' },
+                    { header: 'Thời gian chờ', accessor: order => <div className={minutes(order) > 60 ? styles.danger : minutes(order) > 30 ? styles.warning : undefined}><div>{waitingSince(order) ? diagnosticNotificationTime(waitingSince(order)) : '—'}</div><strong>{minutes(order)} phút</strong>{minutes(order) > 60 ? <div>Chờ quá 60 phút</div> : minutes(order) > 30 ? <div>Chờ quá 30 phút</div> : null}</div> },
+                    { header: 'Thao tác', accessor: order => order.verificationStatus === 'Pending' ? <Link className={styles.link} to={dashboard ? `/lab/orders/${order.id}` : `/doctor/diagnostic-verification/${order.id}`}>Mở để duyệt</Link> : '—' },
                 ]} />
                 <Pagination page={page} totalPages={Math.ceil(total / 15)} totalRecords={total} onPageChange={setPage} />
             </div>}

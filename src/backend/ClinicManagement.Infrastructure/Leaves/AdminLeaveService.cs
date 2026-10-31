@@ -111,6 +111,7 @@ public class AdminLeaveService : IAdminLeaveService
 
             // Check affected active appointments
             var affectedAppointments = await _dbContext.Appointments
+                .Include(a => a.Patient)
                 .Where(a => a.DoctorId == leave.DoctorId 
                          && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status)
                          && a.AppointmentDate >= DateOnly.FromDateTime(leave.StartDateTime.Date)
@@ -127,10 +128,12 @@ public class AdminLeaveService : IAdminLeaveService
 
             if (strictlyAffected.Count > 0)
             {
-                var codes = string.Join(", ", strictlyAffected.Take(10).Select(a => a.AppointmentCode));
-                var remaining = strictlyAffected.Count > 10 ? $" và {strictlyAffected.Count - 10} lịch khác" : string.Empty;
+                var patientUserIds = strictlyAffected.Where(a => a.Patient.UserId.HasValue).Select(a => a.Patient.UserId!.Value).Distinct().ToList();
+                var names = await _dbContext.Users.Where(u => patientUserIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName);
+                var details = string.Join("; ", strictlyAffected.Select(a =>
+                    $"{a.AppointmentCode} ({a.AppointmentDate:dd/MM/yyyy} {a.StartTime:HH:mm}–{a.EndTime:HH:mm}, {(a.Patient.UserId.HasValue && names.TryGetValue(a.Patient.UserId.Value, out var name) ? name : a.Patient.FullName ?? "Bệnh nhân")})"));
                 throw new BusinessException("LEAVE_HAS_AFFECTED_APPOINTMENTS",
-                    $"Lịch nghỉ trùng với các lịch hẹn chưa hoàn thành: {codes}{remaining}. Cần giải quyết lịch hẹn trước khi duyệt.");
+                    $"Có {strictlyAffected.Count} lịch hẹn bị ảnh hưởng: {details}. Cần giải quyết lịch hẹn trước khi duyệt.");
             }
 
             leave.Status = DoctorLeaveRequestStatus.Approved;

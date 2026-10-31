@@ -392,7 +392,7 @@ public class ChangeRequestService : IChangeRequestService
             {
                 var request = await _dbContext.AppointmentChangeRequests
                     .Include(r => r.Appointment)
-                    .FirstOrDefaultAsync(r => r.Id == requestId && r.RequestedByUserId == userId);
+                    .FirstOrDefaultAsync(r => r.Id == requestId && r.Appointment.Patient.UserId == userId);
 
                 if (request == null) throw new NotFoundException("Yêu cầu không tồn tại hoặc không có quyền rút.");
 
@@ -400,7 +400,7 @@ public class ChangeRequestService : IChangeRequestService
                     throw new ConflictException("CHANGE_REQUEST_ALREADY_PROCESSED", "Yêu cầu thay đổi đã được xử lý hoặc đã rút.");
 
                 var reqAffected = await _dbContext.AppointmentChangeRequests
-                    .Where(r => r.Id == requestId && r.RequestedByUserId == userId && r.Status == AppointmentChangeRequestStatus.Pending)
+                    .Where(r => r.Id == requestId && r.Appointment.Patient.UserId == userId && r.Status == AppointmentChangeRequestStatus.Pending)
                     .ExecuteUpdateAsync(r => r
                         .SetProperty(x => x.Status, AppointmentChangeRequestStatus.Withdrawn)
                         .SetProperty(x => x.ProcessedByUserId, userId)
@@ -464,7 +464,7 @@ public class ChangeRequestService : IChangeRequestService
                     join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
                     join rs in _dbContext.AppointmentSlots on cr.RequestedSlotId equals rs.Id into rsg
                     from reqSlot in rsg.DefaultIfEmpty()
-                    where cr.RequestedByUserId == userId
+                    where p.UserId == userId
                     select new ChangeRequestDto
                     {
                         Id = cr.Id,

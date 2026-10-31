@@ -170,6 +170,7 @@ export interface PagedBillingResult<T> {
 }
 
 export interface UnbilledVisitDto {
+    hasPendingPayment?: boolean;
     visitId: number;
     visitCode: string;
     patientId: number;

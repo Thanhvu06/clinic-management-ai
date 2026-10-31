@@ -1,5 +1,6 @@
 import { ChatConsultationLink } from '../../components/chat/ChatConsultationLink';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { isBookingRejected } from './bookingRejection';
 import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import React, { useState, useEffect, useRef } from "react";
 import { BookingExpiryHeader } from './BookingExpiryHeader';
@@ -753,14 +754,7 @@ export const BookAppointment: React.FC = () => {
                 response?: { status?: number; data?: { errorCode?: string; message?: string } };
             };
             const errorCode = apiErr?.response?.data?.errorCode || apiErr?.errorCode;
-            const status = apiErr?.response?.status;
-            const isDeterministicRejection =
-                errorCode === "SLOT_ALREADY_BOOKED" ||
-                errorCode === "PATIENT_TIME_CONFLICT" ||
-                errorCode === "DOCTOR_NOT_AVAILABLE" ||
-                status === 400 ||
-                status === 409 ||
-                status === 422;
+            const isDeterministicRejection = isBookingRejected(err);
 
             // GUARD: Do NOT mutate attempt state if context changed while request was in-flight
             if (!isCurrentContext()) {
@@ -786,7 +780,7 @@ export const BookAppointment: React.FC = () => {
 
             let msg = getApiErrorMessage(apiErr, "Có lỗi xảy ra khi đặt lịch.");
             if (errorCode === "SLOT_ALREADY_BOOKED") {
-                msg = "Khung giờ này vừa được đặt bởi người khác. Vui lòng chọn giờ khác.";
+                msg = getApiErrorMessage(apiErr, "Khung giờ này vừa được đặt bởi người khác. Vui lòng chọn giờ khác.");
                 setPageSlotId("");
                 setActiveDraft(previous => previous ? {
                     ...previous,
@@ -799,7 +793,7 @@ export const BookAppointment: React.FC = () => {
                 } : previous);
                 setStep(3);
             } else if (errorCode === "PATIENT_TIME_CONFLICT") {
-                msg = "Bạn đã có một lịch khám khác trùng vào khung giờ này.";
+                msg = getApiErrorMessage(apiErr, "Bạn đã có một lịch khám khác trùng vào khung giờ này.");
                 setPageSlotId("");
                 setActiveDraft(previous => previous ? {
                     ...previous,
@@ -812,7 +806,7 @@ export const BookAppointment: React.FC = () => {
                 } : previous);
                 setStep(3);
             } else if (errorCode === "DOCTOR_NOT_AVAILABLE") {
-                msg = "Bác sĩ không có ca trực hoặc nghỉ phép vào giờ này.";
+                msg = getApiErrorMessage(apiErr, "Bác sĩ không có ca trực hoặc nghỉ phép vào giờ này.");
                 setPageSlotId("");
                 setActiveDraft(previous => previous ? {
                     ...previous,

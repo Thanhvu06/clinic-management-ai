@@ -538,7 +538,7 @@ export const ReceptionBilling: React.FC = () => {
             accessor: (v) => (
                 <StatusBadge
                     status={v.status}
-                    label={getVisitStatusLabel(v.status)}
+                    label={v.status === 'InPharmacy' && (v.hasPendingPayment ?? v.unbilledItemCount > 0) ? 'Chờ thanh toán' : getVisitStatusLabel(v.status)}
                 />
             ),
         },

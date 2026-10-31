@@ -14,12 +14,15 @@ public partial class DoctorAppointmentService
 
     private async Task RecordCompletionAuditAsync(Guid actor, long? appointmentId, long? visitId, HashSet<long> issuedBefore)
     {
+        var code = visitId.HasValue
+            ? await _dbContext.PatientVisits.Where(v => v.Id == visitId).Select(v => v.VisitCode).SingleAsync()
+            : await _dbContext.Appointments.Where(a => a.Id == appointmentId).Select(a => a.AppointmentCode).SingleAsync();
         _dbContext.SystemAuditLogs.Add(new SystemAuditLog
         {
             UserId = actor, Action = "COMPLETE_CONSULTATION",
             EntityName = visitId.HasValue ? "PatientVisit" : "Appointment",
             EntityId = (visitId ?? appointmentId)!.Value.ToString(),
-            Description = "Bác sĩ hoàn tất khám", CreatedAt = _dateTimeProvider.UtcNow
+            Description = $"Bác sĩ hoàn tất khám {(visitId.HasValue ? "lượt" : "lịch hẹn")} {code}", CreatedAt = _dateTimeProvider.UtcNow
         });
         var prescriptions = await _dbContext.Prescriptions.Where(p =>
             (visitId.HasValue && p.PatientVisitId == visitId || appointmentId.HasValue && p.AppointmentId == appointmentId)).ToListAsync();

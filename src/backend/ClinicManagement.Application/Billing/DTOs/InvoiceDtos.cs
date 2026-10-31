@@ -90,6 +90,7 @@ public class CreateVisitInvoiceRequest
 
 public class UnbilledVisitDto
 {
+    public bool HasPendingPayment { get; set; }
     public long VisitId { get; set; }
     public string VisitCode { get; set; } = string.Empty;
     public long PatientId { get; set; }
