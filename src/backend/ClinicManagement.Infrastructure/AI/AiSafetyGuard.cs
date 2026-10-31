@@ -9,7 +9,8 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
 {
     private static readonly string[] EmergencyPhrases =
     {
-        "đau ngực", "đau thắt ngực", "khó thở nặng", "khó thở", "không thở được", "không cầm máu", "ngất xỉu", "ngất", "bất tỉnh",
+        "đau ngực", "đau thắt ngực", "tức ngực", "đau tức ngực", "nặng ngực", "đè ép ngực", "đau ngực trái", "khó thở khi nằm",
+        "khó thở nặng", "khó thở", "không thở được", "không cầm máu", "ngất xỉu", "ngất", "bất tỉnh",
         "dấu hiệu đột quỵ", "méo miệng", "yếu liệt nửa người", "co giật", "chảy máu không cầm",
         "chảy máu nhiều", "sốc phản vệ", "dị ứng nặng", "tự tử", "muốn tự sát", "cấp cứu thai", "thai kỳ khẩn cấp",
         "trẻ tím tái", "trẻ khó thở", "tím tái", "trẻ co giật", "uống quá liều thuốc", "quá liều thuốc",
@@ -44,20 +45,30 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
 
     private static readonly HashSet<char> ClauseBoundaries = new(".!?;:,\n\r".ToCharArray());
 
+    private static readonly HashSet<string> ChestPainFillers = new(StringComparer.Ordinal)
+    {
+        "tuc", "that", "nhoi", "nang", "am", "i", "du", "doi", "nhe", "vung", "ben", "trai", "phai", "o"
+    };
+
     public AiSafetyGuardResult Inspect(string? message)
     {
         var normalized = NormalizePreservingDiacritics(message);
         if (string.IsNullOrWhiteSpace(normalized)) return new AiSafetyGuardResult();
 
         var tokens = Tokenize(normalized);
+        var chestPainMatches = FindChestPainMatches(normalized, tokens);
         foreach (var phrase in EmergencyPhrases)
         {
             foreach (var match in FindPhraseMatches(tokens, phrase))
             {
-                if (!IsNegated(normalized, tokens, match.StartTokenIndex))
+                var chestStart = chestPainMatches.FirstOrDefault(chest => chest.StartTokenIndex <= match.StartTokenIndex && chest.EndTokenIndex >= match.EndTokenIndex);
+                if (!IsNegated(normalized, tokens, chestStart?.StartTokenIndex ?? match.StartTokenIndex))
                     return new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = phrase };
             }
         }
+
+        if (chestPainMatches.Any(match => !IsNegated(normalized, tokens, match.StartTokenIndex)))
+            return new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = "đau ngực" };
 
         if (ContainsPromptInjectionNormalized(normalized))
             return new AiSafetyGuardResult { IsPromptInjection = true, MatchedCategory = "prompt_injection" };
@@ -174,9 +185,31 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
             }
 
             if (match)
-                matches.Add(new PhraseMatch(start));
+                matches.Add(new PhraseMatch(start, start + phraseTokens.Length - 1));
         }
 
+        return matches;
+    }
+
+    private static List<PhraseMatch> FindChestPainMatches(string text, IReadOnlyList<TextToken> tokens)
+    {
+        var matches = new List<PhraseMatch>();
+        var pain = Tokenize("đau")[0];
+        var chest = Tokenize("ngực")[0];
+        for (var start = 0; start < tokens.Count; start++)
+        {
+            if (!MatchesSyllable(tokens[start], pain)) continue;
+            for (var end = start + 1; end < tokens.Count && end <= start + 4; end++)
+            {
+                if (HasClauseBoundaryBetween(text, tokens[start].EndIndex, tokens[end].StartIndex)) break;
+                if (MatchesSyllable(tokens[end], chest))
+                {
+                    matches.Add(new PhraseMatch(start, end));
+                    break;
+                }
+                if (!ChestPainFillers.Contains(tokens[end].Comparison)) break;
+            }
+        }
         return matches;
     }
 
@@ -222,5 +255,5 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
 
     private sealed record TextToken(string Value, string Comparison, int StartIndex, int EndIndex);
 
-    private sealed record PhraseMatch(int StartTokenIndex);
+    private sealed record PhraseMatch(int StartTokenIndex, int EndTokenIndex);
 }
