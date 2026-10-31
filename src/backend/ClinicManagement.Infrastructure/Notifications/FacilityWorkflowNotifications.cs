@@ -10,7 +10,7 @@ internal static class FacilityWorkflowNotifications
 {
     internal static async Task SendAsync(AppDbContext db, INotificationService notifications, long facilityId,
         string role, NotificationType type, string message, string route, string entity, long entityId,
-        string eventKey, CancellationToken cancellationToken = default)
+        string eventKey, CancellationToken cancellationToken = default, string? title = null)
     {
         var recipients = await (from assignment in db.StaffFacilityAssignments
             join user in db.Users on assignment.UserId equals user.Id
@@ -19,7 +19,7 @@ internal static class FacilityWorkflowNotifications
         foreach (var recipient in recipients)
             await notifications.CreateNotificationAsync(new CreateNotificationRequest
             {
-                UserId = recipient, Type = type, Title = message, Message = message, Route = route,
+                UserId = recipient, Type = type, Title = title ?? message, Message = message, Route = route,
                 RelatedEntityType = entity, RelatedEntityId = entityId.ToString(),
                 DedupeKey = $"{eventKey}_{entityId}_{recipient}"
             }, cancellationToken);

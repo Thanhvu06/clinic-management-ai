@@ -33,7 +33,7 @@ export const diagnosticApi = {
     getVerificationStats: async (): Promise<ApiResponse<import('../types/diagnostic').VerificationStatsDto>> => {
         return axiosClient.get<any, ApiResponse<import('../types/diagnostic').VerificationStatsDto>>('/diagnostic-verification/stats');
     },
-    getSharedVerificationQueue: async (params: { page?: number; pageSize?: number } = {}): Promise<ApiResponse<PagedResult<DiagnosticOrderDto>>> => {
+    getSharedVerificationQueue: async (params: { page?: number; pageSize?: number; active?: boolean } = {}): Promise<ApiResponse<PagedResult<DiagnosticOrderDto>>> => {
         return axiosClient.get<any, ApiResponse<PagedResult<DiagnosticOrderDto>>>('/diagnostic-verification/queue', { params });
     },
     getVerificationOrder: async (orderId: number): Promise<ApiResponse<DiagnosticOrderDto>> => {

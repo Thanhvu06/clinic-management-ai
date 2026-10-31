@@ -25,7 +25,7 @@ public partial class BillingService
             await FacilityWorkflowNotifications.SendAsync(_dbContext, _notificationService, facilityId.Value, "Pharmacist",
                 NotificationType.Prescription,
                 $"Đơn {BusinessDisplay.PrescriptionCode(prescription, _dateTimeProvider)} đã thanh toán, chờ cấp phát",
-                "/pharmacy/prescriptions", "Prescription", prescription.Id, "prescription_paid", cancellationToken);
+                "/pharmacy/prescriptions", "Prescription", prescription.Id, "prescription_paid", cancellationToken, title: "Đơn thuốc chờ cấp phát");
         }
     }
 }

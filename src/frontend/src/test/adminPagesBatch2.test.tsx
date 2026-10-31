@@ -187,7 +187,7 @@ describe('admin batch 2 regression', () => {
         await userEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
         await userEvent.click(screen.getByRole('button', { name: 'Duyệt yêu cầu' }));
         const modal = screen.getByRole('dialog');
-        expect(await within(modal).findByText('Bác sĩ đang có lịch hẹn bị ảnh hưởng. Hãy để lễ tân xử lý các lịch này trước khi duyệt nghỉ.')).toBeInTheDocument();
+        expect(await within(modal).findByText('Backend message')).toBeInTheDocument();
         expect(within(modal).getByRole('alert')).toHaveClass('ant-alert-warning');
         expect(dialog.showAlert).not.toHaveBeenCalled();
     });

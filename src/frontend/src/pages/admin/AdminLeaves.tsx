@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axiosClient from '../../api/axiosClient';
+import { getApiErrorMessage } from '../../utils/apiError';
 import type { ApiResponse } from '../../types';
 import { User, CheckCircle, XCircle, Eye } from 'lucide-react';
 import { Alert, Button, Descriptions, Form, Input, Modal, Select, Space } from 'antd';
@@ -103,7 +104,7 @@ export const AdminLeaves: React.FC = () => {
                 }
             } catch (error: any) {
                 if (error?.errorCode === 'LEAVE_HAS_AFFECTED_APPOINTMENTS') {
-                    setFormError('Bác sĩ đang có lịch hẹn bị ảnh hưởng. Hãy để lễ tân xử lý các lịch này trước khi duyệt nghỉ.');
+                    setFormError(getApiErrorMessage(error, error?.message || 'Không thể tải chi tiết lịch hẹn bị ảnh hưởng.'));
                     setFormErrorType('warning');
                 } else {
                     setFormError(error?.message || 'Có lỗi xảy ra.');

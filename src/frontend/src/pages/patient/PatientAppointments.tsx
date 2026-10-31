@@ -101,6 +101,7 @@ export const PatientAppointments: React.FC = () => {
             } else {
                 setError(appRes.message || "Không thể tải danh sách lịch hẹn.");
             }
+            await fetchPendingRequests();
         } catch (err: any) {
             setError(err?.message || "Không thể tải danh sách lịch hẹn.");
         }
@@ -123,7 +124,6 @@ export const PatientAppointments: React.FC = () => {
 
     const refreshData = () => {
         void fetchData();
-        void fetchPendingRequests();
     };
 
     useEffect(() => {
@@ -409,12 +409,13 @@ export const PatientAppointments: React.FC = () => {
                 <EmptyState icon={<CalendarDays size={48} />} title="Bạn chưa có lịch hẹn nào" description="Hãy đặt lịch khám để được bác sĩ tư vấn nhé." action={<Button type="primary" onClick={() => navigate('/patient/book')}>Đặt lịch ngay</Button>} />
             ) : <div className={styles.appointments}>
                 {filtered.map(app => {
-                    const hasPendingReq = app.status === 'PendingReschedule' || app.status === 'PendingCancellation';
                     const pendingReq = pendingRequests[app.id];
+                    const status = pendingReq ? pendingReq.requestType === 'Reschedule' ? 'PendingReschedule' : 'PendingCancellation' : app.status;
+                    const hasPendingReq = status === 'PendingReschedule' || status === 'PendingCancellation';
                     return <Card key={app.id} id={`appointment-card-${app.id}`} className={highlightedAppId === app.id ? styles.highlightedCard : styles.appointmentCard}>
                         <div className={styles.cardHeader}>
                             <div>
-                                <div className={styles.identity}><strong>{app.appointmentCode}</strong>{getStatusBadge(app.status)}</div>
+                                <div className={styles.identity}><strong>{app.appointmentCode}</strong>{getStatusBadge(status)}</div>
                                 <div className={styles.schedule}>
                                     <span className={styles.infoLine}><CalendarDays size={16} /><span>Ngày: <strong>{formatDateOnly(app.appointmentDate)}</strong></span></span>
                                     <span className={styles.infoLine}><Clock size={16} /><span>Giờ: <strong>{app.startTime?.substring(0, 5)} - {app.endTime?.substring(0, 5)}</strong></span></span>
@@ -422,14 +423,14 @@ export const PatientAppointments: React.FC = () => {
                             </div>
                             <div className={styles.actions}>
                                 <Button icon={<HistoryIcon size={14} />} onClick={() => handleViewHistory(app.id, app.appointmentCode)}>Lịch sử</Button>
-                                {(app.status === 'Pending' || app.status === 'Confirmed') && <>
+                                {!hasPendingReq && (app.status === 'Pending' || app.status === 'Confirmed') && <>
                                     <Button icon={<Calendar size={14} />} onClick={() => handleRescheduleOpen(app)}>Đổi lịch</Button>
                                     <Button danger icon={<XCircle size={14} />} onClick={() => handleCancelOpen(app)}>Hủy lịch</Button>
                                 </>}
                                 {hasPendingReq && <Button icon={<RotateCcw size={14} />} onClick={() => handleWithdraw(app)} disabled={withdrawingId === app.id}>{withdrawingId === app.id ? 'Đang xử lý...' : 'Rút yêu cầu'}</Button>}
                             </div>
                         </div>
-                        {hasPendingReq && <Alert type="warning" showIcon className={styles.pendingAlert} title={<span>Lịch hẹn đang có yêu cầu <strong>{app.status === 'PendingReschedule' ? 'đổi lịch' : 'hủy lịch'}</strong> chờ lễ tân duyệt.{pendingReq?.reason && <> <span className={styles.requestReason}>(Lý do: {pendingReq.reason})</span></>}</span>} />}
+                        {hasPendingReq && <Alert type="warning" showIcon className={styles.pendingAlert} title={<span>Lịch hẹn đang có yêu cầu <strong>{status === 'PendingReschedule' ? 'đổi lịch' : 'hủy lịch'}</strong> chờ lễ tân duyệt.{pendingReq?.reason && <> <span className={styles.requestReason}>(Lý do: {pendingReq.reason})</span></>}</span>} />}
                         <div className={styles.details}>
                             <div>
                                 <h3 className={styles.sectionTitle}>Thông tin khám</h3>

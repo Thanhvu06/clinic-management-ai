@@ -192,7 +192,7 @@ public class PackagePhoneAndLeaveGuardsTests(CustomWebApplicationFactory factory
         Assert.Equal("LEAVE_HAS_AFFECTED_APPOINTMENTS", body.GetProperty("errorCode").GetString());
         var message = body.GetProperty("message").GetString()!;
         for (var i = 0; i < Math.Min(count, 10); i++) Assert.Contains(prefix + i.ToString("D2"), message);
-        if (count > 10) { Assert.DoesNotContain(prefix + "10", message); Assert.Contains($"và {count - 10} lịch khác", message); }
+        if (count > 10) { Assert.Contains(prefix + "10", message); Assert.Contains($"Có {count} lịch hẹn bị ảnh hưởng", message); }
     }
 
     [Theory]

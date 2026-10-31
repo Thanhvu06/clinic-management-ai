@@ -17,8 +17,10 @@ public class DiagnosticVerificationController(IDiagnosticWorkflowService workflo
         Ok(ApiResponse<VerificationStatsDto>.Ok(await workflowService.GetVerificationStatsAsync()));
 
     [HttpGet("queue")]
-    public async Task<IActionResult> Queue([FromQuery] int page = 1, [FromQuery] int pageSize = 15) =>
-        Ok(ApiResponse<PagedResult<DiagnosticOrderDto>>.Ok(await workflowService.GetVerificationQueueAsync(page, pageSize)));
+    public async Task<IActionResult> Queue([FromQuery] int page = 1, [FromQuery] int pageSize = 15, [FromQuery] bool active = false) =>
+        Ok(ApiResponse<PagedResult<DiagnosticOrderDto>>.Ok(active
+            ? await workflowService.GetLabActiveOrdersAsync(page, pageSize)
+            : await workflowService.GetVerificationQueueAsync(page, pageSize)));
 
     [HttpGet("orders/{orderId}")]
     public async Task<IActionResult> Order(long orderId) =>

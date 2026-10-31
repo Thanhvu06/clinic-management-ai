@@ -827,6 +827,9 @@ public class AppointmentService : IAppointmentService
         // the booking binding independent of a later check-in department.
         var facilities = await AppointmentFacilityResolver.GetEligibleAsync(_dbContext, request.DoctorId, request.SpecialtyId);
 
+        if (facilities.Count == 0)
+            throw new BusinessException("FACILITY_NOT_AVAILABLE", "Không có cơ sở khả dụng cho bác sĩ và chuyên khoa đã chọn.");
+
         if (request.FacilityId.HasValue)
         {
             if (request.FacilityId.Value <= 0 || !facilities.Any(x => x.Id == request.FacilityId.Value))
