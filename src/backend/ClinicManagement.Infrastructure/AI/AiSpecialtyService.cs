@@ -325,7 +325,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         var passiveDraftVersion = ResolveDraftVersion(request.DraftVersion, hasSubstantiveChanges: false);
 
         // 3.1 Unclear or Out-of-Scope: Politeness Guardian (Prevents dropping into Degraded or polluting Reason)
-        if (!localClassification.IsClear || resolvedIntent == AiChatIntentTypes.UnclearOrOutOfScope)
+        if (SymptomSpecialtyRules.RequiresClarification(!localClassification.IsClear || resolvedIntent == AiChatIntentTypes.UnclearOrOutOfScope, cleanMessage))
         {
             var unclearResponse = new AiChatResponseDto
             {
@@ -2913,7 +2913,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         var nextDraftVersion = ResolveDraftVersion(request.DraftVersion);
         string userMessage = providerStatus switch
         {
-            "Disabled" => "Tính năng trợ lý AI hiện đang tạm bảo trì hoặc chưa được cấu hình. Hệ thống đã chuyển sang chế độ hỗ trợ cơ bản để bạn có thể tra cứu và đặt lịch trực tiếp.",
+            "Disabled" => "Mình chưa xác định được chuyên khoa phù hợp từ mô tả này. Bạn có thể chọn chuyên khoa thủ công hoặc xem danh sách bác sĩ.",
             "RateLimited" => "Dịch vụ AI đang nhận quá nhiều yêu cầu vào thời điểm này. Hệ thống đã chuyển sang chế độ hỗ trợ cơ bản để bạn có thể tiếp tục tra cứu và đặt lịch.",
             "AuthFailure" or "InvalidModelOrEndpoint" => "Dịch vụ AI đang gặp sự cố cấu hình xác thực. Hệ thống chuyển sang chế độ hỗ trợ cơ bản để bạn tra cứu và đặt lịch trực tiếp.",
             "Timeout" => "Dịch vụ AI phản hồi quá lâu nên hệ thống đã dừng chờ và chuyển sang chế độ hỗ trợ cơ bản. Bản nháp đặt lịch của bạn vẫn được giữ nguyên.",
@@ -3100,7 +3100,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             }
         }
 
-        return WithDraftVersionSync(response, nextDraftVersion);
+        return WithDraftVersionSync(await SymptomSpecialtyRules.ApplyAsync(_dbContext, response, cleanMessage, cancellationToken), nextDraftVersion);
     }
 
 

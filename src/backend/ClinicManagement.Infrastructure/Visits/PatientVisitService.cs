@@ -137,6 +137,18 @@ public partial class PatientVisitService : IPatientVisitService
         if (appointment.Status == AppointmentStatus.Completed)
             throw new BusinessException("APPOINTMENT_COMPLETED", "Lịch hẹn đã hoàn thành khám.");
 
+        if (appointment.Status != AppointmentStatus.Confirmed)
+        {
+            var code = appointment.Status switch
+            {
+                AppointmentStatus.Pending => "CHECKIN_APPOINTMENT_PENDING",
+                AppointmentStatus.NoShow => "CHECKIN_APPOINTMENT_NO_SHOW",
+                AppointmentStatus.CheckedIn => "CHECKIN_VISIT_MISSING",
+                _ => "CHECKIN_APPOINTMENT_NOT_CONFIRMED"
+            };
+            throw new BusinessException(code, "Chỉ có thể tiếp nhận lịch hẹn đã xác nhận và chưa có lượt khám đang hoạt động.");
+        }
+
         // Appointments created before the facility binding migration can only
         // be repaired when one facility is provably eligible. Ambiguous legacy
         // rows stay fail-closed instead of being assigned to an arbitrary
@@ -156,6 +168,8 @@ public partial class PatientVisitService : IPatientVisitService
             department = await _dbContext.Departments
                 .Include(d => d.Facility)
                 .FirstOrDefaultAsync(d => d.Id == request.DepartmentId.Value && d.FacilityId == appointmentFacilityId.Value && d.IsActive, cancellationToken);
+            if (department == null || department.SpecialtyId != appointment.SpecialtyId)
+                throw new BusinessException("CHECKIN_DEPARTMENT_INVALID", "Khoa được chọn không hoạt động, không thuộc cơ sở hoặc không đúng chuyên khoa của lịch hẹn.");
         }
 
         if (department == null)
@@ -167,14 +181,7 @@ public partial class PatientVisitService : IPatientVisitService
 
         if (department == null)
         {
-            department = await _dbContext.Departments
-                .Include(d => d.Facility)
-                .FirstOrDefaultAsync(d => d.FacilityId == appointmentFacilityId.Value && d.IsActive, cancellationToken);
-        }
-
-        if (department == null)
-        {
-            throw new NotFoundException("Khoa tiếp nhận không tồn tại hoặc đã ngừng hoạt động.");
+            throw new BusinessException("CHECKIN_SPECIALTY_DEPARTMENT_UNAVAILABLE", "Cơ sở của lịch hẹn không có khoa đang hoạt động đúng chuyên khoa; không thể tiếp nhận.");
         }
 
         var facilityId = appointmentFacilityId.Value;
@@ -189,6 +196,8 @@ public partial class PatientVisitService : IPatientVisitService
         {
             room = await _dbContext.Rooms
                 .FirstOrDefaultAsync(r => r.Id == request.RoomId.Value && r.DepartmentId == department.Id && r.IsActive, cancellationToken);
+            if (room == null)
+                throw new BusinessException("CHECKIN_ROOM_INVALID", "Phòng được chọn không tồn tại, đã ngừng hoạt động hoặc không thuộc khoa tiếp nhận.");
         }
 
         var assignedDoctorId = request.AssignedDoctorId ?? appointment.DoctorId;
