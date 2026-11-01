@@ -61,6 +61,21 @@ export function classifyStaffTypedIntent(role: string, text: string, menuCodes?:
     const tokens = typedTokens(text);
     const has: Has = (phrase, fuzzy = true) => findPhrase(tokens, phrase, fuzzy) >= 0;
     const any = (phrases: string[]) => phrases.some(phrase => has(phrase));
+    const normalized = tokens.join(' ');
+    if (role === 'Receptionist' && (
+        (/\b(?:yeu cau|de nghi)\b/.test(normalized) && /\b(?:doi|huy)\b.*\blich\b/.test(normalized)) ||
+        (/\b(?:hoa don|bien lai)\b/.test(normalized) && /\b(?:chua thanh toan|cho thanh toan|con no|unpaid)\b/.test(normalized))
+    )) return null;
+    if (role === 'Pharmacist' && (
+        (/\blo\b/.test(normalized) && /\b(?:het han|han dung)\b/.test(normalized)) ||
+        /\b(?:con|ton)\s+(?:lai\s+)?(?:bao nhieu|may)\b/.test(normalized)
+    )) return null;
+    if (role === 'Admin' && (
+        (/\bdoanh thu\b/.test(normalized) && /\b\d+\s+ngay\b/.test(normalized)) ||
+        (/\bbac si\b/.test(normalized) && /\b(?:hoat dong|dang lam viec)\b/.test(normalized)) ||
+        (/\bnghi phep\b/.test(normalized) && /\b(?:cho|pending|chua duyet)\b/.test(normalized)) ||
+        /\b(?:xoa|sua|cap nhat|chinh sua|vo hieu hoa)\b|\b(?:khoa|mo khoa)\s+(?:tai khoan|bac si|nhan vien|nguoi dung)\b/.test(normalized)
+    )) return null;
     // "How do I…" questions are not data lookups.
     if (has('cach', false) || has('the nao', false) || has('huong dan')) return null;
 

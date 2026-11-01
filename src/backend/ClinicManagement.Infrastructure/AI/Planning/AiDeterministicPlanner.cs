@@ -186,6 +186,9 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
             foreignAlias = true;
         }
 
+        var accuracyDecision = AiCopilotAccuracyRouting.Plan(context.Role, text);
+        if (accuracyDecision is not null) return accuracyDecision;
+
         var roleDecision = context.Role switch
         {
             AiActorRole.Receptionist => PlanReception(text),
@@ -437,6 +440,7 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
         foreach (Match match in writePattern.Matches(text))
         {
             var prefix = text[..match.Index].TrimEnd();
+            if (match.Value == "thuc hien" && Regex.IsMatch(prefix, @"\b(?:cho|chua|can)\s*$")) continue;
             if (Regex.IsMatch(prefix, @"(?:\bkhong\s+phai|\bkhong)\s*$", RegexOptions.CultureInvariant))
                 continue;
             return true;

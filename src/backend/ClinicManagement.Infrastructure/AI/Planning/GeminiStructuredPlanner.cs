@@ -31,7 +31,8 @@ public sealed class GeminiStructuredPlanner : IAiStructuredPlanner
         if (!_health.CanAttempt())
             return Failed(AiProviderStatusContract.Unavailable, AiProviderStatusContract.FailureCircuitOpen, false, false);
 
-        var allowed = request.AllowedToolNames.Where(AiPlannerPolicy.IsAllowed).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var deterministicTools = AiRoleToolCatalog.DeterministicReadDefinitions.Select(tool => tool.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var allowed = request.AllowedToolNames.Where(AiPlannerPolicy.IsAllowed).Where(name => !deterministicTools.Contains(name)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var planningDefinitions = request.AllowedTools.Count > 0
             ? request.AllowedTools
             : request.AllowedToolNames.Select(name => new AiToolDefinition { Name = name }).ToArray();

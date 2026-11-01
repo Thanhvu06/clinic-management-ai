@@ -33,7 +33,9 @@ public sealed partial class RoleCopilotToolHandler
                 intakeStatus = q.PatientVisitId.HasValue ? "Đã tiếp nhận" : "Chưa tiếp nhận"
             }).ToList();
         var received = items.Count(q => q.intakeStatus == "Đã tiếp nhận");
-        return Completed(items, "doctor_queue", $"Bàn làm việc của bạn có {items.Count} lượt: {received} đã tiếp nhận, {items.Count - received} chưa tiếp nhận.");
+        var statuses = string.Join(", ", items.GroupBy(q => q.Status).Select(group => $"{group.Key}: {group.Count()}"));
+        return Completed(items, "doctor_queue", $"Bàn làm việc của bạn có {items.Count} lượt: {received} đã tiếp nhận, {items.Count - received} chưa tiếp nhận." +
+            (items.Count > 0 ? $" {statuses}." : ""));
     }
 
     private async Task<AiToolExecutionResult> GetPharmacyQueueAsync(AiToolExecutionContext context, CancellationToken cancellationToken)

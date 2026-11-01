@@ -206,7 +206,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
         }
     }
 
-    private static IQueryable<DiagnosticOrder> WhereTechnicianFacilityScope(
+    internal static IQueryable<DiagnosticOrder> WhereTechnicianFacilityScope(
         IQueryable<DiagnosticOrder> query,
         IReadOnlyCollection<long> facilityIds)
     {

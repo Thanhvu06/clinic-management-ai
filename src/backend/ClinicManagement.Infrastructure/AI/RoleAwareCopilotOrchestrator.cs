@@ -295,7 +295,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 hasPrescriptionResource),
             Cards = grounded.Cards,
             Sources = grounded.Sources,
-            AvailableTools = ToolsForUi(tools),
+            AvailableTools = ToolsForUi(tools, providerWasCalled),
             ProviderFailureCode = providerFailureCode,
             ExecutionMode = outputBlock is null ? executionMode : AiProviderStatusContract.ExecutionManualHandoff,
             FallbackActive = outputBlock != null || executionMode != AiProviderStatusContract.ExecutionProviderAssisted,
@@ -404,6 +404,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
     private static IReadOnlyList<AiToolDefinition> ToolsForRole(AiActorRole role)
     {
         var roleTools = AiRoleToolCatalog.Definitions
+            .Concat(AiRoleToolCatalog.DeterministicReadDefinitions)
             .Where(x => x.AllowedRoles.Contains(role));
 
         // Patient read tools are registered by the patient dispatcher, not by
@@ -425,8 +426,8 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             .ToArray();
     }
 
-    private static IReadOnlyList<AiToolDefinition> ToolsForUi(IReadOnlyList<AiToolDefinition> tools) =>
-        tools.Select(tool => new AiToolDefinition
+    private static IReadOnlyList<AiToolDefinition> ToolsForUi(IReadOnlyList<AiToolDefinition> tools, bool providerToolsOnly = false) =>
+        tools.Where(tool => !providerToolsOnly || !AiRoleToolCatalog.DeterministicReadDefinitions.Any(local => local.Name == tool.Name)).Select(tool => new AiToolDefinition
         {
             Name = tool.Name,
             Version = tool.Version,

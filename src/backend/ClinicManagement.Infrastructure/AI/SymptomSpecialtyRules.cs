@@ -46,10 +46,33 @@ public static class SymptomSpecialtyRules
         new("SP01", "mệt mỏi", "sốt nhẹ", "sốt", "khám tổng quát", "mệt kéo dài", "ho", "cảm cúm", "khám sức khỏe", "sức khỏe tổng quát", "khám sức khỏe ... tổng quát")
     ];
 
+    private static readonly Rule[] NamedSpecialties =
+    [
+        new("SP01", "Nội tổng quát"), new("SP02", "Nhi", "Nhi khoa"), new("SP03", "Sản phụ khoa"),
+        new("SP04", "Da liễu"), new("SP05", "Tai mũi họng"), new("SP06", "Tim mạch"),
+        new("SP07", "Cơ xương khớp"), new("SP08", "Thần kinh"), new("SP09", "Nội tiết"),
+        new("SP10", "Nhãn khoa", "Mắt"), new("SP11", "Tiêu hóa")
+    ];
+
+    public static bool HasNamedSpecialty(string message) => NamedSpecialties.Any(rule => MatchedNamedKeywords(rule, message).Length > 0);
+
+    private static string[] MatchedNamedKeywords(Rule rule, string message)
+    {
+        var actual = NormalizeAccented(message).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return rule.Keywords.Where(keyword =>
+        {
+            if (keyword == "Mắt" && actual.Length > 1 && !Regex.IsMatch(Normalize(message), @"\b(?:kham|dat lich|chuyen khoa)\b")) return false;
+            var expected = NormalizeAccented(keyword).Split(' ');
+            return Enumerable.Range(0, Math.Max(0, actual.Length - expected.Length + 1)).Any(start =>
+                expected.Select((syllable, offset) => HasDiacritics(actual[start + offset])
+                    ? actual[start + offset] == syllable : Normalize(actual[start + offset]) == Normalize(syllable)).All(match => match));
+        }).ToArray();
+    }
+
     public static bool RequiresClarification(bool unclear, string message)
     {
         var clauses = Clauses(message);
-        return unclear && !Rules.Any(rule => MatchedKeywords(rule, clauses).Length > 0);
+        return unclear && !Rules.Any(rule => MatchedKeywords(rule, clauses).Length > 0) && !HasNamedSpecialty(message);
     }
 
     private static ClauseSet Clauses(string message)
@@ -73,19 +96,20 @@ public static class SymptomSpecialtyRules
     private static string NormalizeAccented(string value) =>
         Regex.Replace(value.ToLowerInvariant().Normalize(NormalizationForm.FormC), @"[^\p{L}\p{N}]+", " ").Trim();
 
-    public static async Task<AiChatResponseDto> ApplyAsync(AppDbContext db, AiChatResponseDto response, string message, CancellationToken ct = default)
+    public static async Task<AiChatResponseDto> ApplyAsync(AppDbContext db, AiChatResponseDto response, string message, CancellationToken ct = default, bool namedOnly = false)
     {
         var clauses = Clauses(message);
-        var matches = Rules.Select((rule, index) => new
+        var matches = (namedOnly ? NamedSpecialties : Rules.Concat(NamedSpecialties)).GroupBy(rule => rule.Code).Select((rules, index) => new
         {
-            rule.Code, Index = index, Keywords = MatchedKeywords(rule, clauses)
+            Code = rules.Key, Index = index, Keywords = rules.SelectMany(rule => NamedSpecialties.Contains(rule) ? MatchedNamedKeywords(rule, message) : MatchedKeywords(rule, clauses)).Distinct().ToArray(),
+            IsNamed = NamedSpecialties.Any(rule => rule.Code == rules.Key && MatchedNamedKeywords(rule, message).Length > 0)
         }).Where(match => match.Keywords.Length > 0).ToList();
         var codes = matches.Select(match => match.Code).ToList();
         var specialties = await db.Specialties.AsNoTracking()
             .Where(s => s.IsActive && s.AiEnabled && codes.Contains(s.SpecialtyCode)).ToListAsync(ct);
         var eligible = matches.Where(match => specialties.Any(s => s.SpecialtyCode == match.Code)).ToList();
-        if (eligible.Any(match => match.Code != "SP01")) eligible.RemoveAll(match => match.Code == "SP01");
-        var suggestions = eligible.OrderByDescending(match => match.Code == "SP02")
+        if (eligible.Any(match => match.Code != "SP01")) eligible.RemoveAll(match => match.Code == "SP01" && !match.IsNamed);
+        var suggestions = eligible.OrderByDescending(match => match.IsNamed).ThenByDescending(match => match.Code == "SP02")
             .ThenByDescending(match => match.Keywords.Max(keyword => keyword.Length)).ThenBy(match => match.Index)
             .Take(2).Select((match, index) =>
             {
@@ -100,8 +124,10 @@ public static class SymptomSpecialtyRules
 
         response.SpecialtySuggestions = suggestions;
         response.ManualSelectionRequired = false;
-        var guidance = $"Dựa trên từ khóa triệu chứng bạn mô tả, bạn có thể khám: {string.Join(", ", suggestions.Select(s => s.SpecialtyName))}. Đây là gợi ý tham khảo, không phải chẩn đoán. Gợi ý này được tạo theo quy tắc từ khóa.";
-        response.Message = response.ProviderStatus == "Disabled" ? guidance : response.Message + "\n\n" + guidance;
+        var guidance = namedOnly
+            ? $"Bạn có thể đặt lịch chuyên khoa {string.Join(", ", suggestions.Select(s => s.SpecialtyName))} bằng nút bên dưới. Chuyên khoa được xác định theo quy tắc tên bạn yêu cầu."
+            : $"Dựa trên từ khóa triệu chứng bạn mô tả, bạn có thể khám: {string.Join(", ", suggestions.Select(s => s.SpecialtyName))}. Đây là gợi ý tham khảo, không phải chẩn đoán. Gợi ý này được tạo theo quy tắc từ khóa.";
+        response.Message = response.ProviderStatus == "Disabled" || string.IsNullOrWhiteSpace(response.Message) ? guidance : response.Message + "\n\n" + guidance;
         response.Reply = response.Message;
         response.Actions.InsertRange(0, suggestions.Select(suggestion => new AiActionDto
         {

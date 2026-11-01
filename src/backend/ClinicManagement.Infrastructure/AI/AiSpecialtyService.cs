@@ -323,6 +323,8 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             : localClassification.Intent;
 
         var passiveDraftVersion = ResolveDraftVersion(request.DraftVersion, hasSubstantiveChanges: false);
+        if (await TryResolveLocalPatientReadAsync(request, cleanMessage, passiveDraftVersion, cancellationToken) is { } localResponse)
+            return localResponse;
 
         // 3.1 Unclear or Out-of-Scope: Politeness Guardian (Prevents dropping into Degraded or polluting Reason)
         if (SymptomSpecialtyRules.RequiresClarification(!localClassification.IsClear || resolvedIntent == AiChatIntentTypes.UnclearOrOutOfScope, cleanMessage))
@@ -2603,82 +2605,6 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         return WithDraftVersionSync(response, nextDraftVersion);
     }
 
-
-    private async Task<AiChatResponseDto> HandleViewAppointmentsAsync(
-        AiChatRequestDto request,
-        int nextDraftVersion,
-        CancellationToken cancellationToken)
-    {
-        var response = new AiChatResponseDto
-        {
-            Urgency = "ROUTINE",
-            PromptVersion = GeminiAiProvider.CurrentPromptVersion,
-            DialogueOutcome = "NavigationInquiryResolved",
-            PrimaryIntent = AiChatIntentTypes.ViewAppointments,
-            AssistantStatus = "Online",
-            ProviderStatus = "NotCalled",
-            Message = "Bạn có thể xem danh sách lịch khám đã đặt và lịch sử khám bệnh của mình tại mục Lịch hẹn."
-        };
-
-        var currentUserId = _currentUserService?.UserId;
-        long? verifiedAppointmentId = null;
-        string? verifiedAppointmentCode = null;
-
-        if (currentUserId.HasValue && currentUserId.Value != Guid.Empty)
-        {
-            var pat = await _dbContext.Patients.AsNoTracking()
-                .FirstOrDefaultAsync(p => p.UserId == currentUserId.Value, cancellationToken);
-            if (pat != null)
-            {
-                var apt = await _dbContext.Appointments.AsNoTracking()
-                    .Where(a => a.PatientId == pat.Id && ClinicManagement.Domain.Enums.AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status))
-                    .OrderByDescending(a => a.AppointmentDate)
-                    .ThenByDescending(a => a.StartTime)
-                    .FirstOrDefaultAsync(cancellationToken);
-                if (apt != null)
-                {
-                    verifiedAppointmentId = apt.Id;
-                    verifiedAppointmentCode = apt.AppointmentCode;
-                    response.Message = $"Lịch khám gần nhất của bạn là mã **{apt.AppointmentCode}** vào ngày **{apt.AppointmentDate:dd/MM/yyyy}** ({apt.StartTime:HH\\:mm}). Bạn có thể mở chi tiết hoặc vào danh sách lịch hẹn để quản lý:";
-                }
-            }
-        }
-
-        response.Actions.Add(new AiActionDto
-        {
-            Id = "act-nav-my-appointments",
-            Type = AiActionTypes.ViewMyAppointments,
-            Label = "Xem lịch hẹn của tôi",
-            Description = "Mở danh sách các lịch khám sắp tới và lịch sử khám bệnh",
-            Style = "primary",
-            RequiresAuthentication = true,
-            RequiresConfirmation = false,
-            Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Appointments }
-        });
-
-        if (verifiedAppointmentId.HasValue)
-        {
-            response.Actions.Add(new AiActionDto
-            {
-                Id = "act-nav-appointment-detail",
-                Type = AiActionTypes.OpenAppointmentDetail,
-                Label = $"Xem chi tiết lịch {verifiedAppointmentCode}",
-                Description = "Mở xem chi tiết cuộc hẹn gần nhất",
-                Style = "secondary",
-                RequiresAuthentication = true,
-                RequiresConfirmation = false,
-                Payload = new AiActionPayloadDto
-                {
-                    AppointmentId = verifiedAppointmentId,
-                    AppointmentCode = verifiedAppointmentCode,
-                    TargetUrl = $"{SafeRoutes.Appointments}?appointmentId={verifiedAppointmentId.Value}"
-                }
-            });
-        }
-
-        await PreserveExistingDraftAsync(request, response, cancellationToken);
-        return WithDraftVersionSync(response, nextDraftVersion);
-    }
 
     private Task<bool> TryAttachPersistedConfirmationAsync(
         AiChatRequestDto request,

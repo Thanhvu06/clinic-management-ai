@@ -5,6 +5,7 @@ import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
 import { formatCopilotDateTime } from './displayFormatters';
 import { statusLabels } from '../../utils/visitStatusLabels';
 import styles from './UnifiedCopilotPanel.module.css';
+import { accuracyCardEmptyMessage, CopilotAccuracyCard, isAccuracyCard } from './CopilotAccuracyCards';
 
 type DataRecord = Record<string, unknown>;
 
@@ -79,6 +80,8 @@ const EmptyData: React.FC<{ message: string }> = ({ message }) => <p className={
 
 // Match the typed renderers' empty states, including unsupported envelopes.
 export const copilotCardEmptyMessage = (card: AiCopilotCard): string | null => {
+    const accuracyEmpty = accuracyCardEmptyMessage(card);
+    if (accuracyEmpty !== undefined) return accuracyEmpty;
     const record = asRecord(card.data);
     const noRows = asRecords(card.data).length === 0;
     switch (card.type) {
@@ -490,6 +493,7 @@ const ActionResultCard: React.FC<{ type: string; data: unknown }> = ({ type, dat
 };
 
 export const renderCopilotCardData = (card: AiCopilotCard): React.ReactNode => {
+    if (isAccuracyCard(card.type)) return <CopilotAccuracyCard card={card} />;
     switch (card.type) {
         case 'clinic_knowledge': return <PublicCatalogCard data={card.data} />;
         case 'specialties': return <SpecialtyCard data={card.data} />;

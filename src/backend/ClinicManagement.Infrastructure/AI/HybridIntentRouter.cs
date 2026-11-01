@@ -81,6 +81,7 @@ public sealed class HybridIntentRouter(AiDeterministicPlanner rules, IRoleIntent
     private bool CanOverride(AiCopilotPlanningContext context, AiPlannerDecision original)
     {
         var settings = options?.Value;
+        if (AiCopilotAccuracyRouting.IsAuthoritative(original)) return false;
         if (settings?.OverrideEnabled != true || settings.OverrideThreshold is not {} threshold ||
             !double.IsFinite(threshold) || threshold < 0 || threshold > 1) return false;
         var intent = context.Analysis.Intent;
