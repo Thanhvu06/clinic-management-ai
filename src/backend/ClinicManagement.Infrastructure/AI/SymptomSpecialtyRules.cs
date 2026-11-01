@@ -9,17 +9,22 @@ namespace ClinicManagement.Infrastructure.AI;
 
 public static class SymptomSpecialtyRules
 {
-    private sealed record KeywordPattern(string Label, Regex Pattern)
+    private sealed record KeywordPattern(string Label, Regex Accented, Regex Plain)
     {
         public static KeywordPattern Create(string keyword)
         {
+            var label = keyword.TrimStart('^');
             var anchored = keyword.StartsWith('^');
-            var parts = keyword.TrimStart('^').Split(" ... ").Select(Normalize);
-            var body = string.Join("(?: [^ ]+){0,2} ", parts.Select(Regex.Escape));
-            var pattern = (anchored ? "^" : "(?<![^ ])") + body + "(?![^ ])";
-            return new KeywordPattern(keyword.TrimStart('^'), new Regex(pattern, RegexOptions.CultureInvariant | RegexOptions.Compiled));
+            var parts = label.Split(" ... ");
+            return new KeywordPattern(label, Build(parts.Select(NormalizeAccented), anchored), Build(parts.Select(Normalize), anchored));
         }
+
+        private static Regex Build(IEnumerable<string> parts, bool anchored) =>
+            new((anchored ? "^" : "(?<![^ ])") + string.Join("(?: [^ ]+){0,2} ", parts.Select(Regex.Escape)) + "(?![^ ])",
+                RegexOptions.CultureInvariant | RegexOptions.Compiled);
     }
+
+    private sealed record ClauseSet(bool Accented, string[] Texts);
 
     private sealed record Rule(string Code, params string[] Keywords)
     {
@@ -47,11 +52,26 @@ public static class SymptomSpecialtyRules
         return unclear && !Rules.Any(rule => MatchedKeywords(rule, clauses).Length > 0);
     }
 
-    private static string[] Clauses(string message) =>
-        Regex.Split(message, @"[,.;:!?()\r\n]+").Select(Normalize).Where(clause => clause.Length > 0).ToArray();
+    private static ClauseSet Clauses(string message)
+    {
+        var accented = HasDiacritics(message);
+        var texts = Regex.Split(message, @"[,.;:!?()\r\n]+").Select(clause => accented ? NormalizeAccented(clause) : Normalize(clause)).Where(clause => clause.Length > 0).ToArray();
+        return new ClauseSet(accented, texts);
+    }
 
-    private static string[] MatchedKeywords(Rule rule, string[] clauses) =>
-        rule.Patterns.Where(keyword => clauses.Any(clause => keyword.Pattern.IsMatch(clause))).Select(keyword => keyword.Label).ToArray();
+    private static string[] MatchedKeywords(Rule rule, ClauseSet clauses) =>
+        rule.Patterns.Where(keyword =>
+        {
+            var pattern = clauses.Accented ? keyword.Accented : keyword.Plain;
+            return clauses.Texts.Any(pattern.IsMatch);
+        }).Select(keyword => keyword.Label).ToArray();
+
+    private static bool HasDiacritics(string value) =>
+        value.ToLowerInvariant().Normalize(NormalizationForm.FormD)
+            .Any(character => character == 'đ' || CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark);
+
+    private static string NormalizeAccented(string value) =>
+        Regex.Replace(value.ToLowerInvariant().Normalize(NormalizationForm.FormC), @"[^\p{L}\p{N}]+", " ").Trim();
 
     public static async Task<AiChatResponseDto> ApplyAsync(AppDbContext db, AiChatResponseDto response, string message, CancellationToken ct = default)
     {
