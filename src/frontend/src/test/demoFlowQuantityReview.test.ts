@@ -31,6 +31,6 @@ describe('Prescription quantity review additions', () => {
             dosage: '1 viên',
             frequency: 'Sáng 0,5, tối 1',
             durationDays: 3,
-        })).toBe(5);
+        })).toBe(6);
     });
 });

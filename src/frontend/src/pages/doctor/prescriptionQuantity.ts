@@ -22,8 +22,18 @@ export function calculatePrescriptionQuantity(item: PrescriptionQuantity): numbe
         return match ? Number(match[0].replace(',', '.')) : NaN;
     };
     const parseFrequency = (text: string) => {
-        const matches = text.match(/\d+(?:[.,]\d+)?/g);
-        return matches ? matches.reduce((sum, raw) => sum + Number(raw.replace(',', '.')), 0) : NaN;
+        const normalized = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const interval = normalized.match(/\bcach\s+(\d+(?:[.,]\d+)?)\s*(?:gio|tieng)\b/);
+        if (interval) {
+            const hours = parseFirst(interval[1]);
+            return hours > 0 ? Math.max(1, Math.floor(24 / hours)) : NaN;
+        }
+        const occurrences = normalized.match(/\b(\d+(?:[.,]\d+)?)\s*lan\b/);
+        if (occurrences) return parseFirst(occurrences[1]);
+        const periods = text.toLowerCase().normalize('NFC').match(/\b(?:sáng|trưa|chiều|tối)\b/g);
+        if (periods) return new Set(periods).size;
+        const numbers = normalized.match(/\d+(?:[.,]\d+)?/g);
+        return numbers?.length === 1 ? parseFirst(numbers[0]) : NaN;
     };
     const quantity = Math.ceil(parseFirst(item.dosage) * parseFrequency(item.frequency) * item.durationDays);
     return Number.isFinite(quantity) && quantity > 0 ? quantity : item.quantity;
